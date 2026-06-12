@@ -1,17 +1,31 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from telegram_bot.bot import (
+    BotIdentity,
+    BotTokenConfig,
     ChatState,
+    InstanceRunConfig,
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     TelegramNetworkError,
+    UserMemoryStore,
+    WorkingMemoryStore,
     _build_openai_user_input,
+    _bot_token_config_error,
+    _discover_instance_names,
+    _duplicate_telegram_token_error,
     _downloaded_file_name,
     _encode_multipart_form_data,
     _instance_env_key,
+    _resolve_bot_token_configs,
     _resolve_instruction_path,
     _resolve_openai_api_key,
+    _resolve_openai_api_keys,
     _resolve_telegram_token,
+    _resolve_telegram_tokens,
     _transcribe_voice_audio,
     contains_sources,
     count_words,
@@ -120,61 +134,361 @@ class FlakyPollingAPI(FakeAPI):
         super().__init__()
         self.calls = 0
 
-    def get_updates(self, offset):
+    def get_updates(self, offset, timeout=50):
         self.calls += 1
         if self.calls == 1:
             raise TelegramNetworkError("Telegram network error: reset")
         raise KeyboardInterrupt
 
 
+def read_jsonl(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
 class BotTests(unittest.TestCase):
     def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/BOT.md")
+            self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
 
     def test_instruction_path_uses_selected_instance(self) -> None:
-        with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Mondbot"}, clear=True):
-            self.assertEqual(_resolve_instruction_path(), "instances/Mondbot/BOT.md")
+        with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Depressionsbot"}, clear=True):
+            self.assertEqual(_resolve_instruction_path(), "instances/Depressionsbot/Bot_Verhalten.md")
 
     def test_explicit_instruction_path_still_overrides_instance(self) -> None:
         with patch.dict(
             "os.environ",
             {
-                "TELEGRAM_BOT_INSTANCE": "Mondbot",
-                "TELEGRAM_BOT_INSTRUCTIONS": "custom/BOT.md",
+                "TELEGRAM_BOT_INSTANCE": "Depressionsbot",
+                "TELEGRAM_BOT_INSTRUCTIONS": "custom/Bot_Verhalten.md",
             },
             clear=True,
         ):
-            self.assertEqual(_resolve_instruction_path(), "custom/BOT.md")
+            self.assertEqual(_resolve_instruction_path(), "custom/Bot_Verhalten.md")
+
+    def test_discovers_instances_from_bot_verhalten_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory)
+            (instances_dir / "Bote_der_Wahrheit").mkdir()
+            (instances_dir / "Bote_der_Wahrheit" / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+            (instances_dir / "Depressionsbot").mkdir()
+            (instances_dir / "Depressionsbot" / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+            (instances_dir / "Ignoriert").mkdir()
+
+            with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCES_DIR": str(instances_dir)}, clear=True):
+                self.assertEqual(_discover_instance_names(), ["Bote_der_Wahrheit", "Depressionsbot"])
 
     def test_instance_token_overrides_generic_token(self) -> None:
         with patch.dict(
             "os.environ",
             {
                 "TELEGRAM_BOT_TOKEN": "generic",
-                "TELEGRAM_BOT_TOKEN_MONDBOT": "moon-token",
+                "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "depression-token",
             },
             clear=True,
         ):
-            self.assertEqual(_resolve_telegram_token("Mondbot"), "moon-token")
+            self.assertEqual(_resolve_telegram_token("Depressionsbot"), "depression-token")
+
+    def test_resolve_telegram_tokens_accepts_plural_and_indexed_values(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "depression-a, depression-b",
+                "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_2": "depression-c",
+                "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_1": "depression-b",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_resolve_telegram_tokens("Depressionsbot"), ["depression-a", "depression-b", "depression-c"])
 
     def test_instance_openai_key_overrides_generic_key(self) -> None:
         with patch.dict(
             "os.environ",
             {
                 "OPENAI_API_KEY": "generic-key",
-                "OPENAI_API_KEY_MONDBOT": "moon-key",
+                "OPENAI_API_KEY_DEPRESSIONSBOT": "depression-key",
             },
             clear=True,
         ):
-            self.assertEqual(_resolve_openai_api_key("Mondbot"), "moon-key")
+            self.assertEqual(_resolve_openai_api_key("Depressionsbot"), "depression-key")
 
     def test_generic_openai_key_is_fallback(self) -> None:
         with patch.dict("os.environ", {"OPENAI_API_KEY": "generic-key"}, clear=True):
-            self.assertEqual(_resolve_openai_api_key("Mondbot"), "generic-key")
+            self.assertEqual(_resolve_openai_api_key("Depressionsbot"), "generic-key")
+
+    def test_openai_keys_accept_plural_and_indexed_values(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEYS_DEPRESSIONSBOT": "depression-key-a, depression-key-b",
+                "OPENAI_API_KEY_DEPRESSIONSBOT_3": "depression-key-c",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_resolve_openai_api_keys("Depressionsbot", 3), ["depression-key-a", "depression-key-b", "depression-key-c"])
+
+    def test_bot_token_configs_couple_token_slots_to_openai_key_slots(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "depression-token-a, depression-token-b",
+                "OPENAI_API_KEYS_DEPRESSIONSBOT": "depression-key-a, depression-key-b",
+            },
+            clear=True,
+        ):
+            configs = _resolve_bot_token_configs("Depressionsbot")
+
+        self.assertEqual([(config.label, config.token, config.openai_api_key) for config in configs], [
+            ("1", "depression-token-a", "depression-key-a"),
+            ("2", "depression-token-b", "depression-key-b"),
+        ])
+        self.assertEqual(_bot_token_config_error(configs), "")
+
+    def test_multi_token_config_requires_distinct_openai_keys(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "depression-token-a, depression-token-b",
+                "OPENAI_API_KEY_DEPRESSIONSBOT": "shared-key",
+                "OPENAI_API_KEY_DEPRESSIONSBOT_2": "shared-key",
+            },
+            clear=True,
+        ):
+            configs = _resolve_bot_token_configs("Depressionsbot")
+
+        self.assertIn("must not share the same OpenAI API key", _bot_token_config_error(configs))
+
+    def test_all_instances_reject_duplicate_telegram_tokens(self) -> None:
+        error = _duplicate_telegram_token_error(
+            [
+                InstanceRunConfig(
+                    "Bote_der_Wahrheit",
+                    "instances/Bote_der_Wahrheit/Bot_Verhalten.md",
+                    (BotTokenConfig("1", "same-token", "key-a"),),
+                ),
+                InstanceRunConfig(
+                    "Depressionsbot",
+                    "instances/Depressionsbot/Bot_Verhalten.md",
+                    (BotTokenConfig("1", "same-token", "key-b"),),
+                ),
+            ]
+        )
+
+        self.assertIn("Duplicate Telegram bot token", error)
+        self.assertIn("Bote_der_Wahrheit:1 / Depressionsbot:1", error)
 
     def test_instance_env_key_normalizes_instance_name(self) -> None:
         self.assertEqual(_instance_env_key("TELEGRAM_BOT_TOKEN", "Bote_der_Wahrheit"), "TELEGRAM_BOT_TOKEN_BOTE_DER_WAHRHEIT")
+
+    def test_user_memory_file_is_sender_id_and_follows_openai_across_chats(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Mein Lieblingswort ist Mond.",
+                        "chat": {"id": -1001, "type": "group", "title": "Gruppe A"},
+                        "from": {"id": 456, "first_name": "Ada", "username": "ada_l"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            self.assertTrue(memory_path.exists())
+            payload = json.loads(memory_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["sender_id"], "456")
+            self.assertIn("mond", payload["index"]["keywords"])
+            entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            self.assertIn("Mein Lieblingswort ist Mond.", entries[0]["user_text"])
+            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md").exists())
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Was weisst du noch?",
+                        "chat": {"id": -1002, "type": "group", "title": "Gruppe B"},
+                        "from": {"id": 456, "first_name": "Ada", "username": "ada_l"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+
+            self.assertIn("Persistentes Nutzergedaechtnis", openai_client.reply_inputs[-1])
+            self.assertIn("selected_memory_ids", openai_client.reply_inputs[-1])
+            self.assertIn("Mein Lieblingswort ist Mond.", openai_client.reply_inputs[-1])
+
+    def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Geheimnis fuer Ada: Mondstein.",
+                        "chat": {"id": -1001, "type": "group", "title": "Gruppe A"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Was weisst du ueber Mondstein?",
+                        "chat": {"id": -1002, "type": "group", "title": "Gruppe B"},
+                        "from": {"id": 789, "first_name": "Bob"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+
+            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json").exists())
+            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Index.json").exists())
+            self.assertNotIn("Geheimnis fuer Ada", openai_client.reply_inputs[-1])
+
+    def test_user_habits_file_is_included_for_same_sender_id(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Lege Memory an.",
+                        "chat": {"id": -1001, "type": "group", "title": "Gruppe A"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+            habits_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md"
+            habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Was gilt fuer mich?",
+                        "chat": {"id": -1002, "type": "group", "title": "Gruppe B"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                memory_store,
+            )
+
+            self.assertIn("User_Habbits_and_behave.md", openai_client.reply_inputs[-1])
+            self.assertIn("Ada mag knappe Antworten.", openai_client.reply_inputs[-1])
+
+    def test_working_memory_files_are_instance_scoped_and_sanitize_manual_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory) / "instances"
+            store = WorkingMemoryStore("Depressionsbot", instances_dir)
+
+            index_path = store.ensure()
+            self.assertEqual(index_path, instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json")
+            self.assertTrue((instances_dir / "Depressionsbot" / "data" / "Working_Memorys.entries.jsonl").exists())
+
+            memory_id = store.append_manual(
+                "Allgemeine Regel: kurze Antworten. Kontakt @ada, ada@example.com, https://example.com/user/456 und 123456789."
+            )
+
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+            entries = read_jsonl(instances_dir / "Depressionsbot" / "data" / "Working_Memorys.entries.jsonl")
+            entry_text = entries[0]["text"]
+            self.assertTrue(memory_id.startswith("wm_"))
+            self.assertEqual(payload["scope"], "instance")
+            self.assertNotIn("sender_id", payload)
+            self.assertNotIn("profile", payload)
+            self.assertIn(memory_id, payload["index"]["entries"])
+            self.assertNotIn("@ada", entry_text)
+            self.assertNotIn("ada@example.com", entry_text)
+            self.assertNotIn("https://example.com", entry_text)
+            self.assertNotIn("123456789", entry_text)
+
+    def test_working_memory_is_included_in_openai_input_without_auto_writes(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory) / "instances"
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            instructions = BotInstructions(openai_enabled=True)
+            working_store = WorkingMemoryStore("Depressionsbot", instances_dir)
+            working_store.append_manual("Allgemeine Instanzregel: bei Architekturfragen erst kurz strukturieren.")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Bitte eine Architekturfrage strukturieren.",
+                        "chat": {"id": -1001, "type": "group", "title": "Gruppe A"},
+                        "from": {"id": 456, "first_name": "Ada", "username": "ada_l"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                None,
+                None,
+                working_store,
+            )
+
+            openai_input = openai_client.reply_inputs[-1]
+            entries_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.entries.jsonl"
+            self.assertIn("Instanz-Arbeitsgedaechtnis", openai_input)
+            self.assertIn("Allgemeine Instanzregel", openai_input)
+            self.assertNotIn("Persistentes Nutzergedaechtnis", openai_input)
+            self.assertEqual(len(read_jsonl(entries_path)), 1)
 
     def test_handle_update_sends_reply_to_message_chat(self) -> None:
         api = FakeAPI()
@@ -228,6 +542,137 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.chat_actions, [(123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_group_first_contact_must_address_bot_by_telegram_name(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+        bot_identity = BotIdentity(id=99, first_name="Bote_der_Wahrheit Bot", username="BoteDerWahrheitBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 70,
+                    "text": "Hallo zusammen.",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(openai_client.reply_inputs, [])
+        self.assertEqual(api.sent_messages, [])
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 71,
+                    "text": "Hallo @BoteDerWahrheitBot.",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: Hallo @BoteDerWahrheitBot.")])
+
+    def test_known_sender_can_use_any_name_after_first_contact(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+        bot_identity = BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "Depressionsbot, hallo.",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "Kleiner Mond, bist du da?",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(api.sent_messages[0], (-100123, "Ich bin Depressionsbot.\n\nAI: Depressionsbot, hallo."))
+        self.assertEqual(api.sent_messages[1], (-100123, "AI: Kleiner Mond, bist du da?"))
+
+    def test_command_targeting_other_bot_is_ignored(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.mark_sender_seen("456")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "/ping@OtherBot",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            BotInstructions(),
+            None,
+            chat_state,
+            None,
+            BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot"),
+        )
+
+        self.assertEqual(api.sent_messages, [])
+
+    def test_openai_input_includes_bot_identity_context(self) -> None:
+        openai_input = _build_openai_user_input(
+            {
+                "text": "Hallo",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            },
+            "Hallo",
+            bot_identity=BotIdentity(id=99, first_name="Bote_der_Wahrheit Bot", username="BoteDerWahrheitBot"),
+        )
+
+        self.assertIn("- bot_id: 99", openai_input)
+        self.assertIn("- bot_name: Bote der Wahrheit", openai_input)
+        self.assertIn("- bot_username: @BoteDerWahrheitBot", openai_input)
 
     def test_openai_input_includes_sender_context_for_group_messages(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -312,6 +757,46 @@ class BotTests(unittest.TestCase):
         self.assertIn("- sender_name: Ada", openai_client.reply_inputs[0])
         self.assertEqual(api.chat_actions, [(123, "typing"), (123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_transcribed_voice_stores_only_text_in_user_memory(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            api.file_paths["file_1"] = "voice/file_1.oga"
+            api.file_data["voice/file_1.oga"] = b"voice-audio"
+            openai_client = FakeOpenAIClient()
+            openai_client.transcription_text = "Mein Voice-Geheimnis ist Mondlicht."
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 60,
+                        "voice": {"file_id": "file_1"},
+                        "chat": {"id": 123, "type": "group", "title": "Debatte"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                ChatState(),
+                UserMemoryStore("Depressionsbot"),
+            )
+
+            memory_text = (Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json").read_text(encoding="utf-8")
+            payload = json.loads(memory_text)
+            entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            self.assertIn("Mein Voice-Geheimnis ist Mondlicht.", entries[0]["user_text"])
+            self.assertEqual(entries[0]["source"]["message_type"], "voice")
+            self.assertIn(entries[0]["id"], payload["index"]["entries"])
+            self.assertNotIn("voice-audio", memory_text)
+            self.assertNotIn("voice-audio", json.dumps(entries, ensure_ascii=False))
 
     def test_transcribe_voice_audio_retries_fallback_after_empty_primary_transcript(self) -> None:
         from telegram_bot.instructions import BotInstructions

@@ -2,7 +2,9 @@
 .env.*
 !.env.example
 Gesprachsanalyse.md
+Bot_Rüstzeug.md
 instances/
+data/
 __pycache__/
 **/__pycache__/
 *.py[cod]

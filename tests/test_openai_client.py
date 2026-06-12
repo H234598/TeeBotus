@@ -26,7 +26,7 @@ class OpenAIClientTests(unittest.TestCase):
         payload = build_response_payload("Hallo", instructions)
 
         self.assertIn("Basis.", payload["instructions"])
-        self.assertIn("Gesprachsanalyse.md", payload["instructions"])
+        self.assertIn("Bot_Rüstzeug.md", payload["instructions"])
         self.assertIn("Regelwerk.", payload["instructions"])
 
     def test_build_response_payload_includes_optional_web_search(self) -> None:

@@ -33,7 +33,7 @@ def main() -> int:
 
     instructions = load_instructions(ROOT / _resolve_instruction_path(instance_name))
     if instructions.openai_service_tier != "flex":
-        print(f"BOT.md requests service_tier={instructions.openai_service_tier!r}, expected 'flex'.", file=sys.stderr)
+        print(f"Bot_Verhalten.md requests service_tier={instructions.openai_service_tier!r}, expected 'flex'.", file=sys.stderr)
         return 3
 
     try:

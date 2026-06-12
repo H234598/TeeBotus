@@ -31,7 +31,7 @@ class BotInstructions:
     openai_enabled: bool = False
     openai_model: str = "gpt-5.5"
     openai_service_tier: str = ""
-    openai_rule_file: str = "Gesprachsanalyse.md"
+    openai_rule_file: str = "Bot_Rüstzeug.md"
     openai_rule_text: str = ""
     openai_web_search: bool = False
     openai_web_search_context_size: str = "medium"
@@ -69,6 +69,10 @@ class BotInstructions:
     delete_error: str = "Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte."
     cleanup_success: str = "{count} Bot-Nachrichten geloescht."
     cleanup_usage: str = "Nutzung: /cleanup 10"
+    user_memory_enabled: bool = False
+    user_memory_dir: str = "instances/{instance}/data/users"
+    user_memory_max_prompt_chars: int = 12000
+    user_memory_max_entry_chars: int = 2000
     openai_system_prompt: str = (
         "Du bist ein hilfreicher Telegram-Bot.\n"
         "Antworte auf Deutsch, klar und eher kurz.\n"
@@ -204,6 +208,8 @@ def parse_instructions(markdown: str) -> BotInstructions:
             _apply_reply(instructions, key, value)
         elif section == "openai":
             _apply_openai_setting(instructions, key, value)
+        elif section == "memory":
+            _apply_memory_setting(instructions, key, value)
         elif section == "commands":
             commands[_normalize_command_name(key)] = value
         elif section == "text_replies":
@@ -270,6 +276,10 @@ def _section_name(line: str) -> str:
         "enthält": "contains_replies",
         "contains": "contains_replies",
         "contains replies": "contains_replies",
+        "memory": "memory",
+        "gedaechtnis": "memory",
+        "gedächtnis": "memory",
+        "speicher": "memory",
         "hilfe": "help",
         "help": "help",
     }
@@ -407,6 +417,18 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_missing_key = value
     elif normalized == "reset":
         instructions.openai_reset = value
+
+
+def _apply_memory_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized == "enabled":
+        instructions.user_memory_enabled = _parse_bool(value, default=instructions.user_memory_enabled)
+    elif normalized in {"directory", "dir", "path"}:
+        instructions.user_memory_dir = value
+    elif normalized == "max_prompt_chars":
+        instructions.user_memory_max_prompt_chars = _parse_required_int(value, default=instructions.user_memory_max_prompt_chars)
+    elif normalized == "max_entry_chars":
+        instructions.user_memory_max_entry_chars = _parse_required_int(value, default=instructions.user_memory_max_entry_chars)
 
 
 def _normalize_key(key: str) -> str:

@@ -9,7 +9,7 @@ class InstructionTests(unittest.TestCase):
     def test_parse_markdown_instructions(self) -> None:
         instructions = parse_instructions(
             """
-            # BOT.md
+            # Bot_Verhalten.md
 
             ## Einstellungen
             - echo: nein
@@ -43,6 +43,12 @@ class InstructionTests(unittest.TestCase):
             - transcription_prompt: Wortgetreu transkribieren.
             - transcription_error: Transkription fehlgeschlagen.
             - transcription_empty: Keine Sprache erkannt.
+
+            ## Memory
+            - enabled: ja
+            - directory: instances/Depressionsbot/data/users
+            - max_prompt_chars: 9000
+            - max_entry_chars: 1500
 
             ## Antworten
             - start: Moin{name_suffix}
@@ -94,6 +100,10 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_transcription_prompt, "Wortgetreu transkribieren.")
         self.assertEqual(instructions.openai_transcription_error, "Transkription fehlgeschlagen.")
         self.assertEqual(instructions.openai_transcription_empty, "Keine Sprache erkannt.")
+        self.assertTrue(instructions.user_memory_enabled)
+        self.assertEqual(instructions.user_memory_dir, "instances/Depressionsbot/data/users")
+        self.assertEqual(instructions.user_memory_max_prompt_chars, 9000)
+        self.assertEqual(instructions.user_memory_max_entry_chars, 1500)
         self.assertEqual(instructions.openai_system_prompt, "Du bist kurz.\nAntworte auf Deutsch.")
         self.assertEqual(instructions.start, "Moin{name_suffix}")
         self.assertEqual(instructions.commands["/status"], "Alles ok.")
@@ -112,7 +122,7 @@ class InstructionTests(unittest.TestCase):
 
     def test_instruction_store_reads_markdown_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "BOT.md"
+            path = Path(directory) / "Bot_Verhalten.md"
             path.write_text("## Befehle\n- /status: Aus Datei.", encoding="utf-8")
 
             instructions = InstructionStore(path).get()
@@ -121,21 +131,21 @@ class InstructionTests(unittest.TestCase):
 
     def test_load_instructions_adds_adjacent_rule_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "BOT.md"
-            rule_path = Path(directory) / "Gesprachsanalyse.md"
+            path = Path(directory) / "Bot_Verhalten.md"
+            rule_path = Path(directory) / "Bot_Rüstzeug.md"
             path.write_text("## Systemprompt\nBasis.\n", encoding="utf-8")
             rule_path.write_text("Regelwerk fuer jedes Gespraech.", encoding="utf-8")
 
             instructions = load_instructions(path)
 
-        self.assertEqual(instructions.openai_rule_file, "Gesprachsanalyse.md")
+        self.assertEqual(instructions.openai_rule_file, "Bot_Rüstzeug.md")
         self.assertEqual(instructions.openai_rule_text, "Regelwerk fuer jedes Gespraech.")
         self.assertIn("Basis.", instructions.openai_instructions_text())
         self.assertIn("Regelwerk fuer jedes Gespraech.", instructions.openai_instructions_text())
 
     def test_load_instructions_uses_configured_rule_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "BOT.md"
+            path = Path(directory) / "Bot_Verhalten.md"
             rule_path = Path(directory) / "Analyse.md"
             path.write_text("## OpenAI\n- rule_file: Analyse.md\n", encoding="utf-8")
             rule_path.write_text("Spezielle Analyse.", encoding="utf-8")

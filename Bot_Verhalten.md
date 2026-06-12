@@ -1,7 +1,7 @@
-# BOT.md
+# Bot_Verhalten.md
 
 Generisches Template fuer eine Telegram-Bot-Instanz. Kopiere diese Datei nach
-`instances/<Instanzname>/BOT.md` und passe die Werte lokal an.
+`instances/<Instanzname>/Bot_Verhalten.md` und passe die Werte lokal an.
 
 ## Einstellungen
 
@@ -58,6 +58,13 @@ Generisches Template fuer eine Telegram-Bot-Instanz. Kopiere diese Datei nach
 - delete_error: Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte.
 - cleanup_success: "{count} Bot-Nachrichten geloescht."
 - cleanup_usage: "Nutzung: /cleanup 10"
+
+## Memory
+
+- enabled: false
+- directory: instances/{instance}/data/users
+- max_prompt_chars: 12000
+- max_entry_chars: 2000
 
 ## Befehle
 
