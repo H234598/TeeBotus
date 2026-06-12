@@ -15,7 +15,14 @@ DEFAULT_HELP_LINES = (
     "/start - Bot starten",
     "/help - Hilfe anzeigen",
     "/ping - Verbindung testen",
+    "/status - Status anzeigen",
+    "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
     "/chatid - aktuelle Chat-ID anzeigen",
+    "/reset - setzt nur den OpenAI-Verlauf dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",
+    "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
+    "/Call_a_Teladi - Send Teladi a emergency message",
+    "/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht in diesem Chat.",
+    "/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten in diesem Chat.",
 )
 
 
@@ -63,12 +70,52 @@ class BotInstructions:
     openai_transcription_empty: str = "Ich konnte in der Sprachnachricht keinen Text erkennen."
     openai_error: str = "Ich kann die OpenAI API gerade nicht erreichen. Bitte versuche es gleich nochmal."
     openai_missing_key: str = "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt."
-    openai_reset: str = "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht."
-    delete_last_success: str = "Letzte Bot-Nachricht geloescht."
-    delete_empty: str = "Ich habe fuer diesen Chat keine Bot-Nachricht gespeichert, die ich loeschen kann."
-    delete_error: str = "Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte."
-    cleanup_success: str = "{count} Bot-Nachrichten geloescht."
-    cleanup_usage: str = "Nutzung: /cleanup 10"
+    openai_reset: str = (
+        "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht. "
+        "Das betrifft nur den Antwortkontext fuer OpenAI in diesem Chat; Telegram-Nachrichten und User-Memory bleiben erhalten."
+    )
+    delete_last_success: str = (
+        "Letzte gespeicherte Bot-Nachricht geloescht. "
+        "Das entfernt nur eine Telegram-Nachricht des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
+    )
+    delete_empty: str = (
+        "Ich habe fuer diesen Chat keine gespeicherte Bot-Nachricht, die ich loeschen kann. "
+        "/delete_last und /cleanup arbeiten nur mit Bot-Nachrichten, die seit dem letzten Bot-Start gemerkt wurden."
+    )
+    delete_error: str = (
+        "Ich konnte die Bot-Nachricht nicht loeschen. "
+        "In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten."
+    )
+    cleanup_success: str = (
+        "{count} gespeicherte Bot-Nachrichten geloescht. "
+        "Das entfernt nur Telegram-Nachrichten des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
+    )
+    cleanup_usage: str = (
+        "Nutzung: /cleanup 10. "
+        "Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Bot-Nachrichten aus diesem Chat."
+    )
+    user_memory_reset_confirm: str = (
+        "Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? "
+        "Das betrifft nur deine eigenen Memory-Eintraege; OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten. "
+        "Antworte mit Ja zum Loeschen oder Nein zum Abbrechen."
+    )
+    user_memory_reset_success: str = (
+        "Deine gespeicherten User-Memory-Eintraege wurden geloescht. "
+        "OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten."
+    )
+    user_memory_reset_cancelled: str = "Okay, ich loesche nichts. Deine User-Memory-Eintraege bleiben erhalten."
+    user_memory_reset_unavailable: str = (
+        "Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein OpenAI-Verlauf geloescht."
+    )
+    user_memory_reset_error: str = "Ich konnte deine User-Memory-Eintraege gerade nicht loeschen. Bitte versuche es spaeter erneut."
+    user_memory_reset_only_own: str = (
+        "Ich kann nur deine eigenen Erinnerungen loeschen, nicht fremde Erinnerungen oder das Instanz-Arbeitsgedaechtnis. "
+        "Das Instanz-/Arbeitsgedaechtnis enthaelt keine userbezogenen Daten."
+    )
+    teladi_call_prompt: str = "Welche Emergency Message soll ich an Teladi schicken? Deine naechste Antwort wird 1:1 weitergeleitet."
+    teladi_call_sent: str = "Emergency Message wurde an Teladi gesendet."
+    teladi_call_cooldown: str = "Du kannst /Call_a_Teladi erst in {remaining} wieder nutzen."
+    teladi_call_error: str = "Ich konnte die Emergency Message gerade nicht senden. Bitte versuche es spaeter erneut."
     user_memory_enabled: bool = False
     user_memory_dir: str = "instances/{instance}/data/users"
     user_memory_max_prompt_chars: int = 12000
@@ -343,6 +390,26 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.cleanup_success = value
     elif normalized == "cleanup_usage":
         instructions.cleanup_usage = value
+    elif normalized == "user_memory_reset_confirm":
+        instructions.user_memory_reset_confirm = value
+    elif normalized == "user_memory_reset_success":
+        instructions.user_memory_reset_success = value
+    elif normalized == "user_memory_reset_cancelled":
+        instructions.user_memory_reset_cancelled = value
+    elif normalized == "user_memory_reset_unavailable":
+        instructions.user_memory_reset_unavailable = value
+    elif normalized == "user_memory_reset_error":
+        instructions.user_memory_reset_error = value
+    elif normalized == "user_memory_reset_only_own":
+        instructions.user_memory_reset_only_own = value
+    elif normalized == "teladi_call_prompt":
+        instructions.teladi_call_prompt = value
+    elif normalized == "teladi_call_sent":
+        instructions.teladi_call_sent = value
+    elif normalized == "teladi_call_cooldown":
+        instructions.teladi_call_cooldown = value
+    elif normalized == "teladi_call_error":
+        instructions.teladi_call_error = value
 
 
 def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -> None:

@@ -52,6 +52,16 @@ class InstructionTests(unittest.TestCase):
 
             ## Antworten
             - start: Moin{name_suffix}
+            - user_memory_reset_confirm: Wirklich loeschen?
+            - user_memory_reset_success: Memory geloescht.
+            - user_memory_reset_cancelled: Memory bleibt.
+            - user_memory_reset_unavailable: Kein Memory aktiv.
+            - user_memory_reset_error: Memory-Reset fehlgeschlagen.
+            - user_memory_reset_only_own: Nur eigenes Memory.
+            - teladi_call_prompt: Nachricht fuer Teladi?
+            - teladi_call_sent: Nachricht gesendet.
+            - teladi_call_cooldown: Warte {remaining}.
+            - teladi_call_error: Versand fehlgeschlagen.
 
             ## Befehle
             - /status: Alles ok.
@@ -106,6 +116,16 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.user_memory_max_entry_chars, 1500)
         self.assertEqual(instructions.openai_system_prompt, "Du bist kurz.\nAntworte auf Deutsch.")
         self.assertEqual(instructions.start, "Moin{name_suffix}")
+        self.assertEqual(instructions.user_memory_reset_confirm, "Wirklich loeschen?")
+        self.assertEqual(instructions.user_memory_reset_success, "Memory geloescht.")
+        self.assertEqual(instructions.user_memory_reset_cancelled, "Memory bleibt.")
+        self.assertEqual(instructions.user_memory_reset_unavailable, "Kein Memory aktiv.")
+        self.assertEqual(instructions.user_memory_reset_error, "Memory-Reset fehlgeschlagen.")
+        self.assertEqual(instructions.user_memory_reset_only_own, "Nur eigenes Memory.")
+        self.assertEqual(instructions.teladi_call_prompt, "Nachricht fuer Teladi?")
+        self.assertEqual(instructions.teladi_call_sent, "Nachricht gesendet.")
+        self.assertEqual(instructions.teladi_call_cooldown, "Warte {remaining}.")
+        self.assertEqual(instructions.teladi_call_error, "Versand fehlgeschlagen.")
         self.assertEqual(instructions.commands["/status"], "Alles ok.")
         self.assertEqual(instructions.text_replies["hallo"], "Hey.")
         self.assertEqual(instructions.contains_replies["hilfe"], "Sende /help.")

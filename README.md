@@ -10,6 +10,9 @@ Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long 
 - `/status` antwortet mit dem Status aus der aktiven Instanz-`Bot_Verhalten.md`
 - `/chatid` zeigt die aktuelle Chat-ID
 - `/reset` loescht den OpenAI-Verlauf fuer den aktuellen Chat
+- `/reset_memorys` fragt nach und loescht danach nur die eigenen User-Memory-Eintraege
+- frei formulierte Bitten wie `loesch meine Erinnerungen` nutzen denselben bestaetigten User-Memory-Reset
+- `/Call_a_Teladi` fragt nach einer Emergency Message und leitet die naechste Telegram-Nachricht an Teladi weiter
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht
 - `/cleanup 10` loescht bis zu 10 gespeicherte Bot-Nachrichten
 - `/voice Text` erzeugt eine Telegram-Sprachnachricht
@@ -147,6 +150,8 @@ Sobald dieser User mit diesem Bot bekannt ist, darf der User ihn beliebig nennen
 
 Feste Slash-Befehle werden nicht an OpenAI gesendet.
 
+`/Call_a_Teladi` ist ein fester Notfallbefehl. Der Bot fragt nach, welche Emergency Message weitergeleitet werden soll, sendet einen kurzen Herkunfts-Header an Teladi und kopiert danach die naechste Telegram-Nachricht unveraendert dorthin. Pro Telegram-Sender-ID kann der Befehl nur einmal innerhalb von 24 Stunden ausgeloest werden; weitere Versuche werden mit Restzeit abgelehnt. Der Cooldown wird im lokalen Instanz-`data`-Ordner gespeichert und uebersteht Bot-Neustarts. Der interne Zielchat wird Usern nicht angezeigt.
+
 Lange OpenAI-Antworten werden automatisch in mehrere Telegram-Nachrichten aufgeteilt, damit Telegrams Nachrichtenlimit nicht erreicht wird.
 
 Sprachnachrichten werden mit `/voice Text` erzeugt. Alternativ kannst du auf eine Textnachricht antworten und nur `/voice` senden; der Bot vertont dann den Text der beantworteten Nachricht. Die Stimme wird in der aktiven Instanz-`Bot_Verhalten.md` ueber `voice_model`, `voice`, `voice_format`, `voice_speed` und `voice_instructions` gesteuert. Standard ist `voice_format: opus`, passend fuer Telegram-Sprachnachrichten.
@@ -170,15 +175,13 @@ Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Ko
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen:
+Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein JSON-Index, ein JSONL-Eintragslog und eine interne, admingepflegte Zusatzhinweis-Datei.
 
-- `User_Memory_Index.json`
-- `User_Memory_Entries.jsonl`
-- `User_Habbits_and_behave.md`
+Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
 
-Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und die Habits-Datei der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
+Die Index-Datei enthaelt Profilmetadaten, Keyword-Index, Recent-Liste und Byte-Positionen der JSONL-Eintraege. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise werden nur von Botadmins gepflegt und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
-Die Index-Datei enthaelt Profilmetadaten, Keyword-Index, Recent-Liste und Byte-Positionen der JSONL-Eintraege. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. `User_Habbits_and_behave.md` ist fuer manuell kuratierte Gewohnheiten/Verhaltenshinweise pro User gedacht und wird nur fuer diese Sender-ID in den OpenAI-Kontext aufgenommen. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
+Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory der aktuellen Telegram-Sender-ID auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
 
 ## Instanz-Arbeitsgedaechtnis
 

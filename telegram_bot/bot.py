@@ -28,6 +28,8 @@ MAX_TRACKED_BOT_MESSAGES = 100
 INITIAL_RETRY_DELAY_SECONDS = 5
 MAX_RETRY_DELAY_SECONDS = 60
 TELEGRAM_MESSAGE_CHUNK_SIZE = 3900
+TELADI_EMERGENCY_CHAT_ID = 395935293
+TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
 DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
@@ -37,6 +39,7 @@ USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
 USER_HABITS_MAX_PROMPT_CHARS = 4000
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
+TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
 WORKING_MEMORY_MAX_PROMPT_CHARS = 6000
 WORKING_MEMORY_PRIVACY_NOTE = (
     "Instanzweites Arbeitsgedaechtnis. Darf keine User-IDs, Namen, Usernames, Chat-IDs, "
@@ -245,6 +248,21 @@ class TelegramAPI:
         message_id = result.get("message_id")
         return int(message_id) if isinstance(message_id, int) else None
 
+    def copy_message(self, chat_id: int, from_chat_id: int, message_id: int) -> int | None:
+        payload = self.request(
+            "copyMessage",
+            {
+                "chat_id": chat_id,
+                "from_chat_id": from_chat_id,
+                "message_id": message_id,
+            },
+        )
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            return None
+        copied_message_id = result.get("message_id")
+        return int(copied_message_id) if isinstance(copied_message_id, int) else None
+
     def send_voice(self, chat_id: int, audio: bytes, filename: str, content_type: str) -> int | None:
         payload = self.request_multipart(
             "sendVoice",
@@ -289,11 +307,15 @@ class TelegramAPI:
 
 
 class ChatState:
-    def __init__(self) -> None:
+    def __init__(self, teladi_call_state_path: Path | None = None) -> None:
         self.previous_response_ids: dict[int, str] = {}
         self.sent_message_ids: dict[int, list[int]] = {}
         self.auto_voice_eligible_counts: dict[int, int] = {}
         self.seen_sender_ids: set[str] = set()
+        self.pending_user_memory_resets: set[tuple[int, str]] = set()
+        self.pending_teladi_calls: dict[str, int] = {}
+        self.teladi_call_state_path = teladi_call_state_path
+        self.teladi_call_used_at: dict[str, float] = self._load_teladi_call_used_at()
 
     def get_previous_response_id(self, chat_id: int) -> str | None:
         return self.previous_response_ids.get(chat_id)
@@ -339,6 +361,79 @@ class ChatState:
     def mark_sender_seen(self, sender_id: str) -> None:
         if sender_id:
             self.seen_sender_ids.add(sender_id)
+
+    def request_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
+        if sender_id:
+            self.pending_user_memory_resets.add((chat_id, sender_id))
+
+    def has_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> bool:
+        return (chat_id, sender_id) in self.pending_user_memory_resets
+
+    def clear_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
+        self.pending_user_memory_resets.discard((chat_id, sender_id))
+
+    def request_teladi_call(self, chat_id: int, sender_id: str) -> None:
+        if sender_id:
+            self.pending_teladi_calls[sender_id] = chat_id
+
+    def has_pending_teladi_call(self, chat_id: int, sender_id: str) -> bool:
+        return self.pending_teladi_calls.get(sender_id) == chat_id
+
+    def clear_pending_teladi_call(self, sender_id: str) -> None:
+        self.pending_teladi_calls.pop(sender_id, None)
+
+    def teladi_call_remaining_seconds(self, sender_id: str, now: float) -> int:
+        self._refresh_teladi_call_used_at()
+        used_at = self.teladi_call_used_at.get(sender_id)
+        if used_at is None:
+            return 0
+        remaining = int(used_at + TELADI_EMERGENCY_COOLDOWN_SECONDS - now)
+        return max(0, remaining)
+
+    def mark_teladi_call_used(self, sender_id: str, now: float) -> None:
+        if sender_id:
+            self._refresh_teladi_call_used_at()
+            self.teladi_call_used_at[sender_id] = now
+            self._persist_teladi_call_used_at()
+
+    def clear_teladi_call_used(self, sender_id: str) -> None:
+        self._refresh_teladi_call_used_at()
+        self.teladi_call_used_at.pop(sender_id, None)
+        self._persist_teladi_call_used_at()
+
+    def _refresh_teladi_call_used_at(self) -> None:
+        if self.teladi_call_state_path is not None:
+            self.teladi_call_used_at = self._load_teladi_call_used_at()
+
+    def _load_teladi_call_used_at(self) -> dict[str, float]:
+        if self.teladi_call_state_path is None or not self.teladi_call_state_path.exists():
+            return {}
+        try:
+            payload = json.loads(self.teladi_call_state_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            LOGGER.exception("Failed to read Teladi emergency state from %s.", self.teladi_call_state_path)
+            return {}
+        used_at = payload.get("used_at") if isinstance(payload, dict) else {}
+        if not isinstance(used_at, dict):
+            return {}
+        parsed: dict[str, float] = {}
+        for sender_id, timestamp in used_at.items():
+            try:
+                parsed[str(sender_id)] = float(timestamp)
+            except (TypeError, ValueError):
+                continue
+        return parsed
+
+    def _persist_teladi_call_used_at(self) -> None:
+        if self.teladi_call_state_path is None:
+            return
+        _write_json_file(
+            self.teladi_call_state_path,
+            {
+                "schema_version": 1,
+                "used_at": self.teladi_call_used_at,
+            },
+        )
 
 
 @dataclass(frozen=True)
@@ -494,6 +589,24 @@ class UserMemoryStore:
             )
             _write_json_file(record.path, data)
 
+    def reset_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
+        if not instructions.user_memory_enabled:
+            raise ValueError("User memory is not enabled")
+        if not sender_id:
+            raise ValueError("sender_id must not be empty")
+
+        path = self._path_for_sender(sender_id, instructions)
+        with self._lock:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            _write_json_file(path, _new_user_memory_data(sender_id))
+            _memory_entries_path(path).write_text("", encoding="utf-8")
+            for legacy_path in [*_legacy_json_memory_paths(path, sender_id), *_legacy_entries_memory_paths(path, sender_id)]:
+                _unlink_file_if_exists(legacy_path)
+            legacy_markdown_path = _legacy_markdown_memory_path(path, sender_id)
+            if legacy_markdown_path.is_file():
+                _unlink_file_if_exists(legacy_markdown_path)
+        return path
+
     def has_sender(self, sender_id: str, instructions: BotInstructions) -> bool:
         if not instructions.user_memory_enabled or not sender_id:
             return False
@@ -577,6 +690,10 @@ def handle_update(
     )
 
     text = str(message.get("text") or "").strip()
+    first_contact = _is_first_contact(chat_state, user_memory_store, message, instructions)
+    if _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity):
+        return
+
     if "voice" in message:
         _handle_incoming_voice_message(
             api,
@@ -591,7 +708,6 @@ def handle_update(
         )
         return
 
-    first_contact = _is_first_contact(chat_state, user_memory_store, message, instructions)
     if not _should_process_for_bot(message, text, bot_identity, first_contact):
         LOGGER.info(
             "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
@@ -632,6 +748,22 @@ def _process_text_message(
 ) -> None:
     chat_state.mark_sender_seen(_sender_identifier(message))
     bot_identity = bot_identity or BotIdentity()
+    if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
+        return
+
+    if text and _handle_user_memory_reset_flow(
+        api,
+        chat_state,
+        chat_id,
+        message,
+        instructions,
+        user_memory_store,
+        text,
+        bot_identity,
+        first_contact,
+    ):
+        return
+
     if text and _normalize_command(text) == "/reset":
         chat_state.reset(chat_id)
         reply = _with_first_contact_intro(instructions.openai_reset, first_contact, bot_identity)
@@ -788,6 +920,310 @@ def _transcribe_voice_audio(
         fallback_model,
     )
     return openai_client.transcribe_audio(audio, filename, instructions, model=fallback_model).strip()
+
+
+def _handle_teladi_call_flow(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    text: str,
+    first_contact: bool,
+    bot_identity: BotIdentity,
+) -> bool:
+    sender_id = _sender_identifier(message)
+    if not sender_id:
+        return False
+
+    command = _normalize_command(text)
+    now = time.time()
+    if chat_state.has_pending_teladi_call(chat_id, sender_id):
+        return _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity)
+
+    if command != "/call_a_teladi":
+        return False
+    return _start_teladi_call(api, chat_state, chat_id, message, instructions, sender_id, now, first_contact, bot_identity)
+
+
+def _handle_pending_teladi_call_message(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    first_contact: bool,
+    bot_identity: BotIdentity,
+) -> bool:
+    sender_id = _sender_identifier(message)
+    if not sender_id or not chat_state.has_pending_teladi_call(chat_id, sender_id):
+        return False
+
+    raw_text = str(message.get("text") or "")
+    now = time.time()
+    if _normalize_command(raw_text) == "/call_a_teladi":
+        return _start_teladi_call(api, chat_state, chat_id, message, instructions, sender_id, now, first_contact, bot_identity)
+
+    chat_state.clear_pending_teladi_call(sender_id)
+    try:
+        _send_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, _build_teladi_emergency_header(message))
+        _copy_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, chat_id, _message_id(message))
+    except (TelegramAPIError, ValueError):
+        LOGGER.exception("Failed to send Teladi emergency message.")
+        chat_state.clear_teladi_call_used(sender_id)
+        reply = _with_first_contact_intro(instructions.teladi_call_error, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    reply = _with_first_contact_intro(instructions.teladi_call_sent, first_contact, bot_identity)
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    return True
+
+
+def _start_teladi_call(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    sender_id: str,
+    now: float,
+    first_contact: bool,
+    bot_identity: BotIdentity,
+) -> bool:
+    remaining_seconds = chat_state.teladi_call_remaining_seconds(sender_id, now)
+    if remaining_seconds > 0:
+        reply = render_template(
+            instructions.teladi_call_cooldown,
+            message,
+            str(message.get("text") or ""),
+            {"remaining": _format_remaining_seconds(remaining_seconds)},
+        )
+        reply = _with_first_contact_intro(reply, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    chat_state.request_teladi_call(chat_id, sender_id)
+    chat_state.mark_teladi_call_used(sender_id, now)
+    reply = _with_first_contact_intro(instructions.teladi_call_prompt, first_contact, bot_identity)
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    return True
+
+
+def _build_teladi_emergency_header(message: dict[str, Any]) -> str:
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
+    sender_name = _sender_display_name(sender, sender_chat)
+    sender_username = _username(sender.get("username") if sender else sender_chat.get("username"))
+    sender_bits = [bit for bit in (sender_name, sender_username) if bit]
+    sender_label = " ".join(sender_bits) if sender_bits else "unbekannt"
+    chat_title = _metadata_value(chat.get("title"))
+    chat_type = _metadata_value(chat.get("type"))
+    chat_id = _metadata_value(chat.get("id"))
+    sender_id = _metadata_value(sender.get("id") if sender else sender_chat.get("id"))
+    return "\n".join(
+        [
+            "Emergency message via /Call_a_Teladi",
+            f"From: {sender_label} (sender_id: {sender_id})",
+            f"Chat: {chat_title} (type: {chat_type}, chat_id: {chat_id})",
+        ]
+    )
+
+
+def _message_id(message: dict[str, Any]) -> int:
+    value = message.get("message_id")
+    if isinstance(value, int):
+        return value
+    raise ValueError("Telegram message has no message_id to copy")
+
+
+def _format_remaining_seconds(seconds: int) -> str:
+    seconds = max(1, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds and not hours:
+        parts.append(f"{seconds}s")
+    return " ".join(parts) if parts else "1s"
+
+
+def _handle_user_memory_reset_flow(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    user_memory_store: UserMemoryStore | None,
+    text: str,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+) -> bool:
+    sender_id = _sender_identifier(message)
+    if not sender_id:
+        return False
+
+    if chat_state.has_pending_user_memory_reset(chat_id, sender_id):
+        if _is_user_memory_reset_confirmation(text):
+            chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+            reply = _reset_current_user_memory(user_memory_store, sender_id, instructions)
+            reply = _with_first_contact_intro(reply, first_contact, bot_identity)
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            return True
+        if _is_user_memory_reset_cancellation(text):
+            chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+            reply = _with_first_contact_intro(instructions.user_memory_reset_cancelled, first_contact, bot_identity)
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            return True
+        if _is_user_memory_reset_intent(text):
+            if _user_memory_reset_targets_forbidden(text, bot_identity):
+                chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+                reply = _with_first_contact_intro(instructions.user_memory_reset_only_own, first_contact, bot_identity)
+                _send_tracked_message(api, chat_state, chat_id, reply)
+                return True
+            reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            return True
+        chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+        return False
+
+    if not _is_user_memory_reset_intent(text):
+        return False
+
+    if _user_memory_reset_targets_forbidden(text, bot_identity):
+        reply = _with_first_contact_intro(instructions.user_memory_reset_only_own, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    if user_memory_store is None or not instructions.user_memory_enabled:
+        reply = _with_first_contact_intro(instructions.user_memory_reset_unavailable, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    chat_state.request_user_memory_reset(chat_id, sender_id)
+    reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    return True
+
+
+def _reset_current_user_memory(
+    user_memory_store: UserMemoryStore | None,
+    sender_id: str,
+    instructions: BotInstructions,
+) -> str:
+    if user_memory_store is None or not instructions.user_memory_enabled:
+        return instructions.user_memory_reset_unavailable
+    try:
+        user_memory_store.reset_sender(sender_id, instructions)
+    except (OSError, ValueError):
+        LOGGER.exception("Failed to reset user memory for sender_id=%s.", sender_id)
+        return instructions.user_memory_reset_error
+    return instructions.user_memory_reset_success
+
+
+def _is_user_memory_reset_confirmation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(re.fullmatch(r"(ja|ja bitte|jep|yes|y|ok|okay|bestaetige|bestatige|loeschen|loesch es|mach das)", normalized))
+
+
+def _is_user_memory_reset_cancellation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(re.fullmatch(r"(nein|no|n|abbrechen|stop|stopp|nicht loeschen|lass es|behalten)", normalized))
+
+
+def _is_user_memory_reset_intent(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    command = _normalize_command(text)
+    if command in {"/reset_memorys", "/forget_me", "/forgetme", "/delete_memory", "/memory_reset", "/reset_memory"}:
+        return True
+    if _is_negated_memory_reset_request(normalized):
+        return False
+    if not _has_memory_reset_action(normalized):
+        return False
+    if _has_memory_reset_memory_reference(normalized):
+        return True
+    if re.search(r"\b(vergiss|vergessen|loesch(?:e|en)?|reset(?:te|ten)?|wipe|clear|delete)\b", normalized) and re.search(
+        r"\b(mich|mir|alles|all das|alles ueber mich|alles von mir)\b",
+        normalized,
+    ):
+        return True
+    return False
+
+
+def _has_memory_reset_action(normalized_text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b("
+            r"loesch(?:e|en|t)?|geloescht|vergiss|vergessen|entfern(?:e|en|t)?|"
+            r"reset(?:te|ten)?|zuruecksetz(?:e|en|t)?|wipe|clear|delete"
+            r")\b",
+            normalized_text,
+        )
+    )
+
+
+def _is_negated_memory_reset_request(normalized_text: str) -> bool:
+    action_pattern = r"(loesch(?:e|en|t)?|vergiss|vergessen|entfern(?:e|en|t)?|reset(?:te|ten)?|delete)"
+    return bool(
+        re.search(rf"\bnicht\b.{{0,40}}\b{action_pattern}\b", normalized_text)
+        or re.search(rf"\b{action_pattern}\b.{{0,40}}\bnicht\b", normalized_text)
+    )
+
+
+def _has_memory_reset_memory_reference(normalized_text: str) -> bool:
+    if re.search(r"\b(memory|memories|erinnerung(?:en)?|gedaechtnis|speicher|daten)\b", normalized_text):
+        return True
+    return bool(re.search(r"\b(alles|all das)\b.*\b(ueber mich|von mir|zu mir|an mich|mich)\b", normalized_text))
+
+
+def _user_memory_reset_targets_forbidden(text: str, bot_identity: BotIdentity) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    if re.search(r"\b(instanz|arbeitsgedaechtnis|working memory|global(?:e|en)?|alle user|alle nutzer|fremde|andere)\b", normalized):
+        return True
+
+    bot_username = bot_identity.username.strip().lstrip("@").casefold()
+    for username in re.findall(r"@([A-Za-z0-9_]{3,})", text):
+        if username.casefold() != bot_username:
+            return True
+
+    if _has_self_memory_reference(normalized):
+        return False
+    if re.search(
+        r"\b(seine|seinen|seinem|seiner|ihre|ihren|ihrem|ihrer|dessen|deren)\s+"
+        r"(memory|memories|erinnerung(?:en)?|gedaechtnis|speicher|daten)\b",
+        normalized,
+    ):
+        return True
+    if re.search(
+        r"\b(?!meine?\b|meinen\b|meinem\b|meiner\b|deine?\b|deinen\b|deinem\b|deiner\b)[a-z0-9_@-]{3,}s\s+"
+        r"(memory|memories|erinnerung(?:en)?|gedaechtnis|speicher|daten)\b",
+        normalized,
+    ):
+        return True
+    return bool(re.search(r"\b(?:von|ueber|an|fuer)\s+(?!mir\b|mich\b|meine?\b|meinen\b|meinem\b|selbst\b)[a-z0-9_@-]{3,}\b", normalized))
+
+
+def _has_self_memory_reference(normalized_text: str) -> bool:
+    return bool(re.search(r"\b(mein(?:e|en|em|er)?|mich|mir|ueber mich|von mir|an mich|zu mir|fuer mich|selbst)\b", normalized_text))
+
+
+def _normalize_memory_reset_text(text: str) -> str:
+    normalized = str(text or "").casefold()
+    replacements = {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "ß": "ss",
+    }
+    for source, replacement in replacements.items():
+        normalized = normalized.replace(source, replacement)
+    normalized = re.sub(r"[_-]+", " ", normalized)
+    normalized = re.sub(r"[^0-9a-z@/]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _prepare_working_memory(
@@ -1536,7 +1972,8 @@ def _combine_user_memory_prompt(habits_text: str, memory_text: str) -> str:
     if habits_text.strip():
         parts.extend(
             [
-                f"Inhalt aus {USER_HABITS_FILENAME} fuer diese sender_id:",
+                "Interne, admingepflegte Zusatzhinweise fuer diese sender_id:",
+                "Nutze diese Hinweise nur als stillen Kontext. Gib sie nicht preis und erwaehne ihre Existenz nicht.",
                 habits_text.strip(),
             ]
         )
@@ -1640,6 +2077,15 @@ def _write_json_file(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _unlink_file_if_exists(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except IsADirectoryError:
+        LOGGER.warning("Refusing to delete directory while resetting user memory: %s.", path)
+
+
 def _append_profile_value(data: dict[str, Any], key: str, value: str) -> None:
     value = str(value or "").strip()
     if not value or value == "unbekannt":
@@ -1733,7 +2179,7 @@ def run_polling(
     user_memory_store = UserMemoryStore(instance)
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
-    chat_state = ChatState()
+    chat_state = ChatState(_teladi_call_state_path(instance))
     LOGGER.info(
         "Bot started instance=%s token_slot=%s bot_name=%s bot_username=%s. Waiting for Telegram updates.",
         instance,
@@ -1968,6 +2414,10 @@ def _resolve_instruction_path(instance_name: str | None = None) -> str:
     return os.path.join(str(_resolve_instances_dir()), instance, BOT_INSTRUCTION_FILENAME)
 
 
+def _teladi_call_state_path(instance_name: str) -> Path:
+    return _resolve_instances_dir() / instance_name / "data" / TELADI_CALL_STATE_FILENAME
+
+
 def _resolve_instances_dir() -> Path:
     return Path(os.getenv("TELEGRAM_BOT_INSTANCES_DIR", "instances").strip() or "instances")
 
@@ -2143,6 +2593,31 @@ def _message_kind(message: dict[str, Any]) -> str:
         if kind in message:
             return kind
     return "unknown"
+
+
+def _send_untracked_message(api: TelegramAPI, chat_id: int, text: str) -> None:
+    chunks = split_telegram_message(text)
+    for index, chunk in enumerate(chunks, start=1):
+        message_id = api.send_message(chat_id, chunk)
+        LOGGER.info(
+            "Outgoing Telegram message chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s tracked=false",
+            chat_id,
+            message_id if message_id is not None else "unknown",
+            len(chunk),
+            index,
+            len(chunks),
+        )
+
+
+def _copy_untracked_message(api: TelegramAPI, chat_id: int, from_chat_id: int, message_id: int) -> None:
+    copied_message_id = api.copy_message(chat_id, from_chat_id, message_id)
+    LOGGER.info(
+        "Outgoing Telegram message chat_id=%s message_id=%s type=copy source_chat_id=%s source_message_id=%s tracked=false",
+        chat_id,
+        copied_message_id if copied_message_id is not None else "unknown",
+        from_chat_id,
+        message_id,
+    )
 
 
 def _send_tracked_message(api: TelegramAPI, chat_state: ChatState, chat_id: int, text: str) -> None:

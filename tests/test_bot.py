@@ -9,6 +9,7 @@ from telegram_bot.bot import (
     BotTokenConfig,
     ChatState,
     InstanceRunConfig,
+    TELADI_EMERGENCY_CHAT_ID,
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     TelegramNetworkError,
     UserMemoryStore,
@@ -41,6 +42,7 @@ class FakeAPI:
         self.sent_messages: list[tuple[int, str]] = []
         self.chat_actions: list[tuple[int, str]] = []
         self.deleted_messages: list[tuple[int, int]] = []
+        self.copied_messages: list[tuple[int, int, int]] = []
         self.sent_voices: list[tuple[int, bytes, str, str]] = []
         self.file_paths: dict[str, str] = {}
         self.file_data: dict[str, bytes] = {}
@@ -58,6 +60,11 @@ class FakeAPI:
 
     def delete_message(self, chat_id: int, message_id: int) -> None:
         self.deleted_messages.append((chat_id, message_id))
+
+    def copy_message(self, chat_id: int, from_chat_id: int, message_id: int) -> int:
+        self.copied_messages.append((chat_id, from_chat_id, message_id))
+        self.next_message_id += 1
+        return self.next_message_id
 
     def send_voice(self, chat_id: int, audio: bytes, filename: str, content_type: str) -> int:
         self.sent_voices.append((chat_id, audio, filename, content_type))
@@ -426,8 +433,270 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            self.assertIn("User_Habbits_and_behave.md", openai_client.reply_inputs[-1])
+            self.assertIn("Interne, admingepflegte Zusatzhinweise", openai_client.reply_inputs[-1])
+            self.assertIn("Nutze diese Hinweise nur als stillen Kontext", openai_client.reply_inputs[-1])
+            self.assertNotIn("User_Habbits_and_behave.md", openai_client.reply_inputs[-1])
             self.assertIn("Ada mag knappe Antworten.", openai_client.reply_inputs[-1])
+
+    def test_user_memory_reset_requires_confirmation_and_resets_only_current_sender(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            chat_state = ChatState()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Merke dir: Mein Codewort ist Mond.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Bitte loesche alle Erinnerungen ueber mich.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+
+            memory_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            entries_path = memory_dir / "User_Memory_Entries.jsonl"
+            habits_path = memory_dir / "User_Habbits_and_behave.md"
+            habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
+            self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_confirm))
+            self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
+            self.assertEqual(len(read_jsonl(entries_path)), 1)
+            self.assertEqual(len(openai_client.reply_inputs), 1)
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "ja",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+
+            payload = json.loads((memory_dir / "User_Memory_Index.json").read_text(encoding="utf-8"))
+            self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_success))
+            self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
+            self.assertEqual(payload["sender_id"], "456")
+            self.assertEqual(payload["profile"], {"names": [], "usernames": [], "chat_ids": [], "chat_titles": []})
+            self.assertEqual(payload["index"], {"entries": {}, "keywords": {}, "recent_ids": []})
+            self.assertEqual(read_jsonl(entries_path), [])
+            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Ada mag knappe Antworten.")
+            self.assertEqual(len(openai_client.reply_inputs), 1)
+
+    def test_user_memory_reset_can_be_cancelled(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            chat_state = ChatState()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Merke dir: Mein Codewort ist Sonne.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "/reset_memorys",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "nein",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+
+            entries_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl"
+            self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_cancelled))
+            self.assertEqual(len(read_jsonl(entries_path)), 1)
+
+    def test_user_memory_reset_rejects_foreign_and_instance_memory_targets(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            chat_state = ChatState()
+            instructions = BotInstructions(
+                openai_enabled=True,
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+            working_store = WorkingMemoryStore("Depressionsbot", Path(directory) / "instances")
+            working_store.append_manual("Allgemeine Regel: sachlich bleiben.")
+
+            for sender_id, name, text in (
+                (456, "Ada", "Adas privates Codewort ist Mond."),
+                (789, "Bob", "Bobs privates Codewort ist Sonne."),
+            ):
+                handle_update(
+                    api,
+                    {
+                        "message": {
+                            "text": text,
+                            "chat": {"id": 123, "type": "private"},
+                            "from": {"id": sender_id, "first_name": name},
+                        }
+                    },
+                    instructions,
+                    openai_client,
+                    chat_state,
+                    memory_store,
+                    None,
+                    working_store,
+                )
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Loesche Bobs Erinnerungen.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+                None,
+                working_store,
+            )
+
+            self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
+            self.assertIn("keine userbezogenen Daten", api.sent_messages[-1][1])
+            bob_entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Entries.jsonl")
+            self.assertEqual(len(bob_entries), 1)
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Loesche seine Erinnerungen.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+                None,
+                working_store,
+            )
+
+            self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Loesch das Instanzgedaechtnis.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+                None,
+                working_store,
+            )
+
+            self.assertIn("Instanz-/Arbeitsgedaechtnis enthaelt keine userbezogenen Daten", api.sent_messages[-1][1])
+            working_entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "Working_Memorys.entries.jsonl")
+            self.assertEqual(len(working_entries), 1)
+
+    def test_user_memory_reset_ignores_negated_delete_requests(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "Bitte loesche meine Erinnerungen nicht.",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(api.sent_messages, [(123, "AI: Bitte loesche meine Erinnerungen nicht.")])
 
     def test_working_memory_files_are_instance_scoped_and_sanitize_manual_entries(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1074,7 +1343,7 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/reset", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
 
         self.assertIsNone(chat_state.get_previous_response_id(123))
-        self.assertEqual(api.sent_messages, [(123, "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht.")])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_reset)])
 
     def test_delete_last_removes_last_recorded_bot_message(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -1086,7 +1355,7 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/delete_last", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
 
         self.assertEqual(api.deleted_messages, [(123, 88)])
-        self.assertEqual(api.sent_messages, [(123, "Letzte Bot-Nachricht geloescht.")])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().delete_last_success)])
 
     def test_cleanup_removes_requested_number_of_recorded_messages(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -1099,7 +1368,7 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/cleanup 2", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
 
         self.assertEqual(api.deleted_messages, [(123, 12), (123, 11)])
-        self.assertEqual(api.sent_messages, [(123, "2 Bot-Nachrichten geloescht.")])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_success.format(count=2))])
         self.assertEqual(chat_state.pop_sent_messages(123, 10), [101, 10])
 
     def test_cleanup_requires_count(self) -> None:
@@ -1109,7 +1378,140 @@ class BotTests(unittest.TestCase):
 
         handle_update(api, {"message": {"text": "/cleanup", "chat": {"id": 123}}}, BotInstructions(), None, ChatState())
 
-        self.assertEqual(api.sent_messages, [(123, "Nutzung: /cleanup 10")])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_usage)])
+
+    def test_call_a_teladi_prompts_and_forwards_next_message(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "/Call_a_Teladi",
+                    "message_id": 54,
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada", "last_name": "Lovelace", "username": "ada_l"},
+                }
+            },
+            instructions,
+            FakeOpenAIClient(),
+            chat_state,
+        )
+
+        self.assertEqual(api.sent_messages, [(123, instructions.teladi_call_prompt)])
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "  Bitte sofort melden.\nKeine Kuerzung.  ",
+                    "message_id": 55,
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada", "last_name": "Lovelace", "username": "ada_l"},
+                }
+            },
+            instructions,
+            FakeOpenAIClient(),
+            chat_state,
+        )
+
+        self.assertEqual(api.sent_messages[-1], (123, instructions.teladi_call_sent))
+        user_replies = [text for chat_id, text in api.sent_messages if chat_id == 123]
+        self.assertTrue(all(str(TELADI_EMERGENCY_CHAT_ID) not in text for text in user_replies))
+        self.assertEqual(api.sent_messages[1][0], TELADI_EMERGENCY_CHAT_ID)
+        self.assertIn("Emergency message via /Call_a_Teladi", api.sent_messages[1][1])
+        self.assertIn("From: Ada Lovelace @ada_l (sender_id: 456)", api.sent_messages[1][1])
+        self.assertIn("Chat: unbekannt (type: private, chat_id: 123)", api.sent_messages[1][1])
+        self.assertNotIn("Bitte sofort melden", api.sent_messages[1][1])
+        self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 55)])
+
+    def test_call_a_teladi_cooldown_rejects_until_next_day(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        instructions = BotInstructions()
+
+        with patch("telegram_bot.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0, 87401.0]):
+            handle_update(
+                api,
+                {"message": {"text": "/Call_a_Teladi", "message_id": 1, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                instructions,
+                None,
+                chat_state,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "Hilfe", "message_id": 2, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                instructions,
+                None,
+                chat_state,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "/Call_a_Teladi", "message_id": 3, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                instructions,
+                None,
+                chat_state,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "/Call_a_Teladi", "message_id": 4, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                instructions,
+                None,
+                chat_state,
+            )
+
+        target_messages = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
+        self.assertEqual(len(target_messages), 1)
+        self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 2)])
+        self.assertIn("23h", api.sent_messages[3][1])
+        self.assertEqual(api.sent_messages[-1], (123, instructions.teladi_call_prompt))
+
+    def test_call_a_teladi_cooldown_persists_in_state_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            state_path = Path(directory) / "teladi_state.json"
+            chat_state = ChatState(state_path)
+            chat_state.mark_teladi_call_used("456", 1000.0)
+
+            reloaded_state = ChatState(state_path)
+
+            self.assertEqual(reloaded_state.teladi_call_remaining_seconds("456", 4600.0), 82800)
+            reloaded_state.clear_teladi_call_used("456")
+            self.assertEqual(ChatState(state_path).teladi_call_remaining_seconds("456", 4600.0), 0)
+
+    def test_call_a_teladi_copies_non_text_next_message(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        instructions = BotInstructions()
+
+        handle_update(api, {"message": {"text": "/Call_a_Teladi", "message_id": 10, "chat": {"id": 123}, "from": {"id": 456}}}, instructions, None, chat_state)
+        handle_update(api, {"message": {"photo": [{"file_id": "p1"}], "message_id": 11, "chat": {"id": 123}, "from": {"id": 456}}}, instructions, None, chat_state)
+
+        self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 11)])
+        self.assertEqual(api.sent_messages[-1], (123, instructions.teladi_call_sent))
+
+    def test_call_a_teladi_repeated_command_while_pending_does_not_forward_command_text(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        instructions = BotInstructions()
+
+        handle_update(api, {"message": {"text": "/Call_a_Teladi", "chat": {"id": 123}, "from": {"id": 456}}}, instructions, None, chat_state)
+        handle_update(api, {"message": {"text": "/Call_a_Teladi", "chat": {"id": 123}, "from": {"id": 456}}}, instructions, None, chat_state)
+
+        self.assertEqual(api.sent_messages[0], (123, instructions.teladi_call_prompt))
+        self.assertEqual(api.sent_messages[1][0], 123)
+        self.assertIn("Du kannst /Call_a_Teladi erst in", api.sent_messages[1][1])
+        self.assertNotIn(str(TELADI_EMERGENCY_CHAT_ID), api.sent_messages[1][1])
+        self.assertFalse(any(chat_id == TELADI_EMERGENCY_CHAT_ID for chat_id, _ in api.sent_messages))
 
     def test_run_polling_logs_network_errors_without_traceback(self) -> None:
         api = FlakyPollingAPI()

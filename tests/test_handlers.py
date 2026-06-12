@@ -11,7 +11,14 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(reply, "Hallo, Ada. Ich bin bereit. Sende /help fuer die Befehle.")
 
     def test_help_returns_command_list(self) -> None:
-        self.assertEqual(build_reply({"text": "/help"}), HELP_TEXT)
+        reply = build_reply({"text": "/help"})
+
+        self.assertEqual(reply, HELP_TEXT)
+        self.assertIn("/reset - setzt nur den OpenAI-Verlauf", reply)
+        self.assertIn("/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege", reply)
+        self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)
+        self.assertIn("/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht", reply)
+        self.assertIn("/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten", reply)
 
     def test_ping(self) -> None:
         self.assertEqual(build_reply({"text": "/ping"}), "pong")
