@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+Gesprachsanalyse.md
+instances/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/

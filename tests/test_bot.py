@@ -1,0 +1,679 @@
+import unittest
+from unittest.mock import patch
+
+from telegram_bot.bot import (
+    ChatState,
+    TELEGRAM_MESSAGE_CHUNK_SIZE,
+    TelegramNetworkError,
+    _build_openai_user_input,
+    _downloaded_file_name,
+    _encode_multipart_form_data,
+    _instance_env_key,
+    _resolve_instruction_path,
+    _resolve_openai_api_key,
+    _resolve_telegram_token,
+    _transcribe_voice_audio,
+    contains_sources,
+    count_words,
+    handle_update,
+    run_polling,
+    split_telegram_message,
+)
+from telegram_bot.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
+
+
+class FakeAPI:
+    def __init__(self) -> None:
+        self.sent_messages: list[tuple[int, str]] = []
+        self.chat_actions: list[tuple[int, str]] = []
+        self.deleted_messages: list[tuple[int, int]] = []
+        self.sent_voices: list[tuple[int, bytes, str, str]] = []
+        self.file_paths: dict[str, str] = {}
+        self.file_data: dict[str, bytes] = {}
+        self.file_path_requests: list[str] = []
+        self.download_requests: list[str] = []
+        self.next_message_id = 100
+
+    def send_message(self, chat_id: int, text: str) -> int:
+        self.sent_messages.append((chat_id, text))
+        self.next_message_id += 1
+        return self.next_message_id
+
+    def send_chat_action(self, chat_id: int, action: str) -> None:
+        self.chat_actions.append((chat_id, action))
+
+    def delete_message(self, chat_id: int, message_id: int) -> None:
+        self.deleted_messages.append((chat_id, message_id))
+
+    def send_voice(self, chat_id: int, audio: bytes, filename: str, content_type: str) -> int:
+        self.sent_voices.append((chat_id, audio, filename, content_type))
+        self.next_message_id += 1
+        return self.next_message_id
+
+    def get_file_path(self, file_id: str) -> str:
+        self.file_path_requests.append(file_id)
+        return self.file_paths[file_id]
+
+    def download_file(self, file_path: str) -> bytes:
+        self.download_requests.append(file_path)
+        return self.file_data.get(file_path, b"voice-audio")
+
+
+class FakeOpenAIClient:
+    def __init__(self) -> None:
+        self.previous_response_ids: list[str | None] = []
+        self.reply_inputs: list[str] = []
+        self.voice_texts: list[str] = []
+        self.transcribed_audios: list[tuple[bytes, str]] = []
+        self.transcription_models: list[str | None] = []
+        self.transcription_text = "Was ist los?"
+        self.transcription_texts: list[str] = []
+
+    def create_reply(self, user_text, instructions, previous_response_id=None):
+        self.previous_response_ids.append(previous_response_id)
+        self.reply_inputs.append(user_text)
+        message_text = user_text.rsplit("\nNachricht:\n", maxsplit=1)[-1]
+        return OpenAIResponse(text=f"AI: {message_text}", response_id="resp_123", service_tier="flex")
+
+    def create_voice(self, text, instructions):
+        self.voice_texts.append(text)
+        return OpenAIVoice(audio=b"voice-bytes", filename="voice.ogg", content_type="audio/ogg")
+
+    def transcribe_audio(self, audio, filename, instructions, model=None):
+        self.transcribed_audios.append((audio, filename))
+        self.transcription_models.append(model)
+        if self.transcription_texts:
+            return self.transcription_texts.pop(0)
+        return self.transcription_text
+
+
+class SequenceOpenAIClient(FakeOpenAIClient):
+    def __init__(self, replies: list[str]) -> None:
+        super().__init__()
+        self.replies = replies
+
+    def create_reply(self, user_text, instructions, previous_response_id=None):
+        self.previous_response_ids.append(previous_response_id)
+        self.reply_inputs.append(user_text)
+        return OpenAIResponse(text=self.replies.pop(0), response_id="resp_seq", service_tier="flex")
+
+
+class LongReplyOpenAIClient:
+    def create_reply(self, user_text, instructions, previous_response_id=None):
+        return OpenAIResponse(text=("Absatz.\n\n" * 900), response_id="resp_long", service_tier="flex")
+
+
+class FailingOpenAIClient:
+    def create_reply(self, user_text, instructions, previous_response_id=None):
+        raise OpenAIAPIError("short failure")
+
+
+class FakeInstructionStore:
+    def get(self):
+        from telegram_bot.instructions import BotInstructions
+
+        return BotInstructions()
+
+
+class FlakyPollingAPI(FakeAPI):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def get_updates(self, offset):
+        self.calls += 1
+        if self.calls == 1:
+            raise TelegramNetworkError("Telegram network error: reset")
+        raise KeyboardInterrupt
+
+
+class BotTests(unittest.TestCase):
+    def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/BOT.md")
+
+    def test_instruction_path_uses_selected_instance(self) -> None:
+        with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Mondbot"}, clear=True):
+            self.assertEqual(_resolve_instruction_path(), "instances/Mondbot/BOT.md")
+
+    def test_explicit_instruction_path_still_overrides_instance(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_INSTANCE": "Mondbot",
+                "TELEGRAM_BOT_INSTRUCTIONS": "custom/BOT.md",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_resolve_instruction_path(), "custom/BOT.md")
+
+    def test_instance_token_overrides_generic_token(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "TELEGRAM_BOT_TOKEN": "generic",
+                "TELEGRAM_BOT_TOKEN_MONDBOT": "moon-token",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_resolve_telegram_token("Mondbot"), "moon-token")
+
+    def test_instance_openai_key_overrides_generic_key(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "generic-key",
+                "OPENAI_API_KEY_MONDBOT": "moon-key",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_resolve_openai_api_key("Mondbot"), "moon-key")
+
+    def test_generic_openai_key_is_fallback(self) -> None:
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "generic-key"}, clear=True):
+            self.assertEqual(_resolve_openai_api_key("Mondbot"), "generic-key")
+
+    def test_instance_env_key_normalizes_instance_name(self) -> None:
+        self.assertEqual(_instance_env_key("TELEGRAM_BOT_TOKEN", "Bote_der_Wahrheit"), "TELEGRAM_BOT_TOKEN_BOTE_DER_WAHRHEIT")
+
+    def test_handle_update_sends_reply_to_message_chat(self) -> None:
+        api = FakeAPI()
+
+        handle_update(api, {"message": {"text": "/ping", "chat": {"id": 123}}})
+
+        self.assertEqual(api.sent_messages, [(123, "pong")])
+
+    def test_logs_incoming_and_outgoing_messages_without_content(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+
+        with self.assertLogs("telegram_bot", level="INFO") as logs:
+            handle_update(
+                api,
+                {"message": {"message_id": 55, "text": "streng geheim", "chat": {"id": 123}}},
+                BotInstructions(),
+                None,
+                ChatState(),
+            )
+
+        log_text = "\n".join(logs.output)
+        self.assertIn("Incoming Telegram message chat_id=123 message_id=55 type=text", log_text)
+        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=text", log_text)
+        self.assertNotIn("streng geheim", log_text)
+        self.assertNotIn("Echo:", log_text)
+
+    def test_handle_update_ignores_updates_without_chat(self) -> None:
+        api = FakeAPI()
+
+        handle_update(api, {"message": {"text": "/ping"}})
+
+        self.assertEqual(api.sent_messages, [])
+
+    def test_handle_update_ignores_non_text_message_with_chat(self) -> None:
+        api = FakeAPI()
+
+        handle_update(api, {"message": {"photo": [], "chat": {"id": 123}}})
+
+        self.assertEqual(api.sent_messages, [])
+
+    def test_handle_update_uses_openai_for_unmatched_text_when_enabled(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, openai_client, ChatState())
+
+        self.assertEqual(api.chat_actions, [(123, "typing")])
+        self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_openai_input_includes_sender_context_for_group_messages(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 77,
+                    "text": "Was ist los?",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {
+                        "id": 456,
+                        "first_name": "Ada",
+                        "last_name": "Lovelace",
+                        "username": "ada_l",
+                    },
+                }
+            },
+            instructions,
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(len(openai_client.reply_inputs), 1)
+        openai_input = openai_client.reply_inputs[0]
+        self.assertIn("- chat_id: -100123", openai_input)
+        self.assertIn("- chat_type: group", openai_input)
+        self.assertIn("- chat_title: Debatte", openai_input)
+        self.assertIn("- sender_id: 456", openai_input)
+        self.assertIn("- sender_name: Ada Lovelace", openai_input)
+        self.assertIn("- sender_username: @ada_l", openai_input)
+        self.assertTrue(openai_input.endswith("Nachricht:\nWas ist los?"))
+
+    def test_openai_input_uses_sender_chat_when_user_sender_is_missing(self) -> None:
+        openai_input = _build_openai_user_input(
+            {
+                "text": "Anonyme Nachricht",
+                "chat": {"id": -100123, "type": "supergroup", "title": "Debatte"},
+                "sender_chat": {"id": -100999, "title": "Adminteam"},
+            },
+            "Anonyme Nachricht",
+        )
+
+        self.assertIn("- sender_id: -100999", openai_input)
+        self.assertIn("- sender_name: Adminteam", openai_input)
+        self.assertIn("- sender_username: unbekannt", openai_input)
+
+    def test_handle_update_transcribes_voice_and_processes_result_with_openai(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        api.file_data["voice/file_1.oga"] = b"voice-audio"
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 60,
+                    "voice": {"file_id": "file_1"},
+                    "chat": {"id": 123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(api.file_path_requests, ["file_1"])
+        self.assertEqual(api.download_requests, ["voice/file_1.oga"])
+        self.assertEqual(openai_client.transcribed_audios, [(b"voice-audio", "file_1.ogg")])
+        self.assertEqual(openai_client.transcription_models, ["gpt-4o-mini-transcribe"])
+        self.assertIn("- sender_id: 456", openai_client.reply_inputs[0])
+        self.assertIn("- sender_name: Ada", openai_client.reply_inputs[0])
+        self.assertEqual(api.chat_actions, [(123, "typing"), (123, "typing")])
+        self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_transcribe_voice_audio_retries_fallback_after_empty_primary_transcript(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_texts = ["", "Hallo aus Fallback"]
+        instructions = BotInstructions(
+            openai_transcription_model="gpt-4o-mini-transcribe",
+            openai_transcription_fallback_model="whisper-1",
+        )
+
+        with self.assertLogs("telegram_bot", level="WARNING") as logs:
+            text = _transcribe_voice_audio(openai_client, b"voice-audio", "file_1.ogg", instructions)
+
+        self.assertEqual(text, "Hallo aus Fallback")
+        self.assertEqual(openai_client.transcription_models, ["gpt-4o-mini-transcribe", "whisper-1"])
+        self.assertIn("Retrying with fallback_model=whisper-1", "\n".join(logs.output))
+
+    def test_transcribe_voice_audio_does_not_retry_when_fallback_is_disabled(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_text = ""
+        instructions = BotInstructions(openai_transcription_fallback_model="")
+
+        text = _transcribe_voice_audio(openai_client, b"voice-audio", "file_1.ogg", instructions)
+
+        self.assertEqual(text, "")
+        self.assertEqual(openai_client.transcription_models, ["gpt-4o-mini-transcribe"])
+
+    def test_handle_update_transcribed_voice_can_trigger_static_reply(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_text = "/ping"
+
+        handle_update(
+            api,
+            {"message": {"voice": {"file_id": "file_1"}, "chat": {"id": 123}}},
+            BotInstructions(),
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(api.sent_messages, [(123, "pong")])
+
+    def test_handle_update_voice_requires_openai_client(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+
+        handle_update(
+            api,
+            {"message": {"voice": {"file_id": "file_1"}, "chat": {"id": 123}}},
+            BotInstructions(openai_enabled=True),
+            None,
+            ChatState(),
+        )
+
+        self.assertEqual(api.file_path_requests, [])
+        self.assertEqual(api.sent_messages, [(123, "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt.")])
+
+    def test_handle_update_voice_reports_empty_transcription(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_text = ""
+
+        handle_update(
+            api,
+            {"message": {"voice": {"file_id": "file_1"}, "chat": {"id": 123}}},
+            BotInstructions(openai_enabled=True, openai_transcription_fallback_model=""),
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(api.sent_messages, [(123, "Ich konnte in der Sprachnachricht keinen Text erkennen.")])
+
+    def test_logs_incoming_voice_without_transcribed_content(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_text = "streng geheim"
+
+        with self.assertLogs("telegram_bot", level="INFO") as logs:
+            handle_update(
+                api,
+                {"message": {"message_id": 60, "voice": {"file_id": "file_1"}, "chat": {"id": 123}}},
+                BotInstructions(),
+                openai_client,
+                ChatState(),
+            )
+
+        log_text = "\n".join(logs.output)
+        self.assertIn("Incoming Telegram message chat_id=123 message_id=60 type=voice", log_text)
+        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=text", log_text)
+        self.assertNotIn("streng geheim", log_text)
+        self.assertNotIn("Echo:", log_text)
+
+    def test_voice_command_sends_generated_voice(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+
+        handle_update(api, {"message": {"text": "/voice Hallo Welt", "chat": {"id": 123}}}, BotInstructions(), openai_client, ChatState())
+
+        self.assertEqual(openai_client.voice_texts, ["Hallo Welt"])
+        self.assertEqual(api.chat_actions, [(123, "record_voice"), (123, "upload_voice")])
+        self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
+
+    def test_logs_outgoing_voice_without_content(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+
+        with self.assertLogs("telegram_bot", level="INFO") as logs:
+            handle_update(
+                api,
+                {"message": {"message_id": 56, "text": "/voice sehr privat", "chat": {"id": 123}}},
+                BotInstructions(),
+                openai_client,
+                ChatState(),
+            )
+
+        log_text = "\n".join(logs.output)
+        self.assertIn("Incoming Telegram message chat_id=123 message_id=56 type=text", log_text)
+        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=voice bytes=11", log_text)
+        self.assertNotIn("sehr privat", log_text)
+
+    def test_voice_command_uses_replied_message_text(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+
+        handle_update(
+            api,
+            {"message": {"text": "/voice", "reply_to_message": {"text": "Aus Reply"}, "chat": {"id": 123}}},
+            BotInstructions(),
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(openai_client.voice_texts, ["Aus Reply"])
+
+    def test_voice_command_requires_text(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+
+        handle_update(api, {"message": {"text": "/voice", "chat": {"id": 123}}}, BotInstructions(), FakeOpenAIClient(), ChatState())
+
+        self.assertEqual(api.sent_messages, [(123, "Nutzung: /voice Text fuer die Sprachnachricht")])
+
+    def test_voice_command_rejects_too_long_text(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        instructions = BotInstructions(openai_voice_max_input_chars=5)
+
+        handle_update(api, {"message": {"text": "/voice zu lang", "chat": {"id": 123}}}, instructions, FakeOpenAIClient(), ChatState())
+
+        self.assertEqual(api.sent_messages, [(123, "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: 5 Zeichen.")])
+
+    def test_handle_update_splits_long_openai_reply(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        instructions = BotInstructions(openai_enabled=True)
+
+        handle_update(api, {"message": {"text": "lang bitte", "chat": {"id": 123}}}, instructions, LongReplyOpenAIClient(), ChatState())
+
+        self.assertGreater(len(api.sent_messages), 1)
+        self.assertTrue(all(len(text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for _, text in api.sent_messages))
+
+    def test_every_third_short_openai_reply_without_sources_is_voice(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        openai_client = SequenceOpenAIClient(["Kurz eins.", "Kurz zwei.", "Kurz drei."])
+        instructions = BotInstructions(openai_enabled=True, openai_auto_voice_every=3)
+
+        for index in range(3):
+            handle_update(
+                api,
+                {"message": {"text": f"frage {index}", "chat": {"id": 123}}},
+                instructions,
+                openai_client,
+                chat_state,
+            )
+
+        self.assertEqual(api.sent_messages, [(123, "Kurz eins."), (123, "Kurz zwei.")])
+        self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
+        self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
+
+    def test_auto_voice_skips_replies_with_sources(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        openai_client = SequenceOpenAIClient(
+            [
+                "Kurz eins.",
+                "Quelle: https://example.com",
+                "Kurz zwei.",
+                "Kurz drei.",
+            ]
+        )
+        instructions = BotInstructions(openai_enabled=True, openai_auto_voice_every=3)
+
+        for index in range(4):
+            handle_update(
+                api,
+                {"message": {"text": f"frage {index}", "chat": {"id": 123}}},
+                instructions,
+                openai_client,
+                chat_state,
+            )
+
+        self.assertEqual(
+            api.sent_messages,
+            [(123, "Kurz eins."), (123, "Quelle: https://example.com"), (123, "Kurz zwei.")],
+        )
+        self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
+
+    def test_auto_voice_skips_replies_with_50_or_more_words(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        long_reply = " ".join(["wort"] * 50)
+        openai_client = SequenceOpenAIClient(["Kurz eins.", "Kurz zwei.", long_reply, "Kurz drei."])
+        instructions = BotInstructions(openai_enabled=True, openai_auto_voice_every=3, openai_auto_voice_max_words=50)
+
+        for index in range(4):
+            handle_update(
+                api,
+                {"message": {"text": f"frage {index}", "chat": {"id": 123}}},
+                instructions,
+                openai_client,
+                chat_state,
+            )
+
+        self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
+        self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
+
+    def test_handle_update_logs_openai_error_without_traceback(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        instructions = BotInstructions(openai_enabled=True)
+
+        with self.assertLogs("telegram_bot", level="ERROR") as logs:
+            handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, FailingOpenAIClient(), ChatState())
+
+        self.assertIn("OpenAI request failed: short failure", "\n".join(logs.output))
+        self.assertEqual(api.sent_messages, [(123, instructions.openai_error)])
+
+    def test_reset_clears_openai_chat_state(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.set_previous_response_id(123, "resp_old")
+
+        handle_update(api, {"message": {"text": "/reset", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
+
+        self.assertIsNone(chat_state.get_previous_response_id(123))
+        self.assertEqual(api.sent_messages, [(123, "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht.")])
+
+    def test_delete_last_removes_last_recorded_bot_message(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.record_sent_message(123, 88)
+
+        handle_update(api, {"message": {"text": "/delete_last", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
+
+        self.assertEqual(api.deleted_messages, [(123, 88)])
+        self.assertEqual(api.sent_messages, [(123, "Letzte Bot-Nachricht geloescht.")])
+
+    def test_cleanup_removes_requested_number_of_recorded_messages(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        for message_id in (10, 11, 12):
+            chat_state.record_sent_message(123, message_id)
+
+        handle_update(api, {"message": {"text": "/cleanup 2", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
+
+        self.assertEqual(api.deleted_messages, [(123, 12), (123, 11)])
+        self.assertEqual(api.sent_messages, [(123, "2 Bot-Nachrichten geloescht.")])
+        self.assertEqual(chat_state.pop_sent_messages(123, 10), [101, 10])
+
+    def test_cleanup_requires_count(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+
+        handle_update(api, {"message": {"text": "/cleanup", "chat": {"id": 123}}}, BotInstructions(), None, ChatState())
+
+        self.assertEqual(api.sent_messages, [(123, "Nutzung: /cleanup 10")])
+
+    def test_run_polling_logs_network_errors_without_traceback(self) -> None:
+        api = FlakyPollingAPI()
+
+        with patch("telegram_bot.bot.time.sleep") as sleep, self.assertLogs("telegram_bot", level="WARNING") as logs:
+            run_polling(api, FakeInstructionStore())
+
+        sleep.assert_called_once_with(5)
+        self.assertEqual(api.calls, 2)
+        self.assertIn("Retrying in 5 seconds", "\n".join(logs.output))
+
+    def test_split_telegram_message_prefers_paragraph_boundaries(self) -> None:
+        text = ("a" * 20) + "\n\n" + ("b" * 20) + "\n\n" + ("c" * 20)
+
+        chunks = split_telegram_message(text, chunk_size=45)
+
+        self.assertEqual(chunks, [("a" * 20) + "\n\n" + ("b" * 20), "c" * 20])
+
+    def test_split_telegram_message_splits_long_words(self) -> None:
+        chunks = split_telegram_message("x" * 25, chunk_size=10)
+
+        self.assertEqual(chunks, ["x" * 10, "x" * 10, "x" * 5])
+
+    def test_source_detection(self) -> None:
+        self.assertTrue(contains_sources("Quelle: https://example.com"))
+        self.assertTrue(contains_sources("Siehe [Beleg](https://example.com)."))
+        self.assertFalse(contains_sources("Nur eine kurze Antwort ohne Link."))
+
+    def test_count_words_uses_whitespace_tokens(self) -> None:
+        self.assertEqual(count_words("Eins zwei, drei."), 3)
+
+    def test_downloaded_file_name_maps_telegram_oga_to_openai_ogg(self) -> None:
+        self.assertEqual(_downloaded_file_name("voice/file_1.oga"), "file_1.ogg")
+        self.assertEqual(_downloaded_file_name("voice/file_1.ogg"), "file_1.ogg")
+        self.assertEqual(_downloaded_file_name(""), "voice.ogg")
+
+    def test_encode_multipart_form_data_includes_fields_and_file(self) -> None:
+        body, content_type = _encode_multipart_form_data(
+            {"chat_id": 123},
+            [("voice", "voice.ogg", "audio/ogg", b"abc")],
+        )
+
+        self.assertIn("multipart/form-data; boundary=", content_type)
+        self.assertIn(b'name="chat_id"', body)
+        self.assertIn(b"123", body)
+        self.assertIn(b'name="voice"; filename="voice.ogg"', body)
+        self.assertIn(b"Content-Type: audio/ogg", body)
+        self.assertIn(b"abc", body)
+
+
+if __name__ == "__main__":
+    unittest.main()
