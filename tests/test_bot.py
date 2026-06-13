@@ -2,8 +2,10 @@ import base64
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+from importlib import util
 from pathlib import Path
 from unittest.mock import call, patch
 
@@ -12,6 +14,7 @@ from TeeBotus.user_memory_crypto import (
     USER_MEMORY_PASSPHRASE_FILENAME,
     UserMemoryCryptoError,
     ensure_user_memory_key,
+    is_encrypted_payload,
     read_json as read_encrypted_user_memory_json,
     read_jsonl as read_encrypted_user_memory_jsonl,
     read_text as read_encrypted_user_memory_text,
@@ -64,6 +67,12 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
 
 STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
+MIGRATION_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "migrate_user_memory_encryption.py"
+MIGRATION_SCRIPT_SPEC = util.spec_from_file_location("migrate_user_memory_encryption", MIGRATION_SCRIPT_PATH)
+assert MIGRATION_SCRIPT_SPEC is not None and MIGRATION_SCRIPT_SPEC.loader is not None
+migrate_user_memory_encryption = util.module_from_spec(MIGRATION_SCRIPT_SPEC)
+sys.modules[MIGRATION_SCRIPT_SPEC.name] = migrate_user_memory_encryption
+MIGRATION_SCRIPT_SPEC.loader.exec_module(migrate_user_memory_encryption)
 
 
 class FakeAPI:
@@ -422,6 +431,52 @@ class BotTests(unittest.TestCase):
             self.assertIsNone(record)
             self.assertEqual(memory_path.read_bytes(), original_payload)
             self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
+
+    def test_user_memory_encryption_migration_encrypts_known_plaintext_files_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir.mkdir(parents=True, exist_ok=True)
+            index_path = user_dir / "User_Memory_Index.json"
+            entries_path = user_dir / "User_Memory_Entries.jsonl"
+            habits_path = user_dir / "User_Habbits_and_behave.md"
+            custom_path = user_dir / "Julia"
+            index_payload = {
+                "schema_version": 1,
+                "sender_id": "456",
+                "profile": {},
+                "memories": [],
+                "index": {"entries": {}, "keywords": {}, "recent_ids": []},
+            }
+            entries_payload = [{"id": "m1", "text": "Plaintext entry"}]
+            index_path.write_text(json.dumps(index_payload), encoding="utf-8")
+            entries_path.write_text(json.dumps(entries_payload[0]) + "\n", encoding="utf-8")
+            habits_path.write_text("Plaintext habits", encoding="utf-8")
+            custom_path.write_text("kein Bot-Memory-Schema", encoding="utf-8")
+
+            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
+
+            self.assertEqual(result.errors, 0)
+            self.assertEqual(result.encrypted, 3)
+            for path in [index_path, entries_path, habits_path]:
+                self.assertTrue(is_encrypted_payload(path.read_bytes()))
+            self.assertEqual(read_user_memory_json(index_path), index_payload)
+            self.assertEqual(read_user_memory_entries(entries_path), entries_payload)
+            self.assertEqual(read_user_memory_text(habits_path), "Plaintext habits")
+            self.assertEqual(custom_path.read_text(encoding="utf-8"), "kein Bot-Memory-Schema")
+
+            verify_result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
+            self.assertEqual(verify_result.errors, 0)
+            self.assertEqual(verify_result.already_encrypted, 3)
+
+    def test_user_memory_encryption_verify_reports_known_plaintext_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir.mkdir(parents=True, exist_ok=True)
+            (user_dir / "User_Habbits_and_behave.md").write_text("noch plaintext", encoding="utf-8")
+
+            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
+
+            self.assertEqual(result.errors, 1)
 
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
