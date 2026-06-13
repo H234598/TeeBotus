@@ -331,6 +331,39 @@ class BotTests(unittest.TestCase):
                     payload = json.loads(state_path.read_text(encoding="utf-8"))
                     self.assertEqual(payload["processes"], [{"pid": 333, "start_time": 99999}])
 
+    def test_process_registry_unregister_only_removes_matching_start_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+
+            with patch("telegram_bot.bot.PROJECT_ROOT", project_root):
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    json.dumps(
+                        {
+                            "processes": [
+                                {"pid": 111, "start_time": 12345},
+                                {"pid": 111, "start_time": 54321},
+                                {"pid": 222, "start_time": 67890},
+                            ],
+                            "updated_at": "2026-06-13T00:00:00Z",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                registry.unregister(111, 12345)
+
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["processes"],
+                [{"pid": 111, "start_time": 54321}, {"pid": 222, "start_time": 67890}],
+            )
+
     def test_instruction_path_uses_selected_instance(self) -> None:
         with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Depressionsbot"}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Depressionsbot/Bot_Verhalten.md")

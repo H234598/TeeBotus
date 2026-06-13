@@ -115,13 +115,13 @@ class _InstanceProcessRegistry:
         self.instance_name = instance_name.strip()
         self._lock = _PROCESS_REGISTRY_LOCKS.setdefault(self.instance_name, threading.Lock())
 
-    def register(self, pid: int) -> None:
+    def register(self, pid: int) -> int | None:
         if not self.instance_name or pid <= 0:
-            return
+            return None
         start_time = _read_process_start_time(pid)
         if start_time is None:
             LOGGER.debug("Skipping process registry entry for pid %s because its start time could not be read.", pid)
-            return
+            return None
         with self._lock:
             state = self._load_state()
             processes = state.setdefault("processes", [])
@@ -134,15 +134,24 @@ class _InstanceProcessRegistry:
                 processes.append({"pid": pid, "start_time": start_time})
             state["updated_at"] = _utc_timestamp()
             self._write_state(state)
+        return start_time
 
-    def unregister(self, pid: int) -> None:
+    def unregister(self, pid: int, start_time: int | None = None) -> None:
         if not self.instance_name or pid <= 0:
             return
         with self._lock:
             state = self._load_state()
             processes = state.get("processes")
             if isinstance(processes, list):
-                state["processes"] = [entry for entry in processes if not (isinstance(entry, dict) and entry.get("pid") == pid)]
+                state["processes"] = [
+                    entry
+                    for entry in processes
+                    if not (
+                        isinstance(entry, dict)
+                        and entry.get("pid") == pid
+                        and (start_time is None or entry.get("start_time") == start_time)
+                    )
+                ]
                 state["updated_at"] = _utc_timestamp()
                 self._write_state(state)
 
@@ -4069,6 +4078,7 @@ def _run_local_command(
 ) -> subprocess.CompletedProcess[str]:
     registry = _InstanceProcessRegistry(instance_name)
     process: subprocess.Popen[str] | None = None
+    registry_start_time: int | None = None
     env = os.environ.copy()
     env.update(
         {
@@ -4090,7 +4100,7 @@ def _run_local_command(
             bufsize=1,
             start_new_session=True,
         )
-        registry.register(process.pid)
+        registry_start_time = registry.register(process.pid)
         stdout, stderr = process.communicate(timeout=timeout)
         return subprocess.CompletedProcess(command, process.returncode or 0, stdout, stderr)
     except TimeoutError as exc:
@@ -4102,7 +4112,7 @@ def _run_local_command(
         raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
     finally:
         if process is not None:
-            registry.unregister(process.pid)
+            registry.unregister(process.pid, registry_start_time)
 
 
 def _run_local_command_streaming(
@@ -4117,6 +4127,7 @@ def _run_local_command_streaming(
     stderr = ""
     start = time.monotonic()
     process: subprocess.Popen[str] | None = None
+    registry_start_time: int | None = None
     try:
         env = os.environ.copy()
         env.update(
@@ -4138,7 +4149,7 @@ def _run_local_command_streaming(
             bufsize=1,
             start_new_session=True,
         )
-        registry.register(process.pid)
+        registry_start_time = registry.register(process.pid)
         assert process.stdout is not None
         while True:
             if time.monotonic() - start > timeout:
@@ -4167,7 +4178,7 @@ def _run_local_command_streaming(
         raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
     finally:
         if process is not None:
-            registry.unregister(process.pid)
+            registry.unregister(process.pid, registry_start_time)
     returncode = process.returncode if process is not None and process.returncode is not None else 0
     return subprocess.CompletedProcess(command, returncode, "".join(stdout_lines), stderr)
 
