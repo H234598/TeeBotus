@@ -4228,27 +4228,16 @@ def _handle_cleanup_command(
     text: str,
 ) -> bool:
     command = _normalize_command(text)
-    if command == "/delete_last":
-        message_id = chat_state.pop_last_sent_message(chat_id)
-        if message_id is None:
-            _send_tracked_message(api, chat_state, chat_id, instructions.delete_empty)
-            return True
-        try:
-            api.delete_message(chat_id, message_id)
-        except TelegramAPIError:
-            LOGGER.exception("Failed to delete Telegram message %s in chat %s.", message_id, chat_id)
-            _send_tracked_message(api, chat_state, chat_id, instructions.delete_error)
-            return True
-        _send_tracked_message(api, chat_state, chat_id, instructions.delete_last_success)
-        return True
-
     if command == "/cleanup":
-        count = _parse_cleanup_count(text)
-        if count is None:
+        cleanup_target = _parse_cleanup_target(text)
+        if cleanup_target is None:
             _send_tracked_message(api, chat_state, chat_id, instructions.cleanup_usage)
             return True
 
-        message_ids = chat_state.pop_recent_messages(chat_id, count)
+        if cleanup_target == "all":
+            message_ids = chat_state.pop_recent_messages(chat_id, MAX_TRACKED_CHAT_MESSAGES)
+        else:
+            message_ids = chat_state.pop_recent_messages(chat_id, cleanup_target)
         if not message_ids:
             _send_tracked_message(api, chat_state, chat_id, instructions.delete_empty)
             return True
@@ -4353,12 +4342,15 @@ def _is_allowed_codex_sender(sender_id: str, instructions: BotInstructions) -> b
     return sender_id in allowed_sender_ids
 
 
-def _parse_cleanup_count(text: str) -> int | None:
+def _parse_cleanup_target(text: str) -> int | str | None:
     parts = text.split(maxsplit=1)
     if len(parts) != 2:
         return None
+    value = parts[1].strip()
+    if value.casefold() == "all":
+        return "all"
     try:
-        count = int(parts[1])
+        count = int(value)
     except ValueError:
         return None
     if count < 1:

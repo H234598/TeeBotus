@@ -24,8 +24,8 @@ DEFAULT_HELP_LINES = (
     "/reset - setzt nur den OpenAI-Verlauf dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",
     "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
     "/Call_a_Teladi - Send Teladi a emergency message",
-    "/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht in diesem Chat.",
-    "/cleanup N - loescht bis zu N seit Bot-Start gemerkte Nachrichten in diesem Chat.",
+    "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
+    "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
 )
 
 
@@ -85,13 +85,9 @@ class BotInstructions:
         "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht. "
         "Das betrifft nur den Antwortkontext fuer OpenAI in diesem Chat; Telegram-Nachrichten und User-Memory bleiben erhalten."
     )
-    delete_last_success: str = (
-        "Letzte gespeicherte Bot-Nachricht geloescht. "
-        "Das entfernt nur eine Telegram-Nachricht des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
-    )
     delete_empty: str = (
         "Ich habe fuer diesen Chat keine gespeicherte Nachricht, die ich loeschen kann. "
-        "/delete_last und /cleanup arbeiten mit den seit dem letzten Bot-Start gemerkten Nachrichten in diesem Chat."
+        "/cleanup N und /cleanup all arbeiten mit den seit dem letzten Bot-Start gemerkten Nachrichten in diesem Chat."
     )
     delete_error: str = (
         "Ich konnte die Bot-Nachricht nicht loeschen. "
@@ -102,8 +98,8 @@ class BotInstructions:
         "Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
     )
     cleanup_usage: str = (
-        "Nutzung: /cleanup N. "
-        "Damit loesche ich bis zu N seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
+        "Nutzung: /cleanup all. "
+        "Damit loesche ich alle seit dem letzten Bot-Start gemerkten Nachrichten aus diesem Chat."
     )
     user_memory_reset_confirm: str = (
         "Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? "
@@ -394,8 +390,6 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.unknown_command = value
     elif normalized == "echo_prefix":
         instructions.echo_prefix = value
-    elif normalized == "delete_last_success":
-        instructions.delete_last_success = value
     elif normalized == "delete_empty":
         instructions.delete_empty = value
     elif normalized == "delete_error":

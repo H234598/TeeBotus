@@ -1994,18 +1994,6 @@ class BotTests(unittest.TestCase):
         self.assertIsNone(chat_state.get_previous_response_id(123))
         self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_reset)])
 
-    def test_delete_last_removes_last_recorded_bot_message(self) -> None:
-        from telegram_bot.instructions import BotInstructions
-
-        api = FakeAPI()
-        chat_state = ChatState()
-        chat_state.record_sent_message(123, 88)
-
-        handle_update(api, {"message": {"text": "/delete_last", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
-
-        self.assertEqual(api.deleted_messages, [(123, 88)])
-        self.assertEqual(api.sent_messages, [(123, BotInstructions().delete_last_success)])
-
     def test_cleanup_removes_requested_number_of_recorded_messages(self) -> None:
         from telegram_bot.instructions import BotInstructions
 
@@ -2030,6 +2018,22 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/cleanup", "chat": {"id": 123}}}, BotInstructions(), None, ChatState())
 
         self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_usage)])
+
+    def test_cleanup_all_removes_all_recorded_messages(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.record_received_message(123, 10)
+        chat_state.record_sent_message(123, 11)
+        chat_state.record_received_message(123, 12)
+        chat_state.record_sent_message(123, 13)
+
+        handle_update(api, {"message": {"text": "/cleanup all", "message_id": 14, "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
+
+        self.assertEqual(api.deleted_messages, [(123, 14), (123, 13), (123, 12), (123, 11), (123, 10)])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_success.format(count=5))])
+        self.assertEqual(chat_state.pop_recent_messages(123, 10), [101])
 
     def test_call_a_teladi_prompts_and_forwards_next_message(self) -> None:
         from telegram_bot.instructions import BotInstructions
