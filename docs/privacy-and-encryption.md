@@ -37,6 +37,23 @@ Use this when someone asks what is visible:
 
 > User memory is encrypted at rest per sender ID. Plain disk access is not enough to read it. The running bot instance can decrypt the data it needs to process messages, so anyone with runtime or key access can still inspect plaintext.
 
+## Ready-made reply
+
+Use this when a user asks about privacy, encryption, or who can see data:
+
+> User memory is encrypted at rest with a per-user key. That means ordinary disk access is not enough to read the stored memory files. In normal operation, admins do not see those files as plaintext. The bot process can still decrypt the data it needs to answer messages, so runtime or key access is different from plain disk access.
+
+If someone asks for the short version:
+
+> Stored user memory is encrypted per sender ID. An admin browsing the files on disk sees ciphertext, not plaintext. The bot itself can decrypt data while it runs, so runtime access is a different trust level.
+
+## Who can see what
+
+- Disk-only access: ciphertext for encrypted user-memory files
+- Bot runtime with the matching key: plaintext while processing
+- Admins without the key: no plaintext from the stored user-memory files
+- Admins with host, process, or secret access: can still reach plaintext during runtime
+
 ## If someone insists on edge cases
 
 Use this framing:

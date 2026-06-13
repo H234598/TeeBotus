@@ -186,6 +186,15 @@ Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. D
 
 Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md).
 
+Kurzantwort fuer Datenschutzfragen:
+
+- Nutzer-Memory wird pro Telegram-Sender-ID at rest verschluesselt.
+- Ein Admin ohne passenden Key sieht auf Platte keine Klartextdaten.
+- Das laufende Bot-Prozessmodell kann Daten zum Antworten trotzdem entschluesseln.
+- Wer die Laufzeit, den Speicher oder den passenden Key kontrolliert, kann weiterhin auf Klartext stossen.
+
+Wenn du die Standardantwort brauchst, steht sie in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md) als kopierfertiges Template.
+
 Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory der aktuellen Telegram-Sender-ID auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
 
 ## Instanz-Arbeitsgedaechtnis
