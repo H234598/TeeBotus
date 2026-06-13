@@ -3974,8 +3974,6 @@ def _handle_cleanup_command(
             _send_tracked_message(api, chat_state, chat_id, instructions.cleanup_usage)
             return True
 
-        chat_state.discard_recent_message(chat_id, _message_id_or_none(message))
-
         message_ids = chat_state.pop_recent_messages(chat_id, count)
         if not message_ids:
             _send_tracked_message(api, chat_state, chat_id, instructions.delete_empty)
