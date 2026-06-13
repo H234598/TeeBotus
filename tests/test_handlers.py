@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from TeeBotus.handlers import HELP_TEXT, build_reply
 from TeeBotus.instructions import BotInstructions
@@ -57,6 +58,22 @@ class HandlerTests(unittest.TestCase):
         instructions = BotInstructions(openai_enabled=True)
 
         self.assertIsNone(build_reply({"text": "freie Frage"}, instructions, include_fallback=False))
+
+    def test_readme_documents_youtube_transcription_runtime_guards(self) -> None:
+        readme = Path(__file__).resolve().parents[1] / "README.md"
+        text = readme.read_text(encoding="utf-8")
+
+        for needle in [
+            "faster-whisper",
+            "tiny",
+            "nice -n 19",
+            "ionice -c 3",
+            "7200",
+            "5, 15, 60 und 90 Minuten",
+            "Watchdog",
+            "resource_tracker",
+        ]:
+            self.assertIn(needle, text)
 
 
 if __name__ == "__main__":
