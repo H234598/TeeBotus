@@ -204,9 +204,50 @@ class BotTests(unittest.TestCase):
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP8z8BQDwAFgwJ/lwQ+0gAAAABJRU5ErkJggg=="
     )
 
+    def setUp(self) -> None:
+        self._secret_tool_store: dict[tuple[str, ...], str] = {}
+        self._secret_tool_run_patcher = patch(
+            "telegram_bot.user_memory_crypto._run_secret_tool",
+            side_effect=self._fake_secret_tool_run,
+        )
+        self._secret_tool_run_patcher.start()
+        self.addCleanup(self._secret_tool_run_patcher.stop)
+
+    def _fake_secret_tool_run(self, command, *, input_text=""):
+        op = command[0]
+        if op == "lookup":
+            attrs = tuple(command[1:])
+            secret = self._secret_tool_store.get(attrs, "")
+            return subprocess.CompletedProcess(command, 0, f"{secret}\n" if secret else "", "")
+        if op == "store":
+            label_index = command.index("--label")
+            attrs = tuple(command[label_index + 2 :])
+            secret = input_text.strip()
+            self._secret_tool_store[attrs] = secret
+            return subprocess.CompletedProcess(command, 0, "", "")
+        raise AssertionError(f"unexpected secret-tool command: {command}")
+
     def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
+
+    def test_user_memory_key_migrates_legacy_file_into_secret_service(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            legacy_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
+            legacy_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_key = bytes(range(32))
+            legacy_path.write_bytes(legacy_key)
+
+            key = ensure_user_memory_key(legacy_path, instance_name="Depressionsbot", sender_id="456")
+
+            self.assertEqual(key, legacy_key)
+            self.assertFalse(legacy_path.exists())
+            self.assertEqual(
+                self._secret_tool_store[
+                    ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
+                ],
+                base64.urlsafe_b64encode(legacy_key).decode("ascii"),
+            )
 
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
@@ -523,7 +564,7 @@ class BotTests(unittest.TestCase):
 
             memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
             self.assertTrue(memory_path.exists())
-            self.assertTrue((memory_path.parent / USER_MEMORY_KEY_FILENAME).exists())
+            self.assertFalse((memory_path.parent / USER_MEMORY_KEY_FILENAME).exists())
             payload = read_user_memory_json(memory_path)
             self.assertEqual(payload["sender_id"], "456")
             self.assertIn("mond", payload["index"]["keywords"])

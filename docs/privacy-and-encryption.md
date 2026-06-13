@@ -4,9 +4,9 @@ This bot encrypts user memory files at rest, per Telegram sender ID.
 
 ## What is encrypted
 
-For each sender ID, the bot stores a private key file next to the user memory files:
+For each sender ID, the bot stores a private key in the desktop Secret Service via `secret-tool`.
 
-- `instances/<instance>/data/users/<sender_id>/User_Memory_Key.bin`
+If an older local `User_Memory_Key.bin` exists from a previous release, the bot migrates it into the Secret Service on first access and then removes the file.
 
 The following user-memory files are encrypted with that key:
 
@@ -15,6 +15,8 @@ The following user-memory files are encrypted with that key:
 - `User_Habbits_and_behave.md`
 
 The user-specific key is distinct per sender ID. That means one user cannot decrypt another user’s memory files without that other user’s key.
+
+If the Secret Service is unavailable, key lookup or creation fails closed. The bot does not silently fall back to an unprotected local key file.
 
 ## What this protects
 
@@ -50,7 +52,7 @@ If someone asks for the short version:
 ## Who can see what
 
 - Disk-only access: ciphertext for encrypted user-memory files
-- Bot runtime with the matching key: plaintext while processing
+- Bot runtime with the matching key from Secret Service: plaintext while processing
 - Admins without the key: no plaintext from the stored user-memory files
 - Admins with host, process, or secret access: can still reach plaintext during runtime
 

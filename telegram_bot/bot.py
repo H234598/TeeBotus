@@ -137,7 +137,7 @@ class _InstanceProcessRegistry:
         return start_time
 
     def unregister(self, pid: int, start_time: int | None = None) -> None:
-        if not self.instance_name or pid <= 0:
+        if not self.instance_name or pid <= 0 or start_time is None:
             return
         with self._lock:
             state = self._load_state()
@@ -875,7 +875,7 @@ class UserMemoryStore:
         with self._lock:
             data = self._load_or_initialize(path, sender_id)
             _ensure_user_avatar_assets(api, path, message)
-            key = _ensure_user_memory_key(path)
+            key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
             habits_text = _load_user_habits_text(path, key, USER_HABITS_MAX_PROMPT_CHARS)
             memory_text, selected_ids = _select_user_memory_prompt(
                 path,
@@ -901,7 +901,7 @@ class UserMemoryStore:
         instructions: BotInstructions,
     ) -> None:
         with self._lock:
-            key = _ensure_user_memory_key(record.path)
+            key = _ensure_user_memory_key(record.path, sender_id=record.sender_id, instance_name=self.instance_name)
             data = self._load_or_initialize(record.path, record.sender_id)
             _append_json_memory_interaction(
                 record.path,
@@ -924,7 +924,7 @@ class UserMemoryStore:
         path = self._path_for_sender(sender_id, instructions)
         with self._lock:
             path.parent.mkdir(parents=True, exist_ok=True)
-            key = _ensure_user_memory_key(path)
+            key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
             _write_user_memory_json(path, _new_user_memory_data(sender_id), key)
             _write_user_memory_entries(path, [], key)
             for legacy_path in [*_legacy_json_memory_paths(path, sender_id), *_legacy_entries_memory_paths(path, sender_id)]:
@@ -956,7 +956,7 @@ class UserMemoryStore:
 
     def _load_or_initialize(self, path: Path, sender_id: str) -> dict[str, Any]:
         path.parent.mkdir(parents=True, exist_ok=True)
-        key = _ensure_user_memory_key(path)
+        key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
         if not path.exists():
             legacy_data = _load_legacy_user_memory(path, sender_id, key)
             if legacy_data is not None:
@@ -2697,8 +2697,8 @@ def _user_memory_key_path(index_path: Path) -> Path:
     return index_path.parent / USER_MEMORY_KEY_FILENAME
 
 
-def _ensure_user_memory_key(index_path: Path) -> bytes:
-    return ensure_user_memory_key(_user_memory_key_path(index_path))
+def _ensure_user_memory_key(index_path: Path, *, sender_id: str, instance_name: str) -> bytes:
+    return ensure_user_memory_key(_user_memory_key_path(index_path), sender_id=sender_id, instance_name=instance_name)
 
 
 def _load_legacy_user_memory(index_path: Path, sender_id: str, key: bytes) -> dict[str, Any] | None:
@@ -4111,7 +4111,7 @@ def _run_local_command(
     except OSError as exc:
         raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
     finally:
-        if process is not None:
+        if process is not None and registry_start_time is not None:
             registry.unregister(process.pid, registry_start_time)
 
 
@@ -4177,7 +4177,7 @@ def _run_local_command_streaming(
         _, stderr = process.communicate()
         raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
     finally:
-        if process is not None:
+        if process is not None and registry_start_time is not None:
             registry.unregister(process.pid, registry_start_time)
     returncode = process.returncode if process is not None and process.returncode is not None else 0
     return subprocess.CompletedProcess(command, returncode, "".join(stdout_lines), stderr)

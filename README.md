@@ -178,7 +178,7 @@ Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Ko
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener Key pro Sender-ID.
+Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener Key pro Sender-ID. Der Key liegt im Desktop Secret Service und wird via `secret-tool` verwaltet; ein alter lokaler `User_Memory_Key.bin` wird beim ersten Zugriff einmalig migriert und danach entfernt.
 
 Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
 
@@ -189,6 +189,7 @@ Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluessel
 Kurzantwort fuer Datenschutzfragen:
 
 - Nutzer-Memory wird pro Telegram-Sender-ID at rest verschluesselt.
+- Der zugehoerige Key liegt im Desktop Secret Service, nicht als normale Datei.
 - Ein Admin ohne passenden Key sieht auf Platte keine Klartextdaten.
 - Das laufende Bot-Prozessmodell kann Daten zum Antworten trotzdem entschluesseln.
 - Wer die Laufzeit, den Speicher oder den passenden Key kontrolliert, kann weiterhin auf Klartext stossen.

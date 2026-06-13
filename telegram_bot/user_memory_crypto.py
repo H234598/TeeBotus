@@ -4,6 +4,8 @@ import base64
 import json
 import os
 import secrets
+import shutil
+import subprocess
 import stat
 import tempfile
 import uuid
@@ -16,24 +18,37 @@ USER_MEMORY_ENCRYPTION_MAGIC = "TMBMEM1"
 USER_MEMORY_ENCRYPTION_VERSION = 1
 USER_MEMORY_ENCRYPTION_ALGORITHM = "AES-256-GCM"
 USER_MEMORY_KEY_FILENAME = "User_Memory_Key.bin"
+USER_MEMORY_KEY_SERVICE = "telegram-bot"
+USER_MEMORY_KEY_PURPOSE = "user-memory-key"
+USER_MEMORY_KEY_LABEL_PREFIX = "Telegram user memory key"
 USER_MEMORY_KEY_SIZE_BYTES = 32
 USER_MEMORY_NONCE_SIZE_BYTES = 12
+SECRET_TOOL_COMMAND = "secret-tool"
 
 
 class UserMemoryCryptoError(RuntimeError):
     pass
 
 
-def ensure_user_memory_key(path: Path) -> bytes:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        key = path.read_bytes()
+def ensure_user_memory_key(path: Path, *, instance_name: str = "", sender_id: str = "") -> bytes:
+    scope = _resolve_keyring_scope(path, instance_name=instance_name, sender_id=sender_id)
+    existing = _lookup_keyring_key(scope)
+    if existing is not None:
+        return existing
+
+    legacy_path = _legacy_key_path(path)
+    if legacy_path.exists():
+        key = legacy_path.read_bytes()
         if len(key) != USER_MEMORY_KEY_SIZE_BYTES:
             raise UserMemoryCryptoError("user memory key has invalid length")
+        _store_keyring_key(scope, key)
+        _confirm_keyring_key(scope, key)
+        _unlink_legacy_key_file(legacy_path)
         return key
 
     key = secrets.token_bytes(USER_MEMORY_KEY_SIZE_BYTES)
-    _write_private_bytes(path, key)
+    _store_keyring_key(scope, key)
+    _confirm_keyring_key(scope, key)
     return key
 
 
@@ -189,6 +204,117 @@ def _normalize_kind(kind: str) -> str:
     if not value:
         raise UserMemoryCryptoError("user memory kind must not be empty")
     return value
+
+
+def _resolve_keyring_scope(path: Path, *, instance_name: str, sender_id: str) -> tuple[str, str]:
+    resolved_sender_id = _normalize_keyring_token(sender_id or path.parent.name, field_name="sender id")
+    resolved_instance_name = _normalize_keyring_token(instance_name or _infer_instance_name(path), field_name="instance name")
+    return resolved_instance_name, resolved_sender_id
+
+
+def _infer_instance_name(path: Path) -> str:
+    parts = list(path.parts)
+    if "instances" in parts:
+        index = parts.index("instances")
+        if index + 1 < len(parts):
+            return parts[index + 1]
+    return ""
+
+
+def _legacy_key_path(path: Path) -> Path:
+    if path.name == USER_MEMORY_KEY_FILENAME:
+        return path
+    return path.parent / USER_MEMORY_KEY_FILENAME
+
+
+def _normalize_keyring_token(value: str, *, field_name: str) -> str:
+    token = str(value or "").strip()
+    if not token:
+        raise UserMemoryCryptoError(f"user memory {field_name} must not be empty")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in token):
+        raise UserMemoryCryptoError(f"user memory {field_name} contains invalid control characters")
+    return token
+
+
+def _keyring_attributes(instance_name: str, sender_id: str) -> list[str]:
+    return [
+        "application",
+        USER_MEMORY_KEY_SERVICE,
+        "purpose",
+        USER_MEMORY_KEY_PURPOSE,
+        "instance",
+        instance_name,
+        "sender_id",
+        sender_id,
+    ]
+
+
+def _keyring_label(instance_name: str, sender_id: str) -> str:
+    return f"{USER_MEMORY_KEY_LABEL_PREFIX}: instance={instance_name}, sender_id={sender_id}"
+
+
+def _secret_tool_path() -> str:
+    binary = shutil.which(SECRET_TOOL_COMMAND)
+    if binary is None:
+        raise UserMemoryCryptoError("secret-tool is not installed")
+    return binary
+
+
+def _run_secret_tool(args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            [_secret_tool_path(), *args],
+            input=input_text,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as exc:
+        raise UserMemoryCryptoError("secret-tool could not be started") from exc
+
+
+def _lookup_keyring_key(scope: tuple[str, str]) -> bytes | None:
+    instance_name, sender_id = scope
+    result = _run_secret_tool(["lookup", *_keyring_attributes(instance_name, sender_id)])
+    if result.returncode != 0:
+        return None
+    secret = result.stdout.strip()
+    if not secret:
+        return None
+    try:
+        key = base64.urlsafe_b64decode(secret.encode("ascii"))
+    except Exception as exc:
+        raise UserMemoryCryptoError("secret-tool returned invalid user memory key data") from exc
+    if len(key) != USER_MEMORY_KEY_SIZE_BYTES:
+        raise UserMemoryCryptoError("user memory key has invalid length")
+    return key
+
+
+def _store_keyring_key(scope: tuple[str, str], key: bytes) -> None:
+    if len(key) != USER_MEMORY_KEY_SIZE_BYTES:
+        raise UserMemoryCryptoError("user memory key has invalid length")
+    instance_name, sender_id = scope
+    result = _run_secret_tool(
+        ["store", "--label", _keyring_label(instance_name, sender_id), *_keyring_attributes(instance_name, sender_id)],
+        input_text=base64.urlsafe_b64encode(key).decode("ascii") + "\n",
+    )
+    if result.returncode != 0:
+        raise UserMemoryCryptoError("secret-tool could not store the user memory key")
+
+
+def _confirm_keyring_key(scope: tuple[str, str], expected_key: bytes) -> None:
+    confirmed_key = _lookup_keyring_key(scope)
+    if confirmed_key != expected_key:
+        raise UserMemoryCryptoError("secret-tool did not return the stored user memory key")
+
+
+def _unlink_legacy_key_file(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise UserMemoryCryptoError("legacy user memory key file could not be removed") from exc
 
 
 def _write_private_bytes(path: Path, payload: bytes) -> None:
