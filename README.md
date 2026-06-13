@@ -14,7 +14,7 @@ Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long 
 - frei formulierte Bitten wie `loesch meine Erinnerungen` nutzen denselben bestaetigten User-Memory-Reset
 - `/Call_a_Teladi` fragt nach einer Emergency Message und leitet die naechste Telegram-Nachricht an Teladi weiter
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht
-- `/cleanup 10` loescht bis zu 10 gespeicherte Bot-Nachrichten
+- `/cleanup 10` loescht bis zu 10 zuletzt gemerkte Nachrichten aus dem aktuellen Chat
 - `/codex Prompt` startet lokal `codex exec` aus dem Bot-Prozess heraus
 - `/voice Text` erzeugt eine Telegram-Sprachnachricht
 - eingehende Telegram-Sprachnachrichten werden transkribiert und wie Textnachrichten verarbeitet
@@ -178,11 +178,13 @@ Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Ko
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein JSON-Index, ein JSONL-Eintragslog und eine interne, admingepflegte Zusatzhinweis-Datei.
+Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener Key pro Sender-ID.
 
 Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
 
-Die Index-Datei enthaelt Profilmetadaten, Keyword-Index, Recent-Liste und Byte-Positionen der JSONL-Eintraege. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise werden nur von Botadmins gepflegt und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
+Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem verschluesselten JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise werden nur von Botadmins gepflegt und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
+
+Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md).
 
 Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory der aktuellen Telegram-Sender-ID auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
 
@@ -221,7 +223,7 @@ python3 scripts/validate_flex.py
 Der Bot merkt sich die `message_id` seiner eigenen Antworten im Arbeitsspeicher. Damit funktionieren:
 
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht im aktuellen Chat.
-- `/cleanup 10` loescht bis zu 10 gespeicherte Bot-Nachrichten im aktuellen Chat.
+- `/cleanup 10` loescht bis zu 10 zuletzt gemerkte Nachrichten im aktuellen Chat.
 
 Nach einem Bot-Neustart ist diese interne Liste leer. In Gruppen muss der Bot Admin sein und die Berechtigung zum Loeschen von Nachrichten haben, sonst kann Telegram `deleteMessage` ablehnen.
 

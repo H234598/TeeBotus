@@ -54,10 +54,10 @@ Generisches Template fuer eine Telegram-Bot-Instanz. Kopiere diese Datei nach
 - chatid_missing: Keine Chat-ID gefunden.
 - unknown_command: Diesen Befehl kenne ich nicht. Sende /help fuer die verfuegbaren Befehle.
 - delete_last_success: Letzte gespeicherte Bot-Nachricht geloescht. Das entfernt nur eine Telegram-Nachricht des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten.
-- delete_empty: Ich habe fuer diesen Chat keine gespeicherte Bot-Nachricht, die ich loeschen kann. /delete_last und /cleanup arbeiten nur mit Bot-Nachrichten, die seit dem letzten Bot-Start gemerkt wurden.
+- delete_empty: Ich habe fuer diesen Chat keine gespeicherte Nachricht, die ich loeschen kann. /delete_last und /cleanup arbeiten mit den seit dem letzten Bot-Start gemerkten Nachrichten in diesem Chat.
 - delete_error: Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten.
-- cleanup_success: "{count} gespeicherte Bot-Nachrichten geloescht. Das entfernt nur Telegram-Nachrichten des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
-- cleanup_usage: "Nutzung: /cleanup 10. Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Bot-Nachrichten aus diesem Chat."
+- cleanup_success: "{count} gespeicherte Nachrichten geloescht. Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
+- cleanup_usage: "Nutzung: /cleanup 10. Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
 - codex_usage: "Nutzung: /codex Prompt"
 - codex_unauthorized: Nein.
 - codex_not_found: Codex CLI wurde nicht gefunden.
@@ -122,4 +122,4 @@ Wenn du etwas nicht sicher weisst, sage das offen.
 - /reset_memorys - nach Rueckfrage nur deine eigenen User-Memory-Eintraege loeschen
 - /Call_a_Teladi - Send Teladi a emergency message
 - /delete_last - nur die letzte seit Bot-Start gemerkte Bot-Nachricht in diesem Chat loeschen
-- /cleanup 10 - bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten in diesem Chat loeschen
+- /cleanup 10 - bis zu 10 seit Bot-Start gemerkte Nachrichten in diesem Chat loeschen

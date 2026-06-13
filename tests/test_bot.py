@@ -6,6 +6,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from telegram_bot.user_memory_crypto import (
+    USER_MEMORY_KEY_FILENAME,
+    ensure_user_memory_key,
+    read_json as read_encrypted_user_memory_json,
+    read_jsonl as read_encrypted_user_memory_jsonl,
+    read_text as read_encrypted_user_memory_text,
+)
 from telegram_bot.bot import (
     BotIdentity,
     BotTokenConfig,
@@ -173,6 +180,24 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def read_user_memory_json(path: Path) -> dict:
+    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
+    payload, _ = read_encrypted_user_memory_json(path, key, kind="user-memory-index", default={})
+    return payload
+
+
+def read_user_memory_entries(path: Path) -> list[dict]:
+    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
+    entries, _ = read_encrypted_user_memory_jsonl(path, key, kind="user-memory-entries")
+    return entries
+
+
+def read_user_memory_text(path: Path) -> str:
+    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
+    text, _ = read_encrypted_user_memory_text(path, key, kind="user-memory-habits")
+    return text
+
+
 class BotTests(unittest.TestCase):
     AVATAR_PNG = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP8z8BQDwAFgwJ/lwQ+0gAAAABJRU5ErkJggg=="
@@ -211,16 +236,16 @@ class BotTests(unittest.TestCase):
     def test_youtube_transcript_uses_subtitles_before_whisper(self) -> None:
         calls: list[list[str]] = []
 
-        def run(command, cwd, **kwargs):
+        def run(command, workdir, timeout, instance_name=""):
             calls.append(command)
-            Path(cwd, "video.en.srt").write_text(
+            Path(workdir, "video.en.srt").write_text(
                 "1\n00:00:00,000 --> 00:00:01,000\nSubtitle text.\n",
                 encoding="utf-8",
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
-            with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+            with patch("telegram_bot.bot._run_local_command", side_effect=run):
                 transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
 
         self.assertEqual(transcript, "Subtitle text.")
@@ -231,15 +256,15 @@ class BotTests(unittest.TestCase):
     def test_youtube_transcript_uses_faster_whisper_when_no_subtitles_exist(self) -> None:
         calls: list[list[str]] = []
 
-        def run(command, cwd, **kwargs):
+        def run(command, workdir, timeout, instance_name=""):
             calls.append(command)
             if command[:2] == ["yt-dlp", "-x"]:
-                Path(cwd, "youtube-audio.mp3").write_bytes(b"mp3")
+                Path(workdir, "youtube-audio.mp3").write_bytes(b"mp3")
             return subprocess.CompletedProcess(command, 0, "", "")
 
         with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
             with patch("telegram_bot.bot._has_python_module", return_value=True):
-                with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+                with patch("telegram_bot.bot._run_local_command", side_effect=run):
                     with patch(
                         "telegram_bot.bot._run_local_command_streaming",
                         return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
@@ -420,12 +445,15 @@ class BotTests(unittest.TestCase):
 
             memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
             self.assertTrue(memory_path.exists())
-            payload = json.loads(memory_path.read_text(encoding="utf-8"))
+            self.assertTrue((memory_path.parent / USER_MEMORY_KEY_FILENAME).exists())
+            payload = read_user_memory_json(memory_path)
             self.assertEqual(payload["sender_id"], "456")
             self.assertIn("mond", payload["index"]["keywords"])
-            entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
             self.assertIn("Mein Lieblingswort ist Mond.", entries[0]["user_text"])
-            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md").exists())
+            habits_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md"
+            self.assertTrue(habits_path.exists())
+            self.assertNotIn(b"Mond", habits_path.read_bytes())
 
             handle_update(
                 api,
@@ -668,7 +696,7 @@ class BotTests(unittest.TestCase):
             habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_confirm))
             self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
-            self.assertEqual(len(read_jsonl(entries_path)), 1)
+            self.assertEqual(len(read_user_memory_entries(entries_path)), 1)
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
             handle_update(
@@ -686,14 +714,14 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            payload = json.loads((memory_dir / "User_Memory_Index.json").read_text(encoding="utf-8"))
+            payload = read_user_memory_json(memory_dir / "User_Memory_Index.json")
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_success))
             self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
             self.assertEqual(payload["sender_id"], "456")
             self.assertEqual(payload["profile"], {"names": [], "usernames": [], "chat_ids": [], "chat_titles": []})
             self.assertEqual(payload["index"], {"entries": {}, "keywords": {}, "recent_ids": []})
-            self.assertEqual(read_jsonl(entries_path), [])
-            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Ada mag knappe Antworten.")
+            self.assertEqual(read_user_memory_entries(entries_path), [])
+            self.assertEqual(read_user_memory_text(habits_path), "Ada mag knappe Antworten.")
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
     def test_user_memory_reset_can_be_cancelled(self) -> None:
@@ -755,7 +783,7 @@ class BotTests(unittest.TestCase):
 
             entries_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl"
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_cancelled))
-            self.assertEqual(len(read_jsonl(entries_path)), 1)
+            self.assertEqual(len(read_user_memory_entries(entries_path)), 1)
 
     def test_user_memory_reset_rejects_foreign_and_instance_memory_targets(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -813,7 +841,7 @@ class BotTests(unittest.TestCase):
 
             self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
             self.assertIn("keine userbezogenen Daten", api.sent_messages[-1][1])
-            bob_entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Entries.jsonl")
+            bob_entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Entries.jsonl")
             self.assertEqual(len(bob_entries), 1)
 
             handle_update(
@@ -1141,10 +1169,10 @@ class BotTests(unittest.TestCase):
                 chat_state=chat_state,
             )
 
-        self.assertEqual(len(api.sent_messages), 3)
-        self.assertEqual(len(api.sent_messages[0][1].split()), 25)
-        self.assertEqual(api.sent_messages[1][1], "sechsundzwanzig")
-        self.assertEqual(api.sent_messages[2], (123, "Lokale YouTube-Transkription abgeschlossen."))
+        self.assertEqual(len(api.sent_messages), 2)
+        self.assertEqual(len(api.sent_messages[0][1].split()), 26)
+        self.assertEqual(api.sent_messages[1][0], 123)
+        self.assertEqual(api.sent_messages[1][1], "Lokale YouTube-Transkription abgeschlossen.")
         self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
 
     def test_handle_update_youtube_local_options_can_send_final_transcript_to_llm(self) -> None:
@@ -1590,13 +1618,14 @@ class BotTests(unittest.TestCase):
                 UserMemoryStore("Depressionsbot"),
             )
 
-            memory_text = (Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json").read_text(encoding="utf-8")
-            payload = json.loads(memory_text)
-            entries = read_jsonl(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_text = memory_path.read_bytes()
+            payload = read_user_memory_json(memory_path)
+            entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
             self.assertIn("Mein Voice-Geheimnis ist Mondlicht.", entries[0]["user_text"])
             self.assertEqual(entries[0]["source"]["message_type"], "voice")
             self.assertIn(entries[0]["id"], payload["index"]["entries"])
-            self.assertNotIn("voice-audio", memory_text)
+            self.assertNotIn(b"voice-audio", memory_text)
             self.assertNotIn("voice-audio", json.dumps(entries, ensure_ascii=False))
 
     def test_transcribe_voice_audio_retries_fallback_after_empty_primary_transcript(self) -> None:

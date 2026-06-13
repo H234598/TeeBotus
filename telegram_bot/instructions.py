@@ -25,7 +25,7 @@ DEFAULT_HELP_LINES = (
     "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
     "/Call_a_Teladi - Send Teladi a emergency message",
     "/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht in diesem Chat.",
-    "/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten in diesem Chat.",
+    "/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Nachrichten in diesem Chat.",
 )
 
 
@@ -90,20 +90,20 @@ class BotInstructions:
         "Das entfernt nur eine Telegram-Nachricht des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
     )
     delete_empty: str = (
-        "Ich habe fuer diesen Chat keine gespeicherte Bot-Nachricht, die ich loeschen kann. "
-        "/delete_last und /cleanup arbeiten nur mit Bot-Nachrichten, die seit dem letzten Bot-Start gemerkt wurden."
+        "Ich habe fuer diesen Chat keine gespeicherte Nachricht, die ich loeschen kann. "
+        "/delete_last und /cleanup arbeiten mit den seit dem letzten Bot-Start gemerkten Nachrichten in diesem Chat."
     )
     delete_error: str = (
         "Ich konnte die Bot-Nachricht nicht loeschen. "
         "In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten."
     )
     cleanup_success: str = (
-        "{count} gespeicherte Bot-Nachrichten geloescht. "
-        "Das entfernt nur Telegram-Nachrichten des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
+        "{count} gespeicherte Nachrichten geloescht. "
+        "Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
     )
     cleanup_usage: str = (
         "Nutzung: /cleanup 10. "
-        "Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Bot-Nachrichten aus diesem Chat."
+        "Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
     )
     user_memory_reset_confirm: str = (
         "Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? "

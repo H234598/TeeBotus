@@ -19,7 +19,7 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)
         self.assertIn("/codex Prompt - fuehrt Codex CLI lokal aus", reply)
         self.assertIn("/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht", reply)
-        self.assertIn("/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten", reply)
+        self.assertIn("/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Nachrichten", reply)
 
     def test_ping(self) -> None:
         self.assertEqual(build_reply({"text": "/ping"}), "pong")

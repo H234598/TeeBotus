@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import select
+import signal
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +27,17 @@ from typing import Any
 from .handlers import build_reply, should_use_openai
 from .instructions import BotInstructions, InstructionStore, render_template
 from .openai_client import OpenAIAPIError, OpenAIClient
+from .user_memory_crypto import (
+    USER_MEMORY_KEY_FILENAME,
+    UserMemoryCryptoError,
+    ensure_user_memory_key,
+    read_json as read_encrypted_user_memory_json,
+    read_jsonl as read_encrypted_user_memory_jsonl,
+    read_text as read_encrypted_user_memory_text,
+    write_json as write_encrypted_user_memory_json,
+    write_jsonl as write_encrypted_user_memory_jsonl,
+    write_text as write_encrypted_user_memory_text,
+)
 
 LOGGER = logging.getLogger("telegram_bot")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -59,7 +72,7 @@ YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
 YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
 YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
 YOUTUBE_LOCAL_TRANSCRIPTION_WORKERS = 1
-YOUTUBE_LIVE_CHUNK_WORDS = 25
+YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
 TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
@@ -91,6 +104,96 @@ class YouTubeTranscriptionJobRunner:
             future.result()
         except Exception:
             LOGGER.exception("Unhandled YouTube transcription job error.")
+
+
+PROCESS_REGISTRY_FILENAME = "YouTube_Transcription_Processes.json"
+_PROCESS_REGISTRY_LOCKS: dict[str, threading.Lock] = {}
+
+
+class _InstanceProcessRegistry:
+    def __init__(self, instance_name: str) -> None:
+        self.instance_name = instance_name.strip()
+        self._lock = _PROCESS_REGISTRY_LOCKS.setdefault(self.instance_name, threading.Lock())
+
+    def register(self, pid: int) -> None:
+        if not self.instance_name or pid <= 0:
+            return
+        with self._lock:
+            state = self._load_state()
+            pids = state.setdefault("pids", [])
+            if pid not in pids:
+                pids.append(pid)
+            state["updated_at"] = _utc_timestamp()
+            self._write_state(state)
+
+    def unregister(self, pid: int) -> None:
+        if not self.instance_name or pid <= 0:
+            return
+        with self._lock:
+            state = self._load_state()
+            pids = state.get("pids")
+            if isinstance(pids, list) and pid in pids:
+                pids.remove(pid)
+                state["updated_at"] = _utc_timestamp()
+                self._write_state(state)
+
+    def cleanup_orphans(self) -> None:
+        if not self.instance_name:
+            return
+        with self._lock:
+            state = self._load_state()
+            pids = [int(pid) for pid in state.get("pids", []) if isinstance(pid, int) or str(pid).isdigit()]
+            for pid in pids:
+                self._terminate_process_group(pid)
+            self._write_state({"pids": [], "updated_at": _utc_timestamp()})
+
+    def _path(self) -> Path:
+        return PROJECT_ROOT / "instances" / self.instance_name / "data" / PROCESS_REGISTRY_FILENAME
+
+    def _load_state(self) -> dict[str, Any]:
+        path = self._path()
+        if not path.exists():
+            return {"pids": []}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            LOGGER.debug("Failed to read process registry at %s.", path)
+            return {"pids": []}
+        if not isinstance(payload, dict):
+            return {"pids": []}
+        pids = payload.get("pids")
+        if not isinstance(pids, list):
+            payload["pids"] = []
+        else:
+            payload["pids"] = [pid for pid in pids if isinstance(pid, int) and pid > 0]
+        return payload
+
+    def _write_state(self, state: dict[str, Any]) -> None:
+        path = self._path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _terminate_process_group(pid: int) -> None:
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        except OSError:
+            LOGGER.debug("Failed to terminate process group %s with SIGTERM.", pid)
+            return
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(pid, 0)
+            except ProcessLookupError:
+                return
+            except OSError:
+                return
+            time.sleep(0.1)
+        with suppress(ProcessLookupError, OSError):
+            os.killpg(pid, signal.SIGKILL)
+
 DOTENV_RUNTIME_KEYS = {
     "LOG_LEVEL",
     "TELEGRAM_BOT_INSTANCE",
@@ -710,12 +813,14 @@ class UserMemoryStore:
         with self._lock:
             data = self._load_or_initialize(path, sender_id)
             _ensure_user_avatar_assets(api, path, message)
-            habits_text = _load_user_habits_text(path, USER_HABITS_MAX_PROMPT_CHARS)
+            key = _ensure_user_memory_key(path)
+            habits_text = _load_user_habits_text(path, key, USER_HABITS_MAX_PROMPT_CHARS)
             memory_text, selected_ids = _select_user_memory_prompt(
                 path,
                 data,
                 query_text,
                 instructions.user_memory_max_prompt_chars,
+                key,
             )
             prompt_text = _combine_user_memory_prompt(habits_text, memory_text)
         return UserMemoryRecord(
@@ -734,6 +839,7 @@ class UserMemoryStore:
         instructions: BotInstructions,
     ) -> None:
         with self._lock:
+            key = _ensure_user_memory_key(record.path)
             data = self._load_or_initialize(record.path, record.sender_id)
             _append_json_memory_interaction(
                 record.path,
@@ -743,8 +849,9 @@ class UserMemoryStore:
                 bot_text,
                 instructions.user_memory_max_entry_chars,
                 record.selected_ids,
+                key,
             )
-            _write_json_file(record.path, data)
+            _write_user_memory_json(record.path, data, key)
 
     def reset_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
         if not instructions.user_memory_enabled:
@@ -755,8 +862,9 @@ class UserMemoryStore:
         path = self._path_for_sender(sender_id, instructions)
         with self._lock:
             path.parent.mkdir(parents=True, exist_ok=True)
-            _write_json_file(path, _new_user_memory_data(sender_id))
-            _memory_entries_path(path).write_text("", encoding="utf-8")
+            key = _ensure_user_memory_key(path)
+            _write_user_memory_json(path, _new_user_memory_data(sender_id), key)
+            _write_user_memory_entries(path, [], key)
             for legacy_path in [*_legacy_json_memory_paths(path, sender_id), *_legacy_entries_memory_paths(path, sender_id)]:
                 _unlink_file_if_exists(legacy_path)
             legacy_markdown_path = _legacy_markdown_memory_path(path, sender_id)
@@ -768,10 +876,12 @@ class UserMemoryStore:
         if not instructions.user_memory_enabled or not sender_id:
             return False
         path = self._path_for_sender(sender_id, instructions)
+        key_path = _user_memory_key_path(path)
         return (
             path.exists()
             or _memory_entries_path(path).exists()
             or _memory_habits_path(path).exists()
+            or key_path.exists()
             or any(legacy_path.exists() for legacy_path in _legacy_json_memory_paths(path, sender_id))
             or any(legacy_path.exists() for legacy_path in _legacy_entries_memory_paths(path, sender_id))
             or _legacy_markdown_memory_path(path, sender_id).is_file()
@@ -784,36 +894,45 @@ class UserMemoryStore:
 
     def _load_or_initialize(self, path: Path, sender_id: str) -> dict[str, Any]:
         path.parent.mkdir(parents=True, exist_ok=True)
+        key = _ensure_user_memory_key(path)
         if not path.exists():
-            legacy_data = _load_legacy_user_memory(path, sender_id)
+            legacy_data = _load_legacy_user_memory(path, sender_id, key)
             if legacy_data is not None:
-                _write_json_file(path, legacy_data)
-                _ensure_user_habits_file(path)
+                _write_user_memory_json(path, legacy_data, key)
+                _ensure_user_habits_file(path, key)
                 return legacy_data
             legacy_markdown_path = _legacy_markdown_memory_path(path, sender_id)
             if legacy_markdown_path.is_file():
                 data = _new_user_memory_data(sender_id)
-                _store_memory_entry(path, data, _legacy_memory_entry(legacy_markdown_path.read_text(encoding="utf-8")))
-                _write_json_file(path, data)
-                _ensure_user_habits_file(path)
+                _store_memory_entry(path, data, _legacy_memory_entry(legacy_markdown_path.read_text(encoding="utf-8")), key)
+                _write_user_memory_json(path, data, key)
+                _ensure_user_habits_file(path, key)
                 return data
             data = _new_user_memory_data(sender_id)
-            _write_json_file(path, data)
-            _ensure_user_habits_file(path)
+            _write_user_memory_json(path, data, key)
+            _ensure_user_habits_file(path, key)
             return data
 
         try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
+            payload, migrated = read_encrypted_user_memory_json(
+                path,
+                key,
+                kind="user-memory-index",
+                default=_new_user_memory_data(sender_id),
+            )
+        except (json.JSONDecodeError, OSError, UserMemoryCryptoError):
             LOGGER.exception("Failed to read JSON user memory for sender_id=%s.", sender_id)
             payload = _new_user_memory_data(sender_id)
+            migrated = True
         if not isinstance(payload, dict) or str(payload.get("sender_id", "")) != sender_id:
             LOGGER.warning("Ignoring user memory with mismatched sender_id at %s.", path)
             payload = _new_user_memory_data(sender_id)
         elif isinstance(payload.get("memories"), list):
-            payload = _migrate_inline_json_memory(path, payload, sender_id)
+            payload = _migrate_inline_json_memory(path, payload, sender_id, key)
         _normalize_user_memory_data(payload, sender_id)
-        _ensure_user_habits_file(path)
+        if migrated:
+            _write_user_memory_json(path, payload, key)
+        _ensure_user_habits_file(path, key)
         return payload
 
 
@@ -827,6 +946,7 @@ def handle_update(
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    instance_name: str = "",
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -840,6 +960,8 @@ def handle_update(
         instance_name = working_memory_store.instance_name
     elif user_memory_store is not None:
         instance_name = user_memory_store.instance_name
+    elif instance_name:
+        instance_name = instance_name
     elif chat_state is not None:
         instance_name = chat_state.instance_name
 
@@ -962,6 +1084,7 @@ def _process_text_message(
         first_contact,
         working_memory_store,
         youtube_job_runner,
+        instance_name,
     ):
         return
 
@@ -979,6 +1102,7 @@ def _process_text_message(
             bot_identity,
             first_contact,
             working_memory_store,
+            instance_name,
         )
         return
 
@@ -2104,6 +2228,7 @@ def _append_json_memory_interaction(
     bot_text: str,
     max_entry_chars: int,
     related_ids: tuple[str, ...],
+    key: bytes,
 ) -> None:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
@@ -2137,7 +2262,7 @@ def _append_json_memory_interaction(
         "bot_text": clipped_bot_text,
     }
 
-    _store_memory_entry(index_path, data, entry)
+    _store_memory_entry(index_path, data, entry, key)
     _append_profile_value(data, "names", sender_name)
     _append_profile_value(data, "usernames", sender_username)
     _append_profile_value(data, "chat_ids", chat_id)
@@ -2145,7 +2270,13 @@ def _append_json_memory_interaction(
     data["updated_at"] = timestamp
 
 
-def _select_user_memory_prompt(index_path: Path, data: dict[str, Any], query_text: str, max_chars: int) -> tuple[str, list[str]]:
+def _select_user_memory_prompt(
+    index_path: Path,
+    data: dict[str, Any],
+    query_text: str,
+    max_chars: int,
+    key: bytes,
+) -> tuple[str, list[str]]:
     if max_chars < 1:
         return "", []
 
@@ -2154,6 +2285,11 @@ def _select_user_memory_prompt(index_path: Path, data: dict[str, Any], query_tex
     entry_index = index.get("entries") if isinstance(index.get("entries"), dict) else {}
     if not entry_index:
         return "", []
+    entries_by_id = {
+        str(entry.get("id", "")): entry
+        for entry in _load_user_memory_entries(index_path, key)
+        if isinstance(entry, dict) and str(entry.get("id", ""))
+    }
     keyword_index = index.get("keywords") if isinstance(index.get("keywords"), dict) else {}
     for keyword in _memory_keywords(query_text):
         for memory_id in keyword_index.get(keyword, []):
@@ -2179,7 +2315,7 @@ def _select_user_memory_prompt(index_path: Path, data: dict[str, Any], query_tex
     selected: list[dict[str, Any]] = []
     selected_ids: list[str] = []
     for memory_id in ordered_ids:
-        memory = _read_memory_entry(index_path, data, memory_id)
+        memory = entries_by_id.get(memory_id)
         if memory is None or memory_id in selected_ids:
             continue
         candidate = _compact_memory_for_prompt(memory)
@@ -2215,7 +2351,7 @@ def _select_user_memory_prompt(index_path: Path, data: dict[str, Any], query_tex
     return json.dumps(payload, ensure_ascii=False, indent=2), selected_ids
 
 
-def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any]) -> None:
+def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any], key: bytes) -> None:
     _normalize_user_memory_data(data, str(data.get("sender_id", "")))
     memory_id = str(entry.get("id") or _new_memory_id())
     entry["id"] = memory_id
@@ -2224,12 +2360,9 @@ def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str,
         keywords = _memory_keywords(f"{entry.get('user_text', '')}\n{entry.get('bot_text', '')}")
         entry["keywords"] = keywords
 
-    entries_path = _memory_entries_path(index_path)
-    entries_path.parent.mkdir(parents=True, exist_ok=True)
-    line = (json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    with entries_path.open("ab") as file:
-        offset = file.tell()
-        file.write(line)
+    entries = _load_user_memory_entries(index_path, key)
+    entries.append(entry)
+    _write_user_memory_entries(index_path, entries, key)
 
     index = data.setdefault("index", {})
     entry_index = index.setdefault("entries", {})
@@ -2237,8 +2370,6 @@ def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str,
         entry_index = {}
         index["entries"] = entry_index
     entry_index[memory_id] = {
-        "offset": offset,
-        "length": len(line),
         "created_at": str(entry.get("created_at", "")),
         "updated_at": str(entry.get("updated_at", "")),
         "keywords": keywords,
@@ -2268,43 +2399,32 @@ def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str,
     del recent_ids[:-MEMORY_RECENT_LIMIT]
 
 
-def _read_memory_entry(index_path: Path, data: dict[str, Any], memory_id: str) -> dict[str, Any] | None:
-    index = data.get("index") if isinstance(data.get("index"), dict) else {}
-    entries = index.get("entries") if isinstance(index.get("entries"), dict) else {}
-    metadata = entries.get(memory_id)
-    if not isinstance(metadata, dict):
-        return None
+def _read_memory_entry(index_path: Path, data: dict[str, Any], memory_id: str, key: bytes) -> dict[str, Any] | None:
+    entries = _load_user_memory_entries(index_path, key)
     try:
-        offset = int(metadata.get("offset"))
-        length = int(metadata.get("length"))
-    except (TypeError, ValueError):
-        return None
-    try:
-        with _memory_entries_path(index_path).open("rb") as file:
-            file.seek(offset)
-            payload = json.loads(file.read(length).decode("utf-8"))
-    except (OSError, json.JSONDecodeError):
+        for payload in entries:
+            if isinstance(payload, dict) and str(payload.get("id", "")) == memory_id:
+                return payload
+    except Exception:
         LOGGER.exception("Failed to read JSONL user memory entry id=%s.", memory_id)
-        return None
-    if not isinstance(payload, dict) or str(payload.get("id", "")) != memory_id:
-        return None
-    return payload
+    return None
 
 
-def _migrate_inline_json_memory(index_path: Path, payload: dict[str, Any], sender_id: str) -> dict[str, Any]:
+def _migrate_inline_json_memory(index_path: Path, payload: dict[str, Any], sender_id: str, key: bytes) -> dict[str, Any]:
     data = _new_user_memory_data(sender_id)
     data["created_at"] = str(payload.get("created_at") or data["created_at"])
     data["updated_at"] = str(payload.get("updated_at") or data["updated_at"])
     profile = payload.get("profile")
     if isinstance(profile, dict):
         data["profile"] = profile
-    entries_path = _memory_entries_path(index_path)
-    entries_path.parent.mkdir(parents=True, exist_ok=True)
-    entries_path.write_bytes(b"")
+    memories: list[dict[str, Any]] = []
     for memory in payload.get("memories", []):
         if isinstance(memory, dict):
-            _store_memory_entry(index_path, data, memory)
-    _write_json_file(index_path, data)
+            memories.append(memory)
+            _store_memory_entry(index_path, data, memory, key)
+    _write_user_memory_json(index_path, data, key)
+    if not memories:
+        _write_user_memory_entries(index_path, [], key)
     return data
 
 
@@ -2336,10 +2456,10 @@ def _memory_avatar_paths(index_path: Path) -> list[Path]:
     )
 
 
-def _ensure_user_habits_file(index_path: Path) -> None:
+def _ensure_user_habits_file(index_path: Path, key: bytes) -> None:
     habits_path = _memory_habits_path(index_path)
     if not habits_path.exists():
-        habits_path.write_text("", encoding="utf-8")
+        _write_user_memory_text(habits_path, "", key, kind="user-memory-habits")
 
 
 def _ensure_user_avatar_assets(api: TelegramAPI | None, index_path: Path, message: dict[str, Any]) -> None:
@@ -2448,11 +2568,16 @@ def _ensure_user_folder_icon(index_path: Path) -> None:
     marker_path.write_text(icon_path.name, encoding="utf-8")
 
 
-def _load_user_habits_text(index_path: Path, max_chars: int) -> str:
-    _ensure_user_habits_file(index_path)
+def _load_user_habits_text(index_path: Path, key: bytes, max_chars: int) -> str:
+    _ensure_user_habits_file(index_path, key)
     if max_chars < 1:
         return ""
-    return _read_limited_text(_memory_habits_path(index_path), max_chars).strip()
+    text, migrated = read_encrypted_user_memory_text(_memory_habits_path(index_path), key, kind="user-memory-habits")
+    if migrated:
+        _write_user_memory_text(_memory_habits_path(index_path), text, key, kind="user-memory-habits")
+    if len(text) <= max_chars:
+        return text.strip()
+    return text[:max_chars].rstrip() + "\n[gekuerzt]"
 
 
 def _combine_user_memory_prompt(habits_text: str, memory_text: str) -> str:
@@ -2486,7 +2611,35 @@ def _read_limited_text(path: Path, max_chars: int) -> str:
     return text[:max_chars].rstrip() + "\n[gekuerzt]"
 
 
-def _load_legacy_user_memory(index_path: Path, sender_id: str) -> dict[str, Any] | None:
+def _load_user_memory_entries(index_path: Path, key: bytes) -> list[dict[str, Any]]:
+    entries_path = _memory_entries_path(index_path)
+    entries, migrated = read_encrypted_user_memory_jsonl(entries_path, key, kind="user-memory-entries")
+    if migrated:
+        _write_user_memory_entries(index_path, entries, key)
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _write_user_memory_json(index_path: Path, data: dict[str, Any], key: bytes) -> None:
+    write_encrypted_user_memory_json(index_path, key, kind="user-memory-index", data=data)
+
+
+def _write_user_memory_entries(index_path: Path, entries: list[dict[str, Any]], key: bytes) -> None:
+    write_encrypted_user_memory_jsonl(_memory_entries_path(index_path), key, kind="user-memory-entries", entries=entries)
+
+
+def _write_user_memory_text(path: Path, text: str, key: bytes, *, kind: str) -> None:
+    write_encrypted_user_memory_text(path, key, kind=kind, text=text)
+
+
+def _user_memory_key_path(index_path: Path) -> Path:
+    return index_path.parent / USER_MEMORY_KEY_FILENAME
+
+
+def _ensure_user_memory_key(index_path: Path) -> bytes:
+    return ensure_user_memory_key(_user_memory_key_path(index_path))
+
+
+def _load_legacy_user_memory(index_path: Path, sender_id: str, key: bytes) -> dict[str, Any] | None:
     legacy_json_path = _first_existing_path(_legacy_json_memory_paths(index_path, sender_id))
     if legacy_json_path is None:
         return None
@@ -2499,15 +2652,17 @@ def _load_legacy_user_memory(index_path: Path, sender_id: str) -> dict[str, Any]
         LOGGER.warning("Ignoring legacy user memory with mismatched sender_id at %s.", legacy_json_path)
         return None
     if isinstance(payload.get("memories"), list):
-        return _migrate_inline_json_memory(index_path, payload, sender_id)
+        return _migrate_inline_json_memory(index_path, payload, sender_id, key)
 
-    entries_path = _memory_entries_path(index_path)
-    entries_path.parent.mkdir(parents=True, exist_ok=True)
     legacy_entries_path = _first_existing_path(_legacy_entries_memory_paths(index_path, sender_id))
     if legacy_entries_path is not None:
-        entries_path.write_bytes(legacy_entries_path.read_bytes())
+        try:
+            legacy_entries = [json.loads(line) for line in legacy_entries_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except json.JSONDecodeError:
+            legacy_entries = []
+        _write_user_memory_entries(index_path, [entry for entry in legacy_entries if isinstance(entry, dict)], key)
     else:
-        entries_path.write_bytes(b"")
+        _write_user_memory_entries(index_path, [], key)
     _normalize_user_memory_data(payload, sender_id)
     return payload
 
@@ -2671,6 +2826,8 @@ def run_polling(
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
+    process_registry = _InstanceProcessRegistry(instance)
+    process_registry.cleanup_orphans()
     LOGGER.info(
         "Bot started instance=%s token_slot=%s bot_name=%s bot_username=%s. Waiting for Telegram updates.",
         instance,
@@ -2697,6 +2854,7 @@ def run_polling(
                         bot_identity,
                         working_memory_store,
                         youtube_job_runner,
+                        instance,
                     )
                     offset = int(update["update_id"]) + 1
             except KeyboardInterrupt:
@@ -2713,6 +2871,7 @@ def run_polling(
     finally:
         if owns_youtube_job_runner:
             youtube_job_runner.shutdown(wait=False)
+        process_registry.cleanup_orphans()
 
 
 def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, instance_name: str) -> None:
@@ -3297,6 +3456,7 @@ def _handle_youtube_transcript_request(
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
+    instance_name: str,
 ) -> None:
     sender_id = _sender_identifier(message)
     url = _extract_youtube_url(text)
@@ -3313,7 +3473,10 @@ def _handle_youtube_transcript_request(
 
     try:
         api.send_chat_action(chat_id, "typing")
-        transcript, source = transcribe_youtube_video(url, local_allowed=False)
+        transcribe_kwargs: dict[str, Any] = {"local_allowed": False}
+        if instance_name:
+            transcribe_kwargs["instance_name"] = instance_name
+        transcript, source = transcribe_youtube_video(url, **transcribe_kwargs)
     except YouTubeTranscriptError as exc:
         if exc.needs_local_transcription:
             if sender_id:
@@ -3380,6 +3543,7 @@ def _handle_pending_youtube_local_options(
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    instance_name: str = "",
 ) -> bool:
     sender_id = _sender_identifier(message)
     url = chat_state.get_pending_youtube_local_options(chat_id, sender_id)
@@ -3412,6 +3576,7 @@ def _handle_pending_youtube_local_options(
                 bot_identity,
                 first_contact,
                 working_memory_store,
+                instance_name,
             )
         )
         reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
@@ -3437,6 +3602,7 @@ def _handle_pending_youtube_local_options(
         bot_identity,
         first_contact,
         working_memory_store,
+        instance_name,
     )
     return True
 
@@ -3457,11 +3623,18 @@ def _run_youtube_local_transcription_job(
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
+    instance_name: str = "",
 ) -> None:
     try:
         api.send_chat_action(chat_id, "typing")
         live_callback = _build_youtube_live_callback(api, chat_state, chat_id) if live_enabled else None
-        transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=live_callback)
+        transcribe_kwargs: dict[str, Any] = {
+            "local_allowed": True,
+            "live_callback": live_callback,
+        }
+        if instance_name:
+            transcribe_kwargs["instance_name"] = instance_name
+        transcript, source = transcribe_youtube_video(url, **transcribe_kwargs)
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed during YouTube transcription: %s", exc)
         return
@@ -3624,19 +3797,29 @@ class YouTubeTranscriptError(RuntimeError):
         self.needs_local_transcription = needs_local_transcription
 
 
-def transcribe_youtube_video(url: str, local_allowed: bool = True, live_callback=None) -> tuple[str, str]:
+def transcribe_youtube_video(
+    url: str,
+    local_allowed: bool = True,
+    live_callback=None,
+    instance_name: str = "",
+) -> tuple[str, str]:
     if shutil.which("yt-dlp") is None:
         raise YouTubeTranscriptError("yt-dlp ist nicht installiert.")
     normalized_url = _validated_youtube_url(url)
 
     with tempfile.TemporaryDirectory(prefix="telegram-bot-youtube-") as directory:
         workdir = Path(directory)
-        subtitle_text = _download_youtube_subtitles(normalized_url, workdir)
+        subtitle_text = _download_youtube_subtitles(normalized_url, workdir, instance_name=instance_name)
         if subtitle_text:
             return subtitle_text, "YouTube-Untertitel"
         if not local_allowed:
             raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
-        whisper_text = _transcribe_youtube_audio_with_whisper(normalized_url, workdir, live_callback=live_callback)
+        whisper_text = _transcribe_youtube_audio_with_whisper(
+            normalized_url,
+            workdir,
+            live_callback=live_callback,
+            instance_name=instance_name,
+        )
         if whisper_text:
             return whisper_text, "lokales Whisper"
     raise YouTubeTranscriptError("kein Transkript erzeugt.")
@@ -3673,7 +3856,7 @@ def _validated_youtube_url(url: str) -> str:
     return urllib.parse.urlunparse(parsed)
 
 
-def _download_youtube_subtitles(url: str, workdir: Path) -> str:
+def _download_youtube_subtitles(url: str, workdir: Path, instance_name: str = "") -> str:
     result = _run_local_command(
         [
             "yt-dlp",
@@ -3690,17 +3873,24 @@ def _download_youtube_subtitles(url: str, workdir: Path) -> str:
         ],
         workdir,
         YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS,
+        instance_name=instance_name,
     )
     if result.returncode != 0 and not list(workdir.glob("*.srt")):
         LOGGER.debug("yt-dlp subtitle download failed: %s", result.stderr.strip())
     return _read_first_srt_as_text(workdir)
 
 
-def _transcribe_youtube_audio_with_whisper(url: str, workdir: Path, live_callback=None) -> str:
+def _transcribe_youtube_audio_with_whisper(
+    url: str,
+    workdir: Path,
+    live_callback=None,
+    instance_name: str = "",
+) -> str:
     audio_result = _run_local_command(
         ["yt-dlp", "-x", "--audio-format", "mp3", "-o", "youtube-audio.%(ext)s", url],
         workdir,
         YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS,
+        instance_name=instance_name,
     )
     if audio_result.returncode != 0:
         raise YouTubeTranscriptError(f"Audio konnte nicht geladen werden: {_short_process_error(audio_result)}")
@@ -3710,17 +3900,39 @@ def _transcribe_youtube_audio_with_whisper(url: str, workdir: Path, live_callbac
         raise YouTubeTranscriptError("Audio wurde nicht als MP3 erzeugt.")
 
     if _has_python_module("faster_whisper"):
-        return _transcribe_audio_with_faster_whisper(audio_files[0], workdir, live_callback=live_callback)
+        return _transcribe_audio_with_faster_whisper(
+            audio_files[0],
+            workdir,
+            live_callback=live_callback,
+            instance_name=instance_name,
+        )
     if shutil.which("whisper") is None:
         raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden und weder faster-whisper noch whisper ist installiert.")
-    return _transcribe_audio_with_openai_whisper_cli(audio_files[0], workdir)
+    return _transcribe_audio_with_openai_whisper_cli(audio_files[0], workdir, instance_name=instance_name)
 
 
-def _transcribe_audio_with_faster_whisper(audio_path: Path, workdir: Path, live_callback=None) -> str:
-    return _transcribe_audio_with_faster_whisper_model(audio_path, workdir, YOUTUBE_WHISPER_MODEL, live_callback=live_callback)
+def _transcribe_audio_with_faster_whisper(
+    audio_path: Path,
+    workdir: Path,
+    live_callback=None,
+    instance_name: str = "",
+) -> str:
+    return _transcribe_audio_with_faster_whisper_model(
+        audio_path,
+        workdir,
+        YOUTUBE_WHISPER_MODEL,
+        live_callback=live_callback,
+        instance_name=instance_name,
+    )
 
 
-def _transcribe_audio_with_faster_whisper_model(audio_path: Path, workdir: Path, model_name: str, live_callback=None) -> str:
+def _transcribe_audio_with_faster_whisper_model(
+    audio_path: Path,
+    workdir: Path,
+    model_name: str,
+    live_callback=None,
+    instance_name: str = "",
+) -> str:
     code = """
 import sys
 from pathlib import Path
@@ -3751,6 +3963,7 @@ for segment in segments:
         workdir,
         YOUTUBE_WHISPER_TIMEOUT_SECONDS,
         line_callback=live_callback,
+        instance_name=instance_name,
     )
     if result.returncode != 0:
         raise YouTubeTranscriptError(f"faster-whisper konnte nicht transkribieren: {_short_process_error(result)}")
@@ -3762,7 +3975,7 @@ for segment in segments:
     return text
 
 
-def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path) -> str:
+def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path, instance_name: str = "") -> str:
     whisper_result = _run_local_command(
         [
             "whisper",
@@ -3778,6 +3991,7 @@ def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path) -
         ],
         workdir,
         YOUTUBE_WHISPER_TIMEOUT_SECONDS,
+        instance_name=instance_name,
     )
     if whisper_result.returncode != 0:
         raise YouTubeTranscriptError(f"Whisper konnte nicht transkribieren: {_short_process_error(whisper_result)}")
@@ -3794,25 +4008,14 @@ def _has_python_module(module_name: str) -> bool:
     return result.returncode == 0
 
 
-def _run_local_command(command: list[str], workdir: Path, timeout: int) -> subprocess.CompletedProcess[str]:
-    try:
-        return subprocess.run(
-            command,
-            cwd=workdir,
-            text=True,
-            capture_output=True,
-            timeout=timeout,
-            check=False,
-        )
-    except TimeoutError as exc:
-        raise YouTubeTranscriptError(f"lokaler Prozess lief in ein Timeout: {exc}") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.") from exc
-    except OSError as exc:
-        raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
-
-
-def _run_local_command_streaming(command: list[str], workdir: Path, timeout: int, line_callback=None) -> subprocess.CompletedProcess[str]:
+def _run_local_command(
+    command: list[str],
+    workdir: Path,
+    timeout: int,
+    instance_name: str = "",
+) -> subprocess.CompletedProcess[str]:
+    registry = _InstanceProcessRegistry(instance_name)
+    process: subprocess.Popen[str] | None = None
     env = os.environ.copy()
     env.update(
         {
@@ -3832,18 +4035,62 @@ def _run_local_command_streaming(command: list[str], workdir: Path, timeout: int
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=1,
+            start_new_session=True,
         )
+        registry.register(process.pid)
+        stdout, stderr = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(command, process.returncode or 0, stdout, stderr)
+    except TimeoutError as exc:
+        raise YouTubeTranscriptError(f"lokaler Prozess lief in ein Timeout: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        _terminate_process_group(process)
+        raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.") from exc
     except OSError as exc:
         raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
+    finally:
+        if process is not None:
+            registry.unregister(process.pid)
 
+
+def _run_local_command_streaming(
+    command: list[str],
+    workdir: Path,
+    timeout: int,
+    line_callback=None,
+    instance_name: str = "",
+) -> subprocess.CompletedProcess[str]:
+    registry = _InstanceProcessRegistry(instance_name)
     stdout_lines: list[str] = []
+    stderr = ""
     start = time.monotonic()
-    assert process.stdout is not None
+    process: subprocess.Popen[str] | None = None
     try:
+        env = os.environ.copy()
+        env.update(
+            {
+                "OMP_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+                "OPENBLAS_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+                "MKL_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+                "NUMEXPR_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+                "VECLIB_MAXIMUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+            }
+        )
+        process = subprocess.Popen(
+            _lowest_priority_command(command),
+            cwd=workdir,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
+            start_new_session=True,
+        )
+        registry.register(process.pid)
+        assert process.stdout is not None
         while True:
             if time.monotonic() - start > timeout:
-                process.kill()
-                process.communicate()
+                _terminate_process_group(process)
+                _, stderr = process.communicate()
                 raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
             ready, _, _ = select.select([process.stdout], [], [], 0.1)
             if ready:
@@ -3862,10 +4109,37 @@ def _run_local_command_streaming(command: list[str], workdir: Path, timeout: int
                 for line in remaining_stdout.splitlines():
                     line_callback(line)
     except subprocess.TimeoutExpired:
-        process.kill()
+        _terminate_process_group(process)
         _, stderr = process.communicate()
         raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
-    return subprocess.CompletedProcess(command, process.returncode or 0, "".join(stdout_lines), stderr)
+    finally:
+        if process is not None:
+            registry.unregister(process.pid)
+    returncode = process.returncode if process is not None and process.returncode is not None else 0
+    return subprocess.CompletedProcess(command, returncode, "".join(stdout_lines), stderr)
+
+
+def _terminate_process_group(process: subprocess.Popen[str] | None) -> None:
+    if process is None or process.pid <= 0:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError:
+        LOGGER.debug("Failed to terminate process group %s with SIGTERM.", process.pid)
+        return
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return
+        except OSError:
+            return
+        time.sleep(0.1)
+    with suppress(ProcessLookupError, OSError):
+        os.killpg(process.pid, signal.SIGKILL)
 
 
 def _lowest_priority_command(command: list[str]) -> list[str]:
