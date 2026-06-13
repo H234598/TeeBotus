@@ -31,6 +31,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 API_BASE = "https://api.telegram.org/bot{token}/{method}"
 FILE_API_BASE = "https://api.telegram.org/file/bot{token}/{file_path}"
 MAX_TRACKED_BOT_MESSAGES = 100
+MAX_TRACKED_CHAT_MESSAGES = 1000
 INITIAL_RETRY_DELAY_SECONDS = 5
 MAX_RETRY_DELAY_SECONDS = 60
 TELEGRAM_MESSAGE_CHUNK_SIZE = 3900
@@ -383,6 +384,7 @@ class ChatState:
         self._lock = threading.RLock()
         self.previous_response_ids: dict[int, str] = {}
         self.sent_message_ids: dict[int, list[int]] = {}
+        self.recent_message_ids: dict[int, list[int]] = {}
         self.auto_voice_eligible_counts: dict[int, int] = {}
         self.seen_sender_ids: set[str] = set()
         self.depression_alert_signatures: set[str] = set()
@@ -414,6 +416,13 @@ class ChatState:
             message_ids = self.sent_message_ids.setdefault(chat_id, [])
             message_ids.append(message_id)
             del message_ids[:-MAX_TRACKED_BOT_MESSAGES]
+            self._record_recent_message_locked(chat_id, message_id)
+
+    def record_received_message(self, chat_id: int, message_id: int | None) -> None:
+        if message_id is None:
+            return
+        with self._lock:
+            self._record_recent_message_locked(chat_id, message_id)
 
     def pop_last_sent_message(self, chat_id: int) -> int | None:
         with self._lock:
@@ -430,6 +439,34 @@ class ChatState:
             selected = message_ids[-count:]
             del message_ids[-count:]
             return list(reversed(selected))
+
+    def discard_recent_message(self, chat_id: int, message_id: int | None) -> None:
+        if message_id is None:
+            return
+        with self._lock:
+            message_ids = self.recent_message_ids.get(chat_id)
+            if not message_ids:
+                return
+            for index in range(len(message_ids) - 1, -1, -1):
+                if message_ids[index] == message_id:
+                    del message_ids[index]
+                    break
+
+    def pop_recent_messages(self, chat_id: int, count: int) -> list[int]:
+        if count < 1:
+            return []
+        with self._lock:
+            message_ids = self.recent_message_ids.get(chat_id)
+            if not message_ids:
+                return []
+            selected = message_ids[-count:]
+            del message_ids[-count:]
+            return list(reversed(selected))
+
+    def _record_recent_message_locked(self, chat_id: int, message_id: int) -> None:
+        message_ids = self.recent_message_ids.setdefault(chat_id, [])
+        message_ids.append(message_id)
+        del message_ids[:-MAX_TRACKED_CHAT_MESSAGES]
 
     def should_send_auto_voice(self, chat_id: int, every: int) -> bool:
         if every < 1:
@@ -817,6 +854,7 @@ def handle_update(
         message.get("message_id", "unknown"),
         _message_kind(message),
     )
+    chat_state.record_received_message(chat_id, _message_id_or_none(message))
 
     text = str(message.get("text") or "").strip()
     first_contact = _is_first_contact(chat_state, user_memory_store, message, instructions)
@@ -1221,6 +1259,11 @@ def _message_id(message: dict[str, Any]) -> int:
     if isinstance(value, int):
         return value
     raise ValueError("Telegram message has no message_id to copy")
+
+
+def _message_id_or_none(message: dict[str, Any]) -> int | None:
+    value = message.get("message_id")
+    return value if isinstance(value, int) else None
 
 
 def _format_remaining_seconds(seconds: int) -> str:
@@ -3931,7 +3974,9 @@ def _handle_cleanup_command(
             _send_tracked_message(api, chat_state, chat_id, instructions.cleanup_usage)
             return True
 
-        message_ids = chat_state.pop_sent_messages(chat_id, count)
+        chat_state.discard_recent_message(chat_id, _message_id_or_none(message))
+
+        message_ids = chat_state.pop_recent_messages(chat_id, count)
         if not message_ids:
             _send_tracked_message(api, chat_state, chat_id, instructions.delete_empty)
             return True

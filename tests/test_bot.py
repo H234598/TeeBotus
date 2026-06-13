@@ -1982,14 +1982,17 @@ class BotTests(unittest.TestCase):
 
         api = FakeAPI()
         chat_state = ChatState()
-        for message_id in (10, 11, 12):
-            chat_state.record_sent_message(123, message_id)
+        chat_state.record_received_message(123, 10)
+        chat_state.record_sent_message(123, 11)
+        chat_state.record_received_message(123, 12)
+        chat_state.record_sent_message(123, 13)
 
-        handle_update(api, {"message": {"text": "/cleanup 2", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
+        handle_update(api, {"message": {"text": "/cleanup 2", "message_id": 14, "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
 
-        self.assertEqual(api.deleted_messages, [(123, 12), (123, 11)])
+        self.assertEqual(api.deleted_messages, [(123, 13), (123, 12)])
         self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_success.format(count=2))])
-        self.assertEqual(chat_state.pop_sent_messages(123, 10), [101, 10])
+        self.assertEqual(chat_state.pop_recent_messages(123, 10), [101, 11, 10])
+        self.assertNotIn((123, 14), api.deleted_messages)
 
     def test_cleanup_requires_count(self) -> None:
         from telegram_bot.instructions import BotInstructions
