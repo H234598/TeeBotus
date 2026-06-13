@@ -25,7 +25,7 @@ DEFAULT_HELP_LINES = (
     "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
     "/Call_a_Teladi - Send Teladi a emergency message",
     "/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht in diesem Chat.",
-    "/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Nachrichten in diesem Chat.",
+    "/cleanup N - loescht bis zu N seit Bot-Start gemerkte Nachrichten in diesem Chat.",
 )
 
 
@@ -102,8 +102,8 @@ class BotInstructions:
         "Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
     )
     cleanup_usage: str = (
-        "Nutzung: /cleanup 10. "
-        "Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
+        "Nutzung: /cleanup N. "
+        "Damit loesche ich bis zu N seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
     )
     user_memory_reset_confirm: str = (
         "Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? "

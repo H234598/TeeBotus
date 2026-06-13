@@ -14,7 +14,7 @@ Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long 
 - frei formulierte Bitten wie `loesch meine Erinnerungen` nutzen denselben bestaetigten User-Memory-Reset
 - `/Call_a_Teladi` fragt nach einer Emergency Message und leitet die naechste Telegram-Nachricht an Teladi weiter
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht
-- `/cleanup 10` loescht bis zu 10 zuletzt gemerkte Nachrichten aus dem aktuellen Chat
+- `/cleanup N` loescht bis zu N zuletzt gemerkte Nachrichten aus dem aktuellen Chat
 - `/codex Prompt` startet lokal `codex exec` aus dem Bot-Prozess heraus
 - `/voice Text` erzeugt eine Telegram-Sprachnachricht
 - eingehende Telegram-Sprachnachrichten werden transkribiert und wie Textnachrichten verarbeitet
@@ -223,7 +223,7 @@ python3 scripts/validate_flex.py
 Der Bot merkt sich die `message_id` seiner eigenen Antworten im Arbeitsspeicher. Damit funktionieren:
 
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht im aktuellen Chat.
-- `/cleanup 10` loescht bis zu 10 zuletzt gemerkte Nachrichten im aktuellen Chat.
+- `/cleanup N` loescht bis zu N zuletzt gemerkte Nachrichten im aktuellen Chat.
 
 Nach einem Bot-Neustart ist diese interne Liste leer. In Gruppen muss der Bot Admin sein und die Berechtigung zum Loeschen von Nachrichten haben, sonst kann Telegram `deleteMessage` ablehnen.
 
