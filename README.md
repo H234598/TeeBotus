@@ -182,6 +182,8 @@ YouTube-Transkripte laufen zweistufig: Zuerst versucht der Bot mit `yt-dlp` vorh
 
 Wenn der Freitext-Parser Live-Ausgabe oder LLM-Weitergabe nicht vollstaendig erkennt, kann ein vorhandener OpenAI-Client die beiden Optionen eng als JSON klassifizieren. Parser-Ergebnisse gewinnen dabei; das LLM fuellt nur fehlende Werte. Solche nachtraeglich erkannten Formulierungen werden URL-redaktiert in `instances/{instance}/data/YouTube_Parser_Misses.jsonl` protokolliert und instanzlokal wieder vom Parser gelesen, damit dieselbe Formulierung beim naechsten Mal ohne LLM-Fallback erkannt wird.
 
+Die zaehlbaren Grundformen des Live/LLM-Parsers koennen mit `python3 scripts/youtube_parser_stats.py` oder maschinenlesbar mit `python3 scripts/youtube_parser_stats.py --json` neu berechnet werden. Die konkrete Sprache bleibt wegen freier Regex-Zwischenraeume, Learned-Phrases und LLM-Fallback unendlich; das Skript weist deshalb eine konservative zaehlbare Untergrenze aus.
+
 Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.
