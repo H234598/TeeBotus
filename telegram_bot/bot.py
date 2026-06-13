@@ -3419,9 +3419,15 @@ def _run_youtube_local_transcription_job(
         api.send_chat_action(chat_id, "typing")
         live_callback = _build_youtube_live_callback(api, chat_state, chat_id) if live_enabled else None
         transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=live_callback)
+    except TelegramAPIError as exc:
+        LOGGER.warning("Telegram request failed during YouTube transcription: %s", exc)
+        return
     except (YouTubeTranscriptError, TimeoutError, subprocess.TimeoutExpired) as exc:
         reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
-        _send_tracked_message(api, chat_state, chat_id, reply)
+        try:
+            _send_tracked_message(api, chat_state, chat_id, reply)
+        except TelegramAPIError as send_exc:
+            LOGGER.warning("Telegram request failed while reporting YouTube transcription error: %s", send_exc)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
         return
 
@@ -3451,7 +3457,10 @@ def _run_youtube_local_transcription_job(
         reply = "Lokale YouTube-Transkription abgeschlossen."
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
-    _send_tracked_message(api, chat_state, chat_id, reply)
+    try:
+        _send_tracked_message(api, chat_state, chat_id, reply)
+    except TelegramAPIError as exc:
+        LOGGER.warning("Telegram request failed while sending YouTube transcription completion: %s", exc)
     _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
 
 
@@ -3475,14 +3484,24 @@ def _yes_no_value(value: str) -> bool:
 
 def _build_youtube_live_callback(api: TelegramAPI, chat_state: ChatState, chat_id: int):
     buffer: list[str] = []
+    disabled = False
 
     def emit(text: str, force: bool = False) -> None:
+        nonlocal disabled
+        if disabled:
+            return
         buffer.extend(re.findall(r"\S+", text))
         while len(buffer) >= YOUTUBE_LIVE_CHUNK_WORDS or (force and buffer):
             count = min(len(buffer), YOUTUBE_LIVE_CHUNK_WORDS)
             chunk_words = buffer[:count]
             del buffer[:count]
-            _send_tracked_message(api, chat_state, chat_id, " ".join(chunk_words))
+            try:
+                _send_tracked_message(api, chat_state, chat_id, " ".join(chunk_words))
+            except TelegramAPIError as exc:
+                disabled = True
+                LOGGER.warning("Telegram request failed while sending YouTube live output: %s", exc)
+                buffer.clear()
+                return
 
     return emit
 
@@ -3522,13 +3541,22 @@ def _send_youtube_transcript_to_openai_pipeline(
     except OpenAIAPIError as exc:
         LOGGER.error("OpenAI request failed after YouTube transcript: %s", exc)
         reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
-        _send_tracked_message(api, chat_state, chat_id, reply)
+        try:
+            _send_tracked_message(api, chat_state, chat_id, reply)
+        except TelegramAPIError as send_exc:
+            LOGGER.warning("Telegram request failed while reporting OpenAI transcript error: %s", send_exc)
         _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
+        return
+    except TelegramAPIError as exc:
+        LOGGER.warning("Telegram request failed during YouTube transcript OpenAI pipeline: %s", exc)
         return
 
     chat_state.set_previous_response_id(chat_id, openai_response.response_id)
     reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
-    _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
+    try:
+        _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
+    except TelegramAPIError as exc:
+        LOGGER.warning("Telegram request failed while sending YouTube transcript response: %s", exc)
     _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
 
 

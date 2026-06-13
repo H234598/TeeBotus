@@ -32,6 +32,7 @@ from telegram_bot.bot import (
     _resolve_telegram_token,
     _resolve_telegram_tokens,
     _srt_to_plain_text,
+    _run_youtube_local_transcription_job,
     _transcribe_voice_audio,
     contains_sources,
     count_words,
@@ -1203,6 +1204,49 @@ class BotTests(unittest.TestCase):
 
         transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None)
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."))
+
+    def test_youtube_local_transcription_job_ignores_telegram_network_errors(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        instructions = BotInstructions()
+
+        def transcribe(url, local_allowed=True, live_callback=None):
+            self.assertTrue(local_allowed)
+            self.assertIsNotNone(live_callback)
+            live_callback("eins zwei drei vier fuenf")
+            live_callback("", force=True)
+            return "Fertiges Transkript.", "lokales Whisper"
+
+        def fail_send_message(chat_id, text):
+            raise TelegramNetworkError("Telegram network error: reset")
+
+        api.send_message = fail_send_message  # type: ignore[assignment]
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=transcribe):
+            with self.assertLogs("telegram_bot", level="WARNING") as logs:
+                _run_youtube_local_transcription_job(
+                    api,
+                    chat_state,
+                    123,
+                    {"text": "live ja", "chat": {"id": 123}, "from": {"id": 456}},
+                    "live ja",
+                    "https://youtu.be/abc123",
+                    True,
+                    False,
+                    None,
+                    None,
+                    instructions,
+                    None,
+                    BotIdentity(),
+                    False,
+                    None,
+                )
+
+        log_text = "\n".join(logs.output)
+        self.assertIn("Telegram request failed while sending YouTube live output", log_text)
+        self.assertIn("Telegram request failed while sending YouTube transcription completion", log_text)
 
     def test_handle_update_youtube_transcript_timeout_does_not_crash(self) -> None:
         api = FakeAPI()
