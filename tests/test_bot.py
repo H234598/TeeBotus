@@ -1982,6 +1982,36 @@ class BotTests(unittest.TestCase):
                     ),
                     (False, True),
                 )
+                self.assertEqual(
+                    _parse_youtube_local_options(
+                        "Bitte transkribiere https://youtu.be/other und mach das ohne Gelaber unterwegs, LLM ja",
+                        instance_name="Demo",
+                    ),
+                    (False, True),
+                )
+
+    def test_youtube_local_options_learned_phrases_need_specific_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+            miss_path.parent.mkdir(parents=True)
+            miss_path.write_text(
+                json.dumps(
+                    {
+                        "formulation": "LLM ja <youtube-url>",
+                        "llm_live_output": False,
+                        "llm_send_to_llm": True,
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                self.assertEqual(
+                    _parse_youtube_local_options("Andere Formulierung, LLM ja https://youtu.be/other", instance_name="Demo"),
+                    (None, True),
+                )
 
     def test_handle_update_youtube_transcript_uses_llm_option_fallback_from_initial_request(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError

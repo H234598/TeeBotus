@@ -3975,6 +3975,7 @@ def _parse_learned_youtube_local_options(text: str, instance_name: str) -> tuple
     if not path.exists():
         return None
     normalized_formulation = _normalize_youtube_option_formulation(text)
+    formulation_tokens = _youtube_option_formulation_tokens(normalized_formulation)
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -3989,7 +3990,11 @@ def _parse_learned_youtube_local_options(text: str, instance_name: str) -> tuple
             continue
         if not isinstance(entry, dict):
             continue
-        if _normalize_youtube_option_formulation(str(entry.get("formulation") or "")) != normalized_formulation:
+        learned_formulation = _normalize_youtube_option_formulation(str(entry.get("formulation") or ""))
+        if learned_formulation != normalized_formulation and not _learned_youtube_formulation_matches(
+            _youtube_option_formulation_tokens(learned_formulation),
+            formulation_tokens,
+        ):
             continue
         live_value = _coerce_optional_bool(entry.get("llm_live_output"))
         llm_value = _coerce_optional_bool(entry.get("llm_send_to_llm"))
@@ -4173,6 +4178,61 @@ def _normalize_youtube_option_formulation(text: str) -> str:
     redacted = _redact_youtube_urls(text)
     normalized = re.sub(r"[_-]+", " ", redacted.casefold())
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _youtube_option_formulation_tokens(normalized_text: str) -> set[str]:
+    stop_words = {
+        "bitte",
+        "mach",
+        "mache",
+        "das",
+        "den",
+        "die",
+        "der",
+        "ein",
+        "eine",
+        "einen",
+        "mal",
+        "versuch",
+        "versuchs",
+        "transkribiere",
+        "transkribier",
+        "transkribieren",
+        "youtube",
+        "video",
+        "link",
+        "url",
+        "und",
+        "oder",
+        "mit",
+        "ohne",
+        "an",
+        "ans",
+        "zum",
+        "zur",
+        "in",
+        "ins",
+        "ja",
+        "nein",
+        "true",
+        "false",
+        "on",
+        "off",
+        "0",
+        "1",
+        "youtube-url",
+    }
+    return {
+        token
+        for token in re.findall(r"[a-zäöüß]+|[0-9]+", normalized_text)
+        if len(token) >= 3 and token not in stop_words
+    }
+
+
+def _learned_youtube_formulation_matches(learned_tokens: set[str], candidate_tokens: set[str]) -> bool:
+    if len(learned_tokens) < 3:
+        return False
+    return learned_tokens.issubset(candidate_tokens)
 
 
 def _yes_no_value(value: str) -> bool:
