@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-LOGGER = logging.getLogger("telegram_bot.instructions")
+LOGGER = logging.getLogger("TeeBotus.instructions")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 EASTER_EGGS_FILENAME = "EASTER_EGGS.json"

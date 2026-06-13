@@ -1,6 +1,6 @@
-# Telegram Bot
+# TeeBotus
 
-Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long Polling ueber die Telegram Bot API und kann mehrere Instanzen mit getrennten Einstellungen starten.
+TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long Polling ueber die Telegram Bot API und kann mehrere Instanzen mit getrennten Einstellungen starten.
 
 ## Funktionen
 
@@ -45,31 +45,31 @@ cd TeeBotus
 set -a
 source .env
 set +a
-python3 -m telegram_bot
+python3 -m TeeBotus
 ```
 
 Eine bestimmte Einzelinstanz startest du so:
 
 ```bash
-TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m telegram_bot
+TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m TeeBotus
 ```
 
 Alle konfigurierten Instanzen startest du so:
 
 ```bash
-python3 -m telegram_bot --all
+python3 -m TeeBotus --all
 ```
 
 Ohne `TELEGRAM_BOT_INSTANCES` erkennt der All-Start alle Ordner unter `instances/`, die eine `Bot_Verhalten.md` enthalten. Mit `TELEGRAM_BOT_INSTANCES` kannst du die Liste explizit begrenzen:
 
 ```bash
-TELEGRAM_BOT_INSTANCES=Bote_der_Wahrheit,Depressionsbot python3 -m telegram_bot --all
+TELEGRAM_BOT_INSTANCES=Bote_der_Wahrheit,Depressionsbot python3 -m TeeBotus --all
 ```
 
 Alternativ geht der All-Start auch per Environment:
 
 ```bash
-TELEGRAM_BOT_INSTANCE=all python3 -m telegram_bot
+TELEGRAM_BOT_INSTANCE=all python3 -m TeeBotus
 ```
 
 Fuer parallel laufende Bots braucht jede Telegram-Bot-Identitaet einen eigenen BotFather-Token.
@@ -109,11 +109,11 @@ Wenn ein Wert am Anfang oder Ende Leerzeichen behalten soll, setze ihn in Anfueh
 Du kannst eine andere Instanz oder eine konkrete Datei verwenden:
 
 ```bash
-TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m telegram_bot
+TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m TeeBotus
 ```
 
 ```bash
-TELEGRAM_BOT_INSTRUCTIONS=/pfad/zur/datei.md python3 -m telegram_bot
+TELEGRAM_BOT_INSTRUCTIONS=/pfad/zur/datei.md python3 -m TeeBotus
 ```
 
 Token-Aufloesung:
@@ -233,7 +233,7 @@ Der Bot legt die Dateien beim Start automatisch an und nutzt vorhandene, ausgewa
 Alle lokal vorhandenen Instanzen mit konfigurierten Tokens startest du mit:
 
 ```bash
-python3 -m telegram_bot --all
+python3 -m TeeBotus --all
 ```
 
 Der Bot sucht dabei nach `instances/*/Bot_Verhalten.md`. Instanzen ohne Telegram-Token werden uebersprungen; bei fehlerhaften OpenAI-Key-Slots bricht der Start mit einer Meldung ab.

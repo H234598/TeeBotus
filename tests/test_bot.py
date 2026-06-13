@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import call, patch
 
-from telegram_bot.user_memory_crypto import (
+from TeeBotus.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     USER_MEMORY_PASSPHRASE_FILENAME,
     ensure_user_memory_key,
@@ -15,7 +15,7 @@ from telegram_bot.user_memory_crypto import (
     read_jsonl as read_encrypted_user_memory_jsonl,
     read_text as read_encrypted_user_memory_text,
 )
-from telegram_bot.bot import (
+from TeeBotus.bot import (
     BotIdentity,
     BotTokenConfig,
     ChatState,
@@ -54,7 +54,7 @@ from telegram_bot.bot import (
     split_telegram_message,
     transcribe_youtube_video,
 )
-from telegram_bot.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
 
 STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
@@ -168,7 +168,7 @@ class FakeJobRunner:
 
 class FakeInstructionStore:
     def get(self):
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         return BotInstructions()
 
@@ -215,7 +215,7 @@ class BotTests(unittest.TestCase):
     def setUp(self) -> None:
         self._secret_tool_store: dict[tuple[str, ...], str] = {}
         self._secret_tool_run_patcher = patch(
-            "telegram_bot.user_memory_crypto._run_secret_tool",
+            "TeeBotus.user_memory_crypto._run_secret_tool",
             side_effect=self._fake_secret_tool_run,
         )
         self._secret_tool_run_patcher.start()
@@ -368,21 +368,21 @@ class BotTests(unittest.TestCase):
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
-        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+        with patch("TeeBotus.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
             with self.assertRaises(TelegramNetworkError):
                 api.request("getUpdates", {})
 
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
-        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+        with patch("TeeBotus.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
             with self.assertRaises(TelegramNetworkError):
                 api.request_multipart("sendVoice", {"chat_id": 123}, [("voice", "voice.ogg", "audio/ogg", b"data")])
 
     def test_telegram_file_download_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
-        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+        with patch("TeeBotus.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
             with self.assertRaises(TelegramNetworkError):
                 api.download_file("voice/file.oga")
 
@@ -402,8 +402,8 @@ class BotTests(unittest.TestCase):
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
-            with patch("telegram_bot.bot._run_local_command", side_effect=run):
+        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/tool"):
+            with patch("TeeBotus.bot._run_local_command", side_effect=run):
                 transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
 
         self.assertEqual(transcript, "Subtitle text.")
@@ -420,11 +420,11 @@ class BotTests(unittest.TestCase):
                 Path(workdir, "youtube-audio.mp3").write_bytes(b"mp3")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
-            with patch("telegram_bot.bot._has_python_module", return_value=True):
-                with patch("telegram_bot.bot._run_local_command", side_effect=run):
+        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/tool"):
+            with patch("TeeBotus.bot._has_python_module", return_value=True):
+                with patch("TeeBotus.bot._run_local_command", side_effect=run):
                     with patch(
-                        "telegram_bot.bot._run_local_command_streaming",
+                        "TeeBotus.bot._run_local_command_streaming",
                         return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
                     ) as streaming:
                         transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
@@ -438,7 +438,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("2", streaming.call_args.args[0])
 
     def test_youtube_transcript_command_runs_with_lowest_priority_wrappers(self) -> None:
-        with patch("telegram_bot.bot.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
+        with patch("TeeBotus.bot.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
             command = _lowest_priority_command(["python3", "-c", "print('x')"])
 
         self.assertEqual(command[:6], ["nice", "-n", "19", "ionice", "-c", "3"])
@@ -453,8 +453,8 @@ class BotTests(unittest.TestCase):
                 if pid != 333:
                     raise ProcessLookupError
 
-            with patch("telegram_bot.bot.PROJECT_ROOT", project_root):
-                with patch("telegram_bot.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 222: 67890}.get(pid)):
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 222: 67890}.get(pid)):
                     registry.register(111)
                     state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
                     payload = json.loads(state_path.read_text(encoding="utf-8"))
@@ -479,9 +479,9 @@ class BotTests(unittest.TestCase):
 
                     with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
                         with patch(
-                            "telegram_bot.bot._read_process_start_time",
+                            "TeeBotus.bot._read_process_start_time",
                             side_effect=lambda pid: {111: 12345, 222: 11111}.get(pid),
-                        ), patch("telegram_bot.bot.os.killpg", side_effect=fake_killpg):
+                        ), patch("TeeBotus.bot.os.killpg", side_effect=fake_killpg):
                             registry.cleanup_orphans()
 
                     self.assertEqual(terminate.call_args_list, [call(111)])
@@ -494,7 +494,7 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("telegram_bot.bot.PROJECT_ROOT", project_root):
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps(
@@ -742,7 +742,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(_instance_env_key("TELEGRAM_BOT_TOKEN", "Bote_der_Wahrheit"), "TELEGRAM_BOT_TOKEN_BOTE_DER_WAHRHEIT")
 
     def test_user_memory_file_is_sender_id_and_follows_openai_across_chats(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -801,7 +801,7 @@ class BotTests(unittest.TestCase):
             self.assertIn("Mein Lieblingswort ist Mond.", openai_client.reply_inputs[-1])
 
     def test_user_memory_downloads_avatar_icon_and_sets_folder_icon(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -815,7 +815,7 @@ class BotTests(unittest.TestCase):
             )
             memory_store = UserMemoryStore("Depressionsbot")
 
-            with patch("telegram_bot.bot.subprocess.run") as run:
+            with patch("TeeBotus.bot.subprocess.run") as run:
                 handle_update(
                     api,
                     {
@@ -849,7 +849,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0][6], icon_path.resolve().as_uri())
 
     def test_user_memory_rechecks_missing_avatar_only_once_per_day(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -878,7 +878,7 @@ class BotTests(unittest.TestCase):
             self.assertFalse((user_dir / "User_Avatar.icon").exists())
 
     def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -924,7 +924,7 @@ class BotTests(unittest.TestCase):
             self.assertNotIn("Geheimnis fuer Ada", openai_client.reply_inputs[-1])
 
     def test_user_habits_file_is_included_for_same_sender_id(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -974,7 +974,7 @@ class BotTests(unittest.TestCase):
             self.assertIn("Ada mag knappe Antworten.", openai_client.reply_inputs[-1])
 
     def test_user_memory_reset_requires_confirmation_and_resets_only_current_sender(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -1051,7 +1051,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
     def test_user_memory_reset_can_be_cancelled(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -1112,7 +1112,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(read_user_memory_entries(entries_path)), 1)
 
     def test_user_memory_reset_rejects_foreign_and_instance_memory_targets(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -1211,7 +1211,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(working_entries), 1)
 
     def test_user_memory_reset_ignores_negated_delete_requests(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -1260,7 +1260,7 @@ class BotTests(unittest.TestCase):
             self.assertNotIn("123456789", entry_text)
 
     def test_working_memory_is_included_in_openai_input_without_auto_writes(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             instances_dir = Path(directory) / "instances"
@@ -1302,11 +1302,11 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "pong")])
 
     def test_logs_incoming_and_outgoing_messages_without_content(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
 
-        with self.assertLogs("telegram_bot", level="INFO") as logs:
+        with self.assertLogs("TeeBotus", level="INFO") as logs:
             handle_update(
                 api,
                 {"message": {"message_id": 55, "text": "streng geheim", "chat": {"id": 123}}},
@@ -1354,7 +1354,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [])
 
     def test_handle_update_uses_openai_for_unmatched_text_when_enabled(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -1368,7 +1368,7 @@ class BotTests(unittest.TestCase):
     def test_handle_update_youtube_transcript_command_sends_transcript(self) -> None:
         api = FakeAPI()
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+        with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
             handle_update(api, {"message": {"text": "/youtube_transcript https://youtu.be/abc123", "chat": {"id": 123}}}, chat_state=ChatState())
 
         transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
@@ -1376,13 +1376,13 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text.")])
 
     def test_handle_update_youtube_transcript_natural_request_uses_openai_pipeline(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
         instructions = BotInstructions(openai_enabled=True)
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+        with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
             handle_update(
                 api,
                 {"message": {"text": "Bitte transkribiere dieses YouTube Video https://youtu.be/abc123", "chat": {"id": 123}}},
@@ -1415,7 +1415,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")])
         self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, "456"))
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+        with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
             handle_update(
                 api,
                 {
@@ -1433,19 +1433,19 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
 
     def test_handle_update_youtube_transcript_asks_local_options_when_no_subtitles(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
 
         with patch(
-            "telegram_bot.bot.transcribe_youtube_video",
+            "TeeBotus.bot.transcribe_youtube_video",
             side_effect=RuntimeError("wrong error"),
         ):
             with patch(
-                "telegram_bot.bot.transcribe_youtube_video",
+                "TeeBotus.bot.transcribe_youtube_video",
             ) as transcribe:
-                from telegram_bot.bot import YouTubeTranscriptError
+                from TeeBotus.bot import YouTubeTranscriptError
 
                 transcribe.side_effect = YouTubeTranscriptError(
                     "keine YouTube-Untertitel gefunden.",
@@ -1482,7 +1482,7 @@ class BotTests(unittest.TestCase):
             live_callback("", force=True)
             return " ".join(["wort"] * 26), "lokales Whisper"
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=transcribe):
+        with patch("TeeBotus.bot.transcribe_youtube_video", side_effect=transcribe):
             handle_update(
                 api,
                 {
@@ -1502,14 +1502,14 @@ class BotTests(unittest.TestCase):
         self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
 
     def test_handle_update_youtube_local_options_can_send_final_transcript_to_llm(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
         openai_client = FakeOpenAIClient()
         chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
+        with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
             handle_update(
                 api,
                 {
@@ -1536,7 +1536,7 @@ class BotTests(unittest.TestCase):
         runner = FakeJobRunner()
         chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
+        with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
             handle_update(
                 api,
                 {
@@ -1560,7 +1560,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."))
 
     def test_youtube_local_transcription_job_ignores_telegram_network_errors(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
@@ -1578,8 +1578,8 @@ class BotTests(unittest.TestCase):
 
         api.send_message = fail_send_message  # type: ignore[assignment]
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=transcribe):
-            with self.assertLogs("telegram_bot", level="WARNING") as logs:
+        with patch("TeeBotus.bot.transcribe_youtube_video", side_effect=transcribe):
+            with self.assertLogs("TeeBotus", level="WARNING") as logs:
                 _run_youtube_local_transcription_job(
                     api,
                     chat_state,
@@ -1605,7 +1605,7 @@ class BotTests(unittest.TestCase):
     def test_handle_update_youtube_transcript_timeout_does_not_crash(self) -> None:
         api = FakeAPI()
 
-        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=TimeoutError("timed out")):
+        with patch("TeeBotus.bot.transcribe_youtube_video", side_effect=TimeoutError("timed out")):
             handle_update(api, {"message": {"text": "/youtube_transcript https://youtu.be/abc123", "chat": {"id": 123}}}, chat_state=ChatState())
 
         self.assertEqual(
@@ -1614,7 +1614,7 @@ class BotTests(unittest.TestCase):
         )
 
     def test_group_first_contact_must_address_bot_by_telegram_name(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -1662,7 +1662,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: Hallo @BoteDerWahrheitBot.")])
 
     def test_first_contact_start_removes_configured_instance_identity(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -1691,7 +1691,7 @@ class BotTests(unittest.TestCase):
         )
 
     def test_start_uses_telegram_identity_for_known_sender(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -1721,7 +1721,7 @@ class BotTests(unittest.TestCase):
         )
 
     def test_known_sender_can_use_any_name_after_first_contact(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -1764,7 +1764,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages[1], (-100123, "AI: Kleiner Mond, bist du da?"))
 
     def test_command_targeting_other_bot_is_ignored(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -1804,7 +1804,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("- bot_username: @BoteDerWahrheitBot", openai_input)
 
     def test_openai_input_includes_sender_context_for_group_messages(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -1855,7 +1855,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("- sender_username: unbekannt", openai_input)
 
     def test_handle_update_transcribes_voice_and_processes_result_with_openai(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         api.file_paths["file_1"] = "voice/file_1.oga"
@@ -1888,7 +1888,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
 
     def test_handle_update_voice_transcription_timeout_does_not_crash(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         api.file_paths["file_1"] = "voice/file_1.oga"
@@ -1914,7 +1914,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_transcription_error)])
 
     def test_transcribed_voice_stores_only_text_in_user_memory(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
@@ -1955,7 +1955,7 @@ class BotTests(unittest.TestCase):
             self.assertNotIn("voice-audio", json.dumps(entries, ensure_ascii=False))
 
     def test_transcribe_voice_audio_retries_fallback_after_empty_primary_transcript(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         openai_client = FakeOpenAIClient()
         openai_client.transcription_texts = ["", "Hallo aus Fallback"]
@@ -1964,7 +1964,7 @@ class BotTests(unittest.TestCase):
             openai_transcription_fallback_model="whisper-1",
         )
 
-        with self.assertLogs("telegram_bot", level="WARNING") as logs:
+        with self.assertLogs("TeeBotus", level="WARNING") as logs:
             text = _transcribe_voice_audio(openai_client, b"voice-audio", "file_1.ogg", instructions)
 
         self.assertEqual(text, "Hallo aus Fallback")
@@ -1972,7 +1972,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("Retrying with fallback_model=whisper-1", "\n".join(logs.output))
 
     def test_transcribe_voice_audio_does_not_retry_when_fallback_is_disabled(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         openai_client = FakeOpenAIClient()
         openai_client.transcription_text = ""
@@ -1984,7 +1984,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.transcription_models, ["gpt-4o-mini-transcribe"])
 
     def test_handle_update_transcribed_voice_can_trigger_static_reply(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         api.file_paths["file_1"] = "voice/file_1.oga"
@@ -2002,7 +2002,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "pong")])
 
     def test_handle_update_voice_requires_openai_client(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
 
@@ -2018,7 +2018,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt.")])
 
     def test_handle_update_voice_reports_empty_transcription(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         api.file_paths["file_1"] = "voice/file_1.oga"
@@ -2036,14 +2036,14 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "Ich konnte in der Sprachnachricht keinen Text erkennen.")])
 
     def test_logs_incoming_voice_without_transcribed_content(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         api.file_paths["file_1"] = "voice/file_1.oga"
         openai_client = FakeOpenAIClient()
         openai_client.transcription_text = "streng geheim"
 
-        with self.assertLogs("telegram_bot", level="INFO") as logs:
+        with self.assertLogs("TeeBotus", level="INFO") as logs:
             handle_update(
                 api,
                 {"message": {"message_id": 60, "voice": {"file_id": "file_1"}, "chat": {"id": 123}}},
@@ -2059,7 +2059,7 @@ class BotTests(unittest.TestCase):
         self.assertNotIn("Echo:", log_text)
 
     def test_voice_command_sends_generated_voice(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -2071,12 +2071,12 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
 
     def test_logs_outgoing_voice_without_content(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
 
-        with self.assertLogs("telegram_bot", level="INFO") as logs:
+        with self.assertLogs("TeeBotus", level="INFO") as logs:
             handle_update(
                 api,
                 {"message": {"message_id": 56, "text": "/voice sehr privat", "chat": {"id": 123}}},
@@ -2091,7 +2091,7 @@ class BotTests(unittest.TestCase):
         self.assertNotIn("sehr privat", log_text)
 
     def test_voice_command_uses_replied_message_text(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
@@ -2107,7 +2107,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.voice_texts, ["Aus Reply"])
 
     def test_voice_command_requires_text(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
 
@@ -2116,7 +2116,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "Nutzung: /voice Text fuer die Sprachnachricht")])
 
     def test_voice_command_rejects_too_long_text(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         instructions = BotInstructions(openai_voice_max_input_chars=5)
@@ -2126,7 +2126,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: 5 Zeichen.")])
 
     def test_codex_command_runs_locally_for_allowed_sender(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
@@ -2141,8 +2141,8 @@ class BotTests(unittest.TestCase):
             self.assertFalse(kwargs["check"])
             return subprocess.CompletedProcess(command, 0, "Codex erledigt.\n", "")
 
-        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/codex"):
-            with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/codex"):
+            with patch("TeeBotus.bot.subprocess.run", side_effect=run):
                 handle_update(
                     api,
                     {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
@@ -2155,13 +2155,13 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "Codex erledigt.")])
 
     def test_codex_command_rejects_unauthorized_sender(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
         instructions = BotInstructions(codex_allowed_sender_ids=("456",))
 
-        with patch("telegram_bot.bot.subprocess.run") as run:
+        with patch("TeeBotus.bot.subprocess.run") as run:
             handle_update(
                 api,
                 {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 999}}},
@@ -2174,7 +2174,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, instructions.codex_unauthorized)])
 
     def test_depression_alert_notifies_teladi_for_suicide_risk(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
@@ -2195,7 +2195,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("sender_id: 456", alerts[0])
 
     def test_depression_alert_notifies_teladi_for_stress_level_ten(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
@@ -2214,7 +2214,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("Stressstufe 10", alerts[0])
 
     def test_handle_update_splits_long_openai_reply(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         instructions = BotInstructions(openai_enabled=True)
@@ -2225,7 +2225,7 @@ class BotTests(unittest.TestCase):
         self.assertTrue(all(len(text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for _, text in api.sent_messages))
 
     def test_every_third_short_openai_reply_without_sources_is_voice(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2246,7 +2246,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
 
     def test_auto_voice_skips_replies_with_sources(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2276,7 +2276,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
 
     def test_auto_voice_skips_replies_with_50_or_more_words(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2297,19 +2297,19 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
 
     def test_handle_update_logs_openai_error_without_traceback(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         instructions = BotInstructions(openai_enabled=True)
 
-        with self.assertLogs("telegram_bot", level="ERROR") as logs:
+        with self.assertLogs("TeeBotus", level="ERROR") as logs:
             handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, FailingOpenAIClient(), ChatState())
 
         self.assertIn("OpenAI request failed: short failure", "\n".join(logs.output))
         self.assertEqual(api.sent_messages, [(123, instructions.openai_error)])
 
     def test_reset_clears_openai_chat_state(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2321,7 +2321,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_reset)])
 
     def test_cleanup_removes_requested_number_of_recorded_messages(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2337,7 +2337,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(chat_state.pop_recent_messages(123, 10), [101, 12, 11, 10])
 
     def test_cleanup_requires_count(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
 
@@ -2346,7 +2346,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_usage)])
 
     def test_cleanup_all_removes_all_recorded_messages(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2362,7 +2362,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(chat_state.pop_recent_messages(123, 10), [101])
 
     def test_call_a_teladi_prompts_and_forwards_next_message(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2411,13 +2411,13 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 55)])
 
     def test_call_a_teladi_cooldown_rejects_until_next_day(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
         instructions = BotInstructions()
 
-        with patch("telegram_bot.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0, 87401.0]):
+        with patch("TeeBotus.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0, 87401.0]):
             handle_update(
                 api,
                 {"message": {"text": "/Call_a_Teladi", "message_id": 1, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
@@ -2466,7 +2466,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(ChatState(state_path).teladi_call_remaining_seconds("456", 4600.0), 0)
 
     def test_call_a_teladi_copies_non_text_next_message(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2479,7 +2479,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages[-1], (123, instructions.teladi_call_sent))
 
     def test_call_a_teladi_repeated_command_while_pending_does_not_forward_command_text(self) -> None:
-        from telegram_bot.instructions import BotInstructions
+        from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState()
@@ -2497,7 +2497,7 @@ class BotTests(unittest.TestCase):
     def test_run_polling_logs_network_errors_without_traceback(self) -> None:
         api = FlakyPollingAPI()
 
-        with patch("telegram_bot.bot.time.sleep") as sleep, self.assertLogs("telegram_bot", level="WARNING") as logs:
+        with patch("TeeBotus.bot.time.sleep") as sleep, self.assertLogs("TeeBotus", level="WARNING") as logs:
             run_polling(api, FakeInstructionStore())
 
         sleep.assert_called_once_with(5)

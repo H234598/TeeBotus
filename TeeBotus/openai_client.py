@@ -13,7 +13,7 @@ from .instructions import BotInstructions
 RESPONSES_URL = "https://api.openai.com/v1/responses"
 SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
-LOGGER = logging.getLogger("telegram_bot.openai_client")
+LOGGER = logging.getLogger("TeeBotus.openai_client")
 
 
 class OpenAIAPIError(RuntimeError):

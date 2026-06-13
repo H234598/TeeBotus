@@ -1,7 +1,7 @@
 import unittest
 
-from telegram_bot.handlers import HELP_TEXT, build_reply
-from telegram_bot.instructions import BotInstructions
+from TeeBotus.handlers import HELP_TEXT, build_reply
+from TeeBotus.instructions import BotInstructions
 
 
 class HandlerTests(unittest.TestCase):

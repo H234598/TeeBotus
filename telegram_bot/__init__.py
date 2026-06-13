@@ -1,1 +1,0 @@
-"""Minimal Telegram bot package."""

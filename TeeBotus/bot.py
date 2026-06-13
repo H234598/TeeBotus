@@ -39,7 +39,7 @@ from .user_memory_crypto import (
     write_text as write_encrypted_user_memory_text,
 )
 
-LOGGER = logging.getLogger("telegram_bot")
+LOGGER = logging.getLogger("TeeBotus")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 API_BASE = "https://api.telegram.org/bot{token}/{method}"
 FILE_API_BASE = "https://api.telegram.org/file/bot{token}/{file_path}"
@@ -2991,7 +2991,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = list(sys.argv[1:] if argv is None else argv)
     if any(arg != "--all" for arg in args):
-        print("Usage: python3 -m telegram_bot [--all]", file=sys.stderr)
+        print("Usage: python3 -m TeeBotus [--all]", file=sys.stderr)
         return 2
     if "--all" in args or _resolve_instance_name().casefold() == "all":
         return _main_all_instances()

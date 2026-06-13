@@ -30,14 +30,14 @@ run() {
 }
 
 run "1/20 full pytest" python3 -m pytest
-run "2/20 compileall" python3 -m compileall -q telegram_bot tests
+run "2/20 compileall" python3 -m compileall -q TeeBotus tests
 run "3/20 diff check" git diff --check
 run "4/20 runtime env invariants" python3 - <<'PY'
 import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-from telegram_bot.bot import _load_dotenv, _load_runtime_config_defaults, _read_runtime_config_defaults
+from TeeBotus.bot import _load_dotenv, _load_runtime_config_defaults, _read_runtime_config_defaults
 
 with tempfile.TemporaryDirectory() as d:
     root = Path(d)
@@ -62,7 +62,7 @@ with tempfile.TemporaryDirectory() as d:
     assert parsed == {"TELEGRAM_BOT_INSTANCE": "FromMarkdown", "LOG_LEVEL": "DEBUG"}
 PY
 run "5/20 instruction invariants" python3 - <<'PY'
-from telegram_bot.instructions import load_instructions, parse_instructions
+from TeeBotus.instructions import load_instructions, parse_instructions
 
 wrapped = parse_instructions(
     """
@@ -93,7 +93,7 @@ import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-from telegram_bot.bot import (
+from TeeBotus.bot import (
     _bot_token_config_error,
     _discover_instance_names,
     _resolve_bot_token_configs,
@@ -138,7 +138,7 @@ run "13/20 static config references" python3 - <<'PY'
 from pathlib import Path
 
 checks = [
-    ("telegram_bot/bot.py", "DOTENV_RUNTIME_KEYS"),
+    ("TeeBotus/bot.py", "DOTENV_RUNTIME_KEYS"),
     ("README.md", "DOTENV_RUNTIME_KEYS"),
     ("tests/test_bot.py", "DOTENV_RUNTIME_KEYS"),
 ]
@@ -153,12 +153,12 @@ run "14/20 ast parse" python3 - <<'PY'
 import ast
 from pathlib import Path
 
-for root in [Path("telegram_bot"), Path("tests")]:
+for root in [Path("TeeBotus"), Path("tests")]:
     for path in root.rglob("*.py"):
         ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 PY
 run "15/20 section continuation matrix" python3 - <<'PY'
-from telegram_bot.instructions import parse_instructions
+from TeeBotus.instructions import parse_instructions
 
 md = """
 ## Antworten
@@ -193,7 +193,7 @@ PY
 run "16/20 runtime parser edge matrix" python3 - <<'PY'
 import tempfile
 from pathlib import Path
-from telegram_bot.bot import _read_runtime_config_defaults
+from TeeBotus.bot import _read_runtime_config_defaults
 
 with tempfile.TemporaryDirectory() as d:
     path = Path(d) / "ALL_BOTS_DEFAULT.md"
@@ -218,20 +218,20 @@ run "17/20 module imports" python3 - <<'PY'
 import importlib
 
 for name in [
-    "telegram_bot.bot",
-    "telegram_bot.handlers",
-    "telegram_bot.instructions",
-    "telegram_bot.openai_client",
-    "telegram_bot.user_memory_crypto",
+    "TeeBotus.bot",
+    "TeeBotus.handlers",
+    "TeeBotus.instructions",
+    "TeeBotus.openai_client",
+    "TeeBotus.user_memory_crypto",
 ]:
     importlib.import_module(name)
 PY
 run "18/20 full pytest repeat" python3 -m pytest
-run "19/20 compile status gate" bash -c 'python3 -m compileall -q telegram_bot tests && git diff --check && test -z "$(git status --short)"'
+run "19/20 compile status gate" bash -c 'python3 -m compileall -q TeeBotus tests && git diff --check && test -z "$(git status --short)"'
 run "20/20 final smoke and remote parity" bash -c 'python3 - <<'"'"'PY'"'"'
 from pathlib import Path
-from telegram_bot.bot import _read_runtime_config_defaults
-from telegram_bot.instructions import load_instructions
+from TeeBotus.bot import _read_runtime_config_defaults
+from TeeBotus.instructions import load_instructions
 
 runtime = _read_runtime_config_defaults(Path("ALL_BOTS_DEFAULT.md"))
 assert runtime.get("TELEGRAM_BOT_INSTANCE") == "all"

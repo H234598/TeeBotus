@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from telegram_bot.instructions import BotInstructions
-from telegram_bot.openai_client import (
+from TeeBotus.instructions import BotInstructions
+from TeeBotus.openai_client import (
     OpenAIAPIError,
     OpenAIClient,
     build_response_payload,
@@ -113,7 +113,7 @@ class OpenAIClientTests(unittest.TestCase):
     def test_transcribe_audio_timeout_is_api_error(self) -> None:
         client = OpenAIClient("test-key", timeout=1)
 
-        with patch("telegram_bot.openai_client.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+        with patch("TeeBotus.openai_client.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
             with self.assertRaises(OpenAIAPIError):
                 client.transcribe_audio(b"audio", "voice.ogg", BotInstructions(openai_timeout_seconds=1))
 

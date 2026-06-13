@@ -7,9 +7,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from telegram_bot.bot import _resolve_instance_name, _resolve_instruction_path, _resolve_openai_api_key
-from telegram_bot.instructions import load_instructions
-from telegram_bot.openai_client import OpenAIClient, OpenAIAPIError
+from TeeBotus.bot import _resolve_instance_name, _resolve_instruction_path, _resolve_openai_api_key
+from TeeBotus.instructions import load_instructions
+from TeeBotus.openai_client import OpenAIClient, OpenAIAPIError
 
 
 def load_dotenv(path: Path) -> None:

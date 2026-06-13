@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from telegram_bot.instructions import InstructionStore, load_instructions, parse_instructions, render_template
+from TeeBotus.instructions import InstructionStore, load_instructions, parse_instructions, render_template
 
 
 class InstructionTests(unittest.TestCase):
@@ -283,7 +283,7 @@ class InstructionTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("telegram_bot.instructions.PROJECT_ROOT", root):
+            with patch("TeeBotus.instructions.PROJECT_ROOT", root):
                 instructions = load_instructions(instance_path)
 
         self.assertEqual(instructions.openai_model, "instance-model")
@@ -309,7 +309,7 @@ class InstructionTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch("telegram_bot.instructions.PROJECT_ROOT", root):
+            with patch("TeeBotus.instructions.PROJECT_ROOT", root):
                 instructions = InstructionStore(root / "instances" / "Demo" / "Bot_Verhalten.md").get()
 
         self.assertEqual(instructions.commands["/default"], "Aus Default.")
