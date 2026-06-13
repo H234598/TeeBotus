@@ -182,8 +182,6 @@ Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Dep
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 
-Ein alter lokaler `User_Memory_Key.bin` wird beim ersten Zugriff einmalig migriert und danach entfernt. Ein vorhandener Secret-Service-Key oder ein passphrase-geschuetzter lokaler Key wird ebenfalls beim Moduswechsel in den neuen Speicherort uebernommen.
-
 Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
 
 Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem verschluesselten JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise werden nur von Botadmins gepflegt und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
