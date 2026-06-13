@@ -66,7 +66,8 @@ USER_AVATAR_MISSING_RECHECK_SECONDS = 24 * 60 * 60
 USER_HABITS_MAX_PROMPT_CHARS = 4000
 YOUTUBE_TRANSCRIPT_COMMANDS = {"/youtube_transcript", "/yt_transcript"}
 YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS = 15 * 60
-YOUTUBE_WHISPER_TIMEOUT_SECONDS = 60 * 60
+YOUTUBE_WHISPER_TIMEOUT_SECONDS = 7200
+YOUTUBE_TRANSCRIPTION_HEALTH_CHECK_SECONDS = (5 * 60, 15 * 60, 60 * 60, 90 * 60)
 YOUTUBE_TRANSCRIPT_MAX_PIPELINE_CHARS = 60000
 YOUTUBE_WHISPER_MODEL = "tiny"
 YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
@@ -250,8 +251,7 @@ class _InstanceProcessRegistry:
         except OSError:
             LOGGER.debug("Failed to terminate process group %s with SIGTERM.", pid)
             return
-        deadline = time.monotonic() + 3
-        while time.monotonic() < deadline:
+        for _ in range(30):
             try:
                 os.killpg(pid, 0)
             except ProcessLookupError:
@@ -4228,6 +4228,7 @@ def _run_local_command_streaming(
     start = time.monotonic()
     process: subprocess.Popen[str] | None = None
     registry_start_time: int | None = None
+    pending_health_checks = list(YOUTUBE_TRANSCRIPTION_HEALTH_CHECK_SECONDS)
     try:
         env = os.environ.copy()
         env.update(
@@ -4252,7 +4253,17 @@ def _run_local_command_streaming(
         registry_start_time = registry.register(process.pid)
         assert process.stdout is not None
         while True:
-            if time.monotonic() - start > timeout:
+            elapsed = time.monotonic() - start
+            if pending_health_checks and elapsed >= pending_health_checks[0]:
+                health_error = _transcription_process_health_error(process, registry_start_time)
+                if health_error:
+                    _terminate_process_group(process)
+                    _, stderr = process.communicate()
+                    raise YouTubeTranscriptError(
+                        f"Transkriptionsprozess ist nach {int(pending_health_checks[0])} Sekunden nicht ok ({health_error}). Ich habe ihn beendet."
+                    )
+                pending_health_checks.pop(0)
+            if elapsed > timeout:
                 _terminate_process_group(process)
                 _, stderr = process.communicate()
                 raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
@@ -4293,8 +4304,7 @@ def _terminate_process_group(process: subprocess.Popen[str] | None) -> None:
     except OSError:
         LOGGER.debug("Failed to terminate process group %s with SIGTERM.", process.pid)
         return
-    deadline = time.monotonic() + 3
-    while time.monotonic() < deadline:
+    for _ in range(30):
         try:
             os.killpg(process.pid, 0)
         except ProcessLookupError:
@@ -4304,6 +4314,34 @@ def _terminate_process_group(process: subprocess.Popen[str] | None) -> None:
         time.sleep(0.1)
     with suppress(ProcessLookupError, OSError):
         os.killpg(process.pid, signal.SIGKILL)
+
+
+def _transcription_process_health_error(process: subprocess.Popen[str] | None, expected_start_time: int | None) -> str:
+    if process is None or process.pid <= 0:
+        return "kein Prozess"
+    returncode = process.poll()
+    if returncode is not None:
+        return f"Prozess ist bereits beendet, exit={returncode}"
+    if expected_start_time is not None:
+        actual_start_time = _read_process_start_time(process.pid)
+        if actual_start_time is None:
+            return "Prozess-Startzeit nicht mehr lesbar"
+        if actual_start_time != expected_start_time:
+            return "PID wurde wiederverwendet"
+    process_state = _read_process_state(process.pid)
+    if process_state and process_state.startswith("Z"):
+        return "Prozess ist Zombie"
+    return ""
+
+
+def _read_process_state(pid: int) -> str:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("State:"):
+                return line.split(":", maxsplit=1)[1].strip()
+    except OSError:
+        return ""
+    return ""
 
 
 def _read_process_start_time(pid: int) -> int | None:

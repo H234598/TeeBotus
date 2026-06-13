@@ -55,6 +55,7 @@ from TeeBotus.bot import (
     _srt_to_plain_text,
     _run_youtube_local_transcription_job,
     _transcribe_voice_audio,
+    _transcription_process_health_error,
     contains_sources,
     count_words,
     handle_update,
@@ -595,6 +596,27 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(command[:6], ["nice", "-n", "19", "ionice", "-c", "3"])
         self.assertEqual(command[6:], ["python3", "-c", "print('x')"])
+
+    def test_transcription_process_health_detects_exit_reused_pid_and_zombie(self) -> None:
+        class FakeProcess:
+            pid = 111
+
+            def __init__(self, returncode=None) -> None:
+                self._returncode = returncode
+
+            def poll(self):
+                return self._returncode
+
+        self.assertIn("exit=2", _transcription_process_health_error(FakeProcess(2), 12345))
+
+        with patch("TeeBotus.bot._read_process_start_time", return_value=54321), patch("TeeBotus.bot._read_process_state", return_value="S (sleeping)"):
+            self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "PID wurde wiederverwendet")
+
+        with patch("TeeBotus.bot._read_process_start_time", return_value=12345), patch("TeeBotus.bot._read_process_state", return_value="Z (zombie)"):
+            self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "Prozess ist Zombie")
+
+        with patch("TeeBotus.bot._read_process_start_time", return_value=12345), patch("TeeBotus.bot._read_process_state", return_value="S (sleeping)"):
+            self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "")
 
     def test_process_registry_skips_pid_reuse_and_only_cleans_matching_processes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
