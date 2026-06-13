@@ -4128,6 +4128,8 @@ for segment in segments:
         instance_name=instance_name,
     )
     if result.returncode != 0:
+        if result.returncode < 0:
+            raise YouTubeTranscriptError(f"faster-whisper wurde abgebrochen ({_process_signal_name(result.returncode)}).")
         raise YouTubeTranscriptError(f"faster-whisper konnte nicht transkribieren: {_short_process_error(result)}")
     text = result.stdout.strip()
     if not text:
@@ -4394,10 +4396,32 @@ def _srt_to_plain_text(srt_text: str) -> str:
 
 
 def _short_process_error(result: subprocess.CompletedProcess[str]) -> str:
-    text = (result.stderr or result.stdout or "").strip()
+    text = _filter_process_noise(result.stderr or result.stdout or "").strip()
     if not text:
         return f"Exitcode {result.returncode}"
     return text[-500:]
+
+
+def _filter_process_noise(text: str) -> str:
+    lines = []
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if "multiprocessing/resource_tracker.py" in stripped:
+            continue
+        if "resource_tracker:" in stripped and "leaked semaphore objects" in stripped:
+            continue
+        if stripped.startswith("warnings.warn("):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _process_signal_name(returncode: int) -> str:
+    signal_number = abs(int(returncode))
+    try:
+        return signal.Signals(signal_number).name
+    except ValueError:
+        return f"Signal {signal_number}"
 
 
 def _downloaded_file_name(file_path: str) -> str:

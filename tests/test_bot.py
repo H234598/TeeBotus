@@ -52,7 +52,9 @@ from TeeBotus.bot import (
     _read_runtime_config_defaults,
     _resolve_telegram_token,
     _resolve_telegram_tokens,
+    _short_process_error,
     _srt_to_plain_text,
+    _transcribe_audio_with_faster_whisper_model,
     _run_youtube_local_transcription_job,
     _transcribe_voice_audio,
     _transcription_process_health_error,
@@ -589,6 +591,33 @@ class BotTests(unittest.TestCase):
         self.assertIn("-c", streaming.call_args.args[0])
         self.assertIn("tiny", streaming.call_args.args[0])
         self.assertIn("2", streaming.call_args.args[0])
+
+    def test_resource_tracker_warning_is_filtered_from_process_error(self) -> None:
+        result = subprocess.CompletedProcess(
+            ["python3"],
+            1,
+            "",
+            "/usr/lib64/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-test'}\n"
+            "  warnings.warn(\n",
+        )
+
+        self.assertEqual(_short_process_error(result), "Exitcode 1")
+
+    def test_faster_whisper_reports_signal_abort_instead_of_resource_tracker_warning(self) -> None:
+        from TeeBotus.bot import YouTubeTranscriptError
+
+        result = subprocess.CompletedProcess(
+            ["python3"],
+            -15,
+            "",
+            "/usr/lib64/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-test'}\n",
+        )
+
+        with patch("TeeBotus.bot._run_local_command_streaming", return_value=result):
+            with self.assertRaises(YouTubeTranscriptError) as caught:
+                _transcribe_audio_with_faster_whisper_model(Path("audio.mp3"), Path("."), "tiny")
+
+        self.assertEqual(str(caught.exception), "faster-whisper wurde abgebrochen (SIGTERM).")
 
     def test_youtube_transcript_command_runs_with_lowest_priority_wrappers(self) -> None:
         with patch("TeeBotus.bot.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
