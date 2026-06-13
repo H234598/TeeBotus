@@ -10,6 +10,7 @@ from unittest.mock import call, patch
 from TeeBotus.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     USER_MEMORY_PASSPHRASE_FILENAME,
+    UserMemoryCryptoError,
     ensure_user_memory_key,
     read_json as read_encrypted_user_memory_json,
     read_jsonl as read_encrypted_user_memory_jsonl,
@@ -25,6 +26,7 @@ from TeeBotus.bot import (
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     TelegramAPI,
     TelegramNetworkError,
+    UserMemoryRecord,
     UserMemoryStore,
     WorkingMemoryStore,
     _build_openai_user_input,
@@ -36,6 +38,8 @@ from TeeBotus.bot import (
     _instance_env_key,
     _lowest_priority_command,
     _load_dotenv,
+    _prepare_user_memory,
+    _record_user_memory,
     _resolve_bot_token_configs,
     _resolve_instruction_path,
     _resolve_openai_api_key,
@@ -54,6 +58,7 @@ from TeeBotus.bot import (
     split_telegram_message,
     transcribe_youtube_video,
 )
+from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
 
@@ -135,6 +140,14 @@ class FakeOpenAIClient:
         if self.transcription_texts:
             return self.transcription_texts.pop(0)
         return self.transcription_text
+
+
+class FailingUserMemoryStore:
+    def prepare(self, *args, **kwargs):
+        raise UserMemoryCryptoError("secret-tool did not return the stored user memory key")
+
+    def append_interaction(self, *args, **kwargs):
+        raise UserMemoryCryptoError("secret-tool did not return the stored user memory key")
 
 
 class SequenceOpenAIClient(FakeOpenAIClient):
@@ -364,6 +377,37 @@ class BotTests(unittest.TestCase):
             self.assertNotEqual(first_key, second_key)
             self.assertEqual(len(first_key), 32)
             self.assertEqual(len(second_key), 32)
+
+    def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
+        message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
+
+        with self.assertLogs("TeeBotus", level="ERROR"):
+            record = _prepare_user_memory(
+                FailingUserMemoryStore(),
+                message,
+                BotInstructions(user_memory_enabled=True),
+                "Hallo",
+            )
+
+        self.assertIsNone(record)
+
+    def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
+        record = UserMemoryRecord(
+            sender_id="456",
+            path=Path("instances/Demo/data/users/456/User_Memory_Index.json"),
+            prompt_text="",
+            selected_ids=(),
+        )
+
+        with self.assertLogs("TeeBotus", level="ERROR"):
+            _record_user_memory(
+                FailingUserMemoryStore(),
+                record,
+                {"chat": {"id": 123}, "from": {"id": 456}},
+                "Hallo",
+                "Antwort",
+                BotInstructions(user_memory_enabled=True),
+            )
 
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")

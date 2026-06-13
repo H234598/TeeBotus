@@ -1774,7 +1774,7 @@ def _prepare_user_memory(
         return None
     try:
         return user_memory_store.prepare(message, instructions, query_text, api)
-    except OSError:
+    except (OSError, UserMemoryCryptoError):
         LOGGER.exception("Failed to prepare user memory.")
         return None
 
@@ -1791,7 +1791,7 @@ def _record_user_memory(
         return
     try:
         user_memory_store.append_interaction(user_memory, message, user_text, bot_text, instructions)
-    except OSError:
+    except (OSError, UserMemoryCryptoError):
         LOGGER.exception("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
 
 
