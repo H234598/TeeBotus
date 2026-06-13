@@ -145,7 +145,7 @@ Deployment-Werte aus Shell, systemd, Docker oder `.env` haben Vorrang.
 `leer` bedeutet: keinen Default setzen.
 
 - LOG_LEVEL: INFO
-- TELEGRAM_BOT_INSTANCE: Bote_der_Wahrheit
+- TELEGRAM_BOT_INSTANCE: all
 - TELEGRAM_BOT_INSTANCES: leer
 - TELEGRAM_BOT_INSTANCES_DIR: instances
 - TELEGRAM_BOT_INSTRUCTIONS: leer

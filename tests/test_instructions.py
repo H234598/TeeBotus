@@ -181,6 +181,28 @@ class InstructionTests(unittest.TestCase):
         self.assertIn("Bleibt im Prompt.", instructions.openai_system_prompt)
         self.assertEqual(instructions.commands["/status"], "ok")
 
+    def test_wrapped_list_values_continue_previous_item(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## OpenAI
+            - voice_instructions: Sprich natuerlich und verstaendlich.
+            Nutze keine Karikatur.
+
+            ## Hilfe
+            - /voice Text - Text als Sprachnachricht senden.
+            Ohne Text nutzt /voice die beantwortete Nachricht.
+            """
+        )
+
+        self.assertEqual(
+            instructions.openai_voice_instructions,
+            "Sprich natuerlich und verstaendlich. Nutze keine Karikatur.",
+        )
+        self.assertEqual(
+            instructions.help_lines,
+            ("/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice die beantwortete Nachricht.",),
+        )
+
     def test_instruction_store_reads_markdown_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "Bot_Verhalten.md"

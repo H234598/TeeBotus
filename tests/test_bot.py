@@ -35,6 +35,7 @@ from telegram_bot.bot import (
     _encode_multipart_form_data,
     _instance_env_key,
     _lowest_priority_command,
+    _load_dotenv,
     _resolve_bot_token_configs,
     _resolve_instruction_path,
     _resolve_openai_api_key,
@@ -534,6 +535,57 @@ class BotTests(unittest.TestCase):
             clear=True,
         ):
             self.assertEqual(_resolve_instruction_path(), "custom/Bot_Verhalten.md")
+
+    def test_dotenv_does_not_override_existing_environment_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(
+                "\n".join(
+                    [
+                        "TELEGRAM_BOT_INSTANCE=FromDotenv",
+                        "TELEGRAM_BOT_TOKEN=dotenv-token",
+                        "OPENAI_API_KEY=dotenv-key",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_INSTANCE": "FromEnv",
+                    "TELEGRAM_BOT_TOKEN": "env-token",
+                    "OPENAI_API_KEY": "env-key",
+                },
+                clear=True,
+            ):
+                _load_dotenv(path)
+                self.assertEqual(os.environ["TELEGRAM_BOT_INSTANCE"], "FromEnv")
+                self.assertEqual(os.environ["TELEGRAM_BOT_TOKEN"], "env-token")
+                self.assertEqual(os.environ["OPENAI_API_KEY"], "env-key")
+
+    def test_dotenv_sets_missing_environment_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text("TELEGRAM_BOT_TOKEN=dotenv-token\n", encoding="utf-8")
+
+            with patch.dict("os.environ", {}, clear=True):
+                _load_dotenv(path)
+                self.assertEqual(os.environ["TELEGRAM_BOT_TOKEN"], "dotenv-token")
+
+    def test_dotenv_unquotes_fully_quoted_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(
+                'TELEGRAM_BOT_INSTANCE="Depressionsbot"\nTELEGRAM_BOT_TOKEN=\'quoted-token\'\n',
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {}, clear=True):
+                _load_dotenv(path)
+                self.assertEqual(os.environ["TELEGRAM_BOT_INSTANCE"], "Depressionsbot")
+                self.assertEqual(os.environ["TELEGRAM_BOT_TOKEN"], "quoted-token")
 
     def test_reads_runtime_config_defaults_from_all_bots_default_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

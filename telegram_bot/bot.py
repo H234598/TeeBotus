@@ -257,13 +257,6 @@ class _InstanceProcessRegistry:
         with suppress(ProcessLookupError, OSError):
             os.killpg(pid, signal.SIGKILL)
 
-DOTENV_RUNTIME_KEYS = {
-    "LOG_LEVEL",
-    "TELEGRAM_BOT_INSTANCE",
-    "TELEGRAM_BOT_INSTANCES",
-    "TELEGRAM_BOT_INSTANCES_DIR",
-    "TELEGRAM_BOT_INSTRUCTIONS",
-}
 RUNTIME_CONFIG_SECTION_HEADINGS = {
     "laufzeitkonfiguration",
     "laufzeit konfiguration",
@@ -3101,9 +3094,16 @@ def _load_dotenv(path: Path) -> None:
         key = key.strip()
         if not key:
             continue
-        if key in DOTENV_RUNTIME_KEYS and key in os.environ:
+        if key in os.environ:
             continue
-        os.environ[key] = value.strip()
+        os.environ[key] = _clean_dotenv_value(value)
+
+
+def _clean_dotenv_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
 
 
 def _load_runtime_config_defaults(path: Path) -> None:

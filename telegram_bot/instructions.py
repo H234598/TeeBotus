@@ -285,43 +285,26 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     shared_prompt_lines: list[str] | None = None
     system_prompt_lines: list[str] | None = None
     section = ""
+    pending_item: str | None = None
 
-    for raw_line in markdown.splitlines():
-        line = raw_line.strip()
-        if not line and section != "system_prompt":
-            continue
-        if line.startswith("#"):
-            next_section = _section_name(line)
-            if next_section:
-                section = next_section
-                continue
-            if section not in {"shared_prompt", "system_prompt"}:
-                section = ""
-                continue
-        if section == "shared_prompt":
-            if shared_prompt_lines is None:
-                shared_prompt_lines = []
-            shared_prompt_lines.append(line)
-            continue
-        if section == "system_prompt":
-            if system_prompt_lines is None:
-                system_prompt_lines = []
-            system_prompt_lines.append(line)
-            continue
-
-        item = _strip_bullet(line)
+    def apply_pending_item() -> None:
+        nonlocal pending_item, help_lines
+        if pending_item is None:
+            return
+        item = pending_item
+        pending_item = None
         if not item:
-            continue
+            return
 
         if section == "help":
             if help_lines is None:
                 help_lines = []
             help_lines.append(item)
-            continue
+            return
 
         pair = _parse_pair(item)
         if pair is None:
-            continue
+            return
 
         key, value = pair
         if section == "settings":
@@ -343,6 +326,44 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
         elif section == "contains_replies":
             contains_replies[key.casefold()] = value
 
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if not line and section != "system_prompt":
+            apply_pending_item()
+            continue
+        if line.startswith("#"):
+            apply_pending_item()
+            next_section = _section_name(line)
+            if next_section:
+                section = next_section
+                continue
+            if section not in {"shared_prompt", "system_prompt"}:
+                section = ""
+                continue
+        if section == "shared_prompt":
+            apply_pending_item()
+            if shared_prompt_lines is None:
+                shared_prompt_lines = []
+            shared_prompt_lines.append(line)
+            continue
+        if section == "system_prompt":
+            apply_pending_item()
+            if system_prompt_lines is None:
+                system_prompt_lines = []
+            system_prompt_lines.append(line)
+            continue
+
+        item = _strip_bullet(line)
+        if not item:
+            apply_pending_item()
+            continue
+        if pending_item is not None and not _line_starts_bullet(line) and (section == "help" or _parse_pair(item) is None):
+            pending_item = f"{pending_item} {item}"
+            continue
+        apply_pending_item()
+        pending_item = item
+
+    apply_pending_item()
     instructions.commands = commands
     instructions.text_replies = text_replies
     instructions.contains_replies = contains_replies
@@ -437,6 +458,10 @@ def _strip_bullet(line: str) -> str:
         if line.startswith(marker):
             return line[len(marker) :].strip()
     return line
+
+
+def _line_starts_bullet(line: str) -> bool:
+    return line.startswith("- ") or line.startswith("* ")
 
 
 def _parse_pair(line: str) -> tuple[str, str] | None:
