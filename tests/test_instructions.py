@@ -63,6 +63,7 @@ class InstructionTests(unittest.TestCase):
             - user_memory_reset_cancelled: Memory bleibt.
             - user_memory_reset_unavailable: Kein Memory aktiv.
             - user_memory_reset_error: Memory-Reset fehlgeschlagen.
+            - user_memory_crypto_error: Memory-Crypto kaputt.
             - user_memory_reset_only_own: Nur eigenes Memory.
             - teladi_call_prompt: Nachricht fuer Teladi?
             - teladi_call_sent: Nachricht gesendet.
@@ -135,6 +136,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.user_memory_reset_cancelled, "Memory bleibt.")
         self.assertEqual(instructions.user_memory_reset_unavailable, "Kein Memory aktiv.")
         self.assertEqual(instructions.user_memory_reset_error, "Memory-Reset fehlgeschlagen.")
+        self.assertEqual(instructions.user_memory_crypto_error, "Memory-Crypto kaputt.")
         self.assertEqual(instructions.user_memory_reset_only_own, "Nur eigenes Memory.")
         self.assertEqual(instructions.teladi_call_prompt, "Nachricht fuer Teladi?")
         self.assertEqual(instructions.teladi_call_sent, "Nachricht gesendet.")

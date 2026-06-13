@@ -984,7 +984,10 @@ class UserMemoryStore:
                 kind="user-memory-index",
                 default=_new_user_memory_data(sender_id),
             )
-        except (json.JSONDecodeError, OSError, UserMemoryCryptoError):
+        except UserMemoryCryptoError:
+            LOGGER.exception("Failed to decrypt JSON user memory for sender_id=%s.", sender_id)
+            raise
+        except (json.JSONDecodeError, OSError):
             LOGGER.exception("Failed to read JSON user memory for sender_id=%s.", sender_id)
             payload = _new_user_memory_data(sender_id)
             migrated = True
@@ -1127,7 +1130,7 @@ def _process_text_message(
         chat_state.reset(chat_id)
         reply = _with_first_contact_intro(instructions.openai_reset, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     if text and _normalize_command(text) == "/voice":
@@ -1184,14 +1187,14 @@ def _process_text_message(
             reply = _with_first_contact_intro(reply, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     if should_use_openai(message, instructions):
         if openai_client is None:
             reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
-            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
         try:
             api.send_chat_action(chat_id, "typing")
@@ -1212,13 +1215,13 @@ def _process_text_message(
             reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
             _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
             _send_tracked_message(api, chat_state, chat_id, reply)
-            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
         chat_state.set_previous_response_id(chat_id, openai_response.response_id)
         reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
         _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     fallback = build_reply(message, instructions, include_fallback=True)
@@ -1226,7 +1229,7 @@ def _process_text_message(
         fallback = _with_first_contact_intro(fallback, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, fallback, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, fallback)
-        _record_user_memory(user_memory_store, user_memory, message, text, fallback, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, fallback, instructions, api)
 
 
 def _handle_incoming_voice_message(
@@ -1776,6 +1779,27 @@ def _prepare_user_memory(
         return user_memory_store.prepare(message, instructions, query_text, api)
     except (OSError, UserMemoryCryptoError):
         LOGGER.exception("Failed to prepare user memory.")
+        _notify_user_memory_crypto_error(api, message, instructions)
+        return None
+
+
+def _notify_user_memory_crypto_error(api: TelegramAPI | None, message: dict[str, Any], instructions: BotInstructions) -> None:
+    if api is None:
+        return
+    chat_id = _message_chat_id(message)
+    if chat_id is None:
+        return
+    try:
+        _send_untracked_message(api, chat_id, instructions.user_memory_crypto_error)
+    except TelegramAPIError:
+        LOGGER.exception("Failed to notify user about user memory crypto error.")
+
+
+def _message_chat_id(message: dict[str, Any]) -> int | None:
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    try:
+        return int(chat["id"])
+    except (KeyError, TypeError, ValueError):
         return None
 
 
@@ -1786,6 +1810,7 @@ def _record_user_memory(
     user_text: str,
     bot_text: str,
     instructions: BotInstructions,
+    api: TelegramAPI | None = None,
 ) -> None:
     if user_memory_store is None or user_memory is None:
         return
@@ -1793,6 +1818,7 @@ def _record_user_memory(
         user_memory_store.append_interaction(user_memory, message, user_text, bot_text, instructions)
     except (OSError, UserMemoryCryptoError):
         LOGGER.exception("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
+        _notify_user_memory_crypto_error(api, message, instructions)
 
 
 def _build_openai_user_input(
@@ -3596,7 +3622,7 @@ def _handle_youtube_transcript_request(
             chat_state.request_youtube_transcript_link(chat_id, sender_id)
         reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     if sender_id:
@@ -3619,16 +3645,16 @@ def _handle_youtube_transcript_request(
                 "Antworte z. B. mit: live ja, llm ja"
             )
             _send_tracked_message(api, chat_state, chat_id, reply)
-            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
         reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
     except (TimeoutError, subprocess.TimeoutExpired) as exc:
         reply = f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc})."
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     if instructions.openai_enabled and openai_client is not None:
@@ -3657,7 +3683,7 @@ def _handle_youtube_transcript_request(
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
 
     _send_tracked_message(api, chat_state, chat_id, reply)
-    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
 
 
 def _handle_pending_youtube_local_options(
@@ -3685,7 +3711,7 @@ def _handle_pending_youtube_local_options(
     if live_enabled is None or llm_enabled is None:
         reply = "Bitte antworte z. B. mit: live ja, llm ja"
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return True
 
     chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
@@ -3714,7 +3740,7 @@ def _handle_pending_youtube_local_options(
         if live_enabled:
             reply += " Live-Ausgabe ist aktiviert."
         _send_tracked_message(api, chat_state, chat_id, reply)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return True
 
     _run_youtube_local_transcription_job(
@@ -3775,7 +3801,7 @@ def _run_youtube_local_transcription_job(
             _send_tracked_message(api, chat_state, chat_id, reply)
         except TelegramAPIError as send_exc:
             LOGGER.warning("Telegram request failed while reporting YouTube transcription error: %s", send_exc)
-        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
     if llm_enabled and instructions.openai_enabled and openai_client is not None:
@@ -3808,7 +3834,7 @@ def _run_youtube_local_transcription_job(
         _send_tracked_message(api, chat_state, chat_id, reply)
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed while sending YouTube transcription completion: %s", exc)
-    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
 
 
 def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
@@ -3892,7 +3918,7 @@ def _send_youtube_transcript_to_openai_pipeline(
             _send_tracked_message(api, chat_state, chat_id, reply)
         except TelegramAPIError as send_exc:
             LOGGER.warning("Telegram request failed while reporting OpenAI transcript error: %s", send_exc)
-        _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
+        _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions, api)
         return
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed during YouTube transcript OpenAI pipeline: %s", exc)
@@ -3904,7 +3930,7 @@ def _send_youtube_transcript_to_openai_pipeline(
         _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed while sending YouTube transcript response: %s", exc)
-    _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
+    _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions, api)
 
 
 def _build_youtube_pipeline_text(user_text: str, transcript: str, source: str, url: str) -> str:

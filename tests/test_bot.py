@@ -15,6 +15,7 @@ from TeeBotus.user_memory_crypto import (
     read_json as read_encrypted_user_memory_json,
     read_jsonl as read_encrypted_user_memory_jsonl,
     read_text as read_encrypted_user_memory_text,
+    write_json as write_encrypted_user_memory_json,
 )
 from TeeBotus.bot import (
     BotIdentity,
@@ -378,18 +379,66 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(first_key), 32)
             self.assertEqual(len(second_key), 32)
 
+    def test_user_memory_keyring_store_confirm_failure_falls_back_to_private_key_file(self) -> None:
+        def fake_secret_tool(command, *, input_text=""):
+            if command[0] in {"lookup", "store", "clear"}:
+                return subprocess.CompletedProcess(command, 0, "", "")
+            raise AssertionError(f"unexpected secret-tool command: {command}")
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
+            with patch("TeeBotus.user_memory_crypto._run_secret_tool", side_effect=fake_secret_tool):
+                key = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
+                key_again = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
+
+            self.assertEqual(key, key_again)
+            self.assertTrue(key_path.exists())
+            self.assertNotEqual(key_path.read_bytes(), key)
+            self.assertTrue((key_path.parents[2] / USER_MEMORY_PASSPHRASE_FILENAME).exists())
+
+    def test_user_memory_decrypt_failure_does_not_overwrite_existing_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path.parent.mkdir(parents=True, exist_ok=True)
+            original_key = bytes(range(32))
+            wrong_key = bytes(range(32, 64))
+            write_encrypted_user_memory_json(
+                memory_path,
+                original_key,
+                kind="user-memory-index",
+                data={"schema_version": 1, "sender_id": "456", "profile": {}, "memories": [], "memory_index": {}, "recent_memory_ids": []},
+            )
+            original_payload = memory_path.read_bytes()
+
+            store = UserMemoryStore("Depressionsbot")
+            message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
+            api = FakeAPI()
+            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/users"))
+
+            with patch("TeeBotus.bot._ensure_user_memory_key", return_value=wrong_key):
+                with self.assertLogs("TeeBotus", level="ERROR"):
+                    record = _prepare_user_memory(store, message, instructions, "Hallo", api)
+
+            self.assertIsNone(record)
+            self.assertEqual(memory_path.read_bytes(), original_payload)
+            self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
+
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
+        api = FakeAPI()
+        instructions = BotInstructions(user_memory_enabled=True)
 
         with self.assertLogs("TeeBotus", level="ERROR"):
             record = _prepare_user_memory(
                 FailingUserMemoryStore(),
                 message,
-                BotInstructions(user_memory_enabled=True),
+                instructions,
                 "Hallo",
+                api,
             )
 
         self.assertIsNone(record)
+        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
 
     def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         record = UserMemoryRecord(
@@ -398,6 +447,8 @@ class BotTests(unittest.TestCase):
             prompt_text="",
             selected_ids=(),
         )
+        api = FakeAPI()
+        instructions = BotInstructions(user_memory_enabled=True)
 
         with self.assertLogs("TeeBotus", level="ERROR"):
             _record_user_memory(
@@ -406,8 +457,10 @@ class BotTests(unittest.TestCase):
                 {"chat": {"id": 123}, "from": {"id": 456}},
                 "Hallo",
                 "Antwort",
-                BotInstructions(user_memory_enabled=True),
+                instructions,
+                api,
             )
+        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
 
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")

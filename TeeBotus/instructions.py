@@ -120,6 +120,10 @@ class BotInstructions:
         "Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein OpenAI-Verlauf geloescht."
     )
     user_memory_reset_error: str = "Ich konnte deine User-Memory-Eintraege gerade nicht loeschen. Bitte versuche es spaeter erneut."
+    user_memory_crypto_error: str = (
+        "Ich kann dein User-Memory gerade nicht entschluesseln oder speichern. "
+        "Ich antworte ohne gespeicherte Erinnerungen; vorhandene Memory-Dateien werden nicht geloescht."
+    )
     user_memory_reset_only_own: str = (
         "Ich kann nur deine eigenen Erinnerungen loeschen, nicht fremde Erinnerungen oder das Instanz-Arbeitsgedaechtnis. "
         "Das Instanz-/Arbeitsgedaechtnis enthaelt keine userbezogenen Daten."
@@ -522,6 +526,8 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.user_memory_reset_unavailable = value
     elif normalized == "user_memory_reset_error":
         instructions.user_memory_reset_error = value
+    elif normalized == "user_memory_crypto_error":
+        instructions.user_memory_crypto_error = value
     elif normalized == "user_memory_reset_only_own":
         instructions.user_memory_reset_only_own = value
     elif normalized == "teladi_call_prompt":

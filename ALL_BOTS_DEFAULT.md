@@ -72,6 +72,7 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - user_memory_reset_cancelled: Okay, ich loesche nichts. Deine User-Memory-Eintraege bleiben erhalten.
 - user_memory_reset_unavailable: Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein OpenAI-Verlauf geloescht.
 - user_memory_reset_error: Ich konnte deine User-Memory-Eintraege gerade nicht loeschen. Bitte versuche es spaeter erneut.
+- user_memory_crypto_error: Ich kann dein User-Memory gerade nicht entschluesseln oder speichern. Ich antworte ohne gespeicherte Erinnerungen; vorhandene Memory-Dateien werden nicht geloescht.
 - user_memory_reset_only_own: Ich kann nur deine eigenen Erinnerungen loeschen, nicht fremde Erinnerungen oder das Instanz-Arbeitsgedaechtnis. Das Instanz-/Arbeitsgedaechtnis enthaelt keine userbezogenen Daten.
 - teladi_call_prompt: Welche Emergency Message soll ich an Teladi schicken? Deine naechste Antwort wird 1:1 weitergeleitet.
 - teladi_call_sent: Emergency Message wurde an Teladi gesendet.
