@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from telegram_bot.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
@@ -18,6 +18,7 @@ from telegram_bot.bot import (
     BotTokenConfig,
     ChatState,
     InstanceRunConfig,
+    _InstanceProcessRegistry,
     TELADI_EMERGENCY_CHAT_ID,
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     TelegramAPI,
@@ -285,6 +286,50 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(command[:6], ["nice", "-n", "19", "ionice", "-c", "3"])
         self.assertEqual(command[6:], ["python3", "-c", "print('x')"])
+
+    def test_process_registry_skips_pid_reuse_and_only_cleans_matching_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+
+            def fake_killpg(pid: int, sig: int) -> None:
+                if pid != 333:
+                    raise ProcessLookupError
+
+            with patch("telegram_bot.bot.PROJECT_ROOT", project_root):
+                with patch("telegram_bot.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 222: 67890}.get(pid)):
+                    registry.register(111)
+                    state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+                    payload = json.loads(state_path.read_text(encoding="utf-8"))
+                    self.assertEqual(payload["processes"], [{"pid": 111, "start_time": 12345}])
+
+                    state_path.write_text(
+                        json.dumps(
+                            {
+                                "processes": [
+                                    {"pid": 111, "start_time": 12345},
+                                    {"pid": 222, "start_time": 67890},
+                                    {"pid": 333, "start_time": 99999},
+                                ],
+                                "updated_at": "2026-06-13T00:00:00Z",
+                            },
+                            indent=2,
+                            sort_keys=True,
+                        )
+                        + "\n",
+                        encoding="utf-8",
+                    )
+
+                    with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
+                        with patch(
+                            "telegram_bot.bot._read_process_start_time",
+                            side_effect=lambda pid: {111: 12345, 222: 11111}.get(pid),
+                        ), patch("telegram_bot.bot.os.killpg", side_effect=fake_killpg):
+                            registry.cleanup_orphans()
+
+                    self.assertEqual(terminate.call_args_list, [call(111)])
+                    payload = json.loads(state_path.read_text(encoding="utf-8"))
+                    self.assertEqual(payload["processes"], [{"pid": 333, "start_time": 99999}])
 
     def test_instruction_path_uses_selected_instance(self) -> None:
         with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Depressionsbot"}, clear=True):

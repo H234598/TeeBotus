@@ -118,11 +118,20 @@ class _InstanceProcessRegistry:
     def register(self, pid: int) -> None:
         if not self.instance_name or pid <= 0:
             return
+        start_time = _read_process_start_time(pid)
+        if start_time is None:
+            LOGGER.debug("Skipping process registry entry for pid %s because its start time could not be read.", pid)
+            return
         with self._lock:
             state = self._load_state()
-            pids = state.setdefault("pids", [])
-            if pid not in pids:
-                pids.append(pid)
+            processes = state.setdefault("processes", [])
+            if not any(
+                isinstance(entry, dict)
+                and entry.get("pid") == pid
+                and entry.get("start_time") == start_time
+                for entry in processes
+            ):
+                processes.append({"pid": pid, "start_time": start_time})
             state["updated_at"] = _utc_timestamp()
             self._write_state(state)
 
@@ -131,9 +140,9 @@ class _InstanceProcessRegistry:
             return
         with self._lock:
             state = self._load_state()
-            pids = state.get("pids")
-            if isinstance(pids, list) and pid in pids:
-                pids.remove(pid)
+            processes = state.get("processes")
+            if isinstance(processes, list):
+                state["processes"] = [entry for entry in processes if not (isinstance(entry, dict) and entry.get("pid") == pid)]
                 state["updated_at"] = _utc_timestamp()
                 self._write_state(state)
 
@@ -142,10 +151,23 @@ class _InstanceProcessRegistry:
             return
         with self._lock:
             state = self._load_state()
-            pids = [int(pid) for pid in state.get("pids", []) if isinstance(pid, int) or str(pid).isdigit()]
-            for pid in pids:
+            processes = [entry for entry in state.get("processes", []) if isinstance(entry, dict)]
+            remaining: list[dict[str, Any]] = []
+            for entry in processes:
+                pid = entry.get("pid")
+                start_time = entry.get("start_time")
+                if not isinstance(pid, int) or pid <= 0:
+                    continue
+                if not isinstance(start_time, int) or start_time <= 0:
+                    continue
+                process_state = self._process_record_state(pid, start_time)
+                if process_state == "unknown":
+                    remaining.append(entry)
+                    continue
+                if process_state != "match":
+                    continue
                 self._terminate_process_group(pid)
-            self._write_state({"pids": [], "updated_at": _utc_timestamp()})
+            self._write_state({"processes": remaining, "updated_at": _utc_timestamp()})
 
     def _path(self) -> Path:
         return PROJECT_ROOT / "instances" / self.instance_name / "data" / PROCESS_REGISTRY_FILENAME
@@ -153,25 +175,56 @@ class _InstanceProcessRegistry:
     def _load_state(self) -> dict[str, Any]:
         path = self._path()
         if not path.exists():
-            return {"pids": []}
+            return {"processes": []}
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             LOGGER.debug("Failed to read process registry at %s.", path)
-            return {"pids": []}
+            return {"processes": []}
         if not isinstance(payload, dict):
-            return {"pids": []}
-        pids = payload.get("pids")
-        if not isinstance(pids, list):
-            payload["pids"] = []
+            return {"processes": []}
+        processes = payload.get("processes")
+        if isinstance(processes, list):
+            payload["processes"] = [
+                entry
+                for entry in processes
+                if isinstance(entry, dict)
+                and isinstance(entry.get("pid"), int)
+                and entry["pid"] > 0
+                and isinstance(entry.get("start_time"), int)
+                and entry["start_time"] > 0
+            ]
         else:
-            payload["pids"] = [pid for pid in pids if isinstance(pid, int) and pid > 0]
+            legacy_pids = payload.get("pids")
+            if isinstance(legacy_pids, list):
+                payload["processes"] = [
+                    {"pid": pid, "start_time": _read_process_start_time(pid) or 0}
+                    for pid in legacy_pids
+                    if (isinstance(pid, int) and pid > 0) or (isinstance(pid, str) and pid.isdigit() and int(pid) > 0)
+                ]
+                payload["processes"] = [entry for entry in payload["processes"] if entry["start_time"] > 0]
+            else:
+                payload["processes"] = []
+        payload.pop("pids", None)
         return payload
 
     def _write_state(self, state: dict[str, Any]) -> None:
         path = self._path()
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _process_record_state(pid: int, expected_start_time: int) -> str:
+        actual_start_time = _read_process_start_time(pid)
+        if actual_start_time is None:
+            try:
+                os.killpg(pid, 0)
+            except ProcessLookupError:
+                return "dead"
+            except OSError:
+                return "unknown"
+            return "unknown"
+        return "match" if actual_start_time == expected_start_time else "mismatch"
 
     @staticmethod
     def _terminate_process_group(pid: int) -> None:
@@ -4140,6 +4193,23 @@ def _terminate_process_group(process: subprocess.Popen[str] | None) -> None:
         time.sleep(0.1)
     with suppress(ProcessLookupError, OSError):
         os.killpg(process.pid, signal.SIGKILL)
+
+
+def _read_process_start_time(pid: int) -> int | None:
+    if pid <= 0:
+        return None
+    stat_path = Path("/proc") / str(pid) / "stat"
+    try:
+        stat_text = stat_path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        closing = stat_text.rindex(")")
+        stat_fields = stat_text[closing + 2 :].split()
+        start_time_field_index = 19  # field 22 in /proc/<pid>/stat, after pid+comm
+        return int(stat_fields[start_time_field_index])
+    except (ValueError, IndexError):
+        return None
 
 
 def _lowest_priority_command(command: list[str]) -> list[str]:
