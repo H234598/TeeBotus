@@ -184,6 +184,8 @@ Wenn der Freitext-Parser Live-Ausgabe oder LLM-Weitergabe nicht vollstaendig erk
 
 Die zaehlbaren Grundformen des Live/LLM-Parsers koennen mit `python3 scripts/youtube_parser_stats.py` oder maschinenlesbar mit `python3 scripts/youtube_parser_stats.py --json` neu berechnet werden. Die konkrete Sprache bleibt wegen freier Regex-Zwischenraeume, Learned-Phrases und LLM-Fallback unendlich; das Skript weist deshalb eine konservative zaehlbare Untergrenze aus.
 
+Der aktuelle Bestand gelernter Parser-Misses kann mit `python3 scripts/youtube_parser_misses_report.py --instances-dir instances` ausgewertet werden. Der Report gruppiert Formulierungen, zeigt ob der Basisparser sie inzwischen direkt erkennt, und markiert verbleibende Kandidaten fuer dauerhafte Parser-Regeln.
+
 Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.
