@@ -1877,6 +1877,8 @@ class BotTests(unittest.TestCase):
             (False, True),
         )
         self.assertEqual(_parse_youtube_local_options("Live aus, LLM true."), (False, True))
+        self.assertEqual(_parse_youtube_local_options("liveausgabe aus, ans llm"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("live_output = false\nsend_to_llm = true"), (False, True))
 
     def test_handle_update_youtube_transcript_starts_local_job_from_free_words(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError
