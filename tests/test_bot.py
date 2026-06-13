@@ -1,4 +1,6 @@
+import base64
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ from telegram_bot.bot import (
     InstanceRunConfig,
     TELADI_EMERGENCY_CHAT_ID,
     TELEGRAM_MESSAGE_CHUNK_SIZE,
+    TelegramAPI,
     TelegramNetworkError,
     UserMemoryStore,
     WorkingMemoryStore,
@@ -21,18 +24,21 @@ from telegram_bot.bot import (
     _downloaded_file_name,
     _encode_multipart_form_data,
     _instance_env_key,
+    _lowest_priority_command,
     _resolve_bot_token_configs,
     _resolve_instruction_path,
     _resolve_openai_api_key,
     _resolve_openai_api_keys,
     _resolve_telegram_token,
     _resolve_telegram_tokens,
+    _srt_to_plain_text,
     _transcribe_voice_audio,
     contains_sources,
     count_words,
     handle_update,
     run_polling,
     split_telegram_message,
+    transcribe_youtube_video,
 )
 from telegram_bot.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
@@ -48,6 +54,8 @@ class FakeAPI:
         self.file_data: dict[str, bytes] = {}
         self.file_path_requests: list[str] = []
         self.download_requests: list[str] = []
+        self.profile_photo_file_ids: dict[int, str | None] = {}
+        self.profile_photo_requests: list[int] = []
         self.next_message_id = 100
 
     def send_message(self, chat_id: int, text: str) -> int:
@@ -74,6 +82,10 @@ class FakeAPI:
     def get_file_path(self, file_id: str) -> str:
         self.file_path_requests.append(file_id)
         return self.file_paths[file_id]
+
+    def get_user_profile_photo_file_id(self, user_id: int) -> str | None:
+        self.profile_photo_requests.append(user_id)
+        return self.profile_photo_file_ids.get(user_id)
 
     def download_file(self, file_path: str) -> bytes:
         self.download_requests.append(file_path)
@@ -129,6 +141,14 @@ class FailingOpenAIClient:
         raise OpenAIAPIError("short failure")
 
 
+class FakeJobRunner:
+    def __init__(self) -> None:
+        self.jobs = []
+
+    def submit(self, callback):
+        self.jobs.append(callback)
+
+
 class FakeInstructionStore:
     def get(self):
         from telegram_bot.instructions import BotInstructions
@@ -153,9 +173,92 @@ def read_jsonl(path: Path) -> list[dict]:
 
 
 class BotTests(unittest.TestCase):
+    AVATAR_PNG = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP8z8BQDwAFgwJ/lwQ+0gAAAABJRU5ErkJggg=="
+    )
+
     def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
+
+    def test_telegram_request_timeout_is_network_error(self) -> None:
+        api = TelegramAPI("123:test-token")
+
+        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+            with self.assertRaises(TelegramNetworkError):
+                api.request("getUpdates", {})
+
+    def test_telegram_multipart_timeout_is_network_error(self) -> None:
+        api = TelegramAPI("123:test-token")
+
+        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+            with self.assertRaises(TelegramNetworkError):
+                api.request_multipart("sendVoice", {"chat_id": 123}, [("voice", "voice.ogg", "audio/ogg", b"data")])
+
+    def test_telegram_file_download_timeout_is_network_error(self) -> None:
+        api = TelegramAPI("123:test-token")
+
+        with patch("telegram_bot.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+            with self.assertRaises(TelegramNetworkError):
+                api.download_file("voice/file.oga")
+
+    def test_srt_to_plain_text_removes_indices_timestamps_and_tags(self) -> None:
+        srt = "1\n00:00:00,000 --> 00:00:01,000\n<i>Hello</i>\n\n2\n00:00:01,000 --> 00:00:02,000\nWorld\n"
+
+        self.assertEqual(_srt_to_plain_text(srt), "Hello\nWorld")
+
+    def test_youtube_transcript_uses_subtitles_before_whisper(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command, cwd, **kwargs):
+            calls.append(command)
+            Path(cwd, "video.en.srt").write_text(
+                "1\n00:00:00,000 --> 00:00:01,000\nSubtitle text.\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
+            with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+                transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
+
+        self.assertEqual(transcript, "Subtitle text.")
+        self.assertEqual(source, "YouTube-Untertitel")
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--write-auto-subs", calls[0])
+
+    def test_youtube_transcript_uses_faster_whisper_when_no_subtitles_exist(self) -> None:
+        calls: list[list[str]] = []
+
+        def run(command, cwd, **kwargs):
+            calls.append(command)
+            if command[:2] == ["yt-dlp", "-x"]:
+                Path(cwd, "youtube-audio.mp3").write_bytes(b"mp3")
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/tool"):
+            with patch("telegram_bot.bot._has_python_module", return_value=True):
+                with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+                    with patch(
+                        "telegram_bot.bot._run_local_command_streaming",
+                        return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
+                    ) as streaming:
+                        transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
+
+        self.assertEqual(transcript, "Faster text.")
+        self.assertEqual(source, "lokales Whisper")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][:2], ["yt-dlp", "-x"])
+        self.assertIn("-c", streaming.call_args.args[0])
+        self.assertIn("tiny", streaming.call_args.args[0])
+        self.assertIn("2", streaming.call_args.args[0])
+
+    def test_youtube_transcript_command_runs_with_lowest_priority_wrappers(self) -> None:
+        with patch("telegram_bot.bot.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
+            command = _lowest_priority_command(["python3", "-c", "print('x')"])
+
+        self.assertEqual(command[:6], ["nice", "-n", "19", "ionice", "-c", "3"])
+        self.assertEqual(command[6:], ["python3", "-c", "print('x')"])
 
     def test_instruction_path_uses_selected_instance(self) -> None:
         with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Depressionsbot"}, clear=True):
@@ -341,6 +444,83 @@ class BotTests(unittest.TestCase):
             self.assertIn("Persistentes Nutzergedaechtnis", openai_client.reply_inputs[-1])
             self.assertIn("selected_memory_ids", openai_client.reply_inputs[-1])
             self.assertIn("Mein Lieblingswort ist Mond.", openai_client.reply_inputs[-1])
+
+    def test_user_memory_downloads_avatar_icon_and_sets_folder_icon(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            api.profile_photo_file_ids[456] = "avatar_file_id"
+            api.file_paths["avatar_file_id"] = "photos/avatar.jpg"
+            api.file_data["photos/avatar.jpg"] = self.AVATAR_PNG
+            instructions = BotInstructions(
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+                commands={"/status": "ok"},
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+
+            with patch("telegram_bot.bot.subprocess.run") as run:
+                handle_update(
+                    api,
+                    {
+                        "message": {
+                            "message_id": 1,
+                            "text": "/status",
+                            "chat": {"id": 123, "type": "private"},
+                            "from": {"id": 456, "first_name": "Ada"},
+                        }
+                    },
+                    instructions,
+                    None,
+                    ChatState(),
+                    memory_store,
+                    BotIdentity(id=99, first_name="Mondbot", username="MondBot"),
+                )
+
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            avatar_path = user_dir / "User_Avatar.jpg"
+            icon_path = user_dir / "User_Avatar.icon"
+            marker_path = user_dir / ".User_Avatar_Icon_Set"
+            self.assertEqual(api.profile_photo_requests, [456])
+            self.assertEqual(api.file_path_requests, ["avatar_file_id"])
+            self.assertEqual(api.download_requests, ["photos/avatar.jpg"])
+            self.assertTrue(avatar_path.exists())
+            self.assertTrue(icon_path.exists())
+            self.assertTrue(marker_path.exists())
+            run.assert_called_once()
+            self.assertEqual(run.call_args.args[0][0:5], ["gio", "set", "-t", "string", str(user_dir)])
+            self.assertEqual(run.call_args.args[0][5], "metadata::custom-icon")
+            self.assertEqual(run.call_args.args[0][6], icon_path.resolve().as_uri())
+
+    def test_user_memory_rechecks_missing_avatar_only_once_per_day(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            instructions = BotInstructions(
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+                commands={"/status": "ok"},
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+            message = {
+                "message": {
+                    "message_id": 1,
+                    "text": "/status",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            }
+
+            handle_update(api, message, instructions, None, ChatState(), memory_store)
+            handle_update(api, message, instructions, None, ChatState(), memory_store)
+
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            self.assertEqual(api.profile_photo_requests, [456])
+            self.assertTrue((user_dir / ".User_Avatar_Checked").exists())
+            self.assertFalse((user_dir / "User_Avatar.jpg").exists())
+            self.assertFalse((user_dir / "User_Avatar.icon").exists())
 
     def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -800,6 +980,24 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [])
 
+    def test_handle_update_ignores_empty_text_with_bot_identity(self) -> None:
+        api = FakeAPI()
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 56,
+                    "text": "",
+                    "chat": {"id": -100123, "type": "group"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            bot_identity=BotIdentity(id=99, first_name="Mondbot", username="MondBot"),
+        )
+
+        self.assertEqual(api.sent_messages, [])
+
     def test_handle_update_uses_openai_for_unmatched_text_when_enabled(self) -> None:
         from telegram_bot.instructions import BotInstructions
 
@@ -811,6 +1009,211 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.chat_actions, [(123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_handle_update_youtube_transcript_command_sends_transcript(self) -> None:
+        api = FakeAPI()
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+            handle_update(api, {"message": {"text": "/youtube_transcript https://youtu.be/abc123", "chat": {"id": 123}}}, chat_state=ChatState())
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
+        self.assertEqual(api.chat_actions, [(123, "typing")])
+        self.assertEqual(api.sent_messages, [(123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text.")])
+
+    def test_handle_update_youtube_transcript_natural_request_uses_openai_pipeline(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_enabled=True)
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+            handle_update(
+                api,
+                {"message": {"text": "Bitte transkribiere dieses YouTube Video https://youtu.be/abc123", "chat": {"id": 123}}},
+                instructions,
+                openai_client,
+                ChatState(),
+            )
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
+        self.assertIn("YouTube-Transkript:", openai_client.reply_inputs[-1])
+        self.assertIn("Transcript text.", openai_client.reply_inputs[-1])
+        self.assertEqual(api.sent_messages, [(123, "AI: Bitte transkribiere dieses YouTube Video https://youtu.be/abc123\n\nYouTube-Transkript:\n- Quelle: https://youtu.be/abc123\n- Transkriptquelle: YouTube-Untertitel\nTranscript text.")])
+
+    def test_handle_update_youtube_transcript_asks_for_missing_link_then_uses_next_link(self) -> None:
+        api = FakeAPI()
+        chat_state = ChatState()
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "Kannst du ein YouTube-Video transkribieren?",
+                    "chat": {"id": 123},
+                    "from": {"id": 456},
+                }
+            },
+            chat_state=chat_state,
+        )
+
+        self.assertEqual(api.sent_messages, [(123, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")])
+        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, "456"))
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "https://youtu.be/abc123",
+                        "chat": {"id": 123},
+                        "from": {"id": 456},
+                    }
+                },
+                chat_state=chat_state,
+            )
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
+        self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, "456"))
+        self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
+
+    def test_handle_update_youtube_transcript_asks_local_options_when_no_subtitles(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+
+        with patch(
+            "telegram_bot.bot.transcribe_youtube_video",
+            side_effect=RuntimeError("wrong error"),
+        ):
+            with patch(
+                "telegram_bot.bot.transcribe_youtube_video",
+            ) as transcribe:
+                from telegram_bot.bot import YouTubeTranscriptError
+
+                transcribe.side_effect = YouTubeTranscriptError(
+                    "keine YouTube-Untertitel gefunden.",
+                    needs_local_transcription=True,
+                )
+                handle_update(
+                    api,
+                    {
+                        "message": {
+                            "text": "/youtube_transcript https://youtu.be/abc123",
+                            "chat": {"id": 123},
+                            "from": {"id": 456},
+                        }
+                    },
+                    BotInstructions(openai_model="gpt-test"),
+                    chat_state=chat_state,
+                )
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "https://youtu.be/abc123")
+        self.assertIn("Moechtest Du den Text live ausgegeben haben?", api.sent_messages[-1][1])
+        self.assertIn("Moechtest Du, dass das Ganze an dein LLM gpt-test geht?", api.sent_messages[-1][1])
+
+    def test_handle_update_youtube_local_options_live_chunks_without_llm(self) -> None:
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+
+        def transcribe(url, local_allowed=False, live_callback=None):
+            self.assertEqual(url, "https://youtu.be/abc123")
+            self.assertTrue(local_allowed)
+            self.assertIsNotNone(live_callback)
+            live_callback("eins zwei drei vier fuenf sechs sieben acht neun zehn elf zwoelf dreizehn vierzehn fuenfzehn sechzehn siebzehn achtzehn neunzehn zwanzig einundzwanzig zweiundzwanzig dreiundzwanzig vierundzwanzig fuenfundzwanzig sechsundzwanzig")
+            live_callback("", force=True)
+            return " ".join(["wort"] * 26), "lokales Whisper"
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=transcribe):
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "live ja, llm nein",
+                        "chat": {"id": 123},
+                        "from": {"id": 456},
+                    }
+                },
+                chat_state=chat_state,
+            )
+
+        self.assertEqual(len(api.sent_messages), 3)
+        self.assertEqual(len(api.sent_messages[0][1].split()), 25)
+        self.assertEqual(api.sent_messages[1][1], "sechsundzwanzig")
+        self.assertEqual(api.sent_messages[2], (123, "Lokale YouTube-Transkription abgeschlossen."))
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+
+    def test_handle_update_youtube_local_options_can_send_final_transcript_to_llm(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        openai_client = FakeOpenAIClient()
+        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "live nein, llm ja",
+                        "chat": {"id": 123},
+                        "from": {"id": 456},
+                    }
+                },
+                BotInstructions(openai_enabled=True),
+                openai_client,
+                chat_state,
+            )
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None)
+        self.assertIn("YouTube-Transkript:", openai_client.reply_inputs[-1])
+        self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
+        self.assertEqual(api.sent_messages, [(123, "AI: live nein, llm ja\n\nYouTube-Transkript:\n- Quelle: https://youtu.be/abc123\n- Transkriptquelle: lokales Whisper\nLocal transcript.")])
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+
+    def test_handle_update_youtube_local_options_queues_child_job_when_runner_is_available(self) -> None:
+        api = FakeAPI()
+        chat_state = ChatState()
+        runner = FakeJobRunner()
+        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "live nein, llm nein",
+                        "chat": {"id": 123},
+                        "from": {"id": 456},
+                    }
+                },
+                chat_state=chat_state,
+                youtube_job_runner=runner,
+            )
+
+            transcribe.assert_not_called()
+            self.assertEqual(len(runner.jobs), 1)
+            self.assertEqual(api.sent_messages, [(123, "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist.")])
+
+            runner.jobs[0]()
+
+        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None)
+        self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."))
+
+    def test_handle_update_youtube_transcript_timeout_does_not_crash(self) -> None:
+        api = FakeAPI()
+
+        with patch("telegram_bot.bot.transcribe_youtube_video", side_effect=TimeoutError("timed out")):
+            handle_update(api, {"message": {"text": "/youtube_transcript https://youtu.be/abc123", "chat": {"id": 123}}}, chat_state=ChatState())
+
+        self.assertEqual(
+            api.sent_messages,
+            [(123, "YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription (timed out).")],
+        )
 
     def test_group_first_contact_must_address_bot_by_telegram_name(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -859,6 +1262,65 @@ class BotTests(unittest.TestCase):
         )
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: Hallo @BoteDerWahrheitBot.")])
+
+    def test_first_contact_start_removes_configured_instance_identity(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        instructions = BotInstructions(start="Hallo{name_suffix}. Ich bin Depressionsbot. Sende /help fuer die Befehle.")
+        bot_identity = BotIdentity(id=99, first_name="Telegrambotname", username="TelegramBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "/start",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            None,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(
+            api.sent_messages,
+            [(123, "Ich bin Telegrambotname.\n\nHallo, Ada. Sende /help fuer die Befehle.")],
+        )
+
+    def test_start_uses_telegram_identity_for_known_sender(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        chat_state.mark_sender_seen("456")
+        instructions = BotInstructions(start="Hallo{name_suffix}. Ich bin Depressionsbot. Sende /help fuer die Befehle.")
+        bot_identity = BotIdentity(id=99, first_name="Telegrambotname", username="TelegramBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "/start",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            None,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(
+            api.sent_messages,
+            [(123, "Ich bin Telegrambotname.\n\nHallo, Ada. Sende /help fuer die Befehle.")],
+        )
 
     def test_known_sender_can_use_any_name_after_first_contact(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -1026,6 +1488,32 @@ class BotTests(unittest.TestCase):
         self.assertIn("- sender_name: Ada", openai_client.reply_inputs[0])
         self.assertEqual(api.chat_actions, [(123, "typing"), (123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
+
+    def test_handle_update_voice_transcription_timeout_does_not_crash(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        api.file_data["voice/file_1.oga"] = b"voice-audio"
+        openai_client = FakeOpenAIClient()
+        openai_client.transcribe_audio = lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("timed out"))
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 60,
+                    "voice": {"file_id": "file_1"},
+                    "chat": {"id": 123},
+                    "from": {"id": 456},
+                }
+            },
+            BotInstructions(),
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_transcription_error)])
 
     def test_transcribed_voice_stores_only_text_in_user_memory(self) -> None:
         from telegram_bot.instructions import BotInstructions
@@ -1237,6 +1725,94 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/voice zu lang", "chat": {"id": 123}}}, instructions, FakeOpenAIClient(), ChatState())
 
         self.assertEqual(api.sent_messages, [(123, "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: 5 Zeichen.")])
+
+    def test_codex_command_runs_locally_for_allowed_sender(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        instructions = BotInstructions(codex_allowed_sender_ids=("456",), codex_timeout_seconds=30)
+
+        def run(command, cwd, **kwargs):
+            self.assertEqual(command, ["codex", "exec", "Bitte pruefe das."])
+            self.assertEqual(cwd, Path("/home/teladi/TeeBotus"))
+            self.assertTrue(kwargs["text"])
+            self.assertTrue(kwargs["capture_output"])
+            self.assertEqual(kwargs["timeout"], 30)
+            self.assertFalse(kwargs["check"])
+            return subprocess.CompletedProcess(command, 0, "Codex erledigt.\n", "")
+
+        with patch("telegram_bot.bot.shutil.which", return_value="/usr/bin/codex"):
+            with patch("telegram_bot.bot.subprocess.run", side_effect=run):
+                handle_update(
+                    api,
+                    {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
+                    instructions,
+                    None,
+                    chat_state,
+                )
+
+        self.assertEqual(api.chat_actions, [(123, "typing")])
+        self.assertEqual(api.sent_messages, [(123, "Codex erledigt.")])
+
+    def test_codex_command_rejects_unauthorized_sender(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        instructions = BotInstructions(codex_allowed_sender_ids=("456",))
+
+        with patch("telegram_bot.bot.subprocess.run") as run:
+            handle_update(
+                api,
+                {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 999}}},
+                instructions,
+                None,
+                chat_state,
+            )
+
+        run.assert_not_called()
+        self.assertEqual(api.sent_messages, [(123, instructions.codex_unauthorized)])
+
+    def test_depression_alert_notifies_teladi_for_suicide_risk(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+
+        handle_update(
+            api,
+            {"message": {"text": "Ich will mich umbringen.", "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+            BotInstructions(),
+            None,
+            chat_state,
+        )
+
+        alerts = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Depressionsbot Krisenalarm", alerts[0])
+        self.assertIn("Grund: Suizid", alerts[0])
+        self.assertIn("Quelle: incoming", alerts[0])
+        self.assertIn("sender_id: 456", alerts[0])
+
+    def test_depression_alert_notifies_teladi_for_stress_level_ten(self) -> None:
+        from telegram_bot.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+
+        handle_update(
+            api,
+            {"message": {"text": "Stressstufe 10.", "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+            BotInstructions(),
+            None,
+            chat_state,
+        )
+
+        alerts = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
+        self.assertEqual(len(alerts), 1)
+        self.assertIn("Grund: Stressstufe 10", alerts[0])
+        self.assertIn("Stressstufe 10", alerts[0])
 
     def test_handle_update_splits_long_openai_reply(self) -> None:
         from telegram_bot.instructions import BotInstructions

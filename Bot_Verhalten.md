@@ -58,6 +58,11 @@ Generisches Template fuer eine Telegram-Bot-Instanz. Kopiere diese Datei nach
 - delete_error: Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten.
 - cleanup_success: "{count} gespeicherte Bot-Nachrichten geloescht. Das entfernt nur Telegram-Nachrichten des Bots aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
 - cleanup_usage: "Nutzung: /cleanup 10. Damit loesche ich bis zu 10 seit dem letzten Bot-Start gemerkte Bot-Nachrichten aus diesem Chat."
+- codex_usage: "Nutzung: /codex Prompt"
+- codex_unauthorized: Nein.
+- codex_not_found: Codex CLI wurde nicht gefunden.
+- codex_error: "Codex konnte gerade nicht ausgefuehrt werden: {error}"
+- codex_empty: Codex hat keine Ausgabe erzeugt.
 - user_memory_reset_confirm: Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? Das betrifft nur deine eigenen Memory-Eintraege; OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten. Antworte mit Ja zum Loeschen oder Nein zum Abbrechen.
 - user_memory_reset_success: Deine gespeicherten User-Memory-Eintraege wurden geloescht. OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten.
 - user_memory_reset_cancelled: Okay, ich loesche nichts. Deine User-Memory-Eintraege bleiben erhalten.
@@ -80,6 +85,12 @@ Generisches Template fuer eine Telegram-Bot-Instanz. Kopiere diese Datei nach
 
 - /ping: pong
 - /status: Der Bot laeuft.
+
+## Codex
+
+- enabled: true
+- allowed_sender_ids: 395935293
+- timeout_seconds: 300
 
 ## Systemprompt
 
@@ -104,6 +115,8 @@ Wenn du etwas nicht sicher weisst, sage das offen.
 - /ping - Verbindung testen
 - /status - Status anzeigen
 - /voice Text - Text als Sprachnachricht senden; ohne Text wird die beantwortete Nachricht vertont
+- /codex Prompt - fuehrt Codex CLI lokal aus
+- /youtube_transcript URL - YouTube-Untertitel laden oder per lokalem Whisper transkribieren
 - /chatid - aktuelle Chat-ID anzeigen
 - /reset - nur OpenAI-Verlauf dieses Chats zuruecksetzen; Memory und Telegram-Nachrichten bleiben erhalten
 - /reset_memorys - nach Rueckfrage nur deine eigenen User-Memory-Eintraege loeschen

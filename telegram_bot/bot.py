@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import concurrent.futures
+import io
 import json
 import logging
 import os
 import re
+import select
+import shutil
+import subprocess
 import sys
 import threading
 import time
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,7 +42,23 @@ MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
 USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
+USER_AVATAR_BASENAME = "User_Avatar"
+USER_AVATAR_ICON_FILENAME = "User_Avatar.icon"
+USER_AVATAR_ICON_MARKER_FILENAME = ".User_Avatar_Icon_Set"
+USER_AVATAR_CHECK_MARKER_FILENAME = ".User_Avatar_Checked"
+USER_AVATAR_REFRESH_SECONDS = 7 * 24 * 60 * 60
+USER_AVATAR_MISSING_RECHECK_SECONDS = 24 * 60 * 60
 USER_HABITS_MAX_PROMPT_CHARS = 4000
+YOUTUBE_TRANSCRIPT_COMMANDS = {"/youtube_transcript", "/yt_transcript"}
+YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS = 15 * 60
+YOUTUBE_WHISPER_TIMEOUT_SECONDS = 60 * 60
+YOUTUBE_TRANSCRIPT_MAX_PIPELINE_CHARS = 60000
+YOUTUBE_WHISPER_MODEL = "tiny"
+YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
+YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
+YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
+YOUTUBE_LOCAL_TRANSCRIPTION_WORKERS = 1
+YOUTUBE_LIVE_CHUNK_WORDS = 25
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
 TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
@@ -45,6 +67,29 @@ WORKING_MEMORY_PRIVACY_NOTE = (
     "Instanzweites Arbeitsgedaechtnis. Darf keine User-IDs, Namen, Usernames, Chat-IDs, "
     "Chat-Titel, Rohzitate aus Usernachrichten oder eindeutig userbezogene Fakten enthalten."
 )
+
+
+class YouTubeTranscriptionJobRunner:
+    def __init__(self, max_workers: int = YOUTUBE_LOCAL_TRANSCRIPTION_WORKERS) -> None:
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, max_workers),
+            thread_name_prefix="youtube-transcript-job",
+        )
+
+    def submit(self, callback) -> concurrent.futures.Future[Any]:
+        future = self._executor.submit(callback)
+        future.add_done_callback(self._log_unhandled_exception)
+        return future
+
+    def shutdown(self, wait: bool = False) -> None:
+        self._executor.shutdown(wait=wait, cancel_futures=False)
+
+    @staticmethod
+    def _log_unhandled_exception(future: concurrent.futures.Future[Any]) -> None:
+        try:
+            future.result()
+        except Exception:
+            LOGGER.exception("Unhandled YouTube transcription job error.")
 DOTENV_RUNTIME_KEYS = {
     "LOG_LEVEL",
     "TELEGRAM_BOT_INSTANCE",
@@ -173,6 +218,8 @@ class TelegramAPI:
         try:
             with urllib.request.urlopen(request, timeout=75) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise TelegramAPIError(f"Telegram HTTP error {exc.code}: {detail}") from exc
@@ -201,6 +248,8 @@ class TelegramAPI:
         try:
             with urllib.request.urlopen(request, timeout=75) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise TelegramAPIError(f"Telegram HTTP error {exc.code}: {detail}") from exc
@@ -285,6 +334,27 @@ class TelegramAPI:
             raise TelegramAPIError(f"Telegram getFile response did not include file_path: {payload}")
         return file_path
 
+    def get_user_profile_photo_file_id(self, user_id: int) -> str | None:
+        payload = self.request("getUserProfilePhotos", {"user_id": user_id, "limit": 1})
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            raise TelegramAPIError(f"Telegram getUserProfilePhotos result is invalid: {payload}")
+        photos = result.get("photos")
+        if not isinstance(photos, list) or not photos:
+            return None
+        first_photo = photos[0]
+        if not isinstance(first_photo, list) or not first_photo:
+            return None
+        best = max(
+            (photo for photo in first_photo if isinstance(photo, dict)),
+            key=lambda photo: int(photo.get("file_size") or 0) or int(photo.get("width") or 0) * int(photo.get("height") or 0),
+            default=None,
+        )
+        if best is None:
+            return None
+        file_id = best.get("file_id")
+        return str(file_id).strip() if isinstance(file_id, str) and file_id.strip() else None
+
     def download_file(self, file_path: str) -> bytes:
         quoted_path = urllib.parse.quote(file_path, safe="/")
         url = FILE_API_BASE.format(token=self.token, file_path=quoted_path)
@@ -293,6 +363,8 @@ class TelegramAPI:
         try:
             with urllib.request.urlopen(request, timeout=75) as response:
                 return response.read()
+        except TimeoutError as exc:
+            raise TelegramNetworkError(f"Telegram file network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise TelegramAPIError(f"Telegram file HTTP error {exc.code}: {detail}") from exc
@@ -307,46 +379,57 @@ class TelegramAPI:
 
 
 class ChatState:
-    def __init__(self, teladi_call_state_path: Path | None = None) -> None:
+    def __init__(self, teladi_call_state_path: Path | None = None, instance_name: str = "") -> None:
+        self._lock = threading.RLock()
         self.previous_response_ids: dict[int, str] = {}
         self.sent_message_ids: dict[int, list[int]] = {}
         self.auto_voice_eligible_counts: dict[int, int] = {}
         self.seen_sender_ids: set[str] = set()
+        self.depression_alert_signatures: set[str] = set()
         self.pending_user_memory_resets: set[tuple[int, str]] = set()
+        self.pending_youtube_transcript_requests: set[tuple[int, str]] = set()
+        self.pending_youtube_local_options: dict[tuple[int, str], str] = {}
         self.pending_teladi_calls: dict[str, int] = {}
         self.teladi_call_state_path = teladi_call_state_path
+        self.instance_name = instance_name
         self.teladi_call_used_at: dict[str, float] = self._load_teladi_call_used_at()
 
     def get_previous_response_id(self, chat_id: int) -> str | None:
-        return self.previous_response_ids.get(chat_id)
+        with self._lock:
+            return self.previous_response_ids.get(chat_id)
 
     def set_previous_response_id(self, chat_id: int, response_id: str | None) -> None:
-        if response_id:
-            self.previous_response_ids[chat_id] = response_id
+        with self._lock:
+            if response_id:
+                self.previous_response_ids[chat_id] = response_id
 
     def reset(self, chat_id: int) -> None:
-        self.previous_response_ids.pop(chat_id, None)
+        with self._lock:
+            self.previous_response_ids.pop(chat_id, None)
 
     def record_sent_message(self, chat_id: int, message_id: int | None) -> None:
         if message_id is None:
             return
-        message_ids = self.sent_message_ids.setdefault(chat_id, [])
-        message_ids.append(message_id)
-        del message_ids[:-MAX_TRACKED_BOT_MESSAGES]
+        with self._lock:
+            message_ids = self.sent_message_ids.setdefault(chat_id, [])
+            message_ids.append(message_id)
+            del message_ids[:-MAX_TRACKED_BOT_MESSAGES]
 
     def pop_last_sent_message(self, chat_id: int) -> int | None:
-        message_ids = self.sent_message_ids.get(chat_id)
-        if not message_ids:
-            return None
-        return message_ids.pop()
+        with self._lock:
+            message_ids = self.sent_message_ids.get(chat_id)
+            if not message_ids:
+                return None
+            return message_ids.pop()
 
     def pop_sent_messages(self, chat_id: int, count: int) -> list[int]:
-        message_ids = self.sent_message_ids.get(chat_id)
-        if not message_ids:
-            return []
-        selected = message_ids[-count:]
-        del message_ids[-count:]
-        return list(reversed(selected))
+        with self._lock:
+            message_ids = self.sent_message_ids.get(chat_id)
+            if not message_ids:
+                return []
+            selected = message_ids[-count:]
+            del message_ids[-count:]
+            return list(reversed(selected))
 
     def should_send_auto_voice(self, chat_id: int, every: int) -> bool:
         if every < 1:
@@ -356,11 +439,20 @@ class ChatState:
         return count % every == 0
 
     def has_seen_sender(self, sender_id: str) -> bool:
-        return sender_id in self.seen_sender_ids
+        with self._lock:
+            return sender_id in self.seen_sender_ids
 
     def mark_sender_seen(self, sender_id: str) -> None:
-        if sender_id:
-            self.seen_sender_ids.add(sender_id)
+        with self._lock:
+            if sender_id:
+                self.seen_sender_ids.add(sender_id)
+
+    def claim_depression_alert_signature(self, signature: str) -> bool:
+        with self._lock:
+            if signature in self.depression_alert_signatures:
+                return False
+            self.depression_alert_signatures.add(signature)
+            return True
 
     def request_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
         if sender_id:
@@ -371,6 +463,32 @@ class ChatState:
 
     def clear_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
         self.pending_user_memory_resets.discard((chat_id, sender_id))
+
+    def request_youtube_transcript_link(self, chat_id: int, sender_id: str) -> None:
+        with self._lock:
+            if sender_id:
+                self.pending_youtube_transcript_requests.add((chat_id, sender_id))
+
+    def has_pending_youtube_transcript_link(self, chat_id: int, sender_id: str) -> bool:
+        with self._lock:
+            return (chat_id, sender_id) in self.pending_youtube_transcript_requests
+
+    def clear_pending_youtube_transcript_link(self, chat_id: int, sender_id: str) -> None:
+        with self._lock:
+            self.pending_youtube_transcript_requests.discard((chat_id, sender_id))
+
+    def request_youtube_local_options(self, chat_id: int, sender_id: str, url: str) -> None:
+        with self._lock:
+            if sender_id and url:
+                self.pending_youtube_local_options[(chat_id, sender_id)] = url
+
+    def get_pending_youtube_local_options(self, chat_id: int, sender_id: str) -> str:
+        with self._lock:
+            return self.pending_youtube_local_options.get((chat_id, sender_id), "")
+
+    def clear_pending_youtube_local_options(self, chat_id: int, sender_id: str) -> None:
+        with self._lock:
+            self.pending_youtube_local_options.pop((chat_id, sender_id), None)
 
     def request_teladi_call(self, chat_id: int, sender_id: str) -> None:
         if sender_id:
@@ -542,6 +660,7 @@ class UserMemoryStore:
         message: dict[str, Any],
         instructions: BotInstructions,
         query_text: str,
+        api: TelegramAPI | None = None,
     ) -> UserMemoryRecord | None:
         if not instructions.user_memory_enabled:
             return None
@@ -553,6 +672,7 @@ class UserMemoryStore:
         path = self._path_for_sender(sender_id, instructions)
         with self._lock:
             data = self._load_or_initialize(path, sender_id)
+            _ensure_user_avatar_assets(api, path, message)
             habits_text = _load_user_habits_text(path, USER_HABITS_MAX_PROMPT_CHARS)
             memory_text, selected_ids = _select_user_memory_prompt(
                 path,
@@ -669,6 +789,7 @@ def handle_update(
     user_memory_store: UserMemoryStore | None = None,
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -676,6 +797,14 @@ def handle_update(
     message = update.get("message")
     if not isinstance(message, dict):
         return
+
+    instance_name = ""
+    if working_memory_store is not None:
+        instance_name = working_memory_store.instance_name
+    elif user_memory_store is not None:
+        instance_name = user_memory_store.instance_name
+    elif chat_state is not None:
+        instance_name = chat_state.instance_name
 
     chat = message.get("chat")
     if not isinstance(chat, dict) or "id" not in chat:
@@ -705,6 +834,7 @@ def handle_update(
             user_memory_store,
             bot_identity,
             working_memory_store,
+            instance_name,
         )
         return
 
@@ -715,7 +845,7 @@ def handle_update(
             message.get("message_id", "unknown"),
         )
         return
-    user_memory = _prepare_user_memory(user_memory_store, message, instructions, text)
+    user_memory = _prepare_user_memory(user_memory_store, message, instructions, text, api)
     _process_text_message(
         api,
         chat_state,
@@ -729,6 +859,8 @@ def handle_update(
         bot_identity,
         first_contact,
         working_memory_store,
+        youtube_job_runner,
+        instance_name,
     )
 
 
@@ -745,9 +877,12 @@ def _process_text_message(
     bot_identity: BotIdentity | None = None,
     first_contact: bool = False,
     working_memory_store: WorkingMemoryStore | None = None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    instance_name: str = "",
 ) -> None:
     chat_state.mark_sender_seen(_sender_identifier(message))
     bot_identity = bot_identity or BotIdentity()
+    _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, instance_name, "incoming")
     if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
         return
 
@@ -775,12 +910,53 @@ def _process_text_message(
         _handle_voice_command(api, chat_state, chat_id, message, instructions, openai_client, text)
         return
 
+    if text and _handle_pending_youtube_local_options(
+        api,
+        chat_state,
+        chat_id,
+        message,
+        text,
+        user_memory_store,
+        user_memory,
+        instructions,
+        openai_client,
+        bot_identity,
+        first_contact,
+        working_memory_store,
+        youtube_job_runner,
+    ):
+        return
+
+    if text and _should_handle_youtube_transcript_request(chat_state, chat_id, message, text):
+        _handle_youtube_transcript_request(
+            api,
+            chat_state,
+            chat_id,
+            message,
+            text,
+            user_memory_store,
+            user_memory,
+            instructions,
+            openai_client,
+            bot_identity,
+            first_contact,
+            working_memory_store,
+        )
+        return
+
     if text and _handle_cleanup_command(api, chat_state, chat_id, message, instructions, text):
+        return
+
+    if text and _handle_codex_command(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
         return
 
     reply = build_reply(message, instructions, include_fallback=not instructions.openai_enabled)
     if reply:
-        reply = _with_first_contact_intro(reply, first_contact, bot_identity)
+        if _normalize_command(text) == "/start":
+            reply = _with_bot_identity_intro(reply, bot_identity)
+        else:
+            reply = _with_first_contact_intro(reply, first_contact, bot_identity)
+        _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
         return
@@ -808,18 +984,21 @@ def _process_text_message(
         except OpenAIAPIError as exc:
             LOGGER.error("OpenAI request failed: %s", exc)
             reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
+            _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
             return
         chat_state.set_previous_response_id(chat_id, openai_response.response_id)
         reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
-        _send_openai_response(api, chat_state, chat_id, reply, instructions, openai_client)
+        _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
+        _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
         return
 
     fallback = build_reply(message, instructions, include_fallback=True)
     if fallback:
         fallback = _with_first_contact_intro(fallback, first_contact, bot_identity)
+        _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, fallback, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, fallback)
         _record_user_memory(user_memory_store, user_memory, message, text, fallback, instructions)
 
@@ -834,6 +1013,7 @@ def _handle_incoming_voice_message(
     user_memory_store: UserMemoryStore | None = None,
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
+    instance_name: str = "",
 ) -> None:
     bot_identity = bot_identity or BotIdentity()
     if not instructions.openai_transcription_enabled:
@@ -871,6 +1051,10 @@ def _handle_incoming_voice_message(
         LOGGER.error("OpenAI transcription request failed: %s", exc)
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_error)
         return
+    except (TimeoutError, subprocess.TimeoutExpired) as exc:
+        LOGGER.error("Transcription timed out: %s", exc)
+        _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_error)
+        return
 
     if not transcribed_text:
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_empty)
@@ -886,7 +1070,7 @@ def _handle_incoming_voice_message(
             message.get("message_id", "unknown"),
         )
         return
-    user_memory = _prepare_user_memory(user_memory_store, transcribed_message, instructions, transcribed_text)
+    user_memory = _prepare_user_memory(user_memory_store, transcribed_message, instructions, transcribed_text, api)
     _process_text_message(
         api,
         chat_state,
@@ -900,6 +1084,7 @@ def _handle_incoming_voice_message(
         bot_identity,
         first_contact,
         working_memory_store,
+        instance_name=instance_name,
     )
 
 
@@ -1050,6 +1235,114 @@ def _format_remaining_seconds(seconds: int) -> str:
     if seconds and not hours:
         parts.append(f"{seconds}s")
     return " ".join(parts) if parts else "1s"
+
+
+def _maybe_send_depression_alert(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    text: str,
+    instance_name: str,
+    source: str,
+) -> None:
+    if instance_name != "Depressionsbot":
+        return
+
+    reason = _detect_depression_alert_reason(text)
+    if reason is None:
+        return
+
+    sender_id = _sender_identifier(message) or f"chat:{chat_id}"
+    signature = f"{instance_name}:{chat_id}:{sender_id}:{reason}"
+    if not chat_state.claim_depression_alert_signature(signature):
+        return
+
+    try:
+        _send_untracked_message(
+            api,
+            TELADI_EMERGENCY_CHAT_ID,
+            _build_depression_alert_message(message, chat_id, text, reason, source),
+        )
+    except TelegramAPIError:
+        LOGGER.exception("Failed to send Depressionsbot crisis alert.")
+
+
+def _detect_depression_alert_reason(text: str) -> str | None:
+    normalized = _normalize_depression_alert_text(text)
+    if not normalized:
+        return None
+
+    suicide_patterns = (
+        r"\bsuizid\b",
+        r"\bselbstmord\b",
+        r"\bselbst toeten\b",
+        r"\bmir etwas antun\b",
+        r"\bmich umbringen\b",
+        r"\bleben beenden\b",
+        r"\bnicht mehr leben\b",
+        r"\bsterben wollen\b",
+        r"\bsuizidgefahr\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in suicide_patterns):
+        return "suizid"
+
+    stress_patterns = (
+        r"\bstress(?:stufe|level)?\s*(?:[:=]|ist|bei)?\s*10\b",
+        r"\b10\s*/\s*10\b",
+        r"\bhoechste stressstufe\b",
+        r"\bhöchste stressstufe\b",
+        r"\bmaximale stressstufe\b",
+    )
+    if any(re.search(pattern, normalized) for pattern in stress_patterns):
+        return "stress_10"
+
+    return None
+
+
+def _normalize_depression_alert_text(text: str) -> str:
+    normalized = str(text or "").casefold()
+    replacements = {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "ß": "ss",
+    }
+    for source, replacement in replacements.items():
+        normalized = normalized.replace(source, replacement)
+    normalized = re.sub(r"[_-]+", " ", normalized)
+    normalized = re.sub(r"[^0-9a-z@/]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _build_depression_alert_message(
+    message: dict[str, Any],
+    chat_id: int,
+    text: str,
+    reason: str,
+    source: str,
+) -> str:
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
+    sender_name = _sender_display_name(sender, sender_chat)
+    sender_username = _username(sender.get("username") if sender else sender_chat.get("username"))
+    sender_bits = [bit for bit in (sender_name, sender_username) if bit]
+    sender_label = " ".join(sender_bits) if sender_bits else "unbekannt"
+    alert_text = text.strip()
+    if len(alert_text) > 1200:
+        alert_text = f"{alert_text[:1200]}..."
+    return "\n".join(
+        [
+            "Depressionsbot Krisenalarm",
+            f"Grund: {'Suizid' if reason == 'suizid' else 'Stressstufe 10'}",
+            f"Quelle: {source}",
+            f"Chat: {_metadata_value(chat.get('title'))} (type: {_metadata_value(chat.get('type'))}, chat_id: {_metadata_value(chat.get('id'))})",
+            f"Sender: {sender_label} (sender_id: {_metadata_value(sender.get('id') if sender else sender_chat.get('id'))})",
+            f"Text: {alert_text or 'unbekannt'}",
+        ]
+    )
 
 
 def _handle_user_memory_reset_flow(
@@ -1244,11 +1537,12 @@ def _prepare_user_memory(
     message: dict[str, Any],
     instructions: BotInstructions,
     query_text: str,
+    api: TelegramAPI | None = None,
 ) -> UserMemoryRecord | None:
     if user_memory_store is None:
         return None
     try:
-        return user_memory_store.prepare(message, instructions, query_text)
+        return user_memory_store.prepare(message, instructions, query_text, api)
     except OSError:
         LOGGER.exception("Failed to prepare user memory.")
         return None
@@ -1363,8 +1657,14 @@ def _should_process_for_bot(
 
 
 def _with_first_contact_intro(text: str, first_contact: bool, bot_identity: BotIdentity) -> str:
+    if not first_contact:
+        return text
+    return _with_bot_identity_intro(text, bot_identity)
+
+
+def _with_bot_identity_intro(text: str, bot_identity: BotIdentity) -> str:
     display_name = bot_identity.display_name
-    if not first_contact or not display_name:
+    if not display_name:
         return text
     intro = f"Ich bin {display_name}."
     stripped = text.strip()
@@ -1372,7 +1672,23 @@ def _with_first_contact_intro(text: str, first_contact: bool, bot_identity: BotI
         return intro
     if stripped.casefold().startswith(intro.casefold()):
         return text
-    return f"{intro}\n\n{text}"
+    text = _strip_embedded_identity_intro(text)
+    stripped = text.strip()
+    if not stripped:
+        return intro
+    return f"{intro}\n\n{stripped}"
+
+
+def _strip_embedded_identity_intro(text: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        prefix = match.group("prefix")
+        name = match.group("name").strip()
+        if not name or not name[0].isupper():
+            return match.group(0)
+        return prefix
+
+    pattern = re.compile(r"(?P<prefix>^|[.!?]\s+)Ich bin (?P<name>[^.!?\n]{1,80})\.\s*")
+    return pattern.sub(replace, text).strip()
 
 
 def _is_private_chat(message: dict[str, Any]) -> bool:
@@ -1393,7 +1709,10 @@ def _is_reply_to_bot(message: dict[str, Any], bot_identity: BotIdentity) -> bool
 
 
 def _command_targets_other_bot(text: str, bot_identity: BotIdentity) -> bool:
-    command = text.strip().split(maxsplit=1)[0]
+    parts = text.strip().split(maxsplit=1)
+    if not parts:
+        return False
+    command = parts[0]
     if not command.startswith("/") or "@" not in command:
         return False
     target = command.rsplit("@", maxsplit=1)[-1].strip().casefold()
@@ -1954,10 +2273,136 @@ def _memory_habits_path(index_path: Path) -> Path:
     return index_path.parent / USER_HABITS_FILENAME
 
 
+def _memory_avatar_icon_path(index_path: Path) -> Path:
+    return index_path.parent / USER_AVATAR_ICON_FILENAME
+
+
+def _memory_avatar_icon_marker_path(index_path: Path) -> Path:
+    return index_path.parent / USER_AVATAR_ICON_MARKER_FILENAME
+
+
+def _memory_avatar_check_marker_path(index_path: Path) -> Path:
+    return index_path.parent / USER_AVATAR_CHECK_MARKER_FILENAME
+
+
+def _memory_avatar_paths(index_path: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in index_path.parent.glob(f"{USER_AVATAR_BASENAME}.*")
+        if path.name not in {USER_AVATAR_ICON_FILENAME, USER_AVATAR_ICON_MARKER_FILENAME, USER_AVATAR_CHECK_MARKER_FILENAME}
+    )
+
+
 def _ensure_user_habits_file(index_path: Path) -> None:
     habits_path = _memory_habits_path(index_path)
     if not habits_path.exists():
         habits_path.write_text("", encoding="utf-8")
+
+
+def _ensure_user_avatar_assets(api: TelegramAPI | None, index_path: Path, message: dict[str, Any]) -> None:
+    if api is None:
+        return
+
+    avatar_paths = _memory_avatar_paths(index_path)
+    icon_path = _memory_avatar_icon_path(index_path)
+    if avatar_paths and not _avatar_needs_refresh(avatar_paths[0]) and icon_path.exists():
+        _ensure_user_folder_icon(index_path)
+        return
+    if not avatar_paths and not _avatar_missing_recheck_due(index_path):
+        return
+
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    user_id = sender.get("id")
+    if not isinstance(user_id, int):
+        return
+
+    try:
+        _mark_user_avatar_checked(index_path)
+        file_id = api.get_user_profile_photo_file_id(user_id)
+        if not file_id:
+            return
+        file_path = api.get_file_path(file_id)
+        image_bytes = api.download_file(file_path)
+        avatar_path = _write_user_avatar(index_path, file_path, image_bytes)
+        _write_user_avatar_icon(avatar_path, icon_path)
+        _ensure_user_folder_icon(index_path)
+    except (OSError, TelegramAPIError, ValueError) as exc:
+        LOGGER.debug("Failed to prepare user avatar for user_id=%s: %s", user_id, exc)
+
+
+def _avatar_needs_refresh(path: Path) -> bool:
+    try:
+        return time.time() - path.stat().st_mtime > USER_AVATAR_REFRESH_SECONDS
+    except FileNotFoundError:
+        return True
+
+
+def _avatar_missing_recheck_due(index_path: Path) -> bool:
+    marker_path = _memory_avatar_check_marker_path(index_path)
+    try:
+        return time.time() - marker_path.stat().st_mtime > USER_AVATAR_MISSING_RECHECK_SECONDS
+    except FileNotFoundError:
+        return True
+
+
+def _mark_user_avatar_checked(index_path: Path) -> None:
+    _memory_avatar_check_marker_path(index_path).write_text(str(int(time.time())), encoding="utf-8")
+
+
+def _write_user_avatar(index_path: Path, file_path: str, image_bytes: bytes) -> Path:
+    extension = _avatar_extension(file_path, image_bytes)
+    avatar_path = index_path.parent / f"{USER_AVATAR_BASENAME}.{extension}"
+    for existing_path in _memory_avatar_paths(index_path):
+        if existing_path != avatar_path:
+            _unlink_file_if_exists(existing_path)
+    avatar_path.write_bytes(image_bytes)
+    _unlink_file_if_exists(_memory_avatar_icon_marker_path(index_path))
+    _unlink_file_if_exists(_memory_avatar_check_marker_path(index_path))
+    return avatar_path
+
+
+def _avatar_extension(file_path: str, image_bytes: bytes) -> str:
+    suffix = Path(file_path).suffix.lower().lstrip(".")
+    if suffix in {"jpg", "jpeg", "png", "webp"}:
+        return "jpg" if suffix == "jpeg" else suffix
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            image_format = (image.format or "").casefold()
+    except Exception:
+        return "jpg"
+    return {"jpeg": "jpg", "png": "png", "webp": "webp"}.get(image_format, "jpg")
+
+
+def _write_user_avatar_icon(avatar_path: Path, icon_path: Path) -> None:
+    try:
+        from PIL import Image
+
+        with Image.open(avatar_path) as image:
+            icon = image.convert("RGBA")
+            icon.thumbnail((256, 256))
+            icon.save(icon_path, format="ICO", sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+    except Exception as exc:
+        raise ValueError(f"Could not convert avatar to icon: {exc}") from exc
+
+
+def _ensure_user_folder_icon(index_path: Path) -> None:
+    icon_path = _memory_avatar_icon_path(index_path)
+    marker_path = _memory_avatar_icon_marker_path(index_path)
+    if not icon_path.exists() or marker_path.exists():
+        return
+    try:
+        subprocess.run(
+            ["gio", "set", "-t", "string", str(index_path.parent), "metadata::custom-icon", icon_path.resolve().as_uri()],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        LOGGER.debug("Failed to set custom folder icon for %s: %s", index_path.parent, exc)
+        return
+    marker_path.write_text(icon_path.name, encoding="utf-8")
 
 
 def _load_user_habits_text(index_path: Path, max_chars: int) -> str:
@@ -2170,7 +2615,10 @@ def run_polling(
     token_label: str = "1",
     openai_api_key: str | None = None,
     bot_identity: BotIdentity | None = None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
 ) -> None:
+    owns_youtube_job_runner = youtube_job_runner is None
+    youtube_job_runner = youtube_job_runner or YouTubeTranscriptionJobRunner()
     instance = instance_name or _resolve_instance_name()
     instruction_store = instruction_store or InstructionStore(_resolve_instruction_path(instance))
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
@@ -2179,7 +2627,7 @@ def run_polling(
     user_memory_store = UserMemoryStore(instance)
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
-    chat_state = ChatState(_teladi_call_state_path(instance))
+    chat_state = ChatState(_teladi_call_state_path(instance), instance)
     LOGGER.info(
         "Bot started instance=%s token_slot=%s bot_name=%s bot_username=%s. Waiting for Telegram updates.",
         instance,
@@ -2190,33 +2638,38 @@ def run_polling(
     offset: int | None = None
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
 
-    while stop_event is None or not stop_event.is_set():
-        try:
-            updates = api.get_updates(offset, timeout=poll_timeout)
-            retry_delay = INITIAL_RETRY_DELAY_SECONDS
-            for update in updates:
-                handle_update(
-                    api,
-                    update,
-                    instruction_store.get(),
-                    openai_client,
-                    chat_state,
-                    user_memory_store,
-                    bot_identity,
-                    working_memory_store,
-                )
-                offset = int(update["update_id"]) + 1
-        except KeyboardInterrupt:
-            LOGGER.info("Bot stopped.")
-            return
-        except TelegramNetworkError as exc:
-            LOGGER.warning("%s. Retrying in %s seconds.", exc, retry_delay)
-            time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
-        except TelegramAPIError:
-            LOGGER.exception("Telegram request failed. Retrying in %s seconds.", retry_delay)
-            time.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+    try:
+        while stop_event is None or not stop_event.is_set():
+            try:
+                updates = api.get_updates(offset, timeout=poll_timeout)
+                retry_delay = INITIAL_RETRY_DELAY_SECONDS
+                for update in updates:
+                    handle_update(
+                        api,
+                        update,
+                        instruction_store.get(),
+                        openai_client,
+                        chat_state,
+                        user_memory_store,
+                        bot_identity,
+                        working_memory_store,
+                        youtube_job_runner,
+                    )
+                    offset = int(update["update_id"]) + 1
+            except KeyboardInterrupt:
+                LOGGER.info("Bot stopped.")
+                return
+            except TelegramNetworkError as exc:
+                LOGGER.warning("%s. Retrying in %s seconds.", exc, retry_delay)
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+            except TelegramAPIError:
+                LOGGER.exception("Telegram request failed. Retrying in %s seconds.", retry_delay)
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+    finally:
+        if owns_youtube_job_runner:
+            youtube_job_runner.shutdown(wait=False)
 
 
 def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, instance_name: str) -> None:
@@ -2226,6 +2679,7 @@ def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, insta
 def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
+    youtube_job_runner = YouTubeTranscriptionJobRunner()
     for instance_config in instance_configs:
         for config in instance_config.token_configs:
             thread = threading.Thread(
@@ -2238,6 +2692,7 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
                     "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
                     "token_label": config.label,
                     "openai_api_key": config.openai_api_key,
+                    "youtube_job_runner": youtube_job_runner,
                 },
                 name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
                 daemon=True,
@@ -2255,6 +2710,8 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
         stop_event.set()
         for thread in threads:
             thread.join(timeout=MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+    finally:
+        youtube_job_runner.shutdown(wait=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -2650,10 +3107,12 @@ def _send_openai_response(
     api: TelegramAPI,
     chat_state: ChatState,
     chat_id: int,
+    message: dict[str, Any],
     text: str,
     instructions: BotInstructions,
     openai_client: OpenAIClient,
 ) -> None:
+    _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, chat_state.instance_name, "reply")
     if _should_consider_auto_voice(text, instructions) and chat_state.should_send_auto_voice(
         chat_id,
         instructions.openai_auto_voice_every,
@@ -2773,6 +3232,610 @@ def _extract_voice_text(message: dict[str, Any], command_text: str) -> str:
     return ""
 
 
+def _should_handle_youtube_transcript_request(chat_state: ChatState, chat_id: int, message: dict[str, Any], text: str) -> bool:
+    sender_id = _sender_identifier(message)
+    if _normalize_command(text) in YOUTUBE_TRANSCRIPT_COMMANDS:
+        return True
+    if sender_id and chat_state.has_pending_youtube_transcript_link(chat_id, sender_id) and _extract_youtube_url(text):
+        return True
+    return _has_youtube_transcript_intent(text)
+
+
+def _handle_youtube_transcript_request(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    user_memory_store: UserMemoryStore | None,
+    user_memory: UserMemoryRecord | None,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient | None,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+    working_memory_store: WorkingMemoryStore | None,
+) -> None:
+    sender_id = _sender_identifier(message)
+    url = _extract_youtube_url(text)
+    if not url:
+        if sender_id:
+            chat_state.request_youtube_transcript_link(chat_id, sender_id)
+        reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return
+
+    if sender_id:
+        chat_state.clear_pending_youtube_transcript_link(chat_id, sender_id)
+
+    try:
+        api.send_chat_action(chat_id, "typing")
+        transcript, source = transcribe_youtube_video(url, local_allowed=False)
+    except YouTubeTranscriptError as exc:
+        if exc.needs_local_transcription:
+            if sender_id:
+                chat_state.request_youtube_local_options(chat_id, sender_id, url)
+            reply = (
+                "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
+                "Moechtest Du den Text live ausgegeben haben?\n"
+                f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
+                "Antworte z. B. mit: live ja, llm ja"
+            )
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+            return
+        reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return
+    except (TimeoutError, subprocess.TimeoutExpired) as exc:
+        reply = f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc})."
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return
+
+    if instructions.openai_enabled and openai_client is not None:
+        _send_youtube_transcript_to_openai_pipeline(
+            api,
+            chat_state,
+            chat_id,
+            message,
+            text,
+            transcript,
+            source,
+            url,
+            instructions,
+            openai_client,
+            user_memory_store,
+            user_memory,
+            bot_identity,
+            first_contact,
+            working_memory_store,
+        )
+        return
+
+    if instructions.openai_enabled and openai_client is None:
+        reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
+    else:
+        reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
+
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+
+
+def _handle_pending_youtube_local_options(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    user_memory_store: UserMemoryStore | None,
+    user_memory: UserMemoryRecord | None,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient | None,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+    working_memory_store: WorkingMemoryStore | None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+) -> bool:
+    sender_id = _sender_identifier(message)
+    url = chat_state.get_pending_youtube_local_options(chat_id, sender_id)
+    if not url:
+        return False
+
+    live_enabled, llm_enabled = _parse_youtube_local_options(text)
+    if live_enabled is None or llm_enabled is None:
+        reply = "Bitte antworte z. B. mit: live ja, llm ja"
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return True
+
+    chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+    if youtube_job_runner is not None:
+        youtube_job_runner.submit(
+            lambda: _run_youtube_local_transcription_job(
+                api,
+                chat_state,
+                chat_id,
+                dict(message),
+                text,
+                url,
+                live_enabled,
+                llm_enabled,
+                user_memory_store,
+                user_memory,
+                instructions,
+                openai_client,
+                bot_identity,
+                first_contact,
+                working_memory_store,
+            )
+        )
+        reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
+        if live_enabled:
+            reply += " Live-Ausgabe ist aktiviert."
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return True
+
+    _run_youtube_local_transcription_job(
+        api,
+        chat_state,
+        chat_id,
+        message,
+        text,
+        url,
+        live_enabled,
+        llm_enabled,
+        user_memory_store,
+        user_memory,
+        instructions,
+        openai_client,
+        bot_identity,
+        first_contact,
+        working_memory_store,
+    )
+    return True
+
+
+def _run_youtube_local_transcription_job(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    url: str,
+    live_enabled: bool,
+    llm_enabled: bool,
+    user_memory_store: UserMemoryStore | None,
+    user_memory: UserMemoryRecord | None,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient | None,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+    working_memory_store: WorkingMemoryStore | None,
+) -> None:
+    try:
+        api.send_chat_action(chat_id, "typing")
+        live_callback = _build_youtube_live_callback(api, chat_state, chat_id) if live_enabled else None
+        transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=live_callback)
+    except (YouTubeTranscriptError, TimeoutError, subprocess.TimeoutExpired) as exc:
+        reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+        return
+
+    if llm_enabled and instructions.openai_enabled and openai_client is not None:
+        _send_youtube_transcript_to_openai_pipeline(
+            api,
+            chat_state,
+            chat_id,
+            message,
+            text,
+            transcript,
+            source,
+            url,
+            instructions,
+            openai_client,
+            user_memory_store,
+            user_memory,
+            bot_identity,
+            first_contact,
+            working_memory_store,
+        )
+        return
+
+    if llm_enabled and instructions.openai_enabled and openai_client is None:
+        reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
+    elif live_enabled:
+        reply = "Lokale YouTube-Transkription abgeschlossen."
+    else:
+        reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions)
+
+
+def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
+    normalized = text.casefold()
+    yes_words = r"ja|yes|jup|ok|okay|y"
+    no_words = r"nein|no|n|nee"
+    live_match = re.search(rf"live\s+({yes_words}|{no_words})", normalized)
+    llm_match = re.search(rf"llm\s+({yes_words}|{no_words})", normalized)
+    if live_match and llm_match:
+        return _yes_no_value(live_match.group(1)), _yes_no_value(llm_match.group(1))
+    tokens = re.findall(rf"\b({yes_words}|{no_words})\b", normalized)
+    if len(tokens) >= 2:
+        return _yes_no_value(tokens[0]), _yes_no_value(tokens[1])
+    return None, None
+
+
+def _yes_no_value(value: str) -> bool:
+    return value.casefold() in {"ja", "yes", "jup", "ok", "okay", "y"}
+
+
+def _build_youtube_live_callback(api: TelegramAPI, chat_state: ChatState, chat_id: int):
+    buffer: list[str] = []
+
+    def emit(text: str, force: bool = False) -> None:
+        buffer.extend(re.findall(r"\S+", text))
+        while len(buffer) >= YOUTUBE_LIVE_CHUNK_WORDS or (force and buffer):
+            count = min(len(buffer), YOUTUBE_LIVE_CHUNK_WORDS)
+            chunk_words = buffer[:count]
+            del buffer[:count]
+            _send_tracked_message(api, chat_state, chat_id, " ".join(chunk_words))
+
+    return emit
+
+
+def _send_youtube_transcript_to_openai_pipeline(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    user_text: str,
+    transcript: str,
+    source: str,
+    url: str,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient,
+    user_memory_store: UserMemoryStore | None,
+    user_memory: UserMemoryRecord | None,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+    working_memory_store: WorkingMemoryStore | None,
+) -> None:
+    pipeline_text = _build_youtube_pipeline_text(user_text, transcript, source, url)
+    try:
+        api.send_chat_action(chat_id, "typing")
+        working_memory = _prepare_working_memory(working_memory_store, pipeline_text)
+        openai_response = openai_client.create_reply(
+            _build_openai_user_input(
+                message,
+                pipeline_text,
+                user_memory.prompt_text if user_memory else "",
+                bot_identity,
+                working_memory.prompt_text if working_memory else "",
+            ),
+            instructions,
+            chat_state.get_previous_response_id(chat_id),
+        )
+    except OpenAIAPIError as exc:
+        LOGGER.error("OpenAI request failed after YouTube transcript: %s", exc)
+        reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
+        return
+
+    chat_state.set_previous_response_id(chat_id, openai_response.response_id)
+    reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
+    _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
+    _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions)
+
+
+def _build_youtube_pipeline_text(user_text: str, transcript: str, source: str, url: str) -> str:
+    clipped_transcript = transcript
+    if len(clipped_transcript) > YOUTUBE_TRANSCRIPT_MAX_PIPELINE_CHARS:
+        clipped_transcript = clipped_transcript[:YOUTUBE_TRANSCRIPT_MAX_PIPELINE_CHARS].rstrip() + "\n[Transkript gekuerzt]"
+    return (
+        f"{user_text.strip()}\n\n"
+        "YouTube-Transkript:\n"
+        f"- Quelle: {url}\n"
+        f"- Transkriptquelle: {source}\n"
+        f"{clipped_transcript}"
+    ).strip()
+
+
+class YouTubeTranscriptError(RuntimeError):
+    """Raised when a YouTube transcript cannot be produced locally."""
+
+    def __init__(self, message: str, *, needs_local_transcription: bool = False) -> None:
+        super().__init__(message)
+        self.needs_local_transcription = needs_local_transcription
+
+
+def transcribe_youtube_video(url: str, local_allowed: bool = True, live_callback=None) -> tuple[str, str]:
+    if shutil.which("yt-dlp") is None:
+        raise YouTubeTranscriptError("yt-dlp ist nicht installiert.")
+    normalized_url = _validated_youtube_url(url)
+
+    with tempfile.TemporaryDirectory(prefix="telegram-bot-youtube-") as directory:
+        workdir = Path(directory)
+        subtitle_text = _download_youtube_subtitles(normalized_url, workdir)
+        if subtitle_text:
+            return subtitle_text, "YouTube-Untertitel"
+        if not local_allowed:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        whisper_text = _transcribe_youtube_audio_with_whisper(normalized_url, workdir, live_callback=live_callback)
+        if whisper_text:
+            return whisper_text, "lokales Whisper"
+    raise YouTubeTranscriptError("kein Transkript erzeugt.")
+
+
+def _extract_youtube_url(text: str) -> str:
+    parts = text.split(maxsplit=1)
+    search_text = parts[1] if len(parts) >= 2 and _normalize_command(text) in YOUTUBE_TRANSCRIPT_COMMANDS else text
+    for candidate in re.findall(r"https?://\S+", search_text):
+        try:
+            return _validated_youtube_url(candidate.rstrip(".,;)>]\"'"))
+        except YouTubeTranscriptError:
+            continue
+    return ""
+
+
+def _has_youtube_transcript_intent(text: str) -> bool:
+    normalized = text.casefold()
+    mentions_youtube = bool(re.search(r"\byoutube\b|youtu\.be|youtube\.com", normalized))
+    mentions_transcript = bool(
+        re.search(
+            r"transkrib|transcript|transkript|untertitel|abschrift|verschriftlich|mitschrift",
+            normalized,
+        )
+    )
+    return mentions_youtube and mentions_transcript
+
+
+def _validated_youtube_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url.strip())
+    host = parsed.netloc.casefold().removeprefix("www.")
+    if parsed.scheme not in {"http", "https"} or host not in {"youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com"}:
+        raise YouTubeTranscriptError("bitte eine gueltige YouTube-URL angeben.")
+    return urllib.parse.urlunparse(parsed)
+
+
+def _download_youtube_subtitles(url: str, workdir: Path) -> str:
+    result = _run_local_command(
+        [
+            "yt-dlp",
+            "--skip-download",
+            "--write-subs",
+            "--write-auto-subs",
+            "--sub-langs",
+            "en.*,de.*",
+            "--convert-subs",
+            "srt",
+            "-o",
+            "%(id)s.%(ext)s",
+            url,
+        ],
+        workdir,
+        YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0 and not list(workdir.glob("*.srt")):
+        LOGGER.debug("yt-dlp subtitle download failed: %s", result.stderr.strip())
+    return _read_first_srt_as_text(workdir)
+
+
+def _transcribe_youtube_audio_with_whisper(url: str, workdir: Path, live_callback=None) -> str:
+    audio_result = _run_local_command(
+        ["yt-dlp", "-x", "--audio-format", "mp3", "-o", "youtube-audio.%(ext)s", url],
+        workdir,
+        YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS,
+    )
+    if audio_result.returncode != 0:
+        raise YouTubeTranscriptError(f"Audio konnte nicht geladen werden: {_short_process_error(audio_result)}")
+
+    audio_files = sorted(workdir.glob("youtube-audio*.mp3"))
+    if not audio_files:
+        raise YouTubeTranscriptError("Audio wurde nicht als MP3 erzeugt.")
+
+    if _has_python_module("faster_whisper"):
+        return _transcribe_audio_with_faster_whisper(audio_files[0], workdir, live_callback=live_callback)
+    if shutil.which("whisper") is None:
+        raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden und weder faster-whisper noch whisper ist installiert.")
+    return _transcribe_audio_with_openai_whisper_cli(audio_files[0], workdir)
+
+
+def _transcribe_audio_with_faster_whisper(audio_path: Path, workdir: Path, live_callback=None) -> str:
+    return _transcribe_audio_with_faster_whisper_model(audio_path, workdir, YOUTUBE_WHISPER_MODEL, live_callback=live_callback)
+
+
+def _transcribe_audio_with_faster_whisper_model(audio_path: Path, workdir: Path, model_name: str, live_callback=None) -> str:
+    code = """
+import sys
+from pathlib import Path
+from faster_whisper import WhisperModel
+
+audio_path = Path(sys.argv[1])
+model_name = sys.argv[2]
+compute_type = sys.argv[3]
+cpu_threads = int(sys.argv[4])
+model = WhisperModel(model_name, device="cpu", compute_type=compute_type, cpu_threads=cpu_threads, num_workers=1)
+segments, _ = model.transcribe(str(audio_path))
+for segment in segments:
+    text = segment.text.strip()
+    if text:
+        print(text, flush=True)
+"""
+    command = [
+        sys.executable,
+        "-c",
+        code,
+        str(audio_path),
+        model_name,
+        YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE,
+        str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+    ]
+    result = _run_local_command_streaming(
+        command,
+        workdir,
+        YOUTUBE_WHISPER_TIMEOUT_SECONDS,
+        line_callback=live_callback,
+    )
+    if result.returncode != 0:
+        raise YouTubeTranscriptError(f"faster-whisper konnte nicht transkribieren: {_short_process_error(result)}")
+    text = result.stdout.strip()
+    if not text:
+        raise YouTubeTranscriptError("faster-whisper hat kein Transkript erzeugt.")
+    if live_callback is not None:
+        live_callback("", force=True)
+    return text
+
+
+def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path) -> str:
+    whisper_result = _run_local_command(
+        [
+            "whisper",
+            str(audio_path),
+            "--model",
+            YOUTUBE_WHISPER_MODEL,
+            "--language",
+            "English",
+            "--output_format",
+            "srt",
+            "--output_dir",
+            str(workdir),
+        ],
+        workdir,
+        YOUTUBE_WHISPER_TIMEOUT_SECONDS,
+    )
+    if whisper_result.returncode != 0:
+        raise YouTubeTranscriptError(f"Whisper konnte nicht transkribieren: {_short_process_error(whisper_result)}")
+    return _read_first_srt_as_text(workdir)
+
+
+def _has_python_module(module_name: str) -> bool:
+    result = subprocess.run(
+        [sys.executable, "-c", f"import {module_name}"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def _run_local_command(command: list[str], workdir: Path, timeout: int) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            cwd=workdir,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except TimeoutError as exc:
+        raise YouTubeTranscriptError(f"lokaler Prozess lief in ein Timeout: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.") from exc
+    except OSError as exc:
+        raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
+
+
+def _run_local_command_streaming(command: list[str], workdir: Path, timeout: int, line_callback=None) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "OMP_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+            "OPENBLAS_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+            "MKL_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+            "NUMEXPR_NUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+            "VECLIB_MAXIMUM_THREADS": str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+        }
+    )
+    try:
+        process = subprocess.Popen(
+            _lowest_priority_command(command),
+            cwd=workdir,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
+        )
+    except OSError as exc:
+        raise YouTubeTranscriptError(f"lokaler Prozess konnte nicht gestartet werden: {exc}") from exc
+
+    stdout_lines: list[str] = []
+    start = time.monotonic()
+    assert process.stdout is not None
+    try:
+        while True:
+            if time.monotonic() - start > timeout:
+                process.kill()
+                process.communicate()
+                raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
+            ready, _, _ = select.select([process.stdout], [], [], 0.1)
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    stdout_lines.append(line)
+                    if line_callback is not None:
+                        line_callback(line)
+                    continue
+            if process.poll() is not None:
+                break
+        remaining_stdout, stderr = process.communicate(timeout=5)
+        if remaining_stdout:
+            stdout_lines.append(remaining_stdout)
+            if line_callback is not None:
+                for line in remaining_stdout.splitlines():
+                    line_callback(line)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        _, stderr = process.communicate()
+        raise YouTubeTranscriptError(f"lokaler Prozess lief laenger als {timeout} Sekunden.")
+    return subprocess.CompletedProcess(command, process.returncode or 0, "".join(stdout_lines), stderr)
+
+
+def _lowest_priority_command(command: list[str]) -> list[str]:
+    wrapped = list(command)
+    if shutil.which("ionice") is not None:
+        wrapped = ["ionice", "-c", "3", *wrapped]
+    if shutil.which("nice") is not None:
+        wrapped = ["nice", "-n", str(YOUTUBE_TRANSCRIPT_NICE_LEVEL), *wrapped]
+    return wrapped
+
+
+def _read_first_srt_as_text(workdir: Path) -> str:
+    for path in sorted(workdir.glob("*.srt")):
+        text = _srt_to_plain_text(path.read_text(encoding="utf-8", errors="replace"))
+        if text:
+            return text
+    return ""
+
+
+def _srt_to_plain_text(srt_text: str) -> str:
+    lines: list[str] = []
+    previous = ""
+    for raw_line in srt_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.isdigit() or "-->" in line:
+            continue
+        line = re.sub(r"<[^>]+>", "", line).strip()
+        if not line or line == previous:
+            continue
+        lines.append(line)
+        previous = line
+    return "\n".join(lines).strip()
+
+
+def _short_process_error(result: subprocess.CompletedProcess[str]) -> str:
+    text = (result.stderr or result.stdout or "").strip()
+    if not text:
+        return f"Exitcode {result.returncode}"
+    return text[-500:]
+
+
 def _downloaded_file_name(file_path: str) -> str:
     name = file_path.rsplit("/", maxsplit=1)[-1].strip()
     if not name:
@@ -2861,6 +3924,88 @@ def _handle_cleanup_command(
         return True
 
     return False
+
+
+def _handle_codex_command(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    text: str,
+    first_contact: bool,
+    bot_identity: BotIdentity,
+) -> bool:
+    if not instructions.codex_enabled:
+        return False
+    if _normalize_command(text) != "/codex":
+        return False
+
+    sender_id = _sender_identifier(message)
+    if not sender_id or not _is_allowed_codex_sender(sender_id, instructions):
+        reply = _with_first_contact_intro(instructions.codex_unauthorized, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    parts = text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        reply = _with_first_contact_intro(instructions.codex_usage, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    prompt = parts[1].strip()
+    codex_command = "codex"
+    if shutil.which(codex_command) is None:
+        reply = _with_first_contact_intro(instructions.codex_not_found, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    try:
+        api.send_chat_action(chat_id, "typing")
+        result = subprocess.run(
+            [codex_command, "exec", prompt],
+            cwd=PROJECT_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=instructions.codex_timeout_seconds,
+            check=False,
+        )
+    except TimeoutError as exc:
+        LOGGER.error("Codex request timed out: %s", exc)
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=str(exc)), first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+    except subprocess.TimeoutExpired as exc:
+        LOGGER.error("Codex request timed out: %s", exc)
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=f"Timeout nach {instructions.codex_timeout_seconds}s"), first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+    except OSError as exc:
+        LOGGER.error("Codex request could not be started: %s", exc)
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=str(exc)), first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    output = (result.stdout or "").strip() or (result.stderr or "").strip()
+    if result.returncode != 0:
+        error = _short_process_error(result)
+        LOGGER.error("Codex CLI failed with exit code %s: %s", result.returncode, error)
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=error), first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+    if not output:
+        reply = _with_first_contact_intro(instructions.codex_empty, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+
+    reply = _with_first_contact_intro(output, first_contact, bot_identity)
+    _send_tracked_message(api, chat_state, chat_id, reply)
+    return True
+
+
+def _is_allowed_codex_sender(sender_id: str, instructions: BotInstructions) -> bool:
+    allowed_sender_ids = {value.strip() for value in instructions.codex_allowed_sender_ids if value.strip()}
+    return sender_id in allowed_sender_ids
 
 
 def _parse_cleanup_count(text: str) -> int | None:

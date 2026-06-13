@@ -44,6 +44,11 @@ class InstructionTests(unittest.TestCase):
             - transcription_error: Transkription fehlgeschlagen.
             - transcription_empty: Keine Sprache erkannt.
 
+            ## Codex
+            - enabled: ja
+            - allowed_sender_ids: 395935293, 456
+            - timeout_seconds: 180
+
             ## Memory
             - enabled: ja
             - directory: instances/Depressionsbot/data/users
@@ -62,6 +67,11 @@ class InstructionTests(unittest.TestCase):
             - teladi_call_sent: Nachricht gesendet.
             - teladi_call_cooldown: Warte {remaining}.
             - teladi_call_error: Versand fehlgeschlagen.
+            - codex_usage: Nutzung: /codex Text.
+            - codex_unauthorized: Kein Zugriff.
+            - codex_not_found: Codex fehlt.
+            - codex_error: Codex kaputt.
+            - codex_empty: Keine Ausgabe.
 
             ## Befehle
             - /status: Alles ok.
@@ -110,6 +120,9 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_transcription_prompt, "Wortgetreu transkribieren.")
         self.assertEqual(instructions.openai_transcription_error, "Transkription fehlgeschlagen.")
         self.assertEqual(instructions.openai_transcription_empty, "Keine Sprache erkannt.")
+        self.assertTrue(instructions.codex_enabled)
+        self.assertEqual(instructions.codex_allowed_sender_ids, ("395935293", "456"))
+        self.assertEqual(instructions.codex_timeout_seconds, 180)
         self.assertTrue(instructions.user_memory_enabled)
         self.assertEqual(instructions.user_memory_dir, "instances/Depressionsbot/data/users")
         self.assertEqual(instructions.user_memory_max_prompt_chars, 9000)
@@ -126,6 +139,11 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.teladi_call_sent, "Nachricht gesendet.")
         self.assertEqual(instructions.teladi_call_cooldown, "Warte {remaining}.")
         self.assertEqual(instructions.teladi_call_error, "Versand fehlgeschlagen.")
+        self.assertEqual(instructions.codex_usage, "Nutzung: /codex Text.")
+        self.assertEqual(instructions.codex_unauthorized, "Kein Zugriff.")
+        self.assertEqual(instructions.codex_not_found, "Codex fehlt.")
+        self.assertEqual(instructions.codex_error, "Codex kaputt.")
+        self.assertEqual(instructions.codex_empty, "Keine Ausgabe.")
         self.assertEqual(instructions.commands["/status"], "Alles ok.")
         self.assertEqual(instructions.text_replies["hallo"], "Hey.")
         self.assertEqual(instructions.contains_replies["hilfe"], "Sende /help.")

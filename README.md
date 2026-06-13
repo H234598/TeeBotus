@@ -15,6 +15,7 @@ Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long 
 - `/Call_a_Teladi` fragt nach einer Emergency Message und leitet die naechste Telegram-Nachricht an Teladi weiter
 - `/delete_last` loescht die letzte gespeicherte Bot-Nachricht
 - `/cleanup 10` loescht bis zu 10 gespeicherte Bot-Nachrichten
+- `/codex Prompt` startet lokal `codex exec` aus dem Bot-Prozess heraus
 - `/voice Text` erzeugt eine Telegram-Sprachnachricht
 - eingehende Telegram-Sprachnachrichten werden transkribiert und wie Textnachrichten verarbeitet
 - normale Textnachrichten werden per aktiver Instanz-`Bot_Verhalten.md` beantwortet oder als Echo zurueckgegeben
@@ -28,7 +29,7 @@ Ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long 
 3. Den Token in eine lokale `.env` kopieren:
 
 ```bash
-cd telegram-bot
+cd TeeBotus
 cp .env.example .env
 ```
 
@@ -40,7 +41,7 @@ cp .env.example .env
 Standard ist die Instanz `Bote_der_Wahrheit`:
 
 ```bash
-cd telegram-bot
+cd TeeBotus
 set -a
 source .env
 set +a
@@ -156,6 +157,8 @@ Lange OpenAI-Antworten werden automatisch in mehrere Telegram-Nachrichten aufget
 
 Sprachnachrichten werden mit `/voice Text` erzeugt. Alternativ kannst du auf eine Textnachricht antworten und nur `/voice` senden; der Bot vertont dann den Text der beantworteten Nachricht. Die Stimme wird in der aktiven Instanz-`Bot_Verhalten.md` ueber `voice_model`, `voice`, `voice_format`, `voice_speed` und `voice_instructions` gesteuert. Standard ist `voice_format: opus`, passend fuer Telegram-Sprachnachrichten.
 
+`/codex Prompt` startet den lokalen Codex-CLI-Prozess aus dem Bot-Prozess heraus. Zugelassen sind nur die in der aktiven Instanz-`Bot_Verhalten.md` unter `## Codex` eingetragenen Telegram-Sender-IDs. Der Bot arbeitet dabei aus dem Repository-Root und benutzt kein `shell=True`.
+
 Automatische Sprachnachrichten werden in der aktiven Instanz-`Bot_Verhalten.md` ueber `auto_voice_enabled`, `auto_voice_every`, `auto_voice_max_words` und `auto_voice_skip_sources` gesteuert. Aktuell wird jede dritte OpenAI-Antwort unter 50 Woertern ohne Quellen als Sprachnachricht gesendet.
 
 Eingehende Telegram-Sprachnachrichten werden ueber OpenAI transkribiert und danach durch dieselbe Textlogik geschickt wie normale Nachrichten. Gesteuert wird das in der aktiven Instanz-`Bot_Verhalten.md` ueber `transcription_enabled`, `transcription_model`, `transcription_fallback_model`, `transcription_language`, `transcription_prompt`, `transcription_error` und `transcription_empty`. Wenn das erste Modell ein leeres Transkript liefert, versucht der Bot einmal `transcription_fallback_model`; mit leerem Wert wird dieser zweite Versuch abgeschaltet. Der transkribierte Inhalt wird nicht in die stdout-Logs geschrieben. Audio-Dateien werden nicht gespeichert; im User-Memory landet nur das Transkript als Text.
@@ -209,7 +212,7 @@ Der Bot sucht dabei nach `instances/*/Bot_Verhalten.md`. Instanzen ohne Telegram
 Live-Validierung:
 
 ```bash
-cd telegram-bot
+cd TeeBotus
 python3 scripts/validate_flex.py
 ```
 
@@ -229,7 +232,7 @@ Telegram-Long-Polling-Verbindungen koennen gelegentlich durch Telegram, Provider
 ## Tests
 
 ```bash
-cd telegram-bot
+cd TeeBotus
 python3 -m unittest discover -s tests
 ```
 

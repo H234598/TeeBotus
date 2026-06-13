@@ -17,6 +17,7 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/reset - setzt nur den OpenAI-Verlauf", reply)
         self.assertIn("/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege", reply)
         self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)
+        self.assertIn("/codex Prompt - fuehrt Codex CLI lokal aus", reply)
         self.assertIn("/delete_last - loescht nur die letzte seit Bot-Start gemerkte Bot-Nachricht", reply)
         self.assertIn("/cleanup 10 - loescht bis zu 10 seit Bot-Start gemerkte Bot-Nachrichten", reply)
 

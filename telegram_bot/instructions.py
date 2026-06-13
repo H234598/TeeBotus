@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,7 +17,9 @@ DEFAULT_HELP_LINES = (
     "/help - Hilfe anzeigen",
     "/ping - Verbindung testen",
     "/status - Status anzeigen",
+    "/codex Prompt - fuehrt Codex CLI lokal aus",
     "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
+    "/youtube_transcript URL - YouTube-Untertitel laden oder per lokalem Whisper transkribieren",
     "/chatid - aktuelle Chat-ID anzeigen",
     "/reset - setzt nur den OpenAI-Verlauf dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",
     "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
@@ -61,6 +64,14 @@ class BotInstructions:
     openai_voice_usage: str = "Nutzung: /voice Text fuer die Sprachnachricht"
     openai_voice_too_long: str = "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: {max_chars} Zeichen."
     openai_voice_error: str = "Ich konnte die Sprachnachricht gerade nicht erzeugen. Bitte versuche es gleich nochmal."
+    codex_enabled: bool = True
+    codex_allowed_sender_ids: tuple[str, ...] = ("395935293",)
+    codex_timeout_seconds: int = 300
+    codex_usage: str = "Nutzung: /codex Prompt"
+    codex_unauthorized: str = "Nein."
+    codex_not_found: str = "Codex CLI wurde nicht gefunden."
+    codex_error: str = "Codex konnte gerade nicht ausgefuehrt werden: {error}"
+    codex_empty: str = "Codex hat keine Ausgabe erzeugt."
     openai_transcription_enabled: bool = True
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
     openai_transcription_fallback_model: str = "whisper-1"
@@ -255,6 +266,8 @@ def parse_instructions(markdown: str) -> BotInstructions:
             _apply_reply(instructions, key, value)
         elif section == "openai":
             _apply_openai_setting(instructions, key, value)
+        elif section == "codex":
+            _apply_codex_setting(instructions, key, value)
         elif section == "memory":
             _apply_memory_setting(instructions, key, value)
         elif section == "commands":
@@ -316,6 +329,7 @@ def _section_name(line: str) -> str:
         "systemprompt": "system_prompt",
         "system prompt": "system_prompt",
         "system_prompt": "system_prompt",
+        "codex": "codex",
         "textantworten": "text_replies",
         "text replies": "text_replies",
         "exact text replies": "text_replies",
@@ -410,6 +424,16 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.teladi_call_cooldown = value
     elif normalized == "teladi_call_error":
         instructions.teladi_call_error = value
+    elif normalized == "codex_usage":
+        instructions.codex_usage = value
+    elif normalized == "codex_unauthorized":
+        instructions.codex_unauthorized = value
+    elif normalized == "codex_not_found":
+        instructions.codex_not_found = value
+    elif normalized == "codex_error":
+        instructions.codex_error = value
+    elif normalized == "codex_empty":
+        instructions.codex_empty = value
 
 
 def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -> None:
@@ -486,6 +510,16 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_reset = value
 
 
+def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized == "enabled":
+        instructions.codex_enabled = _parse_bool(value, default=instructions.codex_enabled)
+    elif normalized == "allowed_sender_ids":
+        instructions.codex_allowed_sender_ids = tuple(_parse_id_list(value))
+    elif normalized == "timeout_seconds":
+        instructions.codex_timeout_seconds = _parse_required_int(value, default=instructions.codex_timeout_seconds)
+
+
 def _apply_memory_setting(instructions: BotInstructions, key: str, value: str) -> None:
     normalized = _normalize_key(key)
     if normalized == "enabled":
@@ -518,6 +552,13 @@ def _parse_bool(value: str, default: bool) -> bool:
     if normalized in {"0", "false", "no", "nein", "off", "aus"}:
         return False
     return default
+
+
+def _parse_id_list(value: str) -> list[str]:
+    if not value.strip():
+        return []
+    parts = [part.strip() for part in re.split(r"[,\n]", value) if part.strip()]
+    return parts
 
 
 def _parse_optional_int(value: str, default: int | None) -> int | None:
