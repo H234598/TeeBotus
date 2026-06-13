@@ -1,6 +1,6 @@
 # Privacy and Encryption
 
-This bot encrypts user memory files at rest, per Telegram sender ID.
+This bot encrypts structured user-memory files at rest, per Telegram sender ID.
 
 ## What is encrypted
 
@@ -21,7 +21,7 @@ If the Secret Service is unavailable in keyring mode, or the configured passphra
 
 ## What this protects
 
-Disk access alone is not enough to read the encrypted user-memory content. A person who only sees the files on disk sees ciphertext, not plaintext.
+Disk access alone is not enough to read the encrypted structured user-memory content. A person who only sees those files on disk sees ciphertext, not plaintext. Operator-maintained Markdown notes are intentionally plaintext.
 
 ## Important limitation
 
@@ -31,24 +31,25 @@ Anyone who can access the running bot process, its live memory, or the matching 
 
 So the honest rule is:
 
-- disk-only access does not reveal user memory plaintext
+- disk-only access does not reveal plaintext from encrypted user-memory files
+- disk-only access does reveal operator-maintained Markdown notes
 - runtime access with the key can reveal plaintext
 
 ## Short answer for users
 
 Use this when someone asks what is visible:
 
-> User memory is encrypted at rest per sender ID. Plain disk access is not enough to read it. The running bot instance can decrypt the data it needs to process messages, so anyone with runtime or key access can still inspect plaintext.
+> Structured user memory is encrypted at rest per sender ID. Operator-maintained Markdown notes remain plaintext. Plain disk access is not enough to read the encrypted files, but the running bot instance can decrypt the data it needs to process messages, so anyone with runtime or key access can still inspect plaintext.
 
 ## Ready-made reply
 
 Use this when a user asks about privacy, encryption, or who can see data:
 
-> User memory is encrypted at rest with a per-user key. That means ordinary disk access is not enough to read the stored memory files. In normal operation, admins do not see those files as plaintext. The bot process can still decrypt the data it needs to answer messages, so runtime or key access is different from plain disk access.
+> Structured user memory is encrypted at rest with a per-user key. That means ordinary disk access is not enough to read the encrypted index and entry files. Operator-maintained Markdown notes remain plaintext by design. The bot process can still decrypt the data it needs to answer messages, so runtime or key access is different from plain disk access.
 
 If someone asks for the short version:
 
-> Stored user memory is encrypted per sender ID. An admin browsing the files on disk sees ciphertext, not plaintext. The bot itself can decrypt data while it runs, so runtime access is a different trust level.
+> Stored index and entry memory is encrypted per sender ID. An admin browsing those files on disk sees ciphertext, while Markdown notes remain readable. The bot itself can decrypt data while it runs, so runtime access is a different trust level.
 
 ## Who can see what
 

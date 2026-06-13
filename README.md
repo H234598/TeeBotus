@@ -207,9 +207,10 @@ Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluessel
 
 Kurzantwort fuer Datenschutzfragen:
 
-- Nutzer-Memory wird pro Telegram-Sender-ID at rest verschluesselt.
+- Strukturierter Nutzer-Memory wird pro Telegram-Sender-ID at rest verschluesselt.
+- `User_Habbits_and_behave.md` bleibt absichtlich Klartext-Markdown fuer admingepflegte Hinweise.
 - Der zugehoerige Key liegt standardmaessig im Desktop Secret Service, optional im passphrase-geschuetzten lokalen Key-Store.
-- Ein Admin ohne passenden Key sieht auf Platte keine Klartextdaten.
+- Ein Admin ohne passenden Key sieht in den verschluesselten Index-/Entry-Dateien keine Klartextdaten.
 - Das laufende Bot-Prozessmodell kann Daten zum Antworten trotzdem entschluesseln.
 - Wer die Laufzeit, den Speicher oder den passenden Key kontrolliert, kann weiterhin auf Klartext stossen.
 
