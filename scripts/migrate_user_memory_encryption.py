@@ -19,7 +19,6 @@ from TeeBotus.user_memory_crypto import (  # noqa: E402
     read_text,
     write_json,
     write_jsonl,
-    write_text,
 )
 
 
@@ -31,6 +30,7 @@ USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
 @dataclass
 class MigrationResult:
     encrypted: int = 0
+    plaintext_habits: int = 0
     already_encrypted: int = 0
     missing: int = 0
     users: int = 0
@@ -38,6 +38,7 @@ class MigrationResult:
 
     def add(self, other: "MigrationResult") -> None:
         self.encrypted += other.encrypted
+        self.plaintext_habits += other.plaintext_habits
         self.already_encrypted += other.already_encrypted
         self.missing += other.missing
         self.users += other.users
@@ -48,7 +49,6 @@ def known_user_memory_files(user_dir: Path) -> tuple[tuple[Path, str], ...]:
     return (
         (user_dir / USER_MEMORY_INDEX_FILENAME, "user-memory-index"),
         (user_dir / USER_MEMORY_ENTRIES_FILENAME, "user-memory-entries"),
-        (user_dir / USER_HABITS_FILENAME, "user-memory-habits"),
     )
 
 
@@ -107,10 +107,17 @@ def migrate_user_dir(user_dir: Path, *, dry_run: bool = False, verify_only: bool
         elif kind == "user-memory-entries":
             entries, _ = read_jsonl(path, key_bytes, kind=kind)
             write_jsonl(path, key_bytes, kind=kind, entries=entries)
-        else:
-            text, _ = read_text(path, key_bytes, kind=kind)
-            write_text(path, key_bytes, kind=kind, text=text)
         result.encrypted += 1
+    habits_path = user_dir / USER_HABITS_FILENAME
+    if habits_path.exists() and is_encrypted_payload(habits_path.read_bytes()):
+        if verify_only:
+            result.errors += 1
+        elif dry_run:
+            result.plaintext_habits += 1
+        else:
+            text, _ = read_text(habits_path, user_key(), kind="user-memory-habits")
+            habits_path.write_text(text, encoding="utf-8")
+            result.plaintext_habits += 1
     return result
 
 
@@ -129,6 +136,9 @@ def migrate_instances(instances_dir: Path, *, dry_run: bool = False, verify_only
         if verbose and user_result.encrypted:
             action = "would encrypt" if dry_run else "encrypted"
             print(f"{action} {user_result.encrypted} known memory files in {user_dir}")
+        if verbose and user_result.plaintext_habits:
+            action = "would decrypt" if dry_run else "decrypted"
+            print(f"{action} {user_result.plaintext_habits} Markdown habit files in {user_dir}")
     return result
 
 
@@ -154,7 +164,8 @@ def main(argv: list[str] | None = None) -> int:
         mode = "verify" if args.verify_only else "dry-run" if args.dry_run else "migrate"
         print(
             f"user-memory-encryption {mode}: users={result.users} encrypted={result.encrypted} "
-            f"already_encrypted={result.already_encrypted} missing={result.missing} errors={result.errors}"
+            f"plaintext_habits={result.plaintext_habits} already_encrypted={result.already_encrypted} "
+            f"missing={result.missing} errors={result.errors}"
         )
     return 1 if result.errors else 0
 

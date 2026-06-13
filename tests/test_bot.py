@@ -43,6 +43,7 @@ from TeeBotus.bot import (
     _lowest_priority_command,
     _load_dotenv,
     _prepare_user_memory,
+    _parse_youtube_local_options,
     _record_user_memory,
     _resolve_bot_token_configs,
     _resolve_instruction_path,
@@ -228,9 +229,7 @@ def read_user_memory_entries(path: Path) -> list[dict]:
 
 
 def read_user_memory_text(path: Path) -> str:
-    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
-    text, _ = read_encrypted_user_memory_text(path, key, kind="user-memory-habits")
-    return text
+    return path.read_text(encoding="utf-8")
 
 
 class BotTests(unittest.TestCase):
@@ -391,6 +390,21 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(first_key), 32)
             self.assertEqual(len(second_key), 32)
 
+    def test_user_memory_keys_are_scoped_by_instance_and_sender_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            truth_path = Path(directory) / "instances" / "Bote_der_Wahrheit" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
+            depression_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
+
+            truth_key = ensure_user_memory_key(truth_path, instance_name="Bote_der_Wahrheit", sender_id="456")
+            depression_key = ensure_user_memory_key(depression_path, instance_name="Depressionsbot", sender_id="456")
+
+        truth_attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Bote_der_Wahrheit", "sender_id", "456")
+        depression_attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
+        self.assertIn(truth_attrs, self._secret_tool_store)
+        self.assertIn(depression_attrs, self._secret_tool_store)
+        self.assertNotEqual(truth_key, depression_key)
+        self.assertNotEqual(self._secret_tool_store[truth_attrs], self._secret_tool_store[depression_attrs])
+
     def test_user_memory_keyring_store_confirm_failure_falls_back_to_private_key_file(self) -> None:
         def fake_secret_tool(command, *, input_text=""):
             if command[0] in {"lookup", "store", "clear"}:
@@ -459,9 +473,10 @@ class BotTests(unittest.TestCase):
             result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
 
             self.assertEqual(result.errors, 0)
-            self.assertEqual(result.encrypted, 3)
-            for path in [index_path, entries_path, habits_path]:
+            self.assertEqual(result.encrypted, 2)
+            for path in [index_path, entries_path]:
                 self.assertTrue(is_encrypted_payload(path.read_bytes()))
+            self.assertFalse(is_encrypted_payload(habits_path.read_bytes()))
             self.assertEqual(read_user_memory_json(index_path), index_payload)
             self.assertEqual(read_user_memory_entries(entries_path), entries_payload)
             self.assertEqual(read_user_memory_text(habits_path), "Plaintext habits")
@@ -469,17 +484,36 @@ class BotTests(unittest.TestCase):
 
             verify_result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
             self.assertEqual(verify_result.errors, 0)
-            self.assertEqual(verify_result.already_encrypted, 3)
+            self.assertEqual(verify_result.already_encrypted, 2)
 
     def test_user_memory_encryption_verify_reports_known_plaintext_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
             user_dir.mkdir(parents=True, exist_ok=True)
+            (user_dir / "User_Memory_Index.json").write_text("{}", encoding="utf-8")
             (user_dir / "User_Habbits_and_behave.md").write_text("noch plaintext", encoding="utf-8")
 
             result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
 
             self.assertEqual(result.errors, 1)
+
+    def test_user_memory_encryption_migration_decrypts_legacy_encrypted_habits_to_plaintext_md(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir.mkdir(parents=True, exist_ok=True)
+            habits_path = user_dir / "User_Habbits_and_behave.md"
+            key = ensure_user_memory_key(user_dir / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
+            from TeeBotus.user_memory_crypto import write_text as write_encrypted_user_memory_text
+
+            write_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits", text="Legacy encrypted habits")
+
+            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
+
+            self.assertEqual(result.errors, 0)
+            self.assertEqual(result.encrypted, 0)
+            self.assertEqual(result.plaintext_habits, 1)
+            self.assertFalse(is_encrypted_payload(habits_path.read_bytes()))
+            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Legacy encrypted habits")
 
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
@@ -657,11 +691,17 @@ class BotTests(unittest.TestCase):
                     raise ProcessLookupError
 
             with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
-                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 222: 67890}.get(pid)):
+                with patch("TeeBotus.bot.os.getpid", return_value=999), patch(
+                    "TeeBotus.bot._read_process_start_time",
+                    side_effect=lambda pid: {111: 12345, 222: 67890, 999: 77777}.get(pid),
+                ):
                     registry.register(111)
                     state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
                     payload = json.loads(state_path.read_text(encoding="utf-8"))
-                    self.assertEqual(payload["processes"], [{"pid": 111, "start_time": 12345}])
+                    self.assertEqual(
+                        payload["processes"],
+                        [{"pid": 111, "start_time": 12345, "owner_pid": 999, "owner_start_time": 77777}],
+                    )
 
                     state_path.write_text(
                         json.dumps(
@@ -690,6 +730,70 @@ class BotTests(unittest.TestCase):
                     self.assertEqual(terminate.call_args_list, [call(111)])
                     payload = json.loads(state_path.read_text(encoding="utf-8"))
                     self.assertEqual(payload["processes"], [{"pid": 333, "start_time": 99999}])
+
+    def test_process_registry_keeps_processes_owned_by_live_bot_process(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    json.dumps(
+                        {
+                            "processes": [
+                                {"pid": 111, "start_time": 12345, "owner_pid": 999, "owner_start_time": 77777},
+                            ],
+                            "updated_at": "2026-06-13T00:00:00Z",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
+                    with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
+                        registry.cleanup_orphans()
+
+            terminate.assert_not_called()
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["processes"],
+                [{"pid": 111, "start_time": 12345, "owner_pid": 999, "owner_start_time": 77777}],
+            )
+
+    def test_process_registry_can_cleanup_current_owner_on_owned_shutdown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root), patch("TeeBotus.bot.os.getpid", return_value=999):
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    json.dumps(
+                        {
+                            "processes": [
+                                {"pid": 111, "start_time": 12345, "owner_pid": 999, "owner_start_time": 77777},
+                            ],
+                            "updated_at": "2026-06-13T00:00:00Z",
+                        },
+                        indent=2,
+                        sort_keys=True,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
+                    with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
+                        registry.cleanup_orphans(include_current_owner=True)
+
+            self.assertEqual(terminate.call_args_list, [call(111)])
+            self.assertFalse(state_path.exists())
 
     def test_process_registry_unregister_only_removes_matching_start_time(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1767,6 +1871,58 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "AI: live nein, llm ja\n\nYouTube-Transkript:\n- Quelle: https://youtu.be/abc123\n- Transkriptquelle: lokales Whisper\nLocal transcript.")])
         self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
 
+    def test_youtube_local_options_parse_free_words_without_live_and_with_llm(self) -> None:
+        self.assertEqual(
+            _parse_youtube_local_options("Bitte ohne live output transkribieren, danach ans LLM schicken."),
+            (False, True),
+        )
+        self.assertEqual(_parse_youtube_local_options("Live aus, LLM true."), (False, True))
+
+    def test_handle_update_youtube_transcript_starts_local_job_from_free_words(self) -> None:
+        from TeeBotus.bot import YouTubeTranscriptError
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        runner = FakeJobRunner()
+        openai_client = FakeOpenAIClient()
+
+        transcribe_calls = [
+            YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True),
+            ("Local transcript.", "lokales Whisper"),
+        ]
+
+        with patch("TeeBotus.bot.transcribe_youtube_video", side_effect=transcribe_calls) as transcribe:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Rate was du machen darfst ^^ Versuch's nochmal. Live aus, LLM true. transkribiere: https://youtu.be/np_ylvc8Zj8?is=Ao0T6ywvPnln3Rms",
+                        "chat": {"id": 123},
+                        "from": {"id": 456},
+                    }
+                },
+                BotInstructions(openai_enabled=True),
+                openai_client,
+                chat_state,
+                youtube_job_runner=runner,
+            )
+
+            self.assertEqual(len(runner.jobs), 1)
+            self.assertEqual(api.sent_messages, [(123, "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist.")])
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+
+            runner.jobs[0]()
+
+        self.assertEqual(transcribe.call_args_list[0], call("https://youtu.be/np_ylvc8Zj8?is=Ao0T6ywvPnln3Rms", local_allowed=False))
+        self.assertEqual(
+            transcribe.call_args_list[1],
+            call("https://youtu.be/np_ylvc8Zj8?is=Ao0T6ywvPnln3Rms", local_allowed=True, live_callback=None),
+        )
+        self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
+        self.assertEqual(len(api.sent_messages), 2)
+        self.assertTrue(api.sent_messages[-1][1].startswith("AI: Rate was du machen darfst"))
+
     def test_handle_update_youtube_local_options_queues_child_job_when_runner_is_available(self) -> None:
         api = FakeAPI()
         chat_state = ChatState()
@@ -2735,9 +2891,9 @@ class BotTests(unittest.TestCase):
         api = FlakyPollingAPI()
 
         with patch("TeeBotus.bot.time.sleep") as sleep, self.assertLogs("TeeBotus", level="WARNING") as logs:
-            run_polling(api, FakeInstructionStore())
+            run_polling(api, FakeInstructionStore(), youtube_job_runner=FakeJobRunner())
 
-        sleep.assert_called_once_with(5)
+        sleep.assert_any_call(5)
         self.assertEqual(api.calls, 2)
         self.assertIn("Retrying in 5 seconds", "\n".join(logs.output))
 

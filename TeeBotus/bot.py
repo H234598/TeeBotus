@@ -31,12 +31,12 @@ from .user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     UserMemoryCryptoError,
     ensure_user_memory_key,
+    is_encrypted_payload,
     read_json as read_encrypted_user_memory_json,
     read_jsonl as read_encrypted_user_memory_jsonl,
     read_text as read_encrypted_user_memory_text,
     write_json as write_encrypted_user_memory_json,
     write_jsonl as write_encrypted_user_memory_jsonl,
-    write_text as write_encrypted_user_memory_text,
 )
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -124,6 +124,8 @@ class _InstanceProcessRegistry:
         if start_time is None:
             LOGGER.debug("Skipping process registry entry for pid %s because its start time could not be read.", pid)
             return None
+        owner_pid = os.getpid()
+        owner_start_time = _read_process_start_time(owner_pid)
         with self._lock:
             state = self._load_state()
             processes = state.setdefault("processes", [])
@@ -133,7 +135,14 @@ class _InstanceProcessRegistry:
                 and entry.get("start_time") == start_time
                 for entry in processes
             ):
-                processes.append({"pid": pid, "start_time": start_time})
+                processes.append(
+                    {
+                        "pid": pid,
+                        "start_time": start_time,
+                        "owner_pid": owner_pid,
+                        "owner_start_time": owner_start_time,
+                    }
+                )
             state["updated_at"] = _utc_timestamp()
             self._write_state(state)
         return start_time
@@ -157,7 +166,7 @@ class _InstanceProcessRegistry:
                 state["updated_at"] = _utc_timestamp()
                 self._write_state(state)
 
-    def cleanup_orphans(self) -> None:
+    def cleanup_orphans(self, include_current_owner: bool = False) -> None:
         if not self.instance_name:
             return
         with self._lock:
@@ -171,6 +180,11 @@ class _InstanceProcessRegistry:
                     continue
                 if not isinstance(start_time, int) or start_time <= 0:
                     continue
+                owner_pid = entry.get("owner_pid")
+                owner_start_time = entry.get("owner_start_time")
+                if self._process_owner_is_active(owner_pid, owner_start_time, include_current_owner):
+                    remaining.append(entry)
+                    continue
                 process_state = self._process_record_state(pid, start_time)
                 if process_state == "unknown":
                     remaining.append(entry)
@@ -179,6 +193,16 @@ class _InstanceProcessRegistry:
                     continue
                 self._terminate_process_group(pid)
             self._write_state({"processes": remaining, "updated_at": _utc_timestamp()})
+
+    @staticmethod
+    def _process_owner_is_active(owner_pid: Any, owner_start_time: Any, include_current_owner: bool) -> bool:
+        if not isinstance(owner_pid, int) or owner_pid <= 0:
+            return False
+        if include_current_owner and owner_pid == os.getpid():
+            return False
+        if not isinstance(owner_start_time, int) or owner_start_time <= 0:
+            return False
+        return _read_process_start_time(owner_pid) == owner_start_time
 
     def _path(self) -> Path:
         return PROJECT_ROOT / "instances" / self.instance_name / "data" / PROCESS_REGISTRY_FILENAME
@@ -1175,6 +1199,7 @@ def _process_text_message(
             first_contact,
             working_memory_store,
             instance_name,
+            youtube_job_runner,
         )
         return
 
@@ -2554,7 +2579,7 @@ def _memory_avatar_paths(index_path: Path) -> list[Path]:
 def _ensure_user_habits_file(index_path: Path, key: bytes) -> None:
     habits_path = _memory_habits_path(index_path)
     if not habits_path.exists():
-        _write_user_memory_text(habits_path, "", key, kind="user-memory-habits")
+        habits_path.write_text("", encoding="utf-8")
 
 
 def _ensure_user_avatar_assets(api: TelegramAPI | None, index_path: Path, message: dict[str, Any]) -> None:
@@ -2667,9 +2692,13 @@ def _load_user_habits_text(index_path: Path, key: bytes, max_chars: int) -> str:
     _ensure_user_habits_file(index_path, key)
     if max_chars < 1:
         return ""
-    text, migrated = read_encrypted_user_memory_text(_memory_habits_path(index_path), key, kind="user-memory-habits")
-    if migrated:
-        _write_user_memory_text(_memory_habits_path(index_path), text, key, kind="user-memory-habits")
+    habits_path = _memory_habits_path(index_path)
+    raw = habits_path.read_bytes()
+    if is_encrypted_payload(raw):
+        text, _ = read_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits")
+        habits_path.write_text(text, encoding="utf-8")
+    else:
+        text = habits_path.read_text(encoding="utf-8")
     if len(text) <= max_chars:
         return text.strip()
     return text[:max_chars].rstrip() + "\n[gekuerzt]"
@@ -2720,10 +2749,6 @@ def _write_user_memory_json(index_path: Path, data: dict[str, Any], key: bytes) 
 
 def _write_user_memory_entries(index_path: Path, entries: list[dict[str, Any]], key: bytes) -> None:
     write_encrypted_user_memory_jsonl(_memory_entries_path(index_path), key, kind="user-memory-entries", entries=entries)
-
-
-def _write_user_memory_text(path: Path, text: str, key: bytes, *, kind: str) -> None:
-    write_encrypted_user_memory_text(path, key, kind=kind, text=text)
 
 
 def _user_memory_key_path(index_path: Path) -> Path:
@@ -2966,7 +2991,7 @@ def run_polling(
     finally:
         if owns_youtube_job_runner:
             youtube_job_runner.shutdown(wait=False)
-        process_registry.cleanup_orphans()
+        process_registry.cleanup_orphans(include_current_owner=owns_youtube_job_runner)
 
 
 def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, instance_name: str) -> None:
@@ -3619,6 +3644,7 @@ def _handle_youtube_transcript_request(
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
     instance_name: str,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
 ) -> None:
     sender_id = _sender_identifier(message)
     url = _extract_youtube_url(text)
@@ -3641,13 +3667,37 @@ def _handle_youtube_transcript_request(
         transcript, source = transcribe_youtube_video(url, **transcribe_kwargs)
     except YouTubeTranscriptError as exc:
         if exc.needs_local_transcription:
+            live_enabled, llm_enabled = _parse_youtube_local_options(text)
+            if live_enabled is not None and llm_enabled is not None:
+                if sender_id:
+                    chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+                _start_youtube_local_transcription(
+                    api,
+                    chat_state,
+                    chat_id,
+                    message,
+                    text,
+                    url,
+                    live_enabled,
+                    llm_enabled,
+                    user_memory_store,
+                    user_memory,
+                    instructions,
+                    openai_client,
+                    bot_identity,
+                    first_contact,
+                    working_memory_store,
+                    youtube_job_runner,
+                    instance_name,
+                )
+                return
             if sender_id:
                 chat_state.request_youtube_local_options(chat_id, sender_id, url)
             reply = (
                 "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
                 "Moechtest Du den Text live ausgegeben haben?\n"
                 f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
-                "Antworte z. B. mit: live ja, llm ja"
+                "Antworte z. B. mit: live nein, llm ja"
             )
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
@@ -3720,6 +3770,47 @@ def _handle_pending_youtube_local_options(
         return True
 
     chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+    _start_youtube_local_transcription(
+        api,
+        chat_state,
+        chat_id,
+        message,
+        text,
+        url,
+        live_enabled,
+        llm_enabled,
+        user_memory_store,
+        user_memory,
+        instructions,
+        openai_client,
+        bot_identity,
+        first_contact,
+        working_memory_store,
+        youtube_job_runner,
+        instance_name,
+    )
+    return True
+
+
+def _start_youtube_local_transcription(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    url: str,
+    live_enabled: bool,
+    llm_enabled: bool,
+    user_memory_store: UserMemoryStore | None,
+    user_memory: UserMemoryRecord | None,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient | None,
+    bot_identity: BotIdentity,
+    first_contact: bool,
+    working_memory_store: WorkingMemoryStore | None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    instance_name: str = "",
+) -> None:
     if youtube_job_runner is not None:
         youtube_job_runner.submit(
             lambda: _run_youtube_local_transcription_job(
@@ -3746,7 +3837,7 @@ def _handle_pending_youtube_local_options(
             reply += " Live-Ausgabe ist aktiviert."
         _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
-        return True
+        return
 
     _run_youtube_local_transcription_job(
         api,
@@ -3766,7 +3857,6 @@ def _handle_pending_youtube_local_options(
         working_memory_store,
         instance_name,
     )
-    return True
 
 
 def _run_youtube_local_transcription_job(
@@ -3844,20 +3934,50 @@ def _run_youtube_local_transcription_job(
 
 def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
     normalized = text.casefold()
-    yes_words = r"ja|yes|jup|ok|okay|y"
-    no_words = r"nein|no|n|nee"
+    yes_words = r"ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1"
+    no_words = r"nein|no|n|nee|false|falsch|aus|off|0"
     live_match = re.search(rf"live\s+({yes_words}|{no_words})", normalized)
     llm_match = re.search(rf"llm\s+({yes_words}|{no_words})", normalized)
     if live_match and llm_match:
         return _yes_no_value(live_match.group(1)), _yes_no_value(llm_match.group(1))
+    live_option = _parse_youtube_live_option(normalized)
+    llm_option = _parse_youtube_llm_option(normalized)
+    if live_option is not None or llm_option is not None:
+        return live_option, llm_option
     tokens = re.findall(rf"\b({yes_words}|{no_words})\b", normalized)
     if len(tokens) >= 2:
         return _yes_no_value(tokens[0]), _yes_no_value(tokens[1])
     return None, None
 
 
+def _parse_youtube_live_option(normalized_text: str) -> bool | None:
+    live_name = r"live(?:[-\s]*(?:output|ausgabe))?|liveausgabe"
+    if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{live_name}\b", normalized_text):
+        return False
+    if re.search(rf"\b{live_name}\s+(?:nein|no|n|nee|aus|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+        return False
+    if re.search(rf"\b(?:mit\s+)?{live_name}\b", normalized_text):
+        return True
+    return None
+
+
+def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
+    llm_target = r"(?:(?:an|ans|zum|in)\s+)?(?:dein(?:e[nm])?\s+)?(?:llm|send[_\s-]*to[_\s-]*llm)"
+    if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{llm_target}\b", normalized_text):
+        return False
+    if re.search(rf"\b(?:llm|send[_\s-]*to[_\s-]*llm)\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+        return False
+    if re.search(rf"\b{llm_target}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1)\b", normalized_text):
+        return True
+    if re.search(rf"\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|geht|gehen)\b.*\b{llm_target}\b", normalized_text):
+        return True
+    if re.search(rf"\b{llm_target}\b.*\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|auswert(?:en|ung)|analysier(?:en)?)\b", normalized_text):
+        return True
+    return None
+
+
 def _yes_no_value(value: str) -> bool:
-    return value.casefold() in {"ja", "yes", "jup", "ok", "okay", "y"}
+    return value.casefold() in {"ja", "yes", "jup", "ok", "okay", "y", "true", "wahr", "an", "ein", "on", "1"}
 
 
 def _build_youtube_live_callback(api: TelegramAPI, chat_state: ChatState, chat_id: int):

@@ -12,7 +12,8 @@ The following user-memory files are encrypted with that key:
 
 - `User_Memory_Index.json`
 - `User_Memory_Entries.jsonl`
-- `User_Habbits_and_behave.md`
+
+`User_Habbits_and_behave.md` is intentionally not encrypted. It is a human-editable Markdown file for operator-maintained notes and should remain readable as Markdown.
 
 The user-specific key is distinct per sender ID and is generated from fresh random bytes. That means one user cannot decrypt another user’s memory files without that other user’s key.
 
@@ -51,7 +52,7 @@ If someone asks for the short version:
 
 ## Who can see what
 
-- Disk-only access: ciphertext for encrypted user-memory files
+- Disk-only access: ciphertext for encrypted user-memory files; plaintext for operator-maintained Markdown notes
 - Bot runtime with the matching key from Secret Service or from the passphrase-backed local store: plaintext while processing
 - Admins without the key: no plaintext from the stored user-memory files
 - Admins with host, process, or secret/passphrase access: can still reach plaintext during runtime

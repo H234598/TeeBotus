@@ -195,13 +195,13 @@ Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Ko
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener zufaellig erzeugter 32-Byte-Key pro Sender-ID.
+Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine menschenlesbare Markdown-Datei fuer admingepflegte Zusatzhinweise und ein eigener zufaellig erzeugter 32-Byte-Key pro Sender-ID.
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 
 Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
 
-Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem verschluesselten JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise werden nur von Botadmins gepflegt und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
+Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem verschluesselten JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise in `User_Habbits_and_behave.md` werden nur von Botadmins gepflegt, bleiben absichtlich normales Markdown und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
 Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md).
 
