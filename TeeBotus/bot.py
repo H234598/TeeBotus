@@ -3933,11 +3933,11 @@ def _run_youtube_local_transcription_job(
 
 
 def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
-    normalized = text.casefold()
+    normalized = re.sub(r"[_-]+", " ", text.casefold())
     yes_words = r"ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1"
     no_words = r"nein|no|n|nee|false|falsch|aus|off|0"
-    live_match = re.search(rf"live\s+({yes_words}|{no_words})", normalized)
-    llm_match = re.search(rf"llm\s+({yes_words}|{no_words})", normalized)
+    live_match = re.search(rf"\blive(?:\s+(?:output|ausgabe))?\s*(?:=|:)?\s*({yes_words}|{no_words})\b", normalized)
+    llm_match = re.search(rf"\b(?:llm|send\s*to\s*llm)\s*(?:=|:)?\s*({yes_words}|{no_words})\b", normalized)
     if live_match and llm_match:
         return _yes_no_value(live_match.group(1)), _yes_no_value(llm_match.group(1))
     live_option = _parse_youtube_live_option(normalized)
@@ -3951,33 +3951,37 @@ def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
 
 
 def _parse_youtube_live_option(normalized_text: str) -> bool | None:
-    live_name = r"live(?:[-\s]*(?:output|ausgabe))?|liveausgabe"
+    live_name = r"(?:live(?:\s*(?:output|ausgabe))?|liveausgabe)"
     if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{live_name}\b", normalized_text):
         return False
-    if re.search(rf"\b{live_name}\s+(?:nein|no|n|nee|aus|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+    if re.search(rf"\b{live_name}\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
         return False
+    if re.search(rf"\b{live_name}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1|aktivier(?:en|t)?)\b", normalized_text):
+        return True
     if re.search(rf"\b(?:mit\s+)?{live_name}\b", normalized_text):
         return True
     return None
 
 
 def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
-    llm_target = r"(?:(?:an|ans|zum|in)\s+)?(?:dein(?:e[nm])?\s+)?(?:llm|send[_\s-]*to[_\s-]*llm)"
+    llm_target = r"(?:(?:an|ans|zum|zur|in|ins)\s+)?(?:dein(?:e[nm])?\s+)?(?:llm|send\s*to\s*llm)"
     if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{llm_target}\b", normalized_text):
         return False
-    if re.search(rf"\b(?:llm|send[_\s-]*to[_\s-]*llm)\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+    if re.search(rf"\b(?:llm|send\s*to\s*llm)\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
         return False
     if re.search(rf"\b{llm_target}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1)\b", normalized_text):
         return True
-    if re.search(r"\b(?:an|ans|zum|in)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
+    if re.search(r"\b(?:an|ans|zum|zur|in|ins)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
         return True
     if re.search(r"\b(?:aber|mit)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
         return True
-    if re.search(r"\bsend[_\s-]*to[_\s-]*llm\b", normalized_text):
+    if re.search(r"\bsend\s*to\s*llm\b", normalized_text):
         return True
     if re.search(rf"\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|geht|gehen)\b.*\b{llm_target}\b", normalized_text):
         return True
     if re.search(rf"\b{llm_target}\b.*\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|auswert(?:en|ung)|analysier(?:en)?)\b", normalized_text):
+        return True
+    if re.search(r"\b(?:danach|anschlie(?:ß|ss)end|hinterher|danach\s+bitte)\b.*\b(?:auswert(?:en|ung)|analysier(?:en)?|zusammenfass(?:en|ung)|summariz(?:e|en))\b", normalized_text):
         return True
     return None
 

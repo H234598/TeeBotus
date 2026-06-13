@@ -1881,6 +1881,20 @@ class BotTests(unittest.TestCase):
         self.assertEqual(_parse_youtube_local_options("live_output = false\nsend_to_llm = true"), (False, True))
         self.assertEqual(_parse_youtube_local_options("transkribieren, nicht live, aber llm"), (False, True))
         self.assertEqual(_parse_youtube_local_options("ohne live, mit llm"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("live=false send-to-llm=on"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("live output off, send to llm yes"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("keine Liveausgabe, anschließend ins LLM"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("nicht live; danach bitte zusammenfassen"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("live aus und danach analysieren"), (False, True))
+
+    def test_youtube_local_options_parse_more_live_and_llm_variants(self) -> None:
+        self.assertEqual(_parse_youtube_local_options("live-output:on llm:on"), (True, True))
+        self.assertEqual(_parse_youtube_local_options("Liveausgabe aktivieren, danach zum LLM"), (True, True))
+        self.assertEqual(_parse_youtube_local_options("kein liveoutput, send_to_llm true"), (False, True))
+        self.assertEqual(_parse_youtube_local_options("live no, llm no"), (False, False))
+        self.assertEqual(_parse_youtube_local_options("live output false, send_to_llm false"), (False, False))
+        self.assertEqual(_parse_youtube_local_options("ohne live und ohne LLM, danach auswerten"), (False, False))
+        self.assertEqual(_parse_youtube_local_options("nur transkribieren, kein llm"), (None, False))
 
     def test_handle_update_youtube_transcript_starts_local_job_from_free_words(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError
