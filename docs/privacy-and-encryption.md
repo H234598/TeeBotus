@@ -4,9 +4,11 @@ This bot encrypts user memory files at rest, per Telegram sender ID.
 
 ## What is encrypted
 
-For each sender ID, the bot stores a private key in the desktop Secret Service via `secret-tool`.
+By default, the bot stores the private per-sender key in the desktop Secret Service via `secret-tool`.
 
-If an older local `User_Memory_Key.bin` exists from a previous release, the bot migrates it into the Secret Service on first access and then removes the file.
+For headless setups, you can switch to an explicit passphrase backend with `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase`. In that mode, the per-sender random key is stored locally in `User_Memory_Key.bin` and protected by a passphrase from `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE`, `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE`, or an automatically created private passphrase file in the instance data directory.
+
+If an older local `User_Memory_Key.bin` exists from a previous release, the bot migrates it into the active backend on first access and then removes the old storage file. If the active backend changes, the key is moved across as well.
 
 The following user-memory files are encrypted with that key:
 
@@ -16,7 +18,7 @@ The following user-memory files are encrypted with that key:
 
 The user-specific key is distinct per sender ID. That means one user cannot decrypt another user’s memory files without that other user’s key.
 
-If the Secret Service is unavailable, key lookup or creation fails closed. The bot does not silently fall back to an unprotected local key file.
+If the Secret Service is unavailable in keyring mode, or the configured passphrase cannot be loaded in passphrase mode, key lookup or creation fails closed. The bot does not silently fall back to an unprotected local key file.
 
 ## What this protects
 
@@ -52,9 +54,9 @@ If someone asks for the short version:
 ## Who can see what
 
 - Disk-only access: ciphertext for encrypted user-memory files
-- Bot runtime with the matching key from Secret Service: plaintext while processing
+- Bot runtime with the matching key from Secret Service or from the passphrase-backed local store: plaintext while processing
 - Admins without the key: no plaintext from the stored user-memory files
-- Admins with host, process, or secret access: can still reach plaintext during runtime
+- Admins with host, process, or secret/passphrase access: can still reach plaintext during runtime
 
 ## If someone insists on edge cases
 

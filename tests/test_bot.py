@@ -8,6 +8,7 @@ from unittest.mock import call, patch
 
 from telegram_bot.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
+    USER_MEMORY_PASSPHRASE_FILENAME,
     ensure_user_memory_key,
     read_json as read_encrypted_user_memory_json,
     read_jsonl as read_encrypted_user_memory_jsonl,
@@ -50,6 +51,9 @@ from telegram_bot.bot import (
     transcribe_youtube_video,
 )
 from telegram_bot.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
+
+
+STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
 
 
 class FakeAPI:
@@ -225,6 +229,10 @@ class BotTests(unittest.TestCase):
             secret = input_text.strip()
             self._secret_tool_store[attrs] = secret
             return subprocess.CompletedProcess(command, 0, "", "")
+        if op == "clear":
+            attrs = tuple(command[1:])
+            self._secret_tool_store.pop(attrs, None)
+            return subprocess.CompletedProcess(command, 0, "", "")
         raise AssertionError(f"unexpected secret-tool command: {command}")
 
     def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
@@ -248,6 +256,84 @@ class BotTests(unittest.TestCase):
                 ],
                 base64.urlsafe_b64encode(legacy_key).decode("ascii"),
             )
+
+    def test_user_memory_key_passphrase_mode_uses_explicit_passphrase(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
+                },
+                clear=False,
+            ):
+                key = ensure_user_memory_key(memory_path.parent / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
+
+            key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
+            self.assertEqual(len(key), 32)
+            self.assertTrue(key_path.exists())
+            self.assertNotEqual(key_path.read_bytes(), key)
+            self.assertEqual(self._secret_tool_store, {})
+
+    def test_user_memory_key_passphrase_mode_can_migrate_from_secret_service(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path.parent.mkdir(parents=True, exist_ok=True)
+            key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
+
+            keyring_key = bytes(range(32))
+            attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
+            self._secret_tool_store[attrs] = base64.urlsafe_b64encode(keyring_key).decode("ascii")
+
+            with patch.dict("os.environ", {}, clear=False):
+                self.assertEqual(
+                    ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456"),
+                    keyring_key,
+                )
+
+            self.assertIn(attrs, self._secret_tool_store)
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
+                },
+                clear=False,
+            ):
+                migrated_key = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
+
+            self.assertEqual(migrated_key, keyring_key)
+            self.assertNotIn(attrs, self._secret_tool_store)
+            self.assertTrue(key_path.exists())
+            self.assertNotEqual(key_path.read_bytes(), keyring_key)
+
+    def test_user_memory_key_passphrase_mode_generates_default_passphrase_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path.parent.mkdir(parents=True, exist_ok=True)
+            passphrase_path = memory_path.parents[2] / USER_MEMORY_PASSPHRASE_FILENAME
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": "",
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
+                },
+                clear=False,
+            ):
+                key = ensure_user_memory_key(memory_path.parent / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
+
+            self.assertEqual(len(key), 32)
+            self.assertTrue(passphrase_path.exists())
+            self.assertEqual(passphrase_path.stat().st_mode & 0o777, 0o600)
+            self.assertGreaterEqual(len(passphrase_path.read_text(encoding="utf-8").strip()), 32)
 
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
