@@ -3971,6 +3971,8 @@ def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
         return True
     if re.search(r"\b(?:an|ans|zum|in)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
         return True
+    if re.search(r"\b(?:aber|mit)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
+        return True
     if re.search(r"\bsend[_\s-]*to[_\s-]*llm\b", normalized_text):
         return True
     if re.search(rf"\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|geht|gehen)\b.*\b{llm_target}\b", normalized_text):
