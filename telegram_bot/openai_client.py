@@ -63,6 +63,8 @@ class OpenAIClient:
             timeout = instructions.openai_timeout_seconds or self.timeout
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise OpenAIAPIError(f"OpenAI network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise OpenAIAPIError(f"OpenAI HTTP error {exc.code}: {detail}") from exc
@@ -107,6 +109,8 @@ class OpenAIClient:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 audio = response.read()
                 content_type = response.headers.get_content_type() or _voice_content_type(instructions.openai_voice_format)
+        except TimeoutError as exc:
+            raise OpenAIAPIError(f"OpenAI speech network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise OpenAIAPIError(f"OpenAI speech HTTP error {exc.code}: {detail}") from exc
@@ -150,6 +154,8 @@ class OpenAIClient:
             timeout = instructions.openai_timeout_seconds or self.timeout
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise OpenAIAPIError(f"OpenAI transcription network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise OpenAIAPIError(f"OpenAI transcription HTTP error {exc.code}: {detail}") from exc

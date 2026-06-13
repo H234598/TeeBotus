@@ -1,7 +1,10 @@
 import unittest
+from unittest.mock import patch
 
 from telegram_bot.instructions import BotInstructions
 from telegram_bot.openai_client import (
+    OpenAIAPIError,
+    OpenAIClient,
     build_response_payload,
     build_speech_payload,
     build_transcription_fields,
@@ -106,6 +109,13 @@ class OpenAIClientTests(unittest.TestCase):
         fields = build_transcription_fields(instructions, model="whisper-1")
 
         self.assertEqual(fields["model"], "whisper-1")
+
+    def test_transcribe_audio_timeout_is_api_error(self) -> None:
+        client = OpenAIClient("test-key", timeout=1)
+
+        with patch("telegram_bot.openai_client.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
+            with self.assertRaises(OpenAIAPIError):
+                client.transcribe_audio(b"audio", "voice.ogg", BotInstructions(openai_timeout_seconds=1))
 
     def test_extract_output_text_from_direct_field(self) -> None:
         self.assertEqual(extract_output_text({"output_text": " Hallo "}), "Hallo")
