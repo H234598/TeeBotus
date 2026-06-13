@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from copy import deepcopy
@@ -10,6 +11,7 @@ from typing import Any
 LOGGER = logging.getLogger("telegram_bot.instructions")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
+EASTER_EGGS_FILENAME = "EASTER_EGGS.json"
 
 DEFAULT_COMMANDS = {
     "/ping": "pong",
@@ -165,7 +167,7 @@ class BotInstructions:
 class InstructionStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        self._signature: tuple[int | None, int | None, str, int | None] | None = None
+        self._signature: tuple[int | None, int | None, str, int | None, int | None] | None = None
         self._instructions = BotInstructions()
 
     def get(self) -> BotInstructions:
@@ -195,21 +197,53 @@ def load_instructions(path: str | Path) -> BotInstructions:
     return instructions
 
 
-def _instruction_signature(path: Path, instructions: BotInstructions) -> tuple[int | None, int | None, str, int | None]:
+def _instruction_signature(path: Path, instructions: BotInstructions) -> tuple[int | None, int | None, str, int | None, int | None]:
     rule_path = _resolve_rule_path(path, instructions.openai_rule_file)
     default_path = _default_instruction_path()
-    return (_mtime_ns(path), _mtime_ns(rule_path), str(rule_path) if rule_path else "", _mtime_ns(default_path))
+    easter_eggs_path = _easter_eggs_path()
+    return (
+        _mtime_ns(path),
+        _mtime_ns(rule_path),
+        str(rule_path) if rule_path else "",
+        _mtime_ns(default_path),
+        _mtime_ns(easter_eggs_path),
+    )
 
 
 def _default_instruction_path() -> Path:
     return PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME
 
 
+def _easter_eggs_path() -> Path:
+    return PROJECT_ROOT / EASTER_EGGS_FILENAME
+
+
 def _load_default_instructions() -> BotInstructions:
     path = _default_instruction_path()
     if not path.exists():
-        return BotInstructions()
-    return parse_instructions(path.read_text(encoding="utf-8"))
+        instructions = BotInstructions()
+    else:
+        instructions = parse_instructions(path.read_text(encoding="utf-8"))
+    _apply_easter_eggs(instructions, _easter_eggs_path())
+    return instructions
+
+
+def _apply_easter_eggs(instructions: BotInstructions, path: Path) -> None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return
+    except json.JSONDecodeError as exc:
+        LOGGER.warning("Could not parse Easter egg file %s: %s", path, exc)
+        return
+    if not isinstance(payload, dict):
+        LOGGER.warning("Ignoring Easter egg file %s because the root value is not an object.", path)
+        return
+    security = payload.get("security")
+    if isinstance(security, dict):
+        value = security.get("easter_egg")
+        if isinstance(value, str) and value.strip():
+            instructions.security_answer_easter_egg = value
 
 
 def _mtime_ns(path: Path | None) -> int | None:
@@ -257,8 +291,13 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
         if not line and section != "system_prompt":
             continue
         if line.startswith("#"):
-            section = _section_name(line)
-            continue
+            next_section = _section_name(line)
+            if next_section:
+                section = next_section
+                continue
+            if section not in {"shared_prompt", "system_prompt"}:
+                section = ""
+                continue
         if section == "shared_prompt":
             if shared_prompt_lines is None:
                 shared_prompt_lines = []
@@ -312,7 +351,13 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     if shared_prompt_lines is not None:
         instructions.openai_shared_prompt = "\n".join(shared_prompt_lines).strip()
     if system_prompt_lines is not None:
-        instructions.openai_system_prompt = "\n".join(system_prompt_lines).strip()
+        system_prompt = "\n".join(system_prompt_lines).strip()
+        if base is not None and base.openai_system_prompt.strip():
+            instructions.openai_system_prompt = "\n\n".join(
+                part for part in (system_prompt, base.openai_system_prompt.strip()) if part
+            )
+        else:
+            instructions.openai_system_prompt = system_prompt
     return instructions
 
 

@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 import subprocess
 import tempfile
 import unittest
@@ -38,6 +39,8 @@ from telegram_bot.bot import (
     _resolve_instruction_path,
     _resolve_openai_api_key,
     _resolve_openai_api_keys,
+    _load_runtime_config_defaults,
+    _read_runtime_config_defaults,
     _resolve_telegram_token,
     _resolve_telegram_tokens,
     _srt_to_plain_text,
@@ -531,6 +534,46 @@ class BotTests(unittest.TestCase):
             clear=True,
         ):
             self.assertEqual(_resolve_instruction_path(), "custom/Bot_Verhalten.md")
+
+    def test_reads_runtime_config_defaults_from_all_bots_default_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ALL_BOTS_DEFAULT.md"
+            path.write_text(
+                """
+                ## Laufzeitkonfiguration
+
+                - LOG_LEVEL: DEBUG
+                - TELEGRAM_BOT_INSTANCE: Demo
+                - TELEGRAM_BOT_INSTANCES: leer
+                - ignored-lowercase: nope
+                """,
+                encoding="utf-8",
+            )
+
+            defaults = _read_runtime_config_defaults(path)
+
+        self.assertEqual(defaults["LOG_LEVEL"], "DEBUG")
+        self.assertEqual(defaults["TELEGRAM_BOT_INSTANCE"], "Demo")
+        self.assertNotIn("TELEGRAM_BOT_INSTANCES", defaults)
+        self.assertNotIn("ignored-lowercase", defaults)
+
+    def test_runtime_config_defaults_do_not_override_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "ALL_BOTS_DEFAULT.md"
+            path.write_text(
+                """
+                ## Laufzeitkonfiguration
+
+                - TELEGRAM_BOT_INSTANCE: FromMarkdown
+                - LOG_LEVEL: DEBUG
+                """,
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "FromEnv"}, clear=True):
+                _load_runtime_config_defaults(path)
+                self.assertEqual(os.environ["TELEGRAM_BOT_INSTANCE"], "FromEnv")
+                self.assertEqual(os.environ["LOG_LEVEL"], "DEBUG")
 
     def test_discovers_instances_from_bot_verhalten_files(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

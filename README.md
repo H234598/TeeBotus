@@ -38,7 +38,7 @@ cp .env.example .env
 
 ## Starten
 
-Standard ist die Instanz `Bote_der_Wahrheit`:
+Standard ohne Zusatzargument ist die Einzelinstanz `Bote_der_Wahrheit`:
 
 ```bash
 cd TeeBotus
@@ -48,25 +48,37 @@ set +a
 python3 -m telegram_bot
 ```
 
-Eine bestimmte Instanz startest du so:
+Eine bestimmte Einzelinstanz startest du so:
 
 ```bash
 TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m telegram_bot
 ```
 
-Fuer zwei parallel laufende Bots brauchst du zwei verschiedene Telegram-Bot-Tokens von `@BotFather`. Starte sie dann in zwei Terminals:
+Alle konfigurierten Instanzen startest du so:
 
 ```bash
-TELEGRAM_BOT_INSTANCE=Bote_der_Wahrheit python3 -m telegram_bot
+python3 -m telegram_bot --all
 ```
 
+Ohne `TELEGRAM_BOT_INSTANCES` erkennt der All-Start alle Ordner unter `instances/`, die eine `Bot_Verhalten.md` enthalten. Mit `TELEGRAM_BOT_INSTANCES` kannst du die Liste explizit begrenzen:
+
 ```bash
-TELEGRAM_BOT_INSTANCE=Depressionsbot python3 -m telegram_bot
+TELEGRAM_BOT_INSTANCES=Bote_der_Wahrheit,Depressionsbot python3 -m telegram_bot --all
 ```
+
+Alternativ geht der All-Start auch per Environment:
+
+```bash
+TELEGRAM_BOT_INSTANCE=all python3 -m telegram_bot
+```
+
+Fuer parallel laufende Bots braucht jede Telegram-Bot-Identitaet einen eigenen BotFather-Token.
 
 Der Bot laeuft dann im Terminal. Mit `Ctrl+C` beendest du ihn.
 
 Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachrichten ausgehen. Geloggt werden nur Metadaten wie Chat-ID, Message-ID, Nachrichtentyp und Laenge, nicht der Nachrichteninhalt.
+
+`ALL_BOTS_DEFAULT.md` enthaelt unter `## Laufzeitkonfiguration` echte Default-Schalter fuer den Start. Werte aus Shell, systemd, Docker oder `.env` haben Vorrang; die Default-Datei fuellt nur fehlende Environment-Werte.
 
 ## Verhalten steuern
 
@@ -85,6 +97,7 @@ Die Datei funktioniert bewusst aehnlich wie eine `AGENTS.md`, aber fuer den lauf
 - `## Befehle` legt eigene Slash-Befehle an, z. B. `/status: Der Bot laeuft.`
 - `## Prompt` in `ALL_BOTS_DEFAULT.md` wird jeder Instanz zusaetzlich mitgegeben.
 - `## Securityantworten` in `ALL_BOTS_DEFAULT.md` steuert editierbare Antwortvorlagen fuer Datenschutz- und Security-Fragen.
+- `EASTER_EGGS.json` enthaelt auslagerbare Easter-Egg-Antworten, aktuell `security.easter_egg`.
 - `## Systemprompt` steuert die Rolle und den Antwortstil des OpenAI-Modells.
 - `## Textantworten` beantwortet exakte Texte ohne Slash-Befehl.
 - `## Enthaelt` beantwortet Nachrichten, die einen bestimmten Text enthalten.

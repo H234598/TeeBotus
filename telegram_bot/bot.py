@@ -52,6 +52,7 @@ TELADI_EMERGENCY_CHAT_ID = 395935293
 TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
 DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
+ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
@@ -263,6 +264,14 @@ DOTENV_RUNTIME_KEYS = {
     "TELEGRAM_BOT_INSTANCES_DIR",
     "TELEGRAM_BOT_INSTRUCTIONS",
 }
+RUNTIME_CONFIG_SECTION_HEADINGS = {
+    "laufzeitkonfiguration",
+    "laufzeit konfiguration",
+    "runtime config",
+    "runtime configuration",
+}
+RUNTIME_CONFIG_EMPTY_VALUES = {"", "leer", "empty", "none", "null"}
+ENV_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 SOURCE_MARKER_RE = re.compile(
     r"https?://|www\.|\[[^\]]+\]\(https?://|quelle[n]?:|source[s]?:|beleg[e]?:|reference[s]?:|literatur:|【[^】]+†[^】]+】",
     re.IGNORECASE,
@@ -2980,6 +2989,7 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     _load_dotenv(PROJECT_ROOT / ".env")
+    _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
     logging.basicConfig(
         level=os.getenv("LOG_LEVEL", "INFO"),
         format="%(asctime)s %(levelname)s %(message)s",
@@ -3094,6 +3104,65 @@ def _load_dotenv(path: Path) -> None:
         if key in DOTENV_RUNTIME_KEYS and key in os.environ:
             continue
         os.environ[key] = value.strip()
+
+
+def _load_runtime_config_defaults(path: Path) -> None:
+    for key, value in _read_runtime_config_defaults(path).items():
+        if key not in os.environ:
+            os.environ[key] = value
+
+
+def _read_runtime_config_defaults(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    defaults: dict[str, str] = {}
+    in_runtime_config = False
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith("#"):
+            heading = line.lstrip("#").strip().casefold()
+            in_runtime_config = heading in RUNTIME_CONFIG_SECTION_HEADINGS
+            continue
+        if not in_runtime_config:
+            continue
+        item = _strip_markdown_bullet(line)
+        if not item:
+            continue
+        pair = _parse_runtime_config_pair(item)
+        if pair is None:
+            continue
+        key, value = pair
+        if ENV_KEY_RE.fullmatch(key):
+            defaults[key] = value
+    return defaults
+
+
+def _strip_markdown_bullet(line: str) -> str:
+    for marker in ("- ", "* "):
+        if line.startswith(marker):
+            return line[len(marker) :].strip()
+    return line
+
+
+def _parse_runtime_config_pair(line: str) -> tuple[str, str] | None:
+    for separator in ("=", ":"):
+        if separator not in line:
+            continue
+        key, value = line.split(separator, maxsplit=1)
+        key = key.strip()
+        value = _clean_runtime_config_value(value)
+        if key and value is not None:
+            return key, value
+    return None
+
+
+def _clean_runtime_config_value(value: str) -> str | None:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+    if value.casefold() in RUNTIME_CONFIG_EMPTY_VALUES:
+        return None
+    return value
 
 
 def _duplicate_telegram_token_error(instance_configs: list[InstanceRunConfig]) -> str:

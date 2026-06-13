@@ -159,6 +159,28 @@ class InstructionTests(unittest.TestCase):
 
         self.assertEqual(rendered, "Hallo, Ada, Chat 7, Text ping, Unbekannt ")
 
+    def test_system_prompt_keeps_markdown_subheadings(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## Systemprompt
+            Vorher.
+
+            ### Rolle
+            Bleibt im Prompt.
+
+            #### Detail
+            Bleibt auch.
+
+            ## Befehle
+            - /status: ok
+            """
+        )
+
+        self.assertIn("### Rolle", instructions.openai_system_prompt)
+        self.assertIn("#### Detail", instructions.openai_system_prompt)
+        self.assertIn("Bleibt im Prompt.", instructions.openai_system_prompt)
+        self.assertEqual(instructions.commands["/status"], "ok")
+
     def test_instruction_store_reads_markdown_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "Bot_Verhalten.md"
@@ -212,11 +234,17 @@ class InstructionTests(unittest.TestCase):
                 ## Securityantworten
                 - short: Kurz.
                 - full: Voll.
-                - easter_egg: Erfundener Witz.
+
+                ## Systemprompt
+                Defaultprompt.
 
                 ## Befehle
                 - /default: Aus Default.
                 """,
+                encoding="utf-8",
+            )
+            (root / "EASTER_EGGS.json").write_text(
+                '{"security": {"easter_egg": "Erfundener Witz aus JSON."}}\n',
                 encoding="utf-8",
             )
             instance_path.write_text(
@@ -238,13 +266,15 @@ class InstructionTests(unittest.TestCase):
 
         self.assertEqual(instructions.openai_model, "instance-model")
         self.assertEqual(instructions.openai_max_output_tokens, 123)
+        self.assertEqual(instructions.openai_system_prompt, "Instanzprompt.\n\nDefaultprompt.")
         self.assertEqual(instructions.commands["/default"], "Aus Default.")
         self.assertEqual(instructions.commands["/status"], "Aus Instanz.")
         self.assertIn("Gemeinsamer Prompt.", instructions.openai_instructions_text())
+        self.assertIn("Defaultprompt.", instructions.openai_instructions_text())
         self.assertIn("Instanzprompt.", instructions.openai_instructions_text())
         self.assertIn("Kurz.", instructions.openai_instructions_text())
         self.assertIn("Voll.", instructions.openai_instructions_text())
-        self.assertIn("Erfundener Witz.", instructions.openai_instructions_text())
+        self.assertIn("Erfundener Witz aus JSON.", instructions.openai_instructions_text())
 
     def test_instruction_store_uses_all_bots_default_when_instance_file_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
