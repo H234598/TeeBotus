@@ -220,6 +220,11 @@ class _InstanceProcessRegistry:
 
     def _write_state(self, state: dict[str, Any]) -> None:
         path = self._path()
+        processes = state.get("processes")
+        if not isinstance(processes, list) or not processes:
+            with suppress(FileNotFoundError):
+                path.unlink()
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

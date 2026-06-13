@@ -673,6 +673,40 @@ class BotTests(unittest.TestCase):
                 [{"pid": 111, "start_time": 54321}, {"pid": 222, "start_time": 67890}],
             )
 
+    def test_process_registry_deletes_file_when_last_process_is_removed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    json.dumps({"processes": [{"pid": 111, "start_time": 12345}], "updated_at": "2026-06-13T00:00:00Z"}) + "\n",
+                    encoding="utf-8",
+                )
+
+                registry.unregister(111, 12345)
+
+            self.assertFalse(state_path.exists())
+
+    def test_process_registry_deletes_file_when_cleanup_leaves_no_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry = _InstanceProcessRegistry("Demo")
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+
+            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                state_path.write_text(
+                    json.dumps({"processes": [{"pid": 111, "start_time": 12345}], "updated_at": "2026-06-13T00:00:00Z"}) + "\n",
+                    encoding="utf-8",
+                )
+                with patch("TeeBotus.bot._read_process_start_time", return_value=None), patch("TeeBotus.bot.os.killpg", side_effect=ProcessLookupError):
+                    registry.cleanup_orphans()
+
+            self.assertFalse(state_path.exists())
+
     def test_instruction_path_uses_selected_instance(self) -> None:
         with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCE": "Depressionsbot"}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Depressionsbot/Bot_Verhalten.md")
