@@ -53,6 +53,57 @@ def _miss_paths(instances_dir: Path) -> list[Path]:
     return sorted(instances_dir.glob(f"*/data/{YOUTUBE_PARSER_MISSES_FILENAME}"))
 
 
+def _promotion_suggestion(
+    *,
+    tokens: list[str],
+    parser_now: tuple[bool | None, bool | None],
+    llm_options: dict[str, int],
+) -> dict[str, Any] | None:
+    if None not in parser_now:
+        return None
+    target = _dominant_llm_options(llm_options)
+    if target is None:
+        return None
+    missing: list[str] = []
+    if parser_now[0] is None:
+        missing.append("live_output")
+    if parser_now[1] is None:
+        missing.append("send_to_llm")
+    token_pattern = ""
+    if tokens:
+        token_pattern = r"\b" + "".join(rf"(?=.*\b{re_escape(token)}\b)" for token in tokens)
+    return {
+        "missing_fields": missing,
+        "target_live_output": target[0],
+        "target_send_to_llm": target[1],
+        "tokens": tokens,
+        "token_pattern_hint": token_pattern if tokens else "",
+        "summary": (
+            f"add parser coverage for {', '.join(missing)} -> "
+            f"(live_output={target[0]}, send_to_llm={target[1]}) using tokens: {', '.join(tokens) or '-'}"
+        ),
+    }
+
+
+def _dominant_llm_options(llm_options: dict[str, int]) -> tuple[bool, bool] | None:
+    if not llm_options:
+        return None
+    value, _count = max(llm_options.items(), key=lambda item: (item[1], item[0]))
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, list) or len(payload) != 2:
+        return None
+    if not all(isinstance(item, bool) for item in payload):
+        return None
+    return payload[0], payload[1]
+
+
+def re_escape(value: str) -> str:
+    return "".join(f"\\{char}" if not char.isalnum() else char for char in value)
+
+
 def build_report(instances_dir: Path = ROOT / "instances") -> dict[str, Any]:
     all_entries: list[dict[str, Any]] = []
     for path in _miss_paths(instances_dir):
@@ -93,6 +144,11 @@ def build_report(instances_dir: Path = ROOT / "instances") -> dict[str, Any]:
         contexts = dict(group["contexts"])
         parser_options = dict(group["parser_options"])
         llm_options = dict(group["llm_options"])
+        suggestion = _promotion_suggestion(
+            tokens=group["tokens"],
+            parser_now=parser_now,
+            llm_options=llm_options,
+        )
         grouped.append(
             {
                 "formulation": group["formulation"],
@@ -104,6 +160,7 @@ def build_report(instances_dir: Path = ROOT / "instances") -> dict[str, Any]:
                 "llm_options": llm_options,
                 "base_parser_now": list(parser_now),
                 "needs_parser_promotion": None in parser_now,
+                "promotion_suggestion": suggestion,
                 "sources": group["sources"],
             }
         )
@@ -137,6 +194,8 @@ def _print_text(report: dict[str, Any]) -> None:
         print(f"  tokens={', '.join(group['tokens']) or '-'}")
         print(f"  contexts={group['contexts']}")
         print(f"  llm_options={group['llm_options']}")
+        if group["promotion_suggestion"]:
+            print(f"  suggestion={group['promotion_suggestion']['summary']}")
 
 
 def main(argv: list[str] | None = None) -> int:

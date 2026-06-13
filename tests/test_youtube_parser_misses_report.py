@@ -68,10 +68,16 @@ def test_youtube_parser_misses_report_groups_and_marks_promotion_candidates(tmp_
     assert first["base_parser_now"] == [None, True]
     assert first["contexts"] == {"pending-options": 1, "initial-request": 1}
     assert first["tokens"] == ["gelaber", "llm", "unterwegs"]
+    assert first["promotion_suggestion"]["missing_fields"] == ["live_output"]
+    assert first["promotion_suggestion"]["target_live_output"] is False
+    assert first["promotion_suggestion"]["target_send_to_llm"] is True
+    assert first["promotion_suggestion"]["tokens"] == ["gelaber", "llm", "unterwegs"]
+    assert "gelaber" in first["promotion_suggestion"]["token_pattern_hint"]
 
     covered = report["groups"][1]
     assert covered["needs_parser_promotion"] is False
     assert covered["base_parser_now"] == [False, True]
+    assert covered["promotion_suggestion"] is None
 
 
 def test_youtube_parser_misses_report_cli_runs_from_repo_root(tmp_path: Path) -> None:
