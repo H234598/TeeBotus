@@ -78,6 +78,7 @@ YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
 TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
+YOUTUBE_PARSER_MISSES_FILENAME = "YouTube_Parser_Misses.jsonl"
 WORKING_MEMORY_MAX_PROMPT_CHARS = 6000
 WORKING_MEMORY_PRIVACY_NOTE = (
     "Instanzweites Arbeitsgedaechtnis. Darf keine User-IDs, Namen, Usernames, Chat-IDs, "
@@ -1051,13 +1052,14 @@ def handle_update(
     if not isinstance(message, dict):
         return
 
+    provided_instance_name = instance_name
     instance_name = ""
     if working_memory_store is not None:
         instance_name = working_memory_store.instance_name
     elif user_memory_store is not None:
         instance_name = user_memory_store.instance_name
-    elif instance_name:
-        instance_name = instance_name
+    elif provided_instance_name:
+        instance_name = provided_instance_name
     elif chat_state is not None:
         instance_name = chat_state.instance_name
 
@@ -3667,7 +3669,13 @@ def _handle_youtube_transcript_request(
         transcript, source = transcribe_youtube_video(url, **transcribe_kwargs)
     except YouTubeTranscriptError as exc:
         if exc.needs_local_transcription:
-            live_enabled, llm_enabled = _parse_youtube_local_options(text)
+            live_enabled, llm_enabled = _parse_youtube_local_options(text, instance_name=instance_name)
+            if live_enabled is None or llm_enabled is None:
+                inferred_options = _infer_youtube_local_options_with_llm(text, instructions, openai_client)
+                if inferred_options is not None:
+                    _record_youtube_parser_miss(instance_name, text, (live_enabled, llm_enabled), inferred_options, "initial-request")
+                    live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
+                    llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
             if live_enabled is not None and llm_enabled is not None:
                 if sender_id:
                     chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
@@ -3762,7 +3770,13 @@ def _handle_pending_youtube_local_options(
     if not url:
         return False
 
-    live_enabled, llm_enabled = _parse_youtube_local_options(text)
+    live_enabled, llm_enabled = _parse_youtube_local_options(text, instance_name=instance_name)
+    if live_enabled is None or llm_enabled is None:
+        inferred_options = _infer_youtube_local_options_with_llm(text, instructions, openai_client)
+        if inferred_options is not None:
+            _record_youtube_parser_miss(instance_name, text, (live_enabled, llm_enabled), inferred_options, "pending-options")
+            live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
+            llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
     if live_enabled is None or llm_enabled is None:
         reply = "Bitte antworte z. B. mit: live ja, llm ja"
         _send_tracked_message(api, chat_state, chat_id, reply)
@@ -3932,7 +3946,10 @@ def _run_youtube_local_transcription_job(
     _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
 
 
-def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
+def _parse_youtube_local_options(text: str, instance_name: str = "") -> tuple[bool | None, bool | None]:
+    learned_options = _parse_learned_youtube_local_options(text, instance_name)
+    if learned_options is not None:
+        return learned_options
     normalized = re.sub(r"[_-]+", " ", text.casefold())
     normalized = re.sub(r"\s+", " ", normalized).strip()
     yes_words = r"ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1"
@@ -3949,6 +3966,36 @@ def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
     if len(tokens) >= 2:
         return _yes_no_value(tokens[0]), _yes_no_value(tokens[1])
     return None, None
+
+
+def _parse_learned_youtube_local_options(text: str, instance_name: str) -> tuple[bool, bool] | None:
+    if not instance_name:
+        return None
+    path = _youtube_parser_misses_path(instance_name)
+    if not path.exists():
+        return None
+    normalized_formulation = _normalize_youtube_option_formulation(text)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        LOGGER.debug("Could not read YouTube parser misses at %s: %s", path, exc)
+        return None
+    for line in reversed(lines[-200:]):
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict):
+            continue
+        if _normalize_youtube_option_formulation(str(entry.get("formulation") or "")) != normalized_formulation:
+            continue
+        live_value = _coerce_optional_bool(entry.get("llm_live_output"))
+        llm_value = _coerce_optional_bool(entry.get("llm_send_to_llm"))
+        if live_value is not None and llm_value is not None:
+            return live_value, llm_value
+    return None
 
 
 def _parse_youtube_live_option(normalized_text: str) -> bool | None:
@@ -4019,6 +4066,113 @@ def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
     if re.search(r"\b(?:an\s+dich|zu\s+dir|dir)\b.{0,50}\b(?:geben|schicken|senden|weitergeben|weiterleiten|auswerten|analysieren)\b", normalized_text):
         return True
     return None
+
+
+def _infer_youtube_local_options_with_llm(
+    text: str,
+    instructions: BotInstructions,
+    openai_client: OpenAIClient | None,
+) -> tuple[bool, bool] | None:
+    if openai_client is None:
+        return None
+    prompt = (
+        "Klassifiziere ausschliesslich die Optionen fuer eine lokale YouTube-Transkription.\n"
+        "Setze live_output nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob waehrend der Transkription live/zwischendurch Text gesendet werden soll.\n"
+        "Setze send_to_llm nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob das fertige Transkript danach an ein LLM/KI/GPT/OpenAI zur Auswertung gehen soll.\n"
+        "Antworte nur als JSON-Objekt mit exakt diesen Feldern:\n"
+        '{"live_output": true|false|null, "send_to_llm": true|false|null}\n\n'
+        f"Nachricht:\n{text.strip()}"
+    )
+    try:
+        response = openai_client.create_reply(prompt, instructions, None)
+    except OpenAIAPIError as exc:
+        LOGGER.warning("OpenAI YouTube option classification failed: %s", exc)
+        return None
+    return _parse_youtube_local_options_from_llm_response(response.text)
+
+
+def _parse_youtube_local_options_from_llm_response(text: str) -> tuple[bool, bool] | None:
+    payload = _extract_json_object(text)
+    if payload is None:
+        return None
+    live_value = _coerce_optional_bool(payload.get("live_output"))
+    llm_value = _coerce_optional_bool(payload.get("send_to_llm"))
+    if live_value is None or llm_value is None:
+        return None
+    return live_value, llm_value
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    stripped = text.strip()
+    if not stripped:
+        return None
+    candidates = [stripped]
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", stripped, flags=re.DOTALL | re.IGNORECASE)
+    if fenced:
+        candidates.insert(0, fenced.group(1))
+    inline = re.search(r"\{.*\}", stripped, flags=re.DOTALL)
+    if inline:
+        candidates.append(inline.group(0))
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _coerce_optional_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().casefold()
+        if normalized in {"true", "yes", "ja", "jup", "on", "an", "1"}:
+            return True
+        if normalized in {"false", "no", "nein", "nee", "off", "aus", "0"}:
+            return False
+    return None
+
+
+def _record_youtube_parser_miss(
+    instance_name: str,
+    text: str,
+    parser_options: tuple[bool | None, bool | None],
+    llm_options: tuple[bool, bool],
+    context: str,
+) -> None:
+    path = _youtube_parser_misses_path(instance_name)
+    entry = {
+        "created_at": _utc_timestamp(),
+        "context": context,
+        "formulation": _redact_youtube_urls(text.strip())[:1000],
+        "parser_live_output": parser_options[0],
+        "parser_send_to_llm": parser_options[1],
+        "llm_live_output": llm_options[0],
+        "llm_send_to_llm": llm_options[1],
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+    except OSError as exc:
+        LOGGER.warning("Could not record YouTube parser miss at %s: %s", path, exc)
+
+
+def _youtube_parser_misses_path(instance_name: str) -> Path:
+    instance = instance_name.strip() or _resolve_instance_name()
+    return _resolve_instances_dir() / instance / "data" / YOUTUBE_PARSER_MISSES_FILENAME
+
+
+def _redact_youtube_urls(text: str) -> str:
+    return re.sub(r"https?://\S+", "<youtube-url>", text)
+
+
+def _normalize_youtube_option_formulation(text: str) -> str:
+    redacted = _redact_youtube_urls(text)
+    normalized = re.sub(r"[_-]+", " ", redacted.casefold())
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _yes_no_value(value: str) -> bool:

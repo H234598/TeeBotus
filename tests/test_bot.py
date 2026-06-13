@@ -43,6 +43,7 @@ from TeeBotus.bot import (
     _lowest_priority_command,
     _load_dotenv,
     _prepare_user_memory,
+    _parse_youtube_local_options_from_llm_response,
     _parse_youtube_local_options,
     _record_user_memory,
     _resolve_bot_token_configs,
@@ -1916,6 +1917,120 @@ class BotTests(unittest.TestCase):
         for text, expected in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(_parse_youtube_local_options(text), expected)
+
+    def test_youtube_local_options_parse_llm_response_json(self) -> None:
+        self.assertEqual(
+            _parse_youtube_local_options_from_llm_response('{"live_output": false, "send_to_llm": true}'),
+            (False, True),
+        )
+        self.assertEqual(
+            _parse_youtube_local_options_from_llm_response(
+                'Sauber erkannt:\n```json\n{"live_output": "no", "send_to_llm": "yes"}\n```'
+            ),
+            (False, True),
+        )
+        self.assertIsNone(
+            _parse_youtube_local_options_from_llm_response('{"live_output": null, "send_to_llm": true}')
+        )
+
+    def test_handle_update_youtube_local_options_uses_llm_fallback_and_records_phrase(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true}', "AI: transcript summary"])
+        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+
+        with tempfile.TemporaryDirectory() as directory:
+            instructions = BotInstructions(openai_enabled=True)
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
+                    handle_update(
+                        api,
+                        {
+                            "message": {
+                                "text": "Mach das ohne Gelaber unterwegs, LLM ja https://youtu.be/abc123",
+                                "chat": {"id": 123},
+                                "from": {"id": 456},
+                            }
+                        },
+                        instructions,
+                        openai_client,
+                        chat_state,
+                        instance_name="Demo",
+                    )
+
+            transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None, instance_name="Demo")
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+            self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
+
+            miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+            entries = read_jsonl(miss_path)
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["context"], "pending-options")
+            self.assertEqual(entries[0]["parser_live_output"], None)
+            self.assertEqual(entries[0]["parser_send_to_llm"], True)
+            self.assertEqual(entries[0]["llm_live_output"], False)
+            self.assertEqual(entries[0]["llm_send_to_llm"], True)
+            self.assertIn("<youtube-url>", entries[0]["formulation"])
+            self.assertNotIn("https://youtu.be/abc123", entries[0]["formulation"])
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                self.assertEqual(
+                    _parse_youtube_local_options(
+                        "Mach das ohne Gelaber unterwegs, LLM ja https://youtu.be/other",
+                        instance_name="Demo",
+                    ),
+                    (False, True),
+                )
+
+    def test_handle_update_youtube_transcript_uses_llm_option_fallback_from_initial_request(self) -> None:
+        from TeeBotus.bot import YouTubeTranscriptError
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState()
+        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true}', "AI: transcript summary"])
+
+        transcribe_calls = [
+            YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True),
+            ("Local transcript.", "lokales Whisper"),
+        ]
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                with patch("TeeBotus.bot.transcribe_youtube_video", side_effect=transcribe_calls) as transcribe:
+                    handle_update(
+                        api,
+                        {
+                            "message": {
+                                "text": "Bitte transkribiere https://youtu.be/abc123 ohne Gelaber unterwegs, LLM ja",
+                                "chat": {"id": 123},
+                                "from": {"id": 456},
+                            }
+                        },
+                        BotInstructions(openai_enabled=True),
+                        openai_client,
+                        chat_state,
+                        instance_name="Demo",
+                    )
+
+            self.assertEqual(
+                transcribe.call_args_list,
+                [
+                    call("https://youtu.be/abc123", local_allowed=False, instance_name="Demo"),
+                    call("https://youtu.be/abc123", local_allowed=True, live_callback=None, instance_name="Demo"),
+                ],
+            )
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+            self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
+
+            miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+            entries = read_jsonl(miss_path)
+            self.assertEqual(entries[0]["context"], "initial-request")
+            self.assertEqual(entries[0]["parser_live_output"], None)
+            self.assertEqual(entries[0]["parser_send_to_llm"], True)
+            self.assertEqual(entries[0]["llm_live_output"], False)
+            self.assertEqual(entries[0]["llm_send_to_llm"], True)
 
     def test_handle_update_youtube_transcript_starts_local_job_from_free_words(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError
