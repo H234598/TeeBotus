@@ -3934,6 +3934,7 @@ def _run_youtube_local_transcription_job(
 
 def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
     normalized = re.sub(r"[_-]+", " ", text.casefold())
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     yes_words = r"ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1"
     no_words = r"nein|no|n|nee|false|falsch|aus|off|0"
     live_match = re.search(rf"\blive(?:\s+(?:output|ausgabe))?\s*(?:=|:)?\s*({yes_words}|{no_words})\b", normalized)
@@ -3951,12 +3952,28 @@ def _parse_youtube_local_options(text: str) -> tuple[bool | None, bool | None]:
 
 
 def _parse_youtube_live_option(normalized_text: str) -> bool | None:
-    live_name = r"(?:live(?:\s*(?:output|ausgabe))?|liveausgabe)"
+    live_name = r"(?:live(?:\s*(?:output|ausgabe|modus))?|liveausgabe|zwischen(?:stand|stände|staende)|chunks?|häppchen|haeppchen)"
+    live_delivery = r"(?:post(?:en|est)?|past(?:e|en|est)?|sende(?:n|st)?|schick(?:en|st)?|ausgeb(?:en|e|t)?|zeig(?:en|st)?|meld(?:en|est)?|stream(?:en|st)?|spam(?:men|mst)?)"
+    during_words = r"(?:live|während(?:dessen)?|waehrend(?:dessen)?|zwischendurch|unterwegs|parallel|laufend|fortlaufend|sofort|direkt)"
     if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{live_name}\b", normalized_text):
         return False
     if re.search(rf"\b{live_name}\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
         return False
+    if re.search(rf"\b(?:nicht|nichts|kein(?:e|en|em|er|es)?)\b.{{0,60}}\b{during_words}\b.{{0,60}}\b{live_delivery}\b", normalized_text):
+        return False
+    if re.search(rf"\b(?:nicht|nichts|kein(?:e|en|em|er|es)?)\b.{{0,60}}\b{live_delivery}\b.{{0,60}}\b{during_words}\b", normalized_text):
+        return False
+    if re.search(rf"\b{during_words}\b.{{0,60}}\b(?:nicht|nichts|kein(?:e|en|em|er|es)?)\b.{{0,60}}\b{live_delivery}\b", normalized_text):
+        return False
+    if re.search(r"\b(?:erst|nur)\s+(?:am\s+ende|nachher|danach|wenn\s+fertig|nach\s+der\s+transkription)\b.{0,80}\b(?:post(?:en)?|past(?:en)?|senden|schicken|ausgeben|melden|antworten)\b", normalized_text):
+        return False
     if re.search(rf"\b{live_name}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1|aktivier(?:en|t)?)\b", normalized_text):
+        return True
+    if re.search(rf"\b(?:mit|bitte|gern(?:e)?)\b.{{0,30}}\b{live_name}\b", normalized_text):
+        return True
+    if re.search(rf"\b{live_delivery}\b.{{0,60}}\b{during_words}\b", normalized_text):
+        return True
+    if re.search(rf"\b{during_words}\b.{{0,60}}\b{live_delivery}\b", normalized_text):
         return True
     if re.search(rf"\b(?:mit\s+)?{live_name}\b", normalized_text):
         return True
@@ -3964,24 +3981,42 @@ def _parse_youtube_live_option(normalized_text: str) -> bool | None:
 
 
 def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
-    llm_target = r"(?:(?:an|ans|zum|zur|in|ins)\s+)?(?:dein(?:e[nm])?\s+)?(?:llm|send\s*to\s*llm)"
+    llm_name = r"(?:llm|send\s*to\s*llm|gpt|chatgpt|openai|ki|ai|modell|model)"
+    llm_target = rf"(?:(?:an|ans|zum|zur|in|ins)\s+)?(?:dein(?:e[nm])?\s+)?{llm_name}"
+    llm_actions = r"(?:auswert(?:en|ung)?|analysier(?:en|e|t)?|analyse|zusammenfass(?:en|ung)?|summary|summariz(?:e|en)|fazit|bewert(?:en|ung)?|interpretier(?:en|e|t)?)"
+    send_verbs = r"(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|geht|gehen|reich(?:e|en)?|übergib(?:en)?|uebergib(?:en)?)"
     if re.search(rf"\b(?:ohne|kein(?:e|en|em|er|es)?|nicht)\s+{llm_target}\b", normalized_text):
         return False
-    if re.search(rf"\b(?:llm|send\s*to\s*llm)\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+    if re.search(rf"\b{llm_name}\s*(?:=|:)?\s*(?:nein|no|n|nee|false|falsch|aus|off|0|nicht|deaktivier(?:en|t)?|abschalt(?:en|en)?)\b", normalized_text):
+        return False
+    llm_negative_fillers = r"(?:(?:mehr|weiter(?:e|en|er)?|noch|extra|zusätzlich|zusaetzlich|bitte|irgendwas)\s+)*"
+    if re.search(rf"\b(?:nicht|ohne)\s+{llm_negative_fillers}{llm_actions}\b", normalized_text):
+        return False
+    if re.search(rf"\bkein(?:e|en|em|er|es)?\s+{llm_negative_fillers}(?:{llm_actions}|{llm_name})\b", normalized_text):
+        return False
+    if re.search(r"\b(?:nur|bloß|bloss|lediglich)\b.{0,40}\b(?:transkribier(?:en|e)?|transkript|abschrift)\b", normalized_text) and not re.search(rf"\b{llm_name}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1)\b", normalized_text):
         return False
     if re.search(rf"\b{llm_target}\s*(?:=|:)?\s*(?:ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1)\b", normalized_text):
         return True
-    if re.search(r"\b(?:an|ans|zum|zur|in|ins)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
+    if re.search(rf"\b(?:an|ans|zum|zur|in|ins)\s+(?:dein(?:e[nm])?\s+)?{llm_name}\b", normalized_text):
         return True
-    if re.search(r"\b(?:aber|mit)\s+(?:dein(?:e[nm])?\s+)?llm\b", normalized_text):
+    if re.search(rf"\b(?:aber|mit|durch|per)\s+(?:dein(?:e[nm])?\s+)?{llm_name}\b", normalized_text):
         return True
     if re.search(r"\bsend\s*to\s*llm\b", normalized_text):
         return True
-    if re.search(rf"\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|geht|gehen)\b.*\b{llm_target}\b", normalized_text):
+    if re.search(rf"\b{send_verbs}\b.{{0,100}}\b{llm_target}\b", normalized_text):
         return True
-    if re.search(rf"\b{llm_target}\b.*\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|auswert(?:en|ung)|analysier(?:en)?)\b", normalized_text):
+    if re.search(rf"\b{llm_target}\b.{{0,100}}\b(?:schick(?:en)?|send(?:en)?|leit(?:e|en)?|weiter(?:geben|leiten)?|gib|geben|{llm_actions})\b", normalized_text):
         return True
-    if re.search(r"\b(?:danach|anschlie(?:ß|ss)end|hinterher|danach\s+bitte)\b.*\b(?:auswert(?:en|ung)|analysier(?:en)?|zusammenfass(?:en|ung)|summariz(?:e|en))\b", normalized_text):
+    if re.search(rf"\b(?:danach|dann|anschlie(?:ß|ss)end|hinterher|nachher|am\s+ende|nach\s+der\s+transkription)\b.{{0,100}}\b{llm_actions}\b", normalized_text):
+        return True
+    if re.search(rf"\b{llm_actions}\b.{{0,100}}\b(?:danach|dann|anschlie(?:ß|ss)end|hinterher|nachher|am\s+ende|nach\s+der\s+transkription)\b", normalized_text):
+        return True
+    if re.search(rf"\b(?:lass|laß)\b.{{0,80}}\b(?:ki|ai|gpt|chatgpt|openai|modell|model)\b.{{0,80}}\b(?:drüber|drueber|drauf|darauf|damit)\b", normalized_text):
+        return True
+    if re.search(r"\b(?:danach|anschlie(?:ß|ss)end|hinterher|nachher|am\s+ende)\b.{0,80}\b(?:an\s+dich|zu\s+dir|dir\s+geben|gib\s+dir|schick\s+dir)\b", normalized_text):
+        return True
+    if re.search(r"\b(?:an\s+dich|zu\s+dir|dir)\b.{0,50}\b(?:geben|schicken|senden|weitergeben|weiterleiten|auswerten|analysieren)\b", normalized_text):
         return True
     return None
 

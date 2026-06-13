@@ -1896,6 +1896,27 @@ class BotTests(unittest.TestCase):
         self.assertEqual(_parse_youtube_local_options("ohne live und ohne LLM, danach auswerten"), (False, False))
         self.assertEqual(_parse_youtube_local_options("nur transkribieren, kein llm"), (None, False))
 
+    def test_youtube_local_options_parse_broad_context_phrasing(self) -> None:
+        cases = {
+            "transkribier das, waehrenddessen bitte nichts posten, danach an GPT": (False, True),
+            "kein Paste waehrenddessen, anschliessend OpenAI auswerten lassen": (False, True),
+            "erst am Ende senden, dann zusammenfassen": (False, True),
+            "poste chunks live und lass GPT danach analysieren": (True, True),
+            "ohne Zwischenstaende, per KI zusammenfassen": (False, True),
+            "zwischendurch nichts schicken, am Ende Fazit": (False, True),
+            "keine Haeppchen, danach Summary": (False, True),
+            "parallel senden, OpenAI an": (True, True),
+            "nicht spammen unterwegs, aber an dich geben": (False, True),
+            "schick's an dein Modell": (None, True),
+            "Live bitte, keine Auswertung": (True, False),
+            "nur Abschrift, nicht analysieren": (None, False),
+            "nicht an GPT, live aus": (False, False),
+            "OpenAI off, aber live posten": (True, False),
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(_parse_youtube_local_options(text), expected)
+
     def test_handle_update_youtube_transcript_starts_local_job_from_free_words(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError
         from TeeBotus.instructions import BotInstructions
