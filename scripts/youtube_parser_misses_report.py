@@ -198,14 +198,39 @@ def _print_text(report: dict[str, Any]) -> None:
             print(f"  suggestion={group['promotion_suggestion']['summary']}")
 
 
+def build_regression_cases(report: dict[str, Any]) -> list[dict[str, Any]]:
+    cases: list[dict[str, Any]] = []
+    for group in report["groups"]:
+        suggestion = group.get("promotion_suggestion")
+        if not suggestion:
+            continue
+        cases.append(
+            {
+                "text": group["formulation"],
+                "expected": [
+                    suggestion["target_live_output"],
+                    suggestion["target_send_to_llm"],
+                ],
+                "missing_fields": suggestion["missing_fields"],
+                "tokens": suggestion["tokens"],
+                "count": group["count"],
+                "sources": group["sources"],
+            }
+        )
+    return cases
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize YouTube parser miss logs.")
     parser.add_argument("--instances-dir", type=Path, default=ROOT / "instances")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument("--regression-json", action="store_true", help="Print compact regression cases for promotion candidates.")
     args = parser.parse_args(argv)
 
     report = build_report(args.instances_dir)
-    if args.json:
+    if args.regression_json:
+        print(json.dumps(build_regression_cases(report), ensure_ascii=False, indent=2, sort_keys=True))
+    elif args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     else:
         _print_text(report)

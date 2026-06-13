@@ -79,6 +79,18 @@ def test_youtube_parser_misses_report_groups_and_marks_promotion_candidates(tmp_
     assert covered["base_parser_now"] == [False, True]
     assert covered["promotion_suggestion"] is None
 
+    cases = youtube_parser_misses_report.build_regression_cases(report)
+    assert cases == [
+        {
+            "text": "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>",
+            "expected": [False, True],
+            "missing_fields": ["live_output"],
+            "tokens": ["gelaber", "llm", "unterwegs"],
+            "count": 2,
+            "sources": first["sources"],
+        }
+    ]
+
 
 def test_youtube_parser_misses_report_cli_runs_from_repo_root(tmp_path: Path) -> None:
     result = subprocess.run(
@@ -97,3 +109,36 @@ def test_youtube_parser_misses_report_cli_runs_from_repo_root(tmp_path: Path) ->
     payload = json.loads(result.stdout)
     assert payload["entry_count"] == 0
     assert payload["group_count"] == 0
+
+
+def test_youtube_parser_misses_report_cli_regression_json(tmp_path: Path) -> None:
+    miss_path = tmp_path / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+    _write_jsonl(
+        miss_path,
+        [
+            {
+                "context": "pending-options",
+                "formulation": "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>",
+                "parser_live_output": None,
+                "parser_send_to_llm": True,
+                "llm_live_output": False,
+                "llm_send_to_llm": True,
+            }
+        ],
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--instances-dir",
+            str(tmp_path / "instances"),
+            "--regression-json",
+        ],
+        cwd=SCRIPT_PATH.parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+    assert payload[0]["text"] == "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>"
+    assert payload[0]["expected"] == [False, True]
