@@ -75,7 +75,7 @@ Das Bot-Verhalten liegt pro Instanz in einer eigenen `Bot_Verhalten.md`:
 - `instances/Bote_der_Wahrheit/Bot_Verhalten.md`
 - `instances/Depressionsbot/Bot_Verhalten.md`
 
-Diese lokalen Instanzdateien sind absichtlich per `.gitignore` vom Upload ausgeschlossen. Im Git-Repository liegt nur das generische Template `Bot_Verhalten.md`, damit keine echten Prompts, Regelwerke oder Secrets veroeffentlicht werden.
+Gemeinsame Defaults stehen in `ALL_BOTS_DEFAULT.md`. Der Bot laedt diese Datei zuerst und danach die aktive Instanzdatei; Instanzwerte ueberschreiben oder ergaenzen die Defaults. Die lokalen Instanzdateien sind absichtlich per `.gitignore` vom Upload ausgeschlossen, damit keine echten Prompts, Regelwerke oder Secrets veroeffentlicht werden.
 
 Die Datei funktioniert bewusst aehnlich wie eine `AGENTS.md`, aber fuer den laufenden Bot:
 
@@ -83,6 +83,8 @@ Die Datei funktioniert bewusst aehnlich wie eine `AGENTS.md`, aber fuer den lauf
 - `## OpenAI` steuert OpenAI-Fallback, Modell und Ausgabeparameter.
 - `## Antworten` steuert eingebaute Antworten wie `/start`, `/chatid` und unbekannte Befehle.
 - `## Befehle` legt eigene Slash-Befehle an, z. B. `/status: Der Bot laeuft.`
+- `## Prompt` in `ALL_BOTS_DEFAULT.md` wird jeder Instanz zusaetzlich mitgegeben.
+- `## Securityantworten` in `ALL_BOTS_DEFAULT.md` steuert editierbare Antwortvorlagen fuer Datenschutz- und Security-Fragen.
 - `## Systemprompt` steuert die Rolle und den Antwortstil des OpenAI-Modells.
 - `## Textantworten` beantwortet exakte Texte ohne Slash-Befehl.
 - `## Enthaelt` beantwortet Nachrichten, die einen bestimmten Text enthalten.

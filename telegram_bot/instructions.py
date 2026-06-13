@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 LOGGER = logging.getLogger("telegram_bot.instructions")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 
 DEFAULT_COMMANDS = {
     "/ping": "pong",
@@ -127,11 +130,15 @@ class BotInstructions:
     user_memory_dir: str = "instances/{instance}/data/users"
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
+    openai_shared_prompt: str = ""
     openai_system_prompt: str = (
         "Du bist ein hilfreicher Telegram-Bot.\n"
         "Antworte auf Deutsch, klar und eher kurz.\n"
         "Wenn du etwas nicht sicher weisst, sage das offen."
     )
+    security_answer_short: str = ""
+    security_answer_full: str = ""
+    security_answer_easter_egg: str = ""
     commands: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_COMMANDS))
     text_replies: dict[str, str] = field(default_factory=dict)
     contains_replies: dict[str, str] = field(default_factory=dict)
@@ -141,7 +148,7 @@ class BotInstructions:
         return "\n".join([self.help_title, *self.help_lines])
 
     def openai_instructions_text(self) -> str:
-        parts = [self.openai_system_prompt.strip()]
+        parts = [self.openai_shared_prompt.strip(), self.openai_system_prompt.strip()]
         if self.openai_rule_text.strip():
             parts.extend(
                 [
@@ -149,13 +156,16 @@ class BotInstructions:
                     self.openai_rule_text.strip(),
                 ]
             )
+        security_templates = _security_templates_text(self)
+        if security_templates:
+            parts.append(security_templates)
         return "\n\n".join(part for part in parts if part)
 
 
 class InstructionStore:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
-        self._signature: tuple[int | None, int | None, str] | None = None
+        self._signature: tuple[int | None, int | None, str, int | None] | None = None
         self._instructions = BotInstructions()
 
     def get(self) -> BotInstructions:
@@ -163,7 +173,7 @@ class InstructionStore:
             if self._signature is not None:
                 LOGGER.warning("Instruction file %s disappeared; using defaults.", self.path)
             self._signature = None
-            self._instructions = BotInstructions()
+            self._instructions = load_instructions(self.path)
             return self._instructions
 
         signature = _instruction_signature(self.path, self._instructions)
@@ -177,16 +187,29 @@ class InstructionStore:
 
 def load_instructions(path: str | Path) -> BotInstructions:
     path = Path(path)
+    default_instructions = _load_default_instructions()
     if not path.exists():
-        return BotInstructions()
-    instructions = parse_instructions(path.read_text(encoding="utf-8"))
+        return default_instructions
+    instructions = parse_instructions(path.read_text(encoding="utf-8"), base=default_instructions)
     instructions.openai_rule_text = _load_rule_text(path, instructions.openai_rule_file)
     return instructions
 
 
-def _instruction_signature(path: Path, instructions: BotInstructions) -> tuple[int | None, int | None, str]:
+def _instruction_signature(path: Path, instructions: BotInstructions) -> tuple[int | None, int | None, str, int | None]:
     rule_path = _resolve_rule_path(path, instructions.openai_rule_file)
-    return (_mtime_ns(path), _mtime_ns(rule_path), str(rule_path) if rule_path else "")
+    default_path = _default_instruction_path()
+    return (_mtime_ns(path), _mtime_ns(rule_path), str(rule_path) if rule_path else "", _mtime_ns(default_path))
+
+
+def _default_instruction_path() -> Path:
+    return PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME
+
+
+def _load_default_instructions() -> BotInstructions:
+    path = _default_instruction_path()
+    if not path.exists():
+        return BotInstructions()
+    return parse_instructions(path.read_text(encoding="utf-8"))
 
 
 def _mtime_ns(path: Path | None) -> int | None:
@@ -219,12 +242,13 @@ def _resolve_rule_path(instruction_path: Path, rule_file: str) -> Path | None:
     return instruction_path.parent / path
 
 
-def parse_instructions(markdown: str) -> BotInstructions:
-    instructions = BotInstructions()
-    commands = dict(DEFAULT_COMMANDS)
-    text_replies: dict[str, str] = {}
-    contains_replies: dict[str, str] = {}
+def parse_instructions(markdown: str, *, base: BotInstructions | None = None) -> BotInstructions:
+    instructions = deepcopy(base) if base is not None else BotInstructions()
+    commands = dict(instructions.commands)
+    text_replies: dict[str, str] = dict(instructions.text_replies)
+    contains_replies: dict[str, str] = dict(instructions.contains_replies)
     help_lines: list[str] | None = None
+    shared_prompt_lines: list[str] | None = None
     system_prompt_lines: list[str] | None = None
     section = ""
 
@@ -234,6 +258,11 @@ def parse_instructions(markdown: str) -> BotInstructions:
             continue
         if line.startswith("#"):
             section = _section_name(line)
+            continue
+        if section == "shared_prompt":
+            if shared_prompt_lines is None:
+                shared_prompt_lines = []
+            shared_prompt_lines.append(line)
             continue
         if section == "system_prompt":
             if system_prompt_lines is None:
@@ -266,6 +295,8 @@ def parse_instructions(markdown: str) -> BotInstructions:
             _apply_codex_setting(instructions, key, value)
         elif section == "memory":
             _apply_memory_setting(instructions, key, value)
+        elif section == "security_answers":
+            _apply_security_answer(instructions, key, value)
         elif section == "commands":
             commands[_normalize_command_name(key)] = value
         elif section == "text_replies":
@@ -278,6 +309,8 @@ def parse_instructions(markdown: str) -> BotInstructions:
     instructions.contains_replies = contains_replies
     if help_lines is not None:
         instructions.help_lines = tuple(help_lines)
+    if shared_prompt_lines is not None:
+        instructions.openai_shared_prompt = "\n".join(shared_prompt_lines).strip()
     if system_prompt_lines is not None:
         instructions.openai_system_prompt = "\n".join(system_prompt_lines).strip()
     return instructions
@@ -325,6 +358,17 @@ def _section_name(line: str) -> str:
         "systemprompt": "system_prompt",
         "system prompt": "system_prompt",
         "system_prompt": "system_prompt",
+        "prompt": "shared_prompt",
+        "defaultprompt": "shared_prompt",
+        "default prompt": "shared_prompt",
+        "global prompt": "shared_prompt",
+        "all bots prompt": "shared_prompt",
+        "gemeinsamer prompt": "shared_prompt",
+        "securityantworten": "security_answers",
+        "security antworten": "security_answers",
+        "security answers": "security_answers",
+        "datenschutzantworten": "security_answers",
+        "privacy answers": "security_answers",
         "codex": "codex",
         "textantworten": "text_replies",
         "text replies": "text_replies",
@@ -524,6 +568,31 @@ def _apply_memory_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.user_memory_max_prompt_chars = _parse_required_int(value, default=instructions.user_memory_max_prompt_chars)
     elif normalized == "max_entry_chars":
         instructions.user_memory_max_entry_chars = _parse_required_int(value, default=instructions.user_memory_max_entry_chars)
+
+
+def _apply_security_answer(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized in {"short", "kurz", "security_answer_short"}:
+        instructions.security_answer_short = value
+    elif normalized in {"full", "voll", "detailed", "ausfuehrlich", "security_answer_full"}:
+        instructions.security_answer_full = value
+    elif normalized in {"easter_egg", "easteregg", "witz", "security_answer_easter_egg"}:
+        instructions.security_answer_easter_egg = value
+
+
+def _security_templates_text(instructions: BotInstructions) -> str:
+    entries = [
+        ("Kurze Security-Antwort", instructions.security_answer_short),
+        ("Ausfuehrliche Security-Antwort", instructions.security_answer_full),
+        ("Klar als erfundener Witz markiertes Security-Easter-Egg", instructions.security_answer_easter_egg),
+    ]
+    lines: list[str] = []
+    for title, value in entries:
+        if value.strip():
+            lines.extend([f"{title}:", value.strip()])
+    if not lines:
+        return ""
+    return "Editierbare Antwortvorlagen fuer Datenschutz- und Security-Fragen:\n" + "\n\n".join(lines)
 
 
 def _normalize_key(key: str) -> str:

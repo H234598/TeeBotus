@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from telegram_bot.instructions import InstructionStore, load_instructions, parse_instructions, render_template
 
@@ -192,6 +193,74 @@ class InstructionTests(unittest.TestCase):
 
         self.assertEqual(instructions.openai_rule_file, "Analyse.md")
         self.assertEqual(instructions.openai_rule_text, "Spezielle Analyse.")
+
+    def test_load_instructions_merges_all_bots_default_before_instance(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            default_path = root / "ALL_BOTS_DEFAULT.md"
+            instance_path = root / "instances" / "Demo" / "Bot_Verhalten.md"
+            instance_path.parent.mkdir(parents=True)
+            default_path.write_text(
+                """
+                ## Prompt
+                Gemeinsamer Prompt.
+
+                ## OpenAI
+                - model: default-model
+                - max_output_tokens: 123
+
+                ## Securityantworten
+                - short: Kurz.
+                - full: Voll.
+                - easter_egg: Erfundener Witz.
+
+                ## Befehle
+                - /default: Aus Default.
+                """,
+                encoding="utf-8",
+            )
+            instance_path.write_text(
+                """
+                ## OpenAI
+                - model: instance-model
+
+                ## Befehle
+                - /status: Aus Instanz.
+
+                ## Systemprompt
+                Instanzprompt.
+                """,
+                encoding="utf-8",
+            )
+
+            with patch("telegram_bot.instructions.PROJECT_ROOT", root):
+                instructions = load_instructions(instance_path)
+
+        self.assertEqual(instructions.openai_model, "instance-model")
+        self.assertEqual(instructions.openai_max_output_tokens, 123)
+        self.assertEqual(instructions.commands["/default"], "Aus Default.")
+        self.assertEqual(instructions.commands["/status"], "Aus Instanz.")
+        self.assertIn("Gemeinsamer Prompt.", instructions.openai_instructions_text())
+        self.assertIn("Instanzprompt.", instructions.openai_instructions_text())
+        self.assertIn("Kurz.", instructions.openai_instructions_text())
+        self.assertIn("Voll.", instructions.openai_instructions_text())
+        self.assertIn("Erfundener Witz.", instructions.openai_instructions_text())
+
+    def test_instruction_store_uses_all_bots_default_when_instance_file_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "ALL_BOTS_DEFAULT.md").write_text(
+                """
+                ## Befehle
+                - /default: Aus Default.
+                """,
+                encoding="utf-8",
+            )
+
+            with patch("telegram_bot.instructions.PROJECT_ROOT", root):
+                instructions = InstructionStore(root / "instances" / "Demo" / "Bot_Verhalten.md").get()
+
+        self.assertEqual(instructions.commands["/default"], "Aus Default.")
 
 
 if __name__ == "__main__":
