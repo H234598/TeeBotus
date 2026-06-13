@@ -4,7 +4,7 @@ This bot encrypts user memory files at rest, per Telegram sender ID.
 
 ## What is encrypted
 
-By default, the bot stores the private per-sender key in the desktop Secret Service via `secret-tool`.
+By default, the bot stores a private, randomly generated 32-byte per-sender key in the desktop Secret Service via `secret-tool`.
 
 For headless setups, you can switch to an explicit passphrase backend with `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase`. In that mode, the per-sender random key is stored locally in `User_Memory_Key.bin` and protected by a passphrase from `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE`, `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE`, or an automatically created private passphrase file in the instance data directory.
 
@@ -16,7 +16,7 @@ The following user-memory files are encrypted with that key:
 - `User_Memory_Entries.jsonl`
 - `User_Habbits_and_behave.md`
 
-The user-specific key is distinct per sender ID. That means one user cannot decrypt another user’s memory files without that other user’s key.
+The user-specific key is distinct per sender ID and is generated from fresh random bytes. That means one user cannot decrypt another user’s memory files without that other user’s key.
 
 If the Secret Service is unavailable in keyring mode, or the configured passphrase cannot be loaded in passphrase mode, key lookup or creation fails closed. The bot does not silently fall back to an unprotected local key file.
 

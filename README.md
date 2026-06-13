@@ -178,7 +178,7 @@ Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Ko
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener Key pro Sender-ID.
+Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine verschluesselte interne Zusatzhinweis-Datei und ein eigener zufaellig erzeugter 32-Byte-Key pro Sender-ID.
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 

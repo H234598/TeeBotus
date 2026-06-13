@@ -335,6 +335,32 @@ class BotTests(unittest.TestCase):
             self.assertEqual(passphrase_path.stat().st_mode & 0o777, 0o600)
             self.assertGreaterEqual(len(passphrase_path.read_text(encoding="utf-8").strip()), 32)
 
+    def test_user_memory_keys_are_per_sender_id_and_stay_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory) / "instances" / "Depressionsbot" / "data" / "users"
+            first_path = base / "111" / USER_MEMORY_KEY_FILENAME
+            second_path = base / "222" / USER_MEMORY_KEY_FILENAME
+            first_path.parent.mkdir(parents=True, exist_ok=True)
+            second_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with patch.dict(
+                "os.environ",
+                {
+                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
+                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
+                },
+                clear=False,
+            ):
+                first_key = ensure_user_memory_key(first_path, instance_name="Depressionsbot", sender_id="111")
+                first_key_again = ensure_user_memory_key(first_path, instance_name="Depressionsbot", sender_id="111")
+                second_key = ensure_user_memory_key(second_path, instance_name="Depressionsbot", sender_id="222")
+
+            self.assertEqual(first_key, first_key_again)
+            self.assertNotEqual(first_key, second_key)
+            self.assertEqual(len(first_key), 32)
+            self.assertEqual(len(second_key), 32)
+
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
