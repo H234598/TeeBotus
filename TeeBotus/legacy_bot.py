@@ -24,9 +24,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import __version__
+from .core.registration import RegistrationAction, parse_registration_intent
 from .handlers import build_reply, should_use_openai
 from .instructions import BotInstructions, InstructionStore, render_template
 from .openai_client import OpenAIAPIError, OpenAIClient
+from .runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
+from .runtime.legacy_bridge import maybe_handle_account_runtime_message
 from .user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     UserMemoryCryptoError,
@@ -57,6 +61,13 @@ MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
 USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
+ACCOUNT_MEMORY_FILENAMES = frozenset(
+    {
+        USER_MEMORY_INDEX_FILENAME,
+        USER_MEMORY_ENTRIES_FILENAME,
+        USER_HABITS_FILENAME,
+    }
+)
 USER_AVATAR_BASENAME = "User_Avatar"
 USER_AVATAR_ICON_FILENAME = "User_Avatar.icon"
 USER_AVATAR_ICON_MARKER_FILENAME = ".User_Avatar_Icon_Set"
@@ -1103,6 +1114,15 @@ def handle_update(
             message.get("message_id", "unknown"),
         )
         return
+
+    if text and _handle_account_runtime_command(api, chat_id, message, text, instance_name):
+        return
+
+    if text and _normalize_command(text) == "/status":
+        reply = _build_status_reply(message, instructions, instance_name)
+        _send_tracked_message(api, chat_state, chat_id, _with_first_contact_intro(reply, first_contact, bot_identity))
+        return
+
     user_memory = _prepare_user_memory(user_memory_store, message, instructions, text, api)
     _process_text_message(
         api,
@@ -1262,6 +1282,125 @@ def _process_text_message(
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, fallback, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, fallback)
         _record_user_memory(user_memory_store, user_memory, message, text, fallback, instructions, api)
+
+
+class _RuntimeCommandSender:
+    def __init__(self, api: TelegramAPI, chat_id: int) -> None:
+        self.api = api
+        self.chat_id = chat_id
+
+    def send_message(self, text: str) -> None:
+        _send_untracked_message(self.api, self.chat_id, text)
+
+
+def _handle_account_runtime_command(
+    api: TelegramAPI,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    instance_name: str,
+) -> bool:
+    intent = parse_registration_intent(text)
+    if intent.action not in {
+        RegistrationAction.ACCOUNT,
+        RegistrationAction.REGISTER,
+        RegistrationAction.LOGIN,
+        RegistrationAction.ROTATE_SECRET,
+        RegistrationAction.UNLINK_THIS_CHANNEL,
+        RegistrationAction.ACCOUNT_EDIT,
+        RegistrationAction.LINKED_ACCOUNTS,
+        RegistrationAction.WTF_UNLINK,
+    }:
+        return False
+    if not instance_name:
+        return False
+    try:
+        return maybe_handle_account_runtime_message(
+            message,
+            _RuntimeCommandSender(api, chat_id),
+            instance_name=instance_name,
+            data_dir=PROJECT_ROOT / "instances" / instance_name / "data",
+        )
+    except Exception:
+        LOGGER.exception("Failed to handle account runtime command for instance=%s.", instance_name)
+        _send_untracked_message(api, chat_id, "Account-Funktion ist gerade nicht verfuegbar. Bitte versuche es spaeter erneut.")
+        return True
+
+
+def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> str:
+    memory_size = _user_memory_size_for_status(message, instructions, instance_name)
+    return "\n".join(
+        [
+            "Status: laeuft",
+            f"Version: {__version__}",
+            f"Deine Nutzermemorys: {_format_byte_size(memory_size)}",
+        ]
+    )
+
+
+def _user_memory_size_for_status(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> int:
+    sender_id = _sender_identifier(message)
+    if not sender_id:
+        return 0
+    legacy_dir = _legacy_memory_dir_for_sender(sender_id, instructions, instance_name)
+    if instructions.user_memory_enabled and legacy_dir.exists():
+        return _memory_files_size(legacy_dir)
+    account_dir = _account_memory_dir_for_sender(sender_id, instance_name)
+    if account_dir is not None:
+        return _memory_files_size(account_dir)
+    return _memory_files_size(legacy_dir)
+
+
+def _account_memory_dir_for_sender(sender_id: str, instance_name: str) -> Path | None:
+    if not instance_name:
+        return None
+    try:
+        store = AccountStore(
+            PROJECT_ROOT / "instances" / instance_name / "data" / "accounts",
+            instance_name,
+            secret_provider=SecretToolInstanceSecretProvider(),
+            create_dirs=False,
+        )
+        account_id = store.get_account_for_identity(telegram_identity_key(sender_id))
+    except (AccountStoreError, OSError):
+        LOGGER.exception("Failed to resolve account memory directory for status.")
+        return None
+    if not account_id:
+        return None
+    account_dir = PROJECT_ROOT / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
+    return account_dir if account_dir.is_dir() else None
+
+
+def _legacy_memory_dir_for_sender(sender_id: str, instructions: BotInstructions, instance_name: str) -> Path:
+    directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/users"
+    directory = directory.replace("{instance}", instance_name or DEFAULT_INSTANCE_NAME)
+    return Path(directory) / _safe_memory_filename(sender_id)
+
+
+def _memory_files_size(directory: Path | None) -> int:
+    if directory is None or not directory.exists():
+        return 0
+    total = 0
+    for path in directory.rglob("*"):
+        if not path.is_file() or path.name not in ACCOUNT_MEMORY_FILENAMES:
+            continue
+        try:
+            total += path.stat().st_size
+        except OSError:
+            LOGGER.exception("Failed to stat user memory file %s.", path)
+    return total
+
+
+def _format_byte_size(size: int) -> str:
+    value = float(max(0, size))
+    units = ("B", "KB", "MB", "GB", "TB")
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} B"
+            return f"{value:.2f} {unit}"
+        value /= 1024
+    return "0 B"
 
 
 def _handle_incoming_voice_message(

@@ -7,7 +7,7 @@ TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. E
 - `/start` begruesst neue Nutzer
 - `/help` zeigt die verfuegbaren Befehle
 - `/ping` antwortet mit `pong`
-- `/status` antwortet mit dem Status aus der aktiven Instanz-`Bot_Verhalten.md`
+- `/status` zeigt Laufstatus, TeeBotus-Version und die Groesse der Nutzermemorys des anfragenden Nutzers
 - `/chatid` zeigt die aktuelle Chat-ID
 - `/reset` loescht den OpenAI-Verlauf fuer den aktuellen Chat
 - `/reset_memorys` fragt nach und loescht danach nur die eigenen User-Memory-Eintraege
@@ -118,7 +118,7 @@ Die Datei funktioniert bewusst aehnlich wie eine `AGENTS.md`, aber fuer den lauf
 - `## Einstellungen` steuert Schalter wie `echo`.
 - `## OpenAI` steuert OpenAI-Fallback, Modell und Ausgabeparameter.
 - `## Antworten` steuert eingebaute Antworten wie `/start`, `/chatid` und unbekannte Befehle.
-- `## Befehle` legt eigene Slash-Befehle an, z. B. `/status: Der Bot laeuft.`
+- `## Befehle` legt eigene Slash-Befehle an. Eingebaute Befehle wie `/status` haben Vorrang, damit Status, Version und Nutzermemory-Groesse konsistent bleiben.
 - `## Prompt` in `ALL_BOTS_DEFAULT.md` wird jeder Instanz zusaetzlich mitgegeben.
 - `## Securityantworten` in `ALL_BOTS_DEFAULT.md` steuert editierbare Antwortvorlagen fuer Datenschutz- und Security-Fragen.
 - `EASTER_EGGS.json` enthaelt auslagerbare Easter-Egg-Antworten, aktuell `security.easter_egg`.

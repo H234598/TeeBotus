@@ -67,6 +67,7 @@ from TeeBotus.bot import (
     split_telegram_message,
     transcribe_youtube_video,
 )
+from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
@@ -1153,7 +1154,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
-                commands={"/status": "ok"},
             )
             memory_store = UserMemoryStore("Depressionsbot")
 
@@ -1163,7 +1163,7 @@ class BotTests(unittest.TestCase):
                     {
                         "message": {
                             "message_id": 1,
-                            "text": "/status",
+                            "text": "/ping",
                             "chat": {"id": 123, "type": "private"},
                             "from": {"id": 456, "first_name": "Ada"},
                         }
@@ -1198,13 +1198,12 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
-                commands={"/status": "ok"},
             )
             memory_store = UserMemoryStore("Depressionsbot")
             message = {
                 "message": {
                     "message_id": 1,
-                    "text": "/status",
+                    "text": "/ping",
                     "chat": {"id": 123, "type": "private"},
                     "from": {"id": 456, "first_name": "Ada"},
                 }
@@ -1218,6 +1217,66 @@ class BotTests(unittest.TestCase):
             self.assertTrue((user_dir / ".User_Avatar_Checked").exists())
             self.assertFalse((user_dir / "User_Avatar.jpg").exists())
             self.assertFalse((user_dir / "User_Avatar.icon").exists())
+
+    def test_status_reports_version_and_current_user_memory_size(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            instructions = BotInstructions(
+                user_memory_enabled=True,
+                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
+            )
+            memory_store = UserMemoryStore("Depressionsbot")
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir.mkdir(parents=True)
+            (user_dir / "User_Memory_Index.json").write_bytes(b"x" * 1024)
+            (user_dir / "User_Memory_Entries.jsonl").write_bytes(b"y" * 1024)
+            (user_dir / "User_Habbits_and_behave.md").write_bytes(b"z" * 512)
+            (user_dir / "Secret_Verifier.json").write_bytes(b"not counted")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 1,
+                        "text": "/status",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                None,
+                ChatState(),
+                memory_store,
+            )
+
+            self.assertEqual(len(api.sent_messages), 1)
+            reply = api.sent_messages[0][1]
+            self.assertIn("Status: laeuft", reply)
+            self.assertIn(f"Version: {__version__}", reply)
+            self.assertIn("Deine Nutzermemorys: 2.50 KB", reply)
+
+    def test_account_commands_are_handled_before_legacy_fallback(self) -> None:
+        api = FakeAPI()
+        instructions = BotInstructions(commands={"/account": "legacy fallback"})
+
+        with patch("TeeBotus.legacy_bot.maybe_handle_account_runtime_message", return_value=True) as handle:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 1,
+                        "text": "/account",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                None,
+                ChatState(instance_name="Depressionsbot"),
+            )
+
+        handle.assert_called_once()
+        self.assertEqual(api.sent_messages, [])
 
     def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
         from TeeBotus.instructions import BotInstructions
