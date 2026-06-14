@@ -27,6 +27,7 @@ def notify_recent_telegram_users_for_version(
     instance_name: str,
     account_store: AccountStore,
     send_message: Callable[[int, str], object],
+    on_error: Callable[[VersionNotificationRecipient, Exception], object] | None = None,
     now: datetime | None = None,
 ) -> int:
     resolved_now = now or datetime.now(timezone.utc)
@@ -42,7 +43,12 @@ def notify_recent_telegram_users_for_version(
             version=version,
             memory_text=_memory_signal_text(account_store, recipient.account_id),
         )
-        send_message(recipient.chat_id, message)
+        try:
+            send_message(recipient.chat_id, message)
+        except Exception as exc:  # noqa: BLE001
+            if on_error is not None:
+                on_error(recipient, exc)
+            continue
         sent_identities.add(recipient.identity_key)
         sent_count += 1
     version_state["sent_identities"] = sorted(sent_identities)

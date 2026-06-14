@@ -70,6 +70,33 @@ def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) 
     assert "ffmpeg" in sent[0][1]
 
 
+def test_notify_recent_telegram_users_continues_after_send_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Broken")
+    store.resolve_or_create_account("telegram:user:222", display_label="Working")
+    sent: list[int] = []
+    errors: list[str] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        if chat_id == 111:
+            raise RuntimeError("chat not found")
+        sent.append(chat_id)
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        on_error=lambda recipient, exc: errors.append(f"{recipient.identity_key}: {exc}"),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [222]
+    assert errors == ["telegram:user:111: chat not found"]
+
+
 def test_version_notification_text_does_not_expose_memory_files() -> None:
     text = build_version_notification_text(version="1.0.3", memory_text="User_Habbits_and_behave.md crypto secret")
 
