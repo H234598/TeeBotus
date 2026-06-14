@@ -85,6 +85,21 @@ def test_matrix_message_maps_sender_and_room_to_event():
     assert event.text == "/account"
 
 
+def test_matrix_room_without_member_state_is_not_private():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 0
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "/account"
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event.chat_type == "group"
+
+
 def test_matrix_send_text_uses_room_send():
     class Response:
         event_id = "$sent"

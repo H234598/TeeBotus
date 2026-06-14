@@ -53,18 +53,28 @@ def test_runtime_status_loads_env_before_resolving_config(monkeypatch) -> None:
     ]
 
 
-def test_bot_main_delegates_unknown_normal_args_to_telegram_bot() -> None:
+def test_bot_main_delegates_unknown_normal_args_to_telegram_bot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     assert bot.main(["--definitely-not-runtime-status"]) == 2
 
 
-def test_channels_telegram_is_stripped_before_telegram_delegation() -> None:
+def test_channels_telegram_is_stripped_before_telegram_delegation(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     assert bot.main(["--channels", "telegram", "--definitely-not-runtime-status"]) == 2
 
 
-def test_channels_signal_without_config_fails_clearly() -> None:
+def test_channels_signal_without_config_fails_clearly(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
     assert bot.main(["--channels", "signal"]) == 2
 
 
@@ -95,8 +105,13 @@ def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> 
     assert [call[0] for call in calls] == ["signal", "telegram"]
 
 
-def test_channels_matrix_without_config_fails_clearly() -> None:
+def test_channels_matrix_without_config_fails_clearly(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
     assert bot.main(["--channels", "matrix"]) == 2
 
 
