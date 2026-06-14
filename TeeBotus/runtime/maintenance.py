@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import logging
+import os
 import shutil
 import sys
 import tarfile
@@ -79,9 +80,11 @@ def maintain_runtime_directory(
 def gzip_file(path: Path) -> Path:
     if path.suffix == ".gz" or not path.exists():
         return path
+    stat = path.stat()
     target = _unique_path(path.with_name(f"{path.name}.gz"))
     with path.open("rb") as source, gzip.open(target, "wb") as sink:
         shutil.copyfileobj(source, sink)
+    os.utime(target, (stat.st_atime, stat.st_mtime))
     path.unlink()
     return target
 

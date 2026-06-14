@@ -48,3 +48,20 @@ def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_
     assert not path.exists()
     with tarfile.open(archives[0], "r:gz") as archive:
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
+
+
+def test_runtime_maintenance_archives_old_uncompressed_logs_in_same_pass(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01"
+    path.write_text("old log\n", encoding="utf-8")
+    os.utime(path, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    assert not path.exists()
+    assert not (tmp_path / f"{path.name}.gz").exists()
+    with tarfile.open(archives[0], "r:gz") as archive:
+        assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
