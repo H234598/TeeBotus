@@ -147,6 +147,17 @@ def test_admin_migrate_apply_moves_plaintext_legacy_memory(monkeypatch: pytest.M
     assert "legacy habit" in (store.account_dir(account_id) / "User_Habbits_and_behave.md").read_text(encoding="utf-8")
 
 
+def test_admin_plan_documents_current_cli_commands() -> None:
+    plan = (Path(__file__).resolve().parents[1] / "docs" / "multi-channel-runtime-account-plan.yaml").read_text(encoding="utf-8")
+
+    assert "python3 -m TeeBotus admin" not in plan
+    assert "python3 -m TeeBotus.admin accounts report --instances-dir instances --format json" in plan
+    assert "python3 -m TeeBotus.admin accounts migrate --dry-run --instances-dir instances" in plan
+    assert "python3 -m TeeBotus.admin accounts migrate --apply --instances-dir instances" in plan
+    assert "--json" not in plan
+    assert "Actual destructive migration is intentionally not implemented" not in plan
+
+
 def test_render_text_report_contains_summary(tmp_path: Path) -> None:
     make_instance(tmp_path, "Bote_der_Wahrheit")
     report = accounts_report.build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
