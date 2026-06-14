@@ -1,0 +1,6 @@
+signal-cli==0.14.5
+signal-cli-api==0.1.1
+signalbot==1.2.2
+nio-bot==1.0.2.post1
+matrix-nio==0.20.2
+blurhash==1.1.5

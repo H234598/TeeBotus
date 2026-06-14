@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import socket
+import subprocess
+import shutil
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +15,7 @@ from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, Secr
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 
@@ -26,6 +30,9 @@ class SignalServiceHealth:
     ok: bool
     target: str
     error: str = ""
+
+
+LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 class TeeBotusSignalCommand:
@@ -102,7 +109,7 @@ class TeeBotusSignalCommand:
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
     _import_signalbot()
-    _require_signal_services_reachable(config)
+    ensure_signal_services_available(config)
     threads: list[threading.Thread] = []
     for account in _signal_accounts(config):
         thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
@@ -118,7 +125,7 @@ def run_signal_accounts(config: RuntimeConfig) -> int:
             "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
         )
     _import_signalbot()
-    _require_signal_services_reachable(config)
+    ensure_signal_services_available(config)
     for account in accounts[1:]:
         thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
@@ -163,7 +170,91 @@ def _require_signal_services_reachable(config: RuntimeConfig) -> None:
         details = "; ".join(
             f"{health.account.instance_name}/{health.account.label} {health.target}: {health.error}" for health in failures
         )
-        raise SignalRuntimeError(f"signal-cli-rest-api nicht erreichbar: {details}")
+        raise SignalRuntimeError(f"signal-cli-api nicht erreichbar: {details}")
+
+
+def ensure_signal_services_available(config: RuntimeConfig) -> None:
+    failures = [health for health in check_signal_services(config) if not health.ok]
+    for health in failures:
+        _start_local_signal_backend_if_possible(health.account)
+    _require_signal_services_reachable(config)
+
+
+def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
+    try:
+        host, port, target = _signal_service_host_port(account.signal_service)
+    except SignalRuntimeError:
+        return
+    if host not in LOCAL_SIGNAL_HOSTS:
+        return
+    command = _signal_cli_api_command(host, port)
+    log_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.log"
+    pid_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.pid"
+    if _pid_file_process_is_running(pid_path):
+        return
+    runtime_dir().mkdir(parents=True, exist_ok=True)
+    try:
+        log_file = log_path.open("ab")
+    except OSError as exc:
+        raise SignalRuntimeError(f"signal-cli-api log konnte nicht geoeffnet werden: {log_path}: {exc}") from exc
+    try:
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:
+        log_file.close()
+        raise SignalRuntimeError(
+            "signal-cli-api ist nicht im PATH. Installiere die gepinnte native Abhaengigkeit aus adapter-dependencies.lock."
+        ) from exc
+    except OSError as exc:
+        log_file.close()
+        raise SignalRuntimeError(f"signal-cli-api konnte nicht gestartet werden: {exc}") from exc
+    finally:
+        try:
+            log_file.close()
+        except OSError:
+            pass
+    pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
+    deadline = time.monotonic() + 10
+    last_error = ""
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise SignalRuntimeError(
+                f"signal-cli-api fuer {target} wurde gestartet, ist aber sofort beendet. Siehe {log_path}."
+            )
+        health = check_signal_service(account, timeout_seconds=0.25)
+        if health.ok:
+            return
+        last_error = health.error
+        time.sleep(0.25)
+    raise SignalRuntimeError(f"signal-cli-api fuer {target} startete nicht rechtzeitig: {last_error}. Siehe {log_path}.")
+
+
+def _signal_cli_api_command(host: str, port: int) -> list[str]:
+    listen_host = "127.0.0.1" if host in {"localhost", "::1"} else host
+    binary = shutil.which("signal-cli-api")
+    if binary is None:
+        local_binary = Path.home() / ".cargo" / "bin" / "signal-cli-api"
+        binary = str(local_binary) if local_binary.exists() else "signal-cli-api"
+    return [binary, "--listen", f"{listen_host}:{port}"]
+
+
+def _pid_file_process_is_running(path: Path) -> bool:
+    try:
+        pid = int(path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        subprocess.run(["kill", "-0", str(pid)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+    return True
 
 
 def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
@@ -184,6 +275,9 @@ def _signalbot_config_kwargs(signalbot: Any, account: AccountRunConfig) -> dict[
     connection_mode = _signalbot_connection_mode(signalbot, scheme)
     if connection_mode is not None:
         kwargs["connection_mode"] = connection_mode
+    in_memory_config = getattr(signalbot, "InMemoryConfig", None)
+    if in_memory_config is not None:
+        kwargs["storage"] = in_memory_config()
     return kwargs
 
 

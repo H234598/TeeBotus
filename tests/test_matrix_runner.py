@@ -180,7 +180,7 @@ def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
         channels=("matrix",),
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", accounts),),
     )
-    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_nio", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: object())
     monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", lambda _config: ())
     monkeypatch.setattr("TeeBotus.runtime.matrix_runner._matrix_account_thread", lambda *, account, instances_dir: FakeThread(account.slot))
     monkeypatch.setattr(
@@ -210,7 +210,7 @@ def test_matrix_start_fails_before_threads_when_homeserver_unreachable(monkeypat
         channels=("matrix",),
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
     )
-    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_nio", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: object())
     monkeypatch.setattr(
         "TeeBotus.runtime.matrix_runner.check_matrix_homeservers",
         lambda _config: (MatrixHomeserverHealth(account=account, ok=False, target="matrix.example:443", error="connection refused"),),

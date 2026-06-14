@@ -12,6 +12,7 @@ from TeeBotus.runtime.signal_runner import (
     SignalServiceHealth,
     TeeBotusSignalCommand,
     check_signal_service,
+    ensure_signal_services_available,
     run_signal_account,
     run_signal_accounts,
 )
@@ -203,15 +204,63 @@ def test_signal_start_fails_before_threads_when_service_unreachable(monkeypatch,
         "TeeBotus.runtime.signal_runner.check_signal_services",
         lambda _config: (SignalServiceHealth(account=account, ok=False, target="127.0.0.1:8080", error="connection refused"),),
     )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._start_local_signal_backend_if_possible", lambda _account: None)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.run_signal_account", lambda **_kwargs: calls.append("started"))
 
     try:
         run_signal_accounts(config)
     except SignalRuntimeError as exc:
-        assert "signal-cli-rest-api nicht erreichbar" in str(exc)
+        assert "signal-cli-api nicht erreichbar" in str(exc)
     else:
         raise AssertionError("SignalRuntimeError was not raised")
     assert calls == []
+
+
+def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://localhost:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+    commands: list[list[str]] = []
+    attempts = {"count": 0}
+
+    class FakeProcess:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+    def fake_check_signal_services(_config):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            return (SignalServiceHealth(account=account, ok=False, target="localhost:8080", error="connection refused"),)
+        return (SignalServiceHealth(account=account, ok=True, target="localhost:8080"),)
+
+    def fake_popen(command, **_kwargs):
+        commands.append(command)
+        return FakeProcess()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", lambda _account, timeout_seconds=1.0: fake_check_signal_services(config)[0])
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+
+    ensure_signal_services_available(config)
+
+    assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
+    assert (tmp_path / "runtime" / "signal-cli-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:
@@ -234,6 +283,7 @@ def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_
     fake_signalbot = SimpleNamespace(
         Config=FakeConfig,
         SignalBot=FakeBot,
+        InMemoryConfig=lambda: "memory-storage",
         api=SimpleNamespace(ConnectionMode=SimpleNamespace(HTTP_ONLY="http_only", HTTPS_ONLY="https_only")),
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: fake_signalbot)
@@ -253,6 +303,7 @@ def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_
 
     assert captured["signal_service"] == "127.0.0.1:8080"
     assert captured["connection_mode"] == "http_only"
+    assert captured["storage"] == "memory-storage"
 
 
 def test_signal_account_rejects_service_url_with_path(monkeypatch, tmp_path) -> None:

@@ -92,7 +92,13 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
-Signal braucht das Python-Paket `signalbot` und eine laufende `signal-cli-rest-api`. Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
+Signal braucht das Python-Paket `signalbot`, die native `signal-cli-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock` und koennen geprueft werden mit:
+
+```bash
+python3 scripts/check_adapter_deps.py
+```
+
+Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
 ```bash
 SIGNAL_BOT_SERVICE_DEPRESSIONSBOT=http://127.0.0.1:8080
@@ -105,7 +111,7 @@ Die Erreichbarkeit des externen Signal-Dienstes pruefst du ohne Botstart:
 python3 -m TeeBotus --runtime-status --channels signal
 ```
 
-Wenn ein konfigurierter Signal-Dienst nicht erreichbar ist, bricht ein Signal-Start vor dem Adapterstart mit einer klaren Fehlermeldung ab.
+Wenn ein lokaler konfigurierter Signal-Dienst nicht erreichbar ist, startet TeeBotus `signal-cli-api --listen <host>:<port>` automatisch und prueft danach erneut. Fuer nicht-lokale Services bleibt ein nicht erreichbares Backend ein harter Startfehler. `signalbot` nutzt dabei `InMemoryConfig`; persistenter Bot-Zustand liegt in TeeBotus, Signal-Account-Daten liegen bei `signal-cli`.
 
 Mehrere Signal-Slots werden positionsgleich konfiguriert:
 
@@ -120,7 +126,7 @@ In Signal erzeugt `/register` einen neuen TeeBotus-Account fuer diesen Signal-We
 /login <account_id> <secret>
 ```
 
-Matrix ist vorbereitet auf `matrix-nio` und braucht einen Matrix-User mit Access-Token. Pro Instanz muessen Homeserver, User-ID und Access-Token zusammen gesetzt sein:
+Matrix nutzt `nio-bot` als Backend und braucht einen Matrix-User mit Access-Token. Pro Instanz muessen Homeserver, User-ID und Access-Token zusammen gesetzt sein:
 
 ```bash
 MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT=https://matrix.example.org

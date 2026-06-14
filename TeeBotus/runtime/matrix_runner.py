@@ -100,7 +100,7 @@ class MatrixRuntimeBridge:
 
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
-    _import_nio()
+    _import_niobot()
     _require_matrix_homeservers_reachable(config)
     threads: list[threading.Thread] = []
     for account in _matrix_accounts(config):
@@ -116,7 +116,7 @@ def run_matrix_accounts(config: RuntimeConfig) -> int:
         raise MatrixRuntimeError(
             "Matrix ist angefordert, aber kein MATRIX_BOT_HOMESERVER_<INSTANCE> plus MATRIX_BOT_USER_ID_<INSTANCE> plus MATRIX_BOT_ACCESS_TOKEN_<INSTANCE> ist konfiguriert."
         )
-    _import_nio()
+    _import_niobot()
     _require_matrix_homeservers_reachable(config)
     for account in accounts[1:]:
         thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
@@ -132,12 +132,18 @@ def run_matrix_account(*, account: AccountRunConfig, instances_dir: str | Path) 
 async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir: str | Path) -> None:
     if account.channel != "matrix":
         raise MatrixRuntimeError(f"unsupported Matrix account channel: {account.channel}")
-    nio = _import_nio()
-    client = nio.AsyncClient(account.matrix_homeserver, account.matrix_user_id, device_id=account.matrix_device_id or None)
-    client.access_token = account.matrix_access_token
+    niobot = _import_niobot()
+    nio = _import_nio_from_niobot_backend()
+    client = niobot.NioBot(
+        account.matrix_homeserver,
+        account.matrix_user_id,
+        device_id=account.matrix_device_id or "teebotus",
+        command_prefix="/",
+        global_message_type="m.text",
+    )
     bridge = MatrixRuntimeBridge(run_config=account, client=client, instances_dir=instances_dir)
     client.add_event_callback(bridge.handle_message, nio.RoomMessageText)
-    await client.sync_forever(timeout=30000, full_state=True)
+    await client.start(access_token=account.matrix_access_token)
 
 
 def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
@@ -196,14 +202,29 @@ def _matrix_homeserver_host_port(homeserver: str) -> tuple[str, int, str]:
     return parsed.hostname, port, target
 
 
-def _import_nio() -> Any:
+def _import_niobot() -> Any:
+    try:
+        import niobot  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        if exc.name in {"niobot", "blurhash", "marko", "magic"}:
+            raise MatrixRuntimeError(
+                "Matrix braucht das Python-Paket 'nio-bot' mit seinen Abhaengigkeiten. "
+                "Installiere die gepinnte Version aus requirements.txt."
+            ) from exc
+        raise
+    if not hasattr(niobot, "NioBot"):
+        raise MatrixRuntimeError("Das installierte Paket 'nio-bot' stellt NioBot nicht bereit.")
+    return niobot
+
+
+def _import_nio_from_niobot_backend() -> Any:
     try:
         import nio  # type: ignore[import-not-found]
     except ModuleNotFoundError as exc:
         if exc.name == "nio":
-            raise MatrixRuntimeError("Matrix ist vorbereitet, aber das Python-Paket 'matrix-nio' ist nicht installiert.") from exc
+            raise MatrixRuntimeError("Matrix ist vorbereitet, aber das Backend von 'nio-bot' stellt 'matrix-nio' nicht bereit.") from exc
         raise
     for required in ("AsyncClient", "RoomMessageText"):
         if not hasattr(nio, required):
-            raise MatrixRuntimeError(f"Das installierte Paket 'matrix-nio' stellt {required} nicht bereit.")
+            raise MatrixRuntimeError(f"Das Matrix-Backend stellt {required} nicht bereit.")
     return nio

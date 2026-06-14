@@ -141,6 +141,26 @@ def test_matrix_send_text_uses_room_send():
     ]
 
 
+def test_matrix_send_text_prefers_niobot_send_message():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi")]))
+
+    assert sent == ["$sent"]
+    assert client.calls == [("!room:example", "hi", {"message_type": "m.text"})]
+
+
 def test_matrix_export_file_uploads_file_before_room_send():
     class UploadResponse:
         content_uri = "mxc://example/export"

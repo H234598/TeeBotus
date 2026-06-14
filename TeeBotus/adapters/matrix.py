@@ -43,11 +43,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     sent: list[str | None] = []
     for action in actions:
         if isinstance(action, SendText):
-            response = await client.room_send(
-                room_id=action.chat_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.text", "body": action.text},
-            )
+            response = await _send_matrix_text(client, action.chat_id, action.text)
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
             await client.room_typing(action.chat_id, True, timeout=3000)
@@ -75,6 +71,17 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages)):
             sent.append(None)
     return sent
+
+
+async def _send_matrix_text(client: Any, room_id: str, text: str) -> Any:
+    send_message = getattr(client, "send_message", None)
+    if callable(send_message):
+        return await send_message(room_id, text, message_type="m.text")
+    return await client.room_send(
+        room_id=room_id,
+        message_type="m.room.message",
+        content={"msgtype": "m.text", "body": text},
+    )
 
 
 async def _send_matrix_file_or_error_notice(
