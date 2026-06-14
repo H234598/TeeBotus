@@ -28,7 +28,7 @@ Instanz-`## Systemprompt` nachgestellt.
 - voice_enabled: true
 - voice_model: gpt-4o-mini-tts
 - voice: alloy
-- voice_format: opus
+- voice_format: mp3
 - voice_speed: 1.0
 - voice_max_input_chars: 4096
 - voice_instructions: Sprich natuerlich und verstaendlich auf Deutsch mit mittelleichtem mittelfraenkischem Einschlag. Nutze nur dezente fraenkische
