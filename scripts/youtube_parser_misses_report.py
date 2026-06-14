@@ -220,15 +220,47 @@ def build_regression_cases(report: dict[str, Any]) -> list[dict[str, Any]]:
     return cases
 
 
+def build_pytest_snippet(report: dict[str, Any]) -> str:
+    cases = build_regression_cases(report)
+    if not cases:
+        return "# No YouTube parser miss regression cases found.\n"
+
+    lines = [
+        "import pytest",
+        "",
+        "from TeeBotus.bot import _parse_youtube_local_options",
+        "",
+        "",
+        "@pytest.mark.parametrize(",
+        "    (\"text\", \"expected\"),",
+        "    [",
+    ]
+    for case in cases:
+        lines.append(f"        ({case['text']!r}, {tuple(case['expected'])!r}),")
+    lines.extend(
+        [
+            "    ],",
+            ")",
+            "def test_youtube_local_options_promoted_parser_misses(text, expected):",
+            "    assert _parse_youtube_local_options(text) == expected",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Summarize YouTube parser miss logs.")
     parser.add_argument("--instances-dir", type=Path, default=ROOT / "instances")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("--regression-json", action="store_true", help="Print compact regression cases for promotion candidates.")
+    parser.add_argument("--pytest-snippet", action="store_true", help="Print a pytest parametrization snippet for promotion candidates.")
     args = parser.parse_args(argv)
 
     report = build_report(args.instances_dir)
-    if args.regression_json:
+    if args.pytest_snippet:
+        print(build_pytest_snippet(report), end="")
+    elif args.regression_json:
         print(json.dumps(build_regression_cases(report), ensure_ascii=False, indent=2, sort_keys=True))
     elif args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

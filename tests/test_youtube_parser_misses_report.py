@@ -90,6 +90,10 @@ def test_youtube_parser_misses_report_groups_and_marks_promotion_candidates(tmp_
             "sources": first["sources"],
         }
     ]
+    snippet = youtube_parser_misses_report.build_pytest_snippet(report)
+    assert "@pytest.mark.parametrize" in snippet
+    assert "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>" in snippet
+    assert "(False, True)" in snippet
 
 
 def test_youtube_parser_misses_report_cli_runs_from_repo_root(tmp_path: Path) -> None:
@@ -142,3 +146,36 @@ def test_youtube_parser_misses_report_cli_regression_json(tmp_path: Path) -> Non
     payload = json.loads(result.stdout)
     assert payload[0]["text"] == "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>"
     assert payload[0]["expected"] == [False, True]
+
+
+def test_youtube_parser_misses_report_cli_pytest_snippet(tmp_path: Path) -> None:
+    miss_path = tmp_path / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+    _write_jsonl(
+        miss_path,
+        [
+            {
+                "context": "pending-options",
+                "formulation": "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>",
+                "parser_live_output": None,
+                "parser_send_to_llm": True,
+                "llm_live_output": False,
+                "llm_send_to_llm": True,
+            }
+        ],
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--instances-dir",
+            str(tmp_path / "instances"),
+            "--pytest-snippet",
+        ],
+        cwd=SCRIPT_PATH.parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "from TeeBotus.bot import _parse_youtube_local_options" in result.stdout
+    assert "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>" in result.stdout
+    assert "(False, True)" in result.stdout
