@@ -985,7 +985,7 @@ class UserMemoryStore:
         )
 
     def _path_for_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
-        directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/users"
+        directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/sender_memory"
         directory = directory.replace("{instance}", self.instance_name)
         return Path(directory) / _safe_memory_filename(sender_id) / USER_MEMORY_INDEX_FILENAME
 
@@ -1308,24 +1308,24 @@ def _handle_account_runtime_command(
 
 
 def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> str:
-    memory_size = _user_memory_size_for_status(message, instructions, instance_name)
+    account_dir = _account_memory_dir_for_status(message, instance_name)
+    memory_size = _memory_files_size(account_dir)
+    encryption_status = _memory_encryption_status_for_status(account_dir)
     return "\n".join(
         [
             "Status: laeuft",
             f"Version: {__version__}",
             f"Deine Nutzermemorys: {_format_byte_size(memory_size)}",
+            f"Userfiles-Verschluesselung: {encryption_status}",
         ]
     )
 
 
-def _user_memory_size_for_status(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> int:
+def _account_memory_dir_for_status(message: dict[str, Any], instance_name: str) -> Path | None:
     sender_id = _sender_identifier(message)
     if not sender_id:
-        return 0
-    account_dir = _account_memory_dir_for_sender(sender_id, instance_name)
-    if account_dir is not None:
-        return _memory_files_size(account_dir)
-    return 0
+        return None
+    return _account_memory_dir_for_sender(sender_id, instance_name)
 
 
 def _account_memory_dir_for_sender(sender_id: str, instance_name: str) -> Path | None:
@@ -1360,6 +1360,37 @@ def _memory_files_size(directory: Path | None) -> int:
         except OSError:
             LOGGER.exception("Failed to stat user memory file %s.", path)
     return total
+
+
+def _memory_encryption_status_for_status(directory: Path | None) -> str:
+    if directory is None or not directory.exists():
+        return "kein Account-Memory gefunden"
+    structured_files = [directory / USER_MEMORY_INDEX_FILENAME, directory / USER_MEMORY_ENTRIES_FILENAME]
+    existing_structured = [path for path in structured_files if path.exists()]
+    encrypted_structured = [path for path in existing_structured if _looks_like_account_encrypted_payload(path)]
+    habits_path = directory / USER_HABITS_FILENAME
+    if not existing_structured:
+        structured_text = "keine strukturierten Userfiles"
+    elif len(encrypted_structured) == len(existing_structured):
+        structured_text = "strukturierte Userfiles verschluesselt"
+    else:
+        structured_text = "strukturierte Userfiles nicht vollstaendig verschluesselt"
+    habits_text = "Habits-MD Klartext" if habits_path.exists() and not _looks_like_account_encrypted_payload(habits_path) else "Habits-MD fehlt oder verschluesselt"
+    return f"{structured_text}; {habits_text}"
+
+
+def _looks_like_account_encrypted_payload(path: Path) -> bool:
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return False
+    if not raw.lstrip().startswith(b"{"):
+        return False
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("magic") == "TMBMAP1" and isinstance(payload.get("ciphertext"), str)
 
 
 def _format_byte_size(size: int) -> str:
@@ -2968,7 +2999,7 @@ def run_polling(
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
     openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
     bot_identity = bot_identity or _resolve_bot_identity(api)
-    user_memory_store = UserMemoryStore(instance)
+    user_memory_store = None
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
     chat_state = ChatState(_teladi_call_state_path(instance), instance)

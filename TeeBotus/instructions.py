@@ -21,7 +21,7 @@ DEFAULT_HELP_LINES = (
     "/start - Bot starten",
     "/help - Hilfe anzeigen",
     "/ping - Verbindung testen",
-    "/status - Bot-Status, Version und Groesse deiner Nutzermemorys anzeigen",
+    "/status - Bot-Status, Version, Memory-Groesse und Userfile-Verschluesselung anzeigen",
     "/account - TeeBotus-Account und verknuepfte Kommunikationswege anzeigen",
     "/register - Account-Secret erzeugen und anzeigen",
     "/login <account_id> <secret> - diesen Kommunikationsweg mit einem Account verbinden",
@@ -139,7 +139,7 @@ class BotInstructions:
     teladi_call_cooldown: str = "Du kannst /Call_a_Teladi erst in {remaining} wieder nutzen."
     teladi_call_error: str = "Ich konnte die Emergency Message gerade nicht senden. Bitte versuche es spaeter erneut."
     user_memory_enabled: bool = False
-    user_memory_dir: str = "instances/{instance}/data/users"
+    user_memory_dir: str = "instances/{instance}/data/accounts/sender_memory"
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
     openai_shared_prompt: str = ""
@@ -325,8 +325,6 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_openai_setting(instructions, key, value)
         elif section == "codex":
             _apply_codex_setting(instructions, key, value)
-        elif section == "memory":
-            _apply_memory_setting(instructions, key, value)
         elif section == "security_answers":
             _apply_security_answer(instructions, key, value)
         elif section == "commands":
@@ -453,10 +451,6 @@ def _section_name(line: str) -> str:
         "enthält": "contains_replies",
         "contains": "contains_replies",
         "contains replies": "contains_replies",
-        "memory": "memory",
-        "gedaechtnis": "memory",
-        "gedächtnis": "memory",
-        "speicher": "memory",
         "hilfe": "help",
         "help": "help",
     }
@@ -638,18 +632,6 @@ def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) ->
         instructions.codex_allowed_sender_ids = tuple(_parse_id_list(value))
     elif normalized == "timeout_seconds":
         instructions.codex_timeout_seconds = _parse_required_int(value, default=instructions.codex_timeout_seconds)
-
-
-def _apply_memory_setting(instructions: BotInstructions, key: str, value: str) -> None:
-    normalized = _normalize_key(key)
-    if normalized == "enabled":
-        instructions.user_memory_enabled = _parse_bool(value, default=instructions.user_memory_enabled)
-    elif normalized in {"directory", "dir", "path"}:
-        instructions.user_memory_dir = value
-    elif normalized == "max_prompt_chars":
-        instructions.user_memory_max_prompt_chars = _parse_required_int(value, default=instructions.user_memory_max_prompt_chars)
-    elif normalized == "max_entry_chars":
-        instructions.user_memory_max_entry_chars = _parse_required_int(value, default=instructions.user_memory_max_entry_chars)
 
 
 def _apply_security_answer(instructions: BotInstructions, key: str, value: str) -> None:

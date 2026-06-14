@@ -50,12 +50,6 @@ class InstructionTests(unittest.TestCase):
             - allowed_sender_ids: 395935293, 456
             - timeout_seconds: 180
 
-            ## Memory
-            - enabled: ja
-            - directory: instances/Depressionsbot/data/users
-            - max_prompt_chars: 9000
-            - max_entry_chars: 1500
-
             ## Antworten
             - start: Moin{name_suffix}
             - user_memory_reset_confirm: Wirklich loeschen?
@@ -125,10 +119,7 @@ class InstructionTests(unittest.TestCase):
         self.assertTrue(instructions.codex_enabled)
         self.assertEqual(instructions.codex_allowed_sender_ids, ("395935293", "456"))
         self.assertEqual(instructions.codex_timeout_seconds, 180)
-        self.assertTrue(instructions.user_memory_enabled)
-        self.assertEqual(instructions.user_memory_dir, "instances/Depressionsbot/data/users")
-        self.assertEqual(instructions.user_memory_max_prompt_chars, 9000)
-        self.assertEqual(instructions.user_memory_max_entry_chars, 1500)
+        self.assertFalse(instructions.user_memory_enabled)
         self.assertEqual(instructions.openai_system_prompt, "Du bist kurz.\nAntworte auf Deutsch.")
         self.assertEqual(instructions.start, "Moin{name_suffix}")
         self.assertEqual(instructions.user_memory_reset_confirm, "Wirklich loeschen?")

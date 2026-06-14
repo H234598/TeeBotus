@@ -7,7 +7,7 @@ TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. E
 - `/start` begruesst neue Nutzer
 - `/help` zeigt die verfuegbaren Befehle
 - `/ping` antwortet mit `pong`
-- `/status` zeigt Laufstatus, TeeBotus-Version und die Groesse der Nutzermemorys des anfragenden Nutzers
+- `/status` zeigt Laufstatus, TeeBotus-Version, Memory-Groesse und Userfile-Verschluesselung des anfragenden Nutzers
 - `/chatid` zeigt die aktuelle Chat-ID
 - `/reset` loescht den OpenAI-Verlauf fuer den aktuellen Chat
 - `/reset_memorys` fragt nach und loescht danach nur die eigenen User-Memory-Eintraege
@@ -216,20 +216,13 @@ Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: 
 
 ## User-Memory
 
-Der neue Account-Layer speichert accountbezogene Daten unter `instances/<instance>/data/accounts/accounts/<account_id>/`. Der alte Telegram-UserMemory-Schalter in `## Memory` existiert noch fuer die monolithische Telegram-Logik:
+Der Account-Layer speichert accountbezogene Daten unter `instances/<instance>/data/accounts/accounts/<account_id>/`.
 
-- `enabled: true` aktiviert den Speicher.
-- `directory: instances/{instance}/data/users` legt den Speicherort fest.
-- `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
-- `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
-
-Im AccountStore liegen strukturierte Accountdaten unter der Account-ID. `User_Habbits_and_behave.md` bleibt dabei bewusst Klartext-Markdown.
+Strukturierte Accountdaten werden verschluesselt gespeichert. `User_Habbits_and_behave.md` bleibt dabei bewusst Klartext-Markdown.
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 
-Diese ID ist fuer Telegram-User stabiler als ein Username, weil Usernames geaendert werden koennen. Der Bot laedt fuer eine Interaktion nur Index, ausgewaehlte Eintraege und interne Zusatzhinweise der aktuellen `sender_id`; Nutzer bekommen keinen Zugriff auf Memory-Dateien anderer Sender-IDs.
-
-Die Index-Datei enthaelt Profilmetadaten, Keyword-Index und eine Recent-Liste. Dadurch kann der Bot gezielt relevante Eintraege fuer die aktuelle Nachricht auswaehlen und nur diese aus dem verschluesselten JSONL-Log lesen, statt immer das ganze Dokument oder nur die letzten Zeichen mitzuschicken. Die internen Zusatzhinweise in `User_Habbits_and_behave.md` werden nur von Botadmins gepflegt, bleiben absichtlich normales Markdown und dienen dem Bot als stiller Kontext. Der Speicher wird ueber unterschiedliche Chats, Gruppen und mehrere Bot-Tokens derselben Instanz hinweg geteilt, aber nur fuer dieselbe Telegram-Sender-ID. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
+Der Speicher ist accountbezogen und nicht mehr an `data/users/<telegram_sender_id>` gebunden. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
 Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md).
 

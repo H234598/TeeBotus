@@ -2,10 +2,8 @@ import base64
 import json
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
-from importlib import util
 from pathlib import Path
 from unittest.mock import call, patch
 
@@ -73,12 +71,6 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 
 
 STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
-MIGRATION_SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "migrate_user_memory_encryption.py"
-MIGRATION_SCRIPT_SPEC = util.spec_from_file_location("migrate_user_memory_encryption", MIGRATION_SCRIPT_PATH)
-assert MIGRATION_SCRIPT_SPEC is not None and MIGRATION_SCRIPT_SPEC.loader is not None
-migrate_user_memory_encryption = util.module_from_spec(MIGRATION_SCRIPT_SPEC)
-sys.modules[MIGRATION_SCRIPT_SPEC.name] = migrate_user_memory_encryption
-MIGRATION_SCRIPT_SPEC.loader.exec_module(migrate_user_memory_encryption)
 
 
 class FakeAPI:
@@ -290,7 +282,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_key_passphrase_mode_uses_explicit_passphrase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
 
             with patch.dict(
@@ -312,7 +304,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_key_passphrase_mode_can_migrate_from_secret_service(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
 
@@ -426,7 +418,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_decrypt_failure_does_not_overwrite_existing_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             original_key = bytes(range(32))
             wrong_key = bytes(range(32, 64))
@@ -441,7 +433,7 @@ class BotTests(unittest.TestCase):
             store = UserMemoryStore("Depressionsbot")
             message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
             api = FakeAPI()
-            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/users"))
+            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/accounts/sender_memory"))
 
             with patch("TeeBotus.bot._ensure_user_memory_key", return_value=wrong_key):
                 with self.assertLogs("TeeBotus", level="ERROR"):
@@ -450,72 +442,6 @@ class BotTests(unittest.TestCase):
             self.assertIsNone(record)
             self.assertEqual(memory_path.read_bytes(), original_payload)
             self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
-
-    def test_user_memory_encryption_migration_encrypts_known_plaintext_files_only(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
-            user_dir.mkdir(parents=True, exist_ok=True)
-            index_path = user_dir / "User_Memory_Index.json"
-            entries_path = user_dir / "User_Memory_Entries.jsonl"
-            habits_path = user_dir / "User_Habbits_and_behave.md"
-            custom_path = user_dir / "Julia"
-            index_payload = {
-                "schema_version": 1,
-                "sender_id": "456",
-                "profile": {},
-                "memories": [],
-                "index": {"entries": {}, "keywords": {}, "recent_ids": []},
-            }
-            entries_payload = [{"id": "m1", "text": "Plaintext entry"}]
-            index_path.write_text(json.dumps(index_payload), encoding="utf-8")
-            entries_path.write_text(json.dumps(entries_payload[0]) + "\n", encoding="utf-8")
-            habits_path.write_text("Plaintext habits", encoding="utf-8")
-            custom_path.write_text("kein Bot-Memory-Schema", encoding="utf-8")
-
-            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
-
-            self.assertEqual(result.errors, 0)
-            self.assertEqual(result.encrypted, 2)
-            for path in [index_path, entries_path]:
-                self.assertTrue(is_encrypted_payload(path.read_bytes()))
-            self.assertFalse(is_encrypted_payload(habits_path.read_bytes()))
-            self.assertEqual(read_user_memory_json(index_path), index_payload)
-            self.assertEqual(read_user_memory_entries(entries_path), entries_payload)
-            self.assertEqual(read_user_memory_text(habits_path), "Plaintext habits")
-            self.assertEqual(custom_path.read_text(encoding="utf-8"), "kein Bot-Memory-Schema")
-
-            verify_result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
-            self.assertEqual(verify_result.errors, 0)
-            self.assertEqual(verify_result.already_encrypted, 2)
-
-    def test_user_memory_encryption_verify_reports_known_plaintext_files(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
-            user_dir.mkdir(parents=True, exist_ok=True)
-            (user_dir / "User_Memory_Index.json").write_text("{}", encoding="utf-8")
-            (user_dir / "User_Habbits_and_behave.md").write_text("noch plaintext", encoding="utf-8")
-
-            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances", verify_only=True)
-
-            self.assertEqual(result.errors, 1)
-
-    def test_user_memory_encryption_migration_decrypts_encrypted_habits_to_plaintext_md(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
-            user_dir.mkdir(parents=True, exist_ok=True)
-            habits_path = user_dir / "User_Habbits_and_behave.md"
-            key = ensure_user_memory_key(user_dir / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
-            from TeeBotus.user_memory_crypto import write_text as write_encrypted_user_memory_text
-
-            write_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits", text="Encrypted habits")
-
-            result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
-
-            self.assertEqual(result.errors, 0)
-            self.assertEqual(result.encrypted, 0)
-            self.assertEqual(result.plaintext_habits, 1)
-            self.assertFalse(is_encrypted_payload(habits_path.read_bytes()))
-            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Encrypted habits")
 
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
@@ -537,7 +463,7 @@ class BotTests(unittest.TestCase):
     def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         record = UserMemoryRecord(
             sender_id="456",
-            path=Path("instances/Demo/data/users/456/User_Memory_Index.json"),
+            path=Path("instances/Demo/data/accounts/sender_memory/456/User_Memory_Index.json"),
             prompt_text="",
             selected_ids=(),
         )
@@ -1228,8 +1154,9 @@ class BotTests(unittest.TestCase):
             memory_store = UserMemoryStore("Depressionsbot")
             user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / ("a" * 128)
             user_dir.mkdir(parents=True)
-            (user_dir / "User_Memory_Index.json").write_bytes(b"x" * 1024)
-            (user_dir / "User_Memory_Entries.jsonl").write_bytes(b"y" * 1024)
+            encrypted_payload = b'{"magic":"TMBMAP1","ciphertext":"abc"}\n'
+            (user_dir / "User_Memory_Index.json").write_bytes(encrypted_payload)
+            (user_dir / "User_Memory_Entries.jsonl").write_bytes(encrypted_payload)
             (user_dir / "User_Habbits_and_behave.md").write_bytes(b"z" * 512)
             (user_dir / "Secret_Verifier.json").write_bytes(b"not counted")
 
@@ -1254,7 +1181,8 @@ class BotTests(unittest.TestCase):
             reply = api.sent_messages[0][1]
             self.assertIn("Status: laeuft", reply)
             self.assertIn(f"Version: {__version__}", reply)
-            self.assertIn("Deine Nutzermemorys: 2.50 KB", reply)
+            self.assertIn("Deine Nutzermemorys:", reply)
+            self.assertIn("Userfiles-Verschluesselung: strukturierte Userfiles verschluesselt; Habits-MD Klartext", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()

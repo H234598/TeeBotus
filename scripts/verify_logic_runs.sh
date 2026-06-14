@@ -130,7 +130,7 @@ with tempfile.TemporaryDirectory() as d:
 PY
 run "7/20 openai client and handlers" python3 -m pytest -q tests/test_openai_client.py tests/test_handlers.py
 run "8/20 bot split multipart token instance config" python3 -m pytest -q tests/test_bot.py -k "split or multipart or token or instance or config or dotenv or runtime"
-run "9/20 memory crypto paths" bash -c 'python3 -m pytest -q tests/test_bot.py -k "memory or crypto or passphrase or avatar or reset" && python3 scripts/migrate_user_memory_encryption.py --verify-only --quiet'
+run "9/20 memory crypto paths" python3 -m pytest -q tests/test_bot.py -k "memory or crypto or passphrase or avatar or reset"
 run "10/20 youtube subprocess paths" python3 -m pytest -q tests/test_bot.py -k "youtube or transcript or subprocess or process or registry or priority"
 run "10b/20 youtube parser stats" bash -c 'python3 scripts/youtube_parser_stats.py --json >/tmp/teebotus-youtube-parser-stats.json && python3 scripts/youtube_parser_misses_report.py --instances-dir instances --json >/tmp/teebotus-youtube-parser-misses.json && python3 scripts/youtube_parser_misses_report.py --instances-dir instances --regression-json >/tmp/teebotus-youtube-parser-regressions.json && python3 scripts/youtube_parser_misses_report.py --instances-dir instances --pytest-snippet >/tmp/teebotus-youtube-parser-regressions.py && python3 -m pytest -q tests/test_youtube_parser_stats.py tests/test_youtube_parser_misses_report.py'
 run "11/20 voice transcription openai flow" python3 -m pytest -q tests/test_bot.py -k "voice or transcription or openai or source"

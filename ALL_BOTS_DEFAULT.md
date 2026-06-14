@@ -79,13 +79,6 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - teladi_call_cooldown: Du kannst /Call_a_Teladi erst in {remaining} wieder nutzen.
 - teladi_call_error: Ich konnte die Emergency Message gerade nicht senden. Bitte versuche es spaeter erneut.
 
-## Memory
-
-- enabled: false
-- directory: instances/{instance}/data/users
-- max_prompt_chars: 12000
-- max_entry_chars: 2000
-
 ## Codex
 
 - enabled: true
@@ -105,7 +98,7 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - /start - Bot starten
 - /help - Hilfe anzeigen
 - /ping - Verbindung testen
-- /status - Bot-Status, Version und Groesse deiner Nutzermemorys anzeigen
+- /status - Bot-Status, Version, Memory-Groesse und Userfile-Verschluesselung anzeigen
 - /account - TeeBotus-Account und verknuepfte Kommunikationswege anzeigen
 - /register - Account-Secret erzeugen und anzeigen
 - /login <account_id> <secret> - diesen Kommunikationsweg mit einem Account verbinden
