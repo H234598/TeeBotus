@@ -26,7 +26,7 @@ def build_status_reply(*, sender_id: str, instance_name: str, project_root: Path
         [
             "Status: Laeuft",
             f"Version: {__version__}",
-            f"Groesse deine Nutzermemorys: {format_byte_size(memory_size)}",
+            f"Groesse deiner Nutzermemorys: {format_byte_size(memory_size)}",
             f"Userfiles-Verschluesselung: {encryption_status}",
         ]
     )
