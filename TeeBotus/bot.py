@@ -179,6 +179,10 @@ def _channel_requested_without_telegram(config: Any, channel: str) -> bool:
     return channel in config.channels and "telegram" not in config.channels
 
 
+def _non_telegram_channels(config: Any) -> set[str]:
+    return {channel for channel in config.channels if channel != "telegram"}
+
+
 def _run_signal_runtime(config: Any) -> int:
     try:
         from TeeBotus.runtime.signal_runner import SignalRuntimeError, run_signal_accounts
@@ -244,6 +248,9 @@ def main(argv: list[str] | None = None) -> int:
     config = _runtime_config_from_main_args(args)
     if config is None:
         return 2
+    if "telegram" not in config.channels and len(_non_telegram_channels(config)) != 1:
+        print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
+        return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
         return _run_matrix_runtime(config)
     if _channel_requested_without_telegram(config, "signal") and "matrix" not in config.channels:
@@ -256,9 +263,6 @@ def main(argv: list[str] | None = None) -> int:
         status = _start_signal_runtime_background(config)
         if status != 0:
             return status
-    if "telegram" not in config.channels:
-        print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
-        return 2
     if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
         print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
         return 2

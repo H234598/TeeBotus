@@ -127,3 +127,21 @@ def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> 
 
     assert bot.main(["--channels", "telegram,matrix"]) == 0
     assert [call[0] for call in calls] == ["matrix", "telegram"]
+
+
+def test_channels_signal_matrix_rejects_before_starting_any_runner(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_start_signal_runtime_background", lambda config: calls.append(("signal", config)) or 0)
+    monkeypatch.setattr(bot, "_start_matrix_runtime_background", lambda config: calls.append(("matrix", config)) or 0)
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(("run-signal", config)) or 0)
+    monkeypatch.setattr(bot, "_run_matrix_runtime", lambda config: calls.append(("run-matrix", config)) or 0)
+
+    assert bot.main(["--channels", "signal,matrix"]) == 2
+    assert calls == []
