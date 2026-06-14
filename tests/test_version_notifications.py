@@ -9,6 +9,7 @@ from TeeBotus.core.version_notifications import (
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
 )
+from TeeBotus.core.status import github_commit_history_url
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider
 
 
@@ -153,6 +154,12 @@ def test_github_repo_url_normalizes_https_remote(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
 
     assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
+
+
+def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
+
+    assert github_commit_history_url(tmp_path) == "https://github.com/H234598/TeeBotus/commits/main"
 
 
 def test_version_notification_text_does_not_expose_memory_files() -> None:

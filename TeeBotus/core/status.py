@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 from TeeBotus import __version__
+from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -22,14 +23,28 @@ def build_status_reply(*, sender_id: str, instance_name: str, project_root: Path
     account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
     memory_size = memory_files_size(account_dir)
     encryption_status = memory_encryption_status(account_dir)
+    commit_history_url = github_commit_history_url(project_root)
     return "\n".join(
         [
-            "Status: Laeuft",
-            f"Version: {__version__}",
-            f"Groesse deiner Nutzermemorys: {format_byte_size(memory_size)}",
-            f"Userfiles-Verschluesselung: {encryption_status}",
+            "TeeBotus Status",
+            "",
+            "System",
+            "- Status: laeuft",
+            f"- Version: {__version__}",
+            f"  Commits: {commit_history_url}",
+            "",
+            "Deine Daten",
+            f"- Nutzermemory: {format_byte_size(memory_size)}",
+            f"- Userfiles: {encryption_status}",
         ]
     )
+
+
+def github_commit_history_url(project_root: Path) -> str:
+    repo_url = github_repo_url(project_root)
+    if not repo_url:
+        repo_url = DEFAULT_REPO_URL
+    return f"{repo_url.rstrip('/')}/commits/main"
 
 
 def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project_root: Path) -> Path | None:

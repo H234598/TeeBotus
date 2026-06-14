@@ -1249,10 +1249,12 @@ class BotTests(unittest.TestCase):
 
             self.assertEqual(len(api.sent_messages), 1)
             reply = api.sent_messages[0][1]
-            self.assertIn("Status: Laeuft", reply)
-            self.assertIn(f"Version: {__version__}", reply)
-            self.assertIn("Groesse deiner Nutzermemorys:", reply)
-            self.assertIn("Userfiles-Verschluesselung: Userfiles verschluesselt", reply)
+            self.assertIn("TeeBotus Status", reply)
+            self.assertIn("- Status: laeuft", reply)
+            self.assertIn(f"- Version: {__version__}", reply)
+            self.assertIn("  Commits: https://github.com/H234598/TeeBotus/commits/main", reply)
+            self.assertIn("- Nutzermemory:", reply)
+            self.assertIn("- Userfiles: Userfiles verschluesselt", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()
