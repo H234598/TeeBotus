@@ -82,7 +82,7 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 ## Plan3 Account-Runtime
 
-Der produktive Startpfad ist aktuell Telegram-only. `TeeBotus/bot.py` bleibt der stabile Entry-Point und delegiert an `TeeBotus/telegram_bot.py`. Die Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Signal-/Mehrkanal-Produktivbot gestartet.
+Der produktive Startpfad ist aktuell Telegram-only. `TeeBotus/bot.py` bleibt der stabile Entry-Point und delegiert an `TeeBotus/adapters/telegram_polling.py`. Die Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Signal-/Mehrkanal-Produktivbot gestartet.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 
@@ -218,7 +218,7 @@ Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: 
 
 Der Account-Layer speichert accountbezogene Daten unter `instances/<instance>/data/accounts/accounts/<account_id>/`.
 
-Strukturierte Accountdaten werden verschluesselt gespeichert. `User_Habbits_and_behave.md` bleibt dabei bewusst Klartext-Markdown.
+Strukturierte Accountdaten werden verschluesselt gespeichert. Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene und werden Usern nicht mit Dateinamen offengelegt.
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 
@@ -228,14 +228,16 @@ Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluessel
 
 Kurzantwort fuer Datenschutzfragen:
 
-- Strukturierter Nutzer-Memory wird pro Telegram-Sender-ID at rest verschluesselt.
-- `User_Habbits_and_behave.md` bleibt absichtlich Klartext-Markdown fuer admingepflegte Hinweise.
+- Strukturierter Nutzer-Memory wird accountbezogen at rest verschluesselt.
+- Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene und werden nicht mit internen Dateinamen offengelegt.
 - Der zugehoerige Key liegt standardmaessig im Desktop Secret Service, optional im passphrase-geschuetzten lokalen Key-Store.
 - Ein Admin ohne passenden Key sieht in den verschluesselten Index-/Entry-Dateien keine Klartextdaten.
 - Das laufende Bot-Prozessmodell kann Daten zum Antworten trotzdem entschluesseln.
 - Wer die Laufzeit, den Speicher oder den passenden Key kontrolliert, kann weiterhin auf Klartext stossen.
 
 Wenn du die Standardantwort brauchst, steht sie in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md) als kopierfertiges Template.
+
+Bei einem produktiven Versionswechsel benachrichtigt der Telegram-Start alle Telegram-Identities, die in den letzten sieben Tagen in der jeweiligen Instanz aktiv waren. Pro Version und Identity wird nur einmal gesendet; die Nachricht nennt nur die neue Version, einen kurzen neutralen Hinweis und einen kleinen lokal aus Memory-Signalen abgeleiteten Witz.
 
 Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory der aktuellen Telegram-Sender-ID auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
 

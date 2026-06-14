@@ -75,15 +75,18 @@ class HandlerTests(unittest.TestCase):
         ]:
             self.assertIn(needle, text)
 
-    def test_docs_do_not_claim_habit_markdown_is_encrypted(self) -> None:
+    def test_user_facing_docs_do_not_expose_internal_habit_filename(self) -> None:
         root = Path(__file__).resolve().parents[1]
         readme = (root / "README.md").read_text(encoding="utf-8")
         privacy = (root / "docs" / "privacy-and-encryption.md").read_text(encoding="utf-8")
         defaults = (root / "ALL_BOTS_DEFAULT.md").read_text(encoding="utf-8")
 
-        self.assertIn("User_Habbits_and_behave.md` bleibt absichtlich Klartext-Markdown", readme)
-        self.assertIn("Operator-maintained Markdown notes remain plaintext", privacy)
-        self.assertIn("Die admingepflegte `User_Habbits_and_behave.md` bleibt Klartext-Markdown", defaults)
+        self.assertNotIn("User_Habbits_and_behave", readme)
+        self.assertNotIn("User_Habbits_and_behave", privacy)
+        self.assertNotIn("User_Habbits_and_behave", defaults)
+        self.assertIn("Interne operatorgepflegte Hinweise", readme)
+        self.assertIn("Operator-maintained internal notes", privacy)
+        self.assertIn("interne operatorgepflegte Hinweise", defaults)
         self.assertIn("Structured user memory is encrypted", privacy)
 
 

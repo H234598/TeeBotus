@@ -35,7 +35,8 @@ def test_markdown_and_csv_exports(tmp_path):
     csv = export_account_data(ACCOUNT_ID, account_dir, "cls")
 
     assert md.content_type == "text/markdown"
-    assert b"manual note" in md.data
+    assert b"manual note" not in md.data
+    assert b"User_Habbits_and_behave" not in md.data
     assert csv.filename.endswith(".cls")
     assert b"User_Memory_Index.json" in csv.data
 
@@ -62,6 +63,7 @@ def test_export_from_store_decrypts_structured_memory(tmp_path):
     payload = json.loads(result.data.decode("utf-8"))
     assert payload["files"]["User_Memory_Index.json"]["topic"] == "encrypted tea"
     assert payload["files"]["User_Memory_Entries.jsonl"] == [{"entry": "encrypted hello"}]
+    assert "User_Habbits_and_behave.md" not in payload["files"]
 
 
 def test_raw_export_refuses_encrypted_account_files_without_vault(tmp_path):

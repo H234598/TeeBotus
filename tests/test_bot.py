@@ -282,7 +282,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_key_passphrase_mode_uses_explicit_passphrase(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
 
             with patch.dict(
@@ -304,7 +304,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_key_passphrase_mode_can_migrate_from_secret_service(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
 
@@ -418,7 +418,7 @@ class BotTests(unittest.TestCase):
 
     def test_user_memory_decrypt_failure_does_not_overwrite_existing_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "sender_memory" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             original_key = bytes(range(32))
             wrong_key = bytes(range(32, 64))
@@ -433,7 +433,7 @@ class BotTests(unittest.TestCase):
             store = UserMemoryStore("Depressionsbot")
             message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
             api = FakeAPI()
-            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/accounts/sender_memory"))
+            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/accounts/legacy_sender_memory"))
 
             with patch("TeeBotus.bot._ensure_user_memory_key", return_value=wrong_key):
                 with self.assertLogs("TeeBotus", level="ERROR"):
@@ -463,7 +463,7 @@ class BotTests(unittest.TestCase):
     def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         record = UserMemoryRecord(
             sender_id="456",
-            path=Path("instances/Demo/data/accounts/sender_memory/456/User_Memory_Index.json"),
+            path=Path("instances/Demo/data/accounts/legacy_sender_memory/456/User_Memory_Index.json"),
             prompt_text="",
             selected_ids=(),
         )
@@ -1160,7 +1160,7 @@ class BotTests(unittest.TestCase):
             (user_dir / "User_Habbits_and_behave.md").write_bytes(b"z" * 512)
             (user_dir / "Secret_Verifier.json").write_bytes(b"not counted")
 
-            with patch("TeeBotus.telegram_bot._account_memory_dir_for_sender", return_value=user_dir):
+            with patch("TeeBotus.core.status.account_memory_dir_for_sender", return_value=user_dir):
                 handle_update(
                     api,
                     {
@@ -1182,13 +1182,13 @@ class BotTests(unittest.TestCase):
             self.assertIn("Status: laeuft", reply)
             self.assertIn(f"Version: {__version__}", reply)
             self.assertIn("Deine Nutzermemorys:", reply)
-            self.assertIn("Userfiles-Verschluesselung: strukturierte Userfiles verschluesselt; Habits-MD Klartext", reply)
+            self.assertIn("Userfiles-Verschluesselung: strukturierte Userfiles verschluesselt", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()
         instructions = BotInstructions(commands={"/account": "configured fallback"})
 
-        with patch("TeeBotus.telegram_bot.maybe_handle_account_runtime_message", return_value=True) as handle:
+        with patch("TeeBotus.adapters.telegram_polling.maybe_handle_account_runtime_message", return_value=True) as handle:
             handle_update(
                 api,
                 {

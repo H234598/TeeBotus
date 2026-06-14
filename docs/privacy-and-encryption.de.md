@@ -41,10 +41,10 @@ Verschluesselte strukturierte Memory-Dateien:
 
 Auch Account-Index, Identity-Mapping, Secret-Verifier, Profile und Tombstones werden verschluesselt gespeichert.
 
-## Klartext-Markdown
+## Interne operatorgepflegte Hinweise
 
-`User_Habbits_and_behave.md` bleibt absichtlich Klartext. Diese Datei ist eine manuell editierbare Markdown-Notiz. Sie wird bei Account-Merges zusammengefuehrt, aber nicht verschluesselt.
+Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene. Sie werden Usern nicht mit internem Dateinamen offengelegt und sind nicht Teil der oben beschriebenen strukturierten verschluesselten Memory-Dateien.
 
 ## Was geschuetzt ist
 
-Reiner Dateizugriff sieht bei strukturierten Dateien Ciphertext. Reiner Dateizugriff sieht aber weiterhin die Markdown-Notizen im Klartext. Wer Zugriff auf den laufenden Prozess, Secret Service, Passphrase oder Debugger hat, kann weiterhin Plaintext erreichen, weil der Bot Daten zum Arbeiten entschluesseln muss.
+Reiner Dateizugriff sieht bei strukturierten Dateien Ciphertext. Interne operatorgepflegte Hinweise und Runtime-Zugriff sind eigene Vertrauensebenen. Wer Zugriff auf den laufenden Prozess, Secret Service, Passphrase oder Debugger hat, kann weiterhin Plaintext erreichen, weil der Bot Daten zum Arbeiten entschluesseln muss.

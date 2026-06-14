@@ -43,7 +43,7 @@ Account index, identity mapping, secret verifiers, profiles, and tombstones are 
 
 ## Plaintext Markdown
 
-`User_Habbits_and_behave.md` intentionally remains plaintext. It is a manually editable Markdown note. It is merged during account merges, but it is not encrypted.
+Operator-maintained internal notes are a separate trust level. They are not exposed to users by internal filename and are not part of the structured encrypted memory files described above.
 
 ## What Is Protected
 

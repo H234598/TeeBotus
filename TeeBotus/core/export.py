@@ -105,15 +105,12 @@ def export_account_data_from_store(account_store: Any, account_id: str, fmt: str
             "OpenAI_State.json": _redact_data(account_store.read_openai_state(account_id)),
         },
     }
-    habits = account_store.account_dir(account_id) / "User_Habbits_and_behave.md"
-    if habits.exists():
-        payload["files"]["User_Habbits_and_behave.md"] = habits.read_text(encoding="utf-8", errors="replace")
     return _emit_payload(account_id, payload, fmt)
 
 
 def _collect_account_payload(account_id: str, account_dir: Path, *, vault: ExportVault | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {"account_id": account_id, "files": {}}
-    for filename in ["Account_Profile.json", "User_Memory_Index.json", "User_Memory_Entries.jsonl", "User_Habbits_and_behave.md", "OpenAI_State.json"]:
+    for filename in ["Account_Profile.json", "User_Memory_Index.json", "User_Memory_Entries.jsonl", "OpenAI_State.json"]:
         path = account_dir / filename
         if not path.exists():
             continue

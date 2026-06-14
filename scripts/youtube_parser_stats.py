@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-BOT_PATH = ROOT / "TeeBotus" / "telegram_bot.py"
+BOT_PATH = ROOT / "TeeBotus" / "adapters" / "telegram_polling.py"
 
 
 def _literal_assignment(source: str, name: str) -> str:

@@ -43,7 +43,7 @@ Encrypted account files include identity mappings, account index, account secret
 
 ## Plaintext Markdown
 
-`User_Habbits_and_behave.md` remains plaintext by design. Operator-maintained Markdown notes remain plaintext. It is a human-editable Markdown file for operator-maintained notes and manual review. It is merged on account merge, but it is not encrypted.
+Operator-maintained internal notes are a separate trust level. They are not exposed to users by internal filename and are not part of the structured encrypted memory files described above.
 
 ## What This Protects
 
@@ -51,4 +51,4 @@ Disk-only access sees ciphertext for encrypted structured files. Disk-only acces
 
 ## Short User Reply
 
-Structured user memory is encrypted at rest. In the account runtime, structured account memory is encrypted with instance-scoped Secret Service keys. The account secret is not stored, only an HMAC verifier is. `User_Habbits_and_behave.md` stays plaintext because it is a manual Markdown note. The running bot can still decrypt what it needs while processing messages.
+Structured user memory is encrypted at rest. In the account runtime, structured account memory is encrypted with instance-scoped Secret Service keys. The account secret is not stored, only an HMAC verifier is. Operator-maintained internal notes are a separate trust level. The running bot can still decrypt what it needs while processing messages.

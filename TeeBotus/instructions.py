@@ -139,7 +139,7 @@ class BotInstructions:
     teladi_call_cooldown: str = "Du kannst /Call_a_Teladi erst in {remaining} wieder nutzen."
     teladi_call_error: str = "Ich konnte die Emergency Message gerade nicht senden. Bitte versuche es spaeter erneut."
     user_memory_enabled: bool = False
-    user_memory_dir: str = "instances/{instance}/data/accounts/sender_memory"
+    user_memory_dir: str = "instances/{instance}/data/accounts/legacy_sender_memory"
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
     openai_shared_prompt: str = ""

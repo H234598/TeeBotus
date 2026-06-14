@@ -1,7 +1,7 @@
 """Stable entry point for TeeBotus.
 
 ``TeeBotus.bot`` stays as the public import and command module, while the
-Telegram polling implementation lives in ``TeeBotus.telegram_bot``.
+Telegram polling implementation lives in ``TeeBotus.adapters.telegram_polling``.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import types
 from collections.abc import Sequence
 from typing import Any, Callable
 
-_TELEGRAM_MODULE = "TeeBotus.telegram_bot"
+_TELEGRAM_MODULE = "TeeBotus.adapters.telegram_polling"
 
 
 class TelegramBotMissingError(RuntimeError):
@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         return int(telegram_main(telegram_args))
 
     print("TeeBotus Telegram bot implementation is missing.", file=sys.stderr)
-    print("Expected invariant: python3 -m TeeBotus and python3 -m TeeBotus --all must delegate to TeeBotus.telegram_bot.", file=sys.stderr)
+    print("Expected invariant: python3 -m TeeBotus and python3 -m TeeBotus --all must delegate to TeeBotus.adapters.telegram_polling.", file=sys.stderr)
     return 1
 
 

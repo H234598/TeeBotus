@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import concurrent.futures
 import io
 import json
 import logging
@@ -24,14 +23,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import __version__
-from .core.registration import RegistrationAction, parse_registration_intent
-from .handlers import build_reply, should_use_openai
-from .instructions import BotInstructions, InstructionStore, render_template
-from .openai_client import OpenAIAPIError, OpenAIClient
-from .runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
-from .runtime.telegram_bridge import maybe_handle_account_runtime_message
-from .user_memory_crypto import (
+from TeeBotus import __version__
+from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
+from TeeBotus.core.status import build_status_reply as build_core_status_reply
+from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
+from TeeBotus.handlers import build_reply, should_use_openai
+from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
+from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
+from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
+from TeeBotus.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     UserMemoryCryptoError,
     ensure_user_memory_key,
@@ -44,7 +46,7 @@ from .user_memory_crypto import (
 )
 
 LOGGER = logging.getLogger("TeeBotus")
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 API_BASE = "https://api.telegram.org/bot{token}/{method}"
 FILE_API_BASE = "https://api.telegram.org/file/bot{token}/{file_path}"
 MAX_TRACKED_BOT_MESSAGES = 100
@@ -61,13 +63,6 @@ MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
 USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
-ACCOUNT_MEMORY_FILENAMES = frozenset(
-    {
-        USER_MEMORY_INDEX_FILENAME,
-        USER_MEMORY_ENTRIES_FILENAME,
-        USER_HABITS_FILENAME,
-    }
-)
 USER_AVATAR_BASENAME = "User_Avatar"
 USER_AVATAR_ICON_FILENAME = "User_Avatar.icon"
 USER_AVATAR_ICON_MARKER_FILENAME = ".User_Avatar_Icon_Set"
@@ -84,7 +79,6 @@ YOUTUBE_WHISPER_MODEL = "tiny"
 YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
 YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
 YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
-YOUTUBE_LOCAL_TRANSCRIPTION_WORKERS = 1
 YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
@@ -95,29 +89,6 @@ WORKING_MEMORY_PRIVACY_NOTE = (
     "Instanzweites Arbeitsgedaechtnis. Darf keine User-IDs, Namen, Usernames, Chat-IDs, "
     "Chat-Titel, Rohzitate aus Usernachrichten oder eindeutig userbezogene Fakten enthalten."
 )
-
-
-class YouTubeTranscriptionJobRunner:
-    def __init__(self, max_workers: int = YOUTUBE_LOCAL_TRANSCRIPTION_WORKERS) -> None:
-        self._executor = concurrent.futures.ThreadPoolExecutor(
-            max_workers=max(1, max_workers),
-            thread_name_prefix="youtube-transcript-job",
-        )
-
-    def submit(self, callback) -> concurrent.futures.Future[Any]:
-        future = self._executor.submit(callback)
-        future.add_done_callback(self._log_unhandled_exception)
-        return future
-
-    def shutdown(self, wait: bool = False) -> None:
-        self._executor.shutdown(wait=wait, cancel_futures=False)
-
-    @staticmethod
-    def _log_unhandled_exception(future: concurrent.futures.Future[Any]) -> None:
-        try:
-            future.result()
-        except Exception:
-            LOGGER.exception("Unhandled YouTube transcription job error.")
 
 
 PROCESS_REGISTRY_FILENAME = "YouTube_Transcription_Processes.json"
@@ -985,7 +956,7 @@ class UserMemoryStore:
         )
 
     def _path_for_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
-        directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/sender_memory"
+        directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/legacy_sender_memory"
         directory = directory.replace("{instance}", self.instance_name)
         return Path(directory) / _safe_memory_filename(sender_id) / USER_MEMORY_INDEX_FILENAME
 
@@ -1308,101 +1279,8 @@ def _handle_account_runtime_command(
 
 
 def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> str:
-    account_dir = _account_memory_dir_for_status(message, instance_name)
-    memory_size = _memory_files_size(account_dir)
-    encryption_status = _memory_encryption_status_for_status(account_dir)
-    return "\n".join(
-        [
-            "Status: laeuft",
-            f"Version: {__version__}",
-            f"Deine Nutzermemorys: {_format_byte_size(memory_size)}",
-            f"Userfiles-Verschluesselung: {encryption_status}",
-        ]
-    )
-
-
-def _account_memory_dir_for_status(message: dict[str, Any], instance_name: str) -> Path | None:
     sender_id = _sender_identifier(message)
-    if not sender_id:
-        return None
-    return _account_memory_dir_for_sender(sender_id, instance_name)
-
-
-def _account_memory_dir_for_sender(sender_id: str, instance_name: str) -> Path | None:
-    if not instance_name:
-        return None
-    try:
-        store = AccountStore(
-            PROJECT_ROOT / "instances" / instance_name / "data" / "accounts",
-            instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(),
-            create_dirs=False,
-        )
-        account_id = store.get_account_for_identity(telegram_identity_key(sender_id))
-    except (AccountStoreError, OSError):
-        LOGGER.exception("Failed to resolve account memory directory for status.")
-        return None
-    if not account_id:
-        return None
-    account_dir = PROJECT_ROOT / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
-    return account_dir if account_dir.is_dir() else None
-
-
-def _memory_files_size(directory: Path | None) -> int:
-    if directory is None or not directory.exists():
-        return 0
-    total = 0
-    for path in directory.rglob("*"):
-        if not path.is_file() or path.name not in ACCOUNT_MEMORY_FILENAMES:
-            continue
-        try:
-            total += path.stat().st_size
-        except OSError:
-            LOGGER.exception("Failed to stat user memory file %s.", path)
-    return total
-
-
-def _memory_encryption_status_for_status(directory: Path | None) -> str:
-    if directory is None or not directory.exists():
-        return "kein Account-Memory gefunden"
-    structured_files = [directory / USER_MEMORY_INDEX_FILENAME, directory / USER_MEMORY_ENTRIES_FILENAME]
-    existing_structured = [path for path in structured_files if path.exists()]
-    encrypted_structured = [path for path in existing_structured if _looks_like_account_encrypted_payload(path)]
-    habits_path = directory / USER_HABITS_FILENAME
-    if not existing_structured:
-        structured_text = "keine strukturierten Userfiles"
-    elif len(encrypted_structured) == len(existing_structured):
-        structured_text = "strukturierte Userfiles verschluesselt"
-    else:
-        structured_text = "strukturierte Userfiles nicht vollstaendig verschluesselt"
-    habits_text = "Habits-MD Klartext" if habits_path.exists() and not _looks_like_account_encrypted_payload(habits_path) else "Habits-MD fehlt oder verschluesselt"
-    return f"{structured_text}; {habits_text}"
-
-
-def _looks_like_account_encrypted_payload(path: Path) -> bool:
-    try:
-        raw = path.read_bytes()
-    except OSError:
-        return False
-    if not raw.lstrip().startswith(b"{"):
-        return False
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return False
-    return isinstance(payload, dict) and payload.get("magic") == "TMBMAP1" and isinstance(payload.get("ciphertext"), str)
-
-
-def _format_byte_size(size: int) -> str:
-    value = float(max(0, size))
-    units = ("B", "KB", "MB", "GB", "TB")
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            if unit == "B":
-                return f"{int(value)} B"
-            return f"{value:.2f} {unit}"
-        value /= 1024
-    return "0 B"
+    return build_core_status_reply(sender_id=sender_id, instance_name=instance_name, project_root=PROJECT_ROOT)
 
 
 def _handle_incoming_voice_message(
@@ -3059,6 +2937,7 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
     youtube_job_runner = YouTubeTranscriptionJobRunner()
+    _notify_recent_users_for_current_version(instance_configs)
     for instance_config in instance_configs:
         for config in instance_config.token_configs:
             thread = threading.Thread(
@@ -3091,6 +2970,33 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
             thread.join(timeout=MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
     finally:
         youtube_job_runner.shutdown(wait=False)
+
+
+def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunConfig]) -> None:
+    instances_dir = _resolve_instances_dir()
+    for instance_config in instance_configs:
+        if not instance_config.token_configs:
+            continue
+        api = TelegramAPI(instance_config.token_configs[0].token)
+        store = AccountStore(
+            instances_dir / instance_config.instance_name / "data" / "accounts",
+            instance_config.instance_name,
+            secret_provider=SecretToolInstanceSecretProvider(),
+            create_dirs=False,
+        )
+        try:
+            count = notify_recent_telegram_users_for_version(
+                version=__version__,
+                instances_dir=instances_dir,
+                instance_name=instance_config.instance_name,
+                account_store=store,
+                send_message=api.send_message,
+            )
+        except (AccountStoreError, TelegramAPIError, TelegramNetworkError, OSError) as exc:
+            LOGGER.warning("Version notification skipped for instance=%s: %s", instance_config.instance_name, exc)
+            continue
+        if count:
+            LOGGER.info("Sent version notification version=%s instance=%s recipients=%s.", __version__, instance_config.instance_name, count)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -3133,6 +3039,7 @@ def main(argv: list[str] | None = None) -> int:
     LOGGER.info("Using bot instance=%s instructions=%s token_count=%s", instance_name, instruction_path, len(configs))
     if len(configs) == 1:
         config = configs[0]
+        _notify_recent_users_for_current_version([InstanceRunConfig(instance_name, instruction_path, tuple(configs))])
         run_polling(
             TelegramAPI(config.token),
             InstructionStore(instruction_path),
