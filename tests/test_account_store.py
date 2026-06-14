@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+import json
+import re
+
+import pytest
+
+from TeeBotus.runtime.accounts import (
+    AccountStore,
+    AccountStoreError,
+    StaticSecretProvider,
+    signal_identity_key,
+    telegram_identity_key,
+)
+
+HEX_128 = re.compile(r"^[0-9a-f]{128}$")
+
+
+def provider() -> StaticSecretProvider:
+    return StaticSecretProvider(b"a" * 32)
+
+
+def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+
+    assert HEX_128.fullmatch(account_id)
+    assert store.get_account_for_identity("telegram:user:395935293") == account_id
+    raw_identity_file = (tmp_path / "accounts" / "Account_Identities.json").read_text(encoding="utf-8")
+    assert account_id not in raw_identity_file
+    assert "telegram:user:395935293" not in raw_identity_file
+    assert "TMBMAP1" in raw_identity_file
+
+
+def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    returned_account_id, secret = store.register_account(account_id)
+
+    assert returned_account_id == account_id
+    assert HEX_128.fullmatch(secret)
+    assert store.verify_secret(account_id, secret)
+    secrets_raw = (tmp_path / "accounts" / "Account_Secrets.json").read_text(encoding="utf-8")
+    assert secret not in secrets_raw
+
+    with pytest.raises(AccountStoreError):
+        store.register_account(account_id)
+
+
+def test_rotate_secret_invalidates_old_secret(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    _, first_secret = store.register_account(account_id)
+    _, second_secret = store.rotate_secret(account_id)
+
+    assert first_secret != second_secret
+    assert not store.verify_secret(account_id, first_secret)
+    assert store.verify_secret(account_id, second_secret)
+
+
+def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    _, secret = store.register_account(target)
+    temp = store.resolve_or_create_account(signal_identity_key(source_uuid="abc"))
+
+    temp_dir = store.account_dir(temp)
+    target_dir = store.account_dir(target)
+    store.write_memory_entries(temp, [{"text": "from signal"}])
+    store.write_memory_entries(target, [{"text": "from telegram"}])
+    (temp_dir / "User_Habbits_and_behave.md").write_text("temporary note", encoding="utf-8")
+    (target_dir / "User_Habbits_and_behave.md").write_text("target note", encoding="utf-8")
+
+    result = store.link_identity(signal_identity_key(source_uuid="abc"), target, secret, display_label="Signal")
+
+    assert result["merged_from"] == temp
+    assert store.get_account_for_identity("signal:uuid:abc") == target
+    merged_entries = store.read_memory_entries(target)
+    assert {"text": "from signal"} in merged_entries
+    assert {"text": "from telegram"} in merged_entries
+    raw_entries = (target_dir / "User_Memory_Entries.jsonl").read_text(encoding="utf-8")
+    assert "from signal" not in raw_entries
+    assert "TMBMAP1" in raw_entries
+    merged_habits = (target_dir / "User_Habbits_and_behave.md").read_text(encoding="utf-8")
+    assert "target note" in merged_habits
+    assert "temporary note" in merged_habits
+    assert (temp_dir / "Account_Tombstone.json").exists()
+    assert not (temp_dir / "User_Memory_Entries.jsonl").exists()
+
+
+def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    unlinked_account = store.unlink_identity(telegram_identity_key(1))
+
+    assert unlinked_account == account_id
+    summary = store.account_summary(account_id)
+    assert summary["status"] == "orphaned"
+    assert summary["linked_identities"] == []
+
+
+def test_link_identity_refuses_to_silently_merge_registered_source_account(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    _, target_secret = store.register_account(target)
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="abc"))
+    store.register_account(source)
+
+    with pytest.raises(AccountStoreError):
+        store.link_identity(signal_identity_key(source_uuid="abc"), target, target_secret, display_label="Signal")
+
+    assert store.get_account_for_identity("signal:uuid:abc") == source
+
+
+def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelope(tmp_path):
+    first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = first.resolve_or_create_account(telegram_identity_key(77))
+    first.write_memory_index(account_id, {"keywords": {"tea": [1]}})
+
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError):
+        second.read_memory_index(account_id)
+
+
+def test_account_tombstone_is_encrypted_after_merge(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(10))
+    _, secret = store.register_account(target)
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="merge-me"))
+
+    store.link_identity(signal_identity_key(source_uuid="merge-me"), target, secret)
+
+    tombstone = store.account_dir(source) / "Account_Tombstone.json"
+    raw = tombstone.read_text(encoding="utf-8")
+    assert "TMBMAP1" in raw
+    assert source not in raw
+
+
+def test_account_text_helpers_reject_path_traversal(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    with pytest.raises(AccountStoreError):
+        store.write_account_text(account_id, "../escape.md", "bad")
+    with pytest.raises(AccountStoreError):
+        store.read_account_text(account_id, "/tmp/escape.md")

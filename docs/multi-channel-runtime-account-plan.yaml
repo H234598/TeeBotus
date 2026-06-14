@@ -1,0 +1,166 @@
+plan_schema_version: "1.0"
+plan_name: "TeeBotus Multi-Channel Runtime mit Account-Identity-Layer"
+format: "yaml"
+implementation_status: "scaffolded_core_account_runtime_with_tests"
+core_decisions:
+  instances_dir: "instances"
+  default_channels: "auto_start_configured_telegram_and_signal"
+  openai_keys:
+    scope: "instance_channel_slot"
+    shared_between_adapters_allowed: true
+  account_id:
+    generator: "sha512(random_bytes_64).hexdigest()"
+    length: 128
+    group_visibility: "never_show"
+    private_visibility: "show_on_account_or_register"
+  account_secret:
+    generator: "sha512(random_bytes_64).hexdigest()"
+    length: 128
+    per_account_count: 1
+    group_visibility: "never_show"
+    private_visibility: "show_once_on_register_or_rotate"
+    verifier: "HMAC-SHA512(instance_pepper, account_secret)"
+  instance_pepper:
+    backend: "secret_service"
+    per_instance: true
+  identity_mapping:
+    encrypted: true
+    key_backend: "separate_instance_secret_service_key"
+  structured_memory:
+    encrypted: true
+    key_backend: "separate_instance_secret_service_key"
+    key_purpose: "account-structured-memory-key"
+  storage_layout:
+    root: "instances/<instance>/data/accounts"
+    global_files:
+      - "Account_Index.json"
+      - "Account_Identities.json"
+      - "Account_Secrets.json"
+    per_account_dir: "instances/<instance>/data/accounts/accounts/<account_id>"
+    encrypted_structured_files:
+      - "User_Memory_Index.json"
+      - "User_Memory_Entries.jsonl"
+      - "Account_Profile.json"
+      - "Secret_Verifier.json"
+      - "OpenAI_State.json"
+    plaintext_files:
+      - "User_Habbits_and_behave.md"
+commands:
+  account_private_only:
+    - "/account"
+    - "/konto"
+  register_private_only:
+    - "/register"
+    - "/registrieren"
+  login_or_link:
+    - "/login <account_id> <secret>"
+    - "/link <account_id> <secret>"
+  rotate_secret_private_only:
+    - "/rotate_secret"
+  unlink_current_channel:
+    - "/unlink_this_channel"
+  account_edit_wizard:
+    - "/account_edit"
+  export_private_only:
+    - "/export"
+    - "/export_data"
+    - "/daten_export"
+features:
+  account_linking:
+    temp_memory_merge: true
+    delete_temp_after_merge: true
+    merge_user_habits_markdown: "append_with_source_heading"
+    notify_existing_channels: true
+    wtf_unlink_supported: true
+    rotate_secret_after_wtf_unlink: true
+  shared_account_state:
+    user_memory: true
+    openai_previous_response_id: true
+    teladi_cooldown: true
+  cleanup:
+    scope: "current_chat_only"
+    response_must_say_current_chat_only: true
+  export:
+    own_data_only: true
+    private_chat_only: true
+    formats:
+      - "pdf"
+      - "csv"
+      - "cls"
+      - "yaml"
+      - "json"
+      - "txt"
+      - "md"
+      - "tex"
+      - "latex"
+implementation_phases:
+  - id: "phase_1"
+    title: "Account identity core"
+    status: "scaffolded_in_patch"
+    files:
+      - "TeeBotus/runtime/accounts.py"
+      - "TeeBotus/core/registration.py"
+      - "TeeBotus/core/export.py"
+  - id: "phase_2"
+    title: "Wire Telegram adapter through AccountStore"
+    status: "not_started"
+  - id: "phase_3"
+    title: "Add signalbot-org/signalbot adapter"
+    status: "not_started"
+  - id: "phase_4"
+    title: "Move memory/openai/teladi/youtube/codex to account-scoped runtime"
+    status: "not_started"
+  - id: "phase_5"
+    title: "Docs, migration admin tools, CI coverage"
+    status: "partially_specified"
+tests_added:
+  - "tests/test_account_store.py"
+  - "tests/test_registration_parser.py"
+  - "tests/test_export.py"
+local_validation:
+  command: "python -m pytest -q"
+  result: "12 passed"
+
+admin_report_patch_scope:
+  status: "implemented_dry_run_report"
+  added:
+    - "TeeBotus/admin/accounts_report.py"
+    - "TeeBotus/admin/__main__.py"
+    - "Dispatch from python3 -m TeeBotus admin ..."
+    - "Read-only Secret Service provider so reports do not create missing instance secrets"
+    - "Account store summary with account dirs, indexed accounts, identities, secrets and tombstones"
+    - "Legacy users/<telegram_sender_id> inspection"
+    - "Dry-run migration recommendation counts"
+    - "Text and JSON output"
+  commands:
+    report_text: "python3 -m TeeBotus admin accounts report --instances-dir instances"
+    report_json: "python3 -m TeeBotus admin accounts report --instances-dir instances --format json"
+    dry_run: "python3 -m TeeBotus admin accounts migrate --dry-run --instances-dir instances"
+  safety:
+    - "The report does not print secrets, verifiers, peppers, OpenAI keys or memory contents."
+    - "The default report provider is read-only and must not create new Secret Service entries."
+    - "Actual destructive migration is intentionally not implemented in this patch."
+  next_steps:
+    - "Run report against a backup or staging clone first."
+    - "Review requires_live_legacy_key_migration before enabling automatic migration in the live bot."
+    - "Implement actual admin migration only after report output is stable."
+  tests_added:
+    - "tests/test_admin_accounts_report.py"
+  local_validation:
+    command: "python3 -m pytest -q"
+    result: "48 passed"
+
+admin_report_patch:
+  command_module: "TeeBotus.admin.accounts"
+  commands:
+    report: "python3 -m TeeBotus.admin.accounts report --instances-dir instances"
+    report_json: "python3 -m TeeBotus.admin.accounts report --instances-dir instances --json"
+    migrate_dry_run: "python3 -m TeeBotus.admin.accounts migrate --instances-dir instances"
+    migrate_apply: "python3 -m TeeBotus.admin.accounts migrate --instances-dir instances --apply"
+  safety:
+    - "Report mode is read-only."
+    - "Migrate mode without --apply is read-only."
+    - "Blocked legacy migrations are never deleted."
+    - "Reports include metadata only, not memory content or secrets."
+  temporary: true
+  remove_after_full_migration: true

@@ -1,0 +1,251 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Mapping, Sequence
+
+DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
+DEFAULT_INSTANCES_DIR = "instances"
+DEFAULT_CHANNELS = ("telegram", "signal")
+
+
+class RuntimeConfigError(RuntimeError):
+    """Raised when TeeBotus runtime configuration is invalid."""
+
+
+@dataclass(frozen=True)
+class AccountRunConfig:
+    instance_name: str
+    channel: str
+    slot: int
+    label: str
+    openai_api_key: str
+    telegram_token: str = ""
+    signal_service: str = ""
+    signal_phone_number: str = ""
+
+
+@dataclass(frozen=True)
+class InstanceRunConfig:
+    instance_name: str
+    instruction_path: Path
+    accounts: tuple[AccountRunConfig, ...]
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    instances_dir: Path
+    selected_instances: tuple[str, ...]
+    channels: tuple[str, ...]
+    instances: tuple[InstanceRunConfig, ...]
+
+
+def normalize_instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name).strip().upper())
+    token = "_".join(part for part in token.split("_") if part)
+    if not token:
+        raise RuntimeConfigError("instance name must not be empty")
+    return token
+
+
+def parse_csv(value: str | None) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    return tuple(part.strip() for part in value.split(",") if part.strip())
+
+
+def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | None = None) -> tuple[str, ...]:
+    source = cli_channels if cli_channels is not None else (env or os.environ).get("TEEBOTUS_CHANNELS", "auto")
+    value = str(source or "auto").strip().casefold()
+    if value in {"", "auto", "all"}:
+        return DEFAULT_CHANNELS
+    channels = parse_csv(value)
+    invalid = [channel for channel in channels if channel not in {"telegram", "signal"}]
+    if invalid:
+        raise RuntimeConfigError(f"unsupported channel(s): {', '.join(invalid)}")
+    return _validate_unique_values(channels, label="TEEBOTUS_CHANNELS")
+
+
+def resolve_instances_dir(env: Mapping[str, str] | None = None) -> Path:
+    source = env or os.environ
+    value = source.get("TEEBOTUS_INSTANCES_DIR") or source.get("TELEGRAM_BOT_INSTANCES_DIR") or DEFAULT_INSTANCES_DIR
+    return Path(value)
+
+
+def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    source = env or os.environ
+    explicit = source.get("TEEBOTUS_INSTANCES") or source.get("TELEGRAM_BOT_INSTANCES")
+    if explicit:
+        return parse_csv(explicit)
+    single = source.get("TEEBOTUS_INSTANCE") or source.get("TELEGRAM_BOT_INSTANCE")
+    if single and single.strip().casefold() not in {"", "all"}:
+        return (single.strip(),)
+    if not instances_dir.exists():
+        return ()
+    return tuple(
+        sorted(
+            path.name
+            for path in instances_dir.iterdir()
+            if path.is_dir() and (path / "Bot_Verhalten.md").exists()
+        )
+    )
+
+
+def resolve_openai_key(
+    instance_name: str,
+    channel: str,
+    slot: int,
+    env: Mapping[str, str] | None = None,
+) -> str:
+    source = env or os.environ
+    instance_token = normalize_instance_env_token(instance_name)
+    channel_token = str(channel).strip().upper()
+    candidates = [
+        f"OPENAI_API_KEY_{instance_token}_{channel_token}_{slot}",
+        f"OPENAI_API_KEY_{instance_token}_{channel_token}",
+        f"OPENAI_API_KEY_{instance_token}_{slot}",
+        f"OPENAI_API_KEY_{instance_token}",
+        "OPENAI_API_KEY",
+    ]
+    list_candidates = [
+        f"OPENAI_API_KEYS_{instance_token}_{channel_token}",
+        f"OPENAI_API_KEYS_{instance_token}",
+    ]
+    if source.get(candidates[0]):
+        return source[candidates[0]]
+    resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
+    if resolved:
+        return resolved
+    for key in candidates[1:3]:
+        if source.get(key):
+            return source[key]
+    resolved = _resolve_indexed_secret(source.get(list_candidates[1]), slot)
+    if resolved:
+        return resolved
+    for key in candidates[3:]:
+        if source.get(key):
+            return source[key]
+    return ""
+
+
+def _resolve_indexed_secret(value: str | None, slot: int) -> str:
+    values = parse_csv(value)
+    index = slot - 1
+    if index < 0 or index >= len(values):
+        return ""
+    return values[index]
+
+
+def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
+    source = env or os.environ
+    token = normalize_instance_env_token(instance_name)
+    bulk_values = _nonempty(parse_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}")))
+    if bulk_values:
+        return _validate_unique_values(bulk_values, label=f"TELEGRAM_BOT_TOKENS_{token}")
+    single = source.get(f"TELEGRAM_BOT_TOKEN_{token}") or source.get("TELEGRAM_BOT_TOKEN", "")
+    numbered = _numbered_values(source, f"TELEGRAM_BOT_TOKEN_{token}")
+    return _validate_unique_values(_nonempty((single, *numbered)), label=f"TELEGRAM_BOT_TOKEN_{token}")
+
+
+def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:
+    source = env or os.environ
+    token = normalize_instance_env_token(instance_name)
+    services = parse_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"))
+    phones = parse_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"))
+    single_service = source.get(f"SIGNAL_BOT_SERVICE_{token}", "").strip()
+    single_phone = source.get(f"SIGNAL_BOT_PHONE_NUMBER_{token}", "").strip()
+    if bool(single_service) != bool(single_phone):
+        raise RuntimeConfigError(f"Signal single service/phone must be configured together for instance {instance_name}")
+    if single_service and single_phone:
+        services = (*services, single_service)
+        phones = (*phones, single_phone)
+    if len(services) != len(phones):
+        raise RuntimeConfigError(f"Signal service/phone slot mismatch for instance {instance_name}")
+    pairs = tuple((service, phone) for service, phone in zip(services, phones) if service and phone)
+    _validate_unique_values([service for service, _ in pairs], label=f"SIGNAL_BOT_SERVICES_{token}")
+    _validate_unique_values([phone for _, phone in pairs], label=f"SIGNAL_BOT_PHONE_NUMBERS_{token}")
+    return pairs
+
+
+def build_account_run_configs(
+    instance_name: str,
+    channels: Sequence[str],
+    env: Mapping[str, str] | None = None,
+) -> tuple[AccountRunConfig, ...]:
+    accounts: list[AccountRunConfig] = []
+    if "telegram" in channels:
+        for slot, token in enumerate(resolve_telegram_tokens(instance_name, env), start=1):
+            openai_key = resolve_openai_key(instance_name, "telegram", slot, env)
+            accounts.append(
+                AccountRunConfig(
+                    instance_name=instance_name,
+                    channel="telegram",
+                    slot=slot,
+                    label=f"telegram:{slot}",
+                    telegram_token=token,
+                    openai_api_key=openai_key,
+                )
+            )
+    if "signal" in channels:
+        for slot, (service, phone) in enumerate(resolve_signal_accounts(instance_name, env), start=1):
+            openai_key = resolve_openai_key(instance_name, "signal", slot, env)
+            accounts.append(
+                AccountRunConfig(
+                    instance_name=instance_name,
+                    channel="signal",
+                    slot=slot,
+                    label=f"signal:{slot}",
+                    signal_service=service,
+                    signal_phone_number=phone,
+                    openai_api_key=openai_key,
+                )
+            )
+    return tuple(accounts)
+
+
+def build_runtime_config(
+    env: Mapping[str, str] | None = None,
+    cli_channels: str | None = None,
+) -> RuntimeConfig:
+    source = env or os.environ
+    instances_dir = resolve_instances_dir(source)
+    channels = resolve_channels(source, cli_channels)
+    selected_instances = resolve_selected_instances(instances_dir, source)
+    instances = []
+    for instance_name in selected_instances:
+        accounts = build_account_run_configs(instance_name, channels, source)
+        instances.append(
+            InstanceRunConfig(
+                instance_name=instance_name,
+                instruction_path=instances_dir / instance_name / "Bot_Verhalten.md",
+                accounts=accounts,
+            )
+        )
+    return RuntimeConfig(instances_dir, selected_instances, channels, tuple(instances))
+
+
+def _numbered_values(source: Mapping[str, str], prefix: str) -> tuple[str, ...]:
+    values = []
+    for index in range(2, 100):
+        value = source.get(f"{prefix}_{index}", "").strip()
+        if value:
+            values.append(value)
+    return tuple(values)
+
+
+def _nonempty(values: Sequence[str]) -> tuple[str, ...]:
+    return tuple(str(value or "").strip() for value in values if str(value or "").strip())
+
+
+def _validate_unique_values(values: Sequence[str], *, label: str) -> tuple[str, ...]:
+    result = tuple(values)
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for value in result:
+        if value in seen and value not in duplicates:
+            duplicates.append(value)
+        seen.add(value)
+    if duplicates:
+        raise RuntimeConfigError(f"duplicate values in {label}; duplicate adapter tokens would corrupt slot-to-key mapping")
+    return result

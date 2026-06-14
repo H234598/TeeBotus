@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Literal
+
+RefKind = Literal["telegram_message_id", "signal_timestamp"]
+MESSAGE_TRACKER_FILENAME = "Sent_Message_Refs.json"
+
+
+@dataclass(frozen=True)
+class SentMessageRef:
+    channel: str
+    instance_name: str
+    account_id: str
+    chat_id: str
+    message_ref: str
+    ref_kind: RefKind
+
+
+class MessageTracker:
+    """Tracks bot messages for current-chat cleanup only.
+
+    Supports in-memory tracking and optional JSON persistence when constructed with a
+    path. Persistence keeps cleanup state across the integration-scaffold lifetime
+    without widening cleanup beyond the current chat.
+    """
+
+    def __init__(self, root_or_max_refs: Path | str | int | None = None, max_refs_per_chat: int = 100) -> None:
+        self.storage_path: Path | None = None
+        if isinstance(root_or_max_refs, int):
+            self.max_refs_per_chat = root_or_max_refs
+        else:
+            self.max_refs_per_chat = max_refs_per_chat
+            if root_or_max_refs is not None:
+                candidate = Path(root_or_max_refs)
+                self.storage_path = candidate if candidate.suffix else candidate / MESSAGE_TRACKER_FILENAME
+        self.refs: dict[tuple[str, str, str], list[SentMessageRef]] = {}
+        self._load()
+
+    def record(self, ref: SentMessageRef) -> None:
+        key = (ref.instance_name, ref.channel, ref.chat_id)
+        values = self.refs.setdefault(key, [])
+        values.append(ref)
+        del values[:-self.max_refs_per_chat]
+        self._save()
+
+    def list_for_chat(self, chat_id: str, *, instance_name: str | None = None, channel: str | None = None) -> list[SentMessageRef]:
+        selected: list[SentMessageRef] = []
+        for (inst, ch, cid), values in self.refs.items():
+            if cid != str(chat_id):
+                continue
+            if instance_name is not None and inst != instance_name:
+                continue
+            if channel is not None and ch != channel:
+                continue
+            selected.extend(values)
+        return list(selected)
+
+    def pop_for_chat(self, chat_id: str, count: int | str = "all", *, instance_name: str | None = None, channel: str | None = None) -> list[SentMessageRef]:
+        selected: list[SentMessageRef] = []
+        changed = False
+        for key in list(self.refs):
+            inst, ch, cid = key
+            if cid != str(chat_id):
+                continue
+            if instance_name is not None and inst != instance_name:
+                continue
+            if channel is not None and ch != channel:
+                continue
+            values = self.refs[key]
+            if count == "all":
+                chosen = list(reversed(values))
+                if chosen:
+                    changed = True
+                self.refs[key] = []
+            else:
+                n = max(0, int(count))
+                chosen = list(reversed(values[-n:])) if n else []
+                if n and chosen:
+                    del values[-n:]
+                    changed = True
+            selected.extend(chosen)
+        if changed:
+            self._save()
+        return selected
+
+    def pop_for_cleanup(self, *, instance_name: str, channel: str, chat_id: str, count: int | str) -> list[SentMessageRef]:
+        return self.pop_for_chat(chat_id, count, instance_name=instance_name, channel=channel)
+
+    def _load(self) -> None:
+        path = self.storage_path
+        if path is None or not path.exists():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        rows = payload.get("refs") if isinstance(payload, dict) else None
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                ref = SentMessageRef(
+                    channel=str(row["channel"]),
+                    instance_name=str(row["instance_name"]),
+                    account_id=str(row.get("account_id", "")),
+                    chat_id=str(row["chat_id"]),
+                    message_ref=str(row["message_ref"]),
+                    ref_kind=str(row["ref_kind"]),  # type: ignore[arg-type]
+                )
+            except KeyError:
+                continue
+            if ref.ref_kind not in {"telegram_message_id", "signal_timestamp"}:
+                continue
+            key = (ref.instance_name, ref.channel, ref.chat_id)
+            self.refs.setdefault(key, []).append(ref)
+        for values in self.refs.values():
+            del values[:-self.max_refs_per_chat]
+
+    def _save(self) -> None:
+        path = self.storage_path
+        if path is None:
+            return
+        rows = [asdict(ref) for values in self.refs.values() for ref in values]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not rows:
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            return
+        path.write_text(json.dumps({"refs": rows}, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
