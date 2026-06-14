@@ -92,6 +92,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
+        from TeeBotus.runtime.signal_runner import check_signal_services
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
         return 2
@@ -105,6 +106,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
     print(f"instances_dir={config.instances_dir}")
     print(f"instances={','.join(config.selected_instances) if config.selected_instances else 'auto'}")
     print(f"channels={','.join(config.channels)}")
+    for health in check_signal_services(config):
+        state = "reachable" if health.ok else "unreachable"
+        detail = "" if health.ok else f" error={health.error}"
+        print(f"signal_service={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
     return 0
 
 

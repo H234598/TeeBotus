@@ -99,6 +99,14 @@ SIGNAL_BOT_SERVICE_DEPRESSIONSBOT=http://127.0.0.1:8080
 SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT=+49...
 ```
 
+Die Erreichbarkeit des externen Signal-Dienstes pruefst du ohne Botstart:
+
+```bash
+python3 -m TeeBotus --runtime-status --channels signal
+```
+
+Wenn ein konfigurierter Signal-Dienst nicht erreichbar ist, bricht ein Signal-Start vor dem Adapterstart mit einer klaren Fehlermeldung ab.
+
 Mehrere Signal-Slots werden positionsgleich konfiguriert:
 
 ```bash

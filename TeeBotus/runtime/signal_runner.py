@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import socket
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -16,6 +18,14 @@ from TeeBotus.runtime.state import RuntimeStateStore
 
 class SignalRuntimeError(RuntimeError):
     """Raised when the Signal runtime cannot be started."""
+
+
+@dataclass(frozen=True)
+class SignalServiceHealth:
+    account: AccountRunConfig
+    ok: bool
+    target: str
+    error: str = ""
 
 
 class TeeBotusSignalCommand:
@@ -86,6 +96,7 @@ class TeeBotusSignalCommand:
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
     _import_signalbot()
+    _require_signal_services_reachable(config)
     threads: list[threading.Thread] = []
     for account in _signal_accounts(config):
         thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
@@ -101,6 +112,7 @@ def run_signal_accounts(config: RuntimeConfig) -> int:
             "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
         )
     _import_signalbot()
+    _require_signal_services_reachable(config)
     for account in accounts[1:]:
         thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
@@ -121,6 +133,31 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
 
 def _signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "signal")
+
+
+def check_signal_services(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[SignalServiceHealth, ...]:
+    return tuple(check_signal_service(account, timeout_seconds=timeout_seconds) for account in _signal_accounts(config))
+
+
+def check_signal_service(account: AccountRunConfig, *, timeout_seconds: float = 1.0) -> SignalServiceHealth:
+    try:
+        host, port, target = _signal_service_host_port(account.signal_service)
+    except SignalRuntimeError as exc:
+        return SignalServiceHealth(account=account, ok=False, target=account.signal_service, error=str(exc))
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            return SignalServiceHealth(account=account, ok=True, target=target)
+    except OSError as exc:
+        return SignalServiceHealth(account=account, ok=False, target=target, error=str(exc))
+
+
+def _require_signal_services_reachable(config: RuntimeConfig) -> None:
+    failures = [health for health in check_signal_services(config) if not health.ok]
+    if failures:
+        details = "; ".join(
+            f"{health.account.instance_name}/{health.account.label} {health.target}: {health.error}" for health in failures
+        )
+        raise SignalRuntimeError(f"signal-cli-rest-api nicht erreichbar: {details}")
 
 
 def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
@@ -155,6 +192,23 @@ def _normalize_signal_service(signal_service: str) -> tuple[str, str]:
             raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> muss Host und optional Port enthalten.")
         return parsed.netloc, parsed.scheme.casefold()
     return service, ""
+
+
+def _signal_service_host_port(signal_service: str) -> tuple[str, int, str]:
+    normalized, scheme = _normalize_signal_service(signal_service)
+    parsed = urlsplit(f"//{normalized}")
+    if not parsed.hostname:
+        raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> muss Host und optional Port enthalten.")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String oder Fragment enthalten.")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> enthaelt keinen gueltigen Port.") from exc
+    if port is None:
+        port = 80 if scheme == "http" else 443
+    target = f"{parsed.hostname}:{port}"
+    return parsed.hostname, port, target
 
 
 def _signalbot_connection_mode(signalbot: Any, scheme: str) -> Any | None:

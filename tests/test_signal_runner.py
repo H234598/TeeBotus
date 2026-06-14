@@ -6,7 +6,14 @@ from types import SimpleNamespace
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
-from TeeBotus.runtime.signal_runner import SignalRuntimeError, TeeBotusSignalCommand, run_signal_account, run_signal_accounts
+from TeeBotus.runtime.signal_runner import (
+    SignalRuntimeError,
+    SignalServiceHealth,
+    TeeBotusSignalCommand,
+    check_signal_service,
+    run_signal_account,
+    run_signal_accounts,
+)
 
 
 class FakeSignalMessage:
@@ -134,6 +141,7 @@ def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", accounts),),
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", lambda _config: ())
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_account_thread", lambda *, account, instances_dir: FakeThread(account.slot))
     monkeypatch.setattr(
         "TeeBotus.runtime.signal_runner.run_signal_account",
@@ -142,6 +150,39 @@ def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
 
     assert run_signal_accounts(config) == 0
     assert calls == [("background", 2), ("blocking", 1)]
+
+
+def test_signal_start_fails_before_threads_when_service_unreachable(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://127.0.0.1:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_services",
+        lambda _config: (SignalServiceHealth(account=account, ok=False, target="127.0.0.1:8080", error="connection refused"),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.run_signal_account", lambda **_kwargs: calls.append("started"))
+
+    try:
+        run_signal_accounts(config)
+    except SignalRuntimeError as exc:
+        assert "signal-cli-rest-api nicht erreichbar" in str(exc)
+    else:
+        raise AssertionError("SignalRuntimeError was not raised")
+    assert calls == []
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:
@@ -210,3 +251,60 @@ def test_signal_account_rejects_service_url_with_path(monkeypatch, tmp_path) -> 
         assert "darf keinen Pfad" in str(exc)
     else:
         raise AssertionError("SignalRuntimeError was not raised")
+
+
+def test_signal_service_health_uses_normalized_host_port(monkeypatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    def fake_create_connection(address, timeout):
+        calls.append((address, timeout))
+        return FakeSocket()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.socket.create_connection", fake_create_connection)
+
+    health = check_signal_service(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        timeout_seconds=0.25,
+    )
+
+    assert health.ok
+    assert health.target == "127.0.0.1:8080"
+    assert calls == [(("127.0.0.1", 8080), 0.25)]
+
+
+def test_signal_service_health_reports_unreachable_service(monkeypatch) -> None:
+    def fake_create_connection(_address, timeout=None):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.socket.create_connection", fake_create_connection)
+
+    health = check_signal_service(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        )
+    )
+
+    assert not health.ok
+    assert health.target == "127.0.0.1:8080"
+    assert "connection refused" in health.error
