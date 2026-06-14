@@ -9,46 +9,30 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from TeeBotus.runtime.accounts import (
     ACCOUNT_IDENTITIES_FILENAME,
     ACCOUNT_INDEX_FILENAME,
     ACCOUNT_PROFILE_FILENAME,
     ACCOUNT_SECRETS_FILENAME,
-    ACCOUNTS_DIRNAME,
     INSTANCE_KEY_SIZE_BYTES,
-    INSTANCE_MAPPING_KEY_PURPOSE,
-    INSTANCE_PEPPER_PURPOSE,
     INSTANCE_SECRET_SERVICE,
     SECRET_TOOL_COMMAND,
-    USER_HABITS_FILENAME,
-    USER_MEMORY_ENTRIES_FILENAME,
-    USER_MEMORY_INDEX_FILENAME,
     AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
-    SecretToolInstanceSecretProvider,
     TOKEN_HEX_RE,
-    telegram_identity_key,
 )
-from TeeBotus.core.memory import LegacyMemoryMigrator
 
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 DEFAULT_INSTANCES_DIR = "instances"
-LEGACY_USER_FILES = (USER_MEMORY_INDEX_FILENAME, USER_MEMORY_ENTRIES_FILENAME, USER_HABITS_FILENAME)
-LEGACY_ENCRYPTION_MAGICS = {"TMBMEM1", "TMBKEY1", "TMBMAP1"}
-REPORT_SCHEMA_VERSION = 1
+REPORT_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
 class ReadOnlySecretToolInstanceSecretProvider:
-    """Read-only Secret Service provider for admin reports.
-
-    Unlike ``SecretToolInstanceSecretProvider``, this provider never creates missing
-    secrets. Reports must not mutate the host keyring merely because an operator asked
-    what would happen during migration.
-    """
+    """Read-only Secret Service provider for admin reports."""
 
     command: str = SECRET_TOOL_COMMAND
 
@@ -115,7 +99,7 @@ def build_accounts_admin_report(
     resolved_instances_dir = Path(instances_dir)
     provider = provider or ReadOnlySecretToolInstanceSecretProvider()
     selected_instances = discover_instances(resolved_instances_dir, instances)
-    report = {
+    report: dict[str, Any] = {
         "schema_version": REPORT_SCHEMA_VERSION,
         "generated_at": utc_now(),
         "instances_dir": str(resolved_instances_dir),
@@ -125,12 +109,6 @@ def build_accounts_admin_report(
             "account_dirs": 0,
             "indexed_accounts": 0,
             "linked_identities": 0,
-            "legacy_user_dirs": 0,
-            "migration_create_account": 0,
-            "migration_already_mapped": 0,
-            "migration_requires_live_legacy_key": 0,
-            "migration_empty_legacy_dir": 0,
-            "migration_blocked_by_unreadable_account_store": 0,
             "store_errors": 0,
         },
     }
@@ -145,62 +123,6 @@ def build_accounts_admin_report(
     return report
 
 
-def apply_accounts_migration(
-    *,
-    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
-    instances: Sequence[str] = (),
-    provider: InstanceSecretProvider | None = None,
-) -> dict[str, Any]:
-    resolved_instances_dir = Path(instances_dir)
-    provider = provider or SecretToolInstanceSecretProvider()
-    selected_instances = discover_instances(resolved_instances_dir, instances)
-    result: dict[str, Any] = {
-        "schema_version": REPORT_SCHEMA_VERSION,
-        "generated_at": utc_now(),
-        "instances_dir": str(resolved_instances_dir),
-        "instance_count": len(selected_instances),
-        "applied": True,
-        "destructive": True,
-        "instances": [],
-        "totals": {
-            "migrated": 0,
-            "skipped": 0,
-        },
-    }
-    for instance_name in selected_instances:
-        instance_dir = resolved_instances_dir / instance_name
-        store = AccountStore(instance_dir / "data" / "accounts", instance_name, secret_provider=provider)
-        migrator = LegacyMemoryMigrator(store, instance_dir)
-        users_root = instance_dir / "data" / "users"
-        instance_result: dict[str, Any] = {
-            "instance": instance_name,
-            "users_root": str(users_root),
-            "migrations": [],
-            "migrated": 0,
-            "skipped": 0,
-        }
-        for legacy_dir in _legacy_user_dirs(users_root):
-            migration = migrator.migrate_telegram_sender(legacy_dir.name)
-            entry = {
-                "sender_id": legacy_dir.name,
-                "migrated": migration.migrated,
-                "account_id": migration.account_id,
-                "legacy_path": str(migration.legacy_path),
-                "target_path": str(migration.target_path),
-                "encrypted_legacy": migration.encrypted_legacy,
-                "skipped_reason": migration.skipped_reason,
-            }
-            instance_result["migrations"].append(entry)
-            if migration.migrated:
-                instance_result["migrated"] += 1
-                result["totals"]["migrated"] += 1
-            else:
-                instance_result["skipped"] += 1
-                result["totals"]["skipped"] += 1
-        result["instances"].append(instance_result)
-    return result
-
-
 def build_instance_admin_report(
     *,
     instances_dir: Path,
@@ -211,12 +133,6 @@ def build_instance_admin_report(
     data_dir = instance_dir / "data"
     accounts_root = data_dir / "accounts"
     store = AccountStore(accounts_root, instance_name, secret_provider=provider, create_dirs=False)
-    store_report = _build_store_report(store)
-    legacy_report = _build_legacy_report(
-        data_dir,
-        store if store_report["readable"] else None,
-        account_store_readable=bool(store_report["readable"]),
-    )
     return {
         "instance": instance_name,
         "instance_dir": str(instance_dir),
@@ -224,9 +140,7 @@ def build_instance_admin_report(
         "data_dir": str(data_dir),
         "data_dir_exists": data_dir.exists(),
         "accounts_root": str(accounts_root),
-        "account_store": store_report,
-        "legacy_users": legacy_report,
-        "migration_plan": _build_migration_plan(legacy_report),
+        "account_store": _build_store_report(store),
     }
 
 
@@ -301,109 +215,20 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
     return report
 
 
-def _build_legacy_report(data_dir: Path, store: AccountStore | None, *, account_store_readable: bool = True) -> dict[str, Any]:
-    users_root = data_dir / "users"
-    legacy_dirs = _legacy_user_dirs(users_root)
-    entries: list[dict[str, Any]] = []
-    for legacy_dir in legacy_dirs:
-        entries.append(_inspect_legacy_user_dir(legacy_dir, store, account_store_readable=account_store_readable))
-    by_action: dict[str, int] = {}
-    for entry in entries:
-        action = str(entry.get("recommended_action") or "unknown")
-        by_action[action] = by_action.get(action, 0) + 1
-    return {
-        "root": str(users_root),
-        "root_exists": users_root.exists(),
-        "legacy_user_dir_count": len(legacy_dirs),
-        "recommended_actions": by_action,
-        "users": entries,
-    }
-
-
-def _inspect_legacy_user_dir(legacy_dir: Path, store: AccountStore | None, *, account_store_readable: bool = True) -> dict[str, Any]:
-    sender_id = legacy_dir.name
-    identity_key = telegram_identity_key(sender_id)
-    files = {filename: (legacy_dir / filename).exists() for filename in LEGACY_USER_FILES}
-    encrypted_structured = any(_looks_like_legacy_encrypted_payload(legacy_dir / filename) for filename in (USER_MEMORY_INDEX_FILENAME, USER_MEMORY_ENTRIES_FILENAME))
-    existing_account_id = store.get_account_for_identity(identity_key) if store is not None else None
-    if existing_account_id:
-        action = "already_mapped"
-        reason = "telegram identity is already linked to an account"
-    elif not any(files.values()):
-        action = "empty_legacy_dir"
-        reason = "legacy user directory contains no known memory files"
-    elif not account_store_readable:
-        action = "blocked_by_unreadable_account_store"
-        reason = "account store is not readable, so migration must not create duplicate accounts"
-    elif encrypted_structured:
-        action = "requires_live_legacy_key_migration"
-        reason = "legacy structured memory appears encrypted and must be migrated by the live bot with the legacy key backend"
-    else:
-        action = "create_account_and_migrate"
-        reason = "plaintext legacy memory can be migrated to an account directory"
-    return {
-        "sender_id": sender_id,
-        "identity_key": identity_key,
-        "existing_account_id": existing_account_id or "",
-        "files": files,
-        "encrypted_structured_memory": encrypted_structured,
-        "recommended_action": action,
-        "reason": reason,
-    }
-
-
-def _build_migration_plan(legacy_report: Mapping[str, Any]) -> dict[str, Any]:
-    actions = legacy_report.get("recommended_actions") if isinstance(legacy_report, Mapping) else {}
-    if not isinstance(actions, Mapping):
-        actions = {}
-    return {
-        "mode": "dry_run_report_only",
-        "destructive": False,
-        "would_create_accounts": int(actions.get("create_account_and_migrate", 0)),
-        "already_mapped": int(actions.get("already_mapped", 0)),
-        "requires_live_legacy_key_migration": int(actions.get("requires_live_legacy_key_migration", 0)),
-        "empty_legacy_dirs": int(actions.get("empty_legacy_dir", 0)),
-        "blocked_by_unreadable_account_store": int(actions.get("blocked_by_unreadable_account_store", 0)),
-        "actual_migration_implemented": False,
-        "next_step": "Run the live bot migration path or a dedicated migration command after reviewing this report.",
-    }
-
-
 def _add_instance_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> None:
     store = instance_report.get("account_store", {}) if isinstance(instance_report, Mapping) else {}
-    legacy = instance_report.get("legacy_users", {}) if isinstance(instance_report, Mapping) else {}
-    migration = instance_report.get("migration_plan", {}) if isinstance(instance_report, Mapping) else {}
     if isinstance(store, Mapping):
         totals["account_dirs"] += int(store.get("account_directories", 0) or 0)
         totals["indexed_accounts"] += int(store.get("indexed_accounts", 0) or 0)
         totals["linked_identities"] += int(store.get("linked_identities", 0) or 0)
         if store.get("errors"):
             totals["store_errors"] += 1
-    if isinstance(legacy, Mapping):
-        totals["legacy_user_dirs"] += int(legacy.get("legacy_user_dir_count", 0) or 0)
-    if isinstance(migration, Mapping):
-        totals["migration_create_account"] += int(migration.get("would_create_accounts", 0) or 0)
-        totals["migration_already_mapped"] += int(migration.get("already_mapped", 0) or 0)
-        totals["migration_requires_live_legacy_key"] += int(migration.get("requires_live_legacy_key_migration", 0) or 0)
-        totals["migration_empty_legacy_dir"] += int(migration.get("empty_legacy_dirs", 0) or 0)
-        totals["migration_blocked_by_unreadable_account_store"] += int(migration.get("blocked_by_unreadable_account_store", 0) or 0)
 
 
 def _account_dirs(accounts_dir: Path) -> list[Path]:
     if not accounts_dir.exists():
         return []
     return sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
-
-
-def _legacy_user_dirs(users_root: Path) -> list[Path]:
-    if not users_root.exists():
-        return []
-    excluded = {"telegram", "signal", "accounts", "runtime"}
-    return sorted(
-        path
-        for path in users_root.iterdir()
-        if path.is_dir() and not path.name.startswith(".") and path.name not in excluded
-    )
 
 
 def _encrypted_store_files_present(store: AccountStore) -> dict[str, bool]:
@@ -426,20 +251,6 @@ def _count_identities_by_channel(identities: Mapping[str, Any]) -> dict[str, int
     return dict(sorted(counts.items()))
 
 
-def _looks_like_legacy_encrypted_payload(path: Path) -> bool:
-    try:
-        raw = path.read_bytes()
-    except FileNotFoundError:
-        return False
-    if not raw.lstrip().startswith(b"{"):
-        return False
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return False
-    return isinstance(payload, dict) and str(payload.get("magic") or "") in LEGACY_ENCRYPTION_MAGICS and isinstance(payload.get("ciphertext"), str)
-
-
 def render_text_report(report: Mapping[str, Any]) -> str:
     lines = [
         "TeeBotus Account Admin Report",
@@ -456,8 +267,6 @@ def render_text_report(report: Mapping[str, Any]) -> str:
         if not isinstance(instance, Mapping):
             continue
         store = instance.get("account_store", {})
-        legacy = instance.get("legacy_users", {})
-        plan = instance.get("migration_plan", {})
         lines.extend([
             "",
             f"Instance: {instance.get('instance', '')}",
@@ -473,19 +282,6 @@ def render_text_report(report: Mapping[str, Any]) -> str:
             ])
             for error in store.get("errors", []) if isinstance(store.get("errors"), list) else []:
                 lines.append(f"  error: {error}")
-        if isinstance(legacy, Mapping):
-            lines.append(f"  legacy_user_dirs: {legacy.get('legacy_user_dir_count', 0)}")
-            actions = legacy.get("recommended_actions", {})
-            if isinstance(actions, Mapping):
-                for key in sorted(actions):
-                    lines.append(f"    {key}: {actions[key]}")
-        if isinstance(plan, Mapping):
-            lines.extend([
-                f"  migration_would_create_accounts: {plan.get('would_create_accounts', 0)}",
-                f"  migration_requires_live_legacy_key: {plan.get('requires_live_legacy_key_migration', 0)}",
-                f"  migration_blocked_by_unreadable_account_store: {plan.get('blocked_by_unreadable_account_store', 0)}",
-                f"  actual_migration_implemented: {plan.get('actual_migration_implemented', False)}",
-            ])
     return "\n".join(lines) + "\n"
 
 
@@ -502,23 +298,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     report_parser = accounts_subparsers.add_parser("report")
     _add_common_report_args(report_parser)
 
-    migrate_parser = accounts_subparsers.add_parser("migrate")
-    _add_common_report_args(migrate_parser)
-    migrate_parser.add_argument("--dry-run", action="store_true", help="Only print the migration report.")
-    migrate_parser.add_argument("--apply", action="store_true", help="Apply the migration and delete legacy user directories only after successful account-store writes.")
-
     args = parser.parse_args(list(argv) if argv is not None else None)
     instances = parse_csv(getattr(args, "instances", None))
-    if args.area == "accounts" and args.command == "migrate" and args.dry_run and args.apply:
-        print("Use either --dry-run or --apply, not both.", file=sys.stderr)
-        return 2
-    if args.area == "accounts" and args.command == "migrate" and args.apply:
-        report = apply_accounts_migration(instances_dir=args.instances_dir, instances=instances)
-    else:
-        report = build_accounts_admin_report(instances_dir=args.instances_dir, instances=instances)
-    if args.area == "accounts" and args.command == "migrate" and not args.dry_run and not args.apply:
-        print("Migration apply is explicit. Re-run with --dry-run to inspect or --apply to migrate.", file=sys.stderr)
-        return 2
+    report = build_accounts_admin_report(instances_dir=args.instances_dir, instances=instances)
     output = _json_dump(report) if args.format == "json" else render_text_report(report)
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")

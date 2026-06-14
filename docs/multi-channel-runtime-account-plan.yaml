@@ -122,31 +122,25 @@ local_validation:
   result: "12 passed"
 
 admin_report_patch_scope:
-  status: "implemented_dry_run_report"
+  status: "migration_tools_removed_after_cutover"
   added:
     - "TeeBotus/admin/accounts_report.py"
     - "TeeBotus/admin/__main__.py"
     - "Dispatch from python3 -m TeeBotus.admin accounts ..."
     - "Read-only Secret Service provider so reports do not create missing instance secrets"
     - "Account store summary with account dirs, indexed accounts, identities, secrets and tombstones"
-    - "Legacy users/<telegram_sender_id> inspection"
-    - "Dry-run migration recommendation counts"
     - "Text and JSON output"
   commands:
     report_text: "python3 -m TeeBotus.admin accounts report --instances-dir instances"
     report_json: "python3 -m TeeBotus.admin accounts report --instances-dir instances --format json"
-    dry_run: "python3 -m TeeBotus.admin accounts migrate --dry-run --instances-dir instances"
-    apply: "python3 -m TeeBotus.admin accounts migrate --apply --instances-dir instances"
   safety:
     - "The report does not print secrets, verifiers, peppers, OpenAI keys or memory contents."
     - "The default report provider is read-only and must not create new Secret Service entries."
-    - "Actual migration is explicit behind --apply and deletes legacy user directories only after successful account-store writes."
   next_steps:
-    - "Run report against a backup or staging clone first."
-    - "Review requires_live_legacy_key_migration before running --apply on live data."
-    - "Keep automatic live-bot migration disabled until admin migration evidence is stable."
+    - "Use report mode for account-store health checks."
+    - "Do not reintroduce temporary migration commands after production cutover."
   tests_added:
-    - "tests/test_admin_accounts_report.py"
+    - "tests/test_admin_accounts.py"
   local_validation:
     command: "python3 -m pytest -q"
     result: "240 passed, 14 subtests passed"
@@ -156,12 +150,8 @@ admin_report_patch:
   commands:
     report: "python3 -m TeeBotus.admin.accounts report --instances-dir instances"
     report_json: "python3 -m TeeBotus.admin.accounts report --instances-dir instances --format json"
-    migrate_dry_run: "python3 -m TeeBotus.admin.accounts migrate --instances-dir instances --dry-run"
-    migrate_apply: "python3 -m TeeBotus.admin.accounts migrate --instances-dir instances --apply"
   safety:
     - "Report mode is read-only."
-    - "Migrate mode without --apply is read-only."
-    - "Blocked legacy migrations are never deleted."
     - "Reports include metadata only, not memory content or secrets."
-  temporary: true
-  remove_after_full_migration: true
+  temporary: false
+  remove_after_full_migration: false

@@ -82,7 +82,7 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 ## Plan3 Account-Runtime
 
-Der produktive Startpfad bleibt aktuell der Telegram-Legacy-Bot. `TeeBotus/bot.py` ist ein Compatibility-Entry-Point und delegiert an `TeeBotus/legacy_bot.py`. Die neue Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Produktivbot gestartet.
+Der produktive Startpfad ist aktuell Telegram-only. `TeeBotus/bot.py` bleibt der stabile Entry-Point und delegiert an `TeeBotus/telegram_bot.py`. Die Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Signal-/Mehrkanal-Produktivbot gestartet.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 
@@ -90,19 +90,17 @@ Die Runtime-Konfiguration kannst du separat pruefen:
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
-`--channels telegram` ist beim Compatibility-Start erlaubt und wird an den Legacy-Bot weitergereicht. `--channels signal` oder `--channels telegram,signal` starten noch keinen Produktivbot, sondern brechen kontrolliert ab, bis der Signal-Adapter voll verdrahtet ist.
+`--channels telegram` ist beim Telegram-Start erlaubt. `--channels signal` oder `--channels telegram,signal` starten noch keinen Produktivbot, sondern brechen kontrolliert ab, bis der Signal-Adapter voll verdrahtet ist.
 
 Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>` oder `signal:uuid:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
 
-Admin-Report und Migration:
+Account-Report:
 
 ```bash
 python3 -m TeeBotus.admin accounts report --instances-dir instances
-python3 -m TeeBotus.admin accounts migrate --dry-run --instances-dir instances
-python3 -m TeeBotus.admin accounts migrate --apply --instances-dir instances
 ```
 
-`--dry-run` ist read-only. `--apply` migriert Legacy-User-Memorys in den AccountStore und entfernt alte Legacy-Ordner nur nach erfolgreichem Schreiben. Verschluesselte Legacy-Memorys werden uebersprungen, wenn der alte Keyring- oder Passphrase-Kontext nicht lesbar ist.
+Der Report liest den AccountStore read-only und erzeugt keine neuen Secrets.
 
 ## Verhalten steuern
 
@@ -218,14 +216,14 @@ Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: 
 
 ## User-Memory
 
-Eine Instanz kann pro Telegram-Absender ein lokales JSON-Gedaechtnis fuehren. Konfiguriert wird das in `## Memory`:
+Der neue Account-Layer speichert accountbezogene Daten unter `instances/<instance>/data/accounts/accounts/<account_id>/`. Der alte Telegram-UserMemory-Schalter in `## Memory` existiert noch fuer die monolithische Telegram-Logik:
 
 - `enabled: true` aktiviert den Speicher.
 - `directory: instances/{instance}/data/users` legt den Speicherort fest.
 - `max_prompt_chars` begrenzt die ausgewaehlte JSON-Auswahl, die an OpenAI mitgegeben wird.
 - `max_entry_chars` begrenzt gespeicherte Einzelauszuege.
 
-Pro Telegram-Sender-ID gibt es einen eigenen Ordner, zum Beispiel `instances/Depressionsbot/data/users/123456789/`. Darin liegen ein verschluesselter JSON-Index, ein verschluesseltes JSONL-Eintragslog, eine menschenlesbare Markdown-Datei fuer admingepflegte Zusatzhinweise und ein eigener zufaellig erzeugter 32-Byte-Key pro Sender-ID.
+Im AccountStore liegen strukturierte Accountdaten unter der Account-ID. `User_Habbits_and_behave.md` bleibt dabei bewusst Klartext-Markdown.
 
 Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
 

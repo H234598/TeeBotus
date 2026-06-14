@@ -270,22 +270,22 @@ class BotTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
 
-    def test_user_memory_key_migrates_legacy_file_into_secret_service(self) -> None:
+    def test_user_memory_key_loads_existing_key_payload_into_secret_service(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            legacy_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
-            legacy_path.parent.mkdir(parents=True, exist_ok=True)
-            legacy_key = bytes(range(32))
-            legacy_path.write_bytes(legacy_key)
+            payload_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
+            payload_path.parent.mkdir(parents=True, exist_ok=True)
+            payload_key = bytes(range(32))
+            payload_path.write_bytes(payload_key)
 
-            key = ensure_user_memory_key(legacy_path, instance_name="Depressionsbot", sender_id="456")
+            key = ensure_user_memory_key(payload_path, instance_name="Depressionsbot", sender_id="456")
 
-            self.assertEqual(key, legacy_key)
-            self.assertFalse(legacy_path.exists())
+            self.assertEqual(key, payload_key)
+            self.assertFalse(payload_path.exists())
             self.assertEqual(
                 self._secret_tool_store[
                     ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
                 ],
-                base64.urlsafe_b64encode(legacy_key).decode("ascii"),
+                base64.urlsafe_b64encode(payload_key).decode("ascii"),
             )
 
     def test_user_memory_key_passphrase_mode_uses_explicit_passphrase(self) -> None:
@@ -499,7 +499,7 @@ class BotTests(unittest.TestCase):
 
             self.assertEqual(result.errors, 1)
 
-    def test_user_memory_encryption_migration_decrypts_legacy_encrypted_habits_to_plaintext_md(self) -> None:
+    def test_user_memory_encryption_migration_decrypts_encrypted_habits_to_plaintext_md(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
             user_dir.mkdir(parents=True, exist_ok=True)
@@ -507,7 +507,7 @@ class BotTests(unittest.TestCase):
             key = ensure_user_memory_key(user_dir / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
             from TeeBotus.user_memory_crypto import write_text as write_encrypted_user_memory_text
 
-            write_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits", text="Legacy encrypted habits")
+            write_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits", text="Encrypted habits")
 
             result = migrate_user_memory_encryption.migrate_instances(Path(directory) / "instances")
 
@@ -515,7 +515,7 @@ class BotTests(unittest.TestCase):
             self.assertEqual(result.encrypted, 0)
             self.assertEqual(result.plaintext_habits, 1)
             self.assertFalse(is_encrypted_payload(habits_path.read_bytes()))
-            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Legacy encrypted habits")
+            self.assertEqual(habits_path.read_text(encoding="utf-8"), "Encrypted habits")
 
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
@@ -1226,28 +1226,29 @@ class BotTests(unittest.TestCase):
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = UserMemoryStore("Depressionsbot")
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / ("a" * 128)
             user_dir.mkdir(parents=True)
             (user_dir / "User_Memory_Index.json").write_bytes(b"x" * 1024)
             (user_dir / "User_Memory_Entries.jsonl").write_bytes(b"y" * 1024)
             (user_dir / "User_Habbits_and_behave.md").write_bytes(b"z" * 512)
             (user_dir / "Secret_Verifier.json").write_bytes(b"not counted")
 
-            handle_update(
-                api,
-                {
-                    "message": {
-                        "message_id": 1,
-                        "text": "/status",
-                        "chat": {"id": 123, "type": "private"},
-                        "from": {"id": 456, "first_name": "Ada"},
-                    }
-                },
-                instructions,
-                None,
-                ChatState(),
-                memory_store,
-            )
+            with patch("TeeBotus.telegram_bot._account_memory_dir_for_sender", return_value=user_dir):
+                handle_update(
+                    api,
+                    {
+                        "message": {
+                            "message_id": 1,
+                            "text": "/status",
+                            "chat": {"id": 123, "type": "private"},
+                            "from": {"id": 456, "first_name": "Ada"},
+                        }
+                    },
+                    instructions,
+                    None,
+                    ChatState(),
+                    memory_store,
+                )
 
             self.assertEqual(len(api.sent_messages), 1)
             reply = api.sent_messages[0][1]
@@ -1255,11 +1256,11 @@ class BotTests(unittest.TestCase):
             self.assertIn(f"Version: {__version__}", reply)
             self.assertIn("Deine Nutzermemorys: 2.50 KB", reply)
 
-    def test_account_commands_are_handled_before_legacy_fallback(self) -> None:
+    def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()
-        instructions = BotInstructions(commands={"/account": "legacy fallback"})
+        instructions = BotInstructions(commands={"/account": "configured fallback"})
 
-        with patch("TeeBotus.legacy_bot.maybe_handle_account_runtime_message", return_value=True) as handle:
+        with patch("TeeBotus.telegram_bot.maybe_handle_account_runtime_message", return_value=True) as handle:
             handle_update(
                 api,
                 {

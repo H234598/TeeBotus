@@ -30,7 +30,7 @@ from .handlers import build_reply, should_use_openai
 from .instructions import BotInstructions, InstructionStore, render_template
 from .openai_client import OpenAIAPIError, OpenAIClient
 from .runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
-from .runtime.legacy_bridge import maybe_handle_account_runtime_message
+from .runtime.telegram_bridge import maybe_handle_account_runtime_message
 from .user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
     UserMemoryCryptoError,
@@ -242,11 +242,11 @@ class _InstanceProcessRegistry:
                 and entry["start_time"] > 0
             ]
         else:
-            legacy_pids = payload.get("pids")
-            if isinstance(legacy_pids, list):
+            stored_pids = payload.get("pids")
+            if isinstance(stored_pids, list):
                 payload["processes"] = [
                     {"pid": pid, "start_time": _read_process_start_time(pid) or 0}
-                    for pid in legacy_pids
+                    for pid in stored_pids
                     if (isinstance(pid, int) and pid > 0) or (isinstance(pid, str) and pid.isdigit() and int(pid) > 0)
                 ]
                 payload["processes"] = [entry for entry in payload["processes"] if entry["start_time"] > 0]
@@ -970,11 +970,6 @@ class UserMemoryStore:
             key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
             _write_user_memory_json(path, _new_user_memory_data(sender_id), key)
             _write_user_memory_entries(path, [], key)
-            for legacy_path in [*_legacy_json_memory_paths(path, sender_id), *_legacy_entries_memory_paths(path, sender_id)]:
-                _unlink_file_if_exists(legacy_path)
-            legacy_markdown_path = _legacy_markdown_memory_path(path, sender_id)
-            if legacy_markdown_path.is_file():
-                _unlink_file_if_exists(legacy_markdown_path)
         return path
 
     def has_sender(self, sender_id: str, instructions: BotInstructions) -> bool:
@@ -987,9 +982,6 @@ class UserMemoryStore:
             or _memory_entries_path(path).exists()
             or _memory_habits_path(path).exists()
             or key_path.exists()
-            or any(legacy_path.exists() for legacy_path in _legacy_json_memory_paths(path, sender_id))
-            or any(legacy_path.exists() for legacy_path in _legacy_entries_memory_paths(path, sender_id))
-            or _legacy_markdown_memory_path(path, sender_id).is_file()
         )
 
     def _path_for_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
@@ -1001,18 +993,6 @@ class UserMemoryStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
         if not path.exists():
-            legacy_data = _load_legacy_user_memory(path, sender_id, key)
-            if legacy_data is not None:
-                _write_user_memory_json(path, legacy_data, key)
-                _ensure_user_habits_file(path, key)
-                return legacy_data
-            legacy_markdown_path = _legacy_markdown_memory_path(path, sender_id)
-            if legacy_markdown_path.is_file():
-                data = _new_user_memory_data(sender_id)
-                _store_memory_entry(path, data, _legacy_memory_entry(legacy_markdown_path.read_text(encoding="utf-8")), key)
-                _write_user_memory_json(path, data, key)
-                _ensure_user_habits_file(path, key)
-                return data
             data = _new_user_memory_data(sender_id)
             _write_user_memory_json(path, data, key)
             _ensure_user_habits_file(path, key)
@@ -1342,13 +1322,10 @@ def _user_memory_size_for_status(message: dict[str, Any], instructions: BotInstr
     sender_id = _sender_identifier(message)
     if not sender_id:
         return 0
-    legacy_dir = _legacy_memory_dir_for_sender(sender_id, instructions, instance_name)
-    if instructions.user_memory_enabled and legacy_dir.exists():
-        return _memory_files_size(legacy_dir)
     account_dir = _account_memory_dir_for_sender(sender_id, instance_name)
     if account_dir is not None:
         return _memory_files_size(account_dir)
-    return _memory_files_size(legacy_dir)
+    return 0
 
 
 def _account_memory_dir_for_sender(sender_id: str, instance_name: str) -> Path | None:
@@ -1369,12 +1346,6 @@ def _account_memory_dir_for_sender(sender_id: str, instance_name: str) -> Path |
         return None
     account_dir = PROJECT_ROOT / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
     return account_dir if account_dir.is_dir() else None
-
-
-def _legacy_memory_dir_for_sender(sender_id: str, instructions: BotInstructions, instance_name: str) -> Path:
-    directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/users"
-    directory = directory.replace("{instance}", instance_name or DEFAULT_INSTANCE_NAME)
-    return Path(directory) / _safe_memory_filename(sender_id)
 
 
 def _memory_files_size(directory: Path | None) -> int:
@@ -2460,27 +2431,6 @@ def _sanitize_working_memory_text(text: str) -> str:
     return sanitized
 
 
-def _legacy_memory_entry(text: str) -> dict[str, Any]:
-    timestamp = _utc_timestamp()
-    clipped = _clip_memory_text(text, 12000)
-    return {
-        "id": _new_memory_id(),
-        "created_at": timestamp,
-        "updated_at": timestamp,
-        "source": {
-            "chat_id": "legacy",
-            "chat_type": "legacy",
-            "chat_title": "Legacy Markdown Import",
-            "message_type": "legacy",
-        },
-        "sender": {},
-        "keywords": _memory_keywords(clipped),
-        "related_ids": [],
-        "user_text": "",
-        "bot_text": clipped,
-    }
-
-
 def _append_json_memory_interaction(
     index_path: Path,
     data: dict[str, Any],
@@ -2898,71 +2848,6 @@ def _user_memory_key_path(index_path: Path) -> Path:
 
 def _ensure_user_memory_key(index_path: Path, *, sender_id: str, instance_name: str) -> bytes:
     return ensure_user_memory_key(_user_memory_key_path(index_path), sender_id=sender_id, instance_name=instance_name)
-
-
-def _load_legacy_user_memory(index_path: Path, sender_id: str, key: bytes) -> dict[str, Any] | None:
-    legacy_json_path = _first_existing_path(_legacy_json_memory_paths(index_path, sender_id))
-    if legacy_json_path is None:
-        return None
-    try:
-        payload = json.loads(legacy_json_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        LOGGER.exception("Failed to read legacy JSON user memory for sender_id=%s.", sender_id)
-        return None
-    if not isinstance(payload, dict) or str(payload.get("sender_id", "")) != sender_id:
-        LOGGER.warning("Ignoring legacy user memory with mismatched sender_id at %s.", legacy_json_path)
-        return None
-    if isinstance(payload.get("memories"), list):
-        return _migrate_inline_json_memory(index_path, payload, sender_id, key)
-
-    legacy_entries_path = _first_existing_path(_legacy_entries_memory_paths(index_path, sender_id))
-    if legacy_entries_path is not None:
-        try:
-            legacy_entries = [json.loads(line) for line in legacy_entries_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        except json.JSONDecodeError:
-            legacy_entries = []
-        _write_user_memory_entries(index_path, [entry for entry in legacy_entries if isinstance(entry, dict)], key)
-    else:
-        _write_user_memory_entries(index_path, [], key)
-    _normalize_user_memory_data(payload, sender_id)
-    return payload
-
-
-def _first_existing_path(paths: list[Path]) -> Path | None:
-    for path in paths:
-        if path.exists():
-            return path
-    return None
-
-
-def _legacy_json_memory_paths(index_path: Path, sender_id: str) -> list[Path]:
-    safe_sender_id = _safe_memory_filename(sender_id)
-    paths = [index_path.parent.parent / f"{safe_sender_id}.json"]
-    instance_name = _instance_name_from_memory_path(index_path)
-    if instance_name:
-        paths.append(Path("data") / instance_name / "users" / f"{safe_sender_id}.json")
-    return paths
-
-
-def _legacy_entries_memory_paths(index_path: Path, sender_id: str) -> list[Path]:
-    safe_sender_id = _safe_memory_filename(sender_id)
-    paths = [index_path.parent.parent / f"{safe_sender_id}.entries.jsonl"]
-    instance_name = _instance_name_from_memory_path(index_path)
-    if instance_name:
-        paths.append(Path("data") / instance_name / "users" / f"{safe_sender_id}.entries.jsonl")
-    return paths
-
-
-def _legacy_markdown_memory_path(index_path: Path, sender_id: str) -> Path:
-    return index_path.parent.parent / _safe_memory_filename(sender_id)
-
-
-def _instance_name_from_memory_path(index_path: Path) -> str:
-    parts = index_path.parts
-    for index, part in enumerate(parts):
-        if part == "instances" and index + 1 < len(parts):
-            return parts[index + 1]
-    return ""
 
 
 def _compact_memory_for_prompt(memory: dict[str, Any]) -> dict[str, Any]:

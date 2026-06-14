@@ -45,10 +45,6 @@ Account index, identity mapping, secret verifiers, profiles, and tombstones are 
 
 `User_Habbits_and_behave.md` intentionally remains plaintext. It is a manually editable Markdown note. It is merged during account merges, but it is not encrypted.
 
-## Legacy Data
-
-Old `data/users/<telegram_sender_id>` memory can be migrated into account-scoped storage. Encrypted legacy memory still needs the old keyring or passphrase context. If the old key cannot be read, migration skips that user and keeps the legacy folder intact.
-
 ## What Is Protected
 
 Disk-only access sees ciphertext for structured files. Disk-only access still sees Markdown notes in plaintext. Anyone with access to the running process, Secret Service, passphrase, or debugger can still reach plaintext because the bot must decrypt data to operate.

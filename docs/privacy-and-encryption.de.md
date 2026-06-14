@@ -45,10 +45,6 @@ Auch Account-Index, Identity-Mapping, Secret-Verifier, Profile und Tombstones we
 
 `User_Habbits_and_behave.md` bleibt absichtlich Klartext. Diese Datei ist eine manuell editierbare Markdown-Notiz. Sie wird bei Account-Merges zusammengefuehrt, aber nicht verschluesselt.
 
-## Alte Daten
-
-Alte `data/users/<telegram_sender_id>`-Memorys koennen in den neuen Account-Speicher migriert werden. Verschluesselte alte Memorys brauchen weiterhin den alten Keyring- oder Passphrase-Kontext. Wenn der alte Schluessel nicht lesbar ist, wird der Nutzer uebersprungen und der Legacy-Ordner bleibt erhalten.
-
 ## Was geschuetzt ist
 
 Reiner Dateizugriff sieht bei strukturierten Dateien Ciphertext. Reiner Dateizugriff sieht aber weiterhin die Markdown-Notizen im Klartext. Wer Zugriff auf den laufenden Prozess, Secret Service, Passphrase oder Debugger hat, kann weiterhin Plaintext erreichen, weil der Bot Daten zum Arbeiten entschluesseln muss.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from TeeBotus.runtime.accounts import AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider
-from TeeBotus.runtime.legacy_bridge import LegacyRuntimeBridge
+from TeeBotus.runtime.telegram_bridge import TelegramRuntimeBridge
 from TeeBotus.runtime.state import RuntimeStateStore
 
 
@@ -35,8 +35,8 @@ def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_back
     assert "secret backend unavailable" in state.link_notifications_persistence_error
 
 
-def test_legacy_bridge_defaults_to_secret_tool_provider(tmp_path):
-    bridge = LegacyRuntimeBridge(instance_name="Bot", data_dir=tmp_path / "Bot" / "data")
+def test_telegram_bridge_defaults_to_secret_tool_provider(tmp_path):
+    bridge = TelegramRuntimeBridge(instance_name="Bot", data_dir=tmp_path / "Bot" / "data")
 
     assert isinstance(bridge.account_store.secret_provider, SecretToolInstanceSecretProvider)
     assert bridge.state_store.secret_provider is bridge.account_store.secret_provider

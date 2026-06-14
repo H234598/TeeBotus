@@ -229,7 +229,7 @@ def _infer_instance_name(path: Path) -> str:
     return ""
 
 
-def _legacy_key_path(path: Path) -> Path:
+def _key_payload_path(path: Path) -> Path:
     if path.name == USER_MEMORY_KEY_FILENAME:
         return path
     return path.parent / USER_MEMORY_KEY_FILENAME
@@ -323,13 +323,13 @@ def _clear_keyring_key(scope: tuple[str, str]) -> None:
         return
 
 
-def _unlink_legacy_key_file(path: Path) -> None:
+def _unlink_key_payload_file(path: Path) -> None:
     try:
         path.unlink()
     except FileNotFoundError:
         return
     except OSError as exc:
-        raise UserMemoryCryptoError("legacy user memory key file could not be removed") from exc
+        raise UserMemoryCryptoError("user memory key payload file could not be removed") from exc
 
 
 def _write_private_bytes(path: Path, payload: bytes) -> None:
@@ -359,26 +359,26 @@ def _ensure_user_memory_key_keyring(path: Path, scope: tuple[str, str]) -> bytes
     if existing is not None:
         return existing
 
-    legacy_path = _legacy_key_path(path)
-    if legacy_path.exists():
-        payload = legacy_path.read_bytes()
+    payload_path = _key_payload_path(path)
+    if payload_path.exists():
+        payload = payload_path.read_bytes()
         if len(payload) == USER_MEMORY_KEY_SIZE_BYTES:
             key = payload
             if _try_store_keyring_key(scope, key):
-                _unlink_legacy_key_file(legacy_path)
+                _unlink_key_payload_file(payload_path)
             else:
-                _write_passphrase_protected_key(legacy_path, key, _resolve_user_memory_passphrase(path))
+                _write_passphrase_protected_key(payload_path, key, _resolve_user_memory_passphrase(path))
             return key
         if _is_passphrase_encrypted_key_payload(payload):
             key = _decrypt_passphrase_protected_key(path, payload)
             if _try_store_keyring_key(scope, key):
-                _unlink_legacy_key_file(legacy_path)
+                _unlink_key_payload_file(payload_path)
             return key
         raise UserMemoryCryptoError("user memory key file has invalid contents")
 
     key = secrets.token_bytes(USER_MEMORY_KEY_SIZE_BYTES)
     if not _try_store_keyring_key(scope, key):
-        _write_passphrase_protected_key(legacy_path, key, _resolve_user_memory_passphrase(path))
+        _write_passphrase_protected_key(payload_path, key, _resolve_user_memory_passphrase(path))
     return key
 
 
@@ -392,7 +392,7 @@ def _try_store_keyring_key(scope: tuple[str, str], key: bytes) -> bool:
 
 
 def _ensure_user_memory_key_passphrase(path: Path, scope: tuple[str, str]) -> bytes:
-    payload_path = _legacy_key_path(path)
+    payload_path = _key_payload_path(path)
     passphrase = _resolve_user_memory_passphrase(path)
 
     if payload_path.exists():

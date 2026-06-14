@@ -45,10 +45,6 @@ Encrypted account files include identity mappings, account index, account secret
 
 `User_Habbits_and_behave.md` remains plaintext by design. Operator-maintained Markdown notes remain plaintext. It is a human-editable Markdown file for operator-maintained notes and manual review. It is merged on account merge, but it is not encrypted.
 
-## Legacy Data
-
-Old `data/users/<telegram_sender_id>` memory can be read and migrated into account-scoped storage. Legacy encrypted memory still requires the original legacy key backend. If the old key cannot be read, migration skips that user and keeps the legacy folder intact.
-
 ## What This Protects
 
 Disk-only access sees ciphertext for encrypted structured files. Disk-only access still sees plaintext Markdown notes. Runtime access with process, Secret Service, passphrase, or debugger access can still reach plaintext because the bot must decrypt data to operate.

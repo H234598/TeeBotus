@@ -12,7 +12,7 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 
 
-def build_telegram_event_from_legacy_message(
+def build_telegram_event_from_message(
     message: dict[str, Any],
     *,
     instance_name: str,
@@ -22,7 +22,7 @@ def build_telegram_event_from_legacy_message(
     """Convert a Telegram Bot API message dict into the new runtime event model.
 
     This helper is intentionally dependency-free so the existing monolithic
-    ``TeeBotus.bot`` module can call it before the full adapter refactor is done.
+    ``TeeBotus.telegram_bot`` module can call it before the full adapter refactor is done.
     """
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
@@ -53,7 +53,7 @@ def build_telegram_event_from_legacy_message(
     )
 
 
-class LegacyRuntimeBridge:
+class TelegramRuntimeBridge:
     """Small bridge that lets the current Telegram loop use Plan-3 account flows.
 
     It handles only identity/account commands and cleanup action planning. When it
@@ -79,7 +79,7 @@ class LegacyRuntimeBridge:
         self.account_commands = AccountCommandHandler(self.account_store, self.state_store)
 
     def event_from_message(self, message: dict[str, Any], *, adapter_slot: int = 1) -> IncomingEvent | None:
-        event = build_telegram_event_from_legacy_message(
+        event = build_telegram_event_from_message(
             message,
             instance_name=self.instance_name,
             adapter_slot=adapter_slot,
@@ -138,12 +138,12 @@ class LegacyRuntimeBridge:
                             instance_name=event.instance,
                             account_id=event.account_id,
                             chat_id=event.chat_id,
-                            message_ref="legacy-unknown",
+                            message_ref="telegram-unknown",
                             ref_kind="telegram_message_id",
                         )
                     )
             elif isinstance(action, NotifyLinkedIdentity):
-                # The legacy bridge has no safe identity router; production adapters must deliver this.
+                # The Telegram bridge has no cross-identity router; production adapters must deliver this.
                 continue
             elif isinstance(action, DeleteTrackedMessages):
                 note = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
@@ -164,7 +164,7 @@ def maybe_handle_account_runtime_message(
     data_dir: str | Path,
     adapter_slot: int = 1,
 ) -> bool:
-    bridge = LegacyRuntimeBridge(instance_name=instance_name, data_dir=data_dir)
+    bridge = TelegramRuntimeBridge(instance_name=instance_name, data_dir=data_dir)
     return bridge.handle_message(message, sender, adapter_slot=adapter_slot)
 
 

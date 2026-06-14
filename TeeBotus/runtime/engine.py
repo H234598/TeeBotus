@@ -25,7 +25,7 @@ class TeeBotusEngine:
     """Channel-neutral first stage engine for account/registration commands.
 
     This intentionally handles only the identity-critical flows. Existing TeeBotus
-    command/OpenAI logic can call this first and continue with legacy behavior when
+    command/OpenAI logic can call this first and continue with Telegram behavior when
     ``handled`` is false.
     """
 
