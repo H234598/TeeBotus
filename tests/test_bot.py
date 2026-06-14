@@ -519,14 +519,51 @@ class BotTests(unittest.TestCase):
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
-            with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
-                transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=Path(directory) / "runtime"):
+                with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+                    with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
+                        transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
 
         self.assertEqual(transcript, "Subtitle text.")
         self.assertEqual(source, "YouTube-Untertitel")
         self.assertEqual(len(calls), 1)
         self.assertIn("--write-auto-subs", calls[0])
+
+    def test_youtube_transcript_uses_global_runtime_cache_before_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_dir = Path(directory) / "runtime"
+            cache_path = runtime_dir / "youtube_transcripts" / "abc123.txt"
+            cache_path.parent.mkdir(parents=True)
+            cache_path.write_text("Cached transcript.\n", encoding="utf-8")
+
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=runtime_dir):
+                with patch("TeeBotus.core.youtube.shutil.which", side_effect=AssertionError("yt-dlp should not be checked")):
+                    transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
+
+        self.assertEqual(transcript, "Cached transcript.")
+        self.assertEqual(source, "Cache")
+
+    def test_youtube_transcript_writes_global_runtime_cache_after_success(self) -> None:
+        def run(command, workdir, timeout, instance_name=""):
+            Path(workdir, "video.en.srt").write_text(
+                "1\n00:00:00,000 --> 00:00:01,000\nSubtitle text.\n",
+                encoding="utf-8",
+            )
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_dir = Path(directory) / "runtime"
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=runtime_dir):
+                with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+                    with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
+                        transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
+
+            cache_path = runtime_dir / "youtube_transcripts" / "abc123.txt"
+            self.assertEqual(cache_path.read_text(encoding="utf-8"), "Subtitle text.\n")
+
+        self.assertEqual(transcript, "Subtitle text.")
+        self.assertEqual(source, "YouTube-Untertitel")
 
     def test_youtube_transcript_uses_faster_whisper_when_no_subtitles_exist(self) -> None:
         calls: list[list[str]] = []
@@ -537,14 +574,16 @@ class BotTests(unittest.TestCase):
                 Path(workdir, "youtube-audio.mp3").write_bytes(b"mp3")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
-            with patch("TeeBotus.core.youtube._has_python_module", return_value=True):
-                with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
-                    with patch(
-                        "TeeBotus.core.youtube._run_local_command_streaming",
-                        return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
-                    ) as streaming:
-                        transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=Path(directory) / "runtime"):
+                with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+                    with patch("TeeBotus.core.youtube._has_python_module", return_value=True):
+                        with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
+                            with patch(
+                                "TeeBotus.core.youtube._run_local_command_streaming",
+                                return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
+                            ) as streaming:
+                                transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
 
         self.assertEqual(transcript, "Faster text.")
         self.assertEqual(source, "lokales Whisper")

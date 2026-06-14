@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import hashlib
 import select
 import signal
 import shutil
@@ -17,6 +18,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from TeeBotus.runtime.maintenance import runtime_dir
+
 LOGGER = logging.getLogger("TeeBotus")
 YOUTUBE_TRANSCRIPT_COMMANDS = {"/youtube_transcript", "/yt_transcript"}
 YOUTUBE_TRANSCRIPT_TIMEOUT_SECONDS = 15 * 60
@@ -28,6 +31,7 @@ YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
 YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
 YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
 YOUTUBE_PARSER_MISSES_FILENAME = "YouTube_Parser_Misses.jsonl"
+YOUTUBE_TRANSCRIPT_CACHE_DIRNAME = "youtube_transcripts"
 
 
 def _default_instances_dir() -> Path:
@@ -521,14 +525,18 @@ def transcribe_youtube_video(
     live_callback=None,
     instance_name: str = "",
 ) -> tuple[str, str]:
+    normalized_url = _validated_youtube_url(url)
+    cached = _read_cached_youtube_transcript(normalized_url)
+    if cached:
+        return cached, "Cache"
     if shutil.which("yt-dlp") is None:
         raise YouTubeTranscriptError("yt-dlp ist nicht installiert.")
-    normalized_url = _validated_youtube_url(url)
 
     with tempfile.TemporaryDirectory(prefix="telegram-bot-youtube-") as directory:
         workdir = Path(directory)
         subtitle_text = _download_youtube_subtitles(normalized_url, workdir, instance_name=instance_name)
         if subtitle_text:
+            _write_cached_youtube_transcript(normalized_url, subtitle_text)
             return subtitle_text, "YouTube-Untertitel"
         if not local_allowed:
             raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
@@ -539,6 +547,7 @@ def transcribe_youtube_video(
             instance_name=instance_name,
         )
         if whisper_text:
+            _write_cached_youtube_transcript(normalized_url, whisper_text)
             return whisper_text, "lokales Whisper"
     raise YouTubeTranscriptError("kein Transkript erzeugt.")
 
@@ -572,6 +581,64 @@ def _validated_youtube_url(url: str) -> str:
     if parsed.scheme not in {"http", "https"} or host not in {"youtube.com", "m.youtube.com", "youtu.be", "youtube-nocookie.com"}:
         raise YouTubeTranscriptError("bitte eine gueltige YouTube-URL angeben.")
     return urllib.parse.urlunparse(parsed)
+
+
+def _youtube_transcript_cache_dir() -> Path:
+    return runtime_dir() / YOUTUBE_TRANSCRIPT_CACHE_DIRNAME
+
+
+def _youtube_transcript_cache_path(url: str) -> Path:
+    key = _youtube_video_cache_key(url)
+    return _youtube_transcript_cache_dir() / f"{key}.txt"
+
+
+def _youtube_video_cache_key(url: str) -> str:
+    parsed = urllib.parse.urlparse(_validated_youtube_url(url))
+    host = parsed.netloc.casefold().removeprefix("www.")
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/").split("/", maxsplit=1)[0]
+        if video_id:
+            return _safe_youtube_cache_key(video_id)
+    query = urllib.parse.parse_qs(parsed.query)
+    if query.get("v") and query["v"][0]:
+        return _safe_youtube_cache_key(query["v"][0])
+    parts = [part for part in parsed.path.split("/") if part]
+    for marker in ("shorts", "embed", "live"):
+        if marker in parts:
+            index = parts.index(marker)
+            if index + 1 < len(parts):
+                return _safe_youtube_cache_key(parts[index + 1])
+    digest = hashlib.sha256(urllib.parse.urlunparse(parsed._replace(query="", fragment="")).encode("utf-8")).hexdigest()
+    return f"url-{digest[:32]}"
+
+
+def _safe_youtube_cache_key(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", value.strip())
+    return cleaned[:120] or "unknown"
+
+
+def _read_cached_youtube_transcript(url: str) -> str:
+    path = _youtube_transcript_cache_path(url)
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+    except OSError as exc:
+        LOGGER.warning("Could not read YouTube transcript cache at %s: %s", path, exc)
+        return ""
+    return text
+
+
+def _write_cached_youtube_transcript(url: str, transcript: str) -> None:
+    text = transcript.strip()
+    if not text:
+        return
+    path = _youtube_transcript_cache_path(url)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+    except OSError as exc:
+        LOGGER.warning("Could not write YouTube transcript cache at %s: %s", path, exc)
 
 
 def _download_youtube_subtitles(url: str, workdir: Path, instance_name: str = "") -> str:

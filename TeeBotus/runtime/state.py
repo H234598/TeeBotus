@@ -12,6 +12,7 @@ from TeeBotus.runtime.accounts import (
     InstanceSecretProvider,
     SecretToolInstanceSecretProvider,
 )
+from TeeBotus.runtime.maintenance import maintain_runtime_directory, rotate_runtime_text_file_if_needed
 
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
@@ -199,8 +200,10 @@ class RuntimeStateStore(RuntimeState):
 
     def append_security_event(self, event: dict[str, Any]) -> None:
         super().append_security_event(event)
+        rotate_runtime_text_file_if_needed(self.security_events_path)
         with self.security_events_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+        maintain_runtime_directory(self.runtime_dir)
 
     def _load_persisted_link_notifications(self) -> None:
         if self.secret_provider is None or not self.link_notifications_path.exists():

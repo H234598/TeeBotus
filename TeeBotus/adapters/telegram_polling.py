@@ -41,6 +41,7 @@ from TeeBotus.instructions import BotInstructions, InstructionStore, render_temp
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
+from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
 from TeeBotus.user_memory_crypto import (
     USER_MEMORY_KEY_FILENAME,
@@ -2831,11 +2832,7 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
 def main(argv: list[str] | None = None) -> int:
     _load_dotenv(PROJECT_ROOT / ".env")
     _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
-    logging.basicConfig(
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)s %(message)s",
-        stream=sys.stdout,
-    )
+    configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"))
 
     args = list(sys.argv[1:] if argv is None else argv)
     if any(arg != "--all" for arg in args):
