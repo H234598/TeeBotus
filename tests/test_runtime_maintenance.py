@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import gzip
+import logging
 import os
+import sys
 import tarfile
 import time
 
-from TeeBotus.runtime.maintenance import maintain_runtime_directory, rotate_runtime_text_file_if_needed
+from TeeBotus.runtime.maintenance import (
+    RuntimeTimedRotatingFileHandler,
+    configure_runtime_logging,
+    maintain_runtime_directory,
+    rotate_runtime_text_file_if_needed,
+)
 
 
 def test_rotate_runtime_text_file_compresses_oversized_active_file(tmp_path):
@@ -65,3 +72,23 @@ def test_runtime_maintenance_archives_old_uncompressed_logs_in_same_pass(tmp_pat
     assert not (tmp_path / f"{path.name}.gz").exists()
     with tarfile.open(archives[0], "r:gz") as archive:
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
+
+
+def test_configure_runtime_logging_skips_file_handler_when_stdout_already_targets_runtime_log(tmp_path, monkeypatch):
+    log_path = tmp_path / "teebotus-production.log"
+    log_path.touch()
+    with log_path.open("a", encoding="utf-8") as redirected_stdout:
+        monkeypatch.setattr(sys, "stdout", redirected_stdout)
+
+        configure_runtime_logging(base_dir=tmp_path)
+
+        handlers = logging.getLogger().handlers
+        assert len(handlers) == 1
+        assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+
+
+def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_log(tmp_path):
+    configure_runtime_logging(base_dir=tmp_path)
+
+    handlers = logging.getLogger().handlers
+    assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)

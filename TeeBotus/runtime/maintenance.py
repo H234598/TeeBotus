@@ -30,13 +30,17 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     directory = base_dir or runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
     maintain_runtime_directory(directory)
+    log_path = runtime_log_path(directory)
 
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
-    file_handler = RuntimeTimedRotatingFileHandler(runtime_log_path(directory))
-    file_handler.setFormatter(formatter)
-    logging.basicConfig(level=level, handlers=[stream_handler, file_handler], force=True)
+    handlers: list[logging.Handler] = [stream_handler]
+    if not _stdout_targets_path(log_path):
+        file_handler = RuntimeTimedRotatingFileHandler(log_path)
+        file_handler.setFormatter(formatter)
+        handlers.append(file_handler)
+    logging.basicConfig(level=level, handlers=handlers, force=True)
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
@@ -47,6 +51,15 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
     def doRollover(self) -> None:  # noqa: N802 - stdlib override name
         super().doRollover()
         maintain_runtime_directory(Path(self.baseFilename).parent)
+
+
+def _stdout_targets_path(path: Path) -> bool:
+    try:
+        stdout_stat = os.fstat(sys.stdout.fileno())
+        path_stat = path.stat()
+    except (AttributeError, FileNotFoundError, OSError, ValueError):
+        return False
+    return stdout_stat.st_dev == path_stat.st_dev and stdout_stat.st_ino == path_stat.st_ino
 
 
 def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
