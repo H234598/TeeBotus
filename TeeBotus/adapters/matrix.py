@@ -78,13 +78,13 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
 def _matrix_room_is_private(room: Any) -> bool:
     joined_count = getattr(room, "joined_count", None)
     if isinstance(joined_count, int):
-        return 0 < joined_count <= 2
+        return joined_count == 2
     member_count = getattr(room, "member_count", None)
     if isinstance(member_count, int):
-        return 0 < member_count <= 2
+        return member_count == 2
     users = getattr(room, "users", None)
     if isinstance(users, dict):
-        return 0 < len(users) <= 2
+        return len(users) == 2
     return False
 
 
