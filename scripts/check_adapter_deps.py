@@ -22,7 +22,7 @@ def main() -> int:
         _check_python_package("signalbot", pins["signalbot"]),
         _check_python_package("nio-bot", pins["nio-bot"]),
         _check_python_package("matrix-nio", pins["matrix-nio"]),
-        _check_python_package("blurhash", pins["blurhash"]),
+        _check_python_package("blurhash-python", pins["blurhash-python"]),
         _check_executable_version("signal-cli", pins["signal-cli"], ["--version"]),
         _check_cargo_binary("signal-cli-api", pins["signal-cli-api"]),
     ]
@@ -49,7 +49,9 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
         installed = importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
         return False, f"{name} missing, expected {expected}"
-    import_name = {"nio-bot": "niobot", "matrix-nio": "nio"}.get(name, name.replace("-", "_"))
+    import_name = {"nio-bot": "niobot", "matrix-nio": "nio", "blurhash-python": "blurhash"}.get(
+        name, name.replace("-", "_")
+    )
     try:
         module = importlib.import_module(import_name)
     except Exception as exc:
@@ -59,7 +61,6 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
         import_detail = f" import={getattr(module, '__file__', '<unknown>')}"
     ok = installed == expected and module is not None
     return ok, f"{name} installed={installed} expected={expected}{import_detail}"
-
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
     path = _which(binary)
