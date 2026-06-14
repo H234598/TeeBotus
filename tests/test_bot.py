@@ -1659,6 +1659,25 @@ class BotTests(unittest.TestCase):
             self.assertNotIn("https://example.com", entry_text)
             self.assertNotIn("123456789", entry_text)
 
+    def test_working_memory_corrupt_index_is_preserved_without_traceback_log(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory) / "instances"
+            index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+            index_path.parent.mkdir(parents=True)
+            index_path.write_text("", encoding="utf-8")
+            store = WorkingMemoryStore("Depressionsbot", instances_dir)
+
+            with self.assertLogs("TeeBotus", level="WARNING") as logs:
+                store.ensure()
+
+            self.assertTrue(any("Resetting invalid instance working memory" in message for message in logs.output))
+            self.assertFalse(any("Traceback" in message for message in logs.output))
+            backups = list(index_path.parent.glob("Working_Memorys.json.corrupt.*"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(encoding="utf-8"), "")
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["scope"], "instance")
+
     def test_working_memory_is_included_in_openai_input_without_auto_writes(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

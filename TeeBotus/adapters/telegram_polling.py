@@ -678,8 +678,17 @@ class WorkingMemoryStore:
 
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            LOGGER.exception("Failed to read instance working memory at %s.", path)
+        except json.JSONDecodeError as exc:
+            backup_path = _move_corrupt_json_file(path)
+            LOGGER.warning(
+                "Resetting invalid instance working memory at %s: %s. Corrupt file preserved at %s.",
+                path,
+                exc,
+                backup_path,
+            )
+            payload = _new_working_memory_data(self.instance_name)
+        except OSError as exc:
+            LOGGER.warning("Resetting unreadable instance working memory at %s: %s.", path, exc)
             payload = _new_working_memory_data(self.instance_name)
         if not isinstance(payload, dict):
             payload = _new_working_memory_data(self.instance_name)
@@ -2595,6 +2604,21 @@ def _compact_memory_for_prompt(memory: dict[str, Any]) -> dict[str, Any]:
 def _write_json_file(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _move_corrupt_json_file(path: Path) -> Path:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup_path = path.with_name(f"{path.name}.corrupt.{timestamp}")
+    for index in range(1, 1000):
+        candidate = backup_path if index == 1 else path.with_name(f"{path.name}.corrupt.{timestamp}.{index}")
+        if candidate.exists():
+            continue
+        try:
+            path.rename(candidate)
+            return candidate
+        except FileNotFoundError:
+            return candidate
+    return path
 
 
 def _unlink_file_if_exists(path: Path) -> None:
