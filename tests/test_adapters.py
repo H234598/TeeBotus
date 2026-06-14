@@ -7,7 +7,7 @@ import asyncio
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import SendText, SendTyping
+from TeeBotus.runtime.actions import ExportFile, SendText, SendTyping
 
 
 @dataclass
@@ -137,5 +137,60 @@ def test_matrix_send_text_uses_room_send():
             "room_id": "!room:example",
             "message_type": "m.room.message",
             "content": {"msgtype": "m.text", "body": "hi"},
+        }
+    ]
+
+
+def test_matrix_export_file_uploads_file_before_room_send():
+    class UploadResponse:
+        content_uri = "mxc://example/export"
+
+    class SendResponse:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.uploads = []
+            self.sends = []
+
+        async def upload(self, data_provider, **kwargs):
+            self.uploads.append((data_provider.read(), kwargs))
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return SendResponse()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export")],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.uploads == [
+        (
+            b"{\"ok\": true}",
+            {
+                "content_type": "application/json",
+                "filename": "report.json",
+                "filesize": 12,
+            },
+        )
+    ]
+    assert client.sends == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.file",
+                "body": "Export",
+                "filename": "report.json",
+                "url": "mxc://example/export",
+                "info": {"mimetype": "application/json", "size": 12},
+            },
         }
     ]

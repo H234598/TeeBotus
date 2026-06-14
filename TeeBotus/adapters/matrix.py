@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import base64
+from io import BytesIO
 from typing import Any
 
 from TeeBotus.runtime.accounts import matrix_identity_key
@@ -53,26 +53,64 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             await client.room_typing(action.chat_id, True, timeout=3000)
             sent.append(None)
         elif isinstance(action, SendAttachment):
-            caption = action.caption or f"Datei erzeugt: {action.filename}"
-            encoded = base64.b64encode(action.data).decode("ascii")
-            response = await client.room_send(
+            response = await _send_matrix_file(
+                client,
                 room_id=action.chat_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.notice", "body": f"{caption}\n\nbase64:{encoded}"},
+                data=action.data,
+                filename=action.filename,
+                content_type=action.content_type,
+                caption=action.caption,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
-            caption = action.caption or f"Export: {action.filename}"
-            encoded = base64.b64encode(action.data).decode("ascii")
-            response = await client.room_send(
+            response = await _send_matrix_file(
+                client,
                 room_id=action.chat_id,
-                message_type="m.room.message",
-                content={"msgtype": "m.notice", "body": f"{caption}\n\nbase64:{encoded}"},
+                data=action.data,
+                filename=action.filename,
+                content_type=action.content_type,
+                caption=action.caption or f"Export: {action.filename}",
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages)):
             sent.append(None)
     return sent
+
+
+async def _send_matrix_file(
+    client: Any,
+    *,
+    room_id: str,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = "",
+) -> Any:
+    upload_response, _keys = await client.upload(
+        BytesIO(data),
+        content_type=content_type or "application/octet-stream",
+        filename=filename,
+        filesize=len(data),
+    )
+    content_uri = getattr(upload_response, "content_uri", None)
+    if not content_uri:
+        message = getattr(upload_response, "message", "") or "Matrix upload returned no content URI"
+        raise RuntimeError(str(message))
+    body = caption or filename
+    return await client.room_send(
+        room_id=room_id,
+        message_type="m.room.message",
+        content={
+            "msgtype": "m.file",
+            "body": body,
+            "filename": filename,
+            "url": str(content_uri),
+            "info": {
+                "mimetype": content_type or "application/octet-stream",
+                "size": len(data),
+            },
+        },
+    )
 
 
 def _matrix_room_is_private(room: Any) -> bool:

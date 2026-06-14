@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -63,7 +63,13 @@ class MatrixRuntimeBridge:
         await self._delete_tracked_messages(event, actions)
         sent_refs = await send_matrix_actions(self.client, actions)
         for action, sent_ref in zip(actions, sent_refs):
-            if sent_ref is None or not isinstance(action, (SendText, SendAttachment)) or not action.track:
+            if sent_ref is None:
+                continue
+            if isinstance(action, ExportFile):
+                should_track = True
+            else:
+                should_track = isinstance(action, (SendText, SendAttachment)) and action.track
+            if not should_track:
                 continue
             self.message_tracker.record(
                 SentMessageRef(
