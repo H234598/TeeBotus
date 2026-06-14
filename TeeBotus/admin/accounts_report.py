@@ -5,6 +5,7 @@ import base64
 import json
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ from TeeBotus.runtime.accounts import (
     TOKEN_HEX_RE,
     telegram_identity_key,
 )
+from TeeBotus.core.memory import LegacyMemoryMigrator
 
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 DEFAULT_INSTANCES_DIR = "instances"
@@ -141,6 +143,62 @@ def build_accounts_admin_report(
         report["instances"].append(instance_report)
         _add_instance_totals(report["totals"], instance_report)
     return report
+
+
+def apply_accounts_migration(
+    *,
+    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
+    instances: Sequence[str] = (),
+    provider: InstanceSecretProvider | None = None,
+) -> dict[str, Any]:
+    resolved_instances_dir = Path(instances_dir)
+    provider = provider or SecretToolInstanceSecretProvider()
+    selected_instances = discover_instances(resolved_instances_dir, instances)
+    result: dict[str, Any] = {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "generated_at": utc_now(),
+        "instances_dir": str(resolved_instances_dir),
+        "instance_count": len(selected_instances),
+        "applied": True,
+        "destructive": True,
+        "instances": [],
+        "totals": {
+            "migrated": 0,
+            "skipped": 0,
+        },
+    }
+    for instance_name in selected_instances:
+        instance_dir = resolved_instances_dir / instance_name
+        store = AccountStore(instance_dir / "data" / "accounts", instance_name, secret_provider=provider)
+        migrator = LegacyMemoryMigrator(store, instance_dir)
+        users_root = instance_dir / "data" / "users"
+        instance_result: dict[str, Any] = {
+            "instance": instance_name,
+            "users_root": str(users_root),
+            "migrations": [],
+            "migrated": 0,
+            "skipped": 0,
+        }
+        for legacy_dir in _legacy_user_dirs(users_root):
+            migration = migrator.migrate_telegram_sender(legacy_dir.name)
+            entry = {
+                "sender_id": legacy_dir.name,
+                "migrated": migration.migrated,
+                "account_id": migration.account_id,
+                "legacy_path": str(migration.legacy_path),
+                "target_path": str(migration.target_path),
+                "encrypted_legacy": migration.encrypted_legacy,
+                "skipped_reason": migration.skipped_reason,
+            }
+            instance_result["migrations"].append(entry)
+            if migration.migrated:
+                instance_result["migrated"] += 1
+                result["totals"]["migrated"] += 1
+            else:
+                instance_result["skipped"] += 1
+                result["totals"]["skipped"] += 1
+        result["instances"].append(instance_result)
+    return result
 
 
 def build_instance_admin_report(
@@ -446,13 +504,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     migrate_parser = accounts_subparsers.add_parser("migrate")
     _add_common_report_args(migrate_parser)
-    migrate_parser.add_argument("--dry-run", action="store_true", help="Only print the migration report. Actual migration is not implemented in this patch.")
+    migrate_parser.add_argument("--dry-run", action="store_true", help="Only print the migration report.")
+    migrate_parser.add_argument("--apply", action="store_true", help="Apply the migration and delete legacy user directories only after successful account-store writes.")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     instances = parse_csv(getattr(args, "instances", None))
-    report = build_accounts_admin_report(instances_dir=args.instances_dir, instances=instances)
-    if args.area == "accounts" and args.command == "migrate" and not args.dry_run:
-        print("Actual account migration is intentionally not implemented in this admin-report patch. Re-run with --dry-run.")
+    if args.area == "accounts" and args.command == "migrate" and args.dry_run and args.apply:
+        print("Use either --dry-run or --apply, not both.", file=sys.stderr)
+        return 2
+    if args.area == "accounts" and args.command == "migrate" and args.apply:
+        report = apply_accounts_migration(instances_dir=args.instances_dir, instances=instances)
+    else:
+        report = build_accounts_admin_report(instances_dir=args.instances_dir, instances=instances)
+    if args.area == "accounts" and args.command == "migrate" and not args.dry_run and not args.apply:
+        print("Migration apply is explicit. Re-run with --dry-run to inspect or --apply to migrate.", file=sys.stderr)
         return 2
     output = _json_dump(report) if args.format == "json" else render_text_report(report)
     if args.output:

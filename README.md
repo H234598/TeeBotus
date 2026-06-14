@@ -80,6 +80,30 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 `ALL_BOTS_DEFAULT.md` enthaelt unter `## Laufzeitkonfiguration` echte Default-Schalter fuer den Start. Werte aus Shell, systemd, Docker oder `.env` haben Vorrang; die Default-Datei fuellt nur fehlende Environment-Werte.
 
+## Plan3 Account-Runtime
+
+Der produktive Startpfad bleibt aktuell der Telegram-Legacy-Bot. `TeeBotus/bot.py` ist ein Compatibility-Entry-Point und delegiert an `TeeBotus/legacy_bot.py`. Die neue Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Produktivbot gestartet.
+
+Die Runtime-Konfiguration kannst du separat pruefen:
+
+```bash
+python3 -m TeeBotus --runtime-status --channels telegram
+```
+
+`--channels telegram` ist beim Compatibility-Start erlaubt und wird an den Legacy-Bot weitergereicht. `--channels signal` oder `--channels telegram,signal` starten noch keinen Produktivbot, sondern brechen kontrolliert ab, bis der Signal-Adapter voll verdrahtet ist.
+
+Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>` oder `signal:uuid:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
+
+Admin-Report und Migration:
+
+```bash
+python3 -m TeeBotus.admin accounts report --instances-dir instances
+python3 -m TeeBotus.admin accounts migrate --dry-run --instances-dir instances
+python3 -m TeeBotus.admin accounts migrate --apply --instances-dir instances
+```
+
+`--dry-run` ist read-only. `--apply` migriert Legacy-User-Memorys in den AccountStore und entfernt alte Legacy-Ordner nur nach erfolgreichem Schreiben. Verschluesselte Legacy-Memorys werden uebersprungen, wenn der alte Keyring- oder Passphrase-Kontext nicht lesbar ist.
+
 ## Verhalten steuern
 
 Das Bot-Verhalten liegt pro Instanz in einer eigenen `Bot_Verhalten.md`:

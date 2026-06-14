@@ -96,7 +96,16 @@ def test_admin_migrate_without_dry_run_refuses_to_apply(tmp_path: Path, capsys: 
     exit_code = accounts_report.main(["accounts", "migrate", "--instances-dir", str(tmp_path)])
 
     assert exit_code == 2
-    assert "Actual account migration is intentionally not implemented" in capsys.readouterr().out
+    assert "--dry-run" in capsys.readouterr().err
+
+
+def test_admin_migrate_rejects_dry_run_and_apply_together(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    make_instance(tmp_path)
+
+    exit_code = accounts_report.main(["accounts", "migrate", "--instances-dir", str(tmp_path), "--dry-run", "--apply"])
+
+    assert exit_code == 2
+    assert "either --dry-run or --apply" in capsys.readouterr().err
 
 
 def test_admin_migrate_dry_run_prints_report(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -112,6 +121,30 @@ def test_admin_migrate_dry_run_prints_report(monkeypatch: pytest.MonkeyPatch, tm
     out = capsys.readouterr().out
     assert "TeeBotus Account Admin Report" in out
     assert "migration_would_create_accounts: 1" in out
+
+
+def test_admin_migrate_apply_moves_plaintext_legacy_memory(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    instance_dir = make_instance(tmp_path)
+    legacy = instance_dir / "data" / "users" / "2"
+    legacy.mkdir(parents=True)
+    (legacy / "User_Memory_Index.json").write_text('{"keywords": {"tea": [1]}}\n', encoding="utf-8")
+    (legacy / "User_Memory_Entries.jsonl").write_text('{"text": "old"}\n', encoding="utf-8")
+    (legacy / "User_Habbits_and_behave.md").write_text("legacy habit\n", encoding="utf-8")
+
+    monkeypatch.setattr(accounts_report, "SecretToolInstanceSecretProvider", lambda: provider())
+    exit_code = accounts_report.main(["accounts", "migrate", "--instances-dir", str(tmp_path), "--apply", "--format", "json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["totals"]["migrated"] == 1
+    assert payload["totals"]["skipped"] == 0
+    assert not legacy.exists()
+    account_id = payload["instances"][0]["migrations"][0]["account_id"]
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    assert store.get_account_for_identity(telegram_identity_key(2)) == account_id
+    assert store.read_memory_index(account_id)["keywords"] == {"tea": [1]}
+    assert store.read_memory_entries(account_id) == [{"text": "old"}]
+    assert "legacy habit" in (store.account_dir(account_id) / "User_Habbits_and_behave.md").read_text(encoding="utf-8")
 
 
 def test_render_text_report_contains_summary(tmp_path: Path) -> None:

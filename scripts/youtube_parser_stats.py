@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BOT_PATH = ROOT / "TeeBotus" / "bot.py"
+LEGACY_BOT_PATH = ROOT / "TeeBotus" / "legacy_bot.py"
 
 
 def _literal_assignment(source: str, name: str) -> str:
@@ -26,6 +27,10 @@ def _pipe_count(pattern: str) -> int:
 
 def build_stats() -> dict[str, object]:
     source = BOT_PATH.read_text(encoding="utf-8")
+    source_path = BOT_PATH
+    if "yes_words" not in source and LEGACY_BOT_PATH.exists():
+        source = LEGACY_BOT_PATH.read_text(encoding="utf-8")
+        source_path = LEGACY_BOT_PATH
     yes_words = _literal_assignment(source, "yes_words")
     no_words = _literal_assignment(source, "no_words")
     live_name = _literal_assignment(source, "live_name")
@@ -110,7 +115,7 @@ def build_stats() -> dict[str, object]:
     )
 
     return {
-        "source": str(BOT_PATH.relative_to(ROOT)),
+        "source": str(source_path.relative_to(ROOT)),
         "language_is_infinite": True,
         "infinite_reasons": [
             "bounded arbitrary text spans such as .{0,60}, .{0,80}, and .{0,100}",

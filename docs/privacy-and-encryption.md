@@ -1,73 +1,58 @@
 # Privacy and Encryption
 
-This bot encrypts structured user-memory files at rest, per Telegram sender ID.
+TeeBotus is moving from Telegram-sender memory to account-scoped memory. The stable privacy boundary is now the TeeBotus account ID inside one instance.
 
-## What is encrypted
+## Account Identity
 
-By default, the bot stores a private, randomly generated 32-byte per-sender key in the desktop Secret Service via `secret-tool`.
+- A TeeBotus account ID is a 128-character SHA-512 hex token generated from random bytes.
+- The account ID is not a password, but the bot does not print it in group chats.
+- Telegram users, Signal UUIDs, Signal numbers, and future channel identities are stored as communication identities linked to an account.
+- Account linking requires account ID plus account secret.
 
-For headless setups, you can switch to an explicit passphrase backend with `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase`. In that mode, the per-sender random key is stored locally in an encrypted private key store and protected by a passphrase from `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE`, `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE`, or an automatically created private passphrase file in the instance data directory.
+## Account Secret
 
-The following user-memory files are encrypted with that key:
+- The account secret is generated once during registration and shown only in private chat.
+- The plaintext secret is never stored.
+- TeeBotus stores an HMAC-SHA512 verifier derived from the secret and a per-instance pepper.
+- The pepper comes from Secret Service via `secret-tool`.
+- Secret rotation invalidates the previous secret.
+
+## Encrypted Files
+
+The account store encrypts structured files with AES-256-GCM envelopes and instance-scoped Secret Service keys.
+
+Identity and account metadata use the separate purpose:
+
+```text
+account-identity-mapping-key
+```
+
+Structured account memory uses the separate purpose:
+
+```text
+account-structured-memory-key
+```
+
+Encrypted structured memory files:
 
 - `User_Memory_Index.json`
 - `User_Memory_Entries.jsonl`
+- `OpenAI_State.json`
 
-`User_Habbits_and_behave.md` is intentionally not encrypted. It is a human-editable Markdown file for operator-maintained notes and should remain readable as Markdown.
+Encrypted account files include identity mappings, account index, account secrets/verifiers, account profiles, and tombstones.
 
-The user-specific key is distinct per sender ID and is generated from fresh random bytes. That means one user cannot decrypt another user’s memory files without that other user’s key.
+## Plaintext Markdown
 
-If the Secret Service is unavailable in keyring mode, or the configured passphrase cannot be loaded in passphrase mode, key lookup or creation fails closed. The bot does not silently fall back to an unprotected local key file.
+`User_Habbits_and_behave.md` remains plaintext by design. Operator-maintained Markdown notes remain plaintext. It is a human-editable Markdown file for operator-maintained notes and manual review. It is merged on account merge, but it is not encrypted.
 
-## What this protects
+## Legacy Data
 
-Disk access alone is not enough to read the encrypted structured user-memory content. A person who only sees those files on disk sees ciphertext, not plaintext. Operator-maintained Markdown notes are intentionally plaintext.
+Old `data/users/<telegram_sender_id>` memory can be read and migrated into account-scoped storage. Legacy encrypted memory still requires the original legacy key backend. If the old key cannot be read, migration skips that user and keeps the legacy folder intact.
 
-## Important limitation
+## What This Protects
 
-Encryption at rest is not a magic shield against runtime access.
+Disk-only access sees ciphertext for encrypted structured files. Disk-only access still sees plaintext Markdown notes. Runtime access with process, Secret Service, passphrase, or debugger access can still reach plaintext because the bot must decrypt data to operate.
 
-Anyone who can access the running bot process, its live memory, or the matching decryption key can still see the plaintext while the bot is operating. That includes an operator with sufficient access to the host, container, secrets, or debugger.
+## Short User Reply
 
-So the honest rule is:
-
-- disk-only access does not reveal plaintext from encrypted user-memory files
-- disk-only access does reveal operator-maintained Markdown notes
-- runtime access with the key can reveal plaintext
-
-## Short answer for users
-
-Use this when someone asks what is visible:
-
-> Structured user memory is encrypted at rest per sender ID. Operator-maintained Markdown notes remain plaintext. Plain disk access is not enough to read the encrypted files, but the running bot instance can decrypt the data it needs to process messages, so anyone with runtime or key access can still inspect plaintext.
-
-## Ready-made reply
-
-Use this when a user asks about privacy, encryption, or who can see data:
-
-> Structured user memory is encrypted at rest with a per-user key. That means ordinary disk access is not enough to read the encrypted index and entry files. Operator-maintained Markdown notes remain plaintext by design. The bot process can still decrypt the data it needs to answer messages, so runtime or key access is different from plain disk access.
-
-If someone asks for the short version:
-
-> Stored index and entry memory is encrypted per sender ID. An admin browsing those files on disk sees ciphertext, while Markdown notes remain readable. The bot itself can decrypt data while it runs, so runtime access is a different trust level.
-
-## Who can see what
-
-- Disk-only access: ciphertext for encrypted user-memory files; plaintext for operator-maintained Markdown notes
-- Bot runtime with the matching key from Secret Service or from the passphrase-backed local store: plaintext while processing
-- Admins without the key: no plaintext from the stored user-memory files
-- Admins with host, process, or secret/passphrase access: can still reach plaintext during runtime
-
-## If someone insists on edge cases
-
-Use this framing:
-
-> No encryption scheme can stop a trusted runtime from reading the data it must process. If an operator has enough control over the machine, process memory, secrets, or decryption keys, they can still reach plaintext. The encryption here protects the stored files, not the entire execution environment.
-
-## Further reading
-
-- [Wikipedia: Advanced Encryption Standard](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
-- [Wikipedia: Galois/Counter Mode](https://en.wikipedia.org/wiki/Galois/Counter_Mode)
-- [Wikipedia: Encryption at rest](https://en.wikipedia.org/wiki/Encryption_at_rest)
-- [Wikipedia: Key management](https://en.wikipedia.org/wiki/Key_management)
-- [Wikipedia: Threat model](https://en.wikipedia.org/wiki/Threat_model)
+Structured user memory is encrypted at rest. In the account runtime, structured account memory is encrypted with instance-scoped Secret Service keys. The account secret is not stored, only an HMAC verifier is. `User_Habbits_and_behave.md` stays plaintext because it is a manual Markdown note. The running bot can still decrypt what it needs while processing messages.

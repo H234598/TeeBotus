@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -223,6 +224,18 @@ def build_runtime_config(
             )
         )
     return RuntimeConfig(instances_dir, selected_instances, channels, tuple(instances))
+
+
+def resolve_runtime_config(
+    argv: Sequence[str] | None = None,
+    env: Mapping[str, str] | None = None,
+) -> RuntimeConfig:
+    parser = argparse.ArgumentParser(prog="python3 -m TeeBotus --runtime-status", add_help=False)
+    parser.add_argument("--channels", default=None)
+    args, unknown = parser.parse_known_args(list(argv or ()))
+    if unknown:
+        raise RuntimeConfigError(f"unsupported runtime-status option(s): {', '.join(unknown)}")
+    return build_runtime_config(env=env, cli_channels=args.channels)
 
 
 def _numbered_values(source: Mapping[str, str], prefix: str) -> tuple[str, ...]:

@@ -7,10 +7,31 @@ import pytest
 from TeeBotus.adapters.signal import signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.config import RuntimeConfigError, resolve_channels, resolve_openai_key, resolve_signal_accounts
+from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.events import IncomingEvent
 
 
 def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"r" * 32)
+
+
+def event(identity_key: str, text: str, *, channel: str = "telegram", chat_type: str = "private") -> IncomingEvent:
+    return IncomingEvent(
+        event_id="round5",
+        instance_name="Depressionsbot",
+        channel=channel,
+        adapter_slot=1,
+        account_label=f"{channel}:1",
+        identity_key=identity_key,
+        chat_id="123",
+        chat_type=chat_type,
+        sender_id="sender",
+        sender_name="Sender",
+        sender_username="sender",
+        sender_number="",
+        text=text,
+        message_ref="1",
+    )
 
 
 def test_account_text_helpers_reject_path_traversal(tmp_path):
