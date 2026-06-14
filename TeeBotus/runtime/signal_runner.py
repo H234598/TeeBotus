@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
@@ -113,7 +114,7 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
     signalbot = _import_signalbot()
     config_class = getattr(signalbot, "Config")
     bot_class = getattr(signalbot, "SignalBot")
-    bot = bot_class(config_class(signal_service=account.signal_service, phone_number=account.signal_phone_number))
+    bot = bot_class(config_class(**_signalbot_config_kwargs(signalbot, account)))
     bot.register(TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir))
     bot.start()
 
@@ -129,6 +130,45 @@ def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Pa
         name=f"teebotus-signal-{account.instance_name}-{account.slot}",
         daemon=True,
     )
+
+
+def _signalbot_config_kwargs(signalbot: Any, account: AccountRunConfig) -> dict[str, Any]:
+    signal_service, scheme = _normalize_signal_service(account.signal_service)
+    kwargs: dict[str, Any] = {
+        "signal_service": signal_service,
+        "phone_number": account.signal_phone_number,
+    }
+    connection_mode = _signalbot_connection_mode(signalbot, scheme)
+    if connection_mode is not None:
+        kwargs["connection_mode"] = connection_mode
+    return kwargs
+
+
+def _normalize_signal_service(signal_service: str) -> tuple[str, str]:
+    service = signal_service.strip().rstrip("/")
+    lowered = service.casefold()
+    if lowered.startswith(("http://", "https://")):
+        parsed = urlsplit(service)
+        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String oder Fragment enthalten.")
+        if not parsed.netloc:
+            raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> muss Host und optional Port enthalten.")
+        return parsed.netloc, parsed.scheme.casefold()
+    return service, ""
+
+
+def _signalbot_connection_mode(signalbot: Any, scheme: str) -> Any | None:
+    if not scheme:
+        return None
+    api = getattr(signalbot, "api", None)
+    connection_mode = getattr(api, "ConnectionMode", None)
+    if connection_mode is None:
+        return None
+    if scheme == "http":
+        return getattr(connection_mode, "HTTP_ONLY", None)
+    if scheme == "https":
+        return getattr(connection_mode, "HTTPS_ONLY", None)
+    return None
 
 
 def _import_signalbot() -> Any:
