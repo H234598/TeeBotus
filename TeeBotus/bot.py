@@ -88,7 +88,22 @@ class _CompatBotModule(types.ModuleType):
         super().__setattr__(name, value)
 
 
+def _load_runtime_environment() -> None:
+    legacy_module = _load_legacy_module()
+    if legacy_module is None:
+        return
+    project_root = getattr(legacy_module, "PROJECT_ROOT", None)
+    load_dotenv = getattr(legacy_module, "_load_dotenv", None)
+    if project_root is not None and callable(load_dotenv):
+        load_dotenv(project_root / ".env")
+    load_defaults = getattr(legacy_module, "_load_runtime_config_defaults", None)
+    defaults_filename = getattr(legacy_module, "ALL_BOTS_DEFAULT_FILENAME", "ALL_BOTS_DEFAULT.md")
+    if project_root is not None and callable(load_defaults):
+        load_defaults(project_root / defaults_filename)
+
+
 def _runtime_status(argv: Sequence[str]) -> int:
+    _load_runtime_environment()
     try:
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
     except Exception as exc:  # pragma: no cover - defensive only

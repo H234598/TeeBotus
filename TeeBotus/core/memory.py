@@ -118,7 +118,7 @@ class LegacyMemoryMigrator:
         if index_path.exists():
             if index_encrypted:
                 try:
-                    index, _ = crypto.read_json(index_path, key, kind="index", default={})
+                    index, _ = crypto.read_json(index_path, key, kind="user-memory-index", default={})
                 except Exception as exc:  # noqa: BLE001
                     raise AccountStoreError("legacy encrypted user memory index could not be decrypted") from exc
             else:
@@ -126,7 +126,7 @@ class LegacyMemoryMigrator:
         if entries_path.exists():
             if entries_encrypted:
                 try:
-                    entries, _ = crypto.read_jsonl(entries_path, key, kind="entries")
+                    entries, _ = crypto.read_jsonl(entries_path, key, kind="user-memory-entries")
                 except Exception as exc:  # noqa: BLE001
                     raise AccountStoreError("legacy encrypted user memory entries could not be decrypted") from exc
             else:

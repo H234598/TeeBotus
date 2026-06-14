@@ -9,6 +9,7 @@ from TeeBotus.admin import accounts as accounts_compat
 from TeeBotus.admin import accounts_report
 from TeeBotus.admin.__main__ import main as admin_main
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.user_memory_crypto import USER_MEMORY_KEY_FILENAME, write_json as write_legacy_json, write_jsonl as write_legacy_jsonl
 
 
 def provider() -> StaticSecretProvider:
@@ -145,6 +146,40 @@ def test_admin_migrate_apply_moves_plaintext_legacy_memory(monkeypatch: pytest.M
     assert store.read_memory_index(account_id)["keywords"] == {"tea": [1]}
     assert store.read_memory_entries(account_id) == [{"text": "old"}]
     assert "legacy habit" in (store.account_dir(account_id) / "User_Habbits_and_behave.md").read_text(encoding="utf-8")
+
+
+def test_admin_migrate_apply_moves_encrypted_legacy_memory_with_existing_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    instance_dir = make_instance(tmp_path)
+    legacy = instance_dir / "data" / "users" / "2"
+    legacy.mkdir(parents=True)
+    key = b"l" * 32
+    (legacy / USER_MEMORY_KEY_FILENAME).write_bytes(key)
+    write_legacy_json(
+        legacy / "User_Memory_Index.json",
+        key,
+        kind="user-memory-index",
+        data={"keywords": {"tea": [1]}},
+    )
+    write_legacy_jsonl(
+        legacy / "User_Memory_Entries.jsonl",
+        key,
+        kind="user-memory-entries",
+        entries=[{"text": "encrypted old"}],
+    )
+
+    monkeypatch.setattr(accounts_report, "SecretToolInstanceSecretProvider", lambda: provider())
+    exit_code = accounts_report.main(["accounts", "migrate", "--instances-dir", str(tmp_path), "--apply", "--format", "json"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["totals"]["migrated"] == 1
+    assert payload["instances"][0]["migrations"][0]["encrypted_legacy"] is True
+    assert not legacy.exists()
+    account_id = payload["instances"][0]["migrations"][0]["account_id"]
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    assert store.get_account_for_identity(telegram_identity_key(2)) == account_id
+    assert store.read_memory_index(account_id)["keywords"] == {"tea": [1]}
+    assert store.read_memory_entries(account_id) == [{"text": "encrypted old"}]
 
 
 def test_admin_plan_documents_current_cli_commands() -> None:
