@@ -1,4 +1,7 @@
 signalbot==1.2.2
 nio-bot==1.0.2.post1
+# nio-bot 1.0.2.post1 declares matrix-nio==0.20.*. The tested
+# matrix-nio/h11 runtime override is pinned in adapter-dependencies.lock and verified by
+# scripts/check_adapter_deps.py after installing that real package.
 matrix-nio==0.20.2
 blurhash-python==1.2.2

@@ -98,6 +98,14 @@ Signal braucht das Python-Paket `signalbot`, die native `signal-cli-api` und `si
 python3 scripts/check_adapter_deps.py
 ```
 
+`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. Nach einer normalen Requirements-Installation die Overrides als echte Pakete installieren und danach den Adapter-Check ausfuehren:
+
+```bash
+python3 -m pip install --user --upgrade --no-deps matrix-nio==0.25.0
+python3 -m pip install --user --upgrade h11==0.16.0 httpcore==1.0.9 httpx==0.28.1
+python3 scripts/check_adapter_deps.py
+```
+
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
 ```bash
