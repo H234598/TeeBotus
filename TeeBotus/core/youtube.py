@@ -634,11 +634,15 @@ def _write_cached_youtube_transcript(url: str, transcript: str) -> None:
     if not text:
         return
     path = _youtube_transcript_cache_path(url)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text + "\n", encoding="utf-8")
+        tmp_path.write_text(text + "\n", encoding="utf-8")
+        os.replace(tmp_path, path)
     except OSError as exc:
         LOGGER.warning("Could not write YouTube transcript cache at %s: %s", path, exc)
+        with suppress(OSError):
+            tmp_path.unlink()
 
 
 def _download_youtube_subtitles(url: str, workdir: Path, instance_name: str = "") -> str:

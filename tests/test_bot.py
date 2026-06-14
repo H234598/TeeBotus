@@ -565,6 +565,37 @@ class BotTests(unittest.TestCase):
         self.assertEqual(transcript, "Subtitle text.")
         self.assertEqual(source, "YouTube-Untertitel")
 
+    def test_youtube_transcript_failure_leaves_no_cache_file(self) -> None:
+        from TeeBotus.bot import YouTubeTranscriptError
+
+        def run(command, workdir, timeout, instance_name=""):
+            return subprocess.CompletedProcess(command, 1, "", "no subtitles")
+
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_dir = Path(directory) / "runtime"
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=runtime_dir):
+                with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+                    with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
+                        with self.assertRaises(YouTubeTranscriptError):
+                            transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
+
+            cache_dir = runtime_dir / "youtube_transcripts"
+            self.assertFalse((cache_dir / "abc123.txt").exists())
+            self.assertEqual(list(cache_dir.glob("*.tmp")) if cache_dir.exists() else [], [])
+
+    def test_youtube_transcript_cache_write_is_atomic_and_removes_temp_file_on_failure(self) -> None:
+        from TeeBotus.core.youtube import _write_cached_youtube_transcript
+
+        with tempfile.TemporaryDirectory() as directory:
+            runtime_dir = Path(directory) / "runtime"
+            with patch("TeeBotus.core.youtube.runtime_dir", return_value=runtime_dir):
+                with patch("TeeBotus.core.youtube.os.replace", side_effect=OSError("replace failed")):
+                    _write_cached_youtube_transcript("https://youtu.be/abc123", "Partial transcript.")
+
+            cache_dir = runtime_dir / "youtube_transcripts"
+            self.assertFalse((cache_dir / "abc123.txt").exists())
+            self.assertEqual(list(cache_dir.glob("*.tmp")), [])
+
     def test_youtube_transcript_uses_faster_whisper_when_no_subtitles_exist(self) -> None:
         calls: list[list[str]] = []
 
