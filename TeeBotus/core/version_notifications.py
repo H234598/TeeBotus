@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,6 +11,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 
 NOTIFICATION_STATE_FILENAME = "Version_Notifications.json"
 ACTIVE_WINDOW_DAYS = 7
+DEFAULT_REPO_URL = "https://github.com/H234598/TeeBotus"
 
 
 @dataclass(frozen=True)
@@ -27,9 +29,14 @@ def notify_recent_telegram_users_for_version(
     instance_name: str,
     account_store: AccountStore,
     send_message: Callable[[int, str], object],
+    repo_root: Path | None = None,
+    repo_url: str | None = None,
     on_error: Callable[[VersionNotificationRecipient, Exception], object] | None = None,
     now: datetime | None = None,
 ) -> int:
+    resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
+    if repo_root is not None and not github_has_version(repo_root, version):
+        return 0
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(state_path)
@@ -41,6 +48,7 @@ def notify_recent_telegram_users_for_version(
             continue
         message = build_version_notification_text(
             version=version,
+            repo_url=resolved_repo_url,
             memory_text=_memory_signal_text(account_store, recipient.account_id),
         )
         try:
@@ -88,14 +96,61 @@ def recent_telegram_recipients(account_store: AccountStore, *, instance_name: st
     return sorted(recipients, key=lambda item: item.identity_key)
 
 
-def build_version_notification_text(*, version: str, memory_text: str = "") -> str:
+def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REPO_URL, memory_text: str = "") -> str:
     return "\n".join(
         [
             f"TeeBotus wurde auf Version {version} aktualisiert.",
+            f"Repo: {repo_url}",
             "Kleiner Hinweis aus dem Maschinenraum: Es wurde geschraubt, sortiert und einmal sehr ernst auf ein Logfile geschaut.",
             _memory_shaped_joke(memory_text),
         ]
     )
+
+
+def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:
+    tag = f"v{str(version).strip().lstrip('v')}"
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--exit-code", "--tags", remote, tag],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def github_repo_url(repo_root: Path, *, remote: str = "origin") -> str:
+    try:
+        result = subprocess.run(
+            ["git", "remote", "get-url", remote],
+            cwd=repo_root,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return DEFAULT_REPO_URL
+    if result.returncode != 0:
+        return DEFAULT_REPO_URL
+    return _normalize_github_url(result.stdout.strip()) or DEFAULT_REPO_URL
+
+
+def _normalize_github_url(value: str) -> str:
+    raw = value.strip()
+    if not raw:
+        return ""
+    if raw.startswith("git@github.com:"):
+        raw = "https://github.com/" + raw.removeprefix("git@github.com:")
+    elif raw.startswith("ssh://git@github.com/"):
+        raw = "https://github.com/" + raw.removeprefix("ssh://git@github.com/")
+    if raw.endswith(".git"):
+        raw = raw[:-4]
+    return raw
 
 
 def _memory_signal_text(account_store: AccountStore, account_id: str) -> str:

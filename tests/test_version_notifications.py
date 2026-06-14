@@ -5,6 +5,7 @@ from pathlib import Path
 
 from TeeBotus.core.version_notifications import (
     build_version_notification_text,
+    github_repo_url,
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
 )
@@ -67,6 +68,7 @@ def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) 
     assert len(sent) == 1
     assert sent[0][0] == 111
     assert "Version 1.0.3" in sent[0][1]
+    assert "https://github.com/H234598/TeeBotus" in sent[0][1]
     assert "ffmpeg" in sent[0][1]
 
 
@@ -97,9 +99,63 @@ def test_notify_recent_telegram_users_continues_after_send_error(tmp_path: Path)
     assert errors == ["telegram:user:111: chat not found"]
 
 
+def test_notify_recent_telegram_users_requires_github_version_when_repo_root_is_given(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    sent: list[int] = []
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda repo_root, version: False)
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.99",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        repo_root=tmp_path,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+
+
+def test_notify_recent_telegram_users_includes_normalized_github_repo_link(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    sent: list[str] = []
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda repo_root, version: True)
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_repo_url", lambda repo_root: "https://github.com/example/project")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.99",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(text),
+        repo_root=tmp_path,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert "Repo: https://github.com/example/project" in sent[0]
+
+
+def test_github_repo_url_normalizes_https_remote(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "https://github.com/H234598/TeeBotus.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
+
+
 def test_version_notification_text_does_not_expose_memory_files() -> None:
     text = build_version_notification_text(version="1.0.3", memory_text="User_Habbits_and_behave.md crypto secret")
 
     assert "User_Habbits_and_behave" not in text
     assert ".md" not in text
     assert "Version 1.0.3" in text
+    assert "Repo: https://github.com/H234598/TeeBotus" in text

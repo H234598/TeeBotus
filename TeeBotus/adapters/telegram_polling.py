@@ -2991,6 +2991,7 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
                 instance_name=instance_config.instance_name,
                 account_store=store,
                 send_message=api.send_message,
+                repo_root=PROJECT_ROOT,
                 on_error=lambda recipient, exc: LOGGER.warning(
                     "Version notification failed version=%s instance=%s identity=%s: %s",
                     __version__,
