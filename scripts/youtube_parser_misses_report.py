@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from TeeBotus.bot import (  # noqa: E402
+from TeeBotus.core.youtube import (  # noqa: E402
     YOUTUBE_PARSER_MISSES_FILENAME,
     _normalize_youtube_option_formulation,
     _parse_youtube_local_options,
@@ -228,7 +228,7 @@ def build_pytest_snippet(report: dict[str, Any]) -> str:
     lines = [
         "import pytest",
         "",
-        "from TeeBotus.bot import _parse_youtube_local_options",
+        "from TeeBotus.core.youtube import _parse_youtube_local_options",
         "",
         "",
         "@pytest.mark.parametrize(",

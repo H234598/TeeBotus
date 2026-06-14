@@ -7,13 +7,16 @@ Telegram polling implementation lives in ``TeeBotus.adapters.telegram_polling``.
 from __future__ import annotations
 
 import importlib
-import os
 import sys
 import types
 from collections.abc import Sequence
 from typing import Any, Callable
 
 _TELEGRAM_MODULE = "TeeBotus.adapters.telegram_polling"
+_COMPAT_EXPORT_MODULES = (
+    _TELEGRAM_MODULE,
+    "TeeBotus.core.youtube",
+)
 
 
 class TelegramBotMissingError(RuntimeError):
@@ -29,37 +32,45 @@ def _load_telegram_main() -> Callable[[list[str] | None], int] | None:
 
 
 def _load_telegram_module() -> Any | None:
+    return _load_module(_TELEGRAM_MODULE)
+
+
+def _load_module(module_name: str) -> Any | None:
     try:
-        return importlib.import_module(_TELEGRAM_MODULE)
+        return importlib.import_module(module_name)
     except ModuleNotFoundError as exc:
-        if exc.name == _TELEGRAM_MODULE or _TELEGRAM_MODULE.startswith(f"{exc.name}."):
+        if exc.name == module_name or module_name.startswith(f"{exc.name}."):
             return None
         raise
 
 
 def __getattr__(name: str) -> Any:
-    telegram_module = _load_telegram_module()
-    if telegram_module is not None and hasattr(telegram_module, name):
-        return getattr(telegram_module, name)
+    for module_name in _COMPAT_EXPORT_MODULES:
+        module = _load_module(module_name)
+        if module is not None and hasattr(module, name):
+            return getattr(module, name)
     raise AttributeError(f"module 'TeeBotus.bot' has no attribute {name!r}")
 
 
 def _populate_telegram_exports() -> None:
-    telegram_module = _load_telegram_module()
-    if telegram_module is None:
-        return
     current = globals()
-    for name, value in vars(telegram_module).items():
-        if name.startswith("__"):
+    for module_name in _COMPAT_EXPORT_MODULES:
+        module = _load_module(module_name)
+        if module is None:
             continue
-        current.setdefault(name, value)
+        for name, value in vars(module).items():
+            if name.startswith("__"):
+                continue
+            current.setdefault(name, value)
 
 
 class _TelegramBotModule(types.ModuleType):
     def __setattr__(self, name: str, value: Any) -> None:
-        telegram_module = _load_telegram_module()
-        if telegram_module is not None and hasattr(telegram_module, name):
-            setattr(telegram_module, name, value)
+        for module_name in _COMPAT_EXPORT_MODULES:
+            module = _load_module(module_name)
+            if module is not None and hasattr(module, name):
+                setattr(module, name, value)
+                break
         super().__setattr__(name, value)
 
 

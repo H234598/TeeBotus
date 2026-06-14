@@ -176,6 +176,6 @@ def test_youtube_parser_misses_report_cli_pytest_snippet(tmp_path: Path) -> None
         capture_output=True,
         text=True,
     )
-    assert "from TeeBotus.bot import _parse_youtube_local_options" in result.stdout
+    assert "from TeeBotus.core.youtube import _parse_youtube_local_options" in result.stdout
     assert "Mach das ohne Gelaber unterwegs, LLM ja <youtube-url>" in result.stdout
     assert "(False, True)" in result.stdout

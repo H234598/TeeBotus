@@ -519,8 +519,8 @@ class BotTests(unittest.TestCase):
             )
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/tool"):
-            with patch("TeeBotus.bot._run_local_command", side_effect=run):
+        with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+            with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
                 transcript, source = transcribe_youtube_video("https://www.youtube.com/watch?v=abc123")
 
         self.assertEqual(transcript, "Subtitle text.")
@@ -537,11 +537,11 @@ class BotTests(unittest.TestCase):
                 Path(workdir, "youtube-audio.mp3").write_bytes(b"mp3")
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/tool"):
-            with patch("TeeBotus.bot._has_python_module", return_value=True):
-                with patch("TeeBotus.bot._run_local_command", side_effect=run):
+        with patch("TeeBotus.core.youtube.shutil.which", return_value="/usr/bin/tool"):
+            with patch("TeeBotus.core.youtube._has_python_module", return_value=True):
+                with patch("TeeBotus.core.youtube._run_local_command", side_effect=run):
                     with patch(
-                        "TeeBotus.bot._run_local_command_streaming",
+                        "TeeBotus.core.youtube._run_local_command_streaming",
                         return_value=subprocess.CompletedProcess(["python3"], 0, "Faster text.\n", ""),
                     ) as streaming:
                         transcript, source = transcribe_youtube_video("https://youtu.be/abc123")
@@ -575,14 +575,14 @@ class BotTests(unittest.TestCase):
             "/usr/lib64/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-test'}\n",
         )
 
-        with patch("TeeBotus.bot._run_local_command_streaming", return_value=result):
+        with patch("TeeBotus.core.youtube._run_local_command_streaming", return_value=result):
             with self.assertRaises(YouTubeTranscriptError) as caught:
                 _transcribe_audio_with_faster_whisper_model(Path("audio.mp3"), Path("."), "tiny")
 
         self.assertEqual(str(caught.exception), "faster-whisper wurde abgebrochen (SIGTERM).")
 
     def test_youtube_transcript_command_runs_with_lowest_priority_wrappers(self) -> None:
-        with patch("TeeBotus.bot.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
+        with patch("TeeBotus.core.youtube.shutil.which", side_effect=lambda name: f"/usr/bin/{name}" if name in {"nice", "ionice"} else None):
             command = _lowest_priority_command(["python3", "-c", "print('x')"])
 
         self.assertEqual(command[:6], ["nice", "-n", "19", "ionice", "-c", "3"])
@@ -600,13 +600,13 @@ class BotTests(unittest.TestCase):
 
         self.assertIn("exit=2", _transcription_process_health_error(FakeProcess(2), 12345))
 
-        with patch("TeeBotus.bot._read_process_start_time", return_value=54321), patch("TeeBotus.bot._read_process_state", return_value="S (sleeping)"):
+        with patch("TeeBotus.core.youtube._read_process_start_time", return_value=54321), patch("TeeBotus.core.youtube._read_process_state", return_value="S (sleeping)"):
             self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "PID wurde wiederverwendet")
 
-        with patch("TeeBotus.bot._read_process_start_time", return_value=12345), patch("TeeBotus.bot._read_process_state", return_value="Z (zombie)"):
+        with patch("TeeBotus.core.youtube._read_process_start_time", return_value=12345), patch("TeeBotus.core.youtube._read_process_state", return_value="Z (zombie)"):
             self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "Prozess ist Zombie")
 
-        with patch("TeeBotus.bot._read_process_start_time", return_value=12345), patch("TeeBotus.bot._read_process_state", return_value="S (sleeping)"):
+        with patch("TeeBotus.core.youtube._read_process_start_time", return_value=12345), patch("TeeBotus.core.youtube._read_process_state", return_value="S (sleeping)"):
             self.assertEqual(_transcription_process_health_error(FakeProcess(None), 12345), "")
 
     def test_process_registry_skips_pid_reuse_and_only_cleans_matching_processes(self) -> None:
@@ -618,9 +618,9 @@ class BotTests(unittest.TestCase):
                 if pid != 333:
                     raise ProcessLookupError
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
-                with patch("TeeBotus.bot.os.getpid", return_value=999), patch(
-                    "TeeBotus.bot._read_process_start_time",
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False):
+                with patch("TeeBotus.core.youtube.os.getpid", return_value=999), patch(
+                    "TeeBotus.core.youtube._read_process_start_time",
                     side_effect=lambda pid: {111: 12345, 222: 67890, 999: 77777}.get(pid),
                 ):
                     registry.register(111)
@@ -650,9 +650,9 @@ class BotTests(unittest.TestCase):
 
                     with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
                         with patch(
-                            "TeeBotus.bot._read_process_start_time",
+                            "TeeBotus.core.youtube._read_process_start_time",
                             side_effect=lambda pid: {111: 12345, 222: 11111}.get(pid),
-                        ), patch("TeeBotus.bot.os.killpg", side_effect=fake_killpg):
+                        ), patch("TeeBotus.core.youtube.os.killpg", side_effect=fake_killpg):
                             registry.cleanup_orphans()
 
                     self.assertEqual(terminate.call_args_list, [call(111)])
@@ -665,7 +665,7 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps(
@@ -682,7 +682,7 @@ class BotTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
+                with patch("TeeBotus.core.youtube._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
                     with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
                         registry.cleanup_orphans()
 
@@ -699,7 +699,7 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root), patch("TeeBotus.bot.os.getpid", return_value=999):
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False), patch("TeeBotus.core.youtube.os.getpid", return_value=999):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps(
@@ -716,7 +716,7 @@ class BotTests(unittest.TestCase):
                     encoding="utf-8",
                 )
 
-                with patch("TeeBotus.bot._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
+                with patch("TeeBotus.core.youtube._read_process_start_time", side_effect=lambda pid: {111: 12345, 999: 77777}.get(pid)):
                     with patch.object(_InstanceProcessRegistry, "_terminate_process_group") as terminate:
                         registry.cleanup_orphans(include_current_owner=True)
 
@@ -729,7 +729,7 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps(
@@ -762,7 +762,7 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps({"processes": [{"pid": 111, "start_time": 12345}], "updated_at": "2026-06-13T00:00:00Z"}) + "\n",
@@ -779,13 +779,13 @@ class BotTests(unittest.TestCase):
             registry = _InstanceProcessRegistry("Demo")
             state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
 
-            with patch("TeeBotus.bot.PROJECT_ROOT", project_root):
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False):
                 state_path.parent.mkdir(parents=True, exist_ok=True)
                 state_path.write_text(
                     json.dumps({"processes": [{"pid": 111, "start_time": 12345}], "updated_at": "2026-06-13T00:00:00Z"}) + "\n",
                     encoding="utf-8",
                 )
-                with patch("TeeBotus.bot._read_process_start_time", return_value=None), patch("TeeBotus.bot.os.killpg", side_effect=ProcessLookupError):
+                with patch("TeeBotus.core.youtube._read_process_start_time", return_value=None), patch("TeeBotus.core.youtube.os.killpg", side_effect=ProcessLookupError):
                     registry.cleanup_orphans()
 
             self.assertFalse(state_path.exists())
