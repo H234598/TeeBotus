@@ -72,6 +72,25 @@ def test_runtime_status_reports_signal_service_health(monkeypatch, capsys) -> No
     assert "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=unreachable error=connection refused" in captured.out
 
 
+def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+
+    def fake_check_matrix_homeservers(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "matrix"][0]
+        return (SimpleNamespace(account=account, ok=False, target="matrix.example:443", error="connection refused"),)
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", fake_check_matrix_homeservers)
+
+    assert bot.main(["--runtime-status", "--channels", "matrix"]) == 0
+    captured = capsys.readouterr()
+    assert "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused" in captured.out
+
+
 def test_bot_main_delegates_unknown_normal_args_to_telegram_bot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

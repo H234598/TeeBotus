@@ -92,6 +92,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
+        from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
         from TeeBotus.runtime.signal_runner import check_signal_services
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
@@ -110,6 +111,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"
         print(f"signal_service={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
+    for health in check_matrix_homeservers(config):
+        state = "reachable" if health.ok else "unreachable"
+        detail = "" if health.ok else f" error={health.error}"
+        print(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
     return 0
 
 

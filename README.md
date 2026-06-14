@@ -138,6 +138,14 @@ MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT=syt_a,syt_b
 MATRIX_BOT_DEVICE_IDS_DEPRESSIONSBOT=DEV_A,DEV_B
 ```
 
+Die Erreichbarkeit der konfigurierten Matrix-Homeserver pruefst du ohne Botstart:
+
+```bash
+python3 -m TeeBotus --runtime-status --channels matrix
+```
+
+Wenn ein konfigurierter Matrix-Homeserver nicht erreichbar ist, bricht ein Matrix-Start vor dem Adapterstart mit einer klaren Fehlermeldung ab.
+
 Zum Verbinden eines bestehenden TeeBotus-Accounts im Matrix-Privatraum:
 
 ```text

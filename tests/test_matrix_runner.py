@@ -5,7 +5,13 @@ import asyncio
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
-from TeeBotus.runtime.matrix_runner import MatrixRuntimeBridge, run_matrix_accounts
+from TeeBotus.runtime.matrix_runner import (
+    MatrixHomeserverHealth,
+    MatrixRuntimeBridge,
+    MatrixRuntimeError,
+    check_matrix_homeserver,
+    run_matrix_accounts,
+)
 
 
 class FakeMatrixRoom:
@@ -137,6 +143,7 @@ def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", accounts),),
     )
     monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_nio", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", lambda _config: ())
     monkeypatch.setattr("TeeBotus.runtime.matrix_runner._matrix_account_thread", lambda *, account, instances_dir: FakeThread(account.slot))
     monkeypatch.setattr(
         "TeeBotus.runtime.matrix_runner.run_matrix_account",
@@ -145,3 +152,90 @@ def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
 
     assert run_matrix_accounts(config) == 0
     assert calls == [("background", 2), ("blocking", 1)]
+
+
+def test_matrix_start_fails_before_threads_when_homeserver_unreachable(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="matrix",
+        slot=1,
+        label="matrix:1",
+        openai_api_key="",
+        matrix_homeserver="https://matrix.example",
+        matrix_user_id="@bot:example",
+        matrix_access_token="token",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("matrix",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_nio", lambda: object())
+    monkeypatch.setattr(
+        "TeeBotus.runtime.matrix_runner.check_matrix_homeservers",
+        lambda _config: (MatrixHomeserverHealth(account=account, ok=False, target="matrix.example:443", error="connection refused"),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.run_matrix_account", lambda **_kwargs: calls.append("started"))
+
+    try:
+        run_matrix_accounts(config)
+    except MatrixRuntimeError as exc:
+        assert "Matrix-Homeserver nicht erreichbar" in str(exc)
+    else:
+        raise AssertionError("MatrixRuntimeError was not raised")
+    assert calls == []
+
+
+def test_matrix_homeserver_health_uses_normalized_host_port(monkeypatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    def fake_create_connection(address, timeout):
+        calls.append((address, timeout))
+        return FakeSocket()
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.socket.create_connection", fake_create_connection)
+
+    health = check_matrix_homeserver(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token",
+        ),
+        timeout_seconds=0.25,
+    )
+
+    assert health.ok
+    assert health.target == "matrix.example:443"
+    assert calls == [(("matrix.example", 443), 0.25)]
+
+
+def test_matrix_homeserver_health_rejects_homeserver_with_path() -> None:
+    health = check_matrix_homeserver(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example/client",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token",
+        )
+    )
+
+    assert not health.ok
+    assert "darf keinen Pfad" in health.error

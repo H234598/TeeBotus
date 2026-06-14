@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
@@ -16,6 +19,14 @@ from TeeBotus.runtime.state import RuntimeStateStore
 
 class MatrixRuntimeError(RuntimeError):
     """Raised when the Matrix runtime cannot be started."""
+
+
+@dataclass(frozen=True)
+class MatrixHomeserverHealth:
+    account: AccountRunConfig
+    ok: bool
+    target: str
+    error: str = ""
 
 
 class MatrixRuntimeBridge:
@@ -84,6 +95,7 @@ class MatrixRuntimeBridge:
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
     _import_nio()
+    _require_matrix_homeservers_reachable(config)
     threads: list[threading.Thread] = []
     for account in _matrix_accounts(config):
         thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
@@ -99,6 +111,7 @@ def run_matrix_accounts(config: RuntimeConfig) -> int:
             "Matrix ist angefordert, aber kein MATRIX_BOT_HOMESERVER_<INSTANCE> plus MATRIX_BOT_USER_ID_<INSTANCE> plus MATRIX_BOT_ACCESS_TOKEN_<INSTANCE> ist konfiguriert."
         )
     _import_nio()
+    _require_matrix_homeservers_reachable(config)
     for account in accounts[1:]:
         thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
@@ -125,6 +138,31 @@ def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "matrix")
 
 
+def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:
+    return tuple(check_matrix_homeserver(account, timeout_seconds=timeout_seconds) for account in _matrix_accounts(config))
+
+
+def check_matrix_homeserver(account: AccountRunConfig, *, timeout_seconds: float = 1.0) -> MatrixHomeserverHealth:
+    try:
+        host, port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
+    except MatrixRuntimeError as exc:
+        return MatrixHomeserverHealth(account=account, ok=False, target=account.matrix_homeserver, error=str(exc))
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            return MatrixHomeserverHealth(account=account, ok=True, target=target)
+    except OSError as exc:
+        return MatrixHomeserverHealth(account=account, ok=False, target=target, error=str(exc))
+
+
+def _require_matrix_homeservers_reachable(config: RuntimeConfig) -> None:
+    failures = [health for health in check_matrix_homeservers(config) if not health.ok]
+    if failures:
+        details = "; ".join(
+            f"{health.account.instance_name}/{health.account.label} {health.target}: {health.error}" for health in failures
+        )
+        raise MatrixRuntimeError(f"Matrix-Homeserver nicht erreichbar: {details}")
+
+
 def _matrix_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
     return threading.Thread(
         target=run_matrix_account,
@@ -132,6 +170,24 @@ def _matrix_account_thread(*, account: AccountRunConfig, instances_dir: str | Pa
         name=f"teebotus-matrix-{account.instance_name}-{account.slot}",
         daemon=True,
     )
+
+
+def _matrix_homeserver_host_port(homeserver: str) -> tuple[str, int, str]:
+    parsed = urlsplit(homeserver.strip().rstrip("/"))
+    if parsed.scheme not in {"http", "https"}:
+        raise MatrixRuntimeError("MATRIX_BOT_HOMESERVER_<INSTANCE> muss mit http:// oder https:// beginnen.")
+    if not parsed.hostname:
+        raise MatrixRuntimeError("MATRIX_BOT_HOMESERVER_<INSTANCE> muss Host und optional Port enthalten.")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise MatrixRuntimeError("MATRIX_BOT_HOMESERVER_<INSTANCE> darf keinen Pfad, Query-String oder Fragment enthalten.")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise MatrixRuntimeError("MATRIX_BOT_HOMESERVER_<INSTANCE> enthaelt keinen gueltigen Port.") from exc
+    if port is None:
+        port = 443 if parsed.scheme == "https" else 80
+    target = f"{parsed.hostname}:{port}"
+    return parsed.hostname, port, target
 
 
 def _import_nio() -> Any:
