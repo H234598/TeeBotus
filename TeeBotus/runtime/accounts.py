@@ -95,6 +95,13 @@ def signal_identity_key(*, source_uuid: str = "", source_number: str = "", sourc
     raise AccountStoreError("Signal identity needs source_uuid, source_number, or source")
 
 
+def matrix_identity_key(sender_id: str) -> str:
+    value = str(sender_id or "").strip()
+    if not value:
+        raise AccountStoreError("Matrix identity needs sender_id")
+    return f"matrix:user:{value}"
+
+
 @dataclass(frozen=True)
 class StaticSecretProvider:
     """Test/development secret provider.

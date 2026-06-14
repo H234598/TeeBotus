@@ -93,3 +93,37 @@ def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> 
 
     assert bot.main(["--channels", "telegram,signal"]) == 0
     assert [call[0] for call in calls] == ["signal", "telegram"]
+
+
+def test_channels_matrix_without_config_fails_clearly() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    assert bot.main(["--channels", "matrix"]) == 2
+
+
+def test_channels_matrix_delegates_to_matrix_runtime(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_run_matrix_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--channels", "matrix"]) == 0
+    assert calls
+    assert calls[0].instances[0].accounts[0].channel == "matrix"
+
+
+def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_start_matrix_runtime_background", lambda config: calls.append(("matrix", config)) or 0)
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(("telegram", args)) or 0)
+
+    assert bot.main(["--channels", "telegram,matrix"]) == 0
+    assert [call[0] for call in calls] == ["matrix", "telegram"]

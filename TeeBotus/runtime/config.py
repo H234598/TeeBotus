@@ -8,7 +8,8 @@ from typing import Mapping, Sequence
 
 DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
 DEFAULT_INSTANCES_DIR = "instances"
-DEFAULT_CHANNELS = ("telegram", "signal")
+DEFAULT_CHANNELS = ("telegram", "signal", "matrix")
+SUPPORTED_CHANNELS = frozenset(DEFAULT_CHANNELS)
 
 
 class RuntimeConfigError(RuntimeError):
@@ -25,6 +26,10 @@ class AccountRunConfig:
     telegram_token: str = ""
     signal_service: str = ""
     signal_phone_number: str = ""
+    matrix_homeserver: str = ""
+    matrix_user_id: str = ""
+    matrix_access_token: str = ""
+    matrix_device_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -62,7 +67,7 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
     if value in {"", "auto", "all"}:
         return DEFAULT_CHANNELS
     channels = parse_csv(value)
-    invalid = [channel for channel in channels if channel not in {"telegram", "signal"}]
+    invalid = [channel for channel in channels if channel not in SUPPORTED_CHANNELS]
     if invalid:
         raise RuntimeConfigError(f"unsupported channel(s): {', '.join(invalid)}")
     return _validate_unique_values(channels, label="TEEBOTUS_CHANNELS")
@@ -169,6 +174,40 @@ def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = 
     return pairs
 
 
+def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str, str, str], ...]:
+    source = env or os.environ
+    token = normalize_instance_env_token(instance_name)
+    homeservers = parse_csv(source.get(f"MATRIX_BOT_HOMESERVERS_{token}"))
+    user_ids = parse_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"))
+    access_tokens = parse_csv(source.get(f"MATRIX_BOT_ACCESS_TOKENS_{token}"))
+    device_ids = parse_csv(source.get(f"MATRIX_BOT_DEVICE_IDS_{token}"))
+    single_homeserver = source.get(f"MATRIX_BOT_HOMESERVER_{token}", "").strip()
+    single_user_id = source.get(f"MATRIX_BOT_USER_ID_{token}", "").strip()
+    single_access_token = source.get(f"MATRIX_BOT_ACCESS_TOKEN_{token}", "").strip()
+    single_device_id = source.get(f"MATRIX_BOT_DEVICE_ID_{token}", "").strip()
+    singles = (single_homeserver, single_user_id, single_access_token)
+    if any(singles) and not all(singles):
+        raise RuntimeConfigError(f"Matrix single homeserver/user/access_token must be configured together for instance {instance_name}")
+    if single_homeserver and single_user_id and single_access_token:
+        homeservers = (*homeservers, single_homeserver)
+        user_ids = (*user_ids, single_user_id)
+        access_tokens = (*access_tokens, single_access_token)
+        device_ids = (*device_ids, single_device_id)
+    if not (len(homeservers) == len(user_ids) == len(access_tokens)):
+        raise RuntimeConfigError(f"Matrix homeserver/user/access_token slot mismatch for instance {instance_name}")
+    if device_ids and len(device_ids) != len(homeservers):
+        raise RuntimeConfigError(f"Matrix device_id slot mismatch for instance {instance_name}")
+    if not device_ids:
+        device_ids = tuple("" for _ in homeservers)
+    pairs = tuple(
+        (homeserver, user_id, access_token, device_id)
+        for homeserver, user_id, access_token, device_id in zip(homeservers, user_ids, access_tokens, device_ids)
+        if homeserver and user_id and access_token
+    )
+    _validate_unique_values([user_id for _, user_id, _, _ in pairs], label=f"MATRIX_BOT_USER_IDS_{token}")
+    return pairs
+
+
 def build_account_run_configs(
     instance_name: str,
     channels: Sequence[str],
@@ -199,6 +238,22 @@ def build_account_run_configs(
                     label=f"signal:{slot}",
                     signal_service=service,
                     signal_phone_number=phone,
+                    openai_api_key=openai_key,
+                )
+            )
+    if "matrix" in channels:
+        for slot, (homeserver, user_id, access_token, device_id) in enumerate(resolve_matrix_accounts(instance_name, env), start=1):
+            openai_key = resolve_openai_key(instance_name, "matrix", slot, env)
+            accounts.append(
+                AccountRunConfig(
+                    instance_name=instance_name,
+                    channel="matrix",
+                    slot=slot,
+                    label=f"matrix:{slot}",
+                    matrix_homeserver=homeserver,
+                    matrix_user_id=user_id,
+                    matrix_access_token=access_token,
+                    matrix_device_id=device_id,
                     openai_api_key=openai_key,
                 )
             )

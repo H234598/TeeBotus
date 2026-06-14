@@ -160,15 +160,23 @@ def _runtime_config_from_main_args(args: list[str]) -> Any | None:
 
 
 def _runtime_has_signal_accounts(config: Any) -> bool:
-    return any(account.channel == "signal" for instance in config.instances for account in instance.accounts)
+    return _runtime_has_channel_accounts(config, "signal")
 
 
 def _runtime_has_telegram_accounts(config: Any) -> bool:
-    return any(account.channel == "telegram" for instance in config.instances for account in instance.accounts)
+    return _runtime_has_channel_accounts(config, "telegram")
 
 
-def _signal_requested_without_telegram(config: Any) -> bool:
-    return "signal" in config.channels and "telegram" not in config.channels
+def _runtime_has_matrix_accounts(config: Any) -> bool:
+    return _runtime_has_channel_accounts(config, "matrix")
+
+
+def _runtime_has_channel_accounts(config: Any, channel: str) -> bool:
+    return any(account.channel == channel for instance in config.instances for account in instance.accounts)
+
+
+def _channel_requested_without_telegram(config: Any, channel: str) -> bool:
+    return channel in config.channels and "telegram" not in config.channels
 
 
 def _run_signal_runtime(config: Any) -> int:
@@ -198,6 +206,33 @@ def _start_signal_runtime_background(config: Any) -> int:
     return 0
 
 
+def _run_matrix_runtime(config: Any) -> int:
+    try:
+        from TeeBotus.runtime.matrix_runner import MatrixRuntimeError, run_matrix_accounts
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import Matrix runtime: {exc}", file=sys.stderr)
+        return 2
+    try:
+        return int(run_matrix_accounts(config))
+    except MatrixRuntimeError as exc:
+        print(f"TeeBotus Matrix runtime error: {exc}", file=sys.stderr)
+        return 2
+
+
+def _start_matrix_runtime_background(config: Any) -> int:
+    try:
+        from TeeBotus.runtime.matrix_runner import MatrixRuntimeError, start_matrix_accounts_in_background
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import Matrix runtime: {exc}", file=sys.stderr)
+        return 2
+    try:
+        start_matrix_accounts_in_background(config)
+    except MatrixRuntimeError as exc:
+        print(f"TeeBotus Matrix runtime error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run TeeBotus through the productive Telegram entry point."""
 
@@ -209,12 +244,21 @@ def main(argv: list[str] | None = None) -> int:
     config = _runtime_config_from_main_args(args)
     if config is None:
         return 2
-    if _signal_requested_without_telegram(config):
+    if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
+        return _run_matrix_runtime(config)
+    if _channel_requested_without_telegram(config, "signal") and "matrix" not in config.channels:
         return _run_signal_runtime(config)
+    if "matrix" in config.channels and _runtime_has_matrix_accounts(config):
+        status = _start_matrix_runtime_background(config)
+        if status != 0:
+            return status
     if "signal" in config.channels and _runtime_has_signal_accounts(config):
         status = _start_signal_runtime_background(config)
         if status != 0:
             return status
+    if "telegram" not in config.channels:
+        print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
+        return 2
     if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
         print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
         return 2

@@ -11,13 +11,14 @@ from TeeBotus.runtime.config import (
     resolve_channels,
     resolve_openai_key,
     resolve_selected_instances,
+    resolve_matrix_accounts,
     resolve_signal_accounts,
     resolve_telegram_tokens,
 )
 
 
-def test_channels_default_to_telegram_and_signal():
-    assert resolve_channels({}) == ("telegram", "signal")
+def test_channels_default_to_telegram_signal_and_matrix():
+    assert resolve_channels({}) == ("telegram", "signal", "matrix")
     assert resolve_channels({}, cli_channels="telegram") == ("telegram",)
 
 
@@ -60,17 +61,34 @@ def test_signal_account_resolution_pairs_services_and_numbers():
     assert resolve_signal_accounts("Depressionsbot", env) == (("127.0.0.1:8080", "+491"), ("127.0.0.1:8081", "+492"))
 
 
-def test_build_account_configs_for_telegram_and_signal():
+def test_matrix_account_resolution_pairs_homeserver_user_and_token():
+    env = {
+        "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://matrix-a.example,https://matrix-b.example",
+        "MATRIX_BOT_USER_IDS_DEPRESSIONSBOT": "@a:example,@b:example",
+        "MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT": "token-a,token-b",
+        "MATRIX_BOT_DEVICE_IDS_DEPRESSIONSBOT": "dev-a,dev-b",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
+        ("https://matrix-b.example", "@b:example", "token-b", "dev-b"),
+    )
+
+
+def test_build_account_configs_for_telegram_signal_and_matrix():
     env = {
         "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "telegram-token",
         "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
         "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT": "+491",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared",
     }
 
-    accounts = build_account_run_configs("Depressionsbot", ("telegram", "signal"), env)
+    accounts = build_account_run_configs("Depressionsbot", ("telegram", "signal", "matrix"), env)
 
-    assert [account.channel for account in accounts] == ["telegram", "signal"]
+    assert [account.channel for account in accounts] == ["telegram", "signal", "matrix"]
     assert {account.openai_api_key for account in accounts} == {"sk-shared"}
 
 
@@ -130,3 +148,21 @@ def test_duplicate_signal_services_raise_instead_of_collapsing_slots():
 
     with pytest.raises(RuntimeConfigError):
         resolve_signal_accounts("Depressionsbot", env)
+
+
+def test_matrix_single_config_requires_homeserver_user_and_token():
+    env = {"MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example"}
+
+    with pytest.raises(RuntimeConfigError):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
+def test_duplicate_matrix_user_ids_raise_instead_of_collapsing_slots():
+    env = {
+        "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://a.example,https://b.example",
+        "MATRIX_BOT_USER_IDS_DEPRESSIONSBOT": "@bot:example,@bot:example",
+        "MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT": "token-a,token-b",
+    }
+
+    with pytest.raises(RuntimeConfigError):
+        resolve_matrix_accounts("Depressionsbot", env)

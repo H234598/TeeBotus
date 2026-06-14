@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import asyncio
+
+from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
 from TeeBotus.runtime.actions import SendText, SendTyping
@@ -61,3 +64,48 @@ def test_telegram_send_keeps_string_chat_ids_for_channels():
     send_telegram_actions(api, [SendText("@my_channel", "hi"), SendTyping("@my_channel")])
 
     assert api.calls == [("message", "@my_channel", "hi"), ("action", "@my_channel", "typing")]
+
+
+def test_matrix_message_maps_sender_and_room_to_event():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "/account"
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event.channel == "matrix"
+    assert event.identity_key == "matrix:user:@alice:example"
+    assert event.chat_id == "!room:example"
+    assert event.chat_type == "private"
+    assert event.text == "/account"
+
+
+def test_matrix_send_text_uses_room_send():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi")]))
+
+    assert sent == ["$sent"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {"msgtype": "m.text", "body": "hi"},
+        }
+    ]

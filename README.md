@@ -82,7 +82,7 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 ## Plan3 Account-Runtime
 
-`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_polling.py`; konfigurierte Signal-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
+`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_polling.py`; konfigurierte Signal- und Matrix-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 
@@ -90,7 +90,7 @@ Die Runtime-Konfiguration kannst du separat pruefen:
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
-`--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels telegram,signal` startet konfigurierte Signal-Slots im Hintergrund und danach den stabilen Telegram-Poller.
+`--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
 Signal braucht das Python-Paket `signalbot` und eine laufende `signal-cli-rest-api`. Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
@@ -112,7 +112,31 @@ In Signal erzeugt `/register` einen neuen TeeBotus-Account fuer diesen Signal-We
 /login <account_id> <secret>
 ```
 
-Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>` oder `signal:uuid:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
+Matrix ist vorbereitet auf `matrix-nio` und braucht einen Matrix-User mit Access-Token. Pro Instanz muessen Homeserver, User-ID und Access-Token zusammen gesetzt sein:
+
+```bash
+MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT=https://matrix.example.org
+MATRIX_BOT_USER_ID_DEPRESSIONSBOT=@teebotus:example.org
+MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT=syt_...
+MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT=TEEBOTUS
+```
+
+Mehrere Matrix-Slots werden positionsgleich konfiguriert:
+
+```bash
+MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT=https://matrix-a.example,https://matrix-b.example
+MATRIX_BOT_USER_IDS_DEPRESSIONSBOT=@bot-a:example,@bot-b:example
+MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT=syt_a,syt_b
+MATRIX_BOT_DEVICE_IDS_DEPRESSIONSBOT=DEV_A,DEV_B
+```
+
+Zum Verbinden eines bestehenden TeeBotus-Accounts im Matrix-Privatraum:
+
+```text
+/login <account_id> <secret>
+```
+
+Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>`, `signal:uuid:<id>` oder `matrix:user:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
 
 Account-Report:
 

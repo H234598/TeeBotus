@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-RefKind = Literal["telegram_message_id", "signal_timestamp"]
+RefKind = Literal["telegram_message_id", "signal_timestamp", "matrix_event_id"]
 MESSAGE_TRACKER_FILENAME = "Sent_Message_Refs.json"
 
 
@@ -114,7 +114,7 @@ class MessageTracker:
                 )
             except KeyError:
                 continue
-            if ref.ref_kind not in {"telegram_message_id", "signal_timestamp"}:
+            if ref.ref_kind not in {"telegram_message_id", "signal_timestamp", "matrix_event_id"}:
                 continue
             key = (ref.instance_name, ref.channel, ref.chat_id)
             self.refs.setdefault(key, []).append(ref)
