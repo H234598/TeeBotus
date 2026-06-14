@@ -216,6 +216,39 @@ def test_matrix_export_file_uploads_file_before_room_send():
     ]
 
 
+def test_matrix_export_file_prefers_niobot_file_attachment():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, content=None, file=None, **kwargs):
+            self.calls.append((room_id, content, file, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export")],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert len(client.calls) == 1
+    room_id, content, file, kwargs = client.calls[0]
+    assert room_id == "!room:example"
+    assert content == "Export"
+    assert kwargs == {}
+    assert file.file_name == "report.json"
+    assert file.mime_type == "application/json"
+    assert file.size == 12
+    assert file.file.getvalue() == b"{\"ok\": true}"
+
+
 def test_matrix_export_upload_failure_sends_notice_and_continues_actions():
     class Response:
         def __init__(self, event_id: str) -> None:

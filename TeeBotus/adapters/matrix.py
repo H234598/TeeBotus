@@ -122,6 +122,10 @@ async def _send_matrix_file(
     content_type: str,
     caption: str = "",
 ) -> Any:
+    send_message = getattr(client, "send_message", None)
+    attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
+    if callable(send_message) and attachment is not None:
+        return await send_message(room_id, caption or filename, file=attachment)
     upload_response, _keys = await client.upload(
         BytesIO(data),
         content_type=content_type or "application/octet-stream",
@@ -146,6 +150,19 @@ async def _send_matrix_file(
                 "size": len(data),
             },
         },
+    )
+
+
+def _make_niobot_file_attachment(*, data: bytes, filename: str, content_type: str) -> Any | None:
+    try:
+        from niobot.attachment import FileAttachment  # type: ignore[import-not-found]
+    except Exception:
+        return None
+    return FileAttachment(
+        BytesIO(data),
+        file_name=filename,
+        mime_type=content_type or "application/octet-stream",
+        size_bytes=len(data),
     )
 
 
