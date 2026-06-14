@@ -70,12 +70,7 @@ def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading
     _import_signalbot()
     threads: list[threading.Thread] = []
     for account in _signal_accounts(config):
-        thread = threading.Thread(
-            target=run_signal_account,
-            kwargs={"account": account, "instances_dir": config.instances_dir},
-            name=f"teebotus-signal-{account.instance_name}-{account.slot}",
-            daemon=True,
-        )
+        thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
         threads.append(thread)
     return threads
@@ -87,8 +82,11 @@ def run_signal_accounts(config: RuntimeConfig) -> int:
         raise SignalRuntimeError(
             "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
         )
-    for account in accounts:
-        run_signal_account(account=account, instances_dir=config.instances_dir)
+    _import_signalbot()
+    for account in accounts[1:]:
+        thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
+        thread.start()
+    run_signal_account(account=accounts[0], instances_dir=config.instances_dir)
     return 0
 
 
@@ -105,6 +103,15 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
 
 def _signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "signal")
+
+
+def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
+    return threading.Thread(
+        target=run_signal_account,
+        kwargs={"account": account, "instances_dir": instances_dir},
+        name=f"teebotus-signal-{account.instance_name}-{account.slot}",
+        daemon=True,
+    )
 
 
 def _import_signalbot() -> Any:

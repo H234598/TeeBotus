@@ -69,12 +69,7 @@ def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading
     _import_nio()
     threads: list[threading.Thread] = []
     for account in _matrix_accounts(config):
-        thread = threading.Thread(
-            target=run_matrix_account,
-            kwargs={"account": account, "instances_dir": config.instances_dir},
-            name=f"teebotus-matrix-{account.instance_name}-{account.slot}",
-            daemon=True,
-        )
+        thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
         threads.append(thread)
     return threads
@@ -86,8 +81,11 @@ def run_matrix_accounts(config: RuntimeConfig) -> int:
         raise MatrixRuntimeError(
             "Matrix ist angefordert, aber kein MATRIX_BOT_HOMESERVER_<INSTANCE> plus MATRIX_BOT_USER_ID_<INSTANCE> plus MATRIX_BOT_ACCESS_TOKEN_<INSTANCE> ist konfiguriert."
         )
-    for account in accounts:
-        run_matrix_account(account=account, instances_dir=config.instances_dir)
+    _import_nio()
+    for account in accounts[1:]:
+        thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
+        thread.start()
+    run_matrix_account(account=accounts[0], instances_dir=config.instances_dir)
     return 0
 
 
@@ -108,6 +106,15 @@ async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir:
 
 def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "matrix")
+
+
+def _matrix_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
+    return threading.Thread(
+        target=run_matrix_account,
+        kwargs={"account": account, "instances_dir": instances_dir},
+        name=f"teebotus-matrix-{account.instance_name}-{account.slot}",
+        daemon=True,
+    )
 
 
 def _import_nio() -> Any:

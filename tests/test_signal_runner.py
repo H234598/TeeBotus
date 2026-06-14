@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.config import AccountRunConfig
-from TeeBotus.runtime.signal_runner import TeeBotusSignalCommand
+from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
+from TeeBotus.runtime.signal_runner import TeeBotusSignalCommand, run_signal_accounts
 
 
 class FakeSignalMessage:
@@ -54,3 +54,50 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:
+    calls: list[tuple[str, int]] = []
+
+    class FakeThread:
+        def __init__(self, slot: int) -> None:
+            self.slot = slot
+
+        def start(self) -> None:
+            calls.append(("background", self.slot))
+
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=2,
+            label="signal:2",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8081",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", accounts),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_account_thread", lambda *, account, instances_dir: FakeThread(account.slot))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.run_signal_account",
+        lambda *, account, instances_dir: calls.append(("blocking", account.slot)),
+    )
+
+    assert run_signal_accounts(config) == 0
+    assert calls == [("background", 2), ("blocking", 1)]
