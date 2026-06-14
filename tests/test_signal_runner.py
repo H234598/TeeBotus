@@ -4,6 +4,7 @@ import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
+from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import TeeBotusSignalCommand, run_signal_accounts
 
 
@@ -25,6 +26,7 @@ class FakeSignalContext:
     def __init__(self) -> None:
         self.message = FakeSignalMessage()
         self.sent: list[str] = []
+        self.deleted: list[int] = []
 
     async def send(self, text: str, **_kwargs) -> int:
         self.sent.append(text)
@@ -32,6 +34,10 @@ class FakeSignalContext:
 
     async def start_typing(self) -> None:
         return None
+
+    async def remote_delete(self, timestamp: int) -> int:
+        self.deleted.append(timestamp)
+        return timestamp
 
 
 def test_signal_command_routes_private_account_commands(tmp_path) -> None:
@@ -54,6 +60,40 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_cleanup_deletes_tracked_current_chat_messages(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+    command.message_tracker.record(
+        SentMessageRef(
+            channel="signal",
+            instance_name="Demo",
+            account_id=account_id,
+            chat_id="+491234",
+            message_ref="555",
+            ref_kind="signal_timestamp",
+        )
+    )
+    context.message.text = "/cleanup 1"
+
+    asyncio.run(command.handle(context))
+
+    assert context.deleted == [555]
+    assert any("aktuellen Chat" in text for text in context.sent)
 
 
 def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:

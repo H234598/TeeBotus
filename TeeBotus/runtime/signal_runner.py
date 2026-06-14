@@ -6,7 +6,7 @@ from typing import Any
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -50,6 +50,7 @@ class TeeBotusSignalCommand:
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         event = event.with_account(account_id)
         actions = self.engine.process(event)
+        await self._delete_tracked_messages(context, event, actions)
         sent_refs = await send_signal_actions(context, actions)
         for action, sent_ref in zip(actions, sent_refs):
             if sent_ref is None or not isinstance(action, (SendText, SendAttachment)) or not action.track:
@@ -64,6 +65,22 @@ class TeeBotusSignalCommand:
                     ref_kind="signal_timestamp",
                 )
             )
+
+    async def _delete_tracked_messages(self, context: Any, event: Any, actions: list[Any]) -> None:
+        for action in actions:
+            if not isinstance(action, DeleteTrackedMessages):
+                continue
+            refs = self.message_tracker.pop_for_cleanup(
+                instance_name=event.instance,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                count=action.count,
+            )
+            for ref in refs:
+                try:
+                    await context.remote_delete(int(ref.message_ref))
+                except Exception:
+                    continue
 
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
