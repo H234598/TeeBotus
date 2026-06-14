@@ -109,8 +109,11 @@ def _runtime_status(argv: Sequence[str]) -> int:
 
 
 def _telegram_args_from_runtime_cli(args: list[str]) -> tuple[list[str] | None, int]:
+    return _strip_runtime_channels_arg(args)
+
+
+def _strip_runtime_channels_arg(args: list[str]) -> tuple[list[str] | None, int]:
     telegram_args: list[str] = []
-    channels = "auto"
     index = 0
     while index < len(args):
         arg = args[index]
@@ -118,22 +121,81 @@ def _telegram_args_from_runtime_cli(args: list[str]) -> tuple[list[str] | None, 
             if index + 1 >= len(args):
                 print("Missing value for --channels.", file=sys.stderr)
                 return None, 2
-            channels = args[index + 1]
             index += 2
             continue
         if arg.startswith("--channels="):
-            channels = arg.split("=", 1)[1]
             index += 1
             continue
         telegram_args.append(arg)
         index += 1
-    requested = {part.strip().casefold() for part in channels.split(",") if part.strip()}
-    if not requested or requested in ({"auto"}, {"all"}):
-        return telegram_args, 0
-    if requested == {"telegram"}:
-        return telegram_args, 0
-    print("Signal/Mehrkanal-Produktivstart ist in diesem Entry-Point noch nicht freigeschaltet. Nutze --runtime-status zur Konfigurationsprüfung.", file=sys.stderr)
-    return None, 2
+    return telegram_args, 0
+
+
+def _runtime_config_from_main_args(args: list[str]) -> Any | None:
+    _load_runtime_environment()
+    try:
+        from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
+        return None
+    runtime_args = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--channels":
+            if index + 1 >= len(args):
+                print("Missing value for --channels.", file=sys.stderr)
+                return None
+            runtime_args.extend([arg, args[index + 1]])
+            index += 2
+            continue
+        if arg.startswith("--channels="):
+            runtime_args.append(arg)
+        index += 1
+    try:
+        return resolve_runtime_config(runtime_args)
+    except RuntimeConfigError as exc:
+        print(f"TeeBotus runtime configuration error: {exc}", file=sys.stderr)
+        return None
+
+
+def _runtime_has_signal_accounts(config: Any) -> bool:
+    return any(account.channel == "signal" for instance in config.instances for account in instance.accounts)
+
+
+def _runtime_has_telegram_accounts(config: Any) -> bool:
+    return any(account.channel == "telegram" for instance in config.instances for account in instance.accounts)
+
+
+def _signal_requested_without_telegram(config: Any) -> bool:
+    return "signal" in config.channels and "telegram" not in config.channels
+
+
+def _run_signal_runtime(config: Any) -> int:
+    try:
+        from TeeBotus.runtime.signal_runner import SignalRuntimeError, run_signal_accounts
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import Signal runtime: {exc}", file=sys.stderr)
+        return 2
+    try:
+        return int(run_signal_accounts(config))
+    except SignalRuntimeError as exc:
+        print(f"TeeBotus Signal runtime error: {exc}", file=sys.stderr)
+        return 2
+
+
+def _start_signal_runtime_background(config: Any) -> int:
+    try:
+        from TeeBotus.runtime.signal_runner import SignalRuntimeError, start_signal_accounts_in_background
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import Signal runtime: {exc}", file=sys.stderr)
+        return 2
+    try:
+        start_signal_accounts_in_background(config)
+    except SignalRuntimeError as exc:
+        print(f"TeeBotus Signal runtime error: {exc}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -143,6 +205,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args and args[0] in {"--runtime-status", "runtime-status"}:
         return _runtime_status(args[1:])
+
+    config = _runtime_config_from_main_args(args)
+    if config is None:
+        return 2
+    if _signal_requested_without_telegram(config):
+        return _run_signal_runtime(config)
+    if "signal" in config.channels and _runtime_has_signal_accounts(config):
+        status = _start_signal_runtime_background(config)
+        if status != 0:
+            return status
+    if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
+        print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
+        return 2
 
     telegram_args, cli_status = _telegram_args_from_runtime_cli(args)
     if telegram_args is None:

@@ -63,6 +63,33 @@ def test_channels_telegram_is_stripped_before_telegram_delegation() -> None:
     assert bot.main(["--channels", "telegram", "--definitely-not-runtime-status"]) == 2
 
 
-def test_channels_signal_does_not_start_partial_runtime() -> None:
+def test_channels_signal_without_config_fails_clearly() -> None:
     bot = importlib.import_module("TeeBotus.bot")
     assert bot.main(["--channels", "signal"]) == 2
+
+
+def test_channels_signal_delegates_to_signal_runtime(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--channels", "signal"]) == 0
+    assert calls
+    assert calls[0].instances[0].accounts[0].channel == "signal"
+
+
+def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.setattr(bot, "_start_signal_runtime_background", lambda config: calls.append(("signal", config)) or 0)
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(("telegram", args)) or 0)
+
+    assert bot.main(["--channels", "telegram,signal"]) == 0
+    assert [call[0] for call in calls] == ["signal", "telegram"]

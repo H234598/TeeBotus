@@ -82,7 +82,7 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 ## Plan3 Account-Runtime
 
-Der produktive Startpfad ist aktuell Telegram-only. `TeeBotus/bot.py` bleibt der stabile Entry-Point und delegiert an `TeeBotus/adapters/telegram_polling.py`. Die Multi-Channel-Runtime wird additiv aufgebaut und wird nicht heimlich als Signal-/Mehrkanal-Produktivbot gestartet.
+`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_polling.py`; konfigurierte Signal-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 
@@ -90,7 +90,27 @@ Die Runtime-Konfiguration kannst du separat pruefen:
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
-`--channels telegram` ist beim Telegram-Start erlaubt. `--channels signal` oder `--channels telegram,signal` starten noch keinen Produktivbot, sondern brechen kontrolliert ab, bis der Signal-Adapter voll verdrahtet ist.
+`--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels telegram,signal` startet konfigurierte Signal-Slots im Hintergrund und danach den stabilen Telegram-Poller.
+
+Signal braucht das Python-Paket `signalbot` und eine laufende `signal-cli-rest-api`. Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
+
+```bash
+SIGNAL_BOT_SERVICE_DEPRESSIONSBOT=http://127.0.0.1:8080
+SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT=+49...
+```
+
+Mehrere Signal-Slots werden positionsgleich konfiguriert:
+
+```bash
+SIGNAL_BOT_SERVICES_DEPRESSIONSBOT=http://127.0.0.1:8080,http://127.0.0.1:8081
+SIGNAL_BOT_PHONE_NUMBERS_DEPRESSIONSBOT=+49...,+49...
+```
+
+In Signal erzeugt `/register` einen neuen TeeBotus-Account fuer diesen Signal-Weg. Um einen bestehenden Telegram-Account zu verbinden, zuerst im privaten Telegram-Chat `/register` oder `/rotate_secret` nutzen und danach im privaten Signal-Chat senden:
+
+```text
+/login <account_id> <secret>
+```
 
 Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>` oder `signal:uuid:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
 
