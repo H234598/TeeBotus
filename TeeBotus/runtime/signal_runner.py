@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -64,7 +64,13 @@ class TeeBotusSignalCommand:
         await self._delete_tracked_messages(context, event, actions)
         sent_refs = await send_signal_actions(context, actions)
         for action, sent_ref in zip(actions, sent_refs):
-            if sent_ref is None or not isinstance(action, (SendText, SendAttachment)) or not action.track:
+            if sent_ref is None:
+                continue
+            if isinstance(action, ExportFile):
+                should_track = True
+            else:
+                should_track = isinstance(action, (SendText, SendAttachment)) and action.track
+            if not should_track:
                 continue
             self.message_tracker.record(
                 SentMessageRef(

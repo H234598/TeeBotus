@@ -4,6 +4,7 @@ import asyncio
 from types import SimpleNamespace
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
+from TeeBotus.runtime.actions import ExportFile
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
@@ -102,6 +103,34 @@ def test_signal_cleanup_deletes_tracked_current_chat_messages(tmp_path) -> None:
 
     assert context.deleted == [555]
     assert any("aktuellen Chat" in text for text in context.sent)
+
+
+def test_signal_command_tracks_export_files_for_cleanup(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [ExportFile(event.chat_id, "report.txt", "text/plain", b"hello")]},
+    )()
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
+    assert len(refs) == 1
+    assert refs[0].message_ref == "987654"
 
 
 def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:
