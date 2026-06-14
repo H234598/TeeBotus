@@ -1249,10 +1249,10 @@ class BotTests(unittest.TestCase):
 
             self.assertEqual(len(api.sent_messages), 1)
             reply = api.sent_messages[0][1]
-            self.assertIn("Status: laeuft", reply)
+            self.assertIn("Status: Laeuft", reply)
             self.assertIn(f"Version: {__version__}", reply)
-            self.assertIn("Deine Nutzermemorys:", reply)
-            self.assertIn("Userfiles-Verschluesselung: strukturierte Userfiles verschluesselt", reply)
+            self.assertIn("Groesse deine Nutzermemorys:", reply)
+            self.assertIn("Userfiles-Verschluesselung: Userfiles verschluesselt", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()

@@ -24,9 +24,9 @@ def build_status_reply(*, sender_id: str, instance_name: str, project_root: Path
     encryption_status = memory_encryption_status(account_dir)
     return "\n".join(
         [
-            "Status: laeuft",
+            "Status: Laeuft",
             f"Version: {__version__}",
-            f"Deine Nutzermemorys: {format_byte_size(memory_size)}",
+            f"Groesse deine Nutzermemorys: {format_byte_size(memory_size)}",
             f"Userfiles-Verschluesselung: {encryption_status}",
         ]
     )
@@ -75,8 +75,8 @@ def memory_encryption_status(directory: Path | None) -> str:
     if not existing_structured:
         return "keine strukturierten Userfiles"
     if len(encrypted_structured) == len(existing_structured):
-        return "strukturierte Userfiles verschluesselt"
-    return "strukturierte Userfiles nicht vollstaendig verschluesselt"
+        return "Userfiles verschluesselt"
+    return "Userfiles nicht vollstaendig verschluesselt"
 
 
 def looks_like_encrypted_payload(path: Path) -> bool:
