@@ -53,7 +53,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             await client.room_typing(action.chat_id, True, timeout=3000)
             sent.append(None)
         elif isinstance(action, SendAttachment):
-            response = await _send_matrix_file(
+            response = await _send_matrix_file_or_error_notice(
                 client,
                 room_id=action.chat_id,
                 data=action.data,
@@ -63,7 +63,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
-            response = await _send_matrix_file(
+            response = await _send_matrix_file_or_error_notice(
                 client,
                 room_id=action.chat_id,
                 data=action.data,
@@ -75,6 +75,35 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages)):
             sent.append(None)
     return sent
+
+
+async def _send_matrix_file_or_error_notice(
+    client: Any,
+    *,
+    room_id: str,
+    data: bytes,
+    filename: str,
+    content_type: str,
+    caption: str = "",
+) -> Any:
+    try:
+        return await _send_matrix_file(
+            client,
+            room_id=room_id,
+            data=data,
+            filename=filename,
+            content_type=content_type,
+            caption=caption,
+        )
+    except Exception as exc:
+        return await client.room_send(
+            room_id=room_id,
+            message_type="m.room.message",
+            content={
+                "msgtype": "m.notice",
+                "body": f"Datei konnte nicht gesendet werden: {filename} ({exc})",
+            },
+        )
 
 
 async def _send_matrix_file(

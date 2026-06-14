@@ -194,3 +194,43 @@ def test_matrix_export_file_uploads_file_before_room_send():
             },
         }
     ]
+
+
+def test_matrix_export_upload_failure_sends_notice_and_continues_actions():
+    class Response:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+    class Client:
+        def __init__(self) -> None:
+            self.sends = []
+
+        async def upload(self, _data_provider, **_kwargs):
+            raise OSError("upload refused")
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return Response(f"$sent-{len(self.sends)}")
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export"),
+                SendText("!room:example", "danach"),
+            ],
+        )
+    )
+
+    assert sent == ["$sent-1", "$sent-2"]
+    assert client.sends[0] == {
+        "room_id": "!room:example",
+        "message_type": "m.room.message",
+        "content": {
+            "msgtype": "m.notice",
+            "body": "Datei konnte nicht gesendet werden: report.json (upload refused)",
+        },
+    }
+    assert client.sends[1]["content"] == {"msgtype": "m.text", "body": "danach"}
