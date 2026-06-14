@@ -32,10 +32,13 @@ def notify_recent_telegram_users_for_version(
     repo_root: Path | None = None,
     repo_url: str | None = None,
     on_error: Callable[[VersionNotificationRecipient, Exception], object] | None = None,
+    on_skip: Callable[[str], object] | None = None,
     now: datetime | None = None,
 ) -> int:
     resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
     if repo_root is not None and not github_has_version(repo_root, version):
+        if on_skip is not None:
+            on_skip(f"GitHub tag v{str(version).strip().lstrip('v')} not found on remote")
         return 0
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME

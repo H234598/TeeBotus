@@ -103,6 +103,7 @@ def test_notify_recent_telegram_users_requires_github_version_when_repo_root_is_
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
     sent: list[int] = []
+    skips: list[str] = []
 
     monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda repo_root, version: False)
 
@@ -113,11 +114,13 @@ def test_notify_recent_telegram_users_requires_github_version_when_repo_root_is_
         account_store=store,
         send_message=lambda chat_id, text: sent.append(chat_id),
         repo_root=tmp_path,
+        on_skip=lambda reason: skips.append(reason),
         now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
     )
 
     assert count == 0
     assert sent == []
+    assert skips == ["GitHub tag v1.0.99 not found on remote"]
 
 
 def test_notify_recent_telegram_users_includes_normalized_github_repo_link(tmp_path: Path, monkeypatch) -> None:

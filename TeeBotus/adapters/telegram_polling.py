@@ -2821,6 +2821,12 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
                     recipient.identity_key,
                     exc,
                 ),
+                on_skip=lambda reason: LOGGER.info(
+                    "Version notification skipped version=%s instance=%s reason=%s.",
+                    __version__,
+                    instance_config.instance_name,
+                    reason,
+                ),
             )
         except (AccountStoreError, TelegramAPIError, TelegramNetworkError, OSError) as exc:
             LOGGER.warning("Version notification skipped for instance=%s: %s", instance_config.instance_name, exc)
