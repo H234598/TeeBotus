@@ -441,6 +441,33 @@ def test_signal_send_uses_context_when_current_recipient_lookup_fails():
     assert context.calls == [("send", "hi", {"base64_attachments": None})]
 
 
+def test_signal_send_text_rejects_missing_timestamp():
+    class Context:
+        message = FakeSignalMessage(source="+491")
+
+        async def send(self, _text, **_kwargs):
+            return None
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendText("+491", "hi")]))
+    except RuntimeError as exc:
+        assert "Signal text send returned no numeric timestamp" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
+def test_signal_send_text_accepts_numeric_string_timestamp():
+    class Context:
+        message = FakeSignalMessage(source="+491")
+
+        async def send(self, _text, **_kwargs):
+            return "123456"
+
+    sent = asyncio.run(send_signal_actions(Context(), [SendText("+491", "hi")]))
+
+    assert sent == [123456]
+
+
 def test_signal_typing_stops_previous_target_before_starting_new_target():
     class Bot:
         def __init__(self) -> None:
