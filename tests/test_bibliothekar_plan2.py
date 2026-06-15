@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 
 
@@ -7,11 +9,9 @@ def test_plan2_bibliothekar_acceptance_dry_run_index_and_query(tmp_path, capsys)
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
-    source_dir = tmp_path / "books"
+    source_dir = Path("tests/fixtures/books")
     library_dir.mkdir(parents=True)
-    source_dir.mkdir()
     (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
-    (source_dir / "therapie.md").write_text("# Therapie\nAktivierung und Schlafhygiene helfen strukturiert.\n", encoding="utf-8")
 
     assert (
         bibliothekar_cli_main(
@@ -30,7 +30,7 @@ def test_plan2_bibliothekar_acceptance_dry_run_index_and_query(tmp_path, capsys)
     )
     dry_run_output = capsys.readouterr().out
     assert "dry_run=True" in dry_run_output
-    assert "1 Dokumente" in dry_run_output
+    assert "2 Dokumente" in dry_run_output
 
     assert (
         bibliothekar_cli_main(
@@ -63,5 +63,5 @@ def test_plan2_bibliothekar_acceptance_dry_run_index_and_query(tmp_path, capsys)
     )
     query_output = capsys.readouterr().out
     assert "selected_library_chunks" in query_output
-    assert "therapie.md" in query_output
+    assert "therapie_basis.md" in query_output
     assert "chunk_id" in query_output

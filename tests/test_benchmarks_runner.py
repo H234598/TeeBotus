@@ -37,7 +37,10 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert migration["ok"] is True
     assert migration["details"]["verified"] is True
     assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
-    assert any(result["name"] == "bibliothekar_haystack_fake_query" for result in suite["results"])
+    local_library = next(result for result in suite["results"] if result["name"] == "bibliothekar_local_query")
+    haystack_library = next(result for result in suite["results"] if result["name"] == "bibliothekar_haystack_fake_query")
+    assert local_library["details"]["fixture"] == "tests/fixtures/books"
+    assert haystack_library["details"]["fixture"] == "tests/fixtures/books"
     assert any(result["name"] == "langgraph_bibliothekar_linear" for result in suite["results"])
     fake_graph = next(result for result in suite["results"] if result["name"] == "langgraph_bibliothekar_fake_installed")
     assert fake_graph["details"]["mode"] == "fake_installed_langgraph"
@@ -57,7 +60,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "# TeeBotus Benchmarks" in markdown
     assert "## Dependencies" in markdown
     assert "| litellm |" in markdown
-    assert "| name | category | status | mode | iterations |" in markdown
+    assert "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" in markdown
     assert "memory_jsonl" in markdown
     assert "memory_migration_jsonl_to_sqlite" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown

@@ -6,6 +6,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import shutil
 import statistics
 import sys
 import tempfile
@@ -130,14 +131,14 @@ def render_markdown(suite: dict[str, Any]) -> str:
             "",
             "## Results",
             "",
-        "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note |",
-        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for result in suite["results"]:
         status = "skipped" if result.get("skipped") else ("ok" if result.get("ok") else "failed")
         lines.append(
-            "| {name} | {category} | {status} | {mode} | {iterations} | {total_ms:.3f} | {throughput:.2f} | {errors} | {payload_bytes} | {index_bytes} | {note} |".format(
+            "| {name} | {category} | {status} | {mode} | {iterations} | {total_ms:.3f} | {throughput:.2f} | {errors} | {payload_bytes} | {index_bytes} | {note} | {details} |".format(
                 name=result.get("name", ""),
                 category=result.get("category", ""),
                 status=status,
@@ -149,11 +150,21 @@ def render_markdown(suite: dict[str, Any]) -> str:
                 payload_bytes=int(result.get("payload_bytes") or 0),
                 index_bytes=int(result.get("index_bytes") or 0),
                 note=str(result.get("reason") or result.get("note") or "").replace("|", "/"),
+                details=_markdown_details(result.get("details") or {}),
             )
         )
     lines.append("")
     lines.append("Standard-Benchmarks nutzen keine echten Provider-Calls und keine Netzsendung.")
     return "\n".join(lines) + "\n"
+
+
+def _markdown_details(details: dict[str, Any]) -> str:
+    if not details:
+        return ""
+    rendered = json.dumps(details, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    if len(rendered) > 220:
+        rendered = f"{rendered[:217]}..."
+    return rendered.replace("|", "/")
 
 
 def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> list[BenchmarkResult]:
@@ -253,12 +264,7 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
     with tempfile.TemporaryDirectory(prefix="teebotus-bench-library-") as tmp:
         root = Path(tmp)
         library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
-        library_dir.mkdir(parents=True)
-        for index in range(3):
-            (library_dir / f"therapie_{index}.txt").write_text(
-                f"Depression Therapie Aktivierung Schlaf Tagesstruktur Quelle {index}.",
-                encoding="utf-8",
-            )
+        _copy_benchmark_books(library_dir)
         store = BibliothekarStore("Bench", root / "instances")
         rebuild_ms = _timed_ms(store.rebuild)
         service = BibliothekarService(LocalBibliothekarBackend(store))
@@ -271,7 +277,12 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
             total_ms=rebuild_ms + sum(timings),
             payload_bytes=store.chunks_path.stat().st_size,
             index_bytes=store.index_path.stat().st_size,
-            details={"documents": len(index.get("documents", {})), "chunks": int(index.get("chunk_count") or 0), "median_query_ms": statistics.median(timings)},
+            details={
+                "fixture": "tests/fixtures/books",
+                "documents": len(index.get("documents", {})),
+                "chunks": int(index.get("chunk_count") or 0),
+                "median_query_ms": statistics.median(timings),
+            },
         )
 
 
@@ -279,12 +290,7 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
     with tempfile.TemporaryDirectory(prefix="teebotus-bench-haystack-") as tmp:
         root = Path(tmp)
         library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
-        library_dir.mkdir(parents=True)
-        for index in range(3):
-            (library_dir / f"therapie_{index}.txt").write_text(
-                f"Depression Therapie Aktivierung Schlaf Tagesstruktur Haystack Quelle {index}.",
-                encoding="utf-8",
-            )
+        _copy_benchmark_books(library_dir)
         document_store = _BenchmarkDocumentStore()
         backend = HaystackBibliothekarBackend(
             instance_name="Bench",
@@ -320,6 +326,7 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
             details={
                 "documents": len(index.get("documents", {})),
                 "chunks": int(index.get("chunk_count") or 0),
+                "fixture": "tests/fixtures/books",
                 "document_store_documents": len(document_store.documents),
                 "median_query_ms": statistics.median(timings),
             },
@@ -586,6 +593,18 @@ class _BenchmarkGraphFixture:
 
     def __exit__(self, *_args: Any) -> None:
         self._tmp.cleanup()
+
+
+def _copy_benchmark_books(destination: Path) -> None:
+    source = REPO_ROOT / "tests" / "fixtures" / "books"
+    if not source.exists():
+        raise FileNotFoundError(f"benchmark fixture directory is missing: {source}")
+    destination.mkdir(parents=True, exist_ok=True)
+    for path in source.rglob("*"):
+        if path.is_file():
+            target = destination / path.relative_to(source)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
 
 
 def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
