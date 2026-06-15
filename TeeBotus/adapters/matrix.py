@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import unescape
 from html.parser import HTMLParser
 from io import BytesIO
-from typing import Any
+from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import matrix_identity_key
 from TeeBotus.runtime.actions import (
@@ -21,7 +21,9 @@ from TeeBotus.runtime.actions import (
     UpdateSignalContact,
     UpdateSignalGroup,
 )
-from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
+
+MATRIX_LINK_PREVIEWS_KEY = "com.teebotus.link_previews"
 
 
 def matrix_message_to_event(
@@ -63,6 +65,7 @@ def matrix_message_to_event(
         message_ref=_matrix_message_ref(message),
         reply_to_text=reply_to_text,
         attachments=attachments,
+        link_previews=_matrix_link_previews(message),
         raw=message,
     )
 
@@ -78,6 +81,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
+                link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix text send"))
         elif isinstance(action, SendTyping):
@@ -97,6 +101,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 action.text,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
+                link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix edit send"))
         elif isinstance(action, SendPoll):
@@ -123,6 +128,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
                 view_once=action.view_once,
+                link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix attachment send"))
         elif isinstance(action, ExportFile):
@@ -150,10 +156,12 @@ async def _send_matrix_text(
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    link_preview: Any | None = None,
 ) -> Any:
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
-    if callable(send_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
+    previews = _matrix_link_preview_payloads(link_preview)
+    if callable(send_message) and not mentions and not previews and not _matrix_is_html_text_mode(text_mode):
         kwargs: dict[str, Any] = {"message_type": msgtype, "clean_mentions": True}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -163,6 +171,7 @@ async def _send_matrix_text(
     content = _matrix_text_content(msgtype, text, text_mode=text_mode)
     _add_matrix_reply_relation(content, reply_to_ref)
     _add_matrix_mentions(content, mentions or [])
+    _add_matrix_link_previews(content, previews)
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
@@ -237,6 +246,7 @@ async def _send_matrix_edit(
     *,
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    link_preview: Any | None = None,
 ) -> Any:
     target = str(event_id or "").strip()
     if not target:
@@ -244,7 +254,8 @@ async def _send_matrix_edit(
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
     room = _matrix_room_object(client, room_id) or room_id
-    if callable(edit_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
+    previews = _matrix_link_preview_payloads(link_preview)
+    if callable(edit_message) and not mentions and not previews and not _matrix_is_html_text_mode(text_mode):
         response = await edit_message(room, target, body, message_type="m.text", clean_mentions=True)
         _raise_matrix_event_response_error(response, "Matrix edit send")
         return response
@@ -263,6 +274,8 @@ async def _send_matrix_edit(
         content["formatted_body"] = f"* {new_content['formatted_body']}"
     _add_matrix_mentions(content, mentions or [])
     _add_matrix_mentions(content["m.new_content"], mentions or [])
+    _add_matrix_link_previews(content, previews)
+    _add_matrix_link_previews(content["m.new_content"], previews)
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
@@ -363,6 +376,7 @@ async def _send_matrix_file_or_error_notice(
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
     view_once: bool = False,
+    link_preview: Any | None = None,
 ) -> Any:
     try:
         return await _send_matrix_file(
@@ -376,6 +390,7 @@ async def _send_matrix_file_or_error_notice(
             mentions=mentions,
             text_mode=text_mode,
             view_once=view_once,
+            link_preview=link_preview,
         )
     except Exception as exc:
         return await _send_matrix_text(
@@ -399,13 +414,15 @@ async def _send_matrix_file(
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
     view_once: bool = False,
+    link_preview: Any | None = None,
 ) -> Any:
     if view_once:
         raise RuntimeError("Matrix view_once attachments are not supported")
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
     encrypt_upload = _matrix_room_is_encrypted(client, room_id)
-    if callable(send_message) and attachment is not None and not mentions and not _matrix_is_html_text_mode(text_mode) and not encrypt_upload:
+    previews = _matrix_link_preview_payloads(link_preview)
+    if callable(send_message) and attachment is not None and not mentions and not previews and not _matrix_is_html_text_mode(text_mode) and not encrypt_upload:
         kwargs: dict[str, Any] = {"file": attachment, "clean_mentions": True}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -444,6 +461,7 @@ async def _send_matrix_file(
         content["file"] = encrypted_file
     _add_matrix_reply_relation(content, reply_to_ref)
     _add_matrix_mentions(content, mentions or [])
+    _add_matrix_link_previews(content, previews)
     if caption and _matrix_is_html_text_mode(text_mode):
         _add_matrix_html_format(content, caption)
     response = await client.room_send(
@@ -497,6 +515,46 @@ def _add_matrix_mentions(content: dict[str, Any], mentions: list[dict[str, Any]]
                 break
     if user_ids:
         content["m.mentions"] = {"user_ids": user_ids}
+
+
+def _add_matrix_link_previews(content: dict[str, Any], previews: list[dict[str, str]]) -> None:
+    if previews:
+        content[MATRIX_LINK_PREVIEWS_KEY] = previews
+
+
+def _matrix_link_preview_payloads(link_preview: Any | None) -> list[dict[str, str]]:
+    if link_preview is None:
+        return []
+    values = link_preview if isinstance(link_preview, (list, tuple)) else [link_preview]
+    payloads: list[dict[str, str]] = []
+    for value in values:
+        payload = _matrix_link_preview_payload(value)
+        if payload:
+            payloads.append(payload)
+    return payloads
+
+
+def _matrix_link_preview_payload(value: Any) -> dict[str, str]:
+    if isinstance(value, Mapping):
+        source = value
+    else:
+        source = {
+            "title": getattr(value, "title", ""),
+            "url": getattr(value, "url", ""),
+            "description": getattr(value, "description", ""),
+            "base64_thumbnail": getattr(value, "base64_thumbnail", ""),
+            "id": getattr(value, "id", ""),
+        }
+    url = str(source.get("url") or "").strip()
+    title = str(source.get("title") or "").strip()
+    if not url and not title:
+        return {}
+    payload: dict[str, str] = {}
+    for key in ("title", "url", "description", "base64_thumbnail", "id"):
+        text = str(source.get(key) or "").strip()
+        if text:
+            payload[key] = text
+    return payload
 
 
 def _matrix_text_content(msgtype: str, text: str, *, text_mode: str = "") -> dict[str, Any]:
@@ -629,6 +687,31 @@ def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
             base64_data=url,
         ),
     )
+
+
+def _matrix_link_previews(message: Any) -> tuple[IncomingLinkPreview, ...]:
+    content = _matrix_effective_content(message)
+    raw_previews = content.get(MATRIX_LINK_PREVIEWS_KEY)
+    if isinstance(raw_previews, Mapping):
+        values = [raw_previews]
+    elif isinstance(raw_previews, list):
+        values = raw_previews
+    else:
+        values = []
+    previews: list[IncomingLinkPreview] = []
+    for raw_preview in values:
+        if not isinstance(raw_preview, Mapping):
+            continue
+        preview = IncomingLinkPreview(
+            title=str(raw_preview.get("title") or "").strip(),
+            url=str(raw_preview.get("url") or "").strip(),
+            description=str(raw_preview.get("description") or "").strip(),
+            base64_thumbnail=str(raw_preview.get("base64_thumbnail") or "").strip(),
+            id=str(raw_preview.get("id") or "").strip(),
+        )
+        if preview.title or preview.url:
+            previews.append(preview)
+    return tuple(previews)
 
 
 def _matrix_message_text_and_reply(message: Any) -> tuple[str, str | None]:

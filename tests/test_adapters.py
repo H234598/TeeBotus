@@ -1438,6 +1438,42 @@ def test_matrix_notice_message_maps_to_text_event():
     assert event.attachments == ()
 
 
+def test_matrix_message_maps_teebotus_link_preview_metadata():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$link"
+        sender = "@alice:example"
+        body = "Link"
+        source = {
+            "content": {
+                "msgtype": "m.text",
+                "body": "Link",
+                "com.teebotus.link_previews": [
+                    {
+                        "title": "TeeBotus",
+                        "url": "https://example.test/tee",
+                        "description": "Botlink",
+                        "base64_thumbnail": "aW1hZ2U=",
+                        "id": "preview-thumb",
+                    }
+                ],
+            }
+        }
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert len(event.link_previews) == 1
+    assert event.link_previews[0].title == "TeeBotus"
+    assert event.link_previews[0].url == "https://example.test/tee"
+    assert event.link_previews[0].description == "Botlink"
+    assert event.link_previews[0].base64_thumbnail == "aW1hZ2U="
+    assert event.link_previews[0].id == "preview-thumb"
+
+
 def test_matrix_emote_message_maps_to_text_event():
     class Room:
         room_id = "!room:example"
@@ -1841,6 +1877,58 @@ def test_matrix_send_text_with_mentions_uses_room_send_mentions_content():
             },
         }
     ]
+
+
+def test_matrix_send_text_preserves_link_preview_metadata():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used when link preview metadata is needed")
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendText(
+                    "!room:example",
+                    "Link",
+                    link_preview={
+                        "title": "TeeBotus",
+                        "url": "https://example.test/tee",
+                        "description": "Bot",
+                        "base64_thumbnail": "aW1hZ2U=",
+                        "id": "preview-thumb",
+                    },
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.calls[0]["content"] == {
+        "msgtype": "m.text",
+        "body": "Link",
+        "com.teebotus.link_previews": [
+            {
+                "title": "TeeBotus",
+                "url": "https://example.test/tee",
+                "description": "Bot",
+                "base64_thumbnail": "aW1hZ2U=",
+                "id": "preview-thumb",
+            }
+        ],
+    }
 
 
 def test_matrix_send_typing_uses_room_typing():
