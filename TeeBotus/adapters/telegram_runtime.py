@@ -2873,7 +2873,8 @@ def run_polling(
     message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
-    bibliothekar_store = BibliothekarService.local(instance, _resolve_instances_dir())
+    current_instructions = instruction_store.get()
+    bibliothekar_store = BibliothekarService.from_instructions(instance, _resolve_instances_dir(), current_instructions)
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
     runtime_context = build_telegram_runtime_context(
         api=api,

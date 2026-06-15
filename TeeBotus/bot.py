@@ -97,6 +97,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.core.status import account_memory_index_health_lines
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
+        from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
@@ -156,6 +157,22 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "ready" if health.ok else "unavailable"
         detail = f" engine={health.engine}" if health.ok else f" error={health.error}"
         print(f"local_transcription={health.instance_name} backend={health.backend} model={health.model} status={state}{detail}")
+    for instance in config.instances:
+        try:
+            instructions = InstructionStore(instance.instruction_path).get()
+        except Exception as exc:
+            print(f"bibliothekar={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            continue
+        health = check_bibliothekar_service(instance.instance_name, config.instances_dir, instructions)
+        detail = (
+            f"bibliothekar={health.instance_name} backend={health.backend} "
+            f"store={health.store or '<none>'} collection={health.collection or '<none>'} status={health.status}"
+        )
+        if health.documents or health.chunks:
+            detail += f" documents={health.documents} chunks={health.chunks}"
+        if health.error:
+            detail += f" error={health.error}"
+        print(detail)
     for instance_name in config.selected_instances:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
             print(line)

@@ -346,6 +346,8 @@ def queue_proactive_message(
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
     policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
+    if str(intent or "").strip() == "user_requested_reminder":
+        policy_item["user_requested_reminder"] = True
     decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=now, item=policy_item)
     if not decision.allowed:
         return decision
@@ -891,6 +893,11 @@ def proactive_policy_decision(
     if not risk_decision.allowed:
         return risk_decision
     resolved_now = now or datetime.now(timezone.utc)
+    route = select_proactive_route(account_store, account_id)
+    if route is None:
+        return ProactiveDecision(False, "no_private_route")
+    if isinstance(item, Mapping) and item.get("user_requested_reminder") is True:
+        return ProactiveDecision(True, "user_requested_reminder", route)
     hour = resolved_now.astimezone().hour
     start_hour, end_hour = state["policy"]["allowed_hours"]
     if not _hour_in_window(hour, start_hour, end_hour):
@@ -901,9 +908,6 @@ def proactive_policy_decision(
     min_interval = int(state["policy"].get("min_minutes_between_messages") or 0)
     if min_interval > 0 and _proactive_last_sent_within(account_store, account_id, resolved_now, timedelta(minutes=min_interval), exclude_item_id=exclude_item_id):
         return ProactiveDecision(False, "min_interval_not_elapsed")
-    route = select_proactive_route(account_store, account_id)
-    if route is None:
-        return ProactiveDecision(False, "no_private_route")
     adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
     if not adaptive_decision.allowed:
         return ProactiveDecision(False, adaptive_decision.reason)

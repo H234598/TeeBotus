@@ -8,7 +8,7 @@ from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
-from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend
+from TeeBotus.runtime.bibliothekar_service import BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -116,6 +116,23 @@ def test_bibliothekar_service_wraps_existing_local_store(tmp_path):
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
+def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
+    local = BibliothekarService.from_instructions(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="local"),
+    )
+    haystack = BibliothekarService.from_instructions(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="haystack", bibliothekar_collection="therapy_books"),
+    )
+
+    assert isinstance(local.backend, LocalBibliothekarBackend)
+    assert isinstance(haystack.backend, HaystackBibliothekarBackend)
+    assert haystack.collection == "therapy_books"
+
+
 def test_engine_bibliothekar_context_uses_service_search(tmp_path):
     class FakeBibliothekarService:
         calls = []
@@ -187,6 +204,29 @@ def test_bibliothekar_openai_settings_are_parsed():
     assert instructions.bibliothekar_max_prompt_chars == 2222
     assert instructions.bibliothekar_max_chunks == 2
     assert instructions.bibliothekar_max_quote_chars == 333
+
+
+def test_bibliothekar_section_settings_are_parsed():
+    instructions = parse_instructions(
+        """
+        ## Bibliothekar
+        - enabled: nein
+        - backend: qdrant
+        - collection: therapie_buecher
+        - max_prompt_chars: 2222
+        - max_chunks: 2
+        - max_quote_chars: 333
+        - require_citations: nein
+        """
+    )
+
+    assert instructions.bibliothekar_enabled is False
+    assert instructions.bibliothekar_backend == "haystack"
+    assert instructions.bibliothekar_collection == "therapie_buecher"
+    assert instructions.bibliothekar_max_prompt_chars == 2222
+    assert instructions.bibliothekar_max_chunks == 2
+    assert instructions.bibliothekar_max_quote_chars == 333
+    assert instructions.bibliothekar_require_citations is False
 
 
 def _write_docx(path, paragraphs):

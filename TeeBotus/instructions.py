@@ -170,9 +170,12 @@ class BotInstructions:
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
     bibliothekar_enabled: bool = True
+    bibliothekar_backend: str = "local"
+    bibliothekar_collection: str = "teebotus_books"
     bibliothekar_max_prompt_chars: int = 5000
     bibliothekar_max_chunks: int = 5
     bibliothekar_max_quote_chars: int = 900
+    bibliothekar_require_citations: bool = True
     openai_shared_prompt: str = ""
     openai_system_prompt: str = (
         "Du bist ein hilfreicher Telegram-Bot.\n"
@@ -364,6 +367,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_openai_setting(instructions, key, value)
         elif section == "llm":
             _apply_llm_setting(instructions, key, value)
+        elif section == "bibliothekar":
+            _apply_bibliothekar_setting(instructions, key, value)
         elif section == "codex":
             _apply_codex_setting(instructions, key, value)
         elif section == "proactive":
@@ -474,6 +479,9 @@ def _section_name(line: str) -> str:
         "ki": "llm",
         "text llm": "llm",
         "text-llm": "llm",
+        "bibliothekar": "bibliothekar",
+        "bibliothek": "bibliothekar",
+        "library": "bibliothekar",
         "befehle": "commands",
         "commands": "commands",
         "systemprompt": "system_prompt",
@@ -743,12 +751,36 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_reset = value
     elif normalized == "bibliothekar_enabled":
         instructions.bibliothekar_enabled = _parse_bool(value, default=instructions.bibliothekar_enabled)
+    elif normalized == "bibliothekar_backend":
+        instructions.bibliothekar_backend = _normalize_bibliothekar_backend(value, default=instructions.bibliothekar_backend)
+    elif normalized == "bibliothekar_collection":
+        instructions.bibliothekar_collection = value.strip() or instructions.bibliothekar_collection
     elif normalized == "bibliothekar_max_prompt_chars":
         instructions.bibliothekar_max_prompt_chars = _parse_required_int(value, default=instructions.bibliothekar_max_prompt_chars)
     elif normalized == "bibliothekar_max_chunks":
         instructions.bibliothekar_max_chunks = _parse_required_int(value, default=instructions.bibliothekar_max_chunks)
     elif normalized == "bibliothekar_max_quote_chars":
         instructions.bibliothekar_max_quote_chars = _parse_required_int(value, default=instructions.bibliothekar_max_quote_chars)
+    elif normalized == "bibliothekar_require_citations":
+        instructions.bibliothekar_require_citations = _parse_bool(value, default=instructions.bibliothekar_require_citations)
+
+
+def _apply_bibliothekar_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized == "enabled":
+        instructions.bibliothekar_enabled = _parse_bool(value, default=instructions.bibliothekar_enabled)
+    elif normalized == "backend":
+        instructions.bibliothekar_backend = _normalize_bibliothekar_backend(value, default=instructions.bibliothekar_backend)
+    elif normalized == "collection":
+        instructions.bibliothekar_collection = value.strip() or instructions.bibliothekar_collection
+    elif normalized == "max_prompt_chars":
+        instructions.bibliothekar_max_prompt_chars = _parse_required_int(value, default=instructions.bibliothekar_max_prompt_chars)
+    elif normalized == "max_chunks":
+        instructions.bibliothekar_max_chunks = _parse_required_int(value, default=instructions.bibliothekar_max_chunks)
+    elif normalized == "max_quote_chars":
+        instructions.bibliothekar_max_quote_chars = _parse_required_int(value, default=instructions.bibliothekar_max_quote_chars)
+    elif normalized == "require_citations":
+        instructions.bibliothekar_require_citations = _parse_bool(value, default=instructions.bibliothekar_require_citations)
 
 
 def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) -> None:
@@ -787,6 +819,15 @@ def _normalize_transcription_backend(value: str, *, default: str = "openai") -> 
         return "openai"
     if normalized in {"local", "lokal", "whisper", "faster_whisper", "fasterwhisper"}:
         return "local"
+    return default
+
+
+def _normalize_bibliothekar_backend(value: str, *, default: str = "local") -> str:
+    normalized = _normalize_key(value)
+    if normalized in {"", "local", "lokal", "legacy", "json"}:
+        return "local"
+    if normalized in {"haystack", "qdrant", "haystack_qdrant"}:
+        return "haystack"
     return default
 
 

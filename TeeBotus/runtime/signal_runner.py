@@ -105,7 +105,11 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             temperature=run_config.llm_temperature,
         )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
-        self.bibliothekar_store = BibliothekarService.local(run_config.instance_name, self.instances_dir)
+        self.bibliothekar_store = BibliothekarService.from_instructions(
+            run_config.instance_name,
+            self.instances_dir,
+            self.instruction_store.get(),
+        )
         self.youtube_job_runner = YouTubeTranscriptionJobRunner()
         self.engine = TeeBotusEngine(
             self.account_store,
