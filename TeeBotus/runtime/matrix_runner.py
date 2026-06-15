@@ -159,7 +159,7 @@ class MatrixRuntimeBridge:
                 should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll)) and action.track
             if not should_track:
                 continue
-            self.message_tracker.record(
+            self._record_sent_ref(
                 SentMessageRef(
                     channel="matrix",
                     instance_name=event.instance,
@@ -167,7 +167,8 @@ class MatrixRuntimeBridge:
                     chat_id=event.chat_id,
                     message_ref=str(sent_ref),
                     ref_kind="matrix_event_id",
-                )
+                ),
+                context="action",
             )
 
     async def _send_memory_error(self, event: IncomingEvent) -> None:
@@ -204,7 +205,7 @@ class MatrixRuntimeBridge:
             sent_ref = sent_refs[0] if sent_refs else None
             if not action.track or sent_ref is None:
                 continue
-            self.message_tracker.record(
+            self._record_sent_ref(
                 SentMessageRef(
                     channel="matrix",
                     instance_name=self.run_config.instance_name,
@@ -212,7 +213,8 @@ class MatrixRuntimeBridge:
                     chat_id=chat_id,
                     message_ref=str(sent_ref),
                     ref_kind="matrix_event_id",
-                )
+                ),
+                context="linked_identity",
             )
 
     def _dispatch_background_actions(self, event: IncomingEvent, actions: list[Any]) -> None:
@@ -242,7 +244,7 @@ class MatrixRuntimeBridge:
         should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
         if not should_track:
             return
-        self.message_tracker.record(
+        self._record_sent_ref(
             SentMessageRef(
                 channel="matrix",
                 instance_name=event.instance,
@@ -250,8 +252,21 @@ class MatrixRuntimeBridge:
                 chat_id=event.chat_id,
                 message_ref=str(sent_ref),
                 ref_kind="matrix_event_id",
-            )
+            ),
+            context="background",
         )
+
+    def _record_sent_ref(self, ref: SentMessageRef, *, context: str) -> None:
+        try:
+            self.message_tracker.record(ref)
+        except Exception:
+            LOGGER.exception(
+                "Matrix sent message tracking failed instance=%s room_id=%s event_id=%s context=%s.",
+                ref.instance_name,
+                ref.chat_id,
+                ref.message_ref,
+                context,
+            )
 
     async def _delete_tracked_messages(self, event: Any, actions: list[Any]) -> None:
         for action in actions:

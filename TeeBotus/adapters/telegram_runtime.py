@@ -972,7 +972,8 @@ def _dispatch_modern_telegram_actions(
         should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
         if not should_track:
             continue
-        message_tracker.record(
+        _record_telegram_sent_ref(
+            message_tracker,
             SentMessageRef(
                 channel="telegram",
                 instance_name=event.instance,
@@ -980,7 +981,8 @@ def _dispatch_modern_telegram_actions(
                 chat_id=event.chat_id,
                 message_ref=str(sent_ref),
                 ref_kind="telegram_message_id",
-            )
+            ),
+            context="action",
         )
 
 
@@ -1013,7 +1015,8 @@ def _notify_telegram_linked_identities(
             continue
         if sent_ref is None or not action.track:
             continue
-        message_tracker.record(
+        _record_telegram_sent_ref(
+            message_tracker,
             SentMessageRef(
                 channel="telegram",
                 instance_name=instance_name,
@@ -1021,7 +1024,21 @@ def _notify_telegram_linked_identities(
                 chat_id=chat_id,
                 message_ref=str(sent_ref),
                 ref_kind="telegram_message_id",
-            )
+            ),
+            context="linked_identity",
+        )
+
+
+def _record_telegram_sent_ref(message_tracker: MessageTracker, ref: SentMessageRef, *, context: str) -> None:
+    try:
+        message_tracker.record(ref)
+    except Exception:
+        LOGGER.exception(
+            "Telegram sent message tracking failed instance=%s chat_id=%s message_id=%s context=%s.",
+            ref.instance_name,
+            ref.chat_id,
+            ref.message_ref,
+            context,
         )
 
 

@@ -189,6 +189,31 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
 
 
+def test_signal_command_logs_sent_message_tracking_errors(tmp_path, caplog) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.message_tracker.record = lambda _ref: (_ for _ in ()).throw(OSError("tracker refused"))  # type: ignore[method-assign]
+    command.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+    context = FakeSignalContext()
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        asyncio.run(command.handle(context))
+
+    assert context.sent
+    assert "Signal sent message tracking failed" in caplog.text
+
+
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:
     secret_provider = StaticSecretProvider(b"x" * 32)
     command = TeeBotusSignalCommand(

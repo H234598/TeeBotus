@@ -191,7 +191,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll)) and action.track
                 if not should_track:
                     continue
-                self.message_tracker.record(
+                self._record_sent_ref(
                     SentMessageRef(
                         channel="signal",
                         instance_name=event.instance,
@@ -199,7 +199,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                         chat_id=event.chat_id,
                         message_ref=str(sent_ref),
                         ref_kind="signal_timestamp",
-                    )
+                    ),
+                    context="action",
                 )
         finally:
             await self._delete_local_attachments(context)
@@ -241,7 +242,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 message_ref = str(_signal_required_timestamp(sent_ref, "Signal linked identity notification"))
             except RuntimeError:
                 continue
-            self.message_tracker.record(
+            self._record_sent_ref(
                 SentMessageRef(
                     channel="signal",
                     instance_name=self.run_config.instance_name,
@@ -249,7 +250,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     chat_id=receiver,
                     message_ref=message_ref,
                     ref_kind="signal_timestamp",
-                )
+                ),
+                context="linked_identity",
             )
 
     def _dispatch_background_actions(self, event: Any, actions: list[Any]) -> None:
@@ -285,7 +287,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             message_ref = str(_signal_required_timestamp(sent_ref, "Signal background dispatch"))
         except RuntimeError:
             return
-        self.message_tracker.record(
+        self._record_sent_ref(
             SentMessageRef(
                 channel="signal",
                 instance_name=event.instance,
@@ -293,8 +295,21 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 chat_id=event.chat_id,
                 message_ref=message_ref,
                 ref_kind="signal_timestamp",
-            )
+            ),
+            context="background",
         )
+
+    def _record_sent_ref(self, ref: SentMessageRef, *, context: str) -> None:
+        try:
+            self.message_tracker.record(ref)
+        except Exception:
+            LOGGER.exception(
+                "Signal sent message tracking failed instance=%s recipient=%s message_ref=%s context=%s.",
+                ref.instance_name,
+                ref.chat_id,
+                ref.message_ref,
+                context,
+            )
 
     async def _delete_tracked_messages(self, context: Any, event: Any, actions: list[Any]) -> None:
         for action in actions:
