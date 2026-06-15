@@ -47,6 +47,10 @@ PROACTIVE_UNSAFE_TEXT_PATTERNS = (
     re.compile(r"\bdu\s+musst\s+(?:sofort|jetzt|unbedingt)\b"),
     re.compile(r"\b(?:wenn\s+du\s+das\s+nicht\s+(?:sofort|jetzt)\s+tust|sonst\s+(?:wird|passiert))\b"),
     re.compile(r"\b(?:akute|lebensgefahr|notfall)\b.{0,80}\b(?:du\s+musst|sofort|jetzt)\b"),
+    re.compile(r"\bdu\s+(?:erinnerst\s+dich|weisst|weißt)\s+(?:nur\s+)?(?:noch\s+)?nicht\b"),
+    re.compile(r"\bdu\s+hast\s+(?:das|es|etwas)(?:\s+(?:bestimmt|sicher|offensichtlich))?\s+verdraengt\b"),
+    re.compile(r"\b(?:bestimmt|sicher|offensichtlich)\s+(?:ist|war)\s+dir\s+damals\b"),
+    re.compile(r"\b(?:deine\s+)?(?:verdraengte|verdrängte)\s+erinnerung(?:en)?\b"),
 )
 PROACTIVE_LLM_PLAN_SCHEMA_VERSION = 1
 PROACTIVE_LLM_MAX_DECISIONS = 5
