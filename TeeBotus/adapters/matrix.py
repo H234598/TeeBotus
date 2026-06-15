@@ -243,8 +243,8 @@ async def _send_matrix_edit(
         raise RuntimeError("Matrix edit requires a message_ref")
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
-    room = _matrix_room_object(client, room_id)
-    if callable(edit_message) and room is not None and not mentions and not _matrix_is_html_text_mode(text_mode):
+    room = _matrix_room_object(client, room_id) or room_id
+    if callable(edit_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
         response = await edit_message(room, target, body, message_type="m.text", clean_mentions=True)
         _raise_matrix_event_response_error(response, "Matrix edit send")
         return response

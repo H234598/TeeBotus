@@ -2061,7 +2061,7 @@ def test_matrix_send_edit_prefers_niobot_edit_message_without_mentions():
     assert client.calls == [(client.rooms["!room:example"], "$old", "korrigiert", {"message_type": "m.text", "clean_mentions": True})]
 
 
-def test_matrix_send_edit_falls_back_when_niobot_room_is_unknown():
+def test_matrix_send_edit_uses_niobot_edit_message_with_room_id_when_room_is_unknown():
     class Response:
         event_id = "$edit"
 
@@ -2069,30 +2069,19 @@ def test_matrix_send_edit_falls_back_when_niobot_room_is_unknown():
         def __init__(self) -> None:
             self.calls = []
 
-        async def edit_message(self, *_args, **_kwargs):
-            raise AssertionError("edit_message needs a MatrixRoom object with nio-bot 1.0.2.post1")
+        async def edit_message(self, room, event_id, content, **kwargs):
+            self.calls.append((room, event_id, content, kwargs))
+            return Response()
 
         async def room_send(self, **kwargs):
-            self.calls.append(kwargs)
-            return Response()
+            raise AssertionError("room_send should not be used when edit_message accepts a room_id")
 
     client = Client()
 
     sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
 
     assert sent == ["$edit"]
-    assert client.calls == [
-        {
-            "room_id": "!room:example",
-            "message_type": "m.room.message",
-            "content": {
-                "msgtype": "m.text",
-                "body": "* korrigiert",
-                "m.new_content": {"msgtype": "m.text", "body": "korrigiert"},
-                "m.relates_to": {"rel_type": "m.replace", "event_id": "$old"},
-            },
-        }
-    ]
+    assert client.calls == [("!room:example", "$old", "korrigiert", {"message_type": "m.text", "clean_mentions": True})]
 
 
 def test_matrix_send_edit_preserves_mentions_in_replacement_content():
