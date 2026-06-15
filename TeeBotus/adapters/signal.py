@@ -117,6 +117,9 @@ async def _send_signal_text(
     base64_attachments: list[str] | None = None,
     reply_to_ref: str = "",
 ) -> int:
+    if _signal_can_use_context_reply(context, reply_to_ref):
+        reply = getattr(context, "reply", None)
+        return await reply(text, base64_attachments=base64_attachments)
     quote = _signal_quote_kwargs_for_context(context, reply_to_ref)
     if quote:
         bot = getattr(context, "bot", None)
@@ -126,6 +129,15 @@ async def _send_signal_text(
         if callable(send) and recipient:
             return await send(recipient, text, base64_attachments=base64_attachments, **quote)
     return await context.send(text, base64_attachments=base64_attachments)
+
+
+def _signal_can_use_context_reply(context: Any, reply_to_ref: str) -> bool:
+    ref = str(reply_to_ref or "").strip()
+    if not ref:
+        return False
+    message = getattr(context, "message", None)
+    timestamp = str(getattr(message, "timestamp", "") or "").strip()
+    return bool(timestamp and timestamp == ref and callable(getattr(context, "reply", None)))
 
 
 def _signal_quote_kwargs_for_context(context: Any, reply_to_ref: str) -> dict[str, Any]:

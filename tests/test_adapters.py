@@ -199,6 +199,73 @@ def test_signal_send_text_can_quote_current_message_with_bot_send():
     ]
 
 
+def test_signal_send_text_prefers_context_reply_for_current_message():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(text="Original", timestamp="123")
+            self.reply_calls = []
+            self.send_calls = []
+
+        async def reply(self, text, **kwargs):
+            self.reply_calls.append((text, kwargs))
+            return 789
+
+        async def send(self, text, **kwargs):
+            self.send_calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Antwort", reply_to_ref="123")]))
+
+    assert sent == [789]
+    assert context.reply_calls == [("Antwort", {"base64_attachments": None})]
+    assert context.send_calls == []
+
+
+def test_signal_send_text_keeps_manual_quote_for_edit_target_timestamp():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(text="Bearbeitet", timestamp="200", type=MessageType.EDIT_MESSAGE)
+            self.message.target_sent_timestamp = 100
+            self.reply_calls = []
+
+        async def reply(self, text, **kwargs):
+            self.reply_calls.append((text, kwargs))
+            return 789
+
+        async def send(self, text, **kwargs):
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Antwort", reply_to_ref="100")]))
+
+    assert sent == [456]
+    assert context.reply_calls == []
+    assert context.bot.calls == [
+        (
+            "+491",
+            "Antwort",
+            {
+                "base64_attachments": None,
+                "quote_author": "+491",
+                "quote_message": "Bearbeitet",
+                "quote_timestamp": 100,
+            },
+        )
+    ]
+
+
 def test_signal_send_text_falls_back_without_matching_quote_context():
     class Context:
         def __init__(self) -> None:
