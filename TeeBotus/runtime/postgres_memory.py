@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ POSTGRES_BACKEND_ENV = "TEEBOTUS_ACCOUNT_MEMORY_BACKEND"
 POSTGRES_DSN_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN"
 POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT"
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
+LOGGER = logging.getLogger("TeeBotus")
 
 
 @dataclass(frozen=True)
@@ -70,7 +72,29 @@ class PostgresAccountMemoryBackend:
                 """,
                 (self.instance_name, account_id),
             ).fetchall()
-        return [self._decrypt_json(account_id, str(row[0]), bytes(row[1]), bytes(row[2])) for row in rows]
+        entries: list[dict[str, Any]] = []
+        skipped = 0
+        first_skipped_id = ""
+        first_error = ""
+        for row in rows:
+            memory_id = str(row[0])
+            try:
+                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+            except AccountStoreError as exc:
+                skipped += 1
+                if not first_skipped_id:
+                    first_skipped_id = memory_id
+                    first_error = str(exc)
+        if skipped:
+            LOGGER.critical(
+                "PostgreSQL account-memory skipped corrupt rows instance=%s account=%s skipped=%s first_memory_id=%s error=%s",
+                self.instance_name,
+                account_id,
+                skipped,
+                first_skipped_id,
+                first_error,
+            )
+        return entries
 
     def write_entries(self, account_id: str, rows: Iterable[dict[str, Any]]) -> None:
         self._ensure_schema()
@@ -101,7 +125,16 @@ class PostgresAccountMemoryBackend:
             ).fetchone()
         if row is None:
             return {}
-        return self._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
+        try:
+            return self._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
+        except AccountStoreError as exc:
+            LOGGER.critical(
+                "PostgreSQL account-memory index could not be decrypted and was ignored instance=%s account=%s error=%s",
+                self.instance_name,
+                account_id,
+                exc,
+            )
+            return {}
 
     def write_index(self, account_id: str, data: dict[str, Any]) -> None:
         self._ensure_schema()

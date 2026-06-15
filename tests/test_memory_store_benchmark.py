@@ -101,3 +101,78 @@ def test_postgres_backend_inserts_keywords_with_cursor_executemany() -> None:
 
     assert len(connection.executed) == 1
     assert connection.cursor_obj.batches == [[("Bench", "a" * 128, "spaziergang", "mem_1"), ("Bench", "a" * 128, "kaffee", "mem_1")]]
+
+
+def test_postgres_backend_skips_corrupt_rows_like_sqlite(monkeypatch, caplog) -> None:
+    class FakeResult:
+        def fetchall(self):
+            return [("mem_ok", b"nonce", b"cipher"), ("mem_bad", b"nonce", b"cipher")]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str, _params: tuple) -> FakeResult:
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: FakeConnection())
+
+    def fake_decrypt(_account_id: str, memory_id: str, _nonce: bytes, _ciphertext: bytes) -> dict[str, str]:
+        if memory_id == "mem_bad":
+            raise AccountStoreError("broken row")
+        return {"id": memory_id}
+
+    monkeypatch.setattr(backend, "_decrypt_json", fake_decrypt)
+
+    with caplog.at_level("CRITICAL", logger="TeeBotus"):
+        entries = backend.read_entries("a" * 128)
+
+    assert entries == [{"id": "mem_ok"}]
+    assert "PostgreSQL account-memory skipped corrupt rows" in caplog.text
+    assert "first_memory_id=mem_bad" in caplog.text
+
+
+def test_postgres_backend_ignores_corrupt_index_like_sqlite(monkeypatch, caplog) -> None:
+    class FakeResult:
+        def fetchone(self):
+            return (b"nonce", b"cipher")
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str, _params: tuple) -> FakeResult:
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: FakeConnection())
+    monkeypatch.setattr(
+        backend,
+        "_decrypt_json",
+        lambda *_args: (_ for _ in ()).throw(AccountStoreError("broken index")),
+    )
+
+    with caplog.at_level("CRITICAL", logger="TeeBotus"):
+        index = backend.read_index("a" * 128)
+
+    assert index == {}
+    assert "PostgreSQL account-memory index could not be decrypted and was ignored" in caplog.text
