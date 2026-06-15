@@ -223,7 +223,18 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
     enriched: list[Any] = []
     for action in actions:
         if isinstance(action, SendText) and action.chat_id == event.chat_id and not action.reply_to_ref:
-            enriched.append(SendText(action.chat_id, action.text, track=action.track, reply_to_ref=reply_to_ref))
+            enriched.append(
+                SendText(
+                    action.chat_id,
+                    action.text,
+                    track=action.track,
+                    reply_to_ref=reply_to_ref,
+                    mentions=action.mentions,
+                    text_mode=action.text_mode,
+                    view_once=action.view_once,
+                    link_preview=action.link_preview,
+                )
+            )
         elif isinstance(action, SendAttachment) and action.chat_id == event.chat_id and not action.reply_to_ref:
             enriched.append(
                 SendAttachment(
@@ -234,6 +245,10 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
                     caption=action.caption,
                     track=action.track,
                     reply_to_ref=reply_to_ref,
+                    mentions=action.mentions,
+                    text_mode=action.text_mode,
+                    view_once=action.view_once,
+                    link_preview=action.link_preview,
                 )
             )
         elif isinstance(action, ExportFile) and action.chat_id == event.chat_id and not action.reply_to_ref:

@@ -61,7 +61,13 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     sent: list[str | None] = []
     for action in actions:
         if isinstance(action, SendText):
-            response = await _send_matrix_text(client, action.chat_id, action.text, reply_to_ref=action.reply_to_ref)
+            response = await _send_matrix_text(
+                client,
+                action.chat_id,
+                action.text,
+                reply_to_ref=action.reply_to_ref,
+                mentions=list(action.mentions),
+            )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
@@ -111,10 +117,18 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     return sent
 
 
-async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: bool = False, reply_to_ref: str = "") -> Any:
+async def _send_matrix_text(
+    client: Any,
+    room_id: str,
+    text: str,
+    *,
+    notice: bool = False,
+    reply_to_ref: str = "",
+    mentions: list[dict[str, Any]] | None = None,
+) -> Any:
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
-    if callable(send_message):
+    if callable(send_message) and not mentions:
         kwargs: dict[str, Any] = {"message_type": msgtype}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -123,6 +137,7 @@ async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: boo
         return response
     content = {"msgtype": msgtype, "body": text}
     _add_matrix_reply_relation(content, reply_to_ref)
+    _add_matrix_mentions(content, mentions or [])
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
@@ -369,6 +384,18 @@ def _add_matrix_reply_relation(content: dict[str, Any], reply_to_ref: str) -> No
     if not event_id:
         return
     content["m.relates_to"] = {"m.in_reply_to": {"event_id": event_id}}
+
+
+def _add_matrix_mentions(content: dict[str, Any], mentions: list[dict[str, Any]]) -> None:
+    user_ids: list[str] = []
+    for mention in mentions:
+        for key in ("user_id", "mxid", "matrix_user_id", "author"):
+            value = str(mention.get(key) or "").strip()
+            if value.startswith("@") and ":" in value and value not in user_ids:
+                user_ids.append(value)
+                break
+    if user_ids:
+        content["m.mentions"] = {"user_ids": user_ids}
 
 
 def _matrix_room_is_private(room: Any) -> bool:

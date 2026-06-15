@@ -430,6 +430,52 @@ def test_signal_edit_to_other_chat_uses_bot_edit_timestamp():
     assert context.bot.calls == [("+492", "extern korrigiert", {"edit_timestamp": 555})]
 
 
+def test_signal_edit_passes_signalbot_send_options():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+            self.edits = []
+
+        async def edit(self, text, edit_timestamp, **kwargs):
+            self.edits.append((text, edit_timestamp, kwargs))
+            return 456
+
+    context = Context()
+    mentions = ({"author": "ada-uuid", "start": 6, "length": 4},)
+    link_preview = object()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [
+                SendEdit(
+                    "+491",
+                    "123",
+                    "Hallo @ada",
+                    mentions=mentions,
+                    text_mode="styled",
+                    view_once=True,
+                    link_preview=link_preview,
+                )
+            ],
+        )
+    )
+
+    assert sent == [456]
+    assert context.edits == [
+        (
+            "Hallo @ada",
+            123,
+            {
+                "mentions": list(mentions),
+                "text_mode": "styled",
+                "view_once": True,
+                "link_preview": link_preview,
+            },
+        )
+    ]
+
+
 def test_signal_edit_rejects_non_numeric_message_ref():
     class Context:
         message = FakeSignalMessage(source="+491", timestamp="123")
@@ -665,6 +711,51 @@ def test_signal_send_text_to_other_chat_uses_bot_send():
     assert context.bot.calls == [("+492", "Direktnachricht", {"base64_attachments": None})]
 
 
+def test_signal_send_text_passes_signalbot_send_options():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491")
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+    mentions = ({"author": "ada-uuid", "start": 6, "length": 4},)
+    link_preview = object()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [
+                SendText(
+                    "+491",
+                    "Hallo @ada",
+                    mentions=mentions,
+                    text_mode="styled",
+                    view_once=True,
+                    link_preview=link_preview,
+                )
+            ],
+        )
+    )
+
+    assert sent == [123]
+    assert context.calls == [
+        (
+            "Hallo @ada",
+            {
+                "base64_attachments": None,
+                "mentions": list(mentions),
+                "text_mode": "styled",
+                "view_once": True,
+                "link_preview": link_preview,
+            },
+        )
+    ]
+
+
 def test_signal_send_attachment_uses_filename_when_caption_is_empty():
     class Context:
         def __init__(self) -> None:
@@ -708,6 +799,47 @@ def test_signal_send_attachment_to_other_chat_uses_bot_send():
     assert sent == [456]
     assert context.context_calls == []
     assert context.bot.calls == [("+492", "voice.ogg", {"base64_attachments": ["aGVsbG8="]})]
+
+
+def test_signal_send_attachment_passes_signalbot_send_options():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [
+                SendAttachment(
+                    "+491",
+                    b"hello",
+                    "photo.jpg",
+                    "image/jpeg",
+                    caption="Bild",
+                    text_mode="styled",
+                    view_once=True,
+                )
+            ],
+        )
+    )
+
+    assert sent == [123]
+    assert context.calls == [
+        (
+            "Bild",
+            {
+                "base64_attachments": ["aGVsbG8="],
+                "text_mode": "styled",
+                "view_once": True,
+            },
+        )
+    ]
 
 
 def test_signal_export_file_uses_caption_when_present():
@@ -1162,6 +1294,50 @@ def test_matrix_send_text_fallback_can_reply_with_relates_to():
         "body": "hi",
         "m.relates_to": {"m.in_reply_to": {"event_id": "$old"}},
     }
+
+
+def test_matrix_send_text_with_mentions_uses_room_send_mentions_content():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used when m.mentions are needed")
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendText(
+                    "!room:example",
+                    "hi @alice",
+                    mentions=({"user_id": "@alice:example"}, {"author": "not-a-matrix-id"}),
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": "hi @alice",
+                "m.mentions": {"user_ids": ["@alice:example"]},
+            },
+        }
+    ]
 
 
 def test_matrix_send_typing_uses_room_typing():

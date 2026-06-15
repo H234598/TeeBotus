@@ -94,7 +94,18 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
     try:
         for action in actions:
             if isinstance(action, SendText):
-                sent.append(await _send_signal_text(context, action.text, chat_id=action.chat_id, reply_to_ref=action.reply_to_ref))
+                sent.append(
+                    await _send_signal_text(
+                        context,
+                        action.text,
+                        chat_id=action.chat_id,
+                        reply_to_ref=action.reply_to_ref,
+                        mentions=list(action.mentions) or None,
+                        text_mode=action.text_mode,
+                        view_once=action.view_once,
+                        link_preview=action.link_preview,
+                    )
+                )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendTyping):
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
@@ -107,7 +118,18 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 await _send_signal_receipt(context, action.chat_id, action.message_ref, action.receipt_type)
                 sent.append(None)
             elif isinstance(action, SendEdit):
-                sent.append(await _send_signal_edit(context, action.chat_id, action.message_ref, action.text))
+                sent.append(
+                    await _send_signal_edit(
+                        context,
+                        action.chat_id,
+                        action.message_ref,
+                        action.text,
+                        mentions=list(action.mentions) or None,
+                        text_mode=action.text_mode,
+                        view_once=action.view_once,
+                        link_preview=action.link_preview,
+                    )
+                )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendPoll):
                 sent.append(
@@ -129,6 +151,10 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                         chat_id=action.chat_id,
                         base64_attachments=[encoded],
                         reply_to_ref=action.reply_to_ref,
+                        mentions=list(action.mentions) or None,
+                        text_mode=action.text_mode,
+                        view_once=action.view_once,
+                        link_preview=action.link_preview,
                     )
                 )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
@@ -161,7 +187,19 @@ async def _send_signal_text(
     chat_id: str = "",
     base64_attachments: list[str] | None = None,
     reply_to_ref: str = "",
+    mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
+    view_once: bool = False,
+    link_preview: Any | None = None,
 ) -> int:
+    send_kwargs = _signal_send_kwargs(
+        base64_attachments=base64_attachments,
+        include_base64_attachments=True,
+        mentions=mentions,
+        text_mode=text_mode,
+        view_once=view_once,
+        link_preview=link_preview,
+    )
     target = str(chat_id or "").strip()
     current_recipient = _signal_context_recipient(context)
     if target and current_recipient and target != current_recipient:
@@ -169,10 +207,10 @@ async def _send_signal_text(
         send = getattr(bot, "send", None)
         if not callable(send):
             raise RuntimeError(f"SignalBot.send is required to send to {target}")
-        return await send(target, text, base64_attachments=base64_attachments)
+        return await send(target, text, **send_kwargs)
     if _signal_can_use_context_reply(context, reply_to_ref):
         reply = getattr(context, "reply", None)
-        return await reply(text, base64_attachments=base64_attachments)
+        return await reply(text, **send_kwargs)
     quote = _signal_quote_kwargs_for_context(context, reply_to_ref)
     if quote:
         bot = getattr(context, "bot", None)
@@ -180,8 +218,8 @@ async def _send_signal_text(
         message = getattr(context, "message", None)
         recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
         if callable(send) and recipient:
-            return await send(recipient, text, base64_attachments=base64_attachments, **quote)
-    return await context.send(text, base64_attachments=base64_attachments)
+            return await send(recipient, text, **send_kwargs, **quote)
+    return await context.send(text, **send_kwargs)
 
 
 def _signal_context_recipient(context: Any) -> str:
@@ -240,25 +278,43 @@ async def _send_signal_receipt(context: Any, chat_id: str, message_ref: str, rec
     raise RuntimeError("SignalBot receipt API is required to send a receipt")
 
 
-async def _send_signal_edit(context: Any, chat_id: str, message_ref: str, text: str) -> int:
+async def _send_signal_edit(
+    context: Any,
+    chat_id: str,
+    message_ref: str,
+    text: str,
+    *,
+    mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
+    view_once: bool = False,
+    link_preview: Any | None = None,
+) -> int:
     target = str(chat_id or "").strip()
     current_recipient = _signal_context_recipient(context)
     timestamp = _signal_edit_timestamp(message_ref)
+    send_kwargs = _signal_send_kwargs(
+        base64_attachments=None,
+        include_base64_attachments=False,
+        mentions=mentions,
+        text_mode=text_mode,
+        view_once=view_once,
+        link_preview=link_preview,
+    )
     if target and current_recipient and target != current_recipient:
         bot = getattr(context, "bot", None)
         send = getattr(bot, "send", None)
         if not callable(send):
             raise RuntimeError(f"SignalBot.send is required to edit in {target}")
-        return await send(target, text, edit_timestamp=timestamp)
+        return await send(target, text, **send_kwargs, edit_timestamp=timestamp)
     current_ref = _signal_message_ref(getattr(context, "message", None))
     edit = getattr(context, "edit", None)
     if callable(edit) and current_ref and current_ref == str(message_ref or "").strip():
-        return await edit(text, timestamp)
+        return await edit(text, timestamp, **send_kwargs)
     bot = getattr(context, "bot", None)
     send = getattr(bot, "send", None)
     recipient = current_recipient or target
     if callable(send) and recipient:
-        return await send(recipient, text, edit_timestamp=timestamp)
+        return await send(recipient, text, **send_kwargs, edit_timestamp=timestamp)
     raise RuntimeError("SignalBot edit API is required to edit a message")
 
 
@@ -270,6 +326,29 @@ def _signal_edit_timestamp(message_ref: str) -> int:
         return int(ref)
     except ValueError as exc:
         raise RuntimeError("Signal edit requires a numeric message_ref") from exc
+
+
+def _signal_send_kwargs(
+    *,
+    base64_attachments: list[str] | None,
+    include_base64_attachments: bool,
+    mentions: list[dict[str, Any]] | None,
+    text_mode: str,
+    view_once: bool,
+    link_preview: Any | None,
+) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    if include_base64_attachments or base64_attachments is not None:
+        kwargs["base64_attachments"] = base64_attachments
+    if mentions:
+        kwargs["mentions"] = mentions
+    if text_mode:
+        kwargs["text_mode"] = text_mode
+    if view_once:
+        kwargs["view_once"] = True
+    if link_preview is not None:
+        kwargs["link_preview"] = link_preview
+    return kwargs
 
 
 async def _send_signal_poll(

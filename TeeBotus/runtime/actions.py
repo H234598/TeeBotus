@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -10,6 +10,10 @@ class SendText:
     text: str
     track: bool = True
     reply_to_ref: str = ""
+    mentions: tuple[dict[str, Any], ...] = ()
+    text_mode: str = ""
+    view_once: bool = False
+    link_preview: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -21,6 +25,10 @@ class SendAttachment:
     caption: str = ""
     track: bool = True
     reply_to_ref: str = ""
+    mentions: tuple[dict[str, Any], ...] = ()
+    text_mode: str = ""
+    view_once: bool = False
+    link_preview: Any | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +62,10 @@ class SendEdit:
     message_ref: str
     text: str
     track: bool = False
+    mentions: tuple[dict[str, Any], ...] = ()
+    text_mode: str = ""
+    view_once: bool = False
+    link_preview: Any | None = None
 
 
 @dataclass(frozen=True)
