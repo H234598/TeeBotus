@@ -6,7 +6,7 @@ import asyncio
 from signalbot.message import MessageType
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
-from TeeBotus.adapters.signal import signal_message_to_event
+from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
 from TeeBotus.runtime.actions import ExportFile, SendText, SendTyping
 
@@ -55,6 +55,56 @@ def test_signal_non_content_message_types_are_ignored():
         )
 
         assert event is None
+
+
+def test_signal_typing_is_stopped_after_followup_send():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def start_typing(self) -> None:
+            self.calls.append("start_typing")
+
+        async def stop_typing(self) -> None:
+            self.calls.append("stop_typing")
+
+        async def send(self, text, **_kwargs):
+            self.calls.append(("send", text))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendTyping("+491"), SendText("+491", "hi")]))
+
+    assert sent == [None, 123]
+    assert context.calls == ["start_typing", ("send", "hi"), "stop_typing"]
+
+
+def test_signal_typing_is_stopped_when_send_fails():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def start_typing(self) -> None:
+            self.calls.append("start_typing")
+
+        async def stop_typing(self) -> None:
+            self.calls.append("stop_typing")
+
+        async def send(self, _text, **_kwargs):
+            self.calls.append("send")
+            raise OSError("send refused")
+
+    context = Context()
+
+    try:
+        asyncio.run(send_signal_actions(context, [SendTyping("+491"), SendText("+491", "hi")]))
+    except OSError as exc:
+        assert "send refused" in str(exc)
+    else:
+        raise AssertionError("OSError was not raised")
+
+    assert context.calls == ["start_typing", "send", "stop_typing"]
 
 
 def test_telegram_message_without_chat_id_is_rejected():

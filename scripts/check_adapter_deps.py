@@ -136,7 +136,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         from signalbot.context import Context  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
-    missing = [name for name in ("send", "start_typing", "remote_delete") if not hasattr(Context, name)]
+    missing = [name for name in ("send", "start_typing", "stop_typing", "remote_delete") if not hasattr(Context, name)]
     if missing:
         return False, f"signalbot Context missing required API: {', '.join(missing)}"
     send_params = inspect.signature(Context.send).parameters
@@ -148,7 +148,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=send,start_typing,remote_delete"
+    return True, "signalbot Context contract=ok methods=send,start_typing,stop_typing,remote_delete"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:

@@ -250,6 +250,7 @@ def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, 
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", lambda _config: ())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_account_thread", lambda *, account, instances_dir: FakeThread(account.slot))
     monkeypatch.setattr(
         "TeeBotus.runtime.signal_runner.run_signal_account",
@@ -347,6 +348,7 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)
 
@@ -422,6 +424,7 @@ def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_pa
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)
 

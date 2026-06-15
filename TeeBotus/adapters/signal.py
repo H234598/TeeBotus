@@ -67,24 +67,44 @@ def signal_context_to_event(
 
 async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | None]:
     sent: list[int | None] = []
-    for action in actions:
-        if isinstance(action, SendText):
-            sent.append(await context.send(action.text))
-        elif isinstance(action, SendTyping):
-            await context.start_typing()
-            sent.append(None)
-        elif isinstance(action, SendAttachment):
-            encoded = base64.b64encode(action.data).decode("ascii")
-            sent.append(await context.send(action.caption, base64_attachments=[encoded]))
-        elif isinstance(action, NotifyLinkedIdentity):
-            # Needs identity-to-context routing in the production runtime.
-            sent.append(None)
-        elif isinstance(action, DeleteTrackedMessages):
-            sent.append(None)
-        elif isinstance(action, ExportFile):
-            encoded = base64.b64encode(action.data).decode("ascii")
-            sent.append(await context.send(f"Export: {action.filename}", base64_attachments=[encoded]))
+    typing_started = False
+    try:
+        for action in actions:
+            if isinstance(action, SendText):
+                sent.append(await context.send(action.text))
+                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+            elif isinstance(action, SendTyping):
+                await context.start_typing()
+                typing_started = True
+                sent.append(None)
+            elif isinstance(action, SendAttachment):
+                encoded = base64.b64encode(action.data).decode("ascii")
+                sent.append(await context.send(action.caption, base64_attachments=[encoded]))
+                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+            elif isinstance(action, NotifyLinkedIdentity):
+                sent.append(None)
+            elif isinstance(action, DeleteTrackedMessages):
+                sent.append(None)
+            elif isinstance(action, ExportFile):
+                encoded = base64.b64encode(action.data).decode("ascii")
+                sent.append(await context.send(f"Export: {action.filename}", base64_attachments=[encoded]))
+                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+    finally:
+        if typing_started:
+            await _stop_signal_typing_if_started(context, typing_started)
     return sent
+
+
+async def _stop_signal_typing_if_started(context: Any, typing_started: bool) -> bool:
+    if not typing_started:
+        return False
+    stop_typing = getattr(context, "stop_typing", None)
+    if callable(stop_typing):
+        try:
+            await stop_typing()
+        except Exception:
+            pass
+    return False
 
 
 def _signal_attachment_name(index: int, names: list[Any]) -> str:
