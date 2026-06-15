@@ -74,12 +74,16 @@ def _index(args: argparse.Namespace) -> int:
     instances_dir = Path(args.instances_dir)
     rows = []
     for instance_name in _resolve_instances(instances_dir, args.instance):
+        instructions = _load_instructions(instances_dir, instance_name)
         if args.source:
-            index = _index_source(instance_name, instances_dir, Path(args.source), dry_run=args.dry_run)
+            index = _index_source(instance_name, instances_dir, Path(args.source), dry_run=args.dry_run, instructions=instructions)
             library_dir = str(Path(args.source))
         else:
             store = BibliothekarStore(instance_name, instances_dir)
-            index = _dry_run_index(store) if args.dry_run else store.rebuild()
+            if args.dry_run:
+                index = _dry_run_index(store)
+            else:
+                index = BibliothekarService.from_instructions(instance_name, instances_dir, instructions).rebuild()
             library_dir = str(store.library_dir)
         rows.append(
             {
@@ -123,7 +127,7 @@ def _query(args: argparse.Namespace) -> int:
     return 0
 
 
-def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_run: bool) -> dict[str, Any]:
+def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_run: bool, instructions: BotInstructions) -> dict[str, Any]:
     if not source.exists():
         raise SystemExit(f"source does not exist: {source}")
     if not dry_run:
@@ -139,7 +143,7 @@ def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_
             destination = store.library_dir / source.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-        return store.rebuild()
+        return BibliothekarService.from_instructions(instance_name, instances_dir, instructions).rebuild()
     with tempfile.TemporaryDirectory(prefix="teebotus-bibliothekar-") as tmp:
         tmp_instances = Path(tmp) / "instances"
         tmp_library = tmp_instances / instance_name / "data" / "Bibliothek"

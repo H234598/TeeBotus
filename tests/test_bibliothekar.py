@@ -9,7 +9,7 @@ from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegr
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
-from TeeBotus.runtime.bibliothekar_service import BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend
+from TeeBotus.runtime.bibliothekar_service import BibliothekarQuery, BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -132,6 +132,77 @@ def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
     assert isinstance(local.backend, LocalBibliothekarBackend)
     assert isinstance(haystack.backend, HaystackBibliothekarBackend)
     assert haystack.collection == "therapy_books"
+
+
+def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    index = backend.rebuild()
+    selection = backend.search(
+        BibliothekarQuery(
+            text="Therapie Schlaf",
+            max_chunks=1,
+            max_prompt_chars=5000,
+            max_quote_chars=300,
+        )
+    )
+    payload = json.loads(selection.prompt_text)
+
+    assert index["chunk_count"] == 1
+    assert len(document_store.documents) == 1
+    assert selection.selected_ids == (document_store.documents[0].id,)
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
+
+
+def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+        document_store_factory=lambda: BrokenDocumentStore(),
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
+def test_bibliothekar_service_rebuild_delegates_to_backend(tmp_path):
+    class FakeBackend:
+        backend_name = "fake"
+
+        def __init__(self):
+            self.rebuilt = False
+
+        def search(self, _query):
+            return SimpleSelection("")
+
+        def rebuild(self):
+            self.rebuilt = True
+            return {"chunk_count": 2}
+
+    backend = FakeBackend()
+    service = BibliothekarService(backend)
+
+    assert service.rebuild() == {"chunk_count": 2}
+    assert backend.rebuilt is True
 
 
 def test_engine_bibliothekar_context_uses_service_search(tmp_path):
@@ -274,3 +345,29 @@ def _write_epub(path, body):
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("mimetype", "application/epub+zip")
         archive.writestr("OPS/chapter.xhtml", body)
+
+
+class FakeDocument:
+    def __init__(self, *, content, meta, id=None):
+        self.content = content
+        self.meta = meta
+        self.id = id or meta.get("chunk_id", "")
+
+
+class FakeDocumentStore:
+    def __init__(self):
+        self.documents = []
+
+    def write_documents(self, documents, **_kwargs):
+        by_id = {document.id: document for document in self.documents}
+        for document in documents:
+            by_id[document.id] = document
+        self.documents = list(by_id.values())
+
+    def filter_documents(self, **_kwargs):
+        return list(self.documents)
+
+
+class BrokenDocumentStore:
+    def filter_documents(self, **_kwargs):
+        raise RuntimeError("qdrant unavailable")
