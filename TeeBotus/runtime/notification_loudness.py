@@ -9,7 +9,8 @@ from TeeBotus.runtime.events import IncomingEvent
 
 NOTIFICATION_LOUDNESS_SYSTEM_ITEM = "notification_loudness"
 NOTIFICATION_LOUDNESS_INTENT = "notification_loudness_check"
-NOTIFICATION_LOUDNESS_INTERVAL = timedelta(hours=12)
+NOTIFICATION_LOUDNESS_ONLINE_WINDOW = timedelta(minutes=5)
+NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -53,8 +54,7 @@ def maybe_notification_loudness_prompt_action(
     if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
         return None
     resolved_now = now or datetime.now(timezone.utc)
-    next_check = _parse_datetime(str(route_state.get("next_check_at") or ""))
-    if next_check is not None and next_check > resolved_now:
+    if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
         account_store.write_agent_state(account_id, state)
         return None
     _mark_notification_loudness_prompted(route_state, event, resolved_now)
@@ -83,8 +83,8 @@ def queue_due_notification_loudness_prompts(
             continue
         if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
             continue
-        next_check = _parse_datetime(str(route_state.get("next_check_at") or ""))
-        if next_check is not None and next_check > resolved_now:
+        _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
+        if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=True):
             continue
         route = route_state.get("route")
         if not _private_route(route):
@@ -228,6 +228,7 @@ def _ensure_route_state(state: dict[str, Any], event: IncomingEvent) -> dict[str
     route_state.setdefault("status", "unknown")
     route_state["route_key"] = route_key
     route_state["route"] = _event_route(event)
+    route_state["identity_key"] = event.identity_key
     return route_state
 
 
@@ -240,8 +241,21 @@ def _mark_route_state_prompted(route_state: dict[str, Any], now: datetime) -> No
     timestamp = now.isoformat(timespec="seconds")
     route_state["status"] = "pending"
     route_state["last_prompt_at"] = timestamp
-    route_state["next_check_at"] = (now + NOTIFICATION_LOUDNESS_INTERVAL).isoformat(timespec="seconds")
+    route_state.pop("next_check_at", None)
     route_state["updated_at"] = timestamp
+    prompts_by_date = route_state.setdefault("prompted_windows_by_date", {})
+    if not isinstance(prompts_by_date, dict):
+        prompts_by_date = {}
+        route_state["prompted_windows_by_date"] = prompts_by_date
+    date_key = _wake_date_key(now)
+    windows = prompts_by_date.setdefault(date_key, [])
+    if not isinstance(windows, list):
+        windows = []
+        prompts_by_date[date_key] = windows
+    window = _wake_window_label(now)
+    if window and window not in windows:
+        windows.append(window)
+    _trim_prompted_window_dates(prompts_by_date)
 
 
 def _cancel_queued_notification_loudness_items(account_store: AccountStore, account_id: str, event: IncomingEvent) -> None:
@@ -312,6 +326,88 @@ def _route_slot(value: Any) -> int:
         return int(value or 1)
     except (TypeError, ValueError):
         return 1
+
+
+def _refresh_route_state_from_account_routes(account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]) -> None:
+    identity_key = str(route_state.get("identity_key") or "").strip()
+    candidate_keys = [identity_key] if identity_key else []
+    try:
+        candidate_keys.extend(identity for identity in account_store.list_identities_for_account(account_id) if identity not in candidate_keys)
+    except Exception:
+        pass
+    for candidate in candidate_keys:
+        route = account_store.get_identity_route(candidate)
+        if not _private_route(route):
+            continue
+        if _route_key_from_route(route) != route_key:
+            continue
+        route_state["identity_key"] = candidate
+        route_state["route"] = route
+        return
+
+
+def _route_key_from_route(route: Mapping[str, Any]) -> str:
+    return f"{route.get('channel')}:{_route_slot(route.get('adapter_slot'))}:{route.get('chat_id')}"
+
+
+def _notification_loudness_prompt_allowed(route_state: Mapping[str, Any], now: datetime, *, require_online: bool) -> bool:
+    if _wake_window_label(now) == "":
+        return False
+    if _already_prompted_in_wake_window(route_state, now):
+        return False
+    if require_online:
+        route = route_state.get("route")
+        if not isinstance(route, Mapping) or not _route_recently_seen(route, now):
+            return False
+    return True
+
+
+def _already_prompted_in_wake_window(route_state: Mapping[str, Any], now: datetime) -> bool:
+    prompts_by_date = route_state.get("prompted_windows_by_date")
+    if not isinstance(prompts_by_date, Mapping):
+        return False
+    windows = prompts_by_date.get(_wake_date_key(now))
+    if not isinstance(windows, list):
+        return False
+    return _wake_window_label(now) in {str(window) for window in windows}
+
+
+def _wake_date_key(now: datetime) -> str:
+    return now.astimezone().date().isoformat()
+
+
+def _wake_window_label(now: datetime) -> str:
+    local = now.astimezone()
+    start_hour, end_hour = NOTIFICATION_LOUDNESS_WAKE_HOURS
+    if not _hour_in_window(local.hour, start_hour, end_hour):
+        return ""
+    midpoint = start_hour + ((end_hour - start_hour) % 24) / 2
+    if start_hour < end_hour:
+        return "first" if local.hour + local.minute / 60 < midpoint else "second"
+    hour_value = local.hour + local.minute / 60
+    normalized = hour_value if hour_value >= start_hour else hour_value + 24
+    return "first" if normalized < midpoint else "second"
+
+
+def _hour_in_window(hour: int, start_hour: int, end_hour: int) -> bool:
+    if start_hour == end_hour:
+        return True
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour
+
+
+def _route_recently_seen(route: Mapping[str, Any], now: datetime) -> bool:
+    last_seen = _parse_datetime(str(route.get("last_seen_at") or ""))
+    if last_seen is None:
+        return False
+    age = now - last_seen
+    return timedelta(0) <= age <= NOTIFICATION_LOUDNESS_ONLINE_WINDOW
+
+
+def _trim_prompted_window_dates(prompts_by_date: dict[str, Any]) -> None:
+    for date_key in sorted(prompts_by_date)[:-14]:
+        prompts_by_date.pop(date_key, None)
 
 
 def _parse_datetime(value: str) -> datetime | None:

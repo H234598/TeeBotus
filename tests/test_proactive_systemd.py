@@ -10,7 +10,7 @@ def test_render_proactive_systemd_unit_defaults_to_tool_planner(tmp_path) -> Non
         repo_root=tmp_path,
         instances_dir="instances",
         instance_name="Depressionsbot",
-        interval="15min",
+        interval="5min",
     )
 
     assert unit.service_name == "teebotus-proactive-depressionsbot.service"
@@ -20,7 +20,7 @@ def test_render_proactive_systemd_unit_defaults_to_tool_planner(tmp_path) -> Non
     assert "teebotus-proactive" in unit.service_text
     assert "--dispatch --plan --tool-plan" in unit.service_text
     assert "--llm-plan" not in unit.service_text
-    assert "OnUnitActiveSec=15min" in unit.timer_text
+    assert "OnUnitActiveSec=5min" in unit.timer_text
     assert "Persistent=true" in unit.timer_text
 
 
@@ -60,7 +60,7 @@ def test_render_proactive_systemd_unit_rejects_multiple_planners(tmp_path) -> No
             repo_root=tmp_path,
             instances_dir="instances",
             instance_name="Depressionsbot",
-            interval="15min",
+            interval="5min",
             tool_plan=True,
             llm_plan=True,
         )

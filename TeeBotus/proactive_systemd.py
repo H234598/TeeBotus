@@ -22,7 +22,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to teebotus-proactive.")
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
-    parser.add_argument("--interval", default="15min", help="systemd OnUnitActiveSec interval.")
+    parser.add_argument("--interval", default="5min", help="systemd OnUnitActiveSec interval.")
     planner_group = parser.add_mutually_exclusive_group()
     planner_group.add_argument(
         "--llm-plan",
@@ -149,7 +149,7 @@ def _systemd_instance_token(instance_name: str) -> str:
 def _systemd_interval(value: str) -> str:
     text = str(value or "").strip()
     if not text:
-        return "15min"
+        return "5min"
     if any(char.isspace() for char in text):
         raise ValueError("systemd interval must not contain whitespace")
     return text
