@@ -65,6 +65,8 @@ class TeeBotusSignalCommand:
             adapter_slot=self.run_config.slot,
             account_label=self.run_config.label,
         )
+        if event is None:
+            return
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         event = event.with_account(account_id)
         actions = self.engine.process(event)

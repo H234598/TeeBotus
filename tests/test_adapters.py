@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import asyncio
+from signalbot.message import MessageType
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import signal_message_to_event
@@ -20,6 +21,7 @@ class FakeSignalMessage:
     group: str = ""
     attachments_local_filenames: list[str] | None = None
     base64_attachments: list[str] | None = None
+    type: object = MessageType.DATA_MESSAGE
 
     def recipient(self) -> str:
         return self.source
@@ -35,6 +37,24 @@ def test_signal_attachments_without_local_filename_get_stable_fallback_name():
     assert len(event.attachments) == 1
     assert event.attachments[0].filename == "signal-attachment-1.bin"
     assert event.attachments[0].data == b"hello"
+
+
+def test_signal_non_content_message_types_are_ignored():
+    for message_type in (
+        MessageType.CONTACT_SYNC_MESSAGE,
+        MessageType.DELETE_MESSAGE,
+        MessageType.GROUP_UPDATE_MESSAGE,
+        MessageType.REACTION_MESSAGE,
+        MessageType.READ_MESSAGE,
+        MessageType.SYNC_MESSAGE,
+    ):
+        event = signal_message_to_event(
+            FakeSignalMessage(type=message_type, text="/account"),
+            instance="Bot",
+            adapter_slot=1,
+        )
+
+        assert event is None
 
 
 def test_telegram_message_without_chat_id_is_rejected():

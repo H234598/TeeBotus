@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from signalbot.message import MessageType
+
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.actions import ExportFile
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
@@ -27,6 +29,7 @@ class FakeSignalMessage:
     group = ""
     attachments_local_filenames = []
     base64_attachments = []
+    type = MessageType.DATA_MESSAGE
 
     def recipient(self) -> str:
         return self.source
@@ -70,6 +73,29 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_command_ignores_non_content_message_types(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.type = MessageType.REACTION_MESSAGE
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == []
+    assert command.account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
 
 
 def test_signal_cleanup_deletes_tracked_current_chat_messages(tmp_path) -> None:

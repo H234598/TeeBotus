@@ -15,7 +15,9 @@ def signal_message_to_event(
     adapter_slot: int,
     account_id: str = "",
     account_label: str = "signal:1",
-) -> IncomingEvent:
+) -> IncomingEvent | None:
+    if not _signal_message_has_user_content(message):
+        return None
     identity_key = signal_identity_key(
         source_uuid=str(getattr(message, "source_uuid", "") or ""),
         source_number=str(getattr(message, "source_number", "") or ""),
@@ -59,7 +61,7 @@ def signal_context_to_event(
     instance_name: str,
     adapter_slot: int,
     account_label: str,
-) -> IncomingEvent:
+) -> IncomingEvent | None:
     return signal_message_to_event(context.message, instance=instance_name, adapter_slot=adapter_slot, account_id="", account_label=account_label)
 
 
@@ -113,3 +115,22 @@ def _guess_content_type(filename: str) -> str:
     if lower.endswith(".m4a"):
         return "audio/mp4"
     return "application/octet-stream"
+
+
+def _signal_message_has_user_content(message: Any) -> bool:
+    message_type = getattr(message, "type", None)
+    type_name = getattr(message_type, "name", "")
+    if type_name in {
+        "CONTACT_SYNC_MESSAGE",
+        "DELETE_MESSAGE",
+        "GROUP_UPDATE_MESSAGE",
+        "REACTION_MESSAGE",
+        "READ_MESSAGE",
+        "SYNC_MESSAGE",
+    }:
+        return False
+    return bool(
+        str(getattr(message, "text", "") or "")
+        or (getattr(message, "base64_attachments", None) or [])
+        or (getattr(message, "attachments_local_filenames", None) or [])
+    )
