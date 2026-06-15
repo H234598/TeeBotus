@@ -11,7 +11,7 @@ from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
-from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendText, SendTyping, OutgoingAction
+from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
 
@@ -31,9 +31,9 @@ class EngineResult:
 class TeeBotusEngine:
     """Channel-neutral first stage engine for account/registration and built-in commands.
 
-    Telegram still owns the broader OpenAI/voice/YouTube stack. Signal and Matrix use
-    this engine as their channel-neutral baseline so configured simple replies and
-    identity-critical commands share the same behavior.
+    Telegram still owns the broader YouTube and memory stack. Signal and Matrix use
+    this engine as their channel-neutral baseline so configured replies, OpenAI
+    text/voice handling, and identity-critical commands share the same behavior.
     """
 
     def __init__(
@@ -80,6 +80,8 @@ class TeeBotusEngine:
         if command == "/reset":
             self.state.reset_previous_response_id(event.instance, result.account_id)
             return [SendText(event.chat_id, self._current_instructions().openai_reset)]
+        if command == "/voice":
+            return self._voice_actions(event, self._current_instructions())
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
             return []
         instructions = self._current_instructions()
@@ -318,6 +320,35 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
 
+    def _voice_actions(self, event: IncomingEvent, instructions: BotInstructions) -> list[OutgoingAction]:
+        if not instructions.openai_voice_enabled:
+            return [SendText(event.chat_id, instructions.openai_voice_error)]
+        if self.openai_client is None:
+            return [SendText(event.chat_id, instructions.openai_missing_key)]
+        create_voice = getattr(self.openai_client, "create_voice", None)
+        if not callable(create_voice):
+            return [SendText(event.chat_id, instructions.openai_voice_error)]
+        voice_text = _extract_voice_text(event)
+        if not voice_text:
+            return [SendText(event.chat_id, instructions.openai_voice_usage)]
+        if len(voice_text) > instructions.openai_voice_max_input_chars:
+            return [
+                SendText(
+                    event.chat_id,
+                    instructions.openai_voice_too_long.format(max_chars=instructions.openai_voice_max_input_chars),
+                )
+            ]
+        try:
+            voice = create_voice(voice_text, instructions)
+        except OpenAIAPIError:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]
+        audio = getattr(voice, "audio", b"")
+        if not isinstance(audio, bytes) or not audio:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]
+        filename = str(getattr(voice, "filename", "") or "voice.ogg")
+        content_type = str(getattr(voice, "content_type", "") or "audio/ogg")
+        return [SendTyping(event.chat_id), SendAttachment(event.chat_id, audio, filename, content_type)]
+
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
         summary = self.account_store.account_summary(account_id)
         for identity_key in summary.get("linked_identities", []):
@@ -464,6 +495,13 @@ def _build_attachment_context(event: IncomingEvent, openai_client: object, instr
         elif _is_audio_attachment(filename, content_type):
             lines.append("  Transkript: <keine Audiodaten verfuegbar>")
     return "\n".join(lines)
+
+
+def _extract_voice_text(event: IncomingEvent) -> str:
+    parts = str(event.text or "").strip().split(maxsplit=1)
+    if len(parts) == 2 and parts[1].strip():
+        return parts[1].strip()
+    return str(event.reply_to_text or "").strip()
 
 
 def _is_audio_attachment(filename: str, content_type: str) -> bool:

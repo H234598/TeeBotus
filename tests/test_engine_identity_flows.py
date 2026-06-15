@@ -6,7 +6,7 @@ from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, SendTyping
+from TeeBotus.runtime.actions import DeleteTrackedMessages, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -297,6 +297,130 @@ def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path)
 
     assert len(actions) == 1
     assert actions[0].text == "Key fehlt."
+
+
+def test_engine_voice_command_sends_generated_attachment(tmp_path):
+    class FakeVoice:
+        audio = b"voice-bytes"
+        filename = "voice.opus"
+        content_type = "audio/ogg"
+
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.voice_texts: list[str] = []
+
+        def create_voice(self, text, _instructions):
+            self.voice_texts.append(text)
+            return FakeVoice()
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice Hallo Welt", channel="signal"))
+
+    assert client.voice_texts == ["Hallo Welt"]
+    assert isinstance(actions[0], SendTyping)
+    assert isinstance(actions[1], SendAttachment)
+    assert actions[1].data == b"voice-bytes"
+    assert actions[1].filename == "voice.opus"
+    assert actions[1].content_type == "audio/ogg"
+
+
+def test_engine_voice_command_uses_reply_text(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.voice_texts: list[str] = []
+
+        def create_voice(self, text, _instructions):
+            self.voice_texts.append(text)
+            return type("Voice", (), {"audio": b"voice", "filename": "voice.ogg", "content_type": "audio/ogg"})()
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client)
+    incoming = event(telegram_identity_key(1), "/voice", channel="matrix")
+    incoming = IncomingEvent(
+        event_id=incoming.event_id,
+        instance=incoming.instance,
+        channel=incoming.channel,
+        adapter_slot=incoming.adapter_slot,
+        account_id=incoming.account_id,
+        identity_key=incoming.identity_key,
+        chat_id=incoming.chat_id,
+        chat_type=incoming.chat_type,
+        sender_id=incoming.sender_id,
+        sender_name=incoming.sender_name,
+        sender_username=incoming.sender_username,
+        sender_number=incoming.sender_number,
+        text=incoming.text,
+        message_ref=incoming.message_ref,
+        reply_to_text="Aus Reply",
+    )
+
+    actions = engine.process(incoming)
+
+    assert client.voice_texts == ["Aus Reply"]
+    assert isinstance(actions[1], SendAttachment)
+
+
+def test_engine_voice_command_requires_openai_client(tmp_path):
+    instructions = BotInstructions(openai_missing_key="Key fehlt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice Hallo"))
+
+    assert actions[0].text == "Key fehlt."
+
+
+def test_engine_voice_command_requires_text(tmp_path):
+    class FakeOpenAIClient:
+        def create_voice(self, _text, _instructions):
+            raise AssertionError("create_voice must not be called")
+
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=FakeOpenAIClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice"))
+
+    assert actions[0].text == "Nutzung: /voice Text fuer die Sprachnachricht"
+
+
+def test_engine_voice_command_respects_disabled_voice(tmp_path):
+    class FakeOpenAIClient:
+        def create_voice(self, _text, _instructions):
+            raise AssertionError("create_voice must not be called")
+
+    instructions = BotInstructions(openai_voice_enabled=False, openai_voice_error="Voice aus.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice Hallo"))
+
+    assert actions[0].text == "Voice aus."
+
+
+def test_engine_voice_command_rejects_too_long_text(tmp_path):
+    class FakeOpenAIClient:
+        def create_voice(self, _text, _instructions):
+            raise AssertionError("create_voice must not be called")
+
+    instructions = BotInstructions(openai_voice_max_input_chars=5)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice zu lang"))
+
+    assert actions[0].text == "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: 5 Zeichen."
+
+
+def test_engine_voice_command_reports_openai_error(tmp_path):
+    class FakeOpenAIClient:
+        def create_voice(self, _text, _instructions):
+            raise OpenAIAPIError("boom")
+
+    instructions = BotInstructions(openai_voice_error="Voice kaputt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice Hallo"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "Voice kaputt."
 
 
 def test_account_edit_sets_pending_flow(tmp_path):
