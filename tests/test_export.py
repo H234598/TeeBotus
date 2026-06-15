@@ -105,7 +105,10 @@ def test_pdf_falls_back_when_weasyprint_render_fails(monkeypatch, tmp_path):
     assert result.content_type == "text/markdown"
 
 
-def test_export_from_store_decrypts_structured_memory(tmp_path):
+def test_export_from_store_decrypts_structured_memory(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
     store = AccountStore(tmp_path / "accounts", "Bot", StaticSecretProvider(b"f" * 32))
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     store.write_memory_index(account_id, {"topic": "encrypted tea"})

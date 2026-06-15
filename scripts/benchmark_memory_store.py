@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
+from TeeBotus.runtime.accounts import AccountStoreError  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Storage backend candidate to benchmark.",
     )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument("--postgres-dsn", default="", help="Override TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN for PostgreSQL benchmark runs.")
+    parser.add_argument("--require-postgres", action="store_true", help="Fail when PostgreSQL benchmark cannot run.")
     args = parser.parse_args(argv)
     if args.entries < 1:
         parser.error("--entries must be >= 1")
@@ -44,16 +47,23 @@ def main(argv: list[str] | None = None) -> int:
     elif args.backend == "sqlite":
         result = benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs)
     elif args.backend == "postgres":
-        result = benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs)
+        result = benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs, dsn=args.postgres_dsn)
     else:
         result = {
             "backend": "comparison",
             "results": [
                 benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs),
                 benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs),
-                benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs),
+                benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs, dsn=args.postgres_dsn),
             ],
         }
+    if args.require_postgres and _postgres_skipped(result):
+        if args.json:
+            print(json.dumps(result, indent=2, sort_keys=True))
+        else:
+            for item in result.get("results", [result]):
+                _print_result(item)
+        return 2
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     else:
@@ -165,10 +175,11 @@ def benchmark_sqlite_row_encrypted_projection(*, entries: int, select_runs: int)
         }
 
 
-def benchmark_postgres_backend(*, entries: int, select_runs: int) -> dict[str, Any]:
+def benchmark_postgres_backend(*, entries: int, select_runs: int, dsn: str = "") -> dict[str, Any]:
     from TeeBotus.runtime.postgres_memory import POSTGRES_BACKEND_ENV, POSTGRES_DSN_ENV
 
-    if not os.environ.get(POSTGRES_DSN_ENV):
+    resolved_dsn = str(dsn or os.environ.get(POSTGRES_DSN_ENV) or "").strip()
+    if not resolved_dsn:
         return {
             "backend": "postgres-row-encrypted-memory",
             "entries": entries,
@@ -176,7 +187,9 @@ def benchmark_postgres_backend(*, entries: int, select_runs: int) -> dict[str, A
             "reason": f"{POSTGRES_DSN_ENV} is not set",
         }
     previous_backend = os.environ.get(POSTGRES_BACKEND_ENV)
+    previous_dsn = os.environ.get(POSTGRES_DSN_ENV)
     os.environ[POSTGRES_BACKEND_ENV] = "postgres"
+    os.environ[POSTGRES_DSN_ENV] = resolved_dsn
     try:
         root = Path(tempfile.mkdtemp(prefix="teebotus-memory-postgres-bench-"))
         store = AccountStore(root / "accounts", f"Bench_{os.getpid()}_{time.time_ns()}", StaticSecretProvider(b"b" * 32))
@@ -226,11 +239,22 @@ def benchmark_postgres_backend(*, entries: int, select_runs: int) -> dict[str, A
             "payload_encryption": "AES-256-GCM-per-row",
             "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
         }
+    except AccountStoreError as exc:
+        return {
+            "backend": "postgres-row-encrypted-memory",
+            "entries": entries,
+            "skipped": True,
+            "reason": str(exc),
+        }
     finally:
         if previous_backend is None:
             os.environ.pop(POSTGRES_BACKEND_ENV, None)
         else:
             os.environ[POSTGRES_BACKEND_ENV] = previous_backend
+        if previous_dsn is None:
+            os.environ.pop(POSTGRES_DSN_ENV, None)
+        else:
+            os.environ[POSTGRES_DSN_ENV] = previous_dsn
 
 
 def _init_sqlite_projection(connection: sqlite3.Connection) -> None:
@@ -334,6 +358,13 @@ def _p95(values: list[float]) -> float:
     if len(values) < 2:
         return values[0]
     return statistics.quantiles(values, n=20, method="inclusive")[18]
+
+
+def _postgres_skipped(result: dict[str, Any]) -> bool:
+    items = result.get("results")
+    if isinstance(items, list):
+        return any(isinstance(item, dict) and item.get("backend") == "postgres-row-encrypted-memory" and item.get("skipped") for item in items)
+    return result.get("backend") == "postgres-row-encrypted-memory" and bool(result.get("skipped"))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 
 import pytest
 
 from TeeBotus.runtime.accounts import (
+    ACCOUNT_MEMORY_KEY_PURPOSE,
     AccountStore,
     AccountStoreError,
     StaticSecretProvider,
@@ -13,6 +15,7 @@ from TeeBotus.runtime.accounts import (
     signal_identity_key,
     telegram_identity_key,
 )
+from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 HEX_128 = re.compile(r"^[0-9a-f]{128}$")
 
@@ -461,6 +464,84 @@ def test_structured_account_memory_v2_has_no_default_entry_store_limit(tmp_path)
     assert memory_index["index"]["retention"]["entry_store_limit"] is None
     assert memory_index["index"]["retention"]["storage_backend"] == "encrypted-jsonl-plus-json-index"
     assert memory_index["index"]["retention"]["next_backend_candidate"] == "sqlite-row-encrypted-projection"
+
+
+def test_account_store_sqlite_backend_stores_memory_outside_json_files(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    memory_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_sqlite",
+            "kind": "observation",
+            "memory_type": "episodic",
+            "user_text": "Mond SQLite geheim",
+            "bot_text": "Notiert.",
+            "keywords": ["mond", "sqlite"],
+        },
+    )
+
+    assert memory_id == "mem_sqlite"
+    entries = store.read_memory_entries(account_id)
+    index = store.read_memory_index(account_id)
+    assert entries[0]["id"] == "mem_sqlite"
+    assert index["index"]["entries"]["mem_sqlite"]["kind"] == "observation"
+    account_dir = store.account_dir(account_id)
+    assert not (account_dir / "User_Memory_Entries.jsonl").exists()
+    assert not (account_dir / "User_Memory_Index.json").exists()
+    raw_db = sqlite_path.read_bytes()
+    assert b"Mond SQLite geheim" not in raw_db
+
+
+def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_path, monkeypatch, caplog):
+    provider_instance = provider()
+    fallback_path = tmp_path / "fallback.sqlite3"
+    fallback_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider_instance,
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=fallback_path, fallback_path=None),
+    )
+    account_id = "a" * 128
+    fallback_backend.write_entries(account_id, [{"id": "mem_backup", "user_text": "Backup"}])
+    fallback_backend.write_index(account_id, {"index": {"entries": {"mem_backup": {}}}})
+    broken_primary_path = tmp_path / "broken-primary.sqlite3"
+    broken_primary_path.mkdir()
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(broken_primary_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider_instance)
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        entries = store.read_memory_entries(account_id)
+
+    assert entries == [{"id": "mem_backup", "user_text": "Backup"}]
+    assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+
+
+def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(account_id, [{"id": "mem_ok", "user_text": "ok"}])
+    import sqlite3
+
+    con = sqlite3.connect(sqlite_path)
+    with con:
+        con.execute("update memory_entries set payload_ciphertext = ? where memory_id = ?", (b"broken", "mem_ok"))
+    con.close()
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        entries = store.read_memory_entries(account_id)
+
+    assert entries == []
+    assert "skipped corrupt rows" in caplog.text
 
 
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):

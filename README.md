@@ -198,22 +198,29 @@ Zum Verbinden eines bestehenden TeeBotus-Accounts im Matrix-Privatraum:
 
 Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>`, `signal:uuid:<id>` oder `matrix:user:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
 
-Strukturierter Account-Memory kann optional auf PostgreSQL umgestellt werden:
+Strukturierter Account-Memory kann auf SQLite oder PostgreSQL umgestellt werden. Auf diesem Host ist SQLite der gemessene lokale Primary-Backend; PostgreSQL bleibt optional und muss per DSN erreichbar sein:
 
 ```bash
+export TEEBOTUS_ACCOUNT_MEMORY_BACKEND=sqlite
+python3 scripts/migrate_account_memory_to_database.py --backend sqlite --instances-dir instances --dry-run
+python3 scripts/migrate_account_memory_to_database.py --backend sqlite --instances-dir instances --delete-json-files
+python3 scripts/sync_account_memory_sqlite_backup.py --accounts-root instances/Depressionsbot/data/accounts
+
 export TEEBOTUS_ACCOUNT_MEMORY_BACKEND=postgres
 export TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN='postgresql://USER:PASSWORD@HOST:5432/DBNAME'
-python3 scripts/migrate_account_memory_to_postgres.py --instances-dir instances --dry-run
-python3 scripts/migrate_account_memory_to_postgres.py --instances-dir instances
+python3 scripts/migrate_account_memory_to_database.py --backend postgres --instances-dir instances --dry-run
+python3 scripts/migrate_account_memory_to_database.py --backend postgres --instances-dir instances --delete-json-files
 ```
 
-PostgreSQL speichert Memory-Payloads weiterhin AES-256-GCM-verschluesselt pro Eintrag. Querybar bleiben nur Metadaten wie `id`, `kind`, `memory_type`, `importance`, `salience`, `access_count` und Keywords. Der Treiber ist als `psycopg[binary]==3.3.4` gepinnt.
+SQLite und PostgreSQL speichern Memory-Payloads weiterhin AES-256-GCM-verschluesselt pro Eintrag. Querybar bleiben nur Metadaten wie `id`, `kind`, `memory_type`, `importance`, `salience`, `access_count` und Keywords. Der PostgreSQL-Treiber ist als `psycopg[binary]==3.3.4` gepinnt. Wenn `TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH` gesetzt ist, nutzt der Bot eine sekundäre SQLite-DB als Fallback und loggt periodische Critical-Warnungen, bis der Primary-Backend wieder funktioniert.
 
 Benchmark:
 
 ```bash
 PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend jsonl --entries 1000 --select-runs 20
+PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend sqlite --entries 1000 --select-runs 20
 PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --entries 1000 --select-runs 20
+PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --postgres-dsn 'postgresql://USER:PASSWORD@HOST:5432/DBNAME' --require-postgres
 ```
 
 Account-Report:

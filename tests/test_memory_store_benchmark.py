@@ -39,6 +39,16 @@ def test_postgres_benchmark_skips_without_dsn(monkeypatch) -> None:
     assert "POSTGRES_DSN" in result["reason"]
 
 
+def test_postgres_benchmark_accepts_dsn_override(monkeypatch) -> None:
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN", raising=False)
+
+    result = benchmark_postgres_backend(entries=1, select_runs=1, dsn="postgresql://invalid.invalid/teebotus")
+
+    assert result["backend"] == "postgres-row-encrypted-memory"
+    assert result["skipped"] is True
+    assert "could not connect to PostgreSQL" in result["reason"]
+
+
 def test_account_store_postgres_backend_requires_dsn(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "postgres")
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN", raising=False)

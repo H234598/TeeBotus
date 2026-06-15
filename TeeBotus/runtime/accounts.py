@@ -593,15 +593,37 @@ class AccountStore:
     @property
     def account_memory_backend(self) -> Any | None:
         if self._account_memory_backend is None:
+            from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
             from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
 
-            config = PostgresMemoryConfig.from_env()
-            if config is not None:
+            sqlite_config = SQLiteMemoryConfig.from_env(self.root)
+            if sqlite_config is not None:
+                primary = SQLiteAccountMemoryBackend(
+                    instance_name=self.instance_name,
+                    provider=self.secret_provider,
+                    purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                    config=sqlite_config,
+                )
+                if sqlite_config.fallback_path is not None:
+                    from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
+
+                    fallback = SQLiteAccountMemoryBackend(
+                        instance_name=self.instance_name,
+                        provider=self.secret_provider,
+                        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                        config=SQLiteMemoryConfig(path=sqlite_config.fallback_path, fallback_path=None),
+                    )
+                    self._account_memory_backend = WarningFallbackAccountMemoryBackend(primary, fallback, label=f"{self.instance_name}:sqlite")
+                else:
+                    self._account_memory_backend = primary
+                return self._account_memory_backend
+            postgres_config = PostgresMemoryConfig.from_env()
+            if postgres_config is not None:
                 self._account_memory_backend = PostgresAccountMemoryBackend(
                     instance_name=self.instance_name,
                     provider=self.secret_provider,
                     purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-                    config=config,
+                    config=postgres_config,
                 )
         return self._account_memory_backend
 
