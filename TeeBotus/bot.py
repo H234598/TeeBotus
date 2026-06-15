@@ -117,7 +117,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
     for health in check_signal_accounts(config):
         if health.registered:
             state = "registered"
-        elif health.error == "account missing in signal-cli-api /v1/accounts":
+        elif health.error == "account missing in signal-cli-rest-api /v1/accounts":
             state = "missing"
         else:
             state = "unavailable"

@@ -25,7 +25,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.4.0\n"
+    assert captured.out == "TeeBotus 1.4.1\n"
     assert captured.err == ""
 
 
@@ -101,7 +101,7 @@ def test_runtime_status_reports_signal_service_health(monkeypatch, capsys) -> No
                 ok=False,
                 registered=False,
                 target="127.0.0.1:8080",
-                error="account missing in signal-cli-api /v1/accounts",
+                error="account missing in signal-cli-rest-api /v1/accounts",
             ),
         )
 
@@ -113,7 +113,7 @@ def test_runtime_status_reports_signal_service_health(monkeypatch, capsys) -> No
     assert "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=unreachable error=connection refused" in captured.out
     assert (
         "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=missing "
-        "error=account missing in signal-cli-api /v1/accounts"
+        "error=account missing in signal-cli-rest-api /v1/accounts"
     ) in captured.out
 
 
@@ -155,7 +155,7 @@ def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(mo
                 ok=False,
                 registered=False,
                 target="127.0.0.1:8080",
-                error="service does not expose signal-cli-api account list",
+                error="service does not expose signal-cli-rest-api account list",
             ),
         )
 
@@ -166,7 +166,7 @@ def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(mo
     captured = capsys.readouterr()
     assert (
         "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=unavailable "
-        "error=service does not expose signal-cli-api account list"
+        "error=service does not expose signal-cli-rest-api account list"
     ) in captured.out
 
 

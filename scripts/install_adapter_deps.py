@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import shlex
 import subprocess
 import sys
@@ -36,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
                 subprocess.run(command, check=True)
     if not args.python_only:
         install_signal_cli(pins["signal-cli"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
-        install_signal_cli_api(pins["signal-cli-api"], dry_run=args.dry_run)
+        install_signal_cli_rest_api(pins["signal-cli-rest-api"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
     if not args.dry_run:
         subprocess.run([args.python, str(Path(__file__).with_name("check_adapter_deps.py"))], check=True)
     return 0
@@ -113,11 +114,31 @@ def install_signal_cli(version: str, *, bin_dir: Path, opt_dir: Path, dry_run: b
     link_path.symlink_to(target)
 
 
-def install_signal_cli_api(version: str, *, dry_run: bool = False) -> None:
-    command = ["cargo", "install", "signal-cli-api", "--version", version, "--locked"]
-    print(shlex.join(command))
-    if not dry_run:
-        subprocess.run(command, check=True)
+def signal_cli_rest_api_repo_url() -> str:
+    return "https://github.com/bbernhard/signal-cli-rest-api.git"
+
+
+def install_signal_cli_rest_api(version: str, *, bin_dir: Path, opt_dir: Path, dry_run: bool = False) -> None:
+    source_dir = opt_dir / f"signal-cli-rest-api-{version}"
+    binary_path = source_dir / "src" / "signal-cli-rest-api"
+    link_path = bin_dir / "signal-cli-rest-api"
+    repo_url = signal_cli_rest_api_repo_url()
+    if dry_run:
+        print(f"git clone --depth 1 --branch {version} {repo_url} {source_dir}")
+        print(f"(cd {source_dir / 'src'} && go build -o signal-cli-rest-api main.go)")
+        print(f"ln -sfn {binary_path} {link_path}")
+        return
+    if shutil.which("go") is None:
+        raise SystemExit("Go ist erforderlich, um signal-cli-rest-api ohne Docker/Podman aus Source zu bauen.")
+    opt_dir.mkdir(parents=True, exist_ok=True)
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    if not source_dir.exists():
+        subprocess.run(["git", "clone", "--depth", "1", "--branch", version, repo_url, str(source_dir)], check=True)
+    subprocess.run(["go", "build", "-o", "signal-cli-rest-api", "main.go"], cwd=source_dir / "src", check=True)
+    if not binary_path.exists():
+        raise SystemExit(f"signal-cli-rest-api build did not create expected binary: {binary_path}")
+    link_path.unlink(missing_ok=True)
+    link_path.symlink_to(binary_path)
 
 
 def _safe_extract_tar(archive: tarfile.TarFile, destination: Path) -> None:

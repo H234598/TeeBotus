@@ -92,14 +92,14 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
-Signal braucht das Python-Paket `signalbot`, die native `signal-cli-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
+Signal braucht das Python-Paket `signalbot`, die native `signal-cli-rest-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
 
 ```bash
 python3 scripts/install_adapter_deps.py
 python3 scripts/check_adapter_deps.py
 ```
 
-`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, installiert `signal-cli-api` per Cargo und laesst danach `scripts/check_adapter_deps.py` laufen.
+`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, baut `signal-cli-rest-api` aus dem gepinnten Upstream-Tag mit Go nach `~/.local/opt` und laesst danach `scripts/check_adapter_deps.py` laufen.
 
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
@@ -114,7 +114,7 @@ Die Erreichbarkeit des externen Signal-Dienstes pruefst du ohne Botstart:
 python3 -m TeeBotus --runtime-status --channels signal
 ```
 
-Wenn ein lokaler konfigurierter Signal-Dienst nicht erreichbar ist, startet TeeBotus `signal-cli-api --listen <host>:<port>` automatisch und prueft danach erneut. Fuer nicht-lokale Services bleibt ein nicht erreichbares Backend ein harter Startfehler. `signalbot` nutzt dabei `InMemoryConfig`; persistenter Bot-Zustand liegt in TeeBotus, Signal-Account-Daten liegen bei `signal-cli`.
+Wenn ein lokaler konfigurierter Signal-Dienst nicht erreichbar ist, startet TeeBotus `signal-cli-rest-api` automatisch mit `MODE=json-rpc`, `PORT=<port>` und der lokalen `signal-cli`-Config und prueft danach erneut. Fuer nicht-lokale Services bleibt ein nicht erreichbares Backend ein harter Startfehler. `signalbot` nutzt dabei `InMemoryConfig`; persistenter Bot-Zustand liegt in TeeBotus, Signal-Account-Daten liegen bei `signal-cli`.
 
 `--runtime-status --channels signal` meldet zusaetzlich den Signal-Account-Zustand:
 
@@ -124,7 +124,7 @@ signal_account=<instance>/<slot> phone=+49... target=127.0.0.1:8080 status=missi
 signal_account=<instance>/<slot> phone=+49... target=127.0.0.1:8080 status=unavailable
 ```
 
-`missing` bedeutet: das Backend ist erreichbar, aber `signal-cli-api` listet die konfigurierte Telefonnummer nicht in `/v1/accounts`. Dann muss der native Signal-Account zuerst in `signal-cli` eingerichtet werden. Als Primaergeraet:
+`missing` bedeutet: das Backend ist erreichbar, aber `signal-cli-rest-api` listet die konfigurierte Telefonnummer nicht in `/v1/accounts`. Dann muss der native Signal-Account zuerst in `signal-cli` eingerichtet werden. Als Primaergeraet:
 
 ```bash
 signal-cli -a +49... register

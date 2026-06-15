@@ -4,12 +4,15 @@ from __future__ import annotations
 import importlib.metadata
 import importlib
 import inspect
+import json
 import os
 import shutil
 import subprocess
 import sys
 from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 
 LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
@@ -30,8 +33,11 @@ def main() -> int:
         _check_matrix_file_contract(),
         _check_signalbot_context_contract(),
         _check_executable_version("signal-cli", pins["signal-cli"], ["--version"]),
-        _check_cargo_binary("signal-cli-api", pins["signal-cli-api"]),
+        _check_signal_cli_rest_api_binary(pins["signal-cli-rest-api"]),
     ]
+    service_url = os.environ.get("SIGNAL_CLI_REST_API_CHECK_URL", "").strip()
+    if service_url:
+        checks.append(_check_signal_cli_rest_api_service(service_url, pins["signal-cli-rest-api"]))
     for ok, message in checks:
         print(("OK " if ok else "FAIL ") + message)
     return 0 if all(ok for ok, _message in checks) else 1
@@ -380,26 +386,27 @@ def _check_executable_version(binary: str, expected: str, args: list[str]) -> tu
     return ok, f"{binary} path={path} version_output={output or '<empty>'} expected={expected}"
 
 
-def _check_cargo_binary(binary: str, expected: str) -> tuple[bool, str]:
-    path = _which(binary)
+def _check_signal_cli_rest_api_binary(expected: str) -> tuple[bool, str]:
+    path = _which("signal-cli-rest-api")
     if path is None:
-        return False, f"{binary} missing from PATH, expected {expected}"
-    cargo = _which("cargo")
-    if cargo is None:
-        return False, f"{binary} path={path}, but cargo is missing; cannot verify expected {expected}"
+        incompatible = _which("signal-cli-api")
+        if incompatible is not None:
+            return False, f"signal-cli-rest-api missing, found incompatible Rust signal-cli-api at {incompatible}; expected {expected}"
+        return False, f"signal-cli-rest-api missing from PATH, expected {expected}"
+    return True, f"signal-cli-rest-api path={path} expected={expected} runtime_version_checked_via_/v1/about"
+
+
+def _check_signal_cli_rest_api_service(base_url: str, expected: str) -> tuple[bool, str]:
+    url = base_url.rstrip("/") + "/v1/about"
     try:
-        result = subprocess.run(
-            [cargo, "install", "--list"],
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=20,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return False, f"{binary} could not be verified through cargo: {exc}"
-    expected_line = f"{binary} v{expected}:"
-    ok = result.returncode == 0 and expected_line in result.stdout
-    return ok, f"{binary} path={path} cargo_pin={'found' if ok else 'missing'} expected={expected}"
+        with urlopen(url, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, OSError, json.JSONDecodeError) as exc:
+        return False, f"signal-cli-rest-api service unavailable url={url}: {exc}"
+    version = str(payload.get("version") or "").strip()
+    mode = str(payload.get("mode") or "").strip()
+    ok = version == expected and mode == "json-rpc"
+    return ok, f"signal-cli-rest-api service version={version or '<missing>'} expected={expected} mode={mode or '<missing>'}"
 
 
 def _which(binary: str) -> str | None:

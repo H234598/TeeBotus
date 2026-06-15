@@ -57,6 +57,8 @@ class SignalAccountHealth:
 
 
 LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+SIGNAL_JSON_RPC_HOST = "127.0.0.1"
+SIGNAL_JSON_RPC_PORT = 6001
 
 
 class TeeBotusSignalCommand(_SignalBotCommand):
@@ -382,7 +384,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 if _signal_service_looks_like_signal_cli_api(account):
                     service_accounts_cache[service_key] = (True, _signal_cli_api_accounts(account), "")
                 else:
-                    service_accounts_cache[service_key] = (False, [], "service does not expose signal-cli-api account list")
+                    service_accounts_cache[service_key] = (False, [], "service does not expose signal-cli-rest-api account list")
             except SignalRuntimeError as exc:
                 service_accounts_cache[service_key] = (False, [], str(exc))
         ok, accounts, error = service_accounts_cache[service_key]
@@ -396,7 +398,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 ok=registered,
                 target=target,
                 registered=registered,
-                error="" if registered else "account missing in signal-cli-api /v1/accounts",
+                error="" if registered else "account missing in signal-cli-rest-api /v1/accounts",
             )
         )
     return tuple(healths)
@@ -408,7 +410,7 @@ def _require_signal_services_reachable(config: RuntimeConfig) -> None:
         details = "; ".join(
             f"{health.account.instance_name}/{health.account.label} {health.target}: {health.error}" for health in failures
         )
-        raise SignalRuntimeError(f"signal-cli-api nicht erreichbar: {details}")
+        raise SignalRuntimeError(f"signal-cli-rest-api nicht erreichbar: {details}")
 
 
 def ensure_signal_services_available(config: RuntimeConfig) -> None:
@@ -432,34 +434,35 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
         return
     if check_signal_service(account, timeout_seconds=0.25).ok:
         return
-    command = _signal_cli_api_command(host, port)
-    log_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.log"
-    pid_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.pid"
+    command = _signal_cli_rest_api_command(host, port)
+    log_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.log"
+    pid_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.pid"
     if _pid_file_process_is_running(pid_path):
         return
     _require_signal_backend_binary("signal-cli")
+    _ensure_signal_json_rpc_daemon()
     runtime_dir().mkdir(parents=True, exist_ok=True)
     try:
         log_file = log_path.open("ab")
     except OSError as exc:
-        raise SignalRuntimeError(f"signal-cli-api log konnte nicht geoeffnet werden: {log_path}: {exc}") from exc
+        raise SignalRuntimeError(f"signal-cli-rest-api log konnte nicht geoeffnet werden: {log_path}: {exc}") from exc
     try:
         process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
             stdout=log_file,
             stderr=subprocess.STDOUT,
-            env=_signal_backend_env(),
+            env=_signal_backend_env(port),
             start_new_session=True,
         )
     except FileNotFoundError as exc:
         log_file.close()
         raise SignalRuntimeError(
-            "signal-cli-api ist nicht im PATH. Installiere die gepinnte native Abhaengigkeit aus adapter-dependencies.lock."
+            "signal-cli-rest-api ist nicht im PATH. Installiere die gepinnte native Abhaengigkeit aus adapter-dependencies.lock."
         ) from exc
     except OSError as exc:
         log_file.close()
-        raise SignalRuntimeError(f"signal-cli-api konnte nicht gestartet werden: {exc}") from exc
+        raise SignalRuntimeError(f"signal-cli-rest-api konnte nicht gestartet werden: {exc}") from exc
     finally:
         try:
             log_file.close()
@@ -471,23 +474,85 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise SignalRuntimeError(
-                f"signal-cli-api fuer {target} wurde gestartet, ist aber sofort beendet. Siehe {log_path}."
+                f"signal-cli-rest-api fuer {target} wurde gestartet, ist aber sofort beendet. Siehe {log_path}."
             )
         health = check_signal_service(account, timeout_seconds=0.25)
         if health.ok:
             return
         last_error = health.error
         time.sleep(0.25)
-    raise SignalRuntimeError(f"signal-cli-api fuer {target} startete nicht rechtzeitig: {last_error}. Siehe {log_path}.")
+    raise SignalRuntimeError(f"signal-cli-rest-api fuer {target} startete nicht rechtzeitig: {last_error}. Siehe {log_path}.")
 
 
-def _signal_cli_api_command(host: str, port: int) -> list[str]:
+def _signal_cli_rest_api_command(host: str, port: int) -> list[str]:
     listen_host = "127.0.0.1" if host in {"localhost", "::1"} else host
-    binary = shutil.which("signal-cli-api")
+    binary = shutil.which("signal-cli-rest-api")
     if binary is None:
-        local_binary = Path.home() / ".cargo" / "bin" / "signal-cli-api"
-        binary = str(local_binary) if local_binary.exists() else "signal-cli-api"
-    return [binary, "--listen", f"{listen_host}:{port}"]
+        local_binary = Path.home() / ".local" / "bin" / "signal-cli-rest-api"
+        binary = str(local_binary) if local_binary.exists() else "signal-cli-rest-api"
+    return [binary, "-signal-cli-config", str(_signal_cli_config_dir()), "-attachment-tmp-dir", str(runtime_dir()), "-avatar-tmp-dir", str(runtime_dir())]
+
+
+def _ensure_signal_json_rpc_daemon() -> None:
+    config_dir = _signal_cli_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    jsonrpc_config = config_dir / "jsonrpc2.yml"
+    if not jsonrpc_config.exists():
+        jsonrpc_config.write_text(f"config:\n  <multi-account>:\n    tcp_port: {SIGNAL_JSON_RPC_PORT}\n", encoding="utf-8")
+    if _tcp_port_is_open(SIGNAL_JSON_RPC_HOST, SIGNAL_JSON_RPC_PORT, timeout_seconds=0.2):
+        return
+    log_path = runtime_dir() / "signal-cli-json-rpc-daemon.log"
+    pid_path = runtime_dir() / "signal-cli-json-rpc-daemon.pid"
+    if _pid_file_process_is_running(pid_path):
+        return
+    signal_cli = _require_signal_backend_binary("signal-cli")
+    runtime_dir().mkdir(parents=True, exist_ok=True)
+    try:
+        log_file = log_path.open("ab")
+    except OSError as exc:
+        raise SignalRuntimeError(f"signal-cli JSON-RPC log konnte nicht geoeffnet werden: {log_path}: {exc}") from exc
+    try:
+        process = subprocess.Popen(
+            [
+                signal_cli,
+                "--output=json",
+                "--config",
+                str(config_dir),
+                "daemon",
+                "--tcp",
+                f"{SIGNAL_JSON_RPC_HOST}:{SIGNAL_JSON_RPC_PORT}",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            env=_signal_backend_env(),
+            start_new_session=True,
+        )
+    except OSError as exc:
+        log_file.close()
+        raise SignalRuntimeError(f"signal-cli JSON-RPC daemon konnte nicht gestartet werden: {exc}") from exc
+    finally:
+        try:
+            log_file.close()
+        except OSError:
+            pass
+    pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise SignalRuntimeError(f"signal-cli JSON-RPC daemon wurde gestartet, ist aber sofort beendet. Siehe {log_path}.")
+        if _tcp_port_is_open(SIGNAL_JSON_RPC_HOST, SIGNAL_JSON_RPC_PORT, timeout_seconds=0.2):
+            return
+        time.sleep(0.25)
+    raise SignalRuntimeError(f"signal-cli JSON-RPC daemon startete nicht rechtzeitig. Siehe {log_path}.")
+
+
+def _tcp_port_is_open(host: str, port: int, *, timeout_seconds: float) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            return True
+    except OSError:
+        return False
 
 
 def _require_signal_backend_binary(binary: str) -> str:
@@ -506,9 +571,14 @@ def _signal_backend_binary(binary: str) -> str | None:
     return shutil.which(binary)
 
 
-def _signal_backend_env() -> dict[str, str]:
+def _signal_backend_env(port: int | None = None) -> dict[str, str]:
     env = dict(os.environ)
     env["PATH"] = _signal_backend_path()
+    env.setdefault("MODE", "json-rpc")
+    env.setdefault("BUILD_VERSION", _signal_cli_rest_api_locked_version())
+    env.setdefault("SIGNAL_CLI_CONFIG_DIR", str(_signal_cli_config_dir()))
+    if port is not None:
+        env["PORT"] = str(port)
     return env
 
 
@@ -521,6 +591,22 @@ def _signal_backend_path() -> str:
         if part not in merged:
             merged.append(part)
     return os.pathsep.join(merged)
+
+
+def _signal_cli_config_dir() -> Path:
+    return Path(os.environ.get("SIGNAL_CLI_CONFIG_DIR", str(Path.home() / ".local" / "share" / "signal-cli"))).expanduser()
+
+
+def _signal_cli_rest_api_locked_version() -> str:
+    lockfile = Path(__file__).resolve().parents[2] / "adapter-dependencies.lock"
+    try:
+        for line in lockfile.read_text(encoding="utf-8").splitlines():
+            name, sep, version = line.partition("==")
+            if sep and name.strip() == "signal-cli-rest-api":
+                return version.strip()
+    except OSError:
+        return "unset"
+    return "unset"
 
 
 def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
@@ -544,7 +630,7 @@ def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
     if missing:
         details = ", ".join(missing)
         raise SignalRuntimeError(
-            f"signal-cli-api kennt den konfigurierten Signal-Account nicht: {details}. "
+            f"signal-cli-rest-api kennt den konfigurierten Signal-Account nicht: {details}. "
             "Registriere oder verlinke den Account zuerst mit signal-cli."
         )
 
@@ -554,14 +640,16 @@ def _signal_service_looks_like_signal_cli_api(account: AccountRunConfig) -> bool
         about = _signal_service_json(account, "/v1/about")
     except SignalRuntimeError:
         return False
+    if isinstance(about.get("version"), str) and isinstance(about.get("mode"), str):
+        return True
     versions = about.get("versions")
-    return isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str)
+    return isinstance(versions, dict) and isinstance(versions.get("signal-cli-rest-api"), str)
 
 
 def _signal_cli_api_accounts(account: AccountRunConfig) -> list[Any]:
     payload = _signal_service_json(account, "/v1/accounts")
     if not isinstance(payload, list):
-        raise SignalRuntimeError("signal-cli-api /v1/accounts lieferte keine Liste.")
+        raise SignalRuntimeError("signal-cli-rest-api /v1/accounts lieferte keine Liste.")
     return payload
 
 
@@ -584,7 +672,7 @@ def _signal_service_json(account: AccountRunConfig, path: str) -> Any:
         with urlopen(url, timeout=3) as response:
             return json.loads(response.read().decode("utf-8"))
     except (HTTPError, URLError, OSError, json.JSONDecodeError) as exc:
-        raise SignalRuntimeError(f"signal-cli-api Statusabfrage fehlgeschlagen: {url}: {exc}") from exc
+        raise SignalRuntimeError(f"signal-cli-rest-api Statusabfrage fehlgeschlagen: {url}: {exc}") from exc
 
 
 def _pid_file_process_is_running(path: Path) -> bool:
@@ -683,17 +771,16 @@ def _patch_signalbot_signal_cli_api_about(signalbot: Any) -> None:
         versions = about.get("versions")
         if not isinstance(versions, dict):
             return None
-        for key in ("signal-cli-api", "signal-cli-rest-api"):
-            api_version = versions.get(key)
-            if isinstance(api_version, str) and api_version.strip():
-                return api_version
+        api_version = versions.get("signal-cli-rest-api")
+        if isinstance(api_version, str) and api_version.strip():
+            return api_version
         return None
 
     def has_signal_cli_api_shape(about: Mapping[str, Any]) -> bool:
         versions = about.get("versions")
         if not isinstance(versions, dict):
             return False
-        return any(key in versions for key in ("signal-cli-api", "signal-cli-rest-api"))
+        return "signal-cli-rest-api" in versions
 
     async def get_signal_cli_rest_api_version(self: Any) -> str:
         about = await self.get_signal_cli_about()

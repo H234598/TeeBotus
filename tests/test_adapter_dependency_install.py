@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.install_adapter_deps import build_python_install_commands, main, read_pins, signal_cli_release_url
+from scripts.install_adapter_deps import build_python_install_commands, main, read_pins, signal_cli_release_url, signal_cli_rest_api_repo_url
 
 
 def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(tmp_path: Path) -> None:
@@ -36,6 +36,10 @@ def test_signal_cli_release_url_uses_pinned_github_release() -> None:
     )
 
 
+def test_signal_cli_rest_api_repo_url_uses_bbernhard_upstream() -> None:
+    assert signal_cli_rest_api_repo_url() == "https://github.com/bbernhard/signal-cli-rest-api.git"
+
+
 def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     result = main(["--dry-run", "--python", "python3"])
 
@@ -43,4 +47,5 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     output = capsys.readouterr().out
     assert "signalbot==1.2.2" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
-    assert "cargo install signal-cli-api --version 0.1.1 --locked" in output
+    assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
+    assert "go build -o signal-cli-rest-api main.go" in output

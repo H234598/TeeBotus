@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from signalbot import Command
 from signalbot.message import MessageType
 
@@ -18,6 +20,7 @@ from TeeBotus.runtime.signal_runner import (
     TeeBotusSignalCommand,
     check_signal_service,
     ensure_signal_services_available,
+    _ensure_signal_json_rpc_daemon,
     _patch_signalbot_signal_cli_api_about,
     _pid_file_process_is_running,
     _require_signal_cli_api_accounts_registered,
@@ -811,7 +814,7 @@ def test_signal_start_fails_before_threads_when_service_unreachable(monkeypatch,
     try:
         run_signal_accounts(config)
     except SignalRuntimeError as exc:
-        assert "signal-cli-api nicht erreichbar" in str(exc)
+        assert "signal-cli-rest-api nicht erreichbar" in str(exc)
     else:
         raise AssertionError("SignalRuntimeError was not raised")
     assert calls == []
@@ -868,8 +871,8 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
         return FakeProcess()
 
     def fake_which(binary, path=None):
-        if binary == "signal-cli-api":
-            return "signal-cli-api"
+        if binary == "signal-cli-rest-api":
+            return "signal-cli-rest-api"
         if binary == "signal-cli" and path and ".local/bin" in path:
             return "/home/teladi/.local/bin/signal-cli"
         return None
@@ -879,14 +882,28 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", fake_which)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._ensure_signal_json_rpc_daemon", lambda: None)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)
 
-    assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
+    assert commands == [
+        [
+            "signal-cli-rest-api",
+            "-signal-cli-config",
+            str(Path.home() / ".local" / "share" / "signal-cli"),
+            "-attachment-tmp-dir",
+            str(tmp_path / "runtime"),
+            "-avatar-tmp-dir",
+            str(tmp_path / "runtime"),
+        ]
+    ]
+    assert envs[0]["PORT"] == "8080"
+    assert envs[0]["MODE"] == "json-rpc"
+    assert envs[0]["BUILD_VERSION"] == "0.100"
     assert ".local/bin" in envs[0]["PATH"]
     assert ".cargo/bin" in envs[0]["PATH"]
-    assert (tmp_path / "runtime" / "signal-cli-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
+    assert (tmp_path / "runtime" / "signal-cli-rest-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
 
 
 def test_signal_backend_autostart_requires_signal_cli_binary(monkeypatch, tmp_path) -> None:
@@ -920,10 +937,10 @@ def test_signal_backend_autostart_requires_signal_cli_binary(monkeypatch, tmp_pa
         ),
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "signal-cli-api" if binary == "signal-cli-api" else None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "signal-cli-rest-api" if binary == "signal-cli-rest-api" else None)
     monkeypatch.setattr(
         "TeeBotus.runtime.signal_runner.subprocess.Popen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("signal-cli-api must not start without signal-cli")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("signal-cli-rest-api must not start without signal-cli")),
     )
 
     try:
@@ -998,8 +1015,8 @@ def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_pa
         return FakeProcess()
 
     def fake_which(binary, path=None):
-        if binary == "signal-cli-api":
-            return "signal-cli-api"
+        if binary == "signal-cli-rest-api":
+            return "signal-cli-rest-api"
         if binary == "signal-cli":
             return "/home/teladi/.local/bin/signal-cli"
         return None
@@ -1009,17 +1026,66 @@ def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_pa
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", fake_which)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._ensure_signal_json_rpc_daemon", lambda: None)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)
 
-    assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
+    assert commands == [
+        [
+            "signal-cli-rest-api",
+            "-signal-cli-config",
+            str(Path.home() / ".local" / "share" / "signal-cli"),
+            "-attachment-tmp-dir",
+            str(tmp_path / "runtime"),
+            "-avatar-tmp-dir",
+            str(tmp_path / "runtime"),
+        ]
+    ]
 
 
-def test_signalbot_patch_accepts_signal_cli_api_about_shape() -> None:
+def test_signal_json_rpc_daemon_writes_config_and_starts_signal_cli(monkeypatch, tmp_path) -> None:
+    commands: list[list[str]] = []
+    opened = {"value": False}
+
+    class FakeProcess:
+        pid = 9876
+
+        def poll(self):
+            return None
+
+    def fake_popen(command, **_kwargs):
+        commands.append(command)
+        opened["value"] = True
+        return FakeProcess()
+
+    monkeypatch.setenv("SIGNAL_CLI_CONFIG_DIR", str(tmp_path / "signal-cli"))
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "/home/teladi/.local/bin/signal-cli" if binary == "signal-cli" else None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._tcp_port_is_open", lambda *_args, **_kwargs: opened["value"])
+
+    _ensure_signal_json_rpc_daemon()
+
+    assert (tmp_path / "signal-cli" / "jsonrpc2.yml").read_text(encoding="utf-8") == "config:\n  <multi-account>:\n    tcp_port: 6001\n"
+    assert commands == [
+        [
+            "/home/teladi/.local/bin/signal-cli",
+            "--output=json",
+            "--config",
+            str(tmp_path / "signal-cli"),
+            "daemon",
+            "--tcp",
+            "127.0.0.1:6001",
+        ]
+    ]
+    assert (tmp_path / "runtime" / "signal-cli-json-rpc-daemon.pid").read_text(encoding="utf-8") == "9876\n"
+
+
+def test_signalbot_patch_accepts_signal_cli_rest_api_about_shape() -> None:
     class FakeSignalAPI:
         async def get_signal_cli_about(self):
-            return {"build": {"os": "linux"}, "versions": {"signal-cli-api": "0.1.1"}}
+            return {"build": {"os": "linux"}, "versions": {"signal-cli-rest-api": "0.100"}}
 
         async def get_signal_cli_rest_api_version(self):
             raise KeyError("version")
@@ -1032,14 +1098,14 @@ def test_signalbot_patch_accepts_signal_cli_api_about_shape() -> None:
     _patch_signalbot_signal_cli_api_about(fake_signalbot)
 
     api = FakeSignalAPI()
-    assert asyncio.run(api.get_signal_cli_rest_api_version()) == "0.1.1"
+    assert asyncio.run(api.get_signal_cli_rest_api_version()) == "0.100"
     assert asyncio.run(api.get_signal_cli_rest_api_mode()) == "json-rpc"
 
 
-def test_signalbot_patch_accepts_unset_signal_cli_api_about_version() -> None:
+def test_signalbot_patch_accepts_unset_signal_cli_rest_api_about_version() -> None:
     class FakeSignalAPI:
         async def get_signal_cli_about(self):
-            return {"build": {"os": "linux"}, "versions": {"signal-cli-api": ""}}
+            return {"build": {"os": "linux"}, "versions": {"signal-cli-rest-api": ""}}
 
         async def get_signal_cli_rest_api_version(self):
             raise KeyError("version")
@@ -1056,8 +1122,28 @@ def test_signalbot_patch_accepts_unset_signal_cli_api_about_version() -> None:
     assert asyncio.run(api.get_signal_cli_rest_api_mode()) == "json-rpc"
 
 
+def test_signalbot_patch_rejects_incompatible_rust_signal_cli_api_about_shape() -> None:
+    class FakeSignalAPI:
+        async def get_signal_cli_about(self):
+            return {"build": {"os": "linux"}, "versions": {"signal-cli-api": "0.1.1"}}
+
+        async def get_signal_cli_rest_api_version(self):
+            raise KeyError("version")
+
+        async def get_signal_cli_rest_api_mode(self):
+            raise KeyError("mode")
+
+    fake_signalbot = SimpleNamespace(api=SimpleNamespace(SignalAPI=FakeSignalAPI))
+
+    _patch_signalbot_signal_cli_api_about(fake_signalbot)
+
+    api = FakeSignalAPI()
+    with pytest.raises(KeyError):
+        asyncio.run(api.get_signal_cli_rest_api_version())
+
+
 def test_signal_pid_check_rejects_dead_process(monkeypatch, tmp_path) -> None:
-    pid_file = tmp_path / "signal-cli-api.pid"
+    pid_file = tmp_path / "signal-cli-rest-api.pid"
     pid_file.write_text("999999\n", encoding="utf-8")
 
     class Result:
@@ -1153,7 +1239,7 @@ def test_signal_account_health_reports_registered_and_missing_numbers(monkeypatc
     health = check_signal_accounts(config)
 
     assert [item.registered for item in health] == [True, False]
-    assert health[1].error == "account missing in signal-cli-api /v1/accounts"
+    assert health[1].error == "account missing in signal-cli-rest-api /v1/accounts"
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:
