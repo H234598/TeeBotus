@@ -43,6 +43,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     query = subparsers.add_parser("query", help="Query indexed Bibliothekar chunks.")
     query.add_argument("query")
+    query.add_argument("--source", default="", help="Query a source file or directory through a temporary local fixture index.")
     query.add_argument("--top-k", type=int, default=3)
     query.add_argument("--max-prompt-chars", type=int, default=5000)
     query.add_argument("--max-quote-chars", type=int, default=900)
@@ -104,7 +105,11 @@ def _query(args: argparse.Namespace) -> int:
     rows = []
     for instance_name in _resolve_instances(instances_dir, args.instance):
         instructions = _load_instructions(instances_dir, instance_name)
-        service = BibliothekarService.from_instructions(instance_name, instances_dir, instructions)
+        service = (
+            _service_from_source(instance_name, Path(args.source))
+            if args.source
+            else BibliothekarService.from_instructions(instance_name, instances_dir, instructions)
+        )
         if args.deep:
             graph_state = run_bibliothekar_deep_query(
                 service,
@@ -173,6 +178,24 @@ def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_
         else:
             shutil.copy2(source, tmp_library / source.name)
         return BibliothekarStore(instance_name, tmp_instances).rebuild()
+
+
+def _service_from_source(instance_name: str, source: Path) -> BibliothekarService:
+    if not source.exists():
+        raise SystemExit(f"source does not exist: {source}")
+    tmp = tempfile.TemporaryDirectory(prefix="teebotus-bibliothekar-query-")
+    tmp_instances = Path(tmp.name) / "instances"
+    tmp_library = tmp_instances / instance_name / "data" / "Bibliothek"
+    tmp_library.mkdir(parents=True)
+    if source.is_dir():
+        shutil.copytree(source, tmp_library, dirs_exist_ok=True)
+    else:
+        shutil.copy2(source, tmp_library / source.name)
+    store = BibliothekarStore(instance_name, tmp_instances)
+    store.rebuild()
+    service = BibliothekarService.local(instance_name, tmp_instances)
+    service._fixture_tmp = tmp  # type: ignore[attr-defined]
+    return service
 
 
 def _dry_run_index(store: BibliothekarStore) -> dict[str, Any]:
