@@ -5,7 +5,19 @@ from typing import Any
 
 from TeeBotus.core.account_commands import AccountCommandHandler, AccountCommandResult
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider, telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import (
+    DeleteTrackedMessages,
+    ExportFile,
+    NotifyLinkedIdentity,
+    SendAttachment,
+    SendEdit,
+    SendPoll,
+    SendReaction,
+    SendReceipt,
+    SendText,
+    SendTyping,
+    SetMatrixState,
+)
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -154,6 +166,32 @@ class TelegramRuntimeBridge:
                 sender.send_message(action.caption or f"Datei erzeugt: {action.filename}")
             elif isinstance(action, SendTyping):
                 continue
+            elif isinstance(action, SendEdit):
+                edit_message = getattr(sender, "edit_message", None)
+                if callable(edit_message):
+                    edit_message(action.message_ref, action.text)
+                else:
+                    sender.send_message(action.text)
+            elif isinstance(action, SendPoll):
+                send_poll = getattr(sender, "send_poll", None)
+                answers = [str(answer or "").strip() for answer in action.answers if str(answer or "").strip()]
+                if callable(send_poll) and len(answers) >= 2:
+                    send_poll(action.question, answers, allow_multiple_selections=action.allow_multiple_selections)
+                else:
+                    sender.send_message(_poll_text_fallback(action.question, answers))
+                if action.track:
+                    self.message_tracker.record(
+                        SentMessageRef(
+                            channel=event.channel,
+                            instance_name=event.instance,
+                            account_id=event.account_id,
+                            chat_id=event.chat_id,
+                            message_ref="telegram-unknown",
+                            ref_kind="telegram_message_id",
+                        )
+                    )
+            elif isinstance(action, (SendReaction, SendReceipt, SetMatrixState)):
+                continue
 
 
 def maybe_handle_account_runtime_message(
@@ -175,3 +213,11 @@ def _normalize_telegram_chat_type(value: str) -> str:
     if normalized in {"group", "supergroup", "channel"}:
         return "group"
     return "unknown"
+
+
+def _poll_text_fallback(question: str, answers: list[str]) -> str:
+    clean_question = str(question or "").strip() or "Umfrage"
+    if not answers:
+        return clean_question
+    options = "\n".join(f"{index}. {answer}" for index, answer in enumerate(answers, start=1))
+    return f"{clean_question}\n{options}"
