@@ -98,6 +98,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_langgraph_linear_flow(iterations=iterations))
     results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
+    comparisons = _build_comparisons(results)
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -105,6 +106,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
         "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results),
         "context": _context(),
         "results": results,
+        "comparisons": comparisons,
     }
 
 
@@ -153,6 +155,38 @@ def render_markdown(suite: dict[str, Any]) -> str:
                 details=_markdown_details(result.get("details") or {}),
             )
         )
+    comparisons = suite.get("comparisons") or {}
+    stable_rankings = comparisons.get("stable_backend_rankings") if isinstance(comparisons, dict) else None
+    if isinstance(stable_rankings, list) and stable_rankings:
+        lines.extend(
+            [
+                "",
+                "## Stable Backend Rankings",
+                "",
+                "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |",
+                "| --- | ---: | --- | --- | ---: | ---: | ---: | --- |",
+            ]
+        )
+        for ranking in stable_rankings:
+            if not isinstance(ranking, dict):
+                continue
+            for candidate in ranking.get("candidates", []):
+                if not isinstance(candidate, dict):
+                    continue
+                lines.append(
+                    "| {category} | {rank} | {name} | {mode} | {throughput:.2f} | {total_ms:.3f} | {errors} | {note} |".format(
+                        category=ranking.get("category", ""),
+                        rank=int(candidate.get("rank") or 0),
+                        name=candidate.get("name", ""),
+                        mode=candidate.get("mode", ""),
+                        throughput=float(candidate.get("throughput_ops_s") or 0.0),
+                        total_ms=float(candidate.get("total_ms") or 0.0),
+                        errors=int(candidate.get("errors") or 0),
+                        note=str(candidate.get("note") or "").replace("|", "/"),
+                    )
+                )
+        lines.append("")
+        lines.append("Die Rangliste dokumentiert Messwerte nur; sie schaltet keine Runtime-Backends automatisch um.")
     lines.append("")
     lines.append("Standard-Benchmarks nutzen keine echten Provider-Calls und keine Netzsendung.")
     return "\n".join(lines) + "\n"
@@ -165,6 +199,75 @@ def _markdown_details(details: dict[str, Any]) -> str:
     if len(rendered) > 220:
         rendered = f"{rendered[:217]}..."
     return rendered.replace("|", "/")
+
+
+def _build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
+    categories = {
+        "account_memory": {"memory_jsonl", "memory_sqlite_projection", "memory_postgres"},
+        "bibliothekar": {"bibliothekar_local_query", "bibliothekar_haystack_fake_query"},
+        "langgraph_flows": {
+            "langgraph_bibliothekar_deep_query",
+            "langgraph_bibliothekar_linear",
+            "langgraph_bibliothekar_fake_installed",
+        },
+    }
+    rankings = []
+    for category, names in categories.items():
+        ranking = _stable_backend_ranking(category=category, results=results, names=names)
+        if ranking:
+            rankings.append(ranking)
+    return {
+        "auto_switching": False,
+        "selection_policy": "document_fastest_stable_backend_only",
+        "stable_backend_rankings": rankings,
+    }
+
+
+def _stable_backend_ranking(*, category: str, results: list[BenchmarkResult], names: set[str]) -> dict[str, Any] | None:
+    candidates = [
+        result
+        for result in results
+        if result.get("name") in names and result.get("category") == category and result.get("ok") and not result.get("skipped")
+    ]
+    skipped = [
+        {
+            "name": str(result.get("name") or ""),
+            "mode": str(result.get("mode") or ""),
+            "reason": str(result.get("reason") or ""),
+        }
+        for result in results
+        if result.get("name") in names and result.get("skipped")
+    ]
+    if not candidates and not skipped:
+        return None
+    ranked = sorted(
+        candidates,
+        key=lambda result: (
+            int(result.get("errors") or 0),
+            -float(result.get("throughput_ops_s") or 0.0),
+            float(result.get("total_ms") or 0.0),
+            str(result.get("name") or ""),
+        ),
+    )
+    return {
+        "category": category,
+        "fastest_stable": str(ranked[0].get("name") or "") if ranked else "",
+        "candidates": [
+            {
+                "rank": index,
+                "name": str(result.get("name") or ""),
+                "mode": str(result.get("mode") or ""),
+                "throughput_ops_s": float(result.get("throughput_ops_s") or 0.0),
+                "total_ms": float(result.get("total_ms") or 0.0),
+                "errors": int(result.get("errors") or 0),
+                "payload_bytes": int(result.get("payload_bytes") or 0),
+                "index_bytes": int(result.get("index_bytes") or 0),
+                "note": str(result.get("note") or ""),
+            }
+            for index, result in enumerate(ranked, start=1)
+        ],
+        "skipped": skipped,
+    }
 
 
 def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> list[BenchmarkResult]:

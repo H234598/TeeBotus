@@ -17,6 +17,15 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["signalbot"]["version"]
+    assert suite["comparisons"]["auto_switching"] is False
+    rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
+    assert {"account_memory", "bibliothekar", "langgraph_flows"}.issubset(rankings)
+    assert rankings["account_memory"]["fastest_stable"]
+    assert rankings["account_memory"]["candidates"]
+    assert [candidate["rank"] for candidate in rankings["account_memory"]["candidates"]] == list(
+        range(1, len(rankings["account_memory"]["candidates"]) + 1)
+    )
+    assert any(skipped["name"] == "memory_postgres" for skipped in rankings["account_memory"]["skipped"])
     assert {
         "account_memory",
         "bibliothekar",
@@ -67,6 +76,9 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "## Dependencies" in markdown
     assert "| litellm |" in markdown
     assert "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" in markdown
+    assert "## Stable Backend Rankings" in markdown
+    assert "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" in markdown
+    assert "Die Rangliste dokumentiert Messwerte nur" in markdown
     assert "memory_jsonl" in markdown
     assert "memory_migration_jsonl_to_sqlite" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
@@ -99,4 +111,5 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["ok"] is True
     assert payload["results"]
+    assert payload["comparisons"]["stable_backend_rankings"]
     assert "TeeBotus Benchmarks" in markdown_path.read_text(encoding="utf-8")
