@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -57,6 +58,49 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
+
+
+def test_adapter_dependency_installer_passes_python_only_to_final_check(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, check=False, **_kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("scripts.install_adapter_deps.subprocess.run", fake_run)
+
+    result = main(["--python-only", "--python", "python3", "--no-user"])
+
+    assert result == 0
+    assert calls[-1][-1] == "--python-only"
+    assert any("signalbot==1.2.2" in command for command in calls)
+    assert not any("signal-cli-rest-api" in " ".join(command) for command in calls[:-1])
+
+
+def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.MonkeyPatch) -> None:
+    called: list[str] = []
+
+    def ok(name: str):
+        def _inner(*_args, **_kwargs):
+            called.append(name)
+            return True, name
+
+        return _inner
+
+    monkeypatch.setattr(check_adapter_deps, "_check_python_package", lambda name, _expected: (called.append(f"package:{name}") or (True, name)))
+    monkeypatch.setattr(check_adapter_deps, "_check_litellm_supply_chain_guard", ok("litellm_guard"))
+    monkeypatch.setattr(check_adapter_deps, "_check_local_transcription_contract", ok("local_transcription"))
+    monkeypatch.setattr(check_adapter_deps, "_check_niobot_matrix_contract", ok("niobot_matrix"))
+    monkeypatch.setattr(check_adapter_deps, "_check_matrix_file_contract", ok("matrix_file"))
+    monkeypatch.setattr(check_adapter_deps, "_check_signalbot_context_contract", ok("signalbot_context"))
+    monkeypatch.setattr(check_adapter_deps, "_check_executable_version", ok("signal_cli"))
+    monkeypatch.setattr(check_adapter_deps, "_check_signal_cli_rest_api_binary", ok("signal_cli_rest_api"))
+
+    assert check_adapter_deps.main(["--python-only"]) == 0
+
+    assert "signal_cli" not in called
+    assert "signal_cli_rest_api" not in called
+    assert "package:signalbot" in called
 
 
 def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:

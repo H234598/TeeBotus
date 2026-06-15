@@ -17,15 +17,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
           python -m pip install -r requirements.txt
-          python -m pip install \
-            signalbot==1.2.2 \
-            matrix-nio==0.25.0 \
-            blurhash-python==1.2.2 \
-            h11==0.16.0 \
-            "marko==2.*" \
-            "python-magic>=0.4.27" \
-            "aiofiles>=23.1.0"
-          python -m pip install --no-deps nio-bot==1.0.2.post1
+          python scripts/install_adapter_deps.py --python-only --no-user
       - name: Verify entrypoints and adapter lock dry-run
         run: |
           python -m TeeBotus --version
@@ -45,15 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,llm]"
           python -m pip install -r requirements.txt
-          python -m pip install \
-            signalbot==1.2.2 \
-            matrix-nio==0.25.0 \
-            blurhash-python==1.2.2 \
-            h11==0.16.0 \
-            "marko==2.*" \
-            "python-magic>=0.4.27" \
-            "aiofiles>=23.1.0"
-          python -m pip install --no-deps nio-bot==1.0.2.post1
+          python scripts/install_adapter_deps.py --python-only --no-user
       - name: Run deterministic benchmark suite
         run: |
           mkdir -p reports

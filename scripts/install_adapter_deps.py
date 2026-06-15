@@ -39,7 +39,12 @@ def main(argv: list[str] | None = None) -> int:
         install_signal_cli(pins["signal-cli"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
         install_signal_cli_rest_api(pins["signal-cli-rest-api"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
     if not args.dry_run:
-        subprocess.run([args.python, str(Path(__file__).with_name("check_adapter_deps.py"))], check=True)
+        check_command = [args.python, str(Path(__file__).with_name("check_adapter_deps.py"))]
+        if args.python_only:
+            check_command.append("--python-only")
+        elif args.native_only:
+            check_command.append("--native-only")
+        subprocess.run(check_command, check=True)
     return 0
 
 

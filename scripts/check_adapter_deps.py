@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import importlib.metadata
 import importlib
 import inspect
@@ -22,27 +23,43 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Check pinned TeeBotus adapter dependencies.")
+    parser.add_argument("--python-only", action="store_true", help="Check only Python adapter dependencies and contracts.")
+    parser.add_argument("--native-only", action="store_true", help="Check only native signal-cli binaries and optional service.")
+    args = parser.parse_args(argv)
+    if args.python_only and args.native_only:
+        parser.error("--python-only and --native-only cannot be combined")
+
     pins = _read_pins(LOCKFILE)
-    checks = [
-        _check_python_package("signalbot", pins["signalbot"]),
-        _check_python_package("nio-bot", pins["nio-bot"]),
-        _check_python_package("matrix-nio", pins["matrix-nio"]),
-        _check_python_package("blurhash-python", pins["blurhash-python"]),
-        _check_python_package("h11", pins["h11"]),
-        _check_python_package("faster-whisper", pins["faster-whisper"]),
-        _check_python_package("litellm", pins["litellm"]),
-        _check_litellm_supply_chain_guard(pins["litellm"]),
-        _check_local_transcription_contract(),
-        _check_niobot_matrix_contract(),
-        _check_matrix_file_contract(),
-        _check_signalbot_context_contract(),
-        _check_executable_version("signal-cli", pins["signal-cli"], ["--version"]),
-        _check_signal_cli_rest_api_binary(pins["signal-cli-rest-api"]),
-    ]
-    service_url = os.environ.get("SIGNAL_CLI_REST_API_CHECK_URL", "").strip()
-    if service_url:
-        checks.append(_check_signal_cli_rest_api_service(service_url, pins["signal-cli-rest-api"]))
+    checks: list[tuple[bool, str]] = []
+    if not args.native_only:
+        checks.extend(
+            [
+                _check_python_package("signalbot", pins["signalbot"]),
+                _check_python_package("nio-bot", pins["nio-bot"]),
+                _check_python_package("matrix-nio", pins["matrix-nio"]),
+                _check_python_package("blurhash-python", pins["blurhash-python"]),
+                _check_python_package("h11", pins["h11"]),
+                _check_python_package("faster-whisper", pins["faster-whisper"]),
+                _check_python_package("litellm", pins["litellm"]),
+                _check_litellm_supply_chain_guard(pins["litellm"]),
+                _check_local_transcription_contract(),
+                _check_niobot_matrix_contract(),
+                _check_matrix_file_contract(),
+                _check_signalbot_context_contract(),
+            ]
+        )
+    if not args.python_only:
+        checks.extend(
+            [
+                _check_executable_version("signal-cli", pins["signal-cli"], ["--version"]),
+                _check_signal_cli_rest_api_binary(pins["signal-cli-rest-api"]),
+            ]
+        )
+        service_url = os.environ.get("SIGNAL_CLI_REST_API_CHECK_URL", "").strip()
+        if service_url:
+            checks.append(_check_signal_cli_rest_api_service(service_url, pins["signal-cli-rest-api"]))
     for ok, message in checks:
         print(("OK " if ok else "FAIL ") + message)
     return 0 if all(ok for ok, _message in checks) else 1
