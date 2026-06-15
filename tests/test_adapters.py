@@ -284,6 +284,23 @@ def test_signal_send_text_falls_back_without_matching_quote_context():
     assert context.calls == [("Antwort", {"base64_attachments": None})]
 
 
+def test_signal_send_attachment_uses_filename_when_caption_is_empty():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendAttachment("+491", b"hello", "voice.ogg", "audio/ogg")]))
+
+    assert sent == [123]
+    assert context.calls == [("voice.ogg", {"base64_attachments": ["aGVsbG8="]})]
+
+
 def test_telegram_message_without_chat_id_is_rejected():
     event = telegram_message_to_event(
         {"message_id": 1, "from": {"id": 42}, "chat": {}, "text": "hi"},

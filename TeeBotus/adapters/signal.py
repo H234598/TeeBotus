@@ -83,7 +83,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(
                     await _send_signal_text(
                         context,
-                        action.caption,
+                        action.caption or action.filename,
                         base64_attachments=[encoded],
                         reply_to_ref=action.reply_to_ref,
                     )
