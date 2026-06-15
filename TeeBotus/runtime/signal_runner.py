@@ -543,12 +543,12 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
     healths: list[SignalAccountHealth] = []
     service_accounts_cache: dict[str, tuple[bool, list[Any], str]] = {}
     for account in _signal_accounts(config):
-        service_key = account.signal_service.strip()
         try:
             _host, _port, target = _signal_service_host_port(account.signal_service)
         except SignalRuntimeError as exc:
             healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc)))
             continue
+        service_key = _signal_service_cache_key(account.signal_service)
         if service_key not in service_accounts_cache:
             try:
                 if _signal_service_looks_like_signal_cli_api(account):
@@ -782,8 +782,9 @@ def _signal_cli_rest_api_locked_version() -> str:
 def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
     missing: list[str] = []
     checked_services: set[str] = set()
-    for account in _signal_accounts(config):
-        service_key = account.signal_service.strip()
+    signal_accounts = _signal_accounts(config)
+    for account in signal_accounts:
+        service_key = _signal_service_cache_key(account.signal_service)
         if service_key in checked_services:
             continue
         checked_services.add(service_key)
@@ -792,8 +793,8 @@ def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
         accounts = _signal_cli_api_accounts(account)
         configured_numbers = {
             signal_account.signal_phone_number
-            for signal_account in _signal_accounts(config)
-            if signal_account.signal_service.strip() == service_key
+            for signal_account in signal_accounts
+            if _signal_service_cache_key(signal_account.signal_service) == service_key
         }
         available = {_signal_cli_api_account_identifier(value) for value in accounts}
         missing.extend(sorted(number for number in configured_numbers if number not in available))
@@ -911,6 +912,12 @@ def _signal_service_host_port(signal_service: str) -> tuple[str, int, str]:
         port = 80 if scheme == "http" else 443
     target = f"{parsed.hostname}:{port}"
     return parsed.hostname, port, target
+
+
+def _signal_service_cache_key(signal_service: str) -> str:
+    _host, _port, target = _signal_service_host_port(signal_service)
+    _normalized, scheme = _normalize_signal_service(signal_service)
+    return f"{scheme or 'http'}://{target}"
 
 
 def _signalbot_connection_mode(signalbot: Any, scheme: str, signal_service: str = "") -> Any | None:

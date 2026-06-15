@@ -1720,6 +1720,50 @@ def test_signal_cli_api_account_preflight_accepts_registered_number(monkeypatch,
     _require_signal_cli_api_accounts_registered(config)
 
 
+def test_signal_cli_api_account_preflight_groups_normalized_service_urls(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://localhost:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Other",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="localhost:8080",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo", "Other"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("Demo", tmp_path / "Demo.md", (accounts[0],)),
+            InstanceRunConfig("Other", tmp_path / "Other.md", (accounts[1],)),
+        ),
+    )
+    calls: list[str] = []
+
+    def fake_accounts(account: AccountRunConfig) -> list[str]:
+        calls.append(account.signal_service)
+        return ["+491", "+492"]
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", fake_accounts)
+
+    _require_signal_cli_api_accounts_registered(config)
+
+    assert calls == ["http://localhost:8080"]
+
+
 def test_signal_cli_api_account_preflight_rejects_missing_number(monkeypatch, tmp_path) -> None:
     account = AccountRunConfig(
         instance_name="Demo",
@@ -1784,6 +1828,52 @@ def test_signal_account_health_reports_registered_and_missing_numbers(monkeypatc
 
     assert [item.registered for item in health] == [True, False]
     assert health[1].error == "account missing in signal-cli-rest-api /v1/accounts"
+
+
+def test_signal_account_health_groups_normalized_service_urls(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://localhost:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Other",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="localhost:8080",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo", "Other"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("Demo", tmp_path / "Demo.md", (accounts[0],)),
+            InstanceRunConfig("Other", tmp_path / "Other.md", (accounts[1],)),
+        ),
+    )
+    calls: list[str] = []
+
+    def fake_accounts(account: AccountRunConfig) -> list[str]:
+        calls.append(account.signal_service)
+        return ["+491", "+492"]
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", fake_accounts)
+
+    health = check_signal_accounts(config)
+
+    assert [item.registered for item in health] == [True, True]
+    assert [item.target for item in health] == ["localhost:8080", "localhost:8080"]
+    assert calls == ["http://localhost:8080"]
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:
