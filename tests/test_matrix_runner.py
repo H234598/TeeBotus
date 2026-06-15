@@ -43,6 +43,7 @@ class FakeMatrixClient:
         self.uploaded: list[tuple[bytes, dict[str, object]]] = []
         self.downloads: list[str] = []
         self.fetched_events: list[tuple[str, str]] = []
+        self.fetch_message_calls: list[tuple[str, str]] = []
         self.events: dict[tuple[str, str], object] = {}
 
     async def room_send(self, **kwargs):
@@ -65,6 +66,10 @@ class FakeMatrixClient:
 
     async def room_get_event(self, room_id: str, event_id: str):
         self.fetched_events.append((room_id, event_id))
+        return self.events[(room_id, event_id)]
+
+    async def fetch_message(self, room_id: str, event_id: str):
+        self.fetch_message_calls.append((room_id, event_id))
         return self.events[(room_id, event_id)]
 
 
@@ -321,9 +326,48 @@ def test_matrix_bridge_fetches_reply_text_without_body_fallback(tmp_path) -> Non
 
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), ReplyMessage()))
 
-    assert client.fetched_events == [("!room:example", "$old")]
+    assert client.fetch_message_calls == [("!room:example", "$old")]
+    assert client.fetched_events == []
     assert seen[0].text == "Antwort"
     assert seen[0].reply_to_text == "Originaltext"
+
+
+def test_matrix_bridge_fetches_reply_text_from_niobot_cache_tuple(tmp_path) -> None:
+    class CachedReplyClient(FakeMatrixClient):
+        async def fetch_message(self, room_id: str, event_id: str):
+            self.fetch_message_calls.append((room_id, event_id))
+            return FakeMatrixRoom(), type("MatrixEvent", (), {"body": "Cached original"})()
+
+        async def room_get_event(self, _room_id: str, _event_id: str):
+            raise AssertionError("room_get_event should not be used when fetch_message returns text")
+
+    client = CachedReplyClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    seen = []
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: seen.append(event) or []})()
+
+    class ReplyMessage(FakeMatrixMessage):
+        body = "Antwort"
+        source = {"content": {"msgtype": "m.text", "body": "Antwort", "m.relates_to": {"m.in_reply_to": {"event_id": "$old"}}}}
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), ReplyMessage()))
+
+    assert client.fetch_message_calls == [("!room:example", "$old")]
+    assert seen[0].reply_to_text == "Cached original"
 
 
 def test_matrix_bridge_keeps_reply_missing_when_lookup_fails(tmp_path) -> None:
@@ -357,6 +401,7 @@ def test_matrix_bridge_keeps_reply_missing_when_lookup_fails(tmp_path) -> None:
 
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), ReplyMessage()))
 
+    assert client.fetch_message_calls == [("!room:example", "$old")]
     assert client.fetched_events == [("!room:example", "$old")]
     assert seen[0].reply_to_text is None
 

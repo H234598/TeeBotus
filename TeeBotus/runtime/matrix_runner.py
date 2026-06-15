@@ -304,6 +304,15 @@ async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent) -> Incomin
     reply_event_id = _matrix_reply_event_id(event.raw)
     if not reply_event_id:
         return event
+    fetch_message = getattr(client, "fetch_message", None)
+    if callable(fetch_message):
+        try:
+            response = await fetch_message(event.chat_id, reply_event_id)
+        except Exception:
+            response = None
+        reply_text = _matrix_reply_text_from_response(response)
+        if reply_text:
+            return event.with_reply_to_text(reply_text)
     room_get_event = getattr(client, "room_get_event", None)
     if not callable(room_get_event):
         return event
@@ -329,6 +338,11 @@ def _matrix_reply_event_id(message: Any) -> str:
 
 
 def _matrix_reply_text_from_response(response: Any) -> str:
+    if isinstance(response, tuple):
+        for item in response:
+            text = _matrix_event_body(item)
+            if text:
+                return text
     for candidate in (
         getattr(response, "event", None),
         response,
