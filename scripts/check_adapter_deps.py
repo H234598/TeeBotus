@@ -106,6 +106,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     start_params = inspect.signature(niobot.NioBot.start).parameters
     send_params = inspect.signature(niobot.NioBot.send_message).parameters
     add_reaction_params = inspect.signature(niobot.NioBot.add_reaction).parameters
+    delete_message_params = inspect.signature(niobot.NioBot.delete_message).parameters
     edit_message_params = inspect.signature(niobot.NioBot.edit_message).parameters
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
@@ -123,6 +124,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.send_message.message_type": "message_type" in send_params,
         "NioBot.send_message.reply_to": "reply_to" in send_params,
         "NioBot.add_reaction.emoji": "emoji" in add_reaction_params,
+        "NioBot.delete_message.reason": "reason" in delete_message_params,
         "NioBot.edit_message.content": "content" in edit_message_params,
         "NioBot.edit_message.message_type": "message_type" in edit_message_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,

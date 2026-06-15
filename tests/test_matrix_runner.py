@@ -426,6 +426,54 @@ def test_matrix_cleanup_redacts_tracked_current_room_messages(tmp_path) -> None:
     assert any("aktuellen Chat" in call["content"]["body"] for call in client.sent)
 
 
+def test_matrix_cleanup_prefers_niobot_delete_message(tmp_path) -> None:
+    class DeleteMessageClient(FakeMatrixClient):
+        def __init__(self) -> None:
+            super().__init__()
+            self.deleted: list[tuple[str, str, str | None]] = []
+
+        async def delete_message(self, room_id: str, event_id: str, reason: str | None = None):
+            self.deleted.append((room_id, event_id, reason))
+            return FakeMatrixResponse()
+
+        async def room_redact(self, *_args, **_kwargs):
+            raise AssertionError("room_redact should not be used when delete_message is available")
+
+    client = DeleteMessageClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = bridge.account_store.resolve_or_create_account("matrix:user:@alice:example")
+    bridge.message_tracker.record(
+        SentMessageRef(
+            channel="matrix",
+            instance_name="Demo",
+            account_id=account_id,
+            chat_id="!room:example",
+            message_ref="$old",
+            ref_kind="matrix_event_id",
+        )
+    )
+    message = FakeMatrixMessage()
+    message.body = "/cleanup 1"
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
+
+    assert client.deleted == [("!room:example", "$old", "TeeBotus cleanup")]
+
+
 def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

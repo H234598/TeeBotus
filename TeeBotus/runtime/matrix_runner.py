@@ -153,9 +153,17 @@ class MatrixRuntimeBridge:
             )
             for ref in refs:
                 try:
-                    await self.client.room_redact(event.chat_id, ref.message_ref, reason="TeeBotus cleanup")
+                    await _delete_matrix_message(self.client, event.chat_id, ref.message_ref)
                 except Exception:
                     continue
+
+
+async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:
+    delete_message = getattr(client, "delete_message", None)
+    if callable(delete_message):
+        await delete_message(room_id, event_id, reason="TeeBotus cleanup")
+        return
+    await client.room_redact(room_id, event_id, reason="TeeBotus cleanup")
 
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
