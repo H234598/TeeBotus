@@ -8,6 +8,7 @@ from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
@@ -227,6 +228,34 @@ def test_bibliothekar_section_settings_are_parsed():
     assert instructions.bibliothekar_max_chunks == 2
     assert instructions.bibliothekar_max_quote_chars == 333
     assert instructions.bibliothekar_require_citations is False
+
+
+def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
+    source = tmp_path / "books"
+    source.mkdir()
+    (source / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "index", "--source", str(source), "--dry-run"]) == 0
+    dry_run_output = capsys.readouterr().out
+    assert "Depressionsbot: 1 Dokumente, 1 Chunks, dry_run=True" in dry_run_output
+    assert not (instance_dir / "data" / "Bibliothek" / "therapie.txt").exists()
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "index", "--source", str(source)]) == 0
+    index_output = capsys.readouterr().out
+    assert "Depressionsbot: 1 Dokumente, 1 Chunks, dry_run=False" in index_output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
+    status_output = capsys.readouterr().out
+    assert "Depressionsbot: backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1" in status_output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "query", "Therapie", "--top-k", "1"]) == 0
+    query_output = capsys.readouterr().out
+    assert "Depressionsbot: backend=local selected=1" in query_output
+    assert "therapie.txt" in query_output
 
 
 def _write_docx(path, paragraphs):
