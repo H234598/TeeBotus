@@ -121,6 +121,31 @@ python3 -m TeeBotus --runtime-status --channels signal
 
 Wenn ein lokaler konfigurierter Signal-Dienst nicht erreichbar ist, startet TeeBotus `signal-cli-api --listen <host>:<port>` automatisch und prueft danach erneut. Fuer nicht-lokale Services bleibt ein nicht erreichbares Backend ein harter Startfehler. `signalbot` nutzt dabei `InMemoryConfig`; persistenter Bot-Zustand liegt in TeeBotus, Signal-Account-Daten liegen bei `signal-cli`.
 
+`--runtime-status --channels signal` meldet zusaetzlich den Signal-Account-Zustand:
+
+```text
+signal_account=<instance>/<slot> phone=+49... target=127.0.0.1:8080 status=registered
+signal_account=<instance>/<slot> phone=+49... target=127.0.0.1:8080 status=missing
+signal_account=<instance>/<slot> phone=+49... target=127.0.0.1:8080 status=unavailable
+```
+
+`missing` bedeutet: das Backend ist erreichbar, aber `signal-cli-api` listet die konfigurierte Telefonnummer nicht in `/v1/accounts`. Dann muss der native Signal-Account zuerst in `signal-cli` eingerichtet werden. Als Primaergeraet:
+
+```bash
+signal-cli -a +49... register
+signal-cli -a +49... verify <sms-code>
+signal-cli listAccounts
+```
+
+Als verlinktes Zweitgeraet:
+
+```bash
+signal-cli link -n TeeBotus
+signal-cli listAccounts
+```
+
+Erst wenn `signal-cli listAccounts` die konfigurierte Nummer kennt, startet `python3 -m TeeBotus --all --channels telegram,signal` dauerhaft ohne Signal-Preflight-Fehler.
+
 Mehrere Signal-Slots werden positionsgleich konfiguriert:
 
 ```bash
