@@ -238,6 +238,32 @@ def test_runtime_status_reports_haystack_bibliothekar_dependency_gap(monkeypatch
     ) in captured.out
 
 
+def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## MCP Tools
+        - bibliothekar.search.enabled: true
+        - bibliothekar.search.read_only: true
+        - memory.search.enabled: false
+        - codex.exec.enabled: true
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "mcp_tools=Demo Read-only allowlist: bibliothekar.search Deaktiviert: memory.search Ignoriert: codex.exec" in captured.out
+
+
 def test_runtime_status_loads_env_before_resolving_config(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls: list[tuple[str, Path]] = []

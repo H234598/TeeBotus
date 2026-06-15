@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,6 +34,13 @@ from TeeBotus.runtime.signal_runner import (
     run_signal_account,
     run_signal_accounts,
 )
+
+
+class FixedWakeDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        value = cls(2026, 6, 15, 12, tzinfo=timezone.utc)
+        return value if tz is None else value.astimezone(tz)
 
 
 class FakeSignalMessage:
@@ -533,7 +541,7 @@ def test_signal_cleanup_logs_tracking_pop_errors(tmp_path, caplog) -> None:
     assert "Signal cleanup could not load tracked messages" in caplog.text
 
 
-def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
+def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path, monkeypatch) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()
     (instance_dir / "Bot_Verhalten.md").write_text("## Befehle\n- /custom: Signal custom fuer {first_name}.\n", encoding="utf-8")
@@ -552,6 +560,7 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
     )
     context = FakeSignalContext()
     context.message.text = "/custom"
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime)
 
     asyncio.run(command.handle(context))
 
@@ -607,7 +616,7 @@ def test_signal_command_preserves_explicit_engine_reply_context(tmp_path) -> Non
     assert context.bot_sent == []
 
 
-def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path) -> None:
+def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path, monkeypatch) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()
     (instance_dir / "Bot_Verhalten.md").write_text("## Befehle\n- /custom: Signal custom fuer {first_name}.\n", encoding="utf-8")
@@ -629,6 +638,7 @@ def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path) -> 
     context.message.text = "/custom"
     context.message.timestamp = 200
     context.message.target_sent_timestamp = 100
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime)
 
     asyncio.run(command.handle(context))
 

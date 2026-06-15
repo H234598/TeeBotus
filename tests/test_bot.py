@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import call, patch
 
@@ -1072,6 +1073,11 @@ class BotTests(unittest.TestCase):
                 llm_provider="huggingface",
                 llm_model="meta-llama/Llama-3.1-8B-Instruct",
                 llm_fallback_models=("groq/llama-3.3-70b-versatile", "openai/gpt-4.1-mini"),
+                mcp_tools={
+                    "bibliothekar.search": {"enabled": True, "read_only": True},
+                    "memory.search": {"enabled": True, "read_only": True, "private_chat_only": True},
+                    "codex.exec": {"enabled": True, "read_only": False},
+                },
             )
             memory_store = account_memory_store(directory)
             account_id = memory_store.resolve_or_create_account(telegram_identity_key(456))
@@ -1124,6 +1130,9 @@ class BotTests(unittest.TestCase):
             self.assertIn("- Provider: huggingface", reply)
             self.assertIn("- Modell: meta-llama/Llama-3.1-8B-Instruct", reply)
             self.assertIn("- Fallback-Modelle: 2", reply)
+            self.assertIn("MCP Tools", reply)
+            self.assertIn("- Read-only allowlist: bibliothekar.search, memory.search (private)", reply)
+            self.assertIn("- Ignoriert: codex.exec", reply)
             self.assertIn("Proactive Agent", reply)
             self.assertIn("- Agent enabled: ja", reply)
             self.assertIn("- Outbox queued: 1", reply)
@@ -1641,6 +1650,12 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, "pong")])
 
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
+        class FixedWakeDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                value = cls(2026, 6, 15, 12, tzinfo=timezone.utc)
+                return value if tz is None else value.astimezone(tz)
+
         class InstructionBox:
             def get(self):
                 return BotInstructions()
@@ -1666,7 +1681,10 @@ class BotTests(unittest.TestCase):
                 bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
             )
 
-            with patch("TeeBotus.adapters.telegram_runtime._process_text_message", side_effect=AssertionError("legacy path used")):
+            with (
+                patch("TeeBotus.adapters.telegram_runtime._process_text_message", side_effect=AssertionError("legacy path used")),
+                patch("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime),
+            ):
                 handle_update(
                     api,
                     {"message": {"message_id": 1, "text": "/ping", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},

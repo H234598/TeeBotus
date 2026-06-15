@@ -94,7 +94,7 @@ def _load_runtime_environment() -> None:
 def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
-        from TeeBotus.core.status import account_memory_index_health_lines
+        from TeeBotus.core.status import account_memory_index_health_lines, mcp_tool_runtime_status_line
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
         from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
@@ -173,6 +173,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
         if health.error:
             detail += f" error={health.error}"
         print(detail)
+    for instance in config.instances:
+        try:
+            instructions = InstructionStore(instance.instruction_path).get()
+        except Exception as exc:
+            print(f"mcp_tools={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            continue
+        print(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools))
     for instance_name in config.selected_instances:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
             print(line)

@@ -286,6 +286,11 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
         llm_provider="ollama",
         llm_model="llama3.1:8b",
         llm_fallback_models=("groq/llama-3.3-70b-versatile",),
+        mcp_tools={
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "memory.search": {"enabled": False, "read_only": True},
+            "codex.exec": {"enabled": True},
+        },
     )
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
@@ -318,6 +323,10 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Provider: ollama" in actions[0].text
     assert "- Modell: llama3.1:8b" in actions[0].text
     assert "- Fallback-Modelle: 1" in actions[0].text
+    assert "MCP Tools" in actions[0].text
+    assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
+    assert "- Deaktiviert: memory.search" in actions[0].text
+    assert "- Ignoriert: codex.exec" in actions[0].text
     assert "Configured status." not in actions[0].text
 
 

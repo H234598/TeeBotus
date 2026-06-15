@@ -18,6 +18,13 @@ from TeeBotus.runtime.proactive_agent import check_proactive_agent_account, disp
 LOCAL = timezone(timedelta(hours=2))
 
 
+class FixedWakeDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        value = cls(2026, 6, 15, 12, tzinfo=timezone.utc)
+        return value if tz is None else value.astimezone(tz)
+
+
 def store(tmp_path) -> AccountStore:
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"n" * 32))
 
@@ -55,7 +62,8 @@ def set_identity_last_seen(account_store: AccountStore, identity: str, when: dat
     account_store._save_identities(identities)
 
 
-def test_engine_asks_user_to_unmute_bot_messages_once_route_exists(tmp_path) -> None:
+def test_engine_asks_user_to_unmute_bot_messages_once_route_exists(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime)
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
     prepare_account_with_route(account_store, identity)

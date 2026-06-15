@@ -1384,6 +1384,7 @@ def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, 
         llm_provider=instructions.llm_provider,
         llm_model=instructions.llm_model or instructions.openai_model,
         llm_fallback_models=instructions.llm_fallback_models,
+        mcp_tools=instructions.mcp_tools,
     )
 
 

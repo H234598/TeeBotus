@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from TeeBotus import __version__
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
+from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     TOKEN_HEX_RE,
@@ -52,6 +53,7 @@ def build_status_reply(
     llm_provider: str = "",
     llm_model: str = "",
     llm_fallback_models: tuple[str, ...] | list[str] | str = (),
+    mcp_tools: Mapping[str, Mapping[str, Any]] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> str:
     resolved_account_id = _resolve_status_account_id(sender_id=sender_id, account_id=account_id, account_store=account_store)
@@ -89,6 +91,8 @@ def build_status_reply(
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
             "",
+            *mcp_tool_status_lines(mcp_tools or {}),
+            "",
             *_proactive_agent_status_lines(
                 account_store=account_store,
                 account_id=resolved_account_id,
@@ -117,6 +121,68 @@ def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
     else:
         count = len([part for part in value if str(part or "").strip()])
     return str(count)
+
+
+def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
+    configured = {str(name or "").strip().casefold(): config for name, config in (mcp_tools or {}).items() if str(name or "").strip()}
+    allowed: list[str] = []
+    disabled: list[str] = []
+    for name, default_policy in sorted(DEFAULT_MCP_TOOL_POLICIES.items()):
+        policy = _mcp_status_policy(default_policy, configured.get(name, {}))
+        if policy.enabled and policy.read_only:
+            allowed.append(_mcp_tool_status_label(name, policy))
+        elif not policy.enabled:
+            disabled.append(name)
+        else:
+            disabled.append(f"{name} (nicht read-only)")
+    ignored = sorted(name for name in configured if name not in DEFAULT_MCP_TOOL_POLICIES)
+    lines = [
+        "MCP Tools",
+        f"- Read-only allowlist: {', '.join(allowed) if allowed else 'keine'}",
+    ]
+    if disabled:
+        lines.append(f"- Deaktiviert: {', '.join(disabled)}")
+    if ignored:
+        lines.append(f"- Ignoriert: {', '.join(ignored)}")
+    return lines
+
+
+def mcp_tool_runtime_status_line(instance_name: str, mcp_tools: Mapping[str, Mapping[str, Any]] | None = None) -> str:
+    lines = mcp_tool_status_lines(mcp_tools)
+    details = " ".join(line.removeprefix("- ") for line in lines[1:])
+    return f"mcp_tools={instance_name} {details}"
+
+
+def _mcp_status_policy(default_policy: MCPToolPolicy, config: Mapping[str, Any]) -> MCPToolPolicy:
+    if not isinstance(config, Mapping):
+        config = {}
+    return MCPToolPolicy(
+        enabled=_mcp_bool_config(config.get("enabled"), default_policy.enabled),
+        read_only=_mcp_bool_config(config.get("read_only"), default_policy.read_only),
+        requires_confirmation=_mcp_bool_config(config.get("requires_confirmation"), default_policy.requires_confirmation),
+        private_chat_only=_mcp_bool_config(config.get("private_chat_only"), default_policy.private_chat_only),
+        requires_admin=_mcp_bool_config(config.get("requires_admin"), default_policy.requires_admin),
+        sandbox_required=_mcp_bool_config(config.get("sandbox_required"), default_policy.sandbox_required),
+    )
+
+
+def _mcp_bool_config(value: object, default: bool) -> bool:
+    if value is None:
+        return default
+    return str(value).strip().casefold() in {"1", "true", "yes", "on", "enabled", "ja", "an"}
+
+
+def _mcp_tool_status_label(name: str, policy: MCPToolPolicy) -> str:
+    suffixes: list[str] = []
+    if policy.private_chat_only:
+        suffixes.append("private")
+    if policy.requires_confirmation:
+        suffixes.append("confirm")
+    if policy.requires_admin:
+        suffixes.append("admin")
+    if policy.sandbox_required:
+        suffixes.append("sandbox")
+    return f"{name} ({', '.join(suffixes)})" if suffixes else name
 
 
 def _status_display_name(instance_name: str) -> str:
