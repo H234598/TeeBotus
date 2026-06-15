@@ -176,7 +176,10 @@ async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> No
         response = await delete_message(room_id, event_id, reason="TeeBotus cleanup")
         _raise_matrix_runtime_response_error(response)
         return
-    response = await client.room_redact(room_id, event_id, reason="TeeBotus cleanup")
+    room_redact = getattr(client, "room_redact", None)
+    if not callable(room_redact):
+        raise MatrixRuntimeError("Matrix cleanup requires nio-bot delete_message or matrix-nio room_redact")
+    response = await room_redact(room_id, event_id, reason="TeeBotus cleanup")
     _raise_matrix_runtime_response_error(response)
 
 

@@ -699,6 +699,18 @@ def test_delete_matrix_message_rejects_dict_error_response() -> None:
         raise AssertionError("MatrixRuntimeError was not raised")
 
 
+def test_delete_matrix_message_reports_missing_redaction_api() -> None:
+    class Client:
+        pass
+
+    try:
+        asyncio.run(_delete_matrix_message(Client(), "!room:example", "$old"))
+    except MatrixRuntimeError as exc:
+        assert str(exc) == "Matrix cleanup requires nio-bot delete_message or matrix-nio room_redact"
+    else:
+        raise AssertionError("MatrixRuntimeError was not raised")
+
+
 def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
