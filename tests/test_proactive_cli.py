@@ -212,6 +212,55 @@ def test_runtime_sender_factory_matrix_lazy_client_does_not_block_on_forever_sta
     assert sent[0]["content"]["file"]["url"] == "mxc://example/file"
 
 
+def test_runtime_sender_factory_matrix_lazy_client_retries_after_start_failure(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    sent: list[tuple[str, str]] = []
+
+    class FakeNioBot:
+        instances: list["FakeNioBot"] = []
+
+        def __init__(self, homeserver: str, user_id: str, *, device_id: str, command_prefix: str, global_message_type: str) -> None:
+            self.rooms: dict[str, object] = {}
+            FakeNioBot.instances.append(self)
+
+        async def start(self, *, access_token: str) -> None:
+            if len(FakeNioBot.instances) == 1:
+                raise RuntimeError("matrix login failed")
+            self.rooms["!room:example"] = object()
+
+        async def send_message(self, room: str, content: str, **kwargs):
+            sent.append((room, content))
+            return type("Response", (), {"event_id": "$matrix-ref"})()
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: type("NioBotModule", (), {"NioBot": FakeNioBot})())
+    factory = runtime_sender_factory(
+        instances_dir,
+        env={
+            "TEEBOTUS_INSTANCES": "Depressionsbot",
+            "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix.example",
+            "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
+            "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
+            "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+        },
+    )
+
+    senders = factory("Depressionsbot", store_for(instance_dir))
+    try:
+        asyncio.run(senders["matrix"]({"adapter_slot": 1}, SendText("!room:example", "Erster Versuch"), {}))
+    except RuntimeError as exc:
+        assert str(exc) == "matrix login failed"
+    else:
+        raise AssertionError("first Matrix lazy start should fail")
+
+    result = asyncio.run(senders["matrix"]({"adapter_slot": 1}, SendText("!room:example", "Zweiter Versuch"), {}))
+
+    assert result == "$matrix-ref"
+    assert len(FakeNioBot.instances) == 2
+    assert sent == [("!room:example", "Zweiter Versuch")]
+
+
 def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:
     result = main(["--dry-run", "--llm-plan"])
 

@@ -221,13 +221,17 @@ class _LazyMatrixProactiveClient:
         return await self.ensure_started()
 
     async def ensure_started(self) -> Any:
-        if self._started and self._client is not None:
+        if self._started and self._client is not None and not _matrix_start_task_failed(self._start_task):
             return self._client
+        if _matrix_start_task_failed(self._start_task):
+            self._reset_failed_start()
         if self._lock is None:
             self._lock = asyncio.Lock()
         async with self._lock:
-            if self._started and self._client is not None:
+            if self._started and self._client is not None and not _matrix_start_task_failed(self._start_task):
                 return self._client
+            if _matrix_start_task_failed(self._start_task):
+                self._reset_failed_start()
             client = self._niobot.NioBot(
                 self._account.matrix_homeserver,
                 self._account.matrix_user_id,
@@ -244,8 +248,18 @@ class _LazyMatrixProactiveClient:
             self._client = client
             self._started = True
             if self._start_task is not None:
-                await _wait_for_matrix_lazy_ready(client, self._ready_event, self._start_task, self._account.label)
+                try:
+                    await _wait_for_matrix_lazy_ready(client, self._ready_event, self._start_task, self._account.label)
+                except Exception:
+                    self._reset_failed_start()
+                    raise
             return client
+
+    def _reset_failed_start(self) -> None:
+        self._client = None
+        self._started = False
+        self._start_task = None
+        self._ready_event = None
 
 
 def _register_matrix_ready_event(client: Any, ready_event: asyncio.Event) -> None:
@@ -292,6 +306,18 @@ async def _wait_for_matrix_lazy_ready(client: Any, ready_event: asyncio.Event, s
 def _matrix_client_has_room_state(client: Any) -> bool:
     rooms = getattr(client, "rooms", None)
     return isinstance(rooms, dict) and bool(rooms)
+
+
+def _matrix_start_task_failed(task: asyncio.Task[Any] | None) -> bool:
+    if task is None or not task.done():
+        return False
+    if task.cancelled():
+        return True
+    try:
+        task.result()
+    except Exception:
+        return True
+    return False
 
 
 def _log_matrix_start_task_failure(task: asyncio.Task[Any]) -> None:
