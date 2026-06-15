@@ -649,7 +649,8 @@ class AccountStore:
     def resolve_or_create_account(self, identity_key: str, *, display_label: str = "") -> str:
         identities = self._load_identities()
         key = self._normalize_identity_key(identity_key)
-        existing = identities.get(key, {}).get("account_id")
+        payload = self._identity_payload_for_key(identities, key)
+        existing = payload.get("account_id") if isinstance(payload, dict) else None
         if isinstance(existing, str) and TOKEN_HEX_RE.fullmatch(existing) and self._account_is_resolvable(existing):
             self._touch_identity(identities, key)
             return existing
@@ -682,7 +683,7 @@ class AccountStore:
 
     def get_account_for_identity(self, identity_key: str) -> str | None:
         identities = self._load_identities()
-        data = identities.get(self._normalize_identity_key(identity_key))
+        data = self._identity_payload_for_key(identities, self._normalize_identity_key(identity_key))
         if isinstance(data, dict):
             account_id = data.get("account_id")
             if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
@@ -701,7 +702,7 @@ class AccountStore:
     ) -> None:
         key = self._normalize_identity_key(identity_key)
         identities = self._load_identities()
-        payload = identities.get(key)
+        payload = self._identity_payload_for_key(identities, key)
         if not isinstance(payload, dict):
             return
         route = {
@@ -719,7 +720,7 @@ class AccountStore:
 
     def get_identity_route(self, identity_key: str) -> dict[str, Any] | None:
         identities = self._load_identities()
-        payload = identities.get(self._normalize_identity_key(identity_key))
+        payload = self._identity_payload_for_key(identities, self._normalize_identity_key(identity_key))
         if not isinstance(payload, dict):
             return None
         route = payload.get("last_route")
@@ -813,7 +814,7 @@ class AccountStore:
             self.merge_accounts(current_account_id, target_account_id)
             merged_from = current_account_id
         identities = self._load_identities()
-        previous_identity = identities.get(key)
+        previous_identity = self._identity_payload_for_key(identities, key)
         first_seen_at = previous_identity.get("first_seen_at", now) if isinstance(previous_identity, dict) else now
         identities[key] = {
             "schema_version": ACCOUNT_SCHEMA_VERSION,
@@ -836,7 +837,7 @@ class AccountStore:
     def unlink_identity(self, identity_key: str) -> str | None:
         key = self._normalize_identity_key(identity_key)
         identities = self._load_identities()
-        payload = identities.get(key)
+        payload = self._identity_payload_for_key(identities, key)
         if not isinstance(payload, dict):
             return None
         account_id = payload.get("account_id")
@@ -875,7 +876,7 @@ class AccountStore:
         expected_account_id = validate_sha512_token(expected_account_id, field_name="expected_account_id")
         key = self._normalize_identity_key(identity_key)
         identities = self._load_identities()
-        payload = identities.get(key)
+        payload = self._identity_payload_for_key(identities, key)
         if not isinstance(payload, dict) or payload.get("account_id") != expected_account_id:
             return None
         return self.unlink_identity(key)
@@ -1868,6 +1869,29 @@ class AccountStore:
                 return f"matrix:localpart:{identifier.lstrip('@').casefold()}"
         return key
 
+    def _identity_payload_for_key(self, identities: dict[str, Any], key: str) -> dict[str, Any] | None:
+        payload = identities.get(key)
+        if isinstance(payload, dict):
+            return payload
+        for stored_key, stored_payload in list(identities.items()):
+            if not isinstance(stored_payload, dict) or not isinstance(stored_key, str):
+                continue
+            try:
+                normalized_stored_key = self._normalize_identity_key(stored_key)
+            except AccountStoreError:
+                continue
+            if normalized_stored_key != key:
+                continue
+            identities.pop(stored_key, None)
+            stored_payload["identity_key"] = key
+            identities[key] = stored_payload
+            account_id = stored_payload.get("account_id")
+            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                self._replace_identity_in_profile(account_id, stored_key, key)
+            self._save_identities(identities)
+            return stored_payload
+        return None
+
     def _load_identities(self) -> dict[str, Any]:
         return self.vault.read_json(self.identities_path, {})
 
@@ -1945,6 +1969,23 @@ class AccountStore:
         if identity_key not in linked:
             linked.append(identity_key)
         profile["linked_identities"] = linked
+        profile["updated_at"] = utc_now()
+        self._write_account_profile(account_id, profile)
+        self._upsert_account_index(profile)
+
+    def _replace_identity_in_profile(self, account_id: str, old_identity_key: str, new_identity_key: str) -> None:
+        if old_identity_key == new_identity_key:
+            return
+        if not (self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME).exists():
+            return
+        profile = self._read_account_profile(account_id)
+        linked = [
+            new_identity_key if str(identity_key) == old_identity_key else str(identity_key)
+            for identity_key in profile.get("linked_identities", [])
+        ]
+        if new_identity_key not in linked:
+            linked.append(new_identity_key)
+        profile["linked_identities"] = list(dict.fromkeys(linked))
         profile["updated_at"] = utc_now()
         self._write_account_profile(account_id, profile)
         self._upsert_account_index(profile)

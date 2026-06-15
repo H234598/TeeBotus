@@ -72,6 +72,30 @@ def test_identity_lookup_normalizes_case_insensitive_fallback_keys(tmp_path) -> 
     assert store.resolve_or_create_account("matrix:localpart:ADA") == matrix_account
 
 
+def test_identity_lookup_migrates_legacy_case_variant_key(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    canonical_key = "signal:uuid:abc-def"
+    legacy_key = "signal:uuid:ABC-DEF"
+    account_id = store.resolve_or_create_account(canonical_key)
+    identities = store._load_identities()
+    payload = identities.pop(canonical_key)
+    payload["identity_key"] = legacy_key
+    identities[legacy_key] = payload
+    store._save_identities(identities)
+    profile = store._read_account_profile(account_id)
+    profile["linked_identities"] = [legacy_key]
+    store._write_account_profile(account_id, profile)
+
+    assert store.get_account_for_identity(canonical_key) == account_id
+    assert store.resolve_or_create_account(canonical_key) == account_id
+
+    migrated_identities = store._load_identities()
+    assert canonical_key in migrated_identities
+    assert legacy_key not in migrated_identities
+    migrated_profile = store._read_account_profile(account_id)
+    assert migrated_profile["linked_identities"] == [canonical_key]
+
+
 def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = telegram_identity_key(395935293)
