@@ -1,6 +1,6 @@
 # TeeBotus
 
-TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. Er nutzt Long Polling ueber die Telegram Bot API und kann mehrere Instanzen mit getrennten Einstellungen starten.
+TeeBotus ist ein kleiner Python-Bot mit Telegram-Long-Polling als stabilem Einstieg und optionalen Extras fuer Signal, Matrix, lokale Transkription, LLM-Provider, RAG/Bibliothekar und Agenten-Workflows. Er kann mehrere Instanzen mit getrennten Einstellungen starten.
 
 ## Funktionen
 
@@ -225,6 +225,14 @@ PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --entr
 PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --postgres-dsn 'postgresql://USER:PASSWORD@HOST:5432/DBNAME' --require-postgres
 ```
 
+Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JSON. Standardmaessig nutzt er keine echten Provider-Calls, keine Netzsendung und keine API-Kosten:
+
+```bash
+python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
+```
+
+Abgedeckt werden Account-Memory, Bibliothekar, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird.
+
 Account-Report:
 
 ```bash
@@ -292,6 +300,58 @@ OpenAI-Key-Aufloesung:
 
 Wenn eine Instanz mehrere Telegram-Tokens startet, verweigert der Bot den Start, falls ein passender OpenAI-Key fehlt oder zwei Telegram-Slots denselben OpenAI-Key verwenden.
 
+## LLM-Router und Providerprofile
+
+OpenAI bleibt als Legacy-Provider fuer Responses, Voice, Bilder, Tool-Calls und Transkription erhalten. Fuer Textantworten gibt es zusaetzlich eine neutrale LLM-Schicht mit `TeeBotus/llm/base.py`, `TeeBotus/llm/openai_provider.py`, `TeeBotus/llm/litellm_provider.py` und Profilrouting unter `config/`.
+
+Die zentralen Profil-Dateien sind:
+
+- `config/llm_profiles.yaml`
+- `config/llm_routing.yaml`
+
+Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama, Hugging Face, Groq, Gemini und OpenAI-kompatible LiteLLM-Modelle. Remote-Fallbacks sind standardmaessig aus. Ein Fallback auf ein Remote-Profil wird nur genutzt, wenn der jeweilige Codepfad explizit `allow_remote_fallback=True` setzt.
+
+Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue neutrale Felder sind:
+
+```text
+## LLM
+- enabled: ja
+- provider: litellm
+- model: ollama_chat/llama3.1:8b
+- profile: local_ollama
+- base_url: http://127.0.0.1:11434
+- timeout_seconds: 120
+- max_tokens: 1200
+- temperature: 0.7
+```
+
+Environment-Fallbacks heissen `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
+
+Ollama Quickstart:
+
+```bash
+ollama serve
+ollama pull llama3.1:8b
+TEEBOTUS_LLM_PROVIDER=litellm \
+TEEBOTUS_LLM_MODEL=ollama_chat/llama3.1:8b \
+TEEBOTUS_LLM_BASE_URL=http://127.0.0.1:11434 \
+python3 -m TeeBotus --runtime-status --channels telegram
+```
+
+`--runtime-status` prueft lokale Ollama-Targets ueber `127.0.0.1:11434` und meldet gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
+
+LiteLLM-Security:
+
+- `litellm` ist gepinnt und die bekannten kompromittierten Versionen `1.82.7` und `1.82.8` sind blockiert.
+- `scripts/check_adapter_deps.py` prueft den Pin, blockierte Versionen und verdächtige `litellm*.pth`-Dateien.
+- Keine Provider-Keys gehoeren ins Repo; nutze `.env`, Secret-Service oder lokale systemd-Environment-Dateien.
+
+Rollback:
+
+- Setze `llm_enabled: nein` oder entferne den `## LLM`-Block, um zur bisherigen OpenAI-/Regelantwort-Logik zurueckzukehren.
+- Setze `llm_provider: openai`, wenn Textantworten wieder ueber den OpenAI-kompatiblen Legacy-Pfad laufen sollen.
+- Entferne `TEEBOTUS_LLM_*`-Overrides aus der Shell oder systemd-Unit, wenn unerwartet ein falsches Profil gewaehlt wird.
+
 Unterstuetzte Platzhalter in Antworten:
 
 - `{first_name}`
@@ -339,6 +399,54 @@ Die zaehlbaren Grundformen des Live/LLM-Parsers koennen mit `python3 scripts/you
 
 Der aktuelle Bestand gelernter Parser-Misses kann mit `python3 scripts/youtube_parser_misses_report.py --instances-dir instances` ausgewertet werden. Der Report gruppiert Formulierungen, zeigt ob der Basisparser sie inzwischen direkt erkennt, markiert verbleibende Kandidaten fuer dauerhafte Parser-Regeln und gibt pro Kandidat eine kompakte Promotion-Suggestion mit Zielwerten und spezifischen Tokens aus. Mit `--regression-json` erzeugt der Report eine kompakte Testfall-Liste; mit `--pytest-snippet` erzeugt er direkt einen einfuegbaren `pytest.mark.parametrize`-Block fuer Parser-Regressionen.
 
+## Bibliothekar, Haystack und LangGraph
+
+Der Bibliothekar ist die lokale Instanz-Bibliothek unter `instances/<instance>/data/Bibliothek`. Dort koennen `.pdf`, `.epub`, `.docx`, `.txt`, `.md` und `.markdown` abgelegt werden. Der lokale Store baut daraus `.bibliothekar/index.json` und `.bibliothekar/chunks.jsonl`. Antworten duerfen kurze Abschnitte daraus zitieren und muessen dann Titel, Datei, Locator und `chunk_id` nennen.
+
+Wichtig: Account-Memory wird nicht in Haystack/Qdrant indexiert. Account-Memory bleibt getrennt, accountbezogen und verschluesselt. Haystack/Qdrant ist nur fuer Bibliotheksdokumente gedacht, also fuer Buecher, Handbuecher, PDFs und andere explizit abgelegte Referenzen.
+
+Konfiguration in `Bot_Verhalten.md`:
+
+```text
+## Bibliothekar
+- enabled: ja
+- backend: local
+- collection: teebotus_books
+- max_prompt_chars: 5000
+- max_chunks: 5
+- max_quote_chars: 900
+- require_citations: ja
+```
+
+`backend: local` nutzt den JSONL-Store. `backend: haystack` oder `backend: qdrant` aktiviert den optionalen Haystack/Qdrant-Backendpfad hinter derselben `BibliothekarService`-Schnittstelle. Der lokale Store bleibt dabei die rebuildbare Quelle; Haystack/Qdrant ist ein Backend/Cache fuer produktivere Suche.
+
+CLI:
+
+```bash
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot index --source /pfad/zu/buechern --dry-run
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot index --source /pfad/zu/buechern
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot query "Was steht zu Schlaf und Aktivierung?" --top-k 3
+```
+
+Haystack/Qdrant optional:
+
+```bash
+python3 -m pip install '.[rag]'
+qdrant --host 127.0.0.1 --port 6333
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
+```
+
+Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. Wenn Haystack/Qdrant konfiguriert, aber zur Laufzeit nicht verfuegbar ist, faellt die Suche auf den lokalen Bibliothekar zurueck, statt normale Botantworten zu crashen.
+
+LangGraph ist nicht der Botkern. Der erste Pilot liegt unter `TeeBotus/runtime/graphs/` und betrifft nur `Bibliothekar Deep Query`. Der Ablauf ist `classify -> retrieve -> rerank -> answer -> citation_check -> fallback`. Ohne installiertes `langgraph` laeuft derselbe serialisierbare State linear weiter. Normale Chatantworten, `/status`, `/help`, `/ping` und einfache Textregeln laufen nicht durch LangGraph.
+
+Deep-Query-Pilot:
+
+```bash
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot query "Therapie Schlaf" --deep --top-k 3
+```
+
 Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.
@@ -355,7 +463,7 @@ Die strukturierten AccountStore-Schluessel liegen instanzgebunden im Desktop Sec
 
 Der Speicher ist accountbezogen und nicht mehr an `data/users/<telegram_sender_id>` gebunden. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
-Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md).
+Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md). Deutsche und englische Fassungen liegen zusaetzlich unter [docs/privacy-and-encryption.de.md](docs/privacy-and-encryption.de.md) und [docs/privacy-and-encryption.en.md](docs/privacy-and-encryption.en.md).
 
 Kurzantwort fuer Datenschutzfragen:
 
@@ -419,7 +527,10 @@ Telegram-Long-Polling-Verbindungen koennen gelegentlich durch Telegram, Provider
 
 ```bash
 cd TeeBotus
-python3 -m unittest discover -s tests
+python3 -m pytest -q
+python3 -m compileall -q TeeBotus scripts
+python3 scripts/check_adapter_deps.py
+python3 -m pytest -q tests/test_benchmarks_*.py tests/test_graphs_*.py
 ```
 
 ## Anpassen

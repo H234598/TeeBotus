@@ -1,0 +1,46 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+README = Path(__file__).resolve().parents[1] / "README.md"
+
+
+def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    assert "## LLM-Router und Providerprofile" in text
+    assert "Ollama Quickstart" in text
+    assert "Hugging Face" in text
+    assert "Groq" in text
+    assert "Gemini" in text
+    assert "LiteLLM-Security" in text
+    assert "Rollback" in text
+    assert "## Bibliothekar, Haystack und LangGraph" in text
+    assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
+    assert "Normale Chatantworten" in text
+    assert "scripts/run_benchmarks.py --quick" in text
+
+
+def test_readme_documents_local_vs_remote_provider_boundary() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    assert "Remote-Fallbacks sind standardmaessig aus" in text
+    assert "Ollama ist der bevorzugte lokale Textprovider" in text
+    assert "Keine Provider-Keys gehoeren ins Repo" in text
+
+
+def test_readme_has_privacy_docs_in_de_and_en() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    assert "docs/privacy-and-encryption.de.md" in text
+    assert "docs/privacy-and-encryption.en.md" in text
+
+
+def test_readme_uses_placeholder_secrets_only() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    assert "sk-" not in text
+    assert "xoxb-" not in text
+    assert "postgresql://USER:PASSWORD@HOST:5432/DBNAME" in text
+    assert "syt_..." in text
