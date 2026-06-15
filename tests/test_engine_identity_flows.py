@@ -598,6 +598,39 @@ def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
     assert client.calls[0][1] is None
 
 
+def test_engine_prefers_llm_client_for_free_text_when_configured(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, *_args, **_kwargs):
+            self.calls += 1
+            return OpenAIResponse("OpenAI.", "resp-openai", "flex")
+
+    class FakeLLMClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.calls.append(user_text)
+            return OpenAIResponse("LiteLLM.", None, None)
+
+    openai_client = FakeOpenAIClient()
+    llm_client = FakeLLMClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=openai_client,
+        llm_client=llm_client,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[1].text == "LiteLLM."
+    assert llm_client.calls
+    assert openai_client.calls == 0
+
+
 def test_engine_turns_openai_file_block_into_attachment(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

@@ -53,6 +53,10 @@ class BotInstructions:
     echo_enabled: bool = True
     echo_prefix: str = "Echo: "
     openai_enabled: bool = False
+    llm_provider: str = "openai"
+    llm_model: str = ""
+    llm_base_url: str = ""
+    llm_api_key_env: str = ""
     openai_model: str = "gpt-5.5"
     openai_service_tier: str = ""
     openai_rule_file: str = "Bot_Rüstzeug.md"
@@ -584,6 +588,14 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
     normalized = _normalize_key(key)
     if normalized == "enabled":
         instructions.openai_enabled = _parse_bool(value, default=instructions.openai_enabled)
+    elif normalized in {"provider", "llm_provider", "text_provider"}:
+        instructions.llm_provider = value.strip() or instructions.llm_provider
+    elif normalized in {"llm_model", "text_model"}:
+        instructions.llm_model = value.strip()
+    elif normalized in {"base_url", "api_base", "llm_base_url", "litellm_base_url"}:
+        instructions.llm_base_url = value.strip()
+    elif normalized in {"api_key_env", "llm_api_key_env", "litellm_api_key_env"}:
+        instructions.llm_api_key_env = value.strip()
     elif normalized == "model":
         instructions.openai_model = value
     elif normalized == "service_tier":

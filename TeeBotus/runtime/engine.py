@@ -25,6 +25,7 @@ from TeeBotus.core.registration import RegistrationAction, parse_registration_in
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm_client import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
 from TeeBotus.runtime.activity_profile import record_account_activity
@@ -108,6 +109,7 @@ class TeeBotusEngine:
         instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
         project_root: Path | None = None,
         openai_client: object | None = None,
+        llm_client: object | None = None,
         bot_address_names: Iterable[str] = (),
         working_memory_store: WorkingMemoryStore | None = None,
         bibliothekar_store: BibliothekarStore | None = None,
@@ -120,6 +122,7 @@ class TeeBotusEngine:
         self._instructions = instructions
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
+        self.llm_client = llm_client or openai_client
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
         self.bibliothekar_store = bibliothekar_store
@@ -468,9 +471,9 @@ class TeeBotusEngine:
         text = str(event.text or "").strip()
         if not instructions.openai_enabled or (not text and not event.attachments) or text.startswith("/"):
             return []
-        if self.openai_client is None:
+        if self.llm_client is None:
             return [SendText(event.chat_id, instructions.openai_missing_key)]
-        create_reply = getattr(self.openai_client, "create_reply", None)
+        create_reply = getattr(self.llm_client, "create_reply", None)
         if not callable(create_reply):
             return [SendText(event.chat_id, instructions.openai_error)]
         try:
@@ -511,7 +514,7 @@ class TeeBotusEngine:
                     instructions,
                     first_response_id if isinstance(first_response_id, str) else previous_response_id,
                 )
-        except OpenAIAPIError:
+        except (OpenAIAPIError, LLMAPIError):
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         response_id = getattr(response, "response_id", None)
         if isinstance(response_id, str):
@@ -889,10 +892,10 @@ class TeeBotusEngine:
             reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, reply)
             return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
-        if self.openai_client is None:
+        if self.llm_client is None:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_missing_key)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_missing_key)]
-        create_reply = getattr(self.openai_client, "create_reply", None)
+        create_reply = getattr(self.llm_client, "create_reply", None)
         if not callable(create_reply):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
@@ -938,7 +941,7 @@ class TeeBotusEngine:
                     instructions,
                     first_response_id if isinstance(first_response_id, str) else self.state.get_previous_response_id(event.instance, account_id),
                 )
-        except OpenAIAPIError:
+        except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         response_id = getattr(response, "response_id", None)
@@ -964,9 +967,9 @@ class TeeBotusEngine:
         _append_account_memory_interaction(self.account_store, account_id, event.with_account(account_id), user_text, bot_text, instructions)
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
-        if self.openai_client is None:
+        if self.llm_client is None:
             return None
-        create_reply = getattr(self.openai_client, "create_reply", None)
+        create_reply = getattr(self.llm_client, "create_reply", None)
         if not callable(create_reply):
             return None
         prompt = (
@@ -979,7 +982,7 @@ class TeeBotusEngine:
         )
         try:
             response = create_reply(prompt, instructions, None)
-        except OpenAIAPIError:
+        except (OpenAIAPIError, LLMAPIError):
             return None
         return _parse_youtube_local_options_from_llm_response(str(getattr(response, "text", "") or ""))
 

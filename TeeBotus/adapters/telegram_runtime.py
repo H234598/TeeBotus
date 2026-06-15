@@ -38,6 +38,7 @@ from TeeBotus.core.youtube import (
 )
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
+from TeeBotus.llm_client import build_text_llm_client
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
@@ -735,6 +736,7 @@ def build_telegram_runtime_context(
     bibliothekar_store: BibliothekarStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None,
     bot_identity: BotIdentity,
+    llm_client: object | None = None,
 ) -> TelegramRuntimeContext:
     engine = TeeBotusEngine(
         account_store,
@@ -742,6 +744,7 @@ def build_telegram_runtime_context(
         message_tracker=message_tracker,
         instructions=instruction_store.get,
         openai_client=openai_client,
+        llm_client=llm_client,
         bot_address_names=tuple(name for name in (bot_identity.display_name, bot_identity.mention) if name),
         working_memory_store=working_memory_store,
         bibliothekar_store=bibliothekar_store,
@@ -2831,6 +2834,11 @@ def run_polling(
     instruction_store = instruction_store or InstructionStore(_resolve_instruction_path(instance))
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
     openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
+    llm_client = build_text_llm_client(
+        instructions=instruction_store.get(),
+        openai_client=openai_client,
+        default_api_key=resolved_openai_api_key or "",
+    )
     bot_identity = bot_identity or _resolve_bot_identity(api)
     user_memory_store = AccountStore(
         _resolve_instances_dir() / instance / "data" / "accounts",
@@ -2858,6 +2866,7 @@ def run_polling(
         bibliothekar_store=bibliothekar_store,
         youtube_job_runner=youtube_job_runner,
         bot_identity=bot_identity,
+        llm_client=llm_client,
     )
     process_registry = _InstanceProcessRegistry(instance)
     process_registry.cleanup_orphans()

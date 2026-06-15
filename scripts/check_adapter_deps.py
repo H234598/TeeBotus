@@ -30,6 +30,7 @@ def main() -> int:
         _check_python_package("blurhash-python", pins["blurhash-python"]),
         _check_python_package("h11", pins["h11"]),
         _check_python_package("faster-whisper", pins["faster-whisper"]),
+        _check_python_package("litellm", pins["litellm"]),
         _check_local_transcription_contract(),
         _check_niobot_matrix_contract(),
         _check_matrix_file_contract(),

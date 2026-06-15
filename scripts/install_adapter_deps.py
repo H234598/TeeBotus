@@ -68,6 +68,7 @@ def build_python_install_commands(pins: dict[str, str], *, python: str, user: bo
             f"blurhash-python=={pins['blurhash-python']}",
             f"h11=={pins['h11']}",
             f"faster-whisper=={pins['faster-whisper']}",
+            f"litellm=={pins['litellm']}",
             "marko==2.*",
             "python-magic>=0.4.27",
             "aiofiles>=23.1.0",

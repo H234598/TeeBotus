@@ -18,6 +18,10 @@ class InstructionTests(unittest.TestCase):
 
             ## OpenAI
             - enabled: ja
+            - provider: litellm
+            - llm_model: ollama/llama3.1:8b
+            - base_url: http://localhost:11434
+            - api_key_env: OLLAMA_API_KEY
             - model: gpt-5.5
             - service_tier: flex
             - rule_file: Analyse.md
@@ -105,6 +109,10 @@ class InstructionTests(unittest.TestCase):
         self.assertFalse(instructions.echo_enabled)
         self.assertEqual(instructions.echo_prefix, "Antwort:")
         self.assertTrue(instructions.openai_enabled)
+        self.assertEqual(instructions.llm_provider, "litellm")
+        self.assertEqual(instructions.llm_model, "ollama/llama3.1:8b")
+        self.assertEqual(instructions.llm_base_url, "http://localhost:11434")
+        self.assertEqual(instructions.llm_api_key_env, "OLLAMA_API_KEY")
         self.assertEqual(instructions.openai_model, "gpt-5.5")
         self.assertEqual(instructions.openai_service_tier, "flex")
         self.assertEqual(instructions.openai_rule_file, "Analyse.md")

@@ -11,6 +11,7 @@ from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
+from TeeBotus.llm_client import build_text_llm_client
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
@@ -60,6 +61,11 @@ class MatrixRuntimeBridge:
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
+        self.llm_client = build_text_llm_client(
+            instructions=self.instruction_store.get(),
+            openai_client=self.openai_client,
+            default_api_key=run_config.openai_api_key,
+        )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, Path(instances_dir))
         self.bibliothekar_store = BibliothekarStore(run_config.instance_name, Path(instances_dir))
         self.youtube_job_runner = YouTubeTranscriptionJobRunner()
@@ -69,6 +75,7 @@ class MatrixRuntimeBridge:
             message_tracker=self.message_tracker,
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
+            llm_client=self.llm_client,
             bot_address_names=_matrix_bot_address_names(run_config),
             working_memory_store=self.working_memory_store,
             bibliothekar_store=self.bibliothekar_store,
