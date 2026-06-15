@@ -1687,6 +1687,54 @@ def test_engine_youtube_transcript_runs_local_when_options_are_explicit(monkeypa
     assert actions[1].text == "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."
 
 
+def test_engine_youtube_local_transcription_can_run_as_background_job(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class FakeRunner:
+        def __init__(self) -> None:
+            self.callbacks = []
+
+        def submit(self, callback):
+            self.callbacks.append(callback)
+            callback()
+            return object()
+
+    background: list[list[str]] = []
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        live_callback = kwargs.get("live_callback")
+        if live_callback is not None:
+            live_callback("eins zwei drei", force=True)
+        return "Local transcript.", "lokales Whisper"
+
+    def dispatch(_event, actions):
+        background.append([action.text for action in actions if hasattr(action, "text")])
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    runner = FakeRunner()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(),
+        youtube_job_runner=runner,
+        background_action_dispatcher=dispatch,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 live ja, llm nein", channel="signal"))
+
+    assert actions[0].text == "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist. Live-Ausgabe ist aktiviert."
+    assert len(runner.callbacks) == 1
+    assert calls[0] == ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"})
+    assert calls[1][0] == "https://youtu.be/abc123"
+    assert calls[1][1]["local_allowed"] is True
+    assert calls[1][1]["instance_name"] == "Depressionsbot"
+    assert callable(calls[1][1]["live_callback"])
+    assert background == [["eins zwei drei"], ["Lokale YouTube-Transkription abgeschlossen."]]
+
+
 def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 

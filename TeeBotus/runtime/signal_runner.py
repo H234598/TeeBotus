@@ -22,6 +22,7 @@ from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, Secr
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.proactive_backends import signal_proactive_sender
@@ -86,6 +87,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
         self.bibliothekar_store = BibliothekarStore(run_config.instance_name, self.instances_dir)
+        self.youtube_job_runner = YouTubeTranscriptionJobRunner()
         self.engine = TeeBotusEngine(
             self.account_store,
             state=self.state_store,
@@ -95,6 +97,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             bot_address_names=(run_config.signal_phone_number, run_config.label),
             working_memory_store=self.working_memory_store,
             bibliothekar_store=self.bibliothekar_store,
+            youtube_job_runner=self.youtube_job_runner,
+            background_action_dispatcher=self._dispatch_background_actions,
         )
         self.bot: Any | None = None
 
@@ -186,6 +190,38 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     ref_kind="signal_timestamp",
                 )
             )
+
+    def _dispatch_background_actions(self, event: Any, actions: list[Any]) -> None:
+        if self.bot is None:
+            return
+        sender = signal_proactive_sender({self.run_config.slot: self.bot})
+        for action in actions:
+            try:
+                sent_ref = asyncio.run(sender({"adapter_slot": self.run_config.slot, "chat_id": event.chat_id}, action, {}))
+            except Exception:
+                continue
+            self._track_background_action(event, action, sent_ref)
+
+    def _track_background_action(self, event: Any, action: Any, sent_ref: Any) -> None:
+        if sent_ref is None:
+            return
+        should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
+        if not should_track:
+            return
+        try:
+            message_ref = str(_signal_required_timestamp(sent_ref, "Signal background dispatch"))
+        except RuntimeError:
+            return
+        self.message_tracker.record(
+            SentMessageRef(
+                channel="signal",
+                instance_name=event.instance,
+                account_id=event.account_id,
+                chat_id=event.chat_id,
+                message_ref=message_ref,
+                ref_kind="signal_timestamp",
+            )
+        )
 
     async def _delete_tracked_messages(self, context: Any, event: Any, actions: list[Any]) -> None:
         for action in actions:

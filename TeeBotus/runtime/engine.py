@@ -33,6 +33,7 @@ from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, Acco
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
+from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.state import RuntimeState
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
@@ -84,6 +85,8 @@ class TeeBotusEngine:
         bot_address_names: Iterable[str] = (),
         working_memory_store: WorkingMemoryStore | None = None,
         bibliothekar_store: BibliothekarStore | None = None,
+        youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+        background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -94,6 +97,8 @@ class TeeBotusEngine:
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
         self.bibliothekar_store = bibliothekar_store
+        self.youtube_job_runner = youtube_job_runner
+        self.background_action_dispatcher = background_action_dispatcher
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self.bot_address_names)
@@ -756,8 +761,89 @@ class TeeBotusEngine:
         llm_enabled: bool,
         user_text: str,
     ) -> list[OutgoingAction]:
+        if self.youtube_job_runner is not None and self.background_action_dispatcher is not None:
+            job_event = event.with_account(account_id)
+            self.youtube_job_runner.submit(
+                lambda: self._run_youtube_local_transcript_job(
+                    job_event,
+                    account_id,
+                    instructions,
+                    url,
+                    live_enabled=live_enabled,
+                    llm_enabled=llm_enabled,
+                    user_text=user_text,
+                )
+            )
+            reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
+            if live_enabled:
+                reply += " Live-Ausgabe ist aktiviert."
+            return [SendText(event.chat_id, reply)]
+        return self._build_youtube_local_transcript_result_actions(
+            event,
+            account_id,
+            instructions,
+            url,
+            live_enabled=live_enabled,
+            llm_enabled=llm_enabled,
+            user_text=user_text,
+            live_callback=None,
+        )
+
+    def _run_youtube_local_transcript_job(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        url: str,
+        *,
+        live_enabled: bool,
+        llm_enabled: bool,
+        user_text: str,
+    ) -> None:
+        live_callback = self._youtube_live_action_callback(event) if live_enabled else None
+        actions = self._build_youtube_local_transcript_result_actions(
+            event,
+            account_id,
+            instructions,
+            url,
+            live_enabled=live_enabled,
+            llm_enabled=llm_enabled,
+            user_text=user_text,
+            live_callback=live_callback,
+        )
+        if live_enabled and not llm_enabled and len(actions) == 2 and isinstance(actions[1], SendText) and actions[1].text.startswith("YouTube-Transkript ("):
+            actions = [SendText(event.chat_id, "Lokale YouTube-Transkription abgeschlossen.")]
+        if self.background_action_dispatcher is not None:
+            self.background_action_dispatcher(event, actions)
+
+    def _youtube_live_action_callback(self, event: IncomingEvent):
+        buffer: list[str] = []
+
+        def emit(text: str, force: bool = False) -> None:
+            buffer.extend(re.findall(r"\S+", text))
+            while len(buffer) >= 80 or (force and buffer):
+                count = min(len(buffer), 80)
+                chunk_words = buffer[:count]
+                del buffer[:count]
+                if self.background_action_dispatcher is not None:
+                    self.background_action_dispatcher(event, [SendText(event.chat_id, " ".join(chunk_words))])
+
+        return emit
+
+    def _build_youtube_local_transcript_result_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        url: str,
+        *,
+        live_enabled: bool,
+        llm_enabled: bool,
+        user_text: str,
+        live_callback: Callable[..., object] | None,
+    ) -> list[OutgoingAction]:
         try:
-            transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=None, instance_name=event.instance)
+            transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=live_callback, instance_name=event.instance)
         except YouTubeTranscriptError as exc:
             return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: {exc}")]
         except (TimeoutError, TimeoutExpired) as exc:
