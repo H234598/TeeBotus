@@ -405,6 +405,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"TeeBotus {__version__}")
         return 0
 
+    if args and args[0] in {"--help", "-h", "help"}:
+        print(_main_help_text())
+        return 0
+
     if args and args[0] in {"--runtime-status", "runtime-status"}:
         return _runtime_status(args[1:])
 
@@ -444,6 +448,21 @@ def main(argv: list[str] | None = None) -> int:
 
 
 __all__ = ["TelegramBotMissingError", "main"]
+
+
+def _main_help_text() -> str:
+    return "\n".join(
+        [
+            "Usage: python3 -m TeeBotus [--all] [--channels telegram,signal,matrix]",
+            "",
+            "Options:",
+            "  --version                 Print package version and exit.",
+            "  --runtime-status          Print resolved runtime health without starting bot loops.",
+            "  --channels CHANNELS       Select channels for runtime-status or startup.",
+            "  --all                     Start all configured instances through the Telegram-compatible entry point.",
+            "  --help                    Show this help text and exit.",
+        ]
+    )
 
 _populate_telegram_exports()
 sys.modules[__name__].__class__ = _TelegramBotModule

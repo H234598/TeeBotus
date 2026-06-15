@@ -38,6 +38,10 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert migration["details"]["verified"] is True
     assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
     assert any(result["name"] == "bibliothekar_haystack_fake_query" for result in suite["results"])
+    assert any(result["name"] == "langgraph_bibliothekar_linear" for result in suite["results"])
+    fake_graph = next(result for result in suite["results"] if result["name"] == "langgraph_bibliothekar_fake_installed")
+    assert fake_graph["details"]["mode"] == "fake_installed_langgraph"
+    assert fake_graph["details"]["node_sequence"] == ["classify", "retrieve", "rerank", "answer", "citation_check", "fallback"]
     llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
     assert llm_router["details"]["runtime_provider"] == "litellm"
     assert llm_router["details"]["runtime_model"] == "ollama_chat/llama3.1:8b"
@@ -58,6 +62,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "memory_migration_jsonl_to_sqlite" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
+    assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "keine echten Provider-Calls" in markdown
 
 

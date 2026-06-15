@@ -29,6 +29,19 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert captured.err == ""
 
 
+def test_help_flag_prints_usage_without_runtime_start(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_runtime_config_from_main_args", lambda _args: (_ for _ in ()).throw(AssertionError("runtime loaded")))
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: (_ for _ in ()).throw(AssertionError("telegram loaded")))
+
+    assert bot.main(["--help"]) == 0
+
+    captured = capsys.readouterr()
+    assert "Usage: python3 -m TeeBotus" in captured.out
+    assert "--runtime-status" in captured.out
+    assert captured.err == ""
+
+
 def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     bot = importlib.import_module("TeeBotus.bot")
     result = bot.main(["--runtime-status", "--channels", "telegram"])

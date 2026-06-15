@@ -10,6 +10,7 @@ import statistics
 import sys
 import tempfile
 import time
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -93,6 +94,8 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_status_doctor(iterations=iterations))
     results.append(_benchmark_database_fallback_policy(iterations=iterations))
     results.append(_benchmark_langgraph_flow(iterations=iterations))
+    results.append(_benchmark_langgraph_linear_flow(iterations=iterations))
+    results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
     return {
         "schema_version": 1,
@@ -478,14 +481,7 @@ def _benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:
 
 
 def _benchmark_langgraph_flow(*, iterations: int) -> BenchmarkResult:
-    with tempfile.TemporaryDirectory(prefix="teebotus-bench-graph-") as tmp:
-        root = Path(tmp)
-        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
-        library_dir.mkdir(parents=True)
-        (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
-        store = BibliothekarStore("Bench", root / "instances")
-        store.rebuild()
-        service = BibliothekarService(LocalBibliothekarBackend(store))
+    with _BenchmarkGraphFixture() as service:
         timings = [_timed_ms(lambda: run_bibliothekar_deep_query(service, "Bibliothek Therapie", prefer_langgraph=True)) for _ in range(iterations)]
         return _result(
             name="langgraph_bibliothekar_deep_query",
@@ -494,6 +490,102 @@ def _benchmark_langgraph_flow(*, iterations: int) -> BenchmarkResult:
             total_ms=sum(timings),
             details={"median_graph_ms": statistics.median(timings), "mode": "langgraph_or_linear_fallback"},
         )
+
+
+def _benchmark_langgraph_linear_flow(*, iterations: int) -> BenchmarkResult:
+    with _BenchmarkGraphFixture() as service:
+        timings = [_timed_ms(lambda: run_bibliothekar_deep_query(service, "Bibliothek Therapie", prefer_langgraph=False)) for _ in range(iterations)]
+        return _result(
+            name="langgraph_bibliothekar_linear",
+            category="langgraph_flows",
+            iterations=iterations,
+            total_ms=sum(timings),
+            details={"median_graph_ms": statistics.median(timings), "mode": "linear"},
+        )
+
+
+def _benchmark_langgraph_fake_installed_flow(*, iterations: int) -> BenchmarkResult:
+    previous_langgraph = sys.modules.get("langgraph")
+    previous_graph = sys.modules.get("langgraph.graph")
+    calls: list[str] = []
+
+    class FakeCompiledGraph:
+        def __init__(self, nodes: dict[str, Callable[[Any], Any]], edges: dict[str, str], entry: str) -> None:
+            self.nodes = nodes
+            self.edges = edges
+            self.entry = entry
+
+        def invoke(self, state: Any) -> Any:
+            current = self.entry
+            while current != "__end__":
+                calls.append(current)
+                state = self.nodes[current](state)
+                current = self.edges[current]
+            return state
+
+    class FakeStateGraph:
+        def __init__(self, _state_type: Any) -> None:
+            self.nodes: dict[str, Callable[[Any], Any]] = {}
+            self.edges: dict[str, str] = {}
+            self.entry = ""
+
+        def add_node(self, name: str, func: Callable[[Any], Any]) -> None:
+            self.nodes[name] = func
+
+        def set_entry_point(self, name: str) -> None:
+            self.entry = name
+
+        def add_edge(self, source: str, target: str) -> None:
+            self.edges[source] = target
+
+        def compile(self) -> FakeCompiledGraph:
+            return FakeCompiledGraph(self.nodes, self.edges, self.entry)
+
+    try:
+        fake_package = types.ModuleType("langgraph")
+        fake_graph = types.ModuleType("langgraph.graph")
+        fake_graph.END = "__end__"
+        fake_graph.StateGraph = FakeStateGraph
+        sys.modules["langgraph"] = fake_package
+        sys.modules["langgraph.graph"] = fake_graph
+        with _BenchmarkGraphFixture() as service:
+            timings = [_timed_ms(lambda: run_bibliothekar_deep_query(service, "Bibliothek Therapie", prefer_langgraph=True)) for _ in range(iterations)]
+    finally:
+        if previous_langgraph is None:
+            sys.modules.pop("langgraph", None)
+        else:
+            sys.modules["langgraph"] = previous_langgraph
+        if previous_graph is None:
+            sys.modules.pop("langgraph.graph", None)
+        else:
+            sys.modules["langgraph.graph"] = previous_graph
+    return _result(
+        name="langgraph_bibliothekar_fake_installed",
+        category="langgraph_flows",
+        iterations=iterations,
+        total_ms=sum(timings),
+        details={
+            "median_graph_ms": statistics.median(timings),
+            "mode": "fake_installed_langgraph",
+            "node_calls": len(calls),
+            "node_sequence": calls[:6],
+        },
+    )
+
+
+class _BenchmarkGraphFixture:
+    def __enter__(self) -> BibliothekarService:
+        self._tmp = tempfile.TemporaryDirectory(prefix="teebotus-bench-graph-")
+        root = Path(self._tmp.name)
+        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
+        library_dir.mkdir(parents=True)
+        (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+        store = BibliothekarStore("Bench", root / "instances")
+        store.rebuild()
+        return BibliothekarService(LocalBibliothekarBackend(store))
+
+    def __exit__(self, *_args: Any) -> None:
+        self._tmp.cleanup()
 
 
 def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
