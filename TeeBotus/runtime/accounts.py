@@ -46,6 +46,7 @@ ACCOUNT_MEMORY_KEY_PURPOSE = "account-structured-memory-key"
 ACCOUNT_MEMORY_RECENT_LIMIT = 200
 ACCOUNT_MEMORY_KEYWORD_LIMIT = 24
 ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT = 250
+ACCOUNT_MEMORY_KINDS = frozenset({"observation", "preference", "fact", "task", "reflection", "manual"})
 ACCOUNT_MEMORY_STOPWORDS = {
     "aber",
     "alle",
@@ -787,6 +788,9 @@ class AccountStore:
         normalized_entry["id"] = memory_id
         normalized_entry.setdefault("created_at", utc_now())
         normalized_entry.setdefault("updated_at", normalized_entry["created_at"])
+        normalized_entry["kind"] = _normalize_account_memory_kind(normalized_entry.get("kind"))
+        normalized_entry["importance"] = _normalize_account_memory_importance(normalized_entry.get("importance"))
+        normalized_entry["related_ids"] = _normalize_account_memory_related_ids(normalized_entry.get("related_ids"), exclude_id=memory_id)
         keywords = normalized_entry.get("keywords")
         if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
             keywords = _account_memory_keywords(f"{normalized_entry.get('user_text', '')}\n{normalized_entry.get('bot_text', '')}")
@@ -827,6 +831,18 @@ class AccountStore:
                 changed = True
             if not entry.get("updated_at"):
                 entry["updated_at"] = entry["created_at"]
+                changed = True
+            kind = _normalize_account_memory_kind(entry.get("kind"))
+            if entry.get("kind") != kind:
+                entry["kind"] = kind
+                changed = True
+            importance = _normalize_account_memory_importance(entry.get("importance"))
+            if entry.get("importance") != importance:
+                entry["importance"] = importance
+                changed = True
+            related_ids = _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id)
+            if entry.get("related_ids") != related_ids:
+                entry["related_ids"] = related_ids
                 changed = True
             keywords = entry.get("keywords")
             if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
@@ -917,6 +933,15 @@ class AccountStore:
         missing_index_entry_ids = sorted(str(memory_id) for memory_id in index_entries if str(memory_id) not in entry_id_set)
         if missing_index_entry_ids:
             errors.append(f"index.entries missing entries: {', '.join(missing_index_entry_ids)}")
+        missing_related_ids: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            for related_id in _normalize_account_memory_related_ids(entry.get("related_ids")):
+                if related_id not in entry_id_set:
+                    missing_related_ids.append(related_id)
+        if missing_related_ids:
+            errors.append(f"related_ids missing entries: {', '.join(sorted(set(missing_related_ids)))}")
         return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
     def select_structured_memory(
@@ -1086,6 +1111,9 @@ class AccountStore:
                 "updated_at": str(entry.get("updated_at", "")),
                 "channel": str(entry.get("channel", "")),
                 "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+                "kind": _normalize_account_memory_kind(entry.get("kind")),
+                "importance": _normalize_account_memory_importance(entry.get("importance")),
+                "related_ids": _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id),
                 "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
             }
 
@@ -1160,6 +1188,7 @@ class AccountStore:
                 scores,
                 key=lambda memory_id: (
                     scores[memory_id],
+                    _normalize_account_memory_importance(entries_by_id[memory_id].get("importance")),
                     recent_ids.index(memory_id) if memory_id in recent_ids else -1,
                 ),
                 reverse=True,
@@ -1430,6 +1459,32 @@ def _account_memory_keywords(text: str) -> list[str]:
     return keywords
 
 
+def _normalize_account_memory_kind(value: Any) -> str:
+    kind = str(value or "").strip().casefold().replace("-", "_")
+    return kind if kind in ACCOUNT_MEMORY_KINDS else "observation"
+
+
+def _normalize_account_memory_importance(value: Any) -> int:
+    try:
+        importance = int(value)
+    except (TypeError, ValueError):
+        return 3
+    return min(5, max(1, importance))
+
+
+def _normalize_account_memory_related_ids(value: Any, *, exclude_id: str = "") -> list[str]:
+    if not isinstance(value, list):
+        return []
+    related_ids: list[str] = []
+    excluded = str(exclude_id or "").strip()
+    for item in value:
+        related_id = str(item or "").strip()
+        if not related_id or related_id == excluded or related_id in related_ids:
+            continue
+        related_ids.append(related_id)
+    return related_ids[:ACCOUNT_MEMORY_RECENT_LIMIT]
+
+
 def _clip_account_memory_text(text: str, max_chars: int) -> str:
     stripped = str(text or "").strip()
     if max_chars < 1:
@@ -1444,11 +1499,13 @@ def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int
         "id": str(entry.get("id", "")),
         "created_at": str(entry.get("created_at", "")),
         "updated_at": str(entry.get("updated_at", "")),
+        "kind": _normalize_account_memory_kind(entry.get("kind")),
+        "importance": _normalize_account_memory_importance(entry.get("importance")),
         "channel": str(entry.get("channel", "")),
         "chat_type": str(entry.get("chat_type", "")),
         "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
         "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
-        "related_ids": entry.get("related_ids", []) if isinstance(entry.get("related_ids"), list) else [],
+        "related_ids": _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=str(entry.get("id", ""))),
         "user_text": _clip_account_memory_text(str(entry.get("user_text", "")), max_entry_chars),
         "bot_text": _clip_account_memory_text(str(entry.get("bot_text", "")), max_entry_chars),
     }

@@ -816,6 +816,8 @@ def _append_account_memory_interaction(
         "id": entry_id,
         "created_at": timestamp,
         "updated_at": timestamp,
+        "kind": "observation",
+        "importance": 3,
         "channel": event.channel,
         "chat_type": event.chat_type,
         "source": {

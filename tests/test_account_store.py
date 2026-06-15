@@ -222,12 +222,16 @@ def test_structured_account_memory_updates_profile_keyword_index_and_prompt(tmp_
     assert index["profile"]["names"] == ["Ada"]
     assert index["profile"]["usernames"] == ["@ada"]
     assert index["profile"]["channels"] == ["telegram", "signal"]
+    assert index["index"]["entries"][first_id]["kind"] == "observation"
+    assert index["index"]["entries"][first_id]["importance"] == 3
     assert first_id in index["index"]["keywords"]["mond"]
     selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
 
     assert selection.selected_ids[0] == first_id
     assert "Ada bevorzugt knappe Antworten." in selection.prompt_text
     assert '"scope": "account"' in selection.prompt_text
+    assert '"kind": "observation"' in selection.prompt_text
+    assert '"importance": 3' in selection.prompt_text
     assert '"user_text": "Ich mag Mond Tee."' in selection.prompt_text
     assert '"user_text": "Ich mag Kaffee."' in selection.prompt_text
     assert selection.selected_ids[-1] != first_id
@@ -299,6 +303,28 @@ def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
     assert list(index["index"]["entries"]) == ["mem_live"]
     entries = store.read_memory_entries(account_id)
     assert entries[0]["keywords"] == ["mond", "bleibt", "gemerkt"]
+    assert entries[0]["kind"] == "observation"
+    assert entries[0]["importance"] == 3
+
+
+def test_structured_account_memory_importance_breaks_keyword_ties(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    low_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_low", "user_text": "Mond", "bot_text": "Tee", "importance": 1},
+    )
+    high_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_high", "user_text": "Mond", "bot_text": "Tasse", "kind": "preference", "importance": 5},
+    )
+
+    selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[:2] == (high_id, low_id)
+    index = store.read_memory_index(account_id)
+    assert index["index"]["entries"][high_id]["kind"] == "preference"
+    assert index["index"]["entries"][high_id]["importance"] == 5
 
 
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
@@ -358,6 +384,9 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
             },
         },
     )
+    entries = store.read_memory_entries(account_id)
+    entries[0]["related_ids"] = ["mem_missing_related"]
+    store.write_memory_entries(account_id, entries)
 
     health = store.check_structured_memory_index(account_id)
 
@@ -370,6 +399,7 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "recent_ids missing entries: mem_missing_recent" in error_text
     assert "keyword ids missing entries: mem_missing_keyword" in error_text
     assert "index.entries missing entries: mem_missing_entry" in error_text
+    assert "related_ids missing entries: mem_missing_related" in error_text
 
 
 def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):
