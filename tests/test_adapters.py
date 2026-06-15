@@ -1401,6 +1401,46 @@ def test_telegram_message_uses_username_identity_fallback_without_sender_id():
     assert event.sender_username == "Teladi"
 
 
+def test_telegram_message_uses_sender_chat_identity_fallback():
+    event = telegram_message_to_event(
+        {
+            "message_id": 1,
+            "sender_chat": {"id": -100123, "title": "Tee Kanal", "username": "TeeKanal"},
+            "chat": {"id": -100123, "type": "channel", "title": "Tee Kanal"},
+            "text": "hi",
+        },
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.identity_key == "telegram:user:-100123"
+    assert event.sender_id == "-100123"
+    assert event.sender_name == "Tee Kanal"
+    assert event.sender_username == "TeeKanal"
+
+
+def test_telegram_channel_post_update_is_converted_to_event():
+    event = telegram_message_to_event(
+        update={
+            "update_id": 10,
+            "channel_post": {
+                "message_id": 2,
+                "sender_chat": {"id": -100123, "title": "Tee Kanal"},
+                "chat": {"id": -100123, "type": "channel", "title": "Tee Kanal"},
+                "text": "Kanalpost",
+            },
+        },
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.event_id == "telegram:2"
+    assert event.text == "Kanalpost"
+    assert event.chat_type == "group"
+
+
 def test_telegram_send_keeps_string_chat_ids_for_channels():
     class API:
         def __init__(self) -> None:

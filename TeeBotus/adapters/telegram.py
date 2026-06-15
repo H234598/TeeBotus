@@ -32,19 +32,21 @@ def telegram_message_to_event(
     account_label: str = "telegram:1",
 ) -> IncomingEvent | None:
     if message is None and update is not None:
-        message = update.get("message") if isinstance(update.get("message"), dict) else None
+        message = telegram_update_message(update)
     if not message:
         return None
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
-    sender_id = str(sender.get("id") or "")
+    sender_id = str((sender.get("id") if sender else sender_chat.get("id")) or "")
     chat_id = str(chat.get("id") or "")
     if not chat_id:
         return None
     text = str(message.get("text") or message.get("caption") or "")
-    sender_name = " ".join(part for part in [str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()] if part)
+    sender_name = _telegram_sender_name(sender, sender_chat)
+    sender_username = str((sender.get("username") if sender else sender_chat.get("username")) or "")
     try:
-        identity_key = telegram_identity_key(sender_id, username=str(sender.get("username") or ""), display_name=sender_name)
+        identity_key = telegram_identity_key(sender_id, username=sender_username, display_name=sender_name)
     except Exception:
         return None
     return IncomingEvent(
@@ -58,13 +60,27 @@ def telegram_message_to_event(
         chat_type=_normalize_telegram_chat_type(str(chat.get("type") or "unknown")),
         sender_id=sender_id,
         sender_name=sender_name,
-        sender_username=str(sender.get("username") or ""),
+        sender_username=sender_username,
         sender_number="",
         text=text,
         message_ref=str(message.get("message_id") or ""),
         attachments=(),
         raw=message if update is None else update,
     )
+
+
+def telegram_update_message(update: dict[str, Any]) -> dict[str, Any] | None:
+    for key in ("message", "channel_post"):
+        value = update.get(key)
+        if isinstance(value, dict):
+            return value
+    return None
+
+
+def _telegram_sender_name(sender: dict[str, Any], sender_chat: dict[str, Any]) -> str:
+    if sender:
+        return " ".join(part for part in [str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()] if part)
+    return str(sender_chat.get("title") or sender_chat.get("first_name") or "").strip()
 
 
 def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:

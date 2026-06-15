@@ -46,7 +46,7 @@ from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
-from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
+from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
@@ -769,7 +769,7 @@ def build_telegram_runtime_context(
 
 
 def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update: dict[str, Any], chat_state: ChatState) -> bool:
-    message = update.get("message")
+    message = telegram_update_message(update)
     if not isinstance(message, dict):
         return False
     chat = message.get("chat")
