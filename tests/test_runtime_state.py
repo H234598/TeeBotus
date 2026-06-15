@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from TeeBotus.runtime.accounts import AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider
 from TeeBotus.runtime.actions import SendEdit, SendPoll, SendReaction, SendReceipt, SetMatrixState, UpdateSignalContact, UpdateSignalGroup
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.telegram_bridge import TelegramRuntimeBridge
@@ -10,6 +10,9 @@ from TeeBotus.runtime.state import RuntimeStateStore
 class BrokenProvider:
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
         raise AccountStoreError("secret backend unavailable")
+
+
+ACCOUNT_ID = "a" * 128
 
 
 def test_runtime_state_store_falls_back_to_memory_on_corrupt_persisted_link_notifications(tmp_path):
@@ -35,6 +38,44 @@ def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_back
 
     assert state.list_link_notifications(instance_name="Bot", account_id="a" * 128)
     assert "secret backend unavailable" in state.link_notifications_persistence_error
+
+
+def test_runtime_state_store_persists_previous_openai_response_id(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_openai_state(ACCOUNT_ID, {"kept": "value"})
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-1"
+    assert account_store.read_openai_state(ACCOUNT_ID)["kept"] == "value"
+    assert account_store.read_openai_state(ACCOUNT_ID)["previous_response_id"] == "resp-1"
+
+
+def test_runtime_state_store_reset_clears_persisted_previous_openai_response_id(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    assert "previous_response_id" not in account_store.read_openai_state(ACCOUNT_ID)
+
+
+def test_runtime_state_store_keeps_invalid_previous_response_account_id_in_memory(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    state.set_previous_response_id("Bot", "not-a-real-account-id", "resp-1")
+
+    assert state.get_previous_response_id("Bot", "not-a-real-account-id") == "resp-1"
+    assert state.openai_state_persistence_error
 
 
 def test_telegram_bridge_defaults_to_secret_tool_provider(tmp_path):

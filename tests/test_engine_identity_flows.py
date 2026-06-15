@@ -9,6 +9,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
@@ -289,6 +290,43 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     engine.process(event(identity, "Noch mal"))
 
     assert client.previous_ids == [None, "resp-1"]
+
+
+def test_engine_restores_previous_openai_response_id_from_persistent_state(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self, response_id: str) -> None:
+            self.response_id = response_id
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return OpenAIResponse("Antwort.", self.response_id, None)
+
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Depressionsbot", provider)
+    instructions = BotInstructions(openai_enabled=True)
+    identity = telegram_identity_key(1)
+    first_client = FakeOpenAIClient("resp-1")
+    first_engine = TeeBotusEngine(
+        account_store=account_store,
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=instructions,
+        openai_client=first_client,
+    )
+
+    first_engine.process(event(identity, "Hallo"))
+    second_client = FakeOpenAIClient("resp-2")
+    second_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=instructions,
+        openai_client=second_client,
+    )
+    second_engine.process(event(identity, "Noch mal"))
+
+    assert first_client.previous_ids == [None]
+    assert second_client.previous_ids == ["resp-1"]
 
 
 def test_engine_reset_clears_previous_openai_response_id(tmp_path):
