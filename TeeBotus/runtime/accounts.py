@@ -1192,6 +1192,29 @@ class AccountStore:
             errors.append(f"semantic_cache entries missing entries: {', '.join(missing_semantic_ids)}")
         if semantic_cache and semantic_cache.get("rebuildable") is not True:
             errors.append("semantic_cache is not rebuildable")
+        entries_by_id = {str(entry.get("id") or "").strip(): entry for entry in entries if isinstance(entry, dict) and str(entry.get("id") or "").strip()}
+        stale_semantic_ids: list[str] = []
+        malformed_semantic_ids: list[str] = []
+        for memory_id, metadata in semantic_entries.items():
+            resolved_id = str(memory_id or "").strip()
+            entry = entries_by_id.get(resolved_id)
+            if entry is None:
+                continue
+            if not isinstance(metadata, dict):
+                malformed_semantic_ids.append(resolved_id)
+                continue
+            if not isinstance(metadata.get("signature"), list):
+                malformed_semantic_ids.append(resolved_id)
+            embedding = metadata.get("embedding")
+            if not isinstance(embedding, list) or len(embedding) != ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS:
+                malformed_semantic_ids.append(resolved_id)
+            expected = _account_memory_semantic_cache_entry(entry)
+            if metadata.get("fingerprint") != expected.get("fingerprint"):
+                stale_semantic_ids.append(resolved_id)
+        if malformed_semantic_ids:
+            errors.append(f"semantic_cache entries malformed: {', '.join(sorted(set(malformed_semantic_ids)))}")
+        if stale_semantic_ids:
+            errors.append(f"semantic_cache entries stale: {', '.join(sorted(set(stale_semantic_ids)))}")
         return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
     def select_structured_memory(

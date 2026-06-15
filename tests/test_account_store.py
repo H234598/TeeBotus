@@ -695,6 +695,35 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "related_ids missing entries: mem_missing_related" in error_text
 
 
+def test_structured_account_memory_index_health_reports_stale_semantic_cache(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
+    entries = store.read_memory_entries(account_id)
+    entries[0]["user_text"] = "Kaffee"
+    store.write_memory_entries(account_id, entries)
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    assert "semantic_cache entries stale: mem_live" in "\n".join(health.errors)
+
+
+def test_structured_account_memory_index_health_reports_malformed_semantic_cache(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
+    index = store.read_memory_index(account_id)
+    index["index"]["semantic_cache"]["entries"]["mem_live"]["embedding"] = [1.0]
+    index["index"]["semantic_cache"]["entries"]["mem_live"]["signature"] = "mond"
+    store.write_memory_index(account_id, index)
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    assert "semantic_cache entries malformed: mem_live" in "\n".join(health.errors)
+
+
 def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
