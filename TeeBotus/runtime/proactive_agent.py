@@ -133,12 +133,26 @@ def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, 
     if subcommand in {"off", "disable", "aus"}:
         disable_proactive_agent(account_store, account_id)
         return (SendText(event.chat_id, "Proaktive Unterstützung ist deaktiviert.", track=False),)
+    if subcommand in {"pause", "pausieren"}:
+        pause_proactive_agent(account_store, account_id)
+        return (SendText(event.chat_id, "Proaktive Unterstützung ist pausiert.", track=False),)
+    if subcommand in {"resume", "weiter", "fortsetzen"}:
+        resume_proactive_agent(account_store, account_id)
+        return (SendText(event.chat_id, "Proaktive Unterstützung ist wieder aktiv.", track=False),)
+    if subcommand in {"category", "categories", "kategorie", "kategorien"}:
+        return (SendText(event.chat_id, _handle_proactive_category_command(account_store, account_id, parts[2:]), track=False),)
+    if subcommand in {"hours", "zeit", "zeiten", "window", "fenster"}:
+        return (SendText(event.chat_id, _handle_proactive_hours_command(account_store, account_id, parts[2:]), track=False),)
+    if subcommand in {"quiet", "ruhe", "ruhezeit"}:
+        return (SendText(event.chat_id, _handle_proactive_quiet_command(account_store, account_id, parts[2:]), track=False),)
+    if subcommand in {"interval", "abstand"}:
+        return (SendText(event.chat_id, _handle_proactive_interval_command(account_store, account_id, parts[2:]), track=False),)
     if subcommand in {"status", "info"}:
         return (SendText(event.chat_id, proactive_status_text(account_store, account_id), track=False),)
     return (
         SendText(
             event.chat_id,
-            "Nutzung: /proactive status, /proactive on oder /proactive off.",
+            "Nutzung: /proactive status, on, off, pause, resume, category on|off <name>, hours <start> <ende>, quiet <start> <ende>, interval <minuten>.",
             track=False,
         ),
     )
@@ -154,6 +168,7 @@ def enable_proactive_agent(account_store: AccountStore, account_id: str, *, cate
     if not enabled_categories:
         enabled_categories = list(PROACTIVE_DEFAULT_CATEGORIES)
     state["proactive"]["enabled"] = True
+    state["proactive"]["paused"] = False
     state["proactive"]["updated_at"] = utc_now()
     state["consent"]["categories"] = enabled_categories
     state["consent"]["updated_at"] = state["proactive"]["updated_at"]
@@ -176,6 +191,56 @@ def proactive_agent_instance_enabled(instance_name: str, env: Mapping[str, str] 
 def disable_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     state["proactive"]["enabled"] = False
+    state["proactive"]["paused"] = False
+    state["proactive"]["updated_at"] = utc_now()
+    account_store.write_agent_state(account_id, state)
+    return state
+
+
+def pause_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    state["proactive"]["paused"] = True
+    state["proactive"]["updated_at"] = utc_now()
+    account_store.write_agent_state(account_id, state)
+    return state
+
+
+def resume_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not state["consent"]["categories"]:
+        state["consent"]["categories"] = list(PROACTIVE_DEFAULT_CATEGORIES)
+        state["consent"]["updated_at"] = utc_now()
+    state["proactive"]["enabled"] = True
+    state["proactive"]["paused"] = False
+    state["proactive"]["updated_at"] = utc_now()
+    account_store.write_agent_state(account_id, state)
+    return state
+
+
+def set_proactive_categories(account_store: AccountStore, account_id: str, categories: Iterable[str]) -> dict[str, Any]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    normalized = [
+        category
+        for category in dict.fromkeys(str(value or "").strip().casefold() for value in categories)
+        if category in PROACTIVE_ALLOWED_CATEGORIES
+    ]
+    state["consent"]["categories"] = normalized
+    state["consent"]["updated_at"] = utc_now()
+    account_store.write_agent_state(account_id, state)
+    return state
+
+
+def set_proactive_allowed_hours(account_store: AccountStore, account_id: str, start_hour: Any, end_hour: Any) -> dict[str, Any]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    state["policy"]["allowed_hours"] = [_normalize_hour(start_hour, default=9), _normalize_hour(end_hour, default=20)]
+    state["proactive"]["updated_at"] = utc_now()
+    account_store.write_agent_state(account_id, state)
+    return state
+
+
+def set_proactive_min_interval_minutes(account_store: AccountStore, account_id: str, minutes: Any) -> dict[str, Any]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    state["policy"]["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(minutes, default=0)))
     state["proactive"]["updated_at"] = utc_now()
     account_store.write_agent_state(account_id, state)
     return state
@@ -186,13 +251,16 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
     outbox = account_store.read_proactive_outbox(account_id)
     queued = sum(1 for item in outbox if isinstance(item, dict) and item.get("status", "queued") == "queued")
     enabled = "ja" if state["proactive"]["enabled"] else "nein"
+    paused = "ja" if state["proactive"]["paused"] else "nein"
     categories = ", ".join(state["consent"]["categories"]) or "keine"
     return "\n".join(
         [
             "Proaktive Unterstützung",
             f"- aktiviert: {enabled}",
+            f"- pausiert: {paused}",
             f"- Kategorien: {categories}",
             f"- erlaubtes Zeitfenster: {state['policy']['allowed_hours'][0]}-{state['policy']['allowed_hours'][1]} Uhr",
+            f"- Mindestabstand: {state['policy']['min_minutes_between_messages']} Minuten",
             f"- queued_outbox_items: {queued}",
         ]
     )
@@ -428,6 +496,8 @@ def proactive_policy_decision(
         return ProactiveDecision(False, "category_not_supported")
     if not state["proactive"]["enabled"]:
         return ProactiveDecision(False, "proactive_disabled")
+    if state["proactive"].get("paused") is True:
+        return ProactiveDecision(False, "proactive_paused")
     if normalized_category not in state["consent"]["categories"]:
         return ProactiveDecision(False, "category_not_consented")
     risk_decision = proactive_risk_policy_decision(account_store, account_id, category=normalized_category, now=now, item=item)
@@ -440,6 +510,9 @@ def proactive_policy_decision(
         return ProactiveDecision(False, "outside_allowed_hours")
     if _proactive_daily_count(account_store, account_id, resolved_now, exclude_item_id=exclude_item_id) >= int(state["policy"]["max_messages_per_day"]):
         return ProactiveDecision(False, "daily_limit_reached")
+    min_interval = int(state["policy"].get("min_minutes_between_messages") or 0)
+    if min_interval > 0 and _proactive_last_sent_within(account_store, account_id, resolved_now, timedelta(minutes=min_interval), exclude_item_id=exclude_item_id):
+        return ProactiveDecision(False, "min_interval_not_elapsed")
     route = select_proactive_route(account_store, account_id)
     if route is None:
         return ProactiveDecision(False, "no_private_route")
@@ -848,6 +921,56 @@ def _strip_json_code_fence(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def _handle_proactive_category_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not args or args[0].casefold() in {"list", "status", "info"}:
+        active = ", ".join(state["consent"]["categories"]) or "keine"
+        allowed = ", ".join(sorted(PROACTIVE_ALLOWED_CATEGORIES))
+        return f"Kategorien aktiv: {active}\nKategorien moeglich: {allowed}"
+    if len(args) < 2:
+        return "Nutzung: /proactive category on <name> oder /proactive category off <name>."
+    operation = args[0].casefold()
+    category = args[1].casefold()
+    if category not in PROACTIVE_ALLOWED_CATEGORIES:
+        return f"Unbekannte Kategorie: {category}"
+    categories = list(state["consent"]["categories"])
+    if operation in {"on", "add", "enable", "an", "ein"}:
+        if category not in categories:
+            categories.append(category)
+    elif operation in {"off", "remove", "disable", "aus"}:
+        categories = [value for value in categories if value != category]
+    else:
+        return "Nutzung: /proactive category on <name> oder /proactive category off <name>."
+    state = set_proactive_categories(account_store, account_id, categories)
+    active = ", ".join(state["consent"]["categories"]) or "keine"
+    return f"Kategorien aktualisiert: {active}"
+
+
+def _handle_proactive_hours_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:
+    if len(args) != 2 or not _is_int_text(args[0]) or not _is_int_text(args[1]):
+        return "Nutzung: /proactive hours <startstunde> <endstunde>, z.B. /proactive hours 9 20."
+    state = set_proactive_allowed_hours(account_store, account_id, args[0], args[1])
+    start_hour, end_hour = state["policy"]["allowed_hours"]
+    return f"Erlaubtes Zeitfenster aktualisiert: {start_hour}-{end_hour} Uhr."
+
+
+def _handle_proactive_quiet_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:
+    if len(args) != 2 or not _is_int_text(args[0]) or not _is_int_text(args[1]):
+        return "Nutzung: /proactive quiet <ruhe-start> <ruhe-ende>, z.B. /proactive quiet 22 8."
+    quiet_start = _normalize_hour(args[0], default=22)
+    quiet_end = _normalize_hour(args[1], default=8)
+    state = set_proactive_allowed_hours(account_store, account_id, quiet_end, quiet_start)
+    start_hour, end_hour = state["policy"]["allowed_hours"]
+    return f"Ruhezeit aktualisiert: {quiet_start}-{quiet_end} Uhr. Erlaubtes Zeitfenster: {start_hour}-{end_hour} Uhr."
+
+
+def _handle_proactive_interval_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:
+    if len(args) != 1 or not _is_int_text(args[0]):
+        return "Nutzung: /proactive interval <minuten>, z.B. /proactive interval 180."
+    state = set_proactive_min_interval_minutes(account_store, account_id, args[0])
+    return f"Mindestabstand aktualisiert: {state['policy']['min_minutes_between_messages']} Minuten."
+
+
 def select_proactive_route(account_store: AccountStore, account_id: str) -> dict[str, Any] | None:
     summary = account_store.account_summary(account_id)
     identities = summary.get("linked_identities", [])
@@ -885,6 +1008,21 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
         if timestamp.astimezone().date() == now.astimezone().date():
             count += 1
     return count
+
+
+def _proactive_last_sent_within(account_store: AccountStore, account_id: str, now: datetime, interval: timedelta, *, exclude_item_id: str = "") -> bool:
+    threshold = now - interval
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict):
+            continue
+        if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
+            continue
+        if str(item.get("status") or "").strip().casefold() != "sent":
+            continue
+        sent_at = _parse_proactive_datetime(str(item.get("sent_at") or item.get("updated_at") or ""))
+        if sent_at is not None and threshold <= sent_at <= now:
+            return True
+    return False
 
 
 async def _maybe_await(value: Any) -> Any:
@@ -978,6 +1116,8 @@ def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:
         proactive = {}
         state["proactive"] = proactive
     proactive.setdefault("enabled", False)
+    proactive["enabled"] = bool(proactive.get("enabled"))
+    proactive["paused"] = bool(proactive.get("paused", False))
     proactive.setdefault("updated_at", "")
     consent = state.setdefault("consent", {})
     if not isinstance(consent, dict):
@@ -1001,6 +1141,7 @@ def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:
         hours = [9, 20]
     policy["allowed_hours"] = [_normalize_hour(hours[0], default=9), _normalize_hour(hours[1], default=20)]
     policy["max_messages_per_day"] = max(0, _normalize_int(policy.get("max_messages_per_day"), default=2))
+    policy["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(policy.get("min_minutes_between_messages"), default=0)))
     return state
 
 
@@ -1017,6 +1158,14 @@ def _normalize_int(value: Any, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _is_int_text(value: Any) -> bool:
+    try:
+        int(str(value).strip())
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _parse_csv(value: str) -> set[str]:

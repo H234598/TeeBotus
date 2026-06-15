@@ -18,12 +18,17 @@ from TeeBotus.runtime.proactive_agent import (
     dispatch_due_proactive_outbox_items,
     due_proactive_outbox_items,
     enable_proactive_agent,
+    pause_proactive_agent,
     proactive_agent_instance_enabled,
     proactive_policy_decision,
     queue_proactive_message,
+    resume_proactive_agent,
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
     select_proactive_route,
+    set_proactive_allowed_hours,
+    set_proactive_categories,
+    set_proactive_min_interval_minutes,
     update_proactive_outbox_item_status,
 )
 
@@ -139,6 +144,93 @@ def test_disabling_proactive_agent_blocks_future_queueing(tmp_path) -> None:
     assert decision.allowed is False
     assert decision.reason == "proactive_disabled"
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_pausing_proactive_agent_blocks_without_losing_consent(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    pause_proactive_agent(account_store, account_id)
+
+    paused = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+    state = resume_proactive_agent(account_store, account_id)
+    resumed = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert paused.allowed is False
+    assert paused.reason == "proactive_paused"
+    assert state["consent"]["categories"] == ["reminder"]
+    assert resumed.allowed is True
+
+
+def test_proactive_category_and_policy_setters_are_normalized(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="1", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id)
+
+    state = set_proactive_categories(account_store, account_id, ("analysis", "bad", "analysis", "reminder"))
+    state = set_proactive_allowed_hours(account_store, account_id, 22, 8)
+    state = set_proactive_min_interval_minutes(account_store, account_id, 99999)
+    decision_at_night = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 23, tzinfo=timezone.utc))
+
+    assert state["consent"]["categories"] == ["analysis", "reminder"]
+    assert state["policy"]["allowed_hours"] == [22, 8]
+    assert state["policy"]["min_minutes_between_messages"] == 1440
+    assert decision_at_night.allowed is True
+
+
+def test_proactive_policy_enforces_min_interval_after_sent_message(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["min_minutes_between_messages"] = 180
+    account_store.write_agent_state(account_id, state)
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="first",
+        message_text="First",
+        due_at="2026-06-15T10:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    assert first.allowed is True
+    assert update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        first.reason.removeprefix("queued:"),
+        status="sent",
+        reason="test",
+        now=datetime(2026, 6, 15, 10, 30, tzinfo=timezone.utc),
+    )
+
+    blocked = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="second",
+        message_text="Second",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+    allowed = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="third",
+        message_text="Third",
+        due_at="2026-06-15T14:00:00+00:00",
+        now=datetime(2026, 6, 15, 14, tzinfo=timezone.utc),
+    )
+
+    assert blocked.allowed is False
+    assert blocked.reason == "min_interval_not_elapsed"
+    assert allowed.allowed is True
 
 
 def test_due_proactive_outbox_items_filters_future_and_terminal_items(tmp_path) -> None:

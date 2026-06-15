@@ -226,7 +226,9 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert "Configured status." not in actions[0].text
 
 
-def test_engine_proactive_command_requires_instance_enablement(tmp_path):
+def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
+    monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
 
@@ -249,6 +251,32 @@ def test_engine_proactive_command_enables_private_account_agent_when_instance_en
     assert account_id is not None
     assert "aktiviert" in actions[0].text
     assert account_store.read_agent_state(account_id)["proactive"]["enabled"] is True
+
+
+def test_engine_proactive_policy_commands_update_account_state(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    engine.process(event(telegram_identity_key(1), "/proactive on"))
+    category_reply = engine.process(event(telegram_identity_key(1), "/proactive category on analysis"))[0].text
+    quiet_reply = engine.process(event(telegram_identity_key(1), "/proactive quiet 22 8"))[0].text
+    interval_reply = engine.process(event(telegram_identity_key(1), "/proactive interval 180"))[0].text
+    pause_reply = engine.process(event(telegram_identity_key(1), "/proactive pause"))[0].text
+    status_reply = engine.process(event(telegram_identity_key(1), "/proactive status"))[0].text
+
+    account_id = account_store.get_account_for_identity(telegram_identity_key(1))
+    assert account_id is not None
+    state = account_store.read_agent_state(account_id)
+    assert "analysis" in state["consent"]["categories"]
+    assert state["policy"]["allowed_hours"] == [8, 22]
+    assert state["policy"]["min_minutes_between_messages"] == 180
+    assert state["proactive"]["paused"] is True
+    assert "Kategorien aktualisiert" in category_reply
+    assert "Erlaubtes Zeitfenster: 8-22 Uhr" in quiet_reply
+    assert "180 Minuten" in interval_reply
+    assert "pausiert" in pause_reply
+    assert "- pausiert: ja" in status_reply
 
 
 def test_engine_proactive_command_is_private_only(tmp_path):
