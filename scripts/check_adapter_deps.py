@@ -162,6 +162,12 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     if failures:
         return False, f"nio-bot/matrix-nio contract missing: {', '.join(failures)}"
     try:
+        matrix_room = nio.MatrixRoom("!check:example", "@bot:example", encrypted=True)
+    except Exception as exc:
+        return False, f"matrix-nio MatrixRoom construction_error={type(exc).__name__}: {exc}"
+    if getattr(matrix_room, "encrypted", None) is not True:
+        return False, "matrix-nio MatrixRoom did not preserve encrypted=True"
+    try:
         requirements = importlib.metadata.metadata("nio-bot").get_all("Requires-Dist") or []
     except importlib.metadata.PackageNotFoundError:
         requirements = []
@@ -207,7 +213,8 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     try:
         import signalbot  # type: ignore[import-not-found]
         from signalbot.context import Context  # type: ignore[import-not-found]
-        from signalbot import Command, LinkPreview, SignalBot  # type: ignore[import-not-found]
+        from signalbot import Command, Config, LinkPreview, SignalBot  # type: ignore[import-not-found]
+        from signalbot.message import Message, MessageType  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
     missing = [
@@ -232,11 +239,23 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_update_contact_params = inspect.signature(SignalBot.update_contact).parameters
     bot_update_group_params = inspect.signature(SignalBot.update_group).parameters
     bot_delete_attachment_params = inspect.signature(SignalBot.delete_attachment).parameters
+    config_params = inspect.signature(Config).parameters
+    message_params = inspect.signature(Message).parameters
     link_preview_params = inspect.signature(LinkPreview).parameters
+    signal_api = getattr(getattr(signalbot, "api", None), "SignalAPI", None)
+    connection_mode = getattr(getattr(signalbot, "api", None), "ConnectionMode", None)
     delete_params = inspect.signature(Context.remote_delete).parameters
     react_params = inspect.signature(Context.react).parameters
     receipt_params = inspect.signature(Context.receipt).parameters
     expectations = {
+        "Config.signal_service": "signal_service" in config_params,
+        "Config.phone_number": "phone_number" in config_params,
+        "Config.storage": "storage" in config_params,
+        "Config.connection_mode": "connection_mode" in config_params,
+        "Config.download_attachments": "download_attachments" in config_params,
+        "InMemoryConfig": hasattr(signalbot, "InMemoryConfig"),
+        "ConnectionMode.HTTP_ONLY": hasattr(connection_mode, "HTTP_ONLY"),
+        "ConnectionMode.HTTPS_ONLY": hasattr(connection_mode, "HTTPS_ONLY"),
         "Context.send.base64_attachments": "base64_attachments" in send_params,
         "Context.send.mentions": "mentions" in send_params,
         "Context.send.text_mode": "text_mode" in send_params,
@@ -290,6 +309,18 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.remote_delete.receiver": "receiver" in bot_remote_delete_params,
         "SignalBot.remote_delete.timestamp": "timestamp" in bot_remote_delete_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
+        "Message.link_previews": "link_previews" in message_params,
+        "Message.mentions": "mentions" in message_params,
+        "Message.quote": "quote" in message_params,
+        "Message.target_sent_timestamp": "target_sent_timestamp" in message_params,
+        "Message.remote_delete_timestamp": "remote_delete_timestamp" in message_params,
+        "MessageType.DATA_MESSAGE": hasattr(MessageType, "DATA_MESSAGE"),
+        "MessageType.EDIT_MESSAGE": hasattr(MessageType, "EDIT_MESSAGE"),
+        "MessageType.DELETE_MESSAGE": hasattr(MessageType, "DELETE_MESSAGE"),
+        "MessageType.REACTION_MESSAGE": hasattr(MessageType, "REACTION_MESSAGE"),
+        "SignalAPI.get_signal_cli_about": hasattr(signal_api, "get_signal_cli_about"),
+        "SignalAPI.get_signal_cli_rest_api_version": hasattr(signal_api, "get_signal_cli_rest_api_version"),
+        "SignalAPI.get_signal_cli_rest_api_mode": hasattr(signal_api, "get_signal_cli_rest_api_mode"),
         "LinkPreview.base64_thumbnail": "base64_thumbnail" in link_preview_params,
         "LinkPreview.title": "title" in link_preview_params,
         "LinkPreview.description": "description" in link_preview_params,
@@ -317,6 +348,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
                 signal_service="127.0.0.1:8080",
                 phone_number="+491234",
                 storage=signalbot.InMemoryConfig(),
+                connection_mode=signalbot.api.ConnectionMode.HTTP_ONLY,
             )
         )
         bot.register(command)
@@ -324,7 +356,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         return False, f"signalbot register contract_error={type(exc).__name__}: {exc}"
     if command.bot is not bot or not command.setup_called:
         return False, "signalbot register did not attach bot and run setup"
-    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about"
+    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about config=in_memory"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
