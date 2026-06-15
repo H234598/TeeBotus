@@ -9,7 +9,7 @@ import hashlib
 from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, utc_now
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
@@ -1070,7 +1070,10 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     errors: list[str] = []
     queued_count = 0
     review_pending_count = 0
-    state = account_store.read_agent_state(account_id)
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError) as exc:
+        return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {type(exc).__name__}: {exc}",), 0, 0)
     if state:
         if state.get("schema_version") != 1:
             errors.append("agent_state schema_version is not 1")
@@ -1079,7 +1082,10 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             errors.append("proactive enabled without consent categories")
     else:
         normalized_state = _normalized_agent_state({})
-    outbox = account_store.read_proactive_outbox(account_id)
+    try:
+        outbox = account_store.read_proactive_outbox(account_id)
+    except (AccountStoreError, OSError, ValueError) as exc:
+        return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {type(exc).__name__}: {exc}",), 0, 0)
     seen_ids: set[str] = set()
     consented_categories = set(normalized_state["consent"]["categories"])
     for index, item in enumerate(outbox):
@@ -1134,8 +1140,13 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
                     errors.append(f"{status} outbox item {item_id or index} missing route channel")
                 if not str(route.get("chat_id") or "").strip():
                     errors.append(f"{status} outbox item {item_id or index} missing route chat_id")
-                if not _account_has_matching_proactive_route(account_store, account_id, route):
-                    errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
+                try:
+                    route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
+                except (AccountStoreError, OSError, ValueError) as exc:
+                    errors.append(f"{status} outbox item {item_id or index} route check failed: {type(exc).__name__}: {exc}")
+                else:
+                    if not route_matches:
+                        errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
     return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count)
 
 

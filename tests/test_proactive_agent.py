@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, matrix_identity_key, signal_identity_key, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, matrix_identity_key, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
@@ -431,6 +431,33 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.queued_count == 1
     assert health.review_pending_count == 0
     assert health.errors == ()
+
+
+def test_proactive_agent_health_reports_agent_state_read_error() -> None:
+    class BrokenStore:
+        def read_agent_state(self, _account_id: str) -> dict:
+            raise AccountStoreError("encrypted envelope authentication failed")
+
+    health = check_proactive_agent_account(BrokenStore(), "a" * 128)  # type: ignore[arg-type]
+
+    assert health.ok is False
+    assert health.queued_count == 0
+    assert health.review_pending_count == 0
+    assert health.errors == ("agent_state read failed: AccountStoreError: encrypted envelope authentication failed",)
+
+
+def test_proactive_agent_health_reports_outbox_read_error() -> None:
+    class BrokenStore:
+        def read_agent_state(self, _account_id: str) -> dict:
+            return {}
+
+        def read_proactive_outbox(self, _account_id: str) -> list:
+            raise AccountStoreError("encrypted envelope authentication failed")
+
+    health = check_proactive_agent_account(BrokenStore(), "a" * 128)  # type: ignore[arg-type]
+
+    assert health.ok is False
+    assert health.errors == ("proactive_outbox read failed: AccountStoreError: encrypted envelope authentication failed",)
 
 
 def test_proactive_dispatch_sends_generated_calendar_file(tmp_path) -> None:
