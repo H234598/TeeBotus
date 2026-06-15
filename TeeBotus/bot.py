@@ -99,6 +99,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.instructions import InstructionStore
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
+        from TeeBotus.runtime.ollama_health import check_ollama_services
         from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
@@ -116,6 +117,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
     for instance in config.instances:
         for account in instance.accounts:
             print(_runtime_status_llm_line(account))
+    for health in check_ollama_services(config):
+        state = "reachable" if health.ok else "unreachable"
+        if health.ok:
+            models = ",".join(health.models) if health.models else "<none>"
+            print(f"ollama={health.target} status={state} models={models}")
+        else:
+            print(f"ollama={health.target} status={state} error={health.error}")
     for health in check_signal_services(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"
