@@ -1638,7 +1638,7 @@ def test_matrix_send_text_prefers_niobot_send_message():
     sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi")]))
 
     assert sent == ["$sent"]
-    assert client.calls == [("!room:example", "hi", {"message_type": "m.text"})]
+    assert client.calls == [("!room:example", "hi", {"message_type": "m.text", "clean_mentions": True})]
 
 
 def test_matrix_send_text_can_reply_with_niobot_send_message():
@@ -1658,7 +1658,7 @@ def test_matrix_send_text_can_reply_with_niobot_send_message():
     sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi", reply_to_ref="$old")]))
 
     assert sent == ["$sent"]
-    assert client.calls == [("!room:example", "hi", {"message_type": "m.text", "reply_to": "$old"})]
+    assert client.calls == [("!room:example", "hi", {"message_type": "m.text", "clean_mentions": True, "reply_to": "$old"})]
 
 
 def test_matrix_send_text_fallback_can_reply_with_relates_to():
@@ -1934,7 +1934,7 @@ def test_matrix_send_edit_prefers_niobot_edit_message_without_mentions():
     sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
 
     assert sent == ["$edit"]
-    assert client.calls == [("!room:example", "$old", "korrigiert", {"message_type": "m.text"})]
+    assert client.calls == [("!room:example", "$old", "korrigiert", {"message_type": "m.text", "clean_mentions": True})]
 
 
 def test_matrix_send_edit_preserves_mentions_in_replacement_content():
@@ -2260,7 +2260,7 @@ def test_matrix_export_file_prefers_niobot_file_attachment():
     room_id, content, file, kwargs = client.calls[0]
     assert room_id == "!room:example"
     assert content == "Export"
-    assert kwargs == {}
+    assert kwargs == {"clean_mentions": True}
     assert file.file_name == "report.json"
     assert file.mime_type == "application/json"
     assert file.size == 12
@@ -2287,7 +2287,7 @@ def test_matrix_image_attachment_prefers_niobot_image_attachment():
     room_id, content, file, kwargs = client.calls[0]
     assert room_id == "!room:example"
     assert content == "photo.jpg"
-    assert kwargs == {}
+    assert kwargs == {"clean_mentions": True}
     assert file.as_body("photo.jpg")["msgtype"] == "m.image"
     assert file.mime_type == "image/jpeg"
     assert file.size == 3
@@ -2328,7 +2328,7 @@ def test_matrix_file_attachment_can_reply_with_niobot_send_message():
     assert room_id == "!room:example"
     assert content == "Bericht"
     assert file.file_name == "report.txt"
-    assert kwargs == {"reply_to": "$old"}
+    assert kwargs == {"clean_mentions": True, "reply_to": "$old"}
 
 
 def test_matrix_attachment_with_mentions_uses_room_send_content():
@@ -2577,7 +2577,7 @@ def test_matrix_niobot_file_send_error_sends_notice():
         "!room:example",
         "Datei konnte nicht gesendet werden: report.json (M_FORBIDDEN: send refused)",
         None,
-        {"message_type": "m.notice"},
+        {"message_type": "m.notice", "clean_mentions": True},
     )
 
 
@@ -2702,5 +2702,5 @@ def test_matrix_export_upload_failure_prefers_niobot_notice_message():
     assert client.calls[1] == (
         "!room:example",
         "Datei konnte nicht gesendet werden: report.json (send refused)",
-        {"message_type": "m.notice"},
+        {"message_type": "m.notice", "clean_mentions": True},
     )

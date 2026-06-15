@@ -154,7 +154,7 @@ async def _send_matrix_text(
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
     if callable(send_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
-        kwargs: dict[str, Any] = {"message_type": msgtype}
+        kwargs: dict[str, Any] = {"message_type": msgtype, "clean_mentions": True}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
         response = await send_message(room_id, text, **kwargs)
@@ -239,7 +239,7 @@ async def _send_matrix_edit(
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
     if callable(edit_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
-        response = await edit_message(room_id, target, body, message_type="m.text")
+        response = await edit_message(room_id, target, body, message_type="m.text", clean_mentions=True)
         _raise_matrix_response_error(response)
         return response
     new_content = _matrix_text_content("m.text", body, text_mode=text_mode)
@@ -395,7 +395,7 @@ async def _send_matrix_file(
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
     encrypt_upload = _matrix_room_is_encrypted(client, room_id)
     if callable(send_message) and attachment is not None and not mentions and not _matrix_is_html_text_mode(text_mode) and not encrypt_upload:
-        kwargs: dict[str, Any] = {"file": attachment}
+        kwargs: dict[str, Any] = {"file": attachment, "clean_mentions": True}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
         response = await send_message(room_id, caption or filename, **kwargs)
