@@ -26,6 +26,7 @@ from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks
 from TeeBotus.runtime.state import RuntimeState
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -420,8 +421,20 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
-        _append_account_memory_interaction(self.account_store, account_id, event, text, response_text, instructions)
-        return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
+        visible_text, files = parse_generated_file_blocks(response_text)
+        memory_response_text = visible_text
+        if files:
+            file_names = ", ".join(file.filename for file in files)
+            memory_response_text = "\n".join(part for part in (visible_text, f"[Gesendete Datei(en): {file_names}]") if part).strip()
+        _append_account_memory_interaction(self.account_store, account_id, event, text, memory_response_text or response_text, instructions)
+        actions: list[OutgoingAction] = [SendTyping(event.chat_id)]
+        if visible_text:
+            actions.append(SendText(event.chat_id, visible_text))
+        for file in files:
+            actions.append(SendAttachment(event.chat_id, file.data, file.filename, file.content_type, caption=file.caption or visible_text))
+        if len(actions) == 1:
+            actions.append(SendText(event.chat_id, response_text))
+        return actions
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
         pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")
@@ -811,6 +824,20 @@ def _build_openai_user_input(
                 working_memory_context,
             ]
         )
+    metadata.extend(
+        [
+            "",
+            "Dateiausgabe:",
+            "Wenn die Nutzeranforderung oder eine sinnvolle Antwort eine Datei erfordert, darfst du bis zu drei kleine Dateien erzeugen.",
+            "Nutze dafuer exakt dieses Blockformat und schreibe den normalen Antworttext ausserhalb des Blocks:",
+            '[[TEE_FILE filename="termin.ics" content_type="text/calendar" caption="Kalenderdatei"]]',
+            "BEGIN:VCALENDAR",
+            "...",
+            "[[/TEE_FILE]]",
+            "Geeignete Textdateien sind unter anderem .ics/.ical fuer Kalender, .vcf/.vcard fuer Kontakte, .md, .txt, .csv, .json, .yaml und .tex.",
+            "Keine ausfuehrbaren Dateien, keine Secrets, keine rohen Memory-Daten.",
+        ]
+    )
     metadata.extend(
         [
             "",

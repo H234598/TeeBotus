@@ -474,6 +474,37 @@ def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
     assert client.calls[0][1] is None
 
 
+def test_engine_turns_openai_file_block_into_attachment(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse(
+                'Hier ist die Kalenderdatei.\n[[TEE_FILE filename="termin.ics" content_type="text/calendar" caption="Termin"]]\nBEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR\n[[/TEE_FILE]]',
+                "resp-file",
+                None,
+            )
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=client,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Mach mir bitte eine ICS Datei fuer morgen."))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "Hier ist die Kalenderdatei."
+    assert isinstance(actions[2], SendAttachment)
+    assert actions[2].filename == "termin.ics"
+    assert actions[2].content_type == "text/calendar"
+    assert actions[2].data.startswith(b"BEGIN:VCALENDAR")
+    assert "Dateiausgabe:" in client.user_text
+
+
 def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

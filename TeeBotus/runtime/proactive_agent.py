@@ -10,8 +10,9 @@ from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
-from TeeBotus.runtime.actions import OutgoingAction, SendText
+from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
@@ -302,6 +303,7 @@ def queue_proactive_message(
     now: datetime | None = None,
     risk_gate: str = "none",
     planner: Mapping[str, Any] | None = None,
+    file: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
@@ -312,23 +314,26 @@ def queue_proactive_message(
     status = "review_pending" if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else "queued"
     policy_result = "needs_review" if status == "review_pending" else "allowed"
     policy_reason = f"risk_gate_needs_review:{normalized_risk_gate}" if status == "review_pending" else decision.reason
-    item_id = account_store.append_proactive_outbox_item(
-        account_id,
-        {
-            "status": status,
-            "category": normalized_category,
-            "intent": str(intent or "").strip(),
-            "message_text": str(message_text or "").strip(),
-            "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
-            "due_at": str(due_at or "").strip(),
-            "risk_gate": normalized_risk_gate,
-            "planner": {str(key): value for key, value in (planner or {}).items()},
-            "policy_result": policy_result,
-            "policy_reason": policy_reason,
-            "route": decision.route or {},
-            "status_history": [{"at": utc_now(), "status": status, "reason": "created" if status == "queued" else policy_reason}],
-        },
-    )
+    payload = {
+        "status": status,
+        "category": normalized_category,
+        "intent": str(intent or "").strip(),
+        "message_text": str(message_text or "").strip(),
+        "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
+        "due_at": str(due_at or "").strip(),
+        "risk_gate": normalized_risk_gate,
+        "planner": {str(key): value for key, value in (planner or {}).items()},
+        "policy_result": policy_result,
+        "policy_reason": policy_reason,
+        "route": decision.route or {},
+        "status_history": [{"at": utc_now(), "status": status, "reason": "created" if status == "queued" else policy_reason}],
+    }
+    if file is not None:
+        generated_file = normalize_generated_file(file)
+        if generated_file is None:
+            return ProactiveDecision(False, "invalid_file")
+        payload["file"] = generated_file_to_outbox_payload(generated_file)
+    item_id = account_store.append_proactive_outbox_item(account_id, payload)
     return ProactiveDecision(True, f"{status}:{item_id}", decision.route)
 
 
@@ -604,6 +609,19 @@ def proactive_agent_tool_definitions() -> list[dict[str, Any]]:
                     "expected_response": {"type": "string"},
                     "review_signal": {"type": "string"},
                     "collaboration_marker": {"type": "string"},
+                    "file": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "filename": {"type": "string"},
+                            "content_type": {"type": "string"},
+                            "caption": {"type": "string"},
+                            "text": {"type": "string"},
+                            "base64": {"type": "string"},
+                            "data_base64": {"type": "string"},
+                        },
+                        "required": ["filename"],
+                    },
                 },
                 "required": ["category", "intent", "message_text", "reason_memory_ids"],
             },
@@ -707,7 +725,7 @@ def build_proactive_llm_planner_prompt(account_store: AccountStore, account_id: 
             "Erlaubte memory actions:",
             '{"action":"memory","kind":"reflection|summary|next_step|follow_up|homework|treatment_plan|assessment_note|intervention_note|response_note","text":"...","source_memory_ids":["mem_..."],"importance":1}',
             "Erlaubte queue actions:",
-            '{"action":"queue","category":"reminder|task|tip|test|image|analysis|reflection","intent":"...","message_text":"...","reason_memory_ids":["mem_..."],"risk_gate":"none|needs_review|blocked","intervention_type":"...","expected_response":"...","review_signal":"..."}',
+            '{"action":"queue","category":"reminder|task|tip|test|image|analysis|reflection","intent":"...","message_text":"...","reason_memory_ids":["mem_..."],"risk_gate":"none|needs_review|blocked","intervention_type":"...","expected_response":"...","review_signal":"...","file":{"filename":"termin.ics","content_type":"text/calendar","text":"BEGIN:VCALENDAR..."}}',
             "Erlaubte cancel/snooze actions fuer bestehende queued Outbox-Items:",
             '{"action":"cancel","item_id":"pro_...","reason":"..."}',
             '{"action":"snooze","item_id":"pro_...","due_at":"2026-06-16T10:00:00+00:00","reason":"..."}',
@@ -967,7 +985,11 @@ async def dispatch_due_proactive_outbox_items(
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="missing_message_text", now=resolved_now)
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_message_text", channel))
             continue
-        action = SendText(chat_id, message_text, track=True)
+        action = _proactive_item_action(chat_id, message_text, item)
+        if action is None:
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="invalid_file", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
+            continue
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
@@ -987,6 +1009,23 @@ async def dispatch_due_proactive_outbox_items(
         )
         results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
     return tuple(results)
+
+
+def _proactive_item_action(chat_id: str, message_text: str, item: Mapping[str, Any]) -> OutgoingAction | None:
+    file_payload = item.get("file")
+    if isinstance(file_payload, Mapping):
+        generated_file = normalize_generated_file(file_payload)
+        if generated_file is None:
+            return None
+        return SendAttachment(
+            chat_id,
+            generated_file.data,
+            generated_file.filename,
+            generated_file.content_type,
+            caption=generated_file.caption or message_text,
+            track=True,
+        )
+    return SendText(chat_id, message_text, track=True)
 
 
 def check_proactive_agent_account(account_store: AccountStore, account_id: str) -> ProactiveAgentHealth:
@@ -1036,6 +1075,12 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
         for key in ("intent", "message_text"):
             if not str(item.get(key) or "").strip():
                 errors.append(f"outbox item {item_id or index} missing {key}")
+        file_payload = item.get("file")
+        if file_payload is not None:
+            if not isinstance(file_payload, Mapping):
+                errors.append(f"outbox item {item_id or index} file is not an object")
+            elif normalize_generated_file(file_payload) is None:
+                errors.append(f"outbox item {item_id or index} has invalid file")
         due_at = str(item.get("due_at") or "").strip()
         if due_at and _parse_proactive_datetime(due_at) is None:
             errors.append(f"outbox item {item_id or index} has invalid due_at")
@@ -1382,6 +1427,7 @@ def _apply_proactive_llm_queue_decision(
         now=now,
         risk_gate=risk_gate,
         planner=planner,
+        file=decision.get("file") if isinstance(decision.get("file"), Mapping) else None,
     )
     if not result.allowed:
         return f"error:policy:{result.reason}"

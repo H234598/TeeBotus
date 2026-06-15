@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import pytest
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, matrix_identity_key, signal_identity_key, telegram_identity_key
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     active_proactive_risk_memory_ids,
@@ -405,6 +405,73 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.queued_count == 1
     assert health.review_pending_count == 0
     assert health.errors == ()
+
+
+def test_proactive_dispatch_sends_generated_calendar_file(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="appointment_file",
+        message_text="Hier ist dein Kalendereintrag.",
+        due_at="2026-06-15T12:00:00+00:00",
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+        file={
+            "filename": "termin.ics",
+            "content_type": "text/calendar",
+            "text": "BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR\n",
+        },
+    )
+    seen: list[SendAttachment] = []
+
+    async def sender(_route, action, _item):
+        seen.append(action)
+        return "sent-file"
+
+    result = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert decision.allowed is True
+    assert result[0].status == "sent"
+    assert isinstance(seen[0], SendAttachment)
+    assert seen[0].filename == "termin.ics"
+    assert seen[0].data.startswith(b"BEGIN:VCALENDAR")
+    assert seen[0].caption == "Hier ist dein Kalendereintrag."
+
+
+def test_proactive_agent_health_rejects_invalid_generated_file(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="bad_file",
+        message_text="Datei",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["file"] = {"filename": "run.sh", "text": "echo nope"}
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    assert "has invalid file" in "\n".join(health.errors)
 
 
 def test_proactive_agent_health_reports_invalid_status_history(tmp_path) -> None:
@@ -1169,6 +1236,11 @@ def test_tool_agent_applies_memory_queue_and_snooze_tools_through_validator(tmp_
                     "message_text": "Magst du kurz berichten, ob ein kleiner Spaziergang passt?",
                     "reason_memory_ids": [source_id],
                     "risk_gate": "none",
+                    "file": {
+                        "filename": "spaziergang.vcf",
+                        "content_type": "text/vcard",
+                        "text": "BEGIN:VCARD\nVERSION:4.0\nFN:Spaziergang\nEND:VCARD\n",
+                    },
                 },
             },
             {
@@ -1187,6 +1259,8 @@ def test_tool_agent_applies_memory_queue_and_snooze_tools_through_validator(tmp_
     assert rows[0]["due_at"] == "2026-06-16T09:30:00+00:00"
     assert rows[1]["id"] == result.queued_item_ids[0]
     assert rows[1]["planner"]["source"] == "llm"
+    assert rows[1]["file"]["filename"] == "spaziergang.vcf"
+    assert rows[1]["file"]["text"].startswith("BEGIN:VCARD")
 
 
 def test_tool_agent_rejects_unknown_tools_without_mutating(tmp_path) -> None:
