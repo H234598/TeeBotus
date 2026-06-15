@@ -17,6 +17,8 @@ from TeeBotus.runtime.actions import (
     SendText,
     SendTyping,
     SetMatrixState,
+    UpdateSignalContact,
+    UpdateSignalGroup,
 )
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
@@ -190,7 +192,7 @@ class TelegramRuntimeBridge:
                             ref_kind="telegram_message_id",
                         )
                     )
-            elif isinstance(action, (SendReaction, SendReceipt, SetMatrixState)):
+            elif isinstance(action, (SendReaction, SendReceipt, SetMatrixState, UpdateSignalContact, UpdateSignalGroup)):
                 continue
 
 

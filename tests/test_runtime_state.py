@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from TeeBotus.runtime.accounts import AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider
-from TeeBotus.runtime.actions import SendEdit, SendPoll, SendReaction, SendReceipt, SetMatrixState
+from TeeBotus.runtime.actions import SendEdit, SendPoll, SendReaction, SendReceipt, SetMatrixState, UpdateSignalContact, UpdateSignalGroup
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.telegram_bridge import TelegramRuntimeBridge
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -126,6 +126,8 @@ def test_telegram_bridge_ignores_unsupported_cross_channel_actions(tmp_path):
             SendReaction("123", "99", "\U0001f44d"),
             SendReceipt("123", "99"),
             SetMatrixState("123", "m.room.topic", {"topic": "Tee"}),
+            UpdateSignalContact("123", name="Ada"),
+            UpdateSignalGroup("123", name="Teegruppe"),
         ],
     )
 
