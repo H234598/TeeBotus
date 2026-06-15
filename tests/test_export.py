@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import json
 import sys
 import types
@@ -43,7 +44,15 @@ def test_markdown_and_csv_exports(tmp_path):
     assert b"User_Memory_Index.json" in csv.data
 
 
-def test_pdf_degrades_to_markdown_without_engine(tmp_path):
+def test_pdf_degrades_to_markdown_without_engine(monkeypatch, tmp_path):
+    original_import = builtins.__import__
+
+    def import_without_weasyprint(name, *args, **kwargs):
+        if name == "weasyprint":
+            raise ImportError("blocked for test")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", import_without_weasyprint)
     account_dir = make_account_dir(tmp_path)
     result = export_account_data(ACCOUNT_ID, account_dir, "pdf")
 
