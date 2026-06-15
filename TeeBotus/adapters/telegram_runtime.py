@@ -713,6 +713,7 @@ class TelegramRuntimeContext:
     instance_name: str
     adapter_slot: int
     api: TelegramAPI
+    instruction_store: InstructionStore
     account_store: AccountStore
     state_store: RuntimeStateStore
     message_tracker: MessageTracker
@@ -758,6 +759,7 @@ def build_telegram_runtime_context(
         instance_name=instance_name,
         adapter_slot=adapter_slot,
         api=api,
+        instruction_store=instruction_store,
         account_store=account_store,
         state_store=state_store,
         message_tracker=message_tracker,
@@ -785,21 +787,56 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         return False
     event = _with_telegram_reply_text(event, message)
     event = _with_telegram_attachments(context.api, event, message)
-    if context.engine.should_ignore_without_account(event):
+    try:
+        should_ignore = context.engine.should_ignore_without_account(event)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception(
+            "Telegram account lookup failed before routing instance=%s chat_id=%s message_id=%s.",
+            context.instance_name,
+            chat_id,
+            message.get("message_id", "unknown"),
+        )
+        try:
+            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
+        except (TelegramAPIError, TelegramNetworkError, OSError):
+            LOGGER.exception(
+                "Telegram memory error notification failed instance=%s chat_id=%s.",
+                context.instance_name,
+                chat_id,
+            )
+        return True
+    if should_ignore:
         LOGGER.info(
             "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
             chat_id,
             message.get("message_id", "unknown"),
         )
         return True
-    account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
-    context.account_store.update_identity_route(
-        event.identity_key,
-        channel=event.channel,
-        chat_id=event.chat_id,
-        chat_type=event.chat_type,
-        adapter_slot=event.adapter_slot,
-    )
+    try:
+        account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        context.account_store.update_identity_route(
+            event.identity_key,
+            channel=event.channel,
+            chat_id=event.chat_id,
+            chat_type=event.chat_type,
+            adapter_slot=event.adapter_slot,
+        )
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception(
+            "Telegram account resolution failed instance=%s chat_id=%s message_id=%s.",
+            context.instance_name,
+            chat_id,
+            message.get("message_id", "unknown"),
+        )
+        try:
+            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
+        except (TelegramAPIError, TelegramNetworkError, OSError):
+            LOGGER.exception(
+                "Telegram memory error notification failed instance=%s chat_id=%s.",
+                context.instance_name,
+                chat_id,
+            )
+        return True
     event = event.with_account(account_id)
     engine_result = context.engine.process_result(event)
     event = event.with_account(engine_result.account_id)

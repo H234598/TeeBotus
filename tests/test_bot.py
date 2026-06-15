@@ -1667,6 +1667,46 @@ class BotTests(unittest.TestCase):
         self.assertIsNotNone(account_id)
         self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
+    def test_handle_update_with_runtime_context_handles_account_store_errors(self) -> None:
+        class InstructionBox:
+            def __init__(self, instructions: BotInstructions) -> None:
+                self.instructions = instructions
+
+            def get(self):
+                return self.instructions
+
+        api = FakeAPI()
+        instructions = BotInstructions(user_memory_error="Memory kaputt.")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = FailingAccountMemoryStore()
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(instructions),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+            with self.assertLogs("TeeBotus", level="ERROR"):
+                handle_update(
+                    api,
+                    {"message": {"message_id": 1, "text": "/ping", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                    chat_state=ChatState(),
+                    runtime_context=context,
+                )
+
+        self.assertEqual(api.sent_messages, [("123", "Memory kaputt.")])
+
     def test_logs_incoming_and_outgoing_messages_without_content(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
