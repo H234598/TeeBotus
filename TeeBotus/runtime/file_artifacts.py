@@ -14,6 +14,7 @@ SAFE_GENERATED_FILE_EXTENSIONS = frozenset(
     {
         ".csv",
         ".ics",
+        ".icl",
         ".ical",
         ".json",
         ".md",
@@ -28,6 +29,7 @@ SAFE_GENERATED_FILE_EXTENSIONS = frozenset(
 )
 TEXT_FILE_CONTENT_TYPES = {
     ".ics": "text/calendar; charset=utf-8",
+    ".icl": "text/calendar; charset=utf-8",
     ".ical": "text/calendar; charset=utf-8",
     ".vcf": "text/vcard; charset=utf-8",
     ".vcard": "text/vcard; charset=utf-8",

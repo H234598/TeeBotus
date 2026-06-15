@@ -450,6 +450,43 @@ def test_proactive_dispatch_sends_generated_calendar_file(tmp_path) -> None:
     assert seen[0].caption == "Hier ist dein Kalendereintrag."
 
 
+def test_proactive_dispatch_accepts_icl_calendar_file(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="appointment_icl_file",
+        message_text="Hier ist dein Kalendereintrag.",
+        due_at="2026-06-15T12:00:00+00:00",
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+        file={"filename": "termin.icl", "text": "BEGIN:VCALENDAR\nVERSION:2.0\nEND:VCALENDAR\n"},
+    )
+    seen: list[SendAttachment] = []
+
+    async def sender(_route, action, _item):
+        seen.append(action)
+        return "sent-file"
+
+    result = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert decision.allowed is True
+    assert result[0].status == "sent"
+    assert seen[0].filename == "termin.icl"
+    assert seen[0].content_type == "text/calendar; charset=utf-8"
+
+
 def test_proactive_agent_health_rejects_invalid_generated_file(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
