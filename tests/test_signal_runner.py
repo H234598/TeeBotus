@@ -11,7 +11,7 @@ from signalbot import Command
 from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendPoll, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.message_tracking import SentMessageRef
@@ -54,6 +54,7 @@ class FakeSignalContext:
         self.sent: list[str] = []
         self.bot_sent: list[tuple[str, str, dict[str, object]]] = []
         self.bot_polls: list[tuple[str, str, list[str], dict[str, object]]] = []
+        self.edits: list[tuple[str, int, dict[str, object]]] = []
         self.deleted_attachments: list[str] = []
         self.deleted: list[int] = []
         self.bot_deleted: list[tuple[str, int]] = []
@@ -76,6 +77,10 @@ class FakeSignalContext:
     async def poll_bot(self, receiver: str, question: str, answers: list[str], **kwargs) -> int:
         self.bot_polls.append((receiver, question, answers, kwargs))
         return 876543
+
+    async def edit(self, text: str, edit_timestamp: int, **kwargs) -> int:
+        self.edits.append((text, edit_timestamp, kwargs))
+        return 765432
 
     async def delete_attachment(self, filename: str) -> None:
         self.deleted_attachments.append(filename)
@@ -299,6 +304,35 @@ def test_signal_cleanup_uses_context_remote_delete_first(tmp_path) -> None:
 
     assert context.deleted == [444]
     assert context.bot_deleted == []
+
+
+def test_signal_bridge_tracks_explicitly_tracked_edits(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [SendEdit(event.chat_id, event.message_ref, "korrigiert", track=True)]},
+    )()
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    refs = command.message_tracker.list_for_chat("+491234", instance_name="Demo", channel="signal")
+    assert context.edits == [("korrigiert", 123456, {})]
+    assert refs[-1].message_ref == "765432"
+    assert refs[-1].ref_kind == "signal_timestamp"
 
 
 def test_signal_cleanup_accepts_sync_context_remote_delete(tmp_path) -> None:
