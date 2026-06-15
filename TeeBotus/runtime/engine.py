@@ -553,7 +553,7 @@ def _command_targets_other_bot(text: str, bot_address_names: frozenset[str]) -> 
     first = parts[0]
     if not first.startswith("/") or "@" not in first or not bot_address_names:
         return False
-    target = _normalize_address_name(first.rsplit("@", maxsplit=1)[-1])
+    target = _normalize_command_target(first.rsplit("@", maxsplit=1)[-1])
     return bool(target and target not in bot_address_names)
 
 
@@ -615,6 +615,13 @@ def _matrix_raw_content(raw: object) -> dict[str, object]:
         return content if isinstance(content, dict) else {}
     content = getattr(raw, "content", None)
     return content if isinstance(content, dict) else {}
+
+
+def _normalize_command_target(value: object) -> str:
+    text = str(value or "").strip()
+    if ":" in text and not text.startswith("@"):
+        text = f"@{text}"
+    return _normalize_address_name(text)
 
 
 def _normalize_address_name(value: object) -> str:

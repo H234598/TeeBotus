@@ -112,6 +112,24 @@ def test_matrix_group_event_with_structured_other_mention_is_ignored() -> None:
     assert ignored is True
 
 
+def test_matrix_command_targeting_bot_full_user_id_is_not_ignored() -> None:
+    ignored = should_ignore_event_without_account(
+        matrix_group_event("/ping@bot:example", raw=None),
+        bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is False
+
+
+def test_matrix_command_targeting_other_full_user_id_is_ignored() -> None:
+    ignored = should_ignore_event_without_account(
+        matrix_group_event("/ping@other:example", raw=None),
+        bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is True
+
+
 def test_cleanup_requires_exact_command_and_valid_count(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path))
 
