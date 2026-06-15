@@ -96,6 +96,38 @@ def test_identity_lookup_migrates_legacy_case_variant_key(tmp_path) -> None:
     assert migrated_profile["linked_identities"] == [canonical_key]
 
 
+def test_identity_lookup_removes_legacy_alias_when_canonical_key_exists(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    canonical_key = "signal:uuid:abc-def"
+    legacy_key = "signal:uuid:ABC-DEF"
+    canonical_account = store.resolve_or_create_account(canonical_key)
+    legacy_account = store.resolve_or_create_account("telegram:user:legacy")
+    identities = store._load_identities()
+    identities[legacy_key] = {
+        "schema_version": 1,
+        "instance": "Depressionsbot",
+        "identity_key": legacy_key,
+        "account_id": legacy_account,
+        "first_seen_at": "2026-06-15T12:00:00+00:00",
+        "last_seen_at": "2026-06-15T12:00:00+00:00",
+    }
+    store._save_identities(identities)
+    legacy_profile = store._read_account_profile(legacy_account)
+    legacy_profile["linked_identities"] = [legacy_key]
+    store._write_account_profile(legacy_account, legacy_profile)
+
+    assert store.get_account_for_identity(legacy_key) == canonical_account
+
+    migrated_identities = store._load_identities()
+    assert canonical_key in migrated_identities
+    assert legacy_key not in migrated_identities
+    canonical_profile = store._read_account_profile(canonical_account)
+    legacy_profile = store._read_account_profile(legacy_account)
+    assert canonical_profile["linked_identities"] == [canonical_key]
+    assert legacy_profile["linked_identities"] == []
+    assert legacy_profile["status"] == "orphaned"
+
+
 def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = telegram_identity_key(395935293)

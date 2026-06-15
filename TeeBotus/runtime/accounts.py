@@ -1872,6 +1872,7 @@ class AccountStore:
     def _identity_payload_for_key(self, identities: dict[str, Any], key: str) -> dict[str, Any] | None:
         payload = identities.get(key)
         if isinstance(payload, dict):
+            self._remove_identity_aliases_for_key(identities, key, keep_account_id=str(payload.get("account_id") or ""))
             return payload
         for stored_key, stored_payload in list(identities.items()):
             if not isinstance(stored_payload, dict) or not isinstance(stored_key, str):
@@ -1891,6 +1892,25 @@ class AccountStore:
             self._save_identities(identities)
             return stored_payload
         return None
+
+    def _remove_identity_aliases_for_key(self, identities: dict[str, Any], key: str, *, keep_account_id: str = "") -> None:
+        changed = False
+        for stored_key, stored_payload in list(identities.items()):
+            if stored_key == key or not isinstance(stored_key, str) or not isinstance(stored_payload, dict):
+                continue
+            try:
+                normalized_stored_key = self._normalize_identity_key(stored_key)
+            except AccountStoreError:
+                continue
+            if normalized_stored_key != key:
+                continue
+            identities.pop(stored_key, None)
+            account_id = stored_payload.get("account_id")
+            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                self._remove_identity_from_profile(account_id, stored_key, mark_orphaned=account_id != keep_account_id)
+            changed = True
+        if changed:
+            self._save_identities(identities)
 
     def _load_identities(self) -> dict[str, Any]:
         return self.vault.read_json(self.identities_path, {})
@@ -1987,6 +2007,18 @@ class AccountStore:
             linked.append(new_identity_key)
         profile["linked_identities"] = list(dict.fromkeys(linked))
         profile["updated_at"] = utc_now()
+        self._write_account_profile(account_id, profile)
+        self._upsert_account_index(profile)
+
+    def _remove_identity_from_profile(self, account_id: str, identity_key: str, *, mark_orphaned: bool) -> None:
+        if not (self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME).exists():
+            return
+        profile = self._read_account_profile(account_id)
+        linked = [str(value) for value in profile.get("linked_identities", []) if str(value) != identity_key]
+        profile["linked_identities"] = linked
+        profile["updated_at"] = utc_now()
+        if mark_orphaned and not linked:
+            profile["status"] = "orphaned"
         self._write_account_profile(account_id, profile)
         self._upsert_account_index(profile)
 
