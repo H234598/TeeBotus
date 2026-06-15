@@ -25,6 +25,13 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
+try:
+    from signalbot import Command as _SignalBotCommand  # type: ignore[import-not-found]
+except ModuleNotFoundError as exc:
+    if exc.name != "signalbot":
+        raise
+    _SignalBotCommand = object  # type: ignore[assignment]
+
 
 class SignalRuntimeError(RuntimeError):
     """Raised when the Signal runtime cannot be started."""
@@ -50,7 +57,7 @@ class SignalAccountHealth:
 LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
-class TeeBotusSignalCommand:
+class TeeBotusSignalCommand(_SignalBotCommand):
     """signalbot command that forwards every Signal message into TeeBotus' runtime engine."""
 
     def __init__(
@@ -60,6 +67,7 @@ class TeeBotusSignalCommand:
         instances_dir: str | Path,
         secret_provider: InstanceSecretProvider | None = None,
     ) -> None:
+        super().__init__()
         self.run_config = run_config
         self.instances_dir = Path(instances_dir)
         data_dir = self.instances_dir / run_config.instance_name / "data"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+from signalbot import Command
 from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
@@ -91,6 +92,25 @@ class FakeSignalBot:
     async def send(self, receiver: str, text: str) -> int:
         self.sent.append((receiver, text))
         return 123
+
+
+def test_signal_command_is_signalbot_command_subclass(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert isinstance(command, Command)
+    assert command.bot is None
 
 
 def test_signal_command_routes_private_account_commands(tmp_path) -> None:

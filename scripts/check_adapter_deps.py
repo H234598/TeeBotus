@@ -205,8 +205,9 @@ def _check_matrix_file_contract() -> tuple[bool, str]:
 
 def _check_signalbot_context_contract() -> tuple[bool, str]:
     try:
+        import signalbot  # type: ignore[import-not-found]
         from signalbot.context import Context  # type: ignore[import-not-found]
-        from signalbot import SignalBot  # type: ignore[import-not-found]
+        from signalbot import Command, SignalBot  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
     missing = [
@@ -292,6 +293,31 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
+    class ContractCommand(Command):
+        def __init__(self) -> None:
+            super().__init__()
+            self.setup_called = False
+
+        def setup(self) -> None:
+            self.setup_called = True
+
+        async def handle(self, context: object) -> None:
+            return None
+
+    try:
+        command = ContractCommand()
+        bot = SignalBot(
+            signalbot.Config(
+                signal_service="127.0.0.1:8080",
+                phone_number="+491234",
+                storage=signalbot.InMemoryConfig(),
+            )
+        )
+        bot.register(command)
+    except Exception as exc:
+        return False, f"signalbot register contract_error={type(exc).__name__}: {exc}"
+    if command.bot is not bot or not command.setup_called:
+        return False, "signalbot register did not attach bot and run setup"
     return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about"
 
 
