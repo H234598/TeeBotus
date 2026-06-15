@@ -113,6 +113,52 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
     assert context.sent == ["Signal custom fuer +491234."]
 
 
+def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.group = "group-1"
+    context.message.text = "Hallo Gruppe"
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == []
+
+
+def test_signal_group_free_text_can_address_bot_by_phone(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.group = "group-1"
+    context.message.text = "+491234 hallo"
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["Echo: +491234 hallo"]
+
+
 def test_signal_command_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:
     captured: list[str] = []
 

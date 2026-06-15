@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Callable, Iterable
 
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
@@ -43,6 +44,7 @@ class TeeBotusEngine:
         instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
         project_root: Path | None = None,
         openai_client: object | None = None,
+        bot_address_names: Iterable[str] = (),
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -50,6 +52,7 @@ class TeeBotusEngine:
         self._instructions = instructions
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
+        self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
 
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
@@ -57,6 +60,8 @@ class TeeBotusEngine:
 
         text = str(event.text or "").strip()
         command = _command_name(text)
+        if _command_targets_other_bot(text, self.bot_address_names):
+            return []
         if command == "/cleanup":
             parsed = _parse_cleanup_count(text)
             if parsed is None:
@@ -72,6 +77,8 @@ class TeeBotusEngine:
                     build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
                 )
             ]
+        if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
+            return []
         instructions = self._current_instructions()
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
         if reply is None:
@@ -323,10 +330,63 @@ def _command_name(text: str) -> str:
     stripped = str(text or "").strip()
     if not stripped:
         return ""
+    if not stripped.startswith("/"):
+        return ""
     first = stripped.split(maxsplit=1)[0].casefold()
     if "@" in first:
         first = first.split("@", maxsplit=1)[0]
     return first
+
+
+def _command_targets_other_bot(text: str, bot_address_names: frozenset[str]) -> bool:
+    parts = str(text or "").strip().split(maxsplit=1)
+    if not parts:
+        return False
+    first = parts[0]
+    if not first.startswith("/") or "@" not in first or not bot_address_names:
+        return False
+    target = _normalize_address_name(first.rsplit("@", maxsplit=1)[-1])
+    return bool(target and target not in bot_address_names)
+
+
+def _event_is_addressed_to_bot(event: IncomingEvent, command: str, bot_address_names: frozenset[str]) -> bool:
+    if event.chat_type != "group":
+        return True
+    if command:
+        return True
+    return _text_addresses_bot(event.text, bot_address_names) or _signal_mentions_bot(event.raw, bot_address_names)
+
+
+def _text_addresses_bot(text: str, bot_address_names: frozenset[str]) -> bool:
+    if not text.strip() or not bot_address_names:
+        return False
+    normalized_text = f" {_normalize_address_text(text)} "
+    for name in bot_address_names:
+        if len(name) >= 3 and f" {name} " in normalized_text:
+            return True
+    return False
+
+
+def _signal_mentions_bot(raw: object, bot_address_names: frozenset[str]) -> bool:
+    mentions = getattr(raw, "mentions", None)
+    if not mentions or not bot_address_names:
+        return False
+    return any(_normalize_address_name(mention) in bot_address_names for mention in mentions)
+
+
+def _normalize_address_name(value: object) -> str:
+    text = str(value or "").strip().casefold()
+    if text.startswith("@") and ":" in text:
+        text = text[1:].split(":", maxsplit=1)[0]
+    text = text.strip("@")
+    return _normalize_address_text(text)
+
+
+def _normalize_address_text(text: str) -> str:
+    normalized = str(text or "").casefold()
+    normalized = re.sub(r"[_@:+().-]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip()
 
 
 def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:

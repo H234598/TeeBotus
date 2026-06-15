@@ -75,6 +75,7 @@ class TeeBotusSignalCommand:
             message_tracker=self.message_tracker,
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
+            bot_address_names=(run_config.signal_phone_number, run_config.label),
         )
         self.bot: Any | None = None
 

@@ -21,6 +21,11 @@ class FakeMatrixRoom:
     joined_count = 2
 
 
+class FakeMatrixGroupRoom:
+    room_id = "!group:example"
+    joined_count = 3
+
+
 class FakeMatrixMessage:
     event_id = "$incoming"
     sender = "@alice:example"
@@ -107,6 +112,56 @@ def test_matrix_bridge_uses_instance_instructions_for_builtin_replies(tmp_path) 
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
 
     assert client.sent[0]["content"]["body"] == "Matrix custom fuer @alice:example."
+
+
+def test_matrix_group_free_text_must_address_bot(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    message = FakeMatrixMessage()
+    message.body = "Hallo Gruppe"
+
+    asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), message))
+
+    assert client.sent == []
+
+
+def test_matrix_group_free_text_can_address_bot_by_user_id(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    message = FakeMatrixMessage()
+    message.body = "@bot:example hallo"
+
+    asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), message))
+
+    assert client.sent[0]["content"]["body"] == "Echo: @bot:example hallo"
 
 
 def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:

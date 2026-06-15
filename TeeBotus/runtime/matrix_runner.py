@@ -57,6 +57,7 @@ class MatrixRuntimeBridge:
             message_tracker=self.message_tracker,
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
+            bot_address_names=_matrix_bot_address_names(run_config),
         )
 
     async def handle_message(self, room: Any, message: Any) -> None:
@@ -185,6 +186,12 @@ async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir:
 
 def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "matrix")
+
+
+def _matrix_bot_address_names(account: AccountRunConfig) -> tuple[str, ...]:
+    user_id = str(account.matrix_user_id or "").strip()
+    localpart = user_id[1:].split(":", maxsplit=1)[0] if user_id.startswith("@") else ""
+    return tuple(value for value in (user_id, localpart, account.label) if value)
 
 
 def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
