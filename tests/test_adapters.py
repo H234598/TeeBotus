@@ -148,6 +148,63 @@ def test_signal_typing_is_stopped_when_send_fails():
     assert context.calls == ["start_typing", "send", "stop_typing"]
 
 
+def test_signal_send_text_can_quote_current_message_with_bot_send():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(text="Original", timestamp="123")
+            self.context_calls = []
+
+        async def send(self, text, **kwargs):
+            self.context_calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Antwort", reply_to_ref="123")]))
+
+    assert sent == [456]
+    assert context.context_calls == []
+    assert context.bot.calls == [
+        (
+            "+491",
+            "Antwort",
+            {
+                "base64_attachments": None,
+                "quote_author": "+491",
+                "quote_message": "Original",
+                "quote_timestamp": 123,
+            },
+        )
+    ]
+
+
+def test_signal_send_text_falls_back_without_matching_quote_context():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(text="Original", timestamp="123")
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Antwort", reply_to_ref="999")]))
+
+    assert sent == [123]
+    assert context.calls == [("Antwort", {"base64_attachments": None})]
+
+
 def test_telegram_message_without_chat_id_is_rejected():
     event = telegram_message_to_event(
         {"message_id": 1, "from": {"id": 42}, "chat": {}, "text": "hi"},

@@ -72,7 +72,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
     try:
         for action in actions:
             if isinstance(action, SendText):
-                sent.append(await context.send(action.text))
+                sent.append(await _send_signal_text(context, action.text, reply_to_ref=action.reply_to_ref))
                 typing_started = await _stop_signal_typing_if_started(context, typing_started)
             elif isinstance(action, SendTyping):
                 await context.start_typing()
@@ -80,7 +80,14 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(None)
             elif isinstance(action, SendAttachment):
                 encoded = base64.b64encode(action.data).decode("ascii")
-                sent.append(await context.send(action.caption, base64_attachments=[encoded]))
+                sent.append(
+                    await _send_signal_text(
+                        context,
+                        action.caption,
+                        base64_attachments=[encoded],
+                        reply_to_ref=action.reply_to_ref,
+                    )
+                )
                 typing_started = await _stop_signal_typing_if_started(context, typing_started)
             elif isinstance(action, NotifyLinkedIdentity):
                 sent.append(None)
@@ -88,12 +95,60 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(None)
             elif isinstance(action, ExportFile):
                 encoded = base64.b64encode(action.data).decode("ascii")
-                sent.append(await context.send(f"Export: {action.filename}", base64_attachments=[encoded]))
+                sent.append(
+                    await _send_signal_text(
+                        context,
+                        f"Export: {action.filename}",
+                        base64_attachments=[encoded],
+                        reply_to_ref=action.reply_to_ref,
+                    )
+                )
                 typing_started = await _stop_signal_typing_if_started(context, typing_started)
     finally:
         if typing_started:
             await _stop_signal_typing_if_started(context, typing_started)
     return sent
+
+
+async def _send_signal_text(
+    context: Any,
+    text: str,
+    *,
+    base64_attachments: list[str] | None = None,
+    reply_to_ref: str = "",
+) -> int:
+    quote = _signal_quote_kwargs_for_context(context, reply_to_ref)
+    if quote:
+        bot = getattr(context, "bot", None)
+        send = getattr(bot, "send", None)
+        message = getattr(context, "message", None)
+        recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
+        if callable(send) and recipient:
+            return await send(recipient, text, base64_attachments=base64_attachments, **quote)
+    return await context.send(text, base64_attachments=base64_attachments)
+
+
+def _signal_quote_kwargs_for_context(context: Any, reply_to_ref: str) -> dict[str, Any]:
+    ref = str(reply_to_ref or "").strip()
+    if not ref:
+        return {}
+    message = getattr(context, "message", None)
+    timestamp = str(getattr(message, "timestamp", "") or "").strip()
+    if not timestamp or timestamp != ref:
+        return {}
+    try:
+        quote_timestamp = int(timestamp)
+    except ValueError:
+        return {}
+    quote_author = str(getattr(message, "source", "") or getattr(message, "source_uuid", "") or "").strip()
+    quote_message = str(getattr(message, "text", "") or "").strip()
+    if not quote_author or not quote_message:
+        return {}
+    return {
+        "quote_author": quote_author,
+        "quote_message": quote_message,
+        "quote_timestamp": quote_timestamp,
+    }
 
 
 async def _stop_signal_typing_if_started(context: Any, typing_started: bool) -> bool:

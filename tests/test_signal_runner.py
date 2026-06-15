@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
@@ -43,10 +43,17 @@ class FakeSignalContext:
     def __init__(self) -> None:
         self.message = FakeSignalMessage()
         self.sent: list[str] = []
+        self.bot_sent: list[tuple[str, str, dict[str, object]]] = []
         self.deleted: list[int] = []
+        self.bot = SimpleNamespace(send=self.send_bot)
 
     async def send(self, text: str, **_kwargs) -> int:
         self.sent.append(text)
+        return 987654
+
+    async def send_bot(self, receiver: str, text: str, **kwargs) -> int:
+        self.sent.append(text)
+        self.bot_sent.append((receiver, text, kwargs))
         return 987654
 
     async def start_typing(self) -> None:
@@ -111,6 +118,45 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
     asyncio.run(command.handle(context))
 
     assert context.sent == ["Signal custom fuer +491234."]
+    assert context.bot_sent == [
+        (
+            "+491234",
+            "Signal custom fuer +491234.",
+            {
+                "base64_attachments": None,
+                "quote_author": "+491234",
+                "quote_message": "/custom",
+                "quote_timestamp": 123456,
+            },
+        )
+    ]
+
+
+def test_signal_command_preserves_explicit_engine_reply_context(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [SendText(event.chat_id, "Explizit", reply_to_ref="111")]},
+    )()
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["Explizit"]
+    assert context.bot_sent == []
 
 
 def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
