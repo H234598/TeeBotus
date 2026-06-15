@@ -6,7 +6,7 @@ from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, SendAttachment, SendTyping
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -112,6 +112,70 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert f"- Version: {__version__}" in actions[0].text
     assert "Commits: https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_engine_export_account_data_as_json(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="export")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_export", "user_text": "Exportiere mich."}])
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(identity, "/export", channel="signal"))
+
+    assert len(actions) == 1
+    assert isinstance(actions[0], ExportFile)
+    assert actions[0].filename.startswith("TeeBotus_account_")
+    assert actions[0].filename.endswith(".json")
+    assert actions[0].content_type == "application/json"
+    assert b"Exportiere mich." in actions[0].data
+    assert b"TMBMAP1" not in actions[0].data
+
+
+def test_engine_export_account_data_respects_format_argument(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="export-md")
+    account_store.resolve_or_create_account(identity)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(identity, "/account_export md", channel="matrix"))
+
+    assert isinstance(actions[0], ExportFile)
+    assert actions[0].filename.endswith(".md")
+    assert actions[0].content_type == "text/markdown"
+
+
+def test_engine_export_account_data_requires_private_chat(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="export-group")
+    engine = TeeBotusEngine(account_store=account_store)
+    incoming = IncomingEvent(
+        event_id="signal:1",
+        instance="Depressionsbot",
+        channel="signal",
+        adapter_slot=1,
+        identity_key=identity,
+        chat_id="group-chat",
+        chat_type="group",
+        sender_id=identity,
+        sender_name=identity,
+        text="/export",
+        message_ref="1",
+    )
+
+    actions = engine.process(incoming)
+
+    assert actions[0].text == "Bitte privat."
+
+
+def test_engine_export_account_data_rejects_unknown_format(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="export-bad")
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(identity, "/export exe", channel="signal"))
+
+    assert "Nutzung:" in actions[0].text
 
 
 def test_engine_reports_missing_openai_key_for_free_text_when_openai_enabled(tmp_path):

@@ -15,19 +15,21 @@ from TeeBotus.core.youtube import (
     _parse_youtube_local_options,
     transcribe_youtube_video,
 )
+from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
-from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
 
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
+EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -83,6 +85,8 @@ class TeeBotusEngine:
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
             return memory_reset_actions
+        if command in EXPORT_COMMANDS:
+            return self._export_actions(event, result.account_id)
         if command == "/status":
             return [
                 SendText(
@@ -374,6 +378,27 @@ class TeeBotusEngine:
             {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
         )
         return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
+
+    def _export_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction]:
+        if event.chat_type != "private":
+            return [SendText(event.chat_id, PRIVATE_ONLY, track=False)]
+        fmt = _parse_export_format(event.text)
+        if fmt is None:
+            return [
+                SendText(
+                    event.chat_id,
+                    "Nutzung: /export [json|md|txt|csv|yaml|pdf|tex]",
+                    track=False,
+                )
+            ]
+        try:
+            result = export_account_data_from_store(self.account_store, account_id, fmt)
+        except (ExportError, AccountStoreError, OSError):
+            return [SendText(event.chat_id, "Account-Export konnte nicht erzeugt werden.", track=False)]
+        caption = "TeeBotus Account Export"
+        if result.degraded and result.note:
+            caption = f"{caption}: {result.note}"
+        return [ExportFile(event.chat_id, result.filename, result.content_type, result.data, caption=caption)]
 
     def _voice_actions(self, event: IncomingEvent, instructions: BotInstructions) -> list[OutgoingAction]:
         if not instructions.openai_voice_enabled:
@@ -851,6 +876,23 @@ def _normalize_memory_reset_text(text: str) -> str:
     normalized = re.sub(r"[_-]+", " ", normalized)
     normalized = re.sub(r"[^0-9a-z@/]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _parse_export_format(text: str) -> str | None:
+    parts = str(text or "").strip().split(maxsplit=1)
+    if len(parts) == 1:
+        return "json"
+    value = parts[1].strip().casefold().lstrip(".")
+    aliases = {
+        "markdown": "md",
+        "text": "txt",
+        "cls": "csv",
+        "latex": "tex",
+    }
+    value = aliases.get(value, value)
+    if value not in SUPPORTED_EXPORT_FORMATS:
+        return None
+    return value
 
 
 def _metadata_value(value: object) -> str:
