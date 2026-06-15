@@ -71,15 +71,14 @@ def signal_context_to_event(
 
 async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | None]:
     sent: list[int | None] = []
-    typing_started = False
+    typing_target: str | None = None
     try:
         for action in actions:
             if isinstance(action, SendText):
                 sent.append(await _send_signal_text(context, action.text, chat_id=action.chat_id, reply_to_ref=action.reply_to_ref))
-                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendTyping):
-                await context.start_typing()
-                typing_started = True
+                typing_target = await _start_signal_typing(context, action.chat_id)
                 sent.append(None)
             elif isinstance(action, SendAttachment):
                 encoded = base64.b64encode(action.data).decode("ascii")
@@ -92,7 +91,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                         reply_to_ref=action.reply_to_ref,
                     )
                 )
-                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, NotifyLinkedIdentity):
                 sent.append(None)
             elif isinstance(action, DeleteTrackedMessages):
@@ -108,10 +107,10 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                         reply_to_ref=action.reply_to_ref,
                     )
                 )
-                typing_started = await _stop_signal_typing_if_started(context, typing_started)
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
     finally:
-        if typing_started:
-            await _stop_signal_typing_if_started(context, typing_started)
+        if typing_target is not None:
+            await _stop_signal_typing_if_started(context, typing_target)
     return sent
 
 
@@ -149,6 +148,20 @@ def _signal_context_recipient(context: Any) -> str:
     message = getattr(context, "message", None)
     recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
     return str(recipient or "").strip()
+
+
+async def _start_signal_typing(context: Any, chat_id: str) -> str:
+    target = str(chat_id or "").strip()
+    current_recipient = _signal_context_recipient(context)
+    if target and current_recipient and target != current_recipient:
+        bot = getattr(context, "bot", None)
+        start_typing = getattr(bot, "start_typing", None)
+        if not callable(start_typing):
+            raise RuntimeError(f"SignalBot.start_typing is required to type in {target}")
+        await start_typing(target)
+        return target
+    await context.start_typing()
+    return ""
 
 
 def _signal_can_use_context_reply(context: Any, reply_to_ref: str) -> bool:
@@ -215,16 +228,23 @@ def _signal_message_ref(message: Any) -> str:
     return str(getattr(message, "timestamp", "") or "").strip()
 
 
-async def _stop_signal_typing_if_started(context: Any, typing_started: bool) -> bool:
-    if not typing_started:
-        return False
-    stop_typing = getattr(context, "stop_typing", None)
+async def _stop_signal_typing_if_started(context: Any, typing_target: str | None) -> None:
+    if typing_target is None:
+        return None
+    if typing_target:
+        bot = getattr(context, "bot", None)
+        stop_typing = getattr(bot, "stop_typing", None)
+    else:
+        stop_typing = getattr(context, "stop_typing", None)
     if callable(stop_typing):
         try:
-            await stop_typing()
+            if typing_target:
+                await stop_typing(typing_target)
+            else:
+                await stop_typing()
         except Exception:
             pass
-    return False
+    return None
 
 
 def _signal_attachment_name(index: int, names: list[Any], remote_names: list[Any] | None = None) -> str:
