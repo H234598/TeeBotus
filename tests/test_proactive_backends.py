@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendText
+from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendPoll, SendReaction, SendReceipt, SendText, SendTyping
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 
 
@@ -43,18 +43,7 @@ def test_signal_proactive_sender_calls_signalbot_send() -> None:
     sent_ref = asyncio.run(sender({"adapter_slot": 1}, SendText("+491", "hi", text_mode="styled"), {}))
 
     assert sent_ref == 123456
-    assert bot.calls == [
-        (
-            "+491",
-            "hi",
-            {
-                "mentions": None,
-                "text_mode": "styled",
-                "view_once": False,
-                "link_preview": None,
-            },
-        )
-    ]
+    assert bot.calls == [("+491", "hi", {"base64_attachments": None, "text_mode": "styled"})]
 
 
 def test_signal_proactive_sender_coerces_link_preview_dict() -> None:
@@ -126,10 +115,7 @@ def test_signal_proactive_sender_sends_attachment_base64() -> None:
             "Sprachnotiz",
             {
                 "base64_attachments": ["aGVsbG8="],
-                "mentions": None,
-                "text_mode": None,
                 "view_once": True,
-                "link_preview": None,
             },
         )
     ]
@@ -163,9 +149,71 @@ def test_signal_proactive_sender_requires_numeric_timestamp() -> None:
     try:
         asyncio.run(sender({"adapter_slot": 1}, SendText("+491", "hi"), {}))
     except RuntimeError as exc:
-        assert "Signal proactive dispatch returned no numeric timestamp" in str(exc)
+        assert "Signal text send returned no numeric timestamp" in str(exc)
     else:
         raise AssertionError("missing Signal timestamp should fail proactive dispatch")
+
+
+def test_signal_proactive_sender_reuses_full_adapter_for_edit_poll_and_typing() -> None:
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver: str, text: str, **kwargs) -> int:
+            self.calls.append(("send", receiver, text, kwargs))
+            return 123459
+
+        async def poll(self, receiver: str, question: str, answers: list[str], **kwargs) -> int:
+            self.calls.append(("poll", receiver, question, tuple(answers), kwargs))
+            return 123460
+
+        async def start_typing(self, receiver: str) -> None:
+            self.calls.append(("start_typing", receiver))
+
+        async def stop_typing(self, receiver: str) -> None:
+            self.calls.append(("stop_typing", receiver))
+
+    bot = Bot()
+    sender = signal_proactive_sender(bot)
+
+    typing_ref = asyncio.run(sender({"adapter_slot": 1}, SendTyping("+491"), {}))
+    edit_ref = asyncio.run(sender({"adapter_slot": 1}, SendEdit("+491", "123456", "korrigiert"), {}))
+    poll_ref = asyncio.run(sender({"adapter_slot": 1}, SendPoll("+491", "Tee?", ("Ja", "Nein"), allow_multiple_selections=True), {}))
+
+    assert typing_ref is None
+    assert edit_ref == 123459
+    assert poll_ref == 123460
+    assert bot.calls == [
+        ("start_typing", "+491"),
+        ("stop_typing", "+491"),
+        ("send", "+491", "korrigiert", {"edit_timestamp": 123456}),
+        ("poll", "+491", "Tee?", ("Ja", "Nein"), {"allow_multiple_selections": True}),
+    ]
+
+
+def test_signal_proactive_sender_reuses_full_adapter_for_reaction_and_receipt() -> None:
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def react(self, message, emoji: str) -> None:
+            self.calls.append(("react", message.recipient(), message.timestamp, emoji))
+
+        async def receipt(self, message, receipt_type: str) -> None:
+            self.calls.append(("receipt", message.recipient(), message.timestamp, receipt_type))
+
+    bot = Bot()
+    sender = signal_proactive_sender(bot)
+
+    reaction_ref = asyncio.run(sender({"adapter_slot": 1}, SendReaction("+491", "123456", "\U0001f44d"), {}))
+    receipt_ref = asyncio.run(sender({"adapter_slot": 1}, SendReceipt("+491", "123456", "viewed"), {}))
+
+    assert reaction_ref is None
+    assert receipt_ref is None
+    assert bot.calls == [
+        ("react", "+491", "123456", "\U0001f44d"),
+        ("receipt", "+491", "123456", "viewed"),
+    ]
 
 
 def test_matrix_proactive_sender_calls_nio_bot_send_message() -> None:
