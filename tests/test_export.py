@@ -19,6 +19,8 @@ def make_account_dir(tmp_path):
     (account_dir / "Account_Profile.json").write_text(json.dumps({"account_id": ACCOUNT_ID, "secret_verifier": "do-not-export"}), encoding="utf-8")
     (account_dir / "User_Memory_Index.json").write_text(json.dumps({"topic": "tea"}), encoding="utf-8")
     (account_dir / "User_Memory_Entries.jsonl").write_text('{"entry":"hello"}\n', encoding="utf-8")
+    (account_dir / "Agent_State.json").write_text(json.dumps({"proactive": {"enabled": True}}), encoding="utf-8")
+    (account_dir / "Proactive_Outbox.jsonl").write_text('{"message_text":"hello later"}\n', encoding="utf-8")
     (account_dir / "User_Habbits_and_behave.md").write_text("manual note", encoding="utf-8")
     return account_dir
 
@@ -116,7 +118,24 @@ def test_export_from_store_decrypts_structured_memory(tmp_path):
     payload = json.loads(result.data.decode("utf-8"))
     assert payload["files"]["User_Memory_Index.json"]["topic"] == "encrypted tea"
     assert payload["files"]["User_Memory_Entries.jsonl"] == [{"entry": "encrypted hello"}]
+    assert payload["files"]["Agent_State.json"] == {}
+    assert payload["files"]["Proactive_Outbox.jsonl"] == []
     assert "User_Habbits_and_behave.md" not in payload["files"]
+
+
+def test_export_from_store_decrypts_proactive_agent_files(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Bot", StaticSecretProvider(b"f" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_agent_state(account_id, {"proactive": {"enabled": True}})
+    store.append_proactive_outbox_item(account_id, {"message_text": "Erinnerung spaeter", "category": "reminder"})
+
+    raw = (store.account_dir(account_id) / "Proactive_Outbox.jsonl").read_text(encoding="utf-8")
+    assert "Erinnerung spaeter" not in raw
+    result = export_account_data_from_store(store, account_id, "json")
+    payload = json.loads(result.data.decode("utf-8"))
+
+    assert payload["files"]["Agent_State.json"]["proactive"]["enabled"] is True
+    assert payload["files"]["Proactive_Outbox.jsonl"][0]["message_text"] == "Erinnerung spaeter"
 
 
 def test_raw_export_refuses_encrypted_account_files_without_vault(tmp_path):

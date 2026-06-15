@@ -41,6 +41,7 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
+from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -932,6 +933,21 @@ def _handle_account_runtime_command(
     text: str,
     instance_name: str,
 ) -> bool:
+    command = _normalize_command(text)
+    if command in PROACTIVE_COMMANDS:
+        if not instance_name:
+            return False
+        try:
+            return maybe_handle_account_runtime_message(
+                message,
+                _RuntimeCommandSender(api, chat_id),
+                instance_name=instance_name,
+                data_dir=PROJECT_ROOT / "instances" / instance_name / "data",
+            )
+        except Exception:
+            LOGGER.exception("Failed to handle proactive runtime command for instance=%s.", instance_name)
+            _send_untracked_message(api, chat_id, "Proaktive Account-Funktion ist gerade nicht verfuegbar. Bitte versuche es spaeter erneut.")
+            return True
     intent = parse_registration_intent(text)
     if intent.action not in {
         RegistrationAction.ACCOUNT,

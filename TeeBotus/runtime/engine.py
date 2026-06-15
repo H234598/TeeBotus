@@ -21,6 +21,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
+from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
@@ -101,6 +102,10 @@ class TeeBotusEngine:
         result = self.process_identity_flows(event)
         if result.handled or result.actions:
             return result
+        if command in PROACTIVE_COMMANDS:
+            actions = handle_proactive_command(event.with_account(result.account_id), self.account_store, result.account_id)
+            if actions is not None:
+                return EngineResult(result.account_id, list(actions), handled=True)
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
             return EngineResult(result.account_id, memory_reset_actions, handled=True)

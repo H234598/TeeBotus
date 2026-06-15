@@ -100,6 +100,8 @@ def export_account_data_from_store(account_store: Any, account_id: str, fmt: str
             "User_Memory_Index.json": _redact_data(account_store.read_memory_index(account_id)),
             "User_Memory_Entries.jsonl": _redact_data(account_store.read_memory_entries(account_id)),
             "OpenAI_State.json": _redact_data(account_store.read_openai_state(account_id)),
+            "Agent_State.json": _redact_data(account_store.read_agent_state(account_id)),
+            "Proactive_Outbox.jsonl": _redact_data(account_store.read_proactive_outbox(account_id)),
         },
     }
     return _emit_payload(account_id, payload, fmt)
@@ -107,7 +109,14 @@ def export_account_data_from_store(account_store: Any, account_id: str, fmt: str
 
 def _collect_account_payload(account_id: str, account_dir: Path, *, vault: ExportVault | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {"account_id": account_id, "files": {}}
-    for filename in ["Account_Profile.json", "User_Memory_Index.json", "User_Memory_Entries.jsonl", "OpenAI_State.json"]:
+    for filename in [
+        "Account_Profile.json",
+        "User_Memory_Index.json",
+        "User_Memory_Entries.jsonl",
+        "OpenAI_State.json",
+        "Agent_State.json",
+        "Proactive_Outbox.jsonl",
+    ]:
         path = account_dir / filename
         if not path.exists():
             continue

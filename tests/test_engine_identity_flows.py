@@ -226,6 +226,45 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert "Configured status." not in actions[0].text
 
 
+def test_engine_proactive_command_enables_private_account_agent(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(telegram_identity_key(1), "/proactive on"))
+
+    account_id = account_store.get_account_for_identity(telegram_identity_key(1))
+    assert account_id is not None
+    assert "aktiviert" in actions[0].text
+    assert account_store.read_agent_state(account_id)["proactive"]["enabled"] is True
+
+
+def test_engine_proactive_command_is_private_only(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    group = event(telegram_identity_key(1), "/proactive on")
+    group = IncomingEvent(
+        event_id=group.event_id,
+        instance=group.instance,
+        channel=group.channel,
+        adapter_slot=group.adapter_slot,
+        account_id=group.account_id,
+        identity_key=group.identity_key,
+        chat_id="group-1",
+        chat_type="group",
+        sender_id=group.sender_id,
+        sender_name=group.sender_name,
+        text=group.text,
+        message_ref=group.message_ref,
+    )
+
+    actions = engine.process(group)
+
+    account_id = account_store.get_account_for_identity(telegram_identity_key(1))
+    assert account_id is not None
+    assert actions[0].text == "Bitte privat."
+    assert account_store.read_agent_state(account_id) == {}
+
+
 def test_engine_export_account_data_as_json(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="export")

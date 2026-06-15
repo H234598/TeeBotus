@@ -97,3 +97,16 @@ For the current TeeBotus target, the encrypted account store remains the source 
 ## Maintenance
 
 `AccountStore.run_memory_maintenance(account_id)` is the notebook-friendly background job entrypoint. It rebuilds the index and consolidates repeated episodic themes into semantic summaries with `derived_from` relations. The hot path still writes the original episode first; heavier consolidation can run later.
+
+## Proactive Agent V1
+
+The depressionsbot instance can enable a guarded proactive-agent module per account with `/proactive on`. The current V1 is deliberately not a free-running sender. It stores explicit consent in encrypted `Agent_State.json`, evaluates a local policy guard, and queues allowed proactive intents in encrypted `Proactive_Outbox.jsonl`.
+
+The guard requires all of the following before a proactive item can be queued:
+
+- account-level opt-in is enabled
+- the category is explicitly consented, such as `reminder`, `task`, or `tip`
+- the current time is inside the configured allowed-hour window
+- a private Telegram, Signal, or Matrix route exists for the account
+
+Queued items keep intent, category, planned text, reason memory IDs, route metadata, and policy result. A later scheduler/dispatcher can send due items through the existing adapter actions, but should keep the same policy gate and audit trail.

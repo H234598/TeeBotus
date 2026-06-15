@@ -133,6 +133,14 @@
         "Short local sample at 50 entries showed JSONL append_last about 4.12ms/select_median about 6.84ms versus SQLite append_last about 0.04ms/select_median about 0.06ms; production migration still needs larger-account measurements and store integration."
       ],
       "status": "completed"
+    },
+    {
+      "id": "proactive_agent_v1_round",
+      "notes": [
+        "Added guarded Proactive Agent V1 primitives: encrypted Agent_State.json, encrypted Proactive_Outbox.jsonl, explicit opt-in commands, category consent, private-route selection, allowed-hour policy, and audit-friendly queued decisions.",
+        "Kept V1 as outbox-only rather than direct autonomous sending; scheduler/dispatcher remains the next step."
+      ],
+      "status": "completed"
     }
   ]
 }

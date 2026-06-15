@@ -1085,6 +1085,29 @@ class BotTests(unittest.TestCase):
         handle.assert_called_once()
         self.assertEqual(api.sent_messages, [])
 
+    def test_proactive_command_is_routed_through_runtime_bridge(self) -> None:
+        api = FakeAPI()
+        instructions = BotInstructions(commands={"/proactive": "configured fallback"})
+
+        with patch("TeeBotus.adapters.telegram_polling.maybe_handle_account_runtime_message", return_value=True) as handle:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 1,
+                        "text": "/proactive on",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                None,
+                ChatState(instance_name="Depressionsbot"),
+            )
+
+        handle.assert_called_once()
+        self.assertEqual(api.sent_messages, [])
+
     def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

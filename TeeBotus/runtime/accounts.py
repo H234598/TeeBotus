@@ -39,6 +39,8 @@ USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
 USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
 OPENAI_STATE_FILENAME = "OpenAI_State.json"
+AGENT_STATE_FILENAME = "Agent_State.json"
+PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 SECRET_TOOL_COMMAND = "secret-tool"
 INSTANCE_KEY_SIZE_BYTES = 32
 INSTANCE_SECRET_SERVICE = "TeeBotus"
@@ -1387,6 +1389,39 @@ class AccountStore:
 
     def write_openai_state(self, account_id: str, data: dict[str, Any]) -> None:
         self.account_memory_vault.write_json(self.account_dir(account_id) / OPENAI_STATE_FILENAME, data)
+
+    def read_agent_state(self, account_id: str) -> dict[str, Any]:
+        return self._read_json_with_fallback(self.account_dir(account_id) / AGENT_STATE_FILENAME, {}, vault=self.account_memory_vault)
+
+    def write_agent_state(self, account_id: str, data: dict[str, Any]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self.account_memory_vault.write_json(self.account_dir(account_id) / AGENT_STATE_FILENAME, dict(data))
+
+    def read_proactive_outbox(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_jsonl_with_fallback(self.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME, vault=self.account_memory_vault)
+
+    def write_proactive_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self.account_memory_vault.write_jsonl(self.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME, list(rows))
+
+    def append_proactive_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        rows = self.read_proactive_outbox(account_id)
+        normalized = dict(item)
+        item_id = str(normalized.get("id") or f"pro_{uuid.uuid4().hex}").strip()
+        existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+        while not item_id or item_id in existing_ids:
+            item_id = f"pro_{uuid.uuid4().hex}"
+        timestamp = utc_now()
+        normalized["id"] = item_id
+        normalized.setdefault("schema_version", 1)
+        normalized.setdefault("created_at", timestamp)
+        normalized.setdefault("updated_at", normalized["created_at"])
+        normalized.setdefault("status", "queued")
+        rows.append(normalized)
+        self.write_proactive_outbox(account_id, rows)
+        return item_id
 
     def read_account_text(self, account_id: str, filename: str) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
