@@ -172,7 +172,7 @@ class TeeBotusSignalCommand:
             )
             for ref in refs:
                 try:
-                    await context.remote_delete(int(ref.message_ref))
+                    await _remote_delete_signal_message(context, event.chat_id, ref.message_ref)
                 except Exception:
                     continue
 
@@ -283,6 +283,25 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
         else:
             enriched.append(action)
     return enriched
+
+
+async def _remote_delete_signal_message(context: Any, receiver: str, message_ref: str) -> int | None:
+    timestamp = int(str(message_ref or "").strip())
+    remote_delete = getattr(context, "remote_delete", None)
+    if callable(remote_delete):
+        return await remote_delete(timestamp)
+    bot = getattr(context, "bot", None)
+    bot_remote_delete = getattr(bot, "remote_delete", None)
+    target = str(receiver or "").strip() or _signal_context_recipient(context)
+    if callable(bot_remote_delete) and target:
+        return await bot_remote_delete(target, timestamp)
+    raise SignalRuntimeError("SignalBot.remote_delete is required to delete tracked messages")
+
+
+def _signal_context_recipient(context: Any) -> str:
+    message = getattr(context, "message", None)
+    recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
+    return str(recipient or "").strip()
 
 
 def _signal_local_attachment_filenames(message: Any) -> tuple[str, ...]:

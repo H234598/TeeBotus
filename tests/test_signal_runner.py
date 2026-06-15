@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
@@ -47,7 +47,13 @@ class FakeSignalContext:
         self.bot_polls: list[tuple[str, str, list[str], dict[str, object]]] = []
         self.deleted_attachments: list[str] = []
         self.deleted: list[int] = []
-        self.bot = SimpleNamespace(send=self.send_bot, poll=self.poll_bot, delete_attachment=self.delete_attachment)
+        self.bot_deleted: list[tuple[str, int]] = []
+        self.bot = SimpleNamespace(
+            send=self.send_bot,
+            poll=self.poll_bot,
+            delete_attachment=self.delete_attachment,
+            remote_delete=self.remote_delete_bot,
+        )
 
     async def send(self, text: str, **_kwargs) -> int:
         self.sent.append(text)
@@ -70,6 +76,10 @@ class FakeSignalContext:
 
     async def remote_delete(self, timestamp: int) -> int:
         self.deleted.append(timestamp)
+        return timestamp
+
+    async def remote_delete_bot(self, receiver: str, timestamp: int) -> int:
+        self.bot_deleted.append((receiver, timestamp))
         return timestamp
 
 
@@ -102,6 +112,73 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_cleanup_uses_context_remote_delete_first(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    command.message_tracker.record(
+        SentMessageRef(
+            channel="signal",
+            instance_name="Demo",
+            account_id="account-1",
+            chat_id="+491234",
+            message_ref="444",
+            ref_kind="signal_timestamp",
+        )
+    )
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    assert context.deleted == [444]
+    assert context.bot_deleted == []
+
+
+def test_signal_cleanup_falls_back_to_bot_remote_delete(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    command.message_tracker.record(
+        SentMessageRef(
+            channel="signal",
+            instance_name="Demo",
+            account_id="account-1",
+            chat_id="+491234",
+            message_ref="555",
+            ref_kind="signal_timestamp",
+        )
+    )
+    context = FakeSignalContext()
+    context.remote_delete = None
+
+    asyncio.run(command.handle(context))
+
+    assert context.deleted == []
+    assert context.bot_deleted == [("+491234", 555)]
 
 
 def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:

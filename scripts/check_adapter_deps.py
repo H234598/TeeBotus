@@ -204,6 +204,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_start_params = inspect.signature(SignalBot.start).parameters
     bot_start_typing_params = inspect.signature(SignalBot.start_typing).parameters
     bot_stop_typing_params = inspect.signature(SignalBot.stop_typing).parameters
+    bot_remote_delete_params = inspect.signature(SignalBot.remote_delete).parameters
     bot_react_params = inspect.signature(SignalBot.react).parameters
     bot_receipt_params = inspect.signature(SignalBot.receipt).parameters
     bot_poll_params = inspect.signature(SignalBot.poll).parameters
@@ -264,6 +265,8 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.delete_attachment.attachment_filename": "attachment_filename" in bot_delete_attachment_params,
         "SignalBot.start_typing.receiver": "receiver" in bot_start_typing_params,
         "SignalBot.stop_typing.receiver": "receiver" in bot_stop_typing_params,
+        "SignalBot.remote_delete.receiver": "receiver" in bot_remote_delete_params,
+        "SignalBot.remote_delete.timestamp": "timestamp" in bot_remote_delete_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
     }
     failures = [name for name, ok in expectations.items() if not ok]
