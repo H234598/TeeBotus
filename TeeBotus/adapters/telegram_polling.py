@@ -39,7 +39,7 @@ from TeeBotus.core.youtube import (
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
@@ -1519,16 +1519,39 @@ def _handle_user_memory_reset_flow(
     return True
 
 
+def _coerce_account_memory_store(user_memory_store: Any, instructions: BotInstructions) -> AccountStore | None:
+    if user_memory_store is None:
+        return None
+    if isinstance(user_memory_store, AccountStore):
+        return user_memory_store
+    instance_name = str(getattr(user_memory_store, "instance_name", "") or "").strip()
+    if not instance_name:
+        return None
+    directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/legacy_sender_memory"
+    directory = Path(directory.replace("{instance}", instance_name))
+    if directory.name == "legacy_sender_memory":
+        root = directory.parent
+    elif directory.parent.name == "data":
+        root = directory.parent / "accounts"
+    else:
+        root = directory
+    return AccountStore(root, instance_name, secret_provider=StaticSecretProvider(b"t" * 32))
+
+
 def _reset_current_user_memory(
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     sender_id: str,
     instructions: BotInstructions,
 ) -> str:
-    if user_memory_store is None or not instructions.user_memory_enabled:
+    account_store = _coerce_account_memory_store(user_memory_store, instructions)
+    if account_store is None or not instructions.user_memory_enabled:
         return instructions.user_memory_reset_unavailable
     try:
-        user_memory_store.reset_sender(sender_id, instructions)
-    except (OSError, ValueError):
+        account_id = account_store.get_account_for_identity(telegram_identity_key(sender_id))
+        if not account_id:
+            return instructions.user_memory_reset_success
+        account_store.reset_structured_memory(account_id)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
         LOGGER.exception("Failed to reset user memory for sender_id=%s.", sender_id)
         return instructions.user_memory_reset_error
     return instructions.user_memory_reset_success
@@ -1649,17 +1672,45 @@ def _prepare_working_memory(
 
 
 def _prepare_user_memory(
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     message: dict[str, Any],
     instructions: BotInstructions,
     query_text: str,
     api: TelegramAPI | None = None,
 ) -> UserMemoryRecord | None:
-    if user_memory_store is None:
+    account_store = _coerce_account_memory_store(user_memory_store, instructions)
+    if not instructions.user_memory_enabled:
+        return None
+    if account_store is None:
+        if user_memory_store is not None:
+            LOGGER.error("Failed to prepare user memory.")
+            _notify_user_memory_crypto_error(api, message, instructions)
         return None
     try:
-        return user_memory_store.prepare(message, instructions, query_text, api)
-    except (OSError, UserMemoryCryptoError):
+        sender_id = _sender_identifier(message)
+        if not sender_id:
+            return None
+        identity_key = telegram_identity_key(sender_id)
+        account_id = account_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        account_store.update_identity_route(
+            identity_key,
+            channel="telegram",
+            chat_id=str(_message_chat_id(message) or ""),
+            chat_type=_telegram_chat_type(message),
+        )
+        selection = account_store.select_structured_memory(
+            account_id,
+            query_text=query_text,
+            max_prompt_chars=instructions.user_memory_max_prompt_chars,
+            max_entry_chars=instructions.user_memory_max_entry_chars,
+        )
+        return UserMemoryRecord(
+            sender_id=sender_id,
+            path=account_store.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME,
+            prompt_text=selection.prompt_text,
+            selected_ids=selection.selected_ids,
+        )
+    except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to prepare user memory.")
         _notify_user_memory_crypto_error(api, message, instructions)
         return None
@@ -1686,7 +1737,7 @@ def _message_chat_id(message: dict[str, Any]) -> int | None:
 
 
 def _record_user_memory(
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     message: dict[str, Any],
     user_text: str,
@@ -1694,11 +1745,50 @@ def _record_user_memory(
     instructions: BotInstructions,
     api: TelegramAPI | None = None,
 ) -> None:
-    if user_memory_store is None or user_memory is None:
+    account_store = _coerce_account_memory_store(user_memory_store, instructions)
+    if user_memory is None:
+        return
+    if account_store is None:
+        if user_memory_store is not None:
+            LOGGER.error("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
+            _notify_user_memory_crypto_error(api, message, instructions)
         return
     try:
-        user_memory_store.append_interaction(user_memory, message, user_text, bot_text, instructions)
-    except (OSError, UserMemoryCryptoError):
+        user_text = _clip_memory_text(user_text, instructions.user_memory_max_entry_chars)
+        bot_text = _clip_memory_text(bot_text, instructions.user_memory_max_entry_chars)
+        if not user_text and not bot_text:
+            return
+        message_chat_id = str(_message_chat_id(message) or "")
+        entry = {
+            "created_at": _utc_timestamp(),
+            "updated_at": _utc_timestamp(),
+            "channel": "telegram",
+            "chat_type": _telegram_chat_type(message),
+            "source": {
+                "channel": "telegram",
+                "chat_id": message_chat_id,
+                "sender_id": user_memory.sender_id,
+                "sender_name": _telegram_sender_display_label(message),
+                "message_ref": str(_message_id_or_none(message) or ""),
+            },
+            "related_ids": list(user_memory.selected_ids),
+            "keywords": _memory_keywords(f"{user_text}\n{bot_text}"),
+            "user_text": user_text,
+            "bot_text": bot_text,
+        }
+        account_id = user_memory.path.parent.name
+        account_store.append_structured_memory_entry(
+            account_id,
+            entry,
+            profile_updates={
+                "names": _telegram_sender_display_label(message),
+                "usernames": _telegram_sender_username(message),
+                "chat_ids": message_chat_id,
+                "chat_titles": _telegram_chat_title(message),
+                "channels": "telegram",
+            },
+        )
+    except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
         _notify_user_memory_crypto_error(api, message, instructions)
 
@@ -1762,7 +1852,7 @@ def _build_openai_user_input(
 
 def _is_first_contact(
     chat_state: ChatState,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     message: dict[str, Any],
     instructions: BotInstructions,
 ) -> bool:
@@ -1771,8 +1861,13 @@ def _is_first_contact(
         return False
     if chat_state.has_seen_sender(sender_id):
         return False
-    if user_memory_store is not None and user_memory_store.has_sender(sender_id, instructions):
-        return False
+    account_store = _coerce_account_memory_store(user_memory_store, instructions)
+    if account_store is not None and instructions.user_memory_enabled:
+        try:
+            if account_store.get_account_for_identity(telegram_identity_key(sender_id)):
+                return False
+        except (AccountStoreError, OSError, AttributeError):
+            return False
     return True
 
 
@@ -1902,6 +1997,28 @@ def _sender_identifier(message: dict[str, Any]) -> str:
     sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
     value = sender.get("id") if sender else sender_chat.get("id")
     return str(value).strip() if value is not None else ""
+
+
+def _telegram_sender_display_label(message: dict[str, Any]) -> str:
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
+    return _sender_display_name(sender, sender_chat)
+
+
+def _telegram_sender_username(message: dict[str, Any]) -> str:
+    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
+    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
+    return _username(sender.get("username") if sender else sender_chat.get("username"))
+
+
+def _telegram_chat_type(message: dict[str, Any]) -> str:
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    return str(chat.get("type") or "").strip()
+
+
+def _telegram_chat_title(message: dict[str, Any]) -> str:
+    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
+    return str(chat.get("title") or "").strip()
 
 
 def _safe_memory_filename(sender_id: str) -> str:
@@ -2723,7 +2840,11 @@ def run_polling(
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
     openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
     bot_identity = bot_identity or _resolve_bot_identity(api)
-    user_memory_store = None
+    user_memory_store = AccountStore(
+        _resolve_instances_dir() / instance / "data" / "accounts",
+        instance,
+        secret_provider=SecretToolInstanceSecretProvider(),
+    )
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
