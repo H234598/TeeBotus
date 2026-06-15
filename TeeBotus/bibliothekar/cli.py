@@ -194,7 +194,7 @@ def _resolve_instances(instances_dir: Path, requested: Iterable[str]) -> tuple[s
     return tuple(
         path.name
         for path in sorted(instances_dir.iterdir())
-        if path.is_dir() and ((path / "Bot_Verhalten.md").exists() or (path / "data").exists())
+        if path.is_dir() and (path / "Bot_Verhalten.md").exists()
     )
 
 

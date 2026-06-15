@@ -484,6 +484,24 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     assert "therapie.txt" in query_output
 
 
+def test_bibliothekar_cli_default_status_ignores_data_only_directories(tmp_path, capsys):
+    instances_dir = tmp_path / "instances"
+    configured = instances_dir / "Depressionsbot"
+    configured.mkdir(parents=True)
+    (configured / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+    (instances_dir / "Bench" / "data").mkdir(parents=True)
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "status"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Depressionsbot: backend=local" in output
+    assert "Bench:" not in output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Bench", "status"]) == 0
+    explicit_output = capsys.readouterr().out
+    assert "Bench: backend=local" in explicit_output
+
+
 def _write_docx(path, paragraphs):
     document = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
