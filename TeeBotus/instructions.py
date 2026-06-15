@@ -82,7 +82,13 @@ class BotInstructions:
     openai_image_quality: str = "low"
     openai_image_format: str = "png"
     openai_image_max_prompt_chars: int = 2000
+    openai_image_max_per_24h: int = 4
+    openai_image_min_interval_minutes: int = 30
     openai_image_error: str = "Ich konnte das Bild gerade nicht erzeugen."
+    openai_image_rate_limited: str = (
+        "Ich generiere gerade keine weiteren Bilder. Ich bin kein Bildgenerator; "
+        "wir können aber normal weiterschreiben."
+    )
     codex_enabled: bool = True
     codex_allowed_sender_ids: tuple[str, ...] = ("395935293",)
     codex_timeout_seconds: int = 300
@@ -630,8 +636,14 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_image_format = value.strip().casefold() or instructions.openai_image_format
     elif normalized == "image_max_prompt_chars":
         instructions.openai_image_max_prompt_chars = _parse_required_int(value, default=instructions.openai_image_max_prompt_chars)
+    elif normalized == "image_max_per_24h":
+        instructions.openai_image_max_per_24h = _parse_required_int(value, default=instructions.openai_image_max_per_24h)
+    elif normalized == "image_min_interval_minutes":
+        instructions.openai_image_min_interval_minutes = _parse_required_int(value, default=instructions.openai_image_min_interval_minutes)
     elif normalized == "image_error":
         instructions.openai_image_error = value
+    elif normalized == "image_rate_limited":
+        instructions.openai_image_rate_limited = value
     elif normalized == "transcription_enabled":
         instructions.openai_transcription_enabled = _parse_bool(value, default=instructions.openai_transcription_enabled)
     elif normalized == "transcription_model":
@@ -718,7 +730,8 @@ def _image_generation_instructions_text() -> str:
         "[[/TEE_IMAGE]]\n"
         "Der sichtbare Antworttext bleibt ausserhalb des Blocks. Nutze Bilder als Aufmunterung, Veranschaulichung, "
         "Wetterstimmung oder freiwilligen Reflexions-/Rateimpuls. Bei psychischer Gesundheit darf das Bild keine Diagnose "
-        "behaupten; frage stattdessen offen, was die Person darin wiedererkennt oder wie es auf sie wirkt."
+        "behaupten; frage stattdessen offen, was die Person darin wiedererkennt oder wie es auf sie wirkt. "
+        "Nutze Bilder sparsam. Du bist kein freier Bildgenerator; lehne reine Bildgenerator-Nutzung freundlich ab."
     )
 
 

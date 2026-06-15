@@ -43,7 +43,10 @@ class InstructionTests(unittest.TestCase):
             - image_quality: low
             - image_format: png
             - image_max_prompt_chars: 1500
+            - image_max_per_24h: 2
+            - image_min_interval_minutes: 45
             - image_error: Bild kaputt.
+            - image_rate_limited: Zu viele Bilder.
             - transcription_enabled: ja
             - transcription_model: gpt-4o-mini-transcribe
             - transcription_fallback_model: whisper-1
@@ -125,7 +128,10 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_image_quality, "low")
         self.assertEqual(instructions.openai_image_format, "png")
         self.assertEqual(instructions.openai_image_max_prompt_chars, 1500)
+        self.assertEqual(instructions.openai_image_max_per_24h, 2)
+        self.assertEqual(instructions.openai_image_min_interval_minutes, 45)
         self.assertEqual(instructions.openai_image_error, "Bild kaputt.")
+        self.assertEqual(instructions.openai_image_rate_limited, "Zu viele Bilder.")
         self.assertIn("[[TEE_IMAGE", instructions.openai_instructions_text())
         self.assertTrue(instructions.openai_transcription_enabled)
         self.assertEqual(instructions.openai_transcription_model, "gpt-4o-mini-transcribe")

@@ -43,7 +43,10 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - image_quality: low
 - image_format: png
 - image_max_prompt_chars: 2000
+- image_max_per_24h: 4
+- image_min_interval_minutes: 30
 - image_error: Ich konnte das Bild gerade nicht erzeugen.
+- image_rate_limited: Ich generiere gerade keine weiteren Bilder. Ich bin kein Bildgenerator; wir koennen aber normal weiterschreiben.
 - voice_usage: "Nutzung: /voice Text fuer die Sprachnachricht"
 - voice_too_long: "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: {max_chars} Zeichen."
 - voice_error: Ich konnte die Sprachnachricht gerade nicht erzeugen. Bitte versuche es gleich nochmal.

@@ -567,6 +567,46 @@ def test_engine_turns_openai_image_block_into_generated_attachment(tmp_path):
     assert "Regen am Fenster" in client.prompt
 
 
+def test_engine_rate_limits_repeated_openai_image_generation(tmp_path):
+    class FakeImage:
+        data = b"png-bytes"
+        filename = "bild.png"
+        content_type = "image/png"
+
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.generate_calls = 0
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse(
+                'Kurz dazu.\n[[TEE_IMAGE filename="bild.png" caption="Bild"]]\nEin freundliches Bild.\n[[/TEE_IMAGE]]',
+                f"resp-{self.generate_calls}",
+                None,
+            )
+
+        def generate_image(self, _prompt, _instructions, *, filename="bild.png"):
+            self.generate_calls += 1
+            return FakeImage()
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(
+        openai_enabled=True,
+        openai_image_enabled=True,
+        openai_image_min_interval_minutes=30,
+        openai_image_rate_limited="Heute keine weiteren Bilder.",
+    )
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    identity = telegram_identity_key(1)
+
+    first_actions = engine.process(event(identity, "Mach ein Wetterbild."))
+    second_actions = engine.process(event(identity, "Noch ein Bild bitte."))
+
+    assert client.generate_calls == 1
+    assert isinstance(first_actions[2], SendAttachment)
+    assert len(second_actions) == 2
+    assert second_actions[1].text == "Kurz dazu.\nHeute keine weiteren Bilder."
+
+
 def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

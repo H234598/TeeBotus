@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from subprocess import TimeoutExpired
@@ -41,6 +42,7 @@ EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
 MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
+OPENAI_IMAGE_STATE_KEY = "openai_image_generation"
 
 
 @dataclass
@@ -453,10 +455,14 @@ class TeeBotusEngine:
         visible_text, image_requests = parse_generated_image_blocks(visible_text)
         generated_images: list[tuple[object, object]] = []
         image_errors = 0
+        image_refusals = 0
         if image_requests and instructions.openai_image_enabled:
             generate_image = getattr(self.openai_client, "generate_image", None)
             if callable(generate_image):
                 for image_request in image_requests:
+                    if not _reserve_openai_image_generation(self.account_store, account_id, instructions):
+                        image_refusals += 1
+                        continue
                     try:
                         generated_images.append((image_request, generate_image(image_request.prompt, instructions, filename=image_request.filename)))
                     except OpenAIAPIError:
@@ -472,9 +478,11 @@ class TeeBotusEngine:
                 f"[Gesendete Bild(er): {', '.join(str(getattr(image, 'filename', '') or 'bild.png') for _request, image in generated_images)}]"
             )
         if image_requests and not generated_images and not visible_text:
-            visible_text = instructions.openai_image_error
+            visible_text = instructions.openai_image_rate_limited if image_refusals else instructions.openai_image_error
         if image_errors and visible_text:
             visible_text = "\n".join(part for part in (visible_text, instructions.openai_image_error) if part).strip()
+        if image_refusals and visible_text:
+            visible_text = "\n".join(part for part in (visible_text, instructions.openai_image_rate_limited) if part).strip()
         if memory_notes:
             memory_response_text = "\n".join(part for part in (visible_text, *memory_notes) if part).strip()
         _append_account_memory_interaction(self.account_store, account_id, event, text, memory_response_text or response_text, instructions)
@@ -1228,6 +1236,73 @@ def _parse_export_format(text: str) -> str | None:
 def _metadata_value(value: object) -> str:
     text = str(value if value is not None else "").strip()
     return text if text else "<leer>"
+
+
+def _reserve_openai_image_generation(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> bool:
+    max_per_24h = max(0, int(instructions.openai_image_max_per_24h))
+    if max_per_24h <= 0:
+        return False
+    min_interval = timedelta(minutes=max(0, int(instructions.openai_image_min_interval_minutes)))
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    image_state = state.get(OPENAI_IMAGE_STATE_KEY)
+    if not isinstance(image_state, dict):
+        image_state = {}
+    raw_attempts = image_state.get("attempts")
+    if not isinstance(raw_attempts, list):
+        raw_attempts = []
+    attempts = [
+        parsed
+        for parsed in (_parse_engine_datetime(str(value or "")) for value in raw_attempts)
+        if parsed is not None and parsed >= cutoff
+    ]
+    if attempts and min_interval.total_seconds() > 0 and max(attempts) > now - min_interval:
+        image_state["attempts"] = [attempt.isoformat(timespec="seconds") for attempt in attempts]
+        image_state["last_refused_at"] = now.isoformat(timespec="seconds")
+        image_state["last_refused_reason"] = "min_interval"
+        state[OPENAI_IMAGE_STATE_KEY] = image_state
+        _write_agent_state_best_effort(account_store, account_id, state)
+        return False
+    if len(attempts) >= max_per_24h:
+        image_state["attempts"] = [attempt.isoformat(timespec="seconds") for attempt in attempts]
+        image_state["last_refused_at"] = now.isoformat(timespec="seconds")
+        image_state["last_refused_reason"] = "daily_limit"
+        state[OPENAI_IMAGE_STATE_KEY] = image_state
+        _write_agent_state_best_effort(account_store, account_id, state)
+        return False
+    attempts.append(now)
+    image_state["attempts"] = [attempt.isoformat(timespec="seconds") for attempt in attempts]
+    image_state["last_allowed_at"] = now.isoformat(timespec="seconds")
+    image_state.pop("last_refused_reason", None)
+    state[OPENAI_IMAGE_STATE_KEY] = image_state
+    return _write_agent_state_best_effort(account_store, account_id, state)
+
+
+def _write_agent_state_best_effort(account_store: AccountStore, account_id: str, state: dict[str, object]) -> bool:
+    try:
+        account_store.write_agent_state(account_id, state)
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    return True
+
+
+def _parse_engine_datetime(value: str) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 
