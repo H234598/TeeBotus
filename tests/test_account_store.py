@@ -15,6 +15,7 @@ from TeeBotus.runtime.accounts import (
     signal_identity_key,
     telegram_identity_key,
 )
+from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 HEX_128 = re.compile(r"^[0-9a-f]{128}$")
@@ -521,6 +522,78 @@ def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_p
 
     assert entries == [{"id": "mem_backup", "user_text": "Backup"}]
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+
+
+def test_account_memory_fallback_syncs_dirty_entries_back_to_primary(caplog):
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend(fail_write=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend.write_entries(account_id, [{"id": "mem_fallback"}])
+        primary.fail_write = False
+        entries = backend.read_entries(account_id)
+
+    assert entries == [{"id": "mem_fallback"}]
+    assert primary.entries[account_id] == [{"id": "mem_fallback"}]
+    assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+    assert "primary backend recovered" in caplog.text
+
+
+def test_account_memory_fallback_syncs_dirty_index_back_to_primary(caplog):
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.indexes: dict[str, dict[str, object]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, object]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.indexes[account_id] = dict(data)
+
+    primary = Backend(fail_write=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend.write_index(account_id, {"index": {"entries": {"mem_fallback": {}}}})
+        primary.fail_write = False
+        index = backend.read_index(account_id)
+
+    assert index == {"index": {"entries": {"mem_fallback": {}}}}
+    assert primary.indexes[account_id] == {"index": {"entries": {"mem_fallback": {}}}}
+    assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+    assert "primary backend recovered" in caplog.text
 
 
 def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
