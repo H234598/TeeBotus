@@ -48,7 +48,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             response = await _send_matrix_text(client, action.chat_id, action.text)
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
-            await client.room_typing(action.chat_id, True, timeout=3000)
+            await _send_matrix_typing(client, action.chat_id)
             sent.append(None)
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
@@ -85,6 +85,16 @@ async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: boo
         message_type="m.room.message",
         content={"msgtype": msgtype, "body": text},
     )
+
+
+async def _send_matrix_typing(client: Any, room_id: str) -> None:
+    room_typing = getattr(client, "room_typing", None)
+    if not callable(room_typing):
+        return
+    try:
+        await room_typing(room_id, True, timeout=3000)
+    except Exception:
+        return
 
 
 async def _send_matrix_file_or_error_notice(

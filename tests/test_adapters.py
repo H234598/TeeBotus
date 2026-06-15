@@ -328,6 +328,45 @@ def test_matrix_send_text_prefers_niobot_send_message():
     assert client.calls == [("!room:example", "hi", {"message_type": "m.text"})]
 
 
+def test_matrix_send_typing_uses_room_typing():
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_typing(self, room_id, typing_state, timeout=0):
+            self.calls.append((room_id, typing_state, timeout))
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendTyping("!room:example")]))
+
+    assert sent == [None]
+    assert client.calls == [("!room:example", True, 3000)]
+
+
+def test_matrix_send_typing_failure_does_not_block_followup_text():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.sends = []
+
+        async def room_typing(self, _room_id, _typing_state, timeout=0):
+            raise OSError("typing refused")
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendTyping("!room:example"), SendText("!room:example", "hi")]))
+
+    assert sent == [None, "$sent"]
+    assert client.sends[0]["content"] == {"msgtype": "m.text", "body": "hi"}
+
+
 def test_matrix_export_file_uploads_file_before_room_send():
     class UploadResponse:
         content_uri = "mxc://example/export"
