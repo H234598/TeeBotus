@@ -664,7 +664,7 @@ def test_matrix_bridge_decrypts_inbound_encrypted_media(tmp_path) -> None:
     class EncryptedDownloadClient(FakeMatrixClient):
         async def download(self, *, mxc: str):
             self.downloads.append(mxc)
-            return type("DownloadResponse", (), {"body": ciphertext, "content_type": "image/jpeg", "filename": "encrypted.jpg"})()
+            return type("DownloadResponse", (), {"body": ciphertext, "content_type": "application/octet-stream", "filename": "encrypted.jpg"})()
 
     client = EncryptedDownloadClient()
     bridge = MatrixRuntimeBridge(

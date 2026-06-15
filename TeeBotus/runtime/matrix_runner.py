@@ -393,7 +393,7 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
             downloaded.append(attachment)
             continue
         filename = str(getattr(response, "filename", "") or attachment.filename or "").strip() or "matrix-attachment.bin"
-        content_type = str(getattr(response, "content_type", "") or attachment.content_type or "").strip() or "application/octet-stream"
+        content_type = _matrix_resolved_download_content_type(response, attachment)
         downloaded.append(
             IncomingAttachment(
                 data=body,
@@ -415,6 +415,14 @@ def _matrix_download_body_bytes(body: Any) -> bytes | None:
         return Path(body).read_bytes()
     except (OSError, TypeError, ValueError):
         return None
+
+
+def _matrix_resolved_download_content_type(response: Any, attachment: IncomingAttachment) -> str:
+    downloaded_type = str(getattr(response, "content_type", "") or "").strip()
+    attachment_type = str(attachment.content_type or "").strip()
+    if downloaded_type and downloaded_type != "application/octet-stream":
+        return downloaded_type
+    return attachment_type or downloaded_type or "application/octet-stream"
 
 
 def _matrix_decrypt_attachment_body(body: bytes, raw_event: Any, attachment: IncomingAttachment) -> bytes | None:
