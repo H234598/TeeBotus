@@ -667,5 +667,6 @@ def _signal_message_has_user_content(message: Any) -> bool:
         str(getattr(message, "text", "") or "")
         or (getattr(message, "base64_attachments", None) or [])
         or (getattr(message, "attachments_local_filenames", None) or [])
+        or (getattr(message, "link_previews", None) or [])
         or _signal_raw_attachment_filenames(message)
     )

@@ -232,6 +232,31 @@ def test_signal_link_previews_map_to_event_metadata():
     assert event.link_previews[0].id == "preview-thumb"
 
 
+def test_signal_link_preview_only_message_is_user_content():
+    preview = type(
+        "Preview",
+        (),
+        {
+            "title": "TeeBotus",
+            "url": "https://example.test/tee",
+            "description": "",
+            "base64_thumbnail": "",
+            "id": "",
+        },
+    )()
+
+    event = signal_message_to_event(
+        FakeSignalMessage(text="", link_previews=[preview]),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.text == ""
+    assert len(event.link_previews) == 1
+    assert event.link_previews[0].url == "https://example.test/tee"
+
+
 def test_signal_edit_message_uses_target_timestamp_as_message_ref():
     message = FakeSignalMessage(text="Bearbeitet", timestamp="200", type=MessageType.EDIT_MESSAGE)
     message.target_sent_timestamp = 100
