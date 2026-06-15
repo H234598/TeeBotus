@@ -93,14 +93,14 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
-Der Proactive-Agent-Scheduler laeuft separat vom Botstart. Ein periodischer User-systemd-Timer kann reproduzierbar erzeugt werden:
+Der Proactive-Agent-Scheduler laeuft separat vom Botstart. Ein periodischer User-systemd-Timer kann reproduzierbar erzeugt werden. Ohne `--interval` prueft der Timer alle 5 Minuten:
 
 ```bash
 teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --print
 teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --enable
 ```
 
-Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dry-run --plan` auf. Das fuehrt lokale Reflection-Planung und Due-Selection aus, sendet aber nicht selbst. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer verfuegbar. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks. Live-Dispatch bleibt im laufenden Bot-/Adapterprozess, weil dort die Telegram-, Signal- und Matrix-Clients vorhanden sind.
+Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --tool-plan` auf. Das fuehrt lokale Reflection-Planung, Due-Selection und Versand ueber die konfigurierten Proactive-Backends aus. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer der Default. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks.
 
 Signal braucht das Python-Paket `signalbot`, die native `signal-cli-rest-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
 
