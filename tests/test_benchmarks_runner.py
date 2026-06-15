@@ -71,6 +71,14 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert youtube_job["details"]["background_dispatches"] == 1
     assert youtube_job["details"]["llm_calls"] == 0
     assert youtube_job["details"]["network_calls"] == 0
+    database_fallback = next(result for result in suite["results"] if result["name"] == "database_fallback_policy")
+    assert database_fallback["ok"] is True
+    assert database_fallback["details"]["primary"] == "sqlite-primary"
+    assert database_fallback["details"]["secondary"] == "sqlite-fallback"
+    assert database_fallback["details"]["synced_entries"] is True
+    assert database_fallback["details"]["synced_index"] is True
+    assert database_fallback["details"]["fallback_warnings"] >= 1
+    assert database_fallback["details"]["recovery_warnings"] >= 1
 
 
 def test_benchmark_markdown_contains_comparison_table() -> None:
@@ -91,6 +99,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "youtube_local_job_queue_no_llm" in markdown
+    assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "keine echten Provider-Calls" in markdown
 
 

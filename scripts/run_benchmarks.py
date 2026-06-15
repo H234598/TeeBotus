@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import logging
 import os
 import platform
 import shutil
@@ -51,6 +52,7 @@ from TeeBotus.runtime.proactive_agent import (  # noqa: E402
 )
 from TeeBotus.runtime.postgres_memory import POSTGRES_BACKEND_ENV  # noqa: E402
 from TeeBotus.runtime.sqlite_memory import SQLITE_PATH_ENV  # noqa: E402
+from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend  # noqa: E402
 from TeeBotus.runtime.engine import TeeBotusEngine  # noqa: E402
 from TeeBotus.runtime.events import IncomingEvent  # noqa: E402
 import TeeBotus.runtime.engine as engine_module  # noqa: E402
@@ -702,19 +704,106 @@ def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
 
 
 def _benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:
-    primary = {"name": "postgres", "ok": False}
-    secondary = {"name": "sqlite", "ok": True}
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+            self.indexes: dict[str, dict[str, Any]] = {}
+            self.write_entries_count = 0
+            self.write_index_count = 0
 
-    def choose_backend() -> str:
-        return primary["name"] if primary["ok"] else secondary["name"]
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
 
-    timings = [_timed_ms(choose_backend) for _ in range(iterations)]
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.write_entries_count += 1
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, account_id: str) -> dict[str, Any]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, Any]) -> None:
+            self.write_index_count += 1
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.indexes[account_id] = dict(data)
+
+    class CountingCriticalHandler(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__(level=logging.CRITICAL)
+            self.messages: list[str] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.messages.append(record.getMessage())
+
+    primary = Backend(fail_write=True)
+    secondary = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, secondary, label="Bench:sqlite")
+    account_id = "b" * 128
+    handler = CountingCriticalHandler()
+    logger = logging.getLogger("TeeBotus")
+    logger.addHandler(handler)
+    previous_level = logger.level
+    logger.setLevel(min(previous_level, logging.CRITICAL) if previous_level else logging.CRITICAL)
+    try:
+        timings = []
+        for index in range(iterations):
+            entry = {"id": f"mem_fallback_{index:06d}", "user_text": "Fallback Benchmark"}
+            timings.append(_timed_ms(lambda entry=entry: backend.write_entries(account_id, [entry])))
+            timings.append(
+                _timed_ms(
+                    lambda index=index: backend.write_index(
+                        account_id,
+                        {
+                            "scope": "account",
+                            "index": {"entries": {f"mem_fallback_{index:06d}": {}}},
+                        },
+                    )
+                )
+            )
+        primary.fail_write = False
+        timings.append(_timed_ms(lambda: backend.read_entries(account_id)))
+        timings.append(_timed_ms(lambda: backend.read_index(account_id)))
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+    synced_entries = primary.entries.get(account_id) == secondary.entries.get(account_id)
+    synced_index = primary.indexes.get(account_id) == secondary.indexes.get(account_id)
+    warning_count = sum(1 for message in handler.messages if "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in message)
+    recovery_count = sum(1 for message in handler.messages if "primary backend recovered" in message)
+    errors = 0
+    if not synced_entries:
+        errors += 1
+    if not synced_index:
+        errors += 1
+    if warning_count < 1:
+        errors += 1
+    if recovery_count < 1:
+        errors += 1
     return _result(
         name="database_fallback_policy",
         category="database_fallback",
-        iterations=iterations,
+        iterations=iterations * 2 + 2,
         total_ms=sum(timings),
-        details={"primary": primary, "secondary": secondary, "selected": choose_backend()},
+        ok=errors == 0,
+        errors=errors,
+        payload_bytes=sum(len(json.dumps(row, ensure_ascii=False)) for row in primary.entries.get(account_id, [])),
+        note="primary_failure_secondary_sync_recovery_warning",
+        details={
+            "primary": "sqlite-primary",
+            "secondary": "sqlite-fallback",
+            "fallback_warnings": warning_count,
+            "recovery_warnings": recovery_count,
+            "synced_entries": synced_entries,
+            "synced_index": synced_index,
+            "primary_entry_writes": primary.write_entries_count,
+            "secondary_entry_writes": secondary.write_entries_count,
+            "primary_index_writes": primary.write_index_count,
+            "secondary_index_writes": secondary.write_index_count,
+            "median_operation_ms": statistics.median(timings),
+        },
     )
 
 
