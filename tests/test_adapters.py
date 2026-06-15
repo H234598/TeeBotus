@@ -1931,6 +1931,32 @@ def test_matrix_send_text_preserves_link_preview_metadata():
     }
 
 
+def test_matrix_view_once_text_sends_notice_without_original_content():
+    class Response:
+        event_id = "$notice"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "geheim", view_once=True)]))
+
+    assert sent == ["$notice"]
+    assert client.calls == [
+        (
+            "!room:example",
+            "Nachricht konnte nicht gesendet werden: Matrix view_once text is not supported",
+            {"message_type": "m.notice", "clean_mentions": True},
+        )
+    ]
+
+
 def test_matrix_send_typing_uses_room_typing():
     class Client:
         def __init__(self) -> None:
@@ -2240,6 +2266,35 @@ def test_matrix_send_edit_html_uses_formatted_replacement_content():
         "format": "org.matrix.custom.html",
         "formatted_body": "* <em>neu</em>",
     }
+
+
+def test_matrix_view_once_edit_sends_notice_without_original_content():
+    class Response:
+        event_id = "$notice"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def edit_message(self, *_args, **_kwargs):
+            raise AssertionError("edit_message must not receive view_once Matrix content")
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "geheim", view_once=True)]))
+
+    assert sent == ["$notice"]
+    assert client.calls == [
+        (
+            "!room:example",
+            "Nachricht konnte nicht bearbeitet werden: Matrix view_once edits are not supported",
+            {"message_type": "m.notice", "clean_mentions": True},
+        )
+    ]
 
 
 def test_matrix_send_poll_uses_poll_start_event():

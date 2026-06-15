@@ -81,6 +81,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
+                view_once=action.view_once,
                 link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix text send"))
@@ -101,6 +102,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 action.text,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
+                view_once=action.view_once,
                 link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix edit send"))
@@ -156,8 +158,17 @@ async def _send_matrix_text(
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    view_once: bool = False,
     link_preview: Any | None = None,
 ) -> Any:
+    if view_once and not notice:
+        return await _send_matrix_text(
+            client,
+            room_id,
+            "Nachricht konnte nicht gesendet werden: Matrix view_once text is not supported",
+            notice=True,
+            reply_to_ref=reply_to_ref,
+        )
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
     previews = _matrix_link_preview_payloads(link_preview)
@@ -246,11 +257,19 @@ async def _send_matrix_edit(
     *,
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    view_once: bool = False,
     link_preview: Any | None = None,
 ) -> Any:
     target = str(event_id or "").strip()
     if not target:
         raise RuntimeError("Matrix edit requires a message_ref")
+    if view_once:
+        return await _send_matrix_text(
+            client,
+            room_id,
+            "Nachricht konnte nicht bearbeitet werden: Matrix view_once edits are not supported",
+            notice=True,
+        )
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
     room = _matrix_room_object(client, room_id) or room_id
