@@ -626,6 +626,31 @@ def test_signal_command_handles_account_store_resolution_errors(tmp_path) -> Non
     assert "User-Memory" in context.sent[0]
 
 
+def test_signal_command_handles_engine_account_store_errors(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine.should_ignore_without_account = lambda _event: False  # type: ignore[method-assign]
+    command.engine.process_result = lambda _event: (_ for _ in ()).throw(AccountStoreError("engine memory broken"))  # type: ignore[method-assign]
+    context = FakeSignalContext()
+    context.message.text = "/ping"
+
+    asyncio.run(command.handle(context))
+
+    assert len(context.sent) == 1
+    assert "User-Memory" in context.sent[0]
+
+
 def test_signal_group_free_text_can_address_bot_by_persistent_alias(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(

@@ -249,6 +249,34 @@ def test_matrix_bridge_handles_account_store_resolution_errors(tmp_path) -> None
     assert "User-Memory" in str(client.sent[0]["content"]["body"])
 
 
+def test_matrix_bridge_handles_engine_account_store_errors(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine.should_ignore_without_account = lambda _event: False  # type: ignore[method-assign]
+    bridge.engine.process_result = lambda _event: (_ for _ in ()).throw(AccountStoreError("engine memory broken"))  # type: ignore[method-assign]
+    message = FakeMatrixMessage()
+    message.body = "/ping"
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
+
+    assert len(client.sent) == 1
+    assert "User-Memory" in str(client.sent[0]["content"]["body"])
+
+
 def test_matrix_group_free_text_can_address_bot_by_persistent_abbreviation(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

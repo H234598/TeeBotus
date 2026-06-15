@@ -838,7 +838,24 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             )
         return True
     event = event.with_account(account_id)
-    engine_result = context.engine.process_result(event)
+    try:
+        engine_result = context.engine.process_result(event)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception(
+            "Telegram engine processing failed instance=%s chat_id=%s message_id=%s.",
+            context.instance_name,
+            chat_id,
+            message.get("message_id", "unknown"),
+        )
+        try:
+            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
+        except (TelegramAPIError, TelegramNetworkError, OSError):
+            LOGGER.exception(
+                "Telegram memory error notification failed instance=%s chat_id=%s.",
+                context.instance_name,
+                chat_id,
+            )
+        return True
     event = event.with_account(engine_result.account_id)
     _dispatch_modern_telegram_actions(
         context.api,

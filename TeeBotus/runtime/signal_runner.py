@@ -165,7 +165,17 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 await self._send_memory_error(context, event)
                 return
             event = event.with_account(account_id)
-            engine_result = _process_engine_result(self.engine, event)
+            try:
+                engine_result = _process_engine_result(self.engine, event)
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                LOGGER.exception(
+                    "Signal engine processing failed instance=%s recipient=%s message_ref=%s.",
+                    self.run_config.instance_name,
+                    event.chat_id,
+                    event.message_ref,
+                )
+                await self._send_memory_error(context, event)
+                return
             event = event.with_account(engine_result.account_id)
             actions = engine_result.actions
             await self._notify_linked_identities(actions)
