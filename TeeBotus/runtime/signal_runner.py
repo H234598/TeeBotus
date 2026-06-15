@@ -15,7 +15,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
-from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
+from TeeBotus.adapters.signal import _signal_required_timestamp, send_signal_actions, signal_context_to_event
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
@@ -170,7 +170,11 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 sent_ref = await _maybe_await(self.bot.send(receiver, action.text))
             except Exception:
                 continue
-            if not action.track or sent_ref is None:
+            if not action.track:
+                continue
+            try:
+                message_ref = str(_signal_required_timestamp(sent_ref, "Signal linked identity notification"))
+            except RuntimeError:
                 continue
             self.message_tracker.record(
                 SentMessageRef(
@@ -178,7 +182,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     instance_name=self.run_config.instance_name,
                     account_id=action.account_id,
                     chat_id=receiver,
-                    message_ref=str(sent_ref),
+                    message_ref=message_ref,
                     ref_kind="signal_timestamp",
                 )
             )
