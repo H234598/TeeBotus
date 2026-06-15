@@ -285,6 +285,75 @@ def test_proactive_cli_rejects_two_model_planners(capsys) -> None:
     assert "Use only one model planner" in captured.err
 
 
+def test_proactive_cycle_plan_uses_instance_tool_planner_resolver(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            plan=True,
+            planner_resolver=lambda _instance_dir: "tool",
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert "planning" in account
+    assert account["tool_planning"] == {"skipped_reason": "tool_planner_instance_not_enabled"}
+    assert "llm_planning" not in account
+
+
+def test_proactive_cycle_plan_uses_instance_llm_planner_resolver(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            plan=True,
+            planner_resolver=lambda _instance_dir: "llm",
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert "planning" in account
+    assert account["llm_planning"] == {"skipped_reason": "llm_planner_instance_not_enabled"}
+    assert "tool_planning" not in account
+
+
+def test_proactive_cycle_plan_can_disable_model_planner_per_instance(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            plan=True,
+            planner_resolver=lambda _instance_dir: "none",
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert "planning" in account
+    assert "llm_planning" not in account
+    assert "tool_planning" not in account
+
+
 def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)

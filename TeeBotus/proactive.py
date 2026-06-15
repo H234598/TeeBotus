@@ -71,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
             llm_plan=bool(args.llm_plan),
             tool_plan=bool(args.tool_plan),
             sender_factory=runtime_sender_factory(instances_dir) if args.dispatch else None,
-            llm_planner_factory=runtime_llm_planner_factory(instances_dir) if (args.llm_plan or args.tool_plan) else None,
+            llm_planner_factory=runtime_llm_planner_factory(instances_dir) if args.plan else None,
+            planner_resolver=runtime_planner_resolver(),
         )
     )
     if args.json:
@@ -85,6 +86,7 @@ StoreFactory = Callable[[Path, str], AccountStore]
 SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
 MessageTrackerFactory = Callable[[Path, str], MessageTracker | None]
 LLMPlannerFactory = Callable[[str, AccountStore, str], tuple[Any, Any] | None]
+PlannerResolver = Callable[[Path], str]
 
 
 def run_proactive_agent_dry_run(
@@ -126,6 +128,17 @@ def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | No
         return OpenAIClient(key), instructions
 
     return factory
+
+
+def runtime_planner_resolver() -> PlannerResolver:
+    def resolver(instance_dir: Path) -> str:
+        instructions = load_instructions(instance_dir / "Bot_Verhalten.md")
+        planner = str(getattr(instructions, "proactive_model_planner", "") or "").strip().casefold()
+        if planner in {"llm", "tool", "none"}:
+            return planner
+        return "tool"
+
+    return resolver
 
 
 def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> SenderFactory:
@@ -364,6 +377,7 @@ async def run_proactive_agent_cycle(
     sender_factory: SenderFactory | None = None,
     message_tracker_factory: MessageTrackerFactory | None = None,
     llm_planner_factory: LLMPlannerFactory | None = None,
+    planner_resolver: PlannerResolver | None = None,
 ) -> dict[str, Any]:
     if dispatch and sender_factory is None:
         raise ValueError("sender_factory is required when dispatch=True")
@@ -391,6 +405,13 @@ async def run_proactive_agent_cycle(
             account_id = account_dir.name
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
             try:
+                effective_llm_plan, effective_tool_plan = _effective_model_planners(
+                    instance_dir,
+                    plan=plan,
+                    llm_plan=llm_plan,
+                    tool_plan=tool_plan,
+                    planner_resolver=planner_resolver,
+                )
                 notification_prompt_ids = queue_due_notification_loudness_prompts(store, account_id, now=resolved_now)
                 if notification_prompt_ids:
                     account_report["notification_loudness_prompt_ids"] = list(notification_prompt_ids)
@@ -402,7 +423,7 @@ async def run_proactive_agent_cycle(
                         "queued_item_ids": list(planning.queued_item_ids),
                         "skipped_reason": planning.skipped_reason,
                     }
-                if llm_plan:
+                if effective_llm_plan:
                     if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
                         account_report["llm_planning"] = {"skipped_reason": "llm_planner_instance_not_enabled"}
                     else:
@@ -425,7 +446,7 @@ async def run_proactive_agent_cycle(
                                 "errors": list(llm_planning.errors),
                                 "audit_event_ids": list(llm_planning.audit_event_ids),
                             }
-                if tool_plan:
+                if effective_tool_plan:
                     if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
                         account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
                     else:
@@ -501,6 +522,24 @@ async def run_proactive_agent_cycle(
         "generated_at": resolved_now.isoformat(timespec="seconds"),
         "instances": instances,
     }
+
+
+def _effective_model_planners(
+    instance_dir: Path,
+    *,
+    plan: bool,
+    llm_plan: bool,
+    tool_plan: bool,
+    planner_resolver: PlannerResolver | None,
+) -> tuple[bool, bool]:
+    if llm_plan or tool_plan or not plan or planner_resolver is None:
+        return llm_plan, tool_plan
+    planner = str(planner_resolver(instance_dir) or "").strip().casefold()
+    if planner == "llm":
+        return True, False
+    if planner == "tool":
+        return False, True
+    return False, False
 
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
