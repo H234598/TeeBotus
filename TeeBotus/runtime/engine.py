@@ -22,6 +22,7 @@ from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command
+from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
@@ -82,6 +83,9 @@ class TeeBotusEngine:
         return self.process_result(event).actions
 
     def process_result(self, event: IncomingEvent) -> EngineResult:
+        return self._with_notification_loudness_prompt(event, self._process_result_inner(event))
+
+    def _process_result_inner(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
 
         text = str(event.text or "").strip()
@@ -121,6 +125,9 @@ class TeeBotusEngine:
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
             return EngineResult(result.account_id, memory_reset_actions, handled=True)
+        notification_response = maybe_handle_notification_loudness_response(event.with_account(result.account_id), self.account_store, result.account_id)
+        if notification_response is not None:
+            return EngineResult(result.account_id, list(notification_response), handled=True)
         reminder_reply = self._natural_reminder_reply(event, result.account_id)
         if reminder_reply is not None:
             return EngineResult(result.account_id, [SendText(event.chat_id, reminder_reply, track=False)], handled=True)
@@ -226,6 +233,14 @@ class TeeBotusEngine:
                 handled=True,
             )
         return EngineResult(account_id, [], handled=False)
+
+    def _with_notification_loudness_prompt(self, event: IncomingEvent, result: EngineResult) -> EngineResult:
+        if not result.account_id:
+            return result
+        prompt = maybe_notification_loudness_prompt_action(event.with_account(result.account_id), self.account_store, result.account_id)
+        if prompt is None:
+            return result
+        return EngineResult(result.account_id, [*result.actions, prompt], handled=True if result.handled or result.actions else True)
 
     def _handle_account_edit_step(self, event: IncomingEvent, account_id: str, pending: dict[str, object]) -> EngineResult:
         text = str(event.text or "").strip().casefold()

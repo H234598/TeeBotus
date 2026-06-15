@@ -16,6 +16,7 @@ from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_openai_key
 from TeeBotus.runtime.message_tracking import MessageTracker
+from TeeBotus.runtime.notification_loudness import queue_due_notification_loudness_prompts
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
@@ -299,6 +300,9 @@ async def run_proactive_agent_cycle(
             account_id = account_dir.name
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
             try:
+                notification_prompt_ids = queue_due_notification_loudness_prompts(store, account_id, now=resolved_now)
+                if notification_prompt_ids:
+                    account_report["notification_loudness_prompt_ids"] = list(notification_prompt_ids)
                 if plan:
                     planning = run_proactive_reflection_planner(store, account_id, now=resolved_now)
                     account_report["planning"] = {

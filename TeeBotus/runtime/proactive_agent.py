@@ -14,6 +14,7 @@ from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
+from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
@@ -830,6 +831,15 @@ def proactive_policy_decision(
     exclude_item_id: str = "",
     item: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
+    if is_notification_loudness_outbox_item(item):
+        route = _item_route(item or {})
+        if route.get("chat_type") != "private":
+            return ProactiveDecision(False, "invalid_route")
+        if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
+            return ProactiveDecision(False, "invalid_route")
+        if not _account_has_matching_proactive_route(account_store, account_id, route):
+            return ProactiveDecision(False, "stale_route")
+        return ProactiveDecision(True, "system_allowed", route)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     normalized_category = str(category or "").strip().casefold()
     if normalized_category not in PROACTIVE_ALLOWED_CATEGORIES:
@@ -1063,9 +1073,10 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             errors.append(f"outbox item {item_id or index} has unsupported status: {status}")
         errors.extend(_proactive_outbox_status_history_errors(item, item_id or str(index), current_status=status))
         category = str(item.get("category") or "").strip().casefold()
-        if category not in PROACTIVE_ALLOWED_CATEGORIES:
+        system_notification_item = is_notification_loudness_outbox_item(item)
+        if category not in PROACTIVE_ALLOWED_CATEGORIES and not system_notification_item:
             errors.append(f"outbox item {item_id or index} has unsupported category: {category}")
-        if status == "queued" and category and category not in consented_categories:
+        if status == "queued" and category and category not in consented_categories and not system_notification_item:
             errors.append(f"queued outbox item {item_id or index} category is not consented: {category}")
         risk_gate = _normalize_risk_gate(item.get("risk_gate"))
         if status == "queued" and risk_gate in PROACTIVE_RISK_BLOCK_GATES | PROACTIVE_RISK_REVIEW_GATES:

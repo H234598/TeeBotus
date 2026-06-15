@@ -15,6 +15,7 @@ from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLi
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.message_tracking import SentMessageRef
+from TeeBotus.runtime.notification_loudness import NOTIFICATION_LOUDNESS_PROMPT
 from TeeBotus.runtime.signal_runner import (
     SignalRuntimeError,
     check_signal_accounts,
@@ -431,7 +432,7 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
 
     asyncio.run(command.handle(context))
 
-    assert context.sent == ["Signal custom fuer +491234."]
+    assert context.sent == ["Signal custom fuer +491234.", NOTIFICATION_LOUDNESS_PROMPT]
     assert context.bot_sent == [
         (
             "+491234",
@@ -442,7 +443,17 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
                 "quote_message": "/custom",
                 "quote_timestamp": 123456,
             },
-        )
+        ),
+        (
+            "+491234",
+            NOTIFICATION_LOUDNESS_PROMPT,
+            {
+                "base64_attachments": None,
+                "quote_author": "+491234",
+                "quote_message": "/custom",
+                "quote_timestamp": 123456,
+            },
+        ),
     ]
 
 
@@ -498,7 +509,7 @@ def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path) -> 
 
     asyncio.run(command.handle(context))
 
-    assert context.sent == ["Signal custom fuer +491234."]
+    assert context.sent == ["Signal custom fuer +491234.", NOTIFICATION_LOUDNESS_PROMPT]
     assert context.bot_sent == [
         (
             "+491234",
@@ -509,7 +520,17 @@ def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path) -> 
                 "quote_message": "/custom",
                 "quote_timestamp": 100,
             },
-        )
+        ),
+        (
+            "+491234",
+            NOTIFICATION_LOUDNESS_PROMPT,
+            {
+                "base64_attachments": None,
+                "quote_author": "+491234",
+                "quote_message": "/custom",
+                "quote_timestamp": 100,
+            },
+        ),
     ]
 
 
