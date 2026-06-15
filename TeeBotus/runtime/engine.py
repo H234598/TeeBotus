@@ -46,6 +46,7 @@ from TeeBotus.runtime.tts_dialect import (
 )
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 PRIVATE_ONLY = "Bitte privat."
@@ -112,7 +113,7 @@ class TeeBotusEngine:
         llm_client: object | None = None,
         bot_address_names: Iterable[str] = (),
         working_memory_store: WorkingMemoryStore | None = None,
-        bibliothekar_store: BibliothekarStore | None = None,
+        bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
         youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
         background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
     ) -> None:
@@ -1382,14 +1383,22 @@ def _build_working_memory_context(working_memory_store: WorkingMemoryStore | Non
 
 
 def _build_bibliothekar_context(
-    bibliothekar_store: BibliothekarStore | None,
+    bibliothekar_store: BibliothekarService | BibliothekarStore | None,
     instructions: BotInstructions,
     query_text: str,
 ) -> str:
     if bibliothekar_store is None or not instructions.bibliothekar_enabled:
         return ""
     try:
-        return bibliothekar_store.select(
+        search = getattr(bibliothekar_store, "search", None)
+        if callable(search):
+            return search(
+                query_text,
+                max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
+                max_chunks=instructions.bibliothekar_max_chunks,
+                max_quote_chars=instructions.bibliothekar_max_quote_chars,
+            ).prompt_text
+        return bibliothekar_store.select(  # type: ignore[union-attr]
             query_text,
             max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
             max_chunks=instructions.bibliothekar_max_chunks,

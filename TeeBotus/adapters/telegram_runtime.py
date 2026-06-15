@@ -51,6 +51,7 @@ from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
 from TeeBotus.runtime.tts_dialect import (
@@ -734,7 +735,7 @@ def build_telegram_runtime_context(
     message_tracker: MessageTracker,
     openai_client: OpenAIClient | None,
     working_memory_store: WorkingMemoryStore | None,
-    bibliothekar_store: BibliothekarStore | None,
+    bibliothekar_store: BibliothekarService | BibliothekarStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None,
     bot_identity: BotIdentity,
     llm_client: object | None = None,
@@ -1108,7 +1109,7 @@ def handle_update(
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
-    bibliothekar_store: BibliothekarStore | None = None,
+    bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
     runtime_context: TelegramRuntimeContext | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
@@ -1214,7 +1215,7 @@ def _process_text_message(
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
-    bibliothekar_store: BibliothekarStore | None = None,
+    bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
 ) -> None:
     chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
@@ -2214,14 +2215,22 @@ def _build_openai_user_input(
 
 
 def _prepare_bibliothekar_context(
-    bibliothekar_store: BibliothekarStore | None,
+    bibliothekar_store: BibliothekarService | BibliothekarStore | None,
     instructions: BotInstructions,
     text: str,
 ) -> str:
     if bibliothekar_store is None or not instructions.bibliothekar_enabled:
         return ""
     try:
-        return bibliothekar_store.select(
+        search = getattr(bibliothekar_store, "search", None)
+        if callable(search):
+            return search(
+                text,
+                max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
+                max_chunks=instructions.bibliothekar_max_chunks,
+                max_quote_chars=instructions.bibliothekar_max_quote_chars,
+            ).prompt_text
+        return bibliothekar_store.select(  # type: ignore[union-attr]
             text,
             max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
             max_chunks=instructions.bibliothekar_max_chunks,
@@ -2864,7 +2873,7 @@ def run_polling(
     message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
-    bibliothekar_store = BibliothekarStore(instance, _resolve_instances_dir())
+    bibliothekar_store = BibliothekarService.local(instance, _resolve_instances_dir())
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
     runtime_context = build_telegram_runtime_context(
         api=api,

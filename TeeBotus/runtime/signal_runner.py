@@ -32,7 +32,7 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.proactive_backends import signal_proactive_sender
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
-from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 
 LOGGER = logging.getLogger("TeeBotus.signal")
 
@@ -105,7 +105,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             temperature=run_config.llm_temperature,
         )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
-        self.bibliothekar_store = BibliothekarStore(run_config.instance_name, self.instances_dir)
+        self.bibliothekar_store = BibliothekarService.local(run_config.instance_name, self.instances_dir)
         self.youtube_job_runner = YouTubeTranscriptionJobRunner()
         self.engine = TeeBotusEngine(
             self.account_store,
