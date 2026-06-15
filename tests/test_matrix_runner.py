@@ -5,11 +5,13 @@ import asyncio
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
     MatrixHomeserverHealth,
     MatrixRuntimeBridge,
     MatrixRuntimeError,
+    _download_matrix_event_attachments,
     check_matrix_homeserver,
     _matrix_message_event_classes,
     run_matrix_accounts,
@@ -652,6 +654,40 @@ def test_matrix_bridge_downloads_inbound_media_from_disk_response(tmp_path) -> N
     assert seen[0].attachments[0].data == b"from disk"
     assert seen[0].attachments[0].filename == "disk.pdf"
     assert seen[0].attachments[0].content_type == "application/pdf"
+
+
+def test_matrix_download_preserves_attachment_metadata_flags() -> None:
+    class DownloadClient:
+        async def download(self, *, mxc: str):
+            return type("DownloadResponse", (), {"body": b"downloaded", "content_type": "application/octet-stream", "filename": ""})()
+
+    event = IncomingEvent(
+        event_id="matrix:$media",
+        instance="Demo",
+        channel="matrix",
+        adapter_slot=1,
+        identity_key="matrix:user:@alice:example",
+        chat_id="!room:example",
+        chat_type="private",
+        sender_id="@alice:example",
+        text="",
+        message_ref="$media",
+        attachments=(
+            IncomingAttachment(
+                filename="voice.ogg",
+                content_type="audio/ogg",
+                base64_data="mxc://example/voice",
+                view_once=True,
+            ),
+        ),
+    )
+
+    downloaded = asyncio.run(_download_matrix_event_attachments(DownloadClient(), event))
+
+    assert downloaded.attachments[0].data == b"downloaded"
+    assert downloaded.attachments[0].filename == "voice.ogg"
+    assert downloaded.attachments[0].content_type == "audio/ogg"
+    assert downloaded.attachments[0].view_once is True
 
 
 def test_matrix_bridge_decrypts_inbound_encrypted_media(tmp_path) -> None:

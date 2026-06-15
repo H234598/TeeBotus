@@ -400,6 +400,7 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
                 filename=filename,
                 content_type=content_type,
                 base64_data=attachment.base64_data,
+                view_once=attachment.view_once,
             )
         )
         changed = True
