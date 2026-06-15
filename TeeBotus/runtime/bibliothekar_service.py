@@ -303,7 +303,48 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 store="qdrant",
                 error=f"missing optional dependency: {', '.join(missing)}",
             )
-        return BibliothekarServiceHealth(instance_name, "haystack", "configured", collection=collection, store="qdrant")
+        haystack_backend = HaystackBibliothekarBackend(
+            instance_name=instance_name,
+            instances_dir=instances_dir,
+            collection=collection,
+        )
+        try:
+            document_store = haystack_backend._document_store()
+            try:
+                document_store.filter_documents()
+            except TypeError:
+                document_store.filter_documents(filters={})
+        except Exception as exc:  # noqa: BLE001 - status should report backend reachability, not crash.
+            return BibliothekarServiceHealth(
+                instance_name,
+                "haystack",
+                "unreachable",
+                collection=collection,
+                store="qdrant",
+                error=f"{type(exc).__name__}: {exc}",
+            )
+        try:
+            haystack_backend.fallback_store.ensure_current()
+            index = _read_index(haystack_backend.fallback_store.index_path)
+        except OSError as exc:
+            return BibliothekarServiceHealth(
+                instance_name,
+                "haystack",
+                "broken",
+                collection=collection,
+                store="qdrant",
+                error=str(exc),
+            )
+        documents = index.get("documents") if isinstance(index.get("documents"), dict) else {}
+        return BibliothekarServiceHealth(
+            instance_name,
+            "haystack",
+            "reachable",
+            collection=collection,
+            store="qdrant",
+            documents=len(documents),
+            chunks=int(index.get("chunk_count") or 0),
+        )
     store = BibliothekarStore(instance_name, instances_dir)
     try:
         store.ensure_current()

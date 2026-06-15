@@ -471,6 +471,8 @@ python3 -m pip install '.[agents]'
 
 Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. Wenn Haystack/Qdrant konfiguriert, aber zur Laufzeit nicht verfuegbar ist, faellt die Suche auf den lokalen Bibliothekar zurueck, statt normale Botantworten zu crashen.
 
+`python3 -m TeeBotus --runtime-status --channels telegram` prueft bei `backend: haystack` die optionalen Haystack/Qdrant-Abhaengigkeiten und die Qdrant-Erreichbarkeit. Bei erreichbarem Backend meldet der Status `store=qdrant status=reachable` plus Dokument-/Chunk-Zahlen aus dem rebuildbaren lokalen Index; bei fehlendem oder nicht erreichbarem Backend meldet er `status=unavailable` oder `status=unreachable` mit Fehlertext.
+
 LangGraph ist nicht der Botkern. Der erste Pilot liegt unter `TeeBotus/runtime/graphs/` und betrifft nur `Bibliothekar Deep Query`. Der Ablauf ist `classify -> retrieve -> rerank -> answer -> citation_check -> fallback`. Ohne installiertes `langgraph` laeuft derselbe serialisierbare State linear weiter. Normale Chatantworten, `/status`, `/help`, `/ping` und einfache Textregeln laufen nicht durch LangGraph.
 
 Deep-Query-Pilot:

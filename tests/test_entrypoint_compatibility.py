@@ -286,6 +286,38 @@ def test_runtime_status_reports_haystack_bibliothekar_dependency_gap(monkeypatch
     ) in captured.out
 
 
+def test_runtime_status_reports_reachable_haystack_bibliothekar(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    library_dir = demo_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: haystack\n- collection: therapy_books\n",
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+
+    class FakeDocumentStore:
+        def filter_documents(self, **_kwargs):
+            return []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.bibliothekar_service.HaystackBibliothekarBackend._document_store",
+        lambda _self: FakeDocumentStore(),
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=reachable documents=1 chunks=1" in captured.out
+
+
 def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

@@ -9,7 +9,7 @@ from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegr
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
-from TeeBotus.runtime.bibliothekar_service import BibliothekarQuery, BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend
+from TeeBotus.runtime.bibliothekar_service import BibliothekarQuery, BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend, check_bibliothekar_service
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -221,6 +221,50 @@ def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(t
 
     assert selection.selected_ids
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
+def test_haystack_status_reports_unreachable_qdrant_when_dependencies_exist(tmp_path, monkeypatch):
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.bibliothekar_service.HaystackBibliothekarBackend._document_store",
+        lambda _self: BrokenDocumentStore(),
+    )
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="haystack", bibliothekar_collection="therapy_books"),
+    )
+
+    assert health.backend == "haystack"
+    assert health.store == "qdrant"
+    assert health.status == "unreachable"
+    assert "RuntimeError: qdrant unavailable" in health.error
+
+
+def test_haystack_status_reports_reachable_qdrant_with_local_index_counts(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    BibliothekarStore("Depressionsbot", tmp_path / "instances").rebuild()
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.bibliothekar_service.HaystackBibliothekarBackend._document_store",
+        lambda _self: FakeDocumentStore(),
+    )
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="haystack", bibliothekar_collection="therapy_books"),
+    )
+
+    assert health.backend == "haystack"
+    assert health.store == "qdrant"
+    assert health.status == "reachable"
+    assert health.collection == "therapy_books"
+    assert health.documents == 1
+    assert health.chunks == 1
 
 
 def test_bibliothekar_service_rebuild_delegates_to_backend(tmp_path):
