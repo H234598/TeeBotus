@@ -400,6 +400,40 @@ def test_structured_account_memory_v2_keeps_entries_and_builds_graph_cache(tmp_p
     assert hypothesis_id in index["index"]["semantic_cache"]["entries"]
 
 
+def test_structured_account_memory_accepts_clinical_note_kinds(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    examples = [
+        ("mem_mse", "mse_mood", "MSE mood: niedergeschlagen.", "compact", 3),
+        ("mem_risk", "suicidal_ideation", "Passive Suizidgedanken ohne Plan.", "retain", 6),
+        ("mem_medication", "medication_adherence", "SSRI Einnahme meist regelmaessig.", "retain", 3),
+        ("mem_process", "psychotherapy_process_note", "Vermeidung taucht bei Naehe auf.", "decay", 3),
+        ("mem_hypothesis", "diagnostic_hypothesis", "Depressive Episode bleibt Hypothese.", "decay", 5),
+        ("mem_treatment", "treatment_goal", "Schlafrhythmus stabilisieren.", "retain", 4),
+    ]
+
+    for memory_id, kind, user_text, expected_policy, expected_salience in examples:
+        store.append_structured_memory_entry(
+            account_id,
+            {
+                "id": memory_id,
+                "kind": kind,
+                "user_text": user_text,
+                "bot_text": "Notiert.",
+            },
+        )
+
+    entries = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    index_entries = store.read_memory_index(account_id)["index"]["entries"]
+
+    for memory_id, kind, _user_text, expected_policy, expected_salience in examples:
+        assert entries[memory_id]["kind"] == kind
+        assert entries[memory_id]["decay"]["policy"] == expected_policy
+        assert index_entries[memory_id]["kind"] == kind
+        assert index_entries[memory_id]["salience"] == expected_salience
+
+
 def test_structured_account_memory_v2_has_no_default_entry_store_limit(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

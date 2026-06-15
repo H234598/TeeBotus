@@ -1,0 +1,99 @@
+{
+  "constraints": [
+    "JSONL remains source of truth",
+    "Indexes and semantic cache must be rebuildable from JSONL",
+    "No default hard cap on account memory entries",
+    "Runtime retrieval must remain feasible on a modern notebook CPU",
+    "Clinical and psychoanalytic entries are signals or hypotheses, not diagnoses"
+  ],
+  "objective": "Expand Account Memory Schema V2 with many more clinically useful memory types, informed by psychiatric and psychotherapy documentation patterns.",
+  "research_summary": {
+    "derived_axes": [
+      "progress_note_format",
+      "mse_domain",
+      "biopsychosocial_domain",
+      "case_formulation_factor",
+      "risk_safety",
+      "treatment_plan",
+      "medication",
+      "psychotherapy_process_note",
+      "functional_impairment",
+      "diagnostic_hypothesis"
+    ],
+    "sources": [
+      {
+        "name": "NCBI StatPearls Mental Status Examination",
+        "takeaways": [
+          "MSE is a structured psychiatric examination; useful domains include appearance, behavior, speech, mood, thought, perception, cognition, insight, judgment."
+        ],
+        "url": "https://www.ncbi.nlm.nih.gov/books/NBK546682/"
+      },
+      {
+        "name": "ICANotes psychiatric SOAP guide",
+        "takeaways": [
+          "Psychiatric progress notes commonly use SOAP, DAP, BIRP; memory types should support subjective/objective/assessment/plan and intervention/response separation."
+        ],
+        "url": "https://www.icanotes.com/2026/03/17/psychiatric-soap-note-examples/"
+      },
+      {
+        "name": "Mentalyc biopsychosocial assessment guide",
+        "takeaways": [
+          "BPS assessments gather biological, psychological, and social domains; 5P/4P formulation suggests presenting, predisposing, precipitating, perpetuating, protective factors."
+        ],
+        "url": "https://www.mentalyc.com/blog/biopsychosocial-assessment"
+      },
+      {
+        "name": "Supanote documentation cheat sheet",
+        "takeaways": [
+          "Risk documentation should include ideation, protective factors, and action taken; psychotherapy process notes are separate from progress notes."
+        ],
+        "url": "https://www.supanote.ai/blog/mental-health-documentation-cheat-sheet"
+      },
+      {
+        "name": "Heidi mental health assessment template",
+        "takeaways": [
+          "Assessments commonly include reason for visit, presenting issue, psychiatric history, medication, MSE, diagnosis, treatment plan, safety assessment, and next steps."
+        ],
+        "url": "https://www.heidihealth.com/en-us/blog/mental-health-assessment-template-with-examples"
+      }
+    ]
+  },
+  "status": "completed",
+  "steps": [
+    {
+      "id": "research_note_schemas",
+      "notes": [
+        "SOAP/DAP/BIRP/PIRP/GIRP separate data, assessment, behavior/problem/goal, intervention, response, and plan.",
+        "MSE domains and BPS/5P formulation should become memory kinds or facets.",
+        "Risk/safety and psychotherapy process notes need explicit sensitivity/provenance handling."
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "derive_memory_type_taxonomy",
+      "notes": [
+        "Added broad families for progress-note sections, intake/history, functioning, BPS/5P formulation, MSE, symptoms/body state, risk/safety, diagnostic hypotheses, therapy process, medication, and care operations.",
+        "Kept clinical/psychoanalytic values as typed observations, signals, or hypotheses with source provenance, not diagnosis facts."
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "extend_code_schema",
+      "notes": [
+        "Extended ACCOUNT_MEMORY_KINDS.",
+        "Risk/safety and medication/care/treatment values retain by default.",
+        "MSE and progress-note observations compact by default.",
+        "Risk/safety and diagnostic/formulation signals get salience boosts."
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "extend_tests_and_docs",
+      "notes": [
+        "Docs now list the researched type families.",
+        "Representative clinical note kinds are covered for kind normalization, decay policy, index metadata, and salience."
+      ],
+      "status": "completed"
+    }
+  ]
+}

@@ -24,6 +24,20 @@ General kinds include `observation`, `episode`, `self_statement`, `preference`, 
 
 Depressionsbot and psychoanalytic work can additionally use `clinical_signal`, `risk_signal`, `protective_factor`, `trigger`, `coping_strategy`, `relationship_pattern`, `attachment_pattern`, `cognitive_pattern`, `affect_pattern`, `defense_pattern`, `therapy_goal`, `intervention_response`, `hypothesis`, `psychoanalytic_hypothesis`, `semantic_contradiction`, `compaction`, and `decay_marker`.
 
+Psychiatric and psychotherapy note-derived kinds:
+
+- Progress note sections: `subjective_note`, `objective_note`, `assessment_note`, `plan_note`, `data_note`, `behavior_note`, `intervention_note`, `response_note`, `problem_note`, `goal_note`, `session_objective`
+- Intake and history: `chief_complaint`, `presenting_problem`, `history_present_illness`, `psychiatric_history`, `medical_history`, `family_history`, `developmental_history`, `substance_use_history`, `trauma_history`, `social_history`, `cultural_context`, `legal_context`
+- Functioning: `occupational_functioning`, `school_functioning`, `functional_impairment`
+- Biopsychosocial and formulation factors: `biological_factor`, `psychological_factor`, `social_factor`, `presenting_factor`, `predisposing_factor`, `precipitating_factor`, `perpetuating_factor`
+- Mental status exam: `mse_appearance`, `mse_behavior`, `mse_speech`, `mse_mood`, `mse_affect`, `mse_thought_process`, `mse_thought_content`, `mse_perception`, `mse_cognition`, `mse_orientation`, `mse_attention`, `mse_memory`, `mse_insight`, `mse_judgment`, `mse_impulse_control`
+- Symptom and body-state signals: `sleep_pattern`, `appetite_pattern`, `energy_pattern`, `somatic_symptom`, `panic_symptom`, `anxiety_signal`, `mood_signal`, `psychosis_signal`, `dissociation_signal`, `obsession_compulsion_signal`
+- Risk and safety: `suicidal_ideation`, `self_harm_signal`, `violence_risk_signal`, `neglect_risk_signal`, `means_access`, `risk_assessment`, `safety_plan`, `crisis_plan`, `action_taken`
+- Diagnostic and formulation caution: `diagnostic_hypothesis`, `differential_diagnosis`, `diagnostic_uncertainty`, `case_formulation`
+- Therapy process: `treatment_goal`, `treatment_plan`, `homework`, `skill_practice`, `therapeutic_alliance`, `rupture_repair`, `transference_pattern`, `countertransference_note`, `resistance_pattern`, `dream_material`, `free_association_theme`, `psychotherapy_process_note`
+- Medication and treatment response: `medication`, `medication_adherence`, `side_effect`, `medication_response`, `substance_craving`, `screening_result`, `measurement_score`
+- Care operations: `care_coordination`, `collateral_information`, `next_step`, `follow_up`, `discharge_plan`
+
 Clinical and psychoanalytic kinds are signals or hypotheses, not diagnoses. They should keep provenance through `source` and graph links.
 
 ## Index
