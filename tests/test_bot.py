@@ -2058,7 +2058,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(api.sent_messages), 2)
         self.assertEqual(len(api.sent_messages[0][1].split()), 26)
         self.assertEqual(api.sent_messages[1][0], 123)
-        self.assertEqual(api.sent_messages[1][1], "Lokale YouTube-Transkription abgeschlossen.")
+        self.assertEqual(api.sent_messages[1][1], "YouTube-Transkript (lokales Whisper):\n\n" + " ".join(["wort"] * 26))
         self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
 
     def test_handle_update_youtube_local_options_can_send_final_transcript_to_llm(self) -> None:

@@ -3968,8 +3968,6 @@ def _run_youtube_local_transcription_job(
 
     if llm_enabled and instructions.openai_enabled and openai_client is None:
         reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
-    elif live_enabled:
-        reply = "Lokale YouTube-Transkription abgeschlossen."
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
     try:

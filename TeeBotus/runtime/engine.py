@@ -826,12 +826,8 @@ class TeeBotusEngine:
             llm_enabled=llm_enabled,
             user_text=user_text,
             live_callback=live_callback,
-            remember_result=not (live_enabled and not llm_enabled),
+            remember_result=True,
         )
-        if live_enabled and not llm_enabled and len(actions) == 2 and isinstance(actions[1], SendText) and actions[1].text.startswith("YouTube-Transkript ("):
-            reply = "Lokale YouTube-Transkription abgeschlossen."
-            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
-            actions = [SendText(event.chat_id, reply)]
         if self.background_action_dispatcher is not None:
             self.background_action_dispatcher(event, actions)
 

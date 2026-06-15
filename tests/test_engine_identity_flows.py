@@ -1982,7 +1982,7 @@ def test_engine_youtube_local_transcription_can_run_as_background_job(monkeypatc
     assert calls[1][1]["local_allowed"] is True
     assert calls[1][1]["instance_name"] == "Depressionsbot"
     assert callable(calls[1][1]["live_callback"])
-    assert background == [["eins zwei drei"], ["Lokale YouTube-Transkription abgeschlossen."]]
+    assert background == [["eins zwei drei"], ["YouTube-Transkript (lokales Whisper):\n\nLocal transcript."]]
 
 
 def test_engine_youtube_background_off_off_dispatches_finished_transcript(monkeypatch, tmp_path):
@@ -2029,7 +2029,7 @@ def test_engine_youtube_background_off_off_dispatches_finished_transcript(monkey
     assert background == [["YouTube-Transkript (lokales Whisper):\n\nLocal transcript."]]
 
 
-def test_engine_youtube_background_live_records_start_and_completion_not_full_transcript(monkeypatch, tmp_path):
+def test_engine_youtube_background_live_records_start_and_full_transcript(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
     class FakeRunner:
@@ -2060,8 +2060,7 @@ def test_engine_youtube_background_live_records_start_and_completion_not_full_tr
 
     bot_texts = [entry["bot_text"] for entry in account_store.read_memory_entries(account_id)]
     assert "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist. Live-Ausgabe ist aktiviert." in bot_texts
-    assert "Lokale YouTube-Transkription abgeschlossen." in bot_texts
-    assert all("Full local transcript." not in text for text in bot_texts)
+    assert "YouTube-Transkript (lokales Whisper):\n\nFull local transcript." in bot_texts
 
 
 def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
