@@ -247,6 +247,8 @@ def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
 
     index = store.read_memory_index(account_id)
     assert "keywords" not in index
+    assert index["schema_version"] == 2
+    assert index["index"]["entries"]["mem_legacy"]["schema_version"] == 2
     assert index["index"]["keywords"]["mond"] == ["mem_legacy"]
     assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
 
@@ -346,6 +348,85 @@ def test_structured_account_memory_related_ids_boost_linked_entries(tmp_path):
     selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
 
     assert selection.selected_ids[:3] == (direct_id, linked_id, unrelated_id)
+
+
+def test_structured_account_memory_v2_keeps_entries_and_builds_graph_cache(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    anchor_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_anchor",
+            "kind": "risk_signal",
+            "user_text": "Akute Krise bei Einsamkeit.",
+            "bot_text": "Krise behutsam eingeordnet.",
+            "importance": 5,
+        },
+    )
+    hypothesis_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_hypothesis",
+            "kind": "psychoanalytic_hypothesis",
+            "user_text": "Rueckzug wirkt wie Schutz vor Beschaemung.",
+            "bot_text": "Hypothese nur vorsichtig nutzen.",
+            "supports": [anchor_id],
+            "contradicts": ["mem_old"],
+        },
+    )
+    old_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_old",
+            "kind": "self_statement",
+            "user_text": "Ich bin nie einsam.",
+            "bot_text": "Als fruehere Selbstbeschreibung gemerkt.",
+            "supersedes": [],
+        },
+    )
+
+    index = store.read_memory_index(account_id)
+    entries = store.read_memory_entries(account_id)
+
+    assert index["schema_version"] == 2
+    assert len(entries) == 3
+    assert entries[0]["kind"] == "risk_signal"
+    assert entries[0]["decay"]["policy"] == "retain"
+    assert entries[1]["kind"] == "psychoanalytic_hypothesis"
+    assert index["index"]["entries"][anchor_id]["salience"] == 8
+    assert index["index"]["graph"]["links"]["supports"][hypothesis_id] == [anchor_id]
+    assert index["index"]["graph"]["links"]["contradicts"][hypothesis_id] == [old_id]
+    assert index["index"]["semantic_cache"]["rebuildable"] is True
+    assert hypothesis_id in index["index"]["semantic_cache"]["entries"]
+
+
+def test_structured_account_memory_v2_has_no_default_entry_store_limit(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    for index in range(205):
+        store.append_structured_memory_entry(account_id, {"id": f"mem_{index}", "user_text": f"Mond {index}", "bot_text": "Tee"})
+
+    assert len(store.read_memory_entries(account_id)) == 205
+    memory_index = store.read_memory_index(account_id)
+    assert memory_index["index"]["retention"]["entry_store_limit"] is None
+
+
+def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    direct_id = store.append_structured_memory_entry(account_id, {"id": "mem_direct", "user_text": "Mond", "bot_text": "Tee"})
+    semantic_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_semantic", "kind": "coping_strategy", "user_text": "Spaziergang hilft bei Druck.", "bot_text": "Ressource notiert."},
+    )
+    index = store.read_memory_index(account_id)
+    index["index"]["keywords"].pop("spaziergang", None)
+    store.write_memory_index(account_id, index)
+
+    selection = store.select_structured_memory(account_id, query_text="spaziergang", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[:2] == (semantic_id, direct_id)
 
 
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):

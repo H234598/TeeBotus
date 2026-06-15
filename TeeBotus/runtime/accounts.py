@@ -23,6 +23,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 TOKEN_HEX_RE = re.compile(r"^[0-9a-f]{128}$")
 ACCOUNT_SCHEMA_VERSION = 1
+ACCOUNT_MEMORY_SCHEMA_VERSION = 2
 MAPPING_MAGIC = "TMBMAP1"
 MAPPING_VERSION = 1
 MAPPING_ALGORITHM = "AES-256-GCM"
@@ -43,10 +44,46 @@ INSTANCE_SECRET_SERVICE = "TeeBotus"
 INSTANCE_PEPPER_PURPOSE = "account-secret-pepper"
 INSTANCE_MAPPING_KEY_PURPOSE = "account-identity-mapping-key"
 ACCOUNT_MEMORY_KEY_PURPOSE = "account-structured-memory-key"
-ACCOUNT_MEMORY_RECENT_LIMIT = 200
-ACCOUNT_MEMORY_KEYWORD_LIMIT = 24
-ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT = 250
-ACCOUNT_MEMORY_KINDS = frozenset({"observation", "preference", "fact", "task", "reflection", "manual"})
+ACCOUNT_MEMORY_RECENT_LIMIT = 1000
+ACCOUNT_MEMORY_KEYWORD_LIMIT = 48
+ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT = 1000
+ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT = 5000
+ACCOUNT_MEMORY_LINK_TYPES = ("related_ids", "supports", "contradicts", "supersedes")
+ACCOUNT_MEMORY_KINDS = frozenset(
+    {
+        "observation",
+        "episode",
+        "self_statement",
+        "preference",
+        "fact",
+        "biographical_fact",
+        "task",
+        "manual",
+        "reflection",
+        "summary",
+        "correction",
+        "boundary",
+        "consent",
+        "clinical_signal",
+        "risk_signal",
+        "protective_factor",
+        "trigger",
+        "coping_strategy",
+        "relationship_pattern",
+        "attachment_pattern",
+        "cognitive_pattern",
+        "affect_pattern",
+        "defense_pattern",
+        "therapy_goal",
+        "intervention_response",
+        "hypothesis",
+        "psychoanalytic_hypothesis",
+        "semantic_contradiction",
+        "compaction",
+        "decay_marker",
+        "procedural",
+    }
+)
 ACCOUNT_MEMORY_STOPWORDS = {
     "aber",
     "alle",
@@ -775,7 +812,7 @@ class AccountStore:
         entry: dict[str, Any],
         *,
         profile_updates: dict[str, str] | None = None,
-        max_entries: int = ACCOUNT_MEMORY_RECENT_LIMIT,
+        max_entries: int = 0,
     ) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
@@ -788,9 +825,13 @@ class AccountStore:
         normalized_entry["id"] = memory_id
         normalized_entry.setdefault("created_at", utc_now())
         normalized_entry.setdefault("updated_at", normalized_entry["created_at"])
+        normalized_entry["schema_version"] = ACCOUNT_MEMORY_SCHEMA_VERSION
         normalized_entry["kind"] = _normalize_account_memory_kind(normalized_entry.get("kind"))
         normalized_entry["importance"] = _normalize_account_memory_importance(normalized_entry.get("importance"))
-        normalized_entry["related_ids"] = _normalize_account_memory_related_ids(normalized_entry.get("related_ids"), exclude_id=memory_id)
+        normalized_entry["salience"] = _normalize_account_memory_salience(normalized_entry.get("salience"), normalized_entry)
+        normalized_entry["decay"] = _normalize_account_memory_decay(normalized_entry.get("decay"), normalized_entry["kind"])
+        for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+            normalized_entry[link_type] = _normalize_account_memory_links(normalized_entry.get(link_type), exclude_id=memory_id)
         keywords = normalized_entry.get("keywords")
         if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
             keywords = _account_memory_keywords(f"{normalized_entry.get('user_text', '')}\n{normalized_entry.get('bot_text', '')}")
@@ -832,6 +873,9 @@ class AccountStore:
             if not entry.get("updated_at"):
                 entry["updated_at"] = entry["created_at"]
                 changed = True
+            if entry.get("schema_version") != ACCOUNT_MEMORY_SCHEMA_VERSION:
+                entry["schema_version"] = ACCOUNT_MEMORY_SCHEMA_VERSION
+                changed = True
             kind = _normalize_account_memory_kind(entry.get("kind"))
             if entry.get("kind") != kind:
                 entry["kind"] = kind
@@ -840,10 +884,19 @@ class AccountStore:
             if entry.get("importance") != importance:
                 entry["importance"] = importance
                 changed = True
-            related_ids = _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id)
-            if entry.get("related_ids") != related_ids:
-                entry["related_ids"] = related_ids
+            salience = _normalize_account_memory_salience(entry.get("salience"), entry)
+            if entry.get("salience") != salience:
+                entry["salience"] = salience
                 changed = True
+            decay = _normalize_account_memory_decay(entry.get("decay"), kind)
+            if entry.get("decay") != decay:
+                entry["decay"] = decay
+                changed = True
+            for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+                normalized_links = _normalize_account_memory_links(entry.get(link_type), exclude_id=memory_id)
+                if entry.get(link_type) != normalized_links:
+                    entry[link_type] = normalized_links
+                    changed = True
             keywords = entry.get("keywords")
             if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
                 keywords = _account_memory_keywords(f"{entry.get('user_text', '')}\n{entry.get('bot_text', '')}\n{entry.get('text', '')}")
@@ -861,7 +914,7 @@ class AccountStore:
                 "profile": existing_index.get("profile", {}),
             },
         )
-        rebuilt_index["index"] = {"keywords": {}, "recent_ids": [], "entries": {}}
+        rebuilt_index["index"] = _new_account_memory_index()
         for entry in normalized_rows:
             self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
         rebuilt_index["updated_at"] = utc_now()
@@ -934,14 +987,41 @@ class AccountStore:
         if missing_index_entry_ids:
             errors.append(f"index.entries missing entries: {', '.join(missing_index_entry_ids)}")
         missing_related_ids: list[str] = []
+        missing_link_ids: dict[str, list[str]] = {link_type: [] for link_type in ACCOUNT_MEMORY_LINK_TYPES}
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
-            for related_id in _normalize_account_memory_related_ids(entry.get("related_ids")):
+            for related_id in _normalize_account_memory_links(entry.get("related_ids")):
                 if related_id not in entry_id_set:
                     missing_related_ids.append(related_id)
+            for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+                for target_id in _normalize_account_memory_links(entry.get(link_type)):
+                    if target_id not in entry_id_set:
+                        missing_link_ids[link_type].append(target_id)
         if missing_related_ids:
             errors.append(f"related_ids missing entries: {', '.join(sorted(set(missing_related_ids)))}")
+        for link_type, missing_ids in missing_link_ids.items():
+            if missing_ids:
+                errors.append(f"{link_type} missing entries: {', '.join(sorted(set(missing_ids)))}")
+        graph = nested_index.get("graph") if isinstance(nested_index.get("graph"), dict) else {}
+        graph_links = graph.get("links") if isinstance(graph.get("links"), dict) else {}
+        for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+            typed_links = graph_links.get(link_type) if isinstance(graph_links.get(link_type), dict) else {}
+            for source_id, target_ids in typed_links.items():
+                source = str(source_id or "").strip()
+                if source and source not in entry_id_set:
+                    errors.append(f"graph {link_type} source missing entry: {source}")
+                if not isinstance(target_ids, list):
+                    errors.append(f"graph {link_type} targets are not a list for {source}")
+                    continue
+                missing_targets = sorted(str(target_id) for target_id in target_ids if str(target_id) not in entry_id_set)
+                if missing_targets:
+                    errors.append(f"graph {link_type} targets missing entries: {', '.join(missing_targets)}")
+        semantic_cache = nested_index.get("semantic_cache") if isinstance(nested_index.get("semantic_cache"), dict) else {}
+        semantic_entries = semantic_cache.get("entries") if isinstance(semantic_cache.get("entries"), dict) else {}
+        missing_semantic_ids = sorted(str(memory_id) for memory_id in semantic_entries if str(memory_id) not in entry_id_set)
+        if missing_semantic_ids:
+            errors.append(f"semantic_cache entries missing entries: {', '.join(missing_semantic_ids)}")
         return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
     def select_structured_memory(
@@ -1060,7 +1140,7 @@ class AccountStore:
     def _normalized_memory_index(self, account_id: str, data: dict[str, Any]) -> dict[str, Any]:
         timestamp = utc_now()
         index_doc = dict(data) if isinstance(data, dict) else {}
-        index_doc["schema_version"] = ACCOUNT_SCHEMA_VERSION
+        index_doc["schema_version"] = ACCOUNT_MEMORY_SCHEMA_VERSION
         index_doc["scope"] = "account"
         index_doc["account_id"] = account_id
         index_doc.setdefault("created_at", timestamp)
@@ -1086,6 +1166,27 @@ class AccountStore:
             nested_index["recent_ids"] = []
         if not isinstance(nested_index.get("entries"), dict):
             nested_index["entries"] = {}
+        graph = nested_index.setdefault("graph", {})
+        if not isinstance(graph, dict):
+            graph = {}
+            nested_index["graph"] = graph
+        links = graph.setdefault("links", {})
+        if not isinstance(links, dict):
+            links = {}
+            graph["links"] = links
+        for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+            if not isinstance(links.get(link_type), dict):
+                links[link_type] = {}
+        semantic_cache = nested_index.setdefault("semantic_cache", {})
+        if not isinstance(semantic_cache, dict):
+            semantic_cache = {}
+            nested_index["semantic_cache"] = semantic_cache
+        semantic_cache.setdefault("source", USER_MEMORY_ENTRIES_FILENAME)
+        semantic_cache.setdefault("rebuildable", True)
+        if not isinstance(semantic_cache.get("entries"), dict):
+            semantic_cache["entries"] = {}
+        if not isinstance(nested_index.get("retention"), dict):
+            nested_index["retention"] = _account_memory_retention_policy()
         index_doc.pop("memories", None)
         return index_doc
 
@@ -1105,17 +1206,12 @@ class AccountStore:
         if not isinstance(entry_index, dict):
             entry_index = {}
             nested_index["entries"] = entry_index
-        if memory_id:
-            entry_index[memory_id] = {
-                "created_at": str(entry.get("created_at", "")),
-                "updated_at": str(entry.get("updated_at", "")),
-                "channel": str(entry.get("channel", "")),
-                "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
-                "kind": _normalize_account_memory_kind(entry.get("kind")),
-                "importance": _normalize_account_memory_importance(entry.get("importance")),
-                "related_ids": _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id),
-                "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
-            }
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_id = str(row.get("id") or "").strip()
+            if row_id:
+                entry_index[row_id] = _account_memory_index_entry(row)
 
         keyword_index = nested_index.setdefault("keywords", {})
         if not isinstance(keyword_index, dict):
@@ -1149,6 +1245,8 @@ class AccountStore:
         for indexed_id in list(entry_index.keys()):
             if indexed_id not in live_ids:
                 entry_index.pop(indexed_id, None)
+        _rebuild_account_memory_graph(nested_index, rows)
+        _rebuild_account_memory_semantic_cache(nested_index, rows)
         for keyword, values in list(keyword_index.items()):
             if not isinstance(values, list):
                 keyword_index.pop(keyword, None)
@@ -1174,8 +1272,9 @@ class AccountStore:
         if not recent_ids:
             recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
         scores: dict[str, int] = {}
+        query_keywords = _account_memory_keywords(query_text)
         keyword_index = nested_index.get("keywords") if isinstance(nested_index.get("keywords"), dict) else {}
-        for keyword in _account_memory_keywords(query_text):
+        for keyword in query_keywords:
             values = keyword_index.get(keyword) if isinstance(keyword_index, dict) else None
             if not isinstance(values, list):
                 continue
@@ -1183,23 +1282,38 @@ class AccountStore:
                 resolved_id = str(memory_id or "")
                 if resolved_id in entries_by_id:
                     scores[resolved_id] = scores.get(resolved_id, 0) + 10
+        semantic_cache = nested_index.get("semantic_cache") if isinstance(nested_index.get("semantic_cache"), dict) else {}
+        semantic_entries = semantic_cache.get("entries") if isinstance(semantic_cache.get("entries"), dict) else {}
+        if query_keywords and isinstance(semantic_entries, dict):
+            query_set = set(query_keywords)
+            for memory_id, metadata in semantic_entries.items():
+                resolved_id = str(memory_id or "")
+                if resolved_id not in entries_by_id or not isinstance(metadata, dict):
+                    continue
+                signature = metadata.get("signature") if isinstance(metadata.get("signature"), list) else []
+                overlap = len(query_set.intersection(str(value) for value in signature))
+                if overlap:
+                    scores[resolved_id] = scores.get(resolved_id, 0) + min(8, overlap * 2)
         if scores:
             direct_match_ids = set(scores)
             for memory_id in list(direct_match_ids):
-                for related_id in _normalize_account_memory_related_ids(entries_by_id[memory_id].get("related_ids"), exclude_id=memory_id):
-                    if related_id in entries_by_id and related_id not in direct_match_ids:
-                        scores[related_id] = max(scores.get(related_id, 0), 3)
+                for link_type, boost in (("supports", 4), ("related_ids", 3), ("supersedes", 3), ("contradicts", 2)):
+                    for linked_id in _normalize_account_memory_links(entries_by_id[memory_id].get(link_type), exclude_id=memory_id):
+                        if linked_id in entries_by_id and linked_id not in direct_match_ids:
+                            scores[linked_id] = max(scores.get(linked_id, 0), boost)
             for memory_id, entry in entries_by_id.items():
                 if memory_id in direct_match_ids:
                     continue
-                related_ids = _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id)
-                if any(related_id in direct_match_ids for related_id in related_ids):
-                    scores[memory_id] = max(scores.get(memory_id, 0), 2)
+                for link_type, boost in (("supports", 3), ("related_ids", 2), ("supersedes", 2), ("contradicts", 1)):
+                    linked_ids = _normalize_account_memory_links(entry.get(link_type), exclude_id=memory_id)
+                    if any(linked_id in direct_match_ids for linked_id in linked_ids):
+                        scores[memory_id] = max(scores.get(memory_id, 0), boost)
         if scores:
             ordered_ids = sorted(
                 scores,
                 key=lambda memory_id: (
                     scores[memory_id],
+                    _normalize_account_memory_salience(entries_by_id[memory_id].get("salience"), entries_by_id[memory_id]),
                     _normalize_account_memory_importance(entries_by_id[memory_id].get("importance")),
                     recent_ids.index(memory_id) if memory_id in recent_ids else -1,
                 ),
@@ -1484,17 +1598,177 @@ def _normalize_account_memory_importance(value: Any) -> int:
     return min(5, max(1, importance))
 
 
-def _normalize_account_memory_related_ids(value: Any, *, exclude_id: str = "") -> list[str]:
+def _normalize_account_memory_salience(value: Any, entry: dict[str, Any] | None = None) -> int:
+    try:
+        salience = int(value)
+    except (TypeError, ValueError):
+        entry = entry or {}
+        kind = _normalize_account_memory_kind(entry.get("kind"))
+        importance = _normalize_account_memory_importance(entry.get("importance"))
+        salience = importance
+        if kind in {"risk_signal", "consent", "boundary"}:
+            salience += 3
+        elif kind in {"clinical_signal", "hypothesis", "psychoanalytic_hypothesis", "semantic_contradiction"}:
+            salience += 2
+        elif kind in {"reflection", "summary", "therapy_goal", "protective_factor"}:
+            salience += 1
+    return min(10, max(1, salience))
+
+
+def _normalize_account_memory_decay(value: Any, kind: str) -> dict[str, Any]:
+    if isinstance(value, dict):
+        policy = {
+            "policy": str(value.get("policy") or "").strip() or _account_memory_decay_policy(kind),
+            "compact_after_days": _normalize_optional_positive_int(value.get("compact_after_days")),
+            "expires_after_days": _normalize_optional_positive_int(value.get("expires_after_days")),
+        }
+    else:
+        policy = {
+            "policy": _account_memory_decay_policy(kind),
+            "compact_after_days": None,
+            "expires_after_days": None,
+        }
+    if policy["policy"] not in {"retain", "compact", "decay", "ephemeral"}:
+        policy["policy"] = _account_memory_decay_policy(kind)
+    if policy["compact_after_days"] is None and policy["policy"] in {"compact", "decay"}:
+        policy["compact_after_days"] = 180 if kind in {"episode", "observation"} else 365
+    return policy
+
+
+def _account_memory_decay_policy(kind: str) -> str:
+    if kind in {"risk_signal", "consent", "boundary", "biographical_fact", "therapy_goal", "protective_factor"}:
+        return "retain"
+    if kind in {"episode", "observation", "intervention_response"}:
+        return "compact"
+    if kind in {"decay_marker", "compaction"}:
+        return "ephemeral"
+    return "decay"
+
+
+def _normalize_optional_positive_int(value: Any) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _normalize_account_memory_links(value: Any, *, exclude_id: str = "") -> list[str]:
     if not isinstance(value, list):
         return []
-    related_ids: list[str] = []
+    links: list[str] = []
     excluded = str(exclude_id or "").strip()
     for item in value:
-        related_id = str(item or "").strip()
-        if not related_id or related_id == excluded or related_id in related_ids:
+        if isinstance(item, dict):
+            link_id = str(item.get("id") or item.get("target_id") or "").strip()
+        else:
+            link_id = str(item or "").strip()
+        if not link_id or link_id == excluded or link_id in links:
             continue
-        related_ids.append(related_id)
-    return related_ids[:ACCOUNT_MEMORY_RECENT_LIMIT]
+        links.append(link_id)
+    return links[:ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT]
+
+
+def _normalize_account_memory_related_ids(value: Any, *, exclude_id: str = "") -> list[str]:
+    return _normalize_account_memory_links(value, exclude_id=exclude_id)
+
+
+def _new_account_memory_index() -> dict[str, Any]:
+    return {
+        "keywords": {},
+        "recent_ids": [],
+        "entries": {},
+        "graph": {"links": {link_type: {} for link_type in ACCOUNT_MEMORY_LINK_TYPES}},
+        "semantic_cache": {
+            "source": USER_MEMORY_ENTRIES_FILENAME,
+            "rebuildable": True,
+            "algorithm": "keyword-signature-v1",
+            "entries": {},
+        },
+        "retention": _account_memory_retention_policy(),
+    }
+
+
+def _account_memory_index_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    memory_id = str(entry.get("id") or "").strip()
+    kind = _normalize_account_memory_kind(entry.get("kind"))
+    return {
+        "schema_version": ACCOUNT_MEMORY_SCHEMA_VERSION,
+        "created_at": str(entry.get("created_at", "")),
+        "updated_at": str(entry.get("updated_at", "")),
+        "channel": str(entry.get("channel", "")),
+        "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+        "kind": kind,
+        "importance": _normalize_account_memory_importance(entry.get("importance")),
+        "salience": _normalize_account_memory_salience(entry.get("salience"), entry),
+        "decay": _normalize_account_memory_decay(entry.get("decay"), kind),
+        "related_ids": _normalize_account_memory_links(entry.get("related_ids"), exclude_id=memory_id),
+        "supports": _normalize_account_memory_links(entry.get("supports"), exclude_id=memory_id),
+        "contradicts": _normalize_account_memory_links(entry.get("contradicts"), exclude_id=memory_id),
+        "supersedes": _normalize_account_memory_links(entry.get("supersedes"), exclude_id=memory_id),
+        "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
+    }
+
+
+def _account_memory_retention_policy() -> dict[str, Any]:
+    return {
+        "source_of_truth": USER_MEMORY_ENTRIES_FILENAME,
+        "entry_store_limit": None,
+        "prompt_budgeted": True,
+        "index_recent_limit": ACCOUNT_MEMORY_RECENT_LIMIT,
+        "semantic_cache_limit": ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT,
+        "compaction": "optional-by-kind",
+    }
+
+
+def _rebuild_account_memory_graph(nested_index: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    live_ids = {str(row.get("id", "")) for row in rows if isinstance(row, dict) and str(row.get("id", ""))}
+    links = {link_type: {} for link_type in ACCOUNT_MEMORY_LINK_TYPES}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        memory_id = str(row.get("id", "")).strip()
+        if not memory_id:
+            continue
+        for link_type in ACCOUNT_MEMORY_LINK_TYPES:
+            values = [target for target in _normalize_account_memory_links(row.get(link_type), exclude_id=memory_id) if target in live_ids]
+            if values:
+                links[link_type][memory_id] = values
+    graph = nested_index.setdefault("graph", {})
+    if not isinstance(graph, dict):
+        graph = {}
+        nested_index["graph"] = graph
+    graph["links"] = links
+
+
+def _rebuild_account_memory_semantic_cache(nested_index: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    entries: dict[str, Any] = {}
+    live_rows = [row for row in rows if isinstance(row, dict) and str(row.get("id", ""))]
+    for row in live_rows[-ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT:]:
+        memory_id = str(row.get("id", "")).strip()
+        text = f"{row.get('user_text', '')}\n{row.get('bot_text', '')}\n{row.get('text', '')}"
+        keywords = row.get("keywords") if isinstance(row.get("keywords"), list) else _account_memory_keywords(text)
+        signature = list(dict.fromkeys([*keywords, _normalize_account_memory_kind(row.get("kind"))]))
+        entries[memory_id] = {
+            "kind": _normalize_account_memory_kind(row.get("kind")),
+            "signature": signature[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+            "salience": _normalize_account_memory_salience(row.get("salience"), row),
+            "fingerprint": hashlib.sha256(text.encode("utf-8")).hexdigest()[:24],
+            "contradicts": _normalize_account_memory_links(row.get("contradicts"), exclude_id=memory_id),
+            "supports": _normalize_account_memory_links(row.get("supports"), exclude_id=memory_id),
+        }
+    semantic_cache = nested_index.setdefault("semantic_cache", {})
+    if not isinstance(semantic_cache, dict):
+        semantic_cache = {}
+        nested_index["semantic_cache"] = semantic_cache
+    semantic_cache.update(
+        {
+            "source": USER_MEMORY_ENTRIES_FILENAME,
+            "rebuildable": True,
+            "algorithm": "keyword-signature-v1",
+            "entries": entries,
+        }
+    )
 
 
 def _clip_account_memory_text(text: str, max_chars: int) -> str:
@@ -1509,15 +1783,21 @@ def _clip_account_memory_text(text: str, max_chars: int) -> str:
 def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int) -> dict[str, Any]:
     return {
         "id": str(entry.get("id", "")),
+        "schema_version": ACCOUNT_MEMORY_SCHEMA_VERSION,
         "created_at": str(entry.get("created_at", "")),
         "updated_at": str(entry.get("updated_at", "")),
         "kind": _normalize_account_memory_kind(entry.get("kind")),
         "importance": _normalize_account_memory_importance(entry.get("importance")),
+        "salience": _normalize_account_memory_salience(entry.get("salience"), entry),
+        "decay": _normalize_account_memory_decay(entry.get("decay"), _normalize_account_memory_kind(entry.get("kind"))),
         "channel": str(entry.get("channel", "")),
         "chat_type": str(entry.get("chat_type", "")),
         "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
         "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
-        "related_ids": _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=str(entry.get("id", ""))),
+        "related_ids": _normalize_account_memory_links(entry.get("related_ids"), exclude_id=str(entry.get("id", ""))),
+        "supports": _normalize_account_memory_links(entry.get("supports"), exclude_id=str(entry.get("id", ""))),
+        "contradicts": _normalize_account_memory_links(entry.get("contradicts"), exclude_id=str(entry.get("id", ""))),
+        "supersedes": _normalize_account_memory_links(entry.get("supersedes"), exclude_id=str(entry.get("id", ""))),
         "user_text": _clip_account_memory_text(str(entry.get("user_text", "")), max_entry_chars),
         "bot_text": _clip_account_memory_text(str(entry.get("bot_text", "")), max_entry_chars),
     }
@@ -1526,6 +1806,7 @@ def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int
 def _account_memory_prompt_payload(account_id: str, selected_ids: list[str], selected: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "scope": "account",
+        "memory_schema_version": ACCOUNT_MEMORY_SCHEMA_VERSION,
         "account_id": account_id,
         "selected_memory_ids": selected_ids,
         "memories": selected,
