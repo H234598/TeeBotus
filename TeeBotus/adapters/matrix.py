@@ -73,14 +73,15 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     return sent
 
 
-async def _send_matrix_text(client: Any, room_id: str, text: str) -> Any:
+async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: bool = False) -> Any:
+    msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
     if callable(send_message):
-        return await send_message(room_id, text, message_type="m.text")
+        return await send_message(room_id, text, message_type=msgtype)
     return await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
-        content={"msgtype": "m.text", "body": text},
+        content={"msgtype": msgtype, "body": text},
     )
 
 
@@ -103,14 +104,7 @@ async def _send_matrix_file_or_error_notice(
             caption=caption,
         )
     except Exception as exc:
-        return await client.room_send(
-            room_id=room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.notice",
-                "body": f"Datei konnte nicht gesendet werden: {filename} ({exc})",
-            },
-        )
+        return await _send_matrix_text(client, room_id, f"Datei konnte nicht gesendet werden: {filename} ({exc})", notice=True)
 
 
 async def _send_matrix_file(

@@ -307,3 +307,38 @@ def test_matrix_export_upload_failure_sends_notice_and_continues_actions():
         },
     }
     assert client.sends[1]["content"] == {"msgtype": "m.text", "body": "danach"}
+
+
+def test_matrix_export_upload_failure_prefers_niobot_notice_message():
+    class Response:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            if "file" in kwargs:
+                raise OSError("send refused")
+            return Response(f"$sent-{len(self.calls)}")
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export")],
+        )
+    )
+
+    assert sent == ["$sent-2"]
+    assert client.calls[0][0] == "!room:example"
+    assert client.calls[0][1] == "Export"
+    assert client.calls[0][2]["file"].file_name == "report.json"
+    assert client.calls[1] == (
+        "!room:example",
+        "Datei konnte nicht gesendet werden: report.json (send refused)",
+        {"message_type": "m.notice"},
+    )

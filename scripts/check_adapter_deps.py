@@ -28,6 +28,7 @@ def main() -> int:
         _check_python_package("h11", pins["h11"]),
         _check_niobot_matrix_contract(),
         _check_matrix_file_contract(),
+        _check_signalbot_context_contract(),
         _check_executable_version("signal-cli", pins["signal-cli"], ["--version"]),
         _check_cargo_binary("signal-cli-api", pins["signal-cli-api"]),
     ]
@@ -85,6 +86,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
+    room_typing_params = inspect.signature(nio.AsyncClient.room_typing).parameters
+    room_redact_params = inspect.signature(nio.AsyncClient.room_redact).parameters
     expectations = {
         "NioBot.command_prefix": "command_prefix" in client_params,
         "NioBot.start.access_token": "access_token" in start_params,
@@ -92,6 +95,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.send_message.message_type": "message_type" in send_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.room_send.content": "content" in room_send_params,
+        "AsyncClient.room_typing.timeout": "timeout" in room_typing_params,
+        "AsyncClient.room_redact.reason": "reason" in room_redact_params,
     }
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
@@ -124,6 +129,26 @@ def _check_matrix_file_contract() -> tuple[bool, str]:
     body = attachment.as_body("Check")
     ok = body.get("msgtype") == "m.file" and body.get("body") == "Check" and body.get("filename") == "check.txt"
     return ok, f"nio-bot FileAttachment contract={'ok' if ok else 'invalid'} body_keys={','.join(sorted(body.keys()))}"
+
+
+def _check_signalbot_context_contract() -> tuple[bool, str]:
+    try:
+        from signalbot.context import Context  # type: ignore[import-not-found]
+    except Exception as exc:
+        return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
+    missing = [name for name in ("send", "start_typing", "remote_delete") if not hasattr(Context, name)]
+    if missing:
+        return False, f"signalbot Context missing required API: {', '.join(missing)}"
+    send_params = inspect.signature(Context.send).parameters
+    delete_params = inspect.signature(Context.remote_delete).parameters
+    expectations = {
+        "Context.send.base64_attachments": "base64_attachments" in send_params,
+        "Context.remote_delete.timestamp": "timestamp" in delete_params,
+    }
+    failures = [name for name, ok in expectations.items() if not ok]
+    if failures:
+        return False, f"signalbot Context contract missing: {', '.join(failures)}"
+    return True, "signalbot Context contract=ok methods=send,start_typing,remote_delete"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
