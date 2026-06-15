@@ -236,6 +236,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_react_params = inspect.signature(SignalBot.react).parameters
     bot_receipt_params = inspect.signature(SignalBot.receipt).parameters
     bot_poll_params = inspect.signature(SignalBot.poll).parameters
+    bot_get_group_params = inspect.signature(SignalBot.get_group).parameters
     bot_update_contact_params = inspect.signature(SignalBot.update_contact).parameters
     bot_update_group_params = inspect.signature(SignalBot.update_group).parameters
     bot_delete_attachment_params = inspect.signature(SignalBot.delete_attachment).parameters
@@ -295,6 +296,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.poll.receiver": "receiver" in bot_poll_params,
         "SignalBot.poll.answers": "answers" in bot_poll_params,
         "SignalBot.poll.allow_multiple_selections": "allow_multiple_selections" in bot_poll_params,
+        "SignalBot.get_group.internal_id": "internal_id" in bot_get_group_params,
         "SignalBot.update_contact.receiver": "receiver" in bot_update_contact_params,
         "SignalBot.update_contact.expiration_in_seconds": "expiration_in_seconds" in bot_update_contact_params,
         "SignalBot.update_contact.name": "name" in bot_update_contact_params,
@@ -356,7 +358,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         return False, f"signalbot register contract_error={type(exc).__name__}: {exc}"
     if command.bot is not bot or not command.setup_called:
         return False, "signalbot register did not attach bot and run setup"
-    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about config=in_memory"
+    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,get_group,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about config=in_memory"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
