@@ -325,6 +325,53 @@ def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path)
     assert index["index"]["keywords"]["kaffee"] == [ids[1]]
 
 
+def test_structured_account_memory_index_health_reports_ok(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert health.ok
+    assert health.errors == ()
+
+
+def test_structured_account_memory_index_health_reports_broken_invariants(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {"id": "mem_live", "user_text": "Mond"},
+            {"id": "mem_live", "user_text": "Kaffee"},
+        ],
+    )
+    store.write_memory_index(
+        account_id,
+        {
+            "scope": "legacy",
+            "keywords": {"legacy": ["mem_live"]},
+            "index": {
+                "recent_ids": ["mem_live", "mem_live", "mem_missing_recent"],
+                "keywords": {"mond": ["mem_live", "mem_missing_keyword"]},
+                "entries": {"mem_live": {}, "mem_missing_entry": {}},
+            },
+        },
+    )
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    error_text = "\n".join(health.errors)
+    assert "duplicate entry ids: mem_live" in error_text
+    assert "index scope is not account" in error_text
+    assert "legacy top-level keywords is present" in error_text
+    assert "duplicate recent_ids: mem_live" in error_text
+    assert "recent_ids missing entries: mem_missing_recent" in error_text
+    assert "keyword ids missing entries: mem_missing_keyword" in error_text
+    assert "index.entries missing entries: mem_missing_entry" in error_text
+
+
 def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

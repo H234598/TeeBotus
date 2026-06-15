@@ -6,7 +6,14 @@ from pathlib import Path
 
 from TeeBotus import __version__
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import (
+    ACCOUNTS_DIRNAME,
+    TOKEN_HEX_RE,
+    AccountStore,
+    AccountStoreError,
+    SecretToolInstanceSecretProvider,
+    telegram_identity_key,
+)
 
 LOGGER = logging.getLogger("TeeBotus")
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
@@ -102,6 +109,55 @@ def memory_encryption_status(directory: Path | None) -> str:
     if len(encrypted_structured) == len(existing_structured):
         return "Userfiles verschluesselt"
     return "Userfiles nicht vollstaendig verschluesselt"
+
+
+def account_memory_index_health_lines(*, instance_name: str, project_root: Path) -> list[str]:
+    if not instance_name:
+        return []
+    root = project_root / "instances" / instance_name / "data" / "accounts"
+    account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
+    if not account_dirs:
+        return [f"account_memory={instance_name} status=none"]
+    try:
+        store = AccountStore(
+            root,
+            instance_name,
+            secret_provider=SecretToolInstanceSecretProvider(),
+            create_dirs=False,
+        )
+    except Exception as exc:
+        return [f"account_memory={instance_name} status=broken error={type(exc).__name__}: {exc}"]
+    lines: list[str] = []
+    for account_dir in account_dirs:
+        account_id = account_dir.name
+        try:
+            health = store.check_structured_memory_index(account_id)
+        except AccountStoreError as exc:
+            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            continue
+        except OSError as exc:
+            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            continue
+        if health.ok:
+            lines.append(f"account_memory={instance_name}/{account_id} status=ok")
+        else:
+            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}")
+    return lines
+
+
+def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
+    if not accounts_dir.exists():
+        return []
+    try:
+        children = list(accounts_dir.iterdir())
+    except OSError:
+        LOGGER.exception("Failed to list account memory directories.")
+        return []
+    return sorted(
+        path
+        for path in children
+        if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name) and not (path / "Account_Tombstone.json").exists()
+    )
 
 
 def looks_like_encrypted_payload(path: Path) -> bool:

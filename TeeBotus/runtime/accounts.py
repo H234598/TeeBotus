@@ -128,6 +128,13 @@ class AccountMemorySelection:
     selected_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class AccountMemoryIndexHealth:
+    account_id: str
+    ok: bool
+    errors: tuple[str, ...] = ()
+
+
 class InstanceSecretProvider(Protocol):
     """Provider for per-instance secrets used by account authentication/storage."""
 
@@ -843,6 +850,74 @@ class AccountStore:
             self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
         rebuilt_index["updated_at"] = utc_now()
         self.write_memory_index(account_id, rebuilt_index)
+
+    def check_structured_memory_index(self, account_id: str) -> AccountMemoryIndexHealth:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._ensure_account_resolvable(account_id)
+        errors: list[str] = []
+        entries = self.read_memory_entries(account_id)
+        entry_ids: list[str] = []
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            memory_id = str(entry.get("id") or "").strip()
+            if memory_id:
+                entry_ids.append(memory_id)
+        entry_id_set = set(entry_ids)
+        duplicate_entry_ids = sorted(memory_id for memory_id in set(entry_ids) if entry_ids.count(memory_id) > 1)
+        if duplicate_entry_ids:
+            errors.append(f"duplicate entry ids: {', '.join(duplicate_entry_ids)}")
+
+        index_doc = self.read_memory_index(account_id)
+        if not isinstance(index_doc, dict):
+            errors.append("index document is not an object")
+            return AccountMemoryIndexHealth(account_id, False, tuple(errors))
+        if index_doc.get("scope") != "account":
+            errors.append("index scope is not account")
+        nested_index = index_doc.get("index")
+        if not isinstance(nested_index, dict):
+            errors.append("index schema is not nested")
+            nested_index = {}
+        for legacy_key in ("keywords", "recent_ids", "entries"):
+            if legacy_key in index_doc:
+                errors.append(f"legacy top-level {legacy_key} is present")
+
+        recent_ids = nested_index.get("recent_ids")
+        if not isinstance(recent_ids, list):
+            errors.append("index.recent_ids is not a list")
+            recent_ids = []
+        normalized_recent_ids = [str(value or "").strip() for value in recent_ids if str(value or "").strip()]
+        duplicate_recent_ids = sorted(memory_id for memory_id in set(normalized_recent_ids) if normalized_recent_ids.count(memory_id) > 1)
+        if duplicate_recent_ids:
+            errors.append(f"duplicate recent_ids: {', '.join(duplicate_recent_ids)}")
+        missing_recent_ids = sorted(memory_id for memory_id in set(normalized_recent_ids) if memory_id not in entry_id_set)
+        if missing_recent_ids:
+            errors.append(f"recent_ids missing entries: {', '.join(missing_recent_ids)}")
+
+        keyword_index = nested_index.get("keywords")
+        if not isinstance(keyword_index, dict):
+            errors.append("index.keywords is not an object")
+            keyword_index = {}
+        missing_keyword_ids: list[str] = []
+        for keyword, values in keyword_index.items():
+            if not isinstance(values, list):
+                errors.append(f"keyword {keyword} ids are not a list")
+                continue
+            for value in values:
+                memory_id = str(value or "").strip()
+                if memory_id and memory_id not in entry_id_set:
+                    missing_keyword_ids.append(memory_id)
+        if missing_keyword_ids:
+            errors.append(f"keyword ids missing entries: {', '.join(sorted(set(missing_keyword_ids)))}")
+
+        index_entries = nested_index.get("entries")
+        if not isinstance(index_entries, dict):
+            errors.append("index.entries is not an object")
+            index_entries = {}
+        missing_index_entry_ids = sorted(str(memory_id) for memory_id in index_entries if str(memory_id) not in entry_id_set)
+        if missing_index_entry_ids:
+            errors.append(f"index.entries missing entries: {', '.join(missing_index_entry_ids)}")
+        return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
     def select_structured_memory(
         self,

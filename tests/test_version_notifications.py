@@ -9,7 +9,7 @@ from TeeBotus.core.version_notifications import (
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
 )
-from TeeBotus.core.status import github_commit_history_url
+from TeeBotus.core.status import account_memory_index_health_lines, github_commit_history_url
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider
 
 
@@ -160,6 +160,32 @@ def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypa
     monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
 
     assert github_commit_history_url(tmp_path) == "https://github.com/H234598/TeeBotus/commits/main"
+
+
+def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_memory_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
+    store.write_memory_index(
+        account_id,
+        {
+            "scope": "legacy",
+            "index": {
+                "recent_ids": ["mem_missing"],
+                "keywords": {"mond": ["mem_live"]},
+                "entries": {"mem_live": {}, "mem_missing": {}},
+            },
+        },
+    )
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert len(lines) == 1
+    assert lines[0].startswith(f"account_memory=Demo/{account_id} status=broken error=")
+    assert "index scope is not account" in lines[0]
+    assert "recent_ids missing entries: mem_missing" in lines[0]
+    assert "index.entries missing entries: mem_missing" in lines[0]
 
 
 def test_version_notification_text_does_not_expose_memory_files() -> None:

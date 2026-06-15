@@ -35,6 +35,22 @@ def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     assert result == 0
 
 
+def test_runtime_status_prints_account_memory_index_health(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_memory_index_health_lines",
+        lambda *, instance_name, project_root: [f"account_memory={instance_name}/abc status=broken error=recent_ids missing entries: mem_missing"],
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "account_memory=Demo/abc status=broken error=recent_ids missing entries: mem_missing" in captured.out
+
+
 def test_runtime_status_loads_env_before_resolving_config(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls: list[tuple[str, Path]] = []
