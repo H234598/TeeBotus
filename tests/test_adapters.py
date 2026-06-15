@@ -439,6 +439,31 @@ def test_matrix_media_message_maps_attachment_metadata():
     assert event.attachments[0].base64_data == "mxc://example/photo"
 
 
+def test_matrix_media_without_plain_url_does_not_create_empty_attachment():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "encrypted.jpg"
+        source = {
+            "content": {
+                "msgtype": "m.image",
+                "body": "encrypted.jpg",
+                "file": {"url": "mxc://example/encrypted"},
+                "info": {"mimetype": "image/jpeg"},
+            }
+        }
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.text == "encrypted.jpg"
+    assert event.attachments == ()
+
+
 def test_matrix_rich_reply_fallback_is_split_from_message_text():
     class Room:
         room_id = "!room:example"

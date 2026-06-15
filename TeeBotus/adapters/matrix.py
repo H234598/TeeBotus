@@ -221,9 +221,9 @@ def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
     content = _matrix_effective_content(message)
     msgtype = str(content.get("msgtype") or "").strip()
     url = str(getattr(message, "url", "") or content.get("url") or "").strip()
-    if not url and not msgtype.startswith("m."):
+    if not url:
         return ()
-    if msgtype not in {"m.file", "m.image", "m.audio", "m.video"} and not url:
+    if msgtype not in {"m.file", "m.image", "m.audio", "m.video"}:
         return ()
     filename = str(content.get("filename") or content.get("body") or getattr(message, "body", "") or "").strip() or "matrix-attachment.bin"
     info = content.get("info") if isinstance(content.get("info"), dict) else {}
