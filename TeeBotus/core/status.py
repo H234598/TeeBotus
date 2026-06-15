@@ -47,6 +47,7 @@ def build_status_reply(
     project_root: Path,
     account_id: str = "",
     account_store: AccountStore | None = None,
+    proactive_model_planner: str = "",
     env: Mapping[str, str] | None = None,
 ) -> str:
     resolved_account_id = _resolve_status_account_id(sender_id=sender_id, account_id=account_id, account_store=account_store)
@@ -78,6 +79,7 @@ def build_status_reply(
                 account_store=account_store,
                 account_id=resolved_account_id,
                 instance_name=instance_name,
+                proactive_model_planner=proactive_model_planner,
                 env=env,
             ),
         ]
@@ -120,9 +122,11 @@ def _proactive_agent_status_lines(
     account_store: AccountStore | None,
     account_id: str,
     instance_name: str,
+    proactive_model_planner: str,
     env: Mapping[str, str] | None,
 ) -> list[str]:
     scheduler_enabled = proactive_agent_instance_enabled(instance_name, env=env or os.environ)
+    planner = _proactive_model_planner_status(proactive_model_planner)
     if account_store is None or not account_id:
         return [
             "Proactive Agent",
@@ -130,6 +134,7 @@ def _proactive_agent_status_lines(
             "- Outbox queued: unbekannt",
             "- Review pending: unbekannt",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+            f"- Model planner: {planner}",
         ]
     try:
         state = account_store.read_agent_state(account_id)
@@ -142,6 +147,7 @@ def _proactive_agent_status_lines(
             "- Outbox queued: Fehler beim Lesen",
             "- Review pending: Fehler beim Lesen",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+            f"- Model planner: {planner}",
         ]
     proactive = state.get("proactive") if isinstance(state, dict) else {}
     if not isinstance(proactive, dict):
@@ -157,7 +163,15 @@ def _proactive_agent_status_lines(
         f"- Outbox queued: {queued}",
         f"- Review pending: {review_pending}",
         f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+        f"- Model planner: {planner}",
     ]
+
+
+def _proactive_model_planner_status(value: str) -> str:
+    planner = str(value or "").strip().casefold()
+    if planner in {"tool", "llm", "none"}:
+        return planner
+    return "unbekannt"
 
 
 def github_commit_history_url(project_root: Path) -> str:

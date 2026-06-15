@@ -215,6 +215,7 @@ class TeeBotusEngine:
                             instance_name=event.instance,
                             project_root=self.project_root,
                             account_store=self.account_store,
+                            proactive_model_planner=self._current_instructions().proactive_model_planner,
                         ),
                     )
                 ],

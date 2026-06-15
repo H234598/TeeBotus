@@ -1115,6 +1115,7 @@ class BotTests(unittest.TestCase):
             self.assertIn("- Outbox queued: 1", reply)
             self.assertIn("- Review pending: 1", reply)
             self.assertIn("- Scheduler enabled: ja", reply)
+            self.assertIn("- Model planner: tool", reply)
 
     def test_info_alias_reports_status_before_configured_command(self) -> None:
         api = FakeAPI()

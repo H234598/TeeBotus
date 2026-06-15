@@ -303,6 +303,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Outbox queued: 1" in actions[0].text
     assert "- Review pending: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
+    assert "- Model planner: tool" in actions[0].text
     assert "Configured status." not in actions[0].text
 
 

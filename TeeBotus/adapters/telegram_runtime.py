@@ -1257,7 +1257,13 @@ def _process_text_message(
 
 def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str, account_store: AccountStore | None = None) -> str:
     sender_id = _sender_identifier(message)
-    return build_core_status_reply(sender_id=sender_id, instance_name=instance_name, project_root=PROJECT_ROOT, account_store=account_store)
+    return build_core_status_reply(
+        sender_id=sender_id,
+        instance_name=instance_name,
+        project_root=PROJECT_ROOT,
+        account_store=account_store,
+        proactive_model_planner=instructions.proactive_model_planner,
+    )
 
 
 def _handle_incoming_voice_message(
