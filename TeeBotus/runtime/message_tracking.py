@@ -42,6 +42,9 @@ class MessageTracker:
     def record(self, ref: SentMessageRef) -> None:
         key = (ref.instance_name, ref.channel, ref.chat_id)
         values = self.refs.setdefault(key, [])
+        ref_key = (ref.account_id, ref.message_ref, ref.ref_kind)
+        if any((existing.account_id, existing.message_ref, existing.ref_kind) == ref_key for existing in values):
+            return
         values.append(ref)
         del values[:-self.max_refs_per_chat]
         self._save()
