@@ -7,7 +7,7 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
-from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -31,6 +31,24 @@ def event(identity_key: str, text: str, *, channel: str = "telegram", attachment
         text=text,
         message_ref="1",
         attachments=attachments,
+    )
+
+
+def matrix_group_event(text: str, raw: object) -> IncomingEvent:
+    return IncomingEvent(
+        event_id="matrix:$event",
+        instance="Depressionsbot",
+        channel="matrix",
+        adapter_slot=1,
+        account_id="",
+        identity_key="matrix:user:@alice:example",
+        chat_id="!room:example",
+        chat_type="group",
+        sender_id="@alice:example",
+        sender_name="@alice:example",
+        text=text,
+        message_ref="$event",
+        raw=raw,
     )
 
 
@@ -68,6 +86,30 @@ def test_new_identity_cannot_use_wtf_notification_for_itself(tmp_path):
     assert result.handled is True
     assert "bereits bestehenden Kommunikationsweg" in result.actions[0].text
     assert account_store.get_account_for_identity(new_signal) == account_id
+
+
+def test_matrix_group_event_with_structured_bot_mention_is_not_ignored() -> None:
+    class Raw:
+        source = {"content": {"m.mentions": {"user_ids": ["@bot:example"]}}}
+
+    ignored = should_ignore_event_without_account(
+        matrix_group_event("Kannst du helfen?", Raw()),
+        bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is False
+
+
+def test_matrix_group_event_with_structured_other_mention_is_ignored() -> None:
+    class Raw:
+        source = {"content": {"m.mentions": {"user_ids": ["@other:example"]}}}
+
+    ignored = should_ignore_event_without_account(
+        matrix_group_event("Kannst du helfen?", Raw()),
+        bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is True
 
 
 def test_cleanup_requires_exact_command_and_valid_count(tmp_path):

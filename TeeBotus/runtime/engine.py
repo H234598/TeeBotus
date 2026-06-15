@@ -562,7 +562,11 @@ def _event_is_addressed_to_bot(event: IncomingEvent, command: str, bot_address_n
         return True
     if command:
         return True
-    return _text_addresses_bot(event.text, bot_address_names) or _signal_mentions_bot(event.raw, bot_address_names)
+    return (
+        _text_addresses_bot(event.text, bot_address_names)
+        or _signal_mentions_bot(event.raw, bot_address_names)
+        or _matrix_mentions_bot(event.raw, bot_address_names)
+    )
 
 
 def _text_addresses_bot(text: str, bot_address_names: frozenset[str]) -> bool:
@@ -580,6 +584,37 @@ def _signal_mentions_bot(raw: object, bot_address_names: frozenset[str]) -> bool
     if not mentions or not bot_address_names:
         return False
     return any(_normalize_address_name(mention) in bot_address_names for mention in mentions)
+
+
+def _matrix_mentions_bot(raw: object, bot_address_names: frozenset[str]) -> bool:
+    if not bot_address_names:
+        return False
+    content = _matrix_raw_content(raw)
+    mentions = content.get("m.mentions")
+    if not mentions:
+        return False
+    user_ids: object
+    if isinstance(mentions, dict):
+        user_ids = mentions.get("user_ids", ())
+    else:
+        user_ids = getattr(mentions, "user_ids", ())
+    if isinstance(user_ids, str):
+        candidates: tuple[object, ...] = (user_ids,)
+    else:
+        try:
+            candidates = tuple(user_ids)  # type: ignore[arg-type]
+        except TypeError:
+            candidates = ()
+    return any(_normalize_address_name(candidate) in bot_address_names for candidate in candidates)
+
+
+def _matrix_raw_content(raw: object) -> dict[str, object]:
+    source = getattr(raw, "source", None)
+    if isinstance(source, dict):
+        content = source.get("content", {})
+        return content if isinstance(content, dict) else {}
+    content = getattr(raw, "content", None)
+    return content if isinstance(content, dict) else {}
 
 
 def _normalize_address_name(value: object) -> str:
