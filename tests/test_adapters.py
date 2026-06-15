@@ -1621,6 +1621,22 @@ def test_matrix_send_text_uses_room_send():
     ]
 
 
+def test_matrix_send_text_rejects_response_without_event_id():
+    class Response:
+        pass
+
+    class Client:
+        async def room_send(self, **_kwargs):
+            return Response()
+
+    try:
+        asyncio.run(send_matrix_actions(Client(), [SendText("!room:example", "hi")]))
+    except RuntimeError as exc:
+        assert "Matrix text send returned no event_id" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_matrix_send_text_prefers_niobot_send_message():
     class Response:
         event_id = "$sent"
@@ -2270,6 +2286,39 @@ def test_matrix_send_attachment_fallback_uses_media_msgtype_from_content_type():
     assert sent == ["$sent"]
     assert client.sends[0]["content"]["msgtype"] == "m.image"
     assert client.sends[0]["content"]["info"]["mimetype"] == "image/jpeg"
+
+
+def test_matrix_attachment_response_without_event_id_sends_notice():
+    class UploadResponse:
+        content_uri = "mxc://example/photo"
+
+    class MissingEventResponse:
+        pass
+
+    class NoticeResponse:
+        event_id = "$notice"
+
+    class Client:
+        def __init__(self) -> None:
+            self.sends = []
+
+        async def upload(self, _data_provider, **_kwargs):
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            if len(self.sends) == 1:
+                return MissingEventResponse()
+            return NoticeResponse()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendAttachment("!room:example", b"img", "photo.jpg", "image/jpeg")]))
+
+    assert sent == ["$notice"]
+    assert client.sends[0]["content"]["body"] == "photo.jpg"
+    assert client.sends[1]["content"]["msgtype"] == "m.notice"
+    assert "Matrix attachment send returned no event_id" in client.sends[1]["content"]["body"]
 
 
 def test_matrix_export_file_prefers_niobot_file_attachment():

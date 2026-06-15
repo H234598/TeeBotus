@@ -79,13 +79,13 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
             )
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix text send"))
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
             sent.append(None)
         elif isinstance(action, SendReaction):
             response = await _send_matrix_reaction(client, action.chat_id, action.message_ref, action.emoji)
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix reaction send"))
         elif isinstance(action, SendReceipt):
             await _send_matrix_receipt(client, action.chat_id, action.message_ref, action.receipt_type)
             sent.append(None)
@@ -98,7 +98,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
             )
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix edit send"))
         elif isinstance(action, SendPoll):
             response = await _send_matrix_poll(
                 client,
@@ -107,7 +107,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 list(action.answers),
                 action.allow_multiple_selections,
             )
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix poll send"))
         elif isinstance(action, SetMatrixState):
             await _set_matrix_state(client, action.chat_id, action.event_type, action.content, state_key=action.state_key)
             sent.append(None)
@@ -124,7 +124,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 text_mode=action.text_mode,
                 view_once=action.view_once,
             )
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix attachment send"))
         elif isinstance(action, ExportFile):
             response = await _send_matrix_file_or_error_notice(
                 client,
@@ -135,7 +135,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 caption=action.caption or f"Export: {action.filename}",
                 reply_to_ref=action.reply_to_ref,
             )
-            sent.append(_matrix_event_id(response))
+            sent.append(_matrix_required_event_id(response, "Matrix export send"))
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages, UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
     return sent
@@ -158,7 +158,7 @@ async def _send_matrix_text(
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
         response = await send_message(room_id, text, **kwargs)
-        _raise_matrix_response_error(response)
+        _raise_matrix_event_response_error(response, "Matrix text send")
         return response
     content = _matrix_text_content(msgtype, text, text_mode=text_mode)
     _add_matrix_reply_relation(content, reply_to_ref)
@@ -168,7 +168,7 @@ async def _send_matrix_text(
         message_type="m.room.message",
         content=content,
     )
-    _raise_matrix_response_error(response)
+    _raise_matrix_event_response_error(response, "Matrix text send")
     return response
 
 
@@ -192,7 +192,7 @@ async def _send_matrix_reaction(client: Any, room_id: str, event_id: str, emoji:
     add_reaction = getattr(client, "add_reaction", None)
     if callable(add_reaction):
         response = await add_reaction(room_id, target, key)
-        _raise_matrix_response_error(response)
+        _raise_matrix_event_response_error(response, "Matrix reaction send")
         return response
     response = await client.room_send(
         room_id=room_id,
@@ -205,7 +205,7 @@ async def _send_matrix_reaction(client: Any, room_id: str, event_id: str, emoji:
             }
         },
     )
-    _raise_matrix_response_error(response)
+    _raise_matrix_event_response_error(response, "Matrix reaction send")
     return response
 
 
@@ -241,7 +241,7 @@ async def _send_matrix_edit(
     room = _matrix_room_object(client, room_id)
     if callable(edit_message) and room is not None and not mentions and not _matrix_is_html_text_mode(text_mode):
         response = await edit_message(room, target, body, message_type="m.text", clean_mentions=True)
-        _raise_matrix_response_error(response)
+        _raise_matrix_event_response_error(response, "Matrix edit send")
         return response
     new_content = _matrix_text_content("m.text", body, text_mode=text_mode)
     content = {
@@ -263,7 +263,7 @@ async def _send_matrix_edit(
         message_type="m.room.message",
         content=content,
     )
-    _raise_matrix_response_error(response)
+    _raise_matrix_event_response_error(response, "Matrix edit send")
     return response
 
 
@@ -299,7 +299,7 @@ async def _send_matrix_poll(
         message_type="m.room.message",
         content=content,
     )
-    _raise_matrix_response_error(response)
+    _raise_matrix_event_response_error(response, "Matrix poll send")
     return response
 
 
@@ -400,7 +400,7 @@ async def _send_matrix_file(
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
         response = await send_message(room_id, caption or filename, **kwargs)
-        _raise_matrix_response_error(response)
+        _raise_matrix_event_response_error(response, "Matrix attachment send")
         return response
     upload_response, _keys = await client.upload(
         BytesIO(data),
@@ -441,7 +441,7 @@ async def _send_matrix_file(
         message_type="m.room.message",
         content=content,
     )
-    _raise_matrix_response_error(response)
+    _raise_matrix_event_response_error(response, "Matrix attachment send")
     return response
 
 
@@ -694,10 +694,26 @@ def _matrix_msgtype_for_content_type(content_type: str) -> str:
 
 
 def _matrix_event_id(response: Any) -> str | None:
+    if isinstance(response, dict):
+        value = response.get("event_id")
+        if value:
+            return str(value)
     value = getattr(response, "event_id", None)
     if value:
         return str(value)
     return None
+
+
+def _matrix_required_event_id(response: Any, operation: str) -> str:
+    event_id = _matrix_event_id(response)
+    if event_id:
+        return event_id
+    _raise_matrix_response_error(response)
+    raise RuntimeError(f"{operation} returned no event_id")
+
+
+def _raise_matrix_event_response_error(response: Any, operation: str) -> None:
+    _matrix_required_event_id(response, operation)
 
 
 def _raise_matrix_response_error(response: Any) -> None:
