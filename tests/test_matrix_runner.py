@@ -101,6 +101,32 @@ def test_matrix_bridge_routes_private_account_commands(tmp_path) -> None:
     assert "Deine TeeBotus-Account-ID" in client.sent[0]["content"]["body"]
 
 
+def test_matrix_bridge_exposes_proactive_sender(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=2,
+            label="matrix:2",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    sender = bridge.proactive_sender()
+    sent_ref = asyncio.run(sender({"adapter_slot": 2}, SendText("!room:example", "hi"), {}))
+
+    assert sent_ref == "$sent"
+    assert client.sent[-1]["room_id"] == "!room:example"
+    assert client.sent[-1]["content"]["body"] == "hi"
+
+
 def test_matrix_bridge_tracks_engine_result_account_id(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

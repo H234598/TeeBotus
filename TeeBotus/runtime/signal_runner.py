@@ -23,6 +23,7 @@ from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
+from TeeBotus.runtime.proactive_backends import signal_proactive_sender
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -93,6 +94,11 @@ class TeeBotusSignalCommand(_SignalBotCommand):
 
     def setup(self) -> None:
         return None
+
+    def proactive_sender(self):
+        if self.bot is None:
+            raise SignalRuntimeError("SignalBot instance is not attached to TeeBotusSignalCommand")
+        return signal_proactive_sender({self.run_config.slot: self.bot})
 
     async def handle(self, context: Any) -> None:
         try:
@@ -240,7 +246,9 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
     config_class = getattr(signalbot, "Config")
     bot_class = getattr(signalbot, "SignalBot")
     bot = bot_class(config_class(**_signalbot_config_kwargs(signalbot, account)))
-    bot.register(TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir))
+    command = TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir)
+    command.bot = bot
+    bot.register(command)
     bot.start()
 
 

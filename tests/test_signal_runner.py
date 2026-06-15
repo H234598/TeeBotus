@@ -114,6 +114,38 @@ def test_signal_command_is_signalbot_command_subclass(tmp_path) -> None:
     assert command.bot is None
 
 
+def test_signal_command_exposes_proactive_sender_when_bot_is_attached(tmp_path) -> None:
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver: str, text: str, **kwargs) -> int:
+            self.calls.append((receiver, text, kwargs))
+            return 123456
+
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=2,
+            label="signal:2",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bot = Bot()
+    command.bot = bot
+
+    sender = command.proactive_sender()
+    sent_ref = asyncio.run(sender({"adapter_slot": 2}, SendText("+491", "hi"), {}))
+
+    assert sent_ref == 123456
+    assert bot.calls[0][0:2] == ("+491", "hi")
+
+
 def test_signal_command_routes_private_account_commands(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
@@ -1134,9 +1166,10 @@ def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_
     class FakeBot:
         def __init__(self, config: FakeConfig) -> None:
             self.config = config
+            self.command = None
 
-        def register(self, _command) -> None:
-            return None
+        def register(self, command) -> None:
+            self.command = command
 
         def start(self) -> None:
             return None
@@ -1147,6 +1180,9 @@ def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_
         InMemoryConfig=lambda: "memory-storage",
         api=SimpleNamespace(ConnectionMode=SimpleNamespace(HTTP_ONLY="http_only", HTTPS_ONLY="https_only")),
     )
+    bots = []
+    original_bot_class = fake_signalbot.SignalBot
+    fake_signalbot.SignalBot = lambda config: bots.append(original_bot_class(config)) or bots[-1]
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: fake_signalbot)
 
     run_signal_account(
@@ -1165,6 +1201,8 @@ def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_
     assert captured["signal_service"] == "127.0.0.1:8080"
     assert captured["connection_mode"] == "http_only"
     assert captured["storage"] == "memory-storage"
+    assert bots[0].command is not None
+    assert bots[0].command.bot is bots[0]
 
 
 def test_signal_account_rejects_service_url_with_path(monkeypatch, tmp_path) -> None:

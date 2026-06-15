@@ -17,6 +17,7 @@ from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
+from TeeBotus.runtime.proactive_backends import matrix_proactive_sender
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -62,6 +63,9 @@ class MatrixRuntimeBridge:
             bot_address_names=_matrix_bot_address_names(run_config),
             working_memory_store=self.working_memory_store,
         )
+
+    def proactive_sender(self):
+        return matrix_proactive_sender({self.run_config.slot: self.client})
 
     async def handle_message(self, room: Any, message: Any) -> None:
         if _matrix_sender_is_self(message, self.run_config.matrix_user_id):
