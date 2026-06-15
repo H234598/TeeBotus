@@ -82,6 +82,13 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert youtube_job["details"]["background_dispatches"] == 1
     assert youtube_job["details"]["llm_calls"] == 0
     assert youtube_job["details"]["network_calls"] == 0
+    messenger = next(result for result in suite["results"] if result["name"] == "messenger_adapter_runtime_contracts")
+    assert messenger["ok"] is True
+    assert messenger["details"]["channels"] == ["telegram", "signal", "matrix"]
+    assert messenger["details"]["event_contracts"] == {"telegram": True, "signal": True, "matrix": True}
+    assert messenger["details"]["send_contracts"] == {"telegram": True, "signal": True, "matrix": True}
+    assert messenger["details"]["fake_network_sends"] == 3
+    assert messenger["details"]["network_calls"] == 0
     database_fallback = next(result for result in suite["results"] if result["name"] == "database_fallback_policy")
     assert database_fallback["ok"] is True
     assert database_fallback["details"]["primary"] == "sqlite-primary"
@@ -110,6 +117,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown
+    assert "messenger_adapter_runtime_contracts" in markdown
     assert "youtube_local_job_queue_no_llm" in markdown
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "keine echten Provider-Calls" in markdown
