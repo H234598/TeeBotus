@@ -224,7 +224,7 @@ def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
         return ()
     if msgtype not in {"m.file", "m.image", "m.audio", "m.video"} and not url:
         return ()
-    filename = str(content.get("filename") or getattr(message, "body", "") or "").strip() or "matrix-attachment.bin"
+    filename = str(content.get("filename") or content.get("body") or getattr(message, "body", "") or "").strip() or "matrix-attachment.bin"
     info = content.get("info") if isinstance(content.get("info"), dict) else {}
     content_type = str(info.get("mimetype") or _matrix_content_type_for_msgtype(msgtype)).strip() or "application/octet-stream"
     return (
@@ -242,8 +242,8 @@ def _matrix_message_text_and_reply(message: Any) -> tuple[str, str | None]:
     relates_to = content.get("m.relates_to") if isinstance(content.get("m.relates_to"), dict) else {}
     if relates_to.get("rel_type") == "m.replace":
         new_content = content.get("m.new_content") if isinstance(content.get("m.new_content"), dict) else {}
-        return str(new_content.get("body") or getattr(message, "body", "") or ""), None
-    body = str(getattr(message, "body", "") or "")
+        return str(new_content.get("body") or content.get("body") or getattr(message, "body", "") or ""), None
+    body = str(content.get("body") or getattr(message, "body", "") or "")
     in_reply_to = relates_to.get("m.in_reply_to") if isinstance(relates_to.get("m.in_reply_to"), dict) else {}
     if not in_reply_to:
         return body, None

@@ -396,7 +396,6 @@ def test_matrix_unknown_message_type_maps_readable_body_to_text_event():
     class Message:
         event_id = "$unknown"
         sender = "@alice:example"
-        body = "Custom body"
         source = {"content": {"msgtype": "com.example.custom", "body": "Custom body"}}
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
@@ -491,6 +490,24 @@ def test_matrix_file_message_prefers_filename_from_content():
     assert event is not None
     assert event.attachments[0].filename == "report.pdf"
     assert event.attachments[0].content_type == "application/octet-stream"
+
+
+def test_matrix_file_message_uses_content_body_as_filename_fallback():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        url = "mxc://example/file"
+        source = {"content": {"msgtype": "m.file", "body": "report.pdf", "url": "mxc://example/file"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.attachments[0].filename == "report.pdf"
+    assert event.text == "report.pdf"
 
 
 def test_matrix_room_without_member_state_is_not_private():
