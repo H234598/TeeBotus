@@ -282,7 +282,7 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
         except Exception:
             downloaded.append(attachment)
             continue
-        body = _matrix_download_body_bytes(getattr(response, "body", b""))
+        body = _matrix_download_body_bytes(getattr(response, "body", None))
         if body is None:
             downloaded.append(attachment)
             continue

@@ -463,6 +463,44 @@ def test_matrix_bridge_keeps_media_metadata_when_download_fails(tmp_path) -> Non
     assert seen[0].attachments[0].base64_data == "mxc://example/photo"
 
 
+def test_matrix_bridge_keeps_media_metadata_when_download_has_no_body(tmp_path) -> None:
+    class NoBodyDownloadClient(FakeMatrixClient):
+        async def download(self, *, mxc: str):
+            self.downloads.append(mxc)
+            return type("DownloadResponse", (), {"filename": "wrong-name.bin", "content_type": "application/octet-stream"})()
+
+    client = NoBodyDownloadClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    seen = []
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: seen.append(event) or []})()
+
+    class MediaMessage(FakeMatrixMessage):
+        body = "photo.jpg"
+        url = "mxc://example/photo"
+        source = {"content": {"msgtype": "m.image", "url": "mxc://example/photo", "info": {"mimetype": "image/jpeg"}}}
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), MediaMessage()))
+
+    assert client.downloads == ["mxc://example/photo"]
+    assert seen[0].attachments[0].data == b""
+    assert seen[0].attachments[0].filename == "photo.jpg"
+    assert seen[0].attachments[0].content_type == "image/jpeg"
+
+
 def test_matrix_bridge_notifies_old_matrix_identity_route(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
