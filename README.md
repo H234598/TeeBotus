@@ -83,7 +83,7 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 ## Plan3 Account-Runtime
 
-`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_polling.py`; konfigurierte Signal- und Matrix-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
+`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_runtime.py`; konfigurierte Signal- und Matrix-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 

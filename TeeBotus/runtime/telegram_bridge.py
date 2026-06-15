@@ -35,8 +35,8 @@ def build_telegram_event_from_message(
 ) -> IncomingEvent | None:
     """Convert a Telegram Bot API message dict into the new runtime event model.
 
-    This helper is intentionally dependency-free so the existing monolithic
-    ``TeeBotus.adapters.telegram_polling`` module can call it before the full adapter refactor is done.
+    This helper is intentionally dependency-free so the Telegram runtime can
+    share the same channel-neutral account and command flow as Signal and Matrix.
     """
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}

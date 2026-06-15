@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
-from TeeBotus.adapters.telegram_polling import TelegramAPI
+from TeeBotus.adapters.telegram_runtime import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_openai_key

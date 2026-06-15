@@ -235,9 +235,9 @@ class BotTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
 
-    def test_legacy_user_memory_payload_is_not_touched_by_account_store_memory(self) -> None:
+    def test_pre_account_sender_memory_payload_is_not_touched_by_account_store_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
+            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "pre_account_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             memory_path.write_text(
                 json.dumps({"schema_version": 1, "sender_id": "456", "profile": {}, "memories": [], "memory_index": {}, "recent_memory_ids": []}),
@@ -1099,7 +1099,7 @@ class BotTests(unittest.TestCase):
         api = FakeAPI()
         instructions = BotInstructions(commands={"/account": "configured fallback"})
 
-        with patch("TeeBotus.adapters.telegram_polling.maybe_handle_account_runtime_message", return_value=True) as handle:
+        with patch("TeeBotus.adapters.telegram_runtime.maybe_handle_account_runtime_message", return_value=True) as handle:
             handle_update(
                 api,
                 {
@@ -1122,7 +1122,7 @@ class BotTests(unittest.TestCase):
         api = FakeAPI()
         instructions = BotInstructions(commands={"/proactive": "configured fallback"})
 
-        with patch("TeeBotus.adapters.telegram_polling.maybe_handle_account_runtime_message", return_value=True) as handle:
+        with patch("TeeBotus.adapters.telegram_runtime.maybe_handle_account_runtime_message", return_value=True) as handle:
             handle_update(
                 api,
                 {
