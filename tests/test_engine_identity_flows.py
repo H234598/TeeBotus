@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import re
 
+from TeeBotus import __version__
+from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
-from TeeBotus.instructions import BotInstructions
 
 
 def store(tmp_path):
@@ -96,6 +97,19 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
 
     assert len(actions) == 1
     assert actions[0].text == "Hallo telegram:user:1."
+
+
+def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
+    instructions = BotInstructions(commands={"/status": "Configured status."})
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, project_root=tmp_path)
+
+    actions = engine.process(event(telegram_identity_key(1), "/status"))
+
+    assert len(actions) == 1
+    assert "TeeBotus Status" in actions[0].text
+    assert f"- Version: {__version__}" in actions[0].text
+    assert "Commits: https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert "Configured status." not in actions[0].text
 
 
 def test_account_edit_sets_pending_flow(tmp_path):

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Iterable
 
+from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
+from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendText, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
@@ -14,6 +16,7 @@ from TeeBotus.runtime.state import RuntimeState
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass
@@ -37,11 +40,13 @@ class TeeBotusEngine:
         state: RuntimeState | None = None,
         message_tracker: object | None = None,
         instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
+        project_root: Path | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
         self.message_tracker = message_tracker
         self._instructions = instructions
+        self.project_root = project_root or PROJECT_ROOT
 
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
@@ -57,6 +62,13 @@ class TeeBotusEngine:
         result = self.process_identity_flows(event)
         if result.handled or result.actions:
             return result.actions
+        if command == "/status":
+            return [
+                SendText(
+                    event.chat_id,
+                    build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
+                )
+            ]
         instructions = self._current_instructions()
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
         if reply is None:

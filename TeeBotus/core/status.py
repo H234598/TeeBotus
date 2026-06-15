@@ -19,8 +19,11 @@ ACCOUNT_MEMORY_FILENAMES = frozenset(
 )
 
 
-def build_status_reply(*, sender_id: str, instance_name: str, project_root: Path) -> str:
-    account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
+def build_status_reply(*, sender_id: str = "", instance_name: str, project_root: Path, account_id: str = "") -> str:
+    if account_id:
+        account_dir = account_memory_dir_for_account(account_id, instance_name=instance_name, project_root=project_root)
+    else:
+        account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
     memory_size = memory_files_size(account_dir)
     encryption_status = memory_encryption_status(account_dir)
     commit_history_url = github_commit_history_url(project_root)
@@ -45,6 +48,13 @@ def github_commit_history_url(project_root: Path) -> str:
     if not repo_url:
         repo_url = DEFAULT_REPO_URL
     return f"{repo_url.rstrip('/')}/commits/main"
+
+
+def account_memory_dir_for_account(account_id: str, *, instance_name: str, project_root: Path) -> Path | None:
+    if not account_id or not instance_name:
+        return None
+    account_dir = project_root / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
+    return account_dir if account_dir.is_dir() else None
 
 
 def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project_root: Path) -> Path | None:
