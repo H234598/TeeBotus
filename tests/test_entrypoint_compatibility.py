@@ -138,7 +138,7 @@ def test_runtime_status_reports_llm_provider_without_secrets(monkeypatch, capsys
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=configured profile=local_ollama base_url=http://127.0.0.1:11434/api "
+        "status=configured profile=local_ollama base_url=http://127.0.0.1:11434 "
         "api_key=configured fallback_models=2 timeout_seconds=180 max_output_tokens=700 temperature=0.7"
     ) in captured.out
     assert "llm-secret" not in captured.out
@@ -164,6 +164,72 @@ def test_runtime_status_reports_runtime_llm_disabled(monkeypatch, capsys, tmp_pa
     captured = capsys.readouterr()
     assert "llm=Demo/telegram:1 provider=none model=<disabled> status=disabled" in captured.out
     assert "openai-secret" not in captured.out
+
+
+def test_runtime_status_resolves_profile_without_direct_provider(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "hf_mistral")
+    monkeypatch.setenv("HUGGINGFACE_API_KEY", "hf-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=huggingface/mistralai/Mistral-7B-Instruct-v0.3 "
+        "status=configured profile=hf_mistral api_key=configured"
+    ) in captured.out
+    assert "hf-secret" not in captured.out
+
+
+def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PURPOSE_DEMO", "structured_decision")
+    monkeypatch.setenv("TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK_DEMO", "yes")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 "
+        "api_key=none fallback_models=1 remote_fallback=enabled"
+    ) in captured.out
+
+
+def test_runtime_status_resolves_purpose_route_api_key_env(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PURPOSE_DEMO", "hard_reasoning")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-profile-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=openai model=gpt-5.5 status=configured purpose=hard_reasoning" in captured.out
+    assert "openai-profile-secret" not in captured.out
 
 
 def test_runtime_status_reports_reachable_ollama(monkeypatch, capsys, tmp_path) -> None:

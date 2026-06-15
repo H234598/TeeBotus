@@ -7,6 +7,7 @@ Telegram polling implementation lives in ``TeeBotus.adapters.telegram_runtime``.
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import types
 from collections.abc import Sequence
@@ -189,13 +190,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
 def _runtime_status_llm_line(account: Any) -> str:
     if _parse_optional_status_bool(getattr(account, "llm_enabled", "")) is False:
         return f"llm={account.instance_name}/{account.label} provider=none model=<disabled> status=disabled"
-    provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
-    model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
+    provider, model, base_url, route_fallback_count, route_api_key_env, route_error = _status_llm_route(account)
     if provider == "openai" and model == "<legacy>":
         model = "<Bot_Verhalten/OpenAI>"
-    base_url = _sanitize_status_url(getattr(account, "llm_base_url", ""))
-    key_configured = _llm_key_configured(account, provider)
-    if provider == "openai":
+    key_configured = _llm_key_configured(account, provider, route_api_key_env=route_api_key_env)
+    if route_error:
+        status = "broken"
+    elif provider == "openai":
         status = "configured" if key_configured else "missing_key"
     else:
         status = "configured"
@@ -206,13 +207,19 @@ def _runtime_status_llm_line(account: Any) -> str:
     profile = str(getattr(account, "llm_profile", "") or "").strip()
     if profile:
         detail += f" profile={profile}"
+    purpose = str(getattr(account, "llm_purpose", "") or "").strip()
+    if purpose:
+        detail += f" purpose={purpose}"
     if base_url:
         detail += f" base_url={base_url}"
     if provider != "openai":
         detail += f" api_key={'configured' if key_configured else 'none'}"
-    fallback_count = _csv_count(getattr(account, "llm_fallback_models", ""))
+    fallback_count = _csv_count(getattr(account, "llm_fallback_models", "")) or route_fallback_count
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
+    allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", ""))
+    if allow_remote_fallback is not None:
+        detail += f" remote_fallback={'enabled' if allow_remote_fallback else 'disabled'}"
     timeout = str(getattr(account, "llm_timeout_seconds", "") or "").strip()
     if timeout:
         detail += f" timeout_seconds={timeout}"
@@ -222,7 +229,32 @@ def _runtime_status_llm_line(account: Any) -> str:
     temperature = str(getattr(account, "llm_temperature", "") or "").strip()
     if temperature:
         detail += f" temperature={temperature}"
+    if route_error:
+        detail += f" error={route_error}"
     return detail
+
+
+def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str]:
+    provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
+    model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
+    base_url = _sanitize_status_url(getattr(account, "llm_base_url", ""))
+    profile_name = str(getattr(account, "llm_profile", "") or "").strip()
+    purpose = str(getattr(account, "llm_purpose", "") or "").strip()
+    allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
+    try:
+        if profile_name:
+            from TeeBotus.llm.profiles import load_llm_profiles
+
+            profile = load_llm_profiles()[profile_name]
+            return profile.provider, profile.model, _sanitize_status_url(profile.base_url), 0, profile.api_key_env, ""
+        if purpose and not (str(getattr(account, "llm_provider", "") or "").strip() or str(getattr(account, "llm_model", "") or "").strip()):
+            from TeeBotus.llm.profiles import select_llm_route
+
+            route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
+            return route.provider, route.model, _sanitize_status_url(route.base_url), len(route.fallback_models), route.api_key_env, ""
+    except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
+        return provider, model, base_url, 0, "", f"{type(exc).__name__}: {exc}"
+    return provider, model, base_url, 0, "", ""
 
 
 def _status_value(value: object, *, default: str) -> str:
@@ -230,10 +262,24 @@ def _status_value(value: object, *, default: str) -> str:
     return text if text else default
 
 
-def _llm_key_configured(account: Any, provider: str) -> bool:
+def _llm_key_configured(account: Any, provider: str, *, route_api_key_env: str = "") -> bool:
     if provider == "openai":
-        return bool(str(getattr(account, "openai_api_key", "") or "").strip())
-    return bool(str(getattr(account, "llm_api_key", "") or "").strip())
+        if str(getattr(account, "openai_api_key", "") or "").strip():
+            return True
+    if str(getattr(account, "llm_api_key", "") or "").strip():
+        return True
+    if route_api_key_env and os.environ.get(route_api_key_env, "").strip():
+        return True
+    profile_name = str(getattr(account, "llm_profile", "") or "").strip()
+    if profile_name:
+        try:
+            from TeeBotus.llm.profiles import load_llm_profiles
+
+            profile = load_llm_profiles()[profile_name]
+        except Exception:
+            return False
+        return bool(profile.api_key_env and os.environ.get(profile.api_key_env, "").strip())
+    return False
 
 
 def _csv_count(value: object) -> int:
