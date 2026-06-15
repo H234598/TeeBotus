@@ -29,10 +29,10 @@ def signal_message_to_event(
         IncomingAttachment(
             filename=_signal_attachment_name(index, attachment_names),
             content_type=_guess_content_type(_signal_attachment_name(index, attachment_names)),
-            data=_safe_b64decode(data),
-            base64_data=data if isinstance(data, str) else "",
+            data=_safe_b64decode(_signal_attachment_data(index, attachment_data)),
+            base64_data=_signal_attachment_data(index, attachment_data),
         )
-        for index, data in enumerate(attachment_data)
+        for index in range(max(len(attachment_names), len(attachment_data)))
     )
     recipient = message.recipient() if callable(getattr(message, "recipient", None)) else (getattr(message, "group", "") or getattr(message, "source", ""))
     return IncomingEvent(
@@ -122,6 +122,14 @@ def _safe_b64decode(data: Any) -> bytes:
         return base64.b64decode(data.encode("ascii"), validate=False)
     except Exception:
         return b""
+
+
+def _signal_attachment_data(index: int, values: list[Any]) -> str:
+    try:
+        value = values[index]
+    except IndexError:
+        return ""
+    return value if isinstance(value, str) else ""
 
 
 def _guess_content_type(filename: str) -> str:

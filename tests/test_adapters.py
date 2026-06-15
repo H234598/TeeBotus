@@ -39,6 +39,33 @@ def test_signal_attachments_without_local_filename_get_stable_fallback_name():
     assert event.attachments[0].data == b"hello"
 
 
+def test_signal_local_attachment_name_without_base64_is_preserved():
+    event = signal_message_to_event(
+        FakeSignalMessage(attachments_local_filenames=["voice.ogg"], base64_attachments=[]),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert len(event.attachments) == 1
+    assert event.attachments[0].filename == "voice.ogg"
+    assert event.attachments[0].content_type == "audio/ogg"
+    assert event.attachments[0].data == b""
+    assert event.attachments[0].base64_data == ""
+
+
+def test_signal_attachment_names_and_base64_are_paired_by_index():
+    event = signal_message_to_event(
+        FakeSignalMessage(attachments_local_filenames=["one.mp3"], base64_attachments=["MQ==", "Mg=="]),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert [attachment.filename for attachment in event.attachments] == ["one.mp3", "signal-attachment-2.bin"]
+    assert [attachment.data for attachment in event.attachments] == [b"1", b"2"]
+
+
 def test_signal_non_content_message_types_are_ignored():
     for message_type in (
         MessageType.CONTACT_SYNC_MESSAGE,
