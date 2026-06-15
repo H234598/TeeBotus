@@ -1532,6 +1532,28 @@ def test_engine_youtube_transcript_command_sends_transcript(monkeypatch, tmp_pat
     assert actions[1].text == "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."
 
 
+def test_engine_youtube_transcript_command_records_account_memory(monkeypatch, tmp_path):
+    def fake_transcribe(_url, **_kwargs):
+        return "Transcript text.", "YouTube-Untertitel"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(user_memory_enabled=True),
+    )
+
+    engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123", channel="signal"))
+
+    entries = account_store.read_memory_entries(account_id)
+    assert len(entries) == 1
+    assert entries[0]["channel"] == "signal"
+    assert entries[0]["user_text"] == "/youtube_transcript https://youtu.be/abc123"
+    assert entries[0]["bot_text"] == "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."
+
+
 def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypatch, tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
@@ -1823,6 +1845,41 @@ def test_engine_youtube_local_transcription_can_run_as_background_job(monkeypatc
     assert calls[1][1]["instance_name"] == "Depressionsbot"
     assert callable(calls[1][1]["live_callback"])
     assert background == [["eins zwei drei"], ["Lokale YouTube-Transkription abgeschlossen."]]
+
+
+def test_engine_youtube_background_live_records_start_and_completion_not_full_transcript(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class FakeRunner:
+        def submit(self, callback):
+            callback()
+            return object()
+
+    def fake_transcribe(_url, **kwargs):
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        live_callback = kwargs.get("live_callback")
+        if live_callback is not None:
+            live_callback("eins zwei drei", force=True)
+        return "Full local transcript.", "lokales Whisper"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(user_memory_enabled=True),
+        youtube_job_runner=FakeRunner(),
+        background_action_dispatcher=lambda _event, _actions: None,
+    )
+
+    engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123 live ja, llm nein", channel="signal"))
+
+    bot_texts = [entry["bot_text"] for entry in account_store.read_memory_entries(account_id)]
+    assert "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist. Live-Ausgabe ist aktiviert." in bot_texts
+    assert "Lokale YouTube-Transkription abgeschlossen." in bot_texts
+    assert all("Full local transcript." not in text for text in bot_texts)
 
 
 def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):

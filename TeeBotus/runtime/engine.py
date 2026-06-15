@@ -656,7 +656,9 @@ class TeeBotusEngine:
                 YOUTUBE_LINK_FLOW,
                 {"chat_id": event.chat_id, "channel": event.channel},
             )
-            return [SendText(event.chat_id, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")]
+            reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
+            self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+            return [SendText(event.chat_id, reply)]
         try:
             transcript, source = transcribe_youtube_video(url, local_allowed=False, instance_name=event.instance)
         except YouTubeTranscriptError as exc:
@@ -675,18 +677,22 @@ class TeeBotusEngine:
                         "original_text": event.text,
                     },
                 )
-                return [
-                    SendText(
-                        event.chat_id,
-                        "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
-                        "Moechtest Du den Text live ausgegeben haben?\n"
-                        f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
-                        "Antworte z. B. mit: /youtube_transcript <URL> live nein, llm ja",
-                    )
-                ]
-            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: {exc}")]
+                reply = (
+                    "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
+                    "Moechtest Du den Text live ausgegeben haben?\n"
+                    f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
+                    "Antworte z. B. mit: /youtube_transcript <URL> live nein, llm ja"
+                )
+                self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+                actions = [SendText(event.chat_id, reply)]
+                return actions
+            reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
+            self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+            return [SendText(event.chat_id, reply)]
         except (TimeoutError, TimeoutExpired) as exc:
-            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
+            reply = f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc})."
+            self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+            return [SendText(event.chat_id, reply)]
         return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
 
     def _pending_youtube_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
@@ -701,7 +707,9 @@ class TeeBotusEngine:
             url = str(pending_options.get("url") or "").strip()
             if not url:
                 self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
-                return [SendText(event.chat_id, "YouTube-Transkript fehlgeschlagen: gespeicherte URL fehlt.")]
+                reply = "YouTube-Transkript fehlgeschlagen: gespeicherte URL fehlt."
+                self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+                return [SendText(event.chat_id, reply)]
             live_enabled, llm_enabled = _parse_youtube_local_options(event.text, instance_name=event.instance)
             if live_enabled is None or llm_enabled is None:
                 inferred_options = self._infer_youtube_local_options_with_llm(event.text, instructions)
@@ -710,7 +718,9 @@ class TeeBotusEngine:
                     live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
                     llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
             if live_enabled is None or llm_enabled is None:
-                return [SendText(event.chat_id, "Bitte antworte z. B. mit: live ja, llm ja")]
+                reply = "Bitte antworte z. B. mit: live ja, llm ja"
+                self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
+                return [SendText(event.chat_id, reply)]
             self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
             original_text = str(pending_options.get("original_text") or event.text)
             return self._youtube_run_local_transcript_actions(
@@ -777,6 +787,7 @@ class TeeBotusEngine:
             reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
             if live_enabled:
                 reply += " Live-Ausgabe ist aktiviert."
+            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
             return [SendText(event.chat_id, reply)]
         return self._build_youtube_local_transcript_result_actions(
             event,
@@ -787,6 +798,7 @@ class TeeBotusEngine:
             llm_enabled=llm_enabled,
             user_text=user_text,
             live_callback=None,
+            remember_result=True,
         )
 
     def _run_youtube_local_transcript_job(
@@ -810,9 +822,12 @@ class TeeBotusEngine:
             llm_enabled=llm_enabled,
             user_text=user_text,
             live_callback=live_callback,
+            remember_result=not (live_enabled and not llm_enabled),
         )
         if live_enabled and not llm_enabled and len(actions) == 2 and isinstance(actions[1], SendText) and actions[1].text.startswith("YouTube-Transkript ("):
-            actions = [SendText(event.chat_id, "Lokale YouTube-Transkription abgeschlossen.")]
+            reply = "Lokale YouTube-Transkription abgeschlossen."
+            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
+            actions = [SendText(event.chat_id, reply)]
         if self.background_action_dispatcher is not None:
             self.background_action_dispatcher(event, actions)
 
@@ -841,16 +856,24 @@ class TeeBotusEngine:
         llm_enabled: bool,
         user_text: str,
         live_callback: Callable[..., object] | None,
+        remember_result: bool = True,
     ) -> list[OutgoingAction]:
         try:
             transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=live_callback, instance_name=event.instance)
         except YouTubeTranscriptError as exc:
-            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: {exc}")]
+            reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
+            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
+            return [SendText(event.chat_id, reply)]
         except (TimeoutError, TimeoutExpired) as exc:
-            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
+            reply = f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc})."
+            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
+            return [SendText(event.chat_id, reply)]
         if llm_enabled:
             return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source, user_text=user_text)
-        return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
+        reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
+        if remember_result:
+            self._remember_youtube_interaction(event, account_id, instructions, user_text, reply)
+        return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
 
     def _youtube_transcript_reply_actions(
         self,
@@ -863,11 +886,15 @@ class TeeBotusEngine:
         user_text: str | None = None,
     ) -> list[OutgoingAction]:
         if not instructions.openai_enabled:
-            return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
+            reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, reply)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
         if self.openai_client is None:
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_missing_key)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_missing_key)]
         create_reply = getattr(self.openai_client, "create_reply", None)
         if not callable(create_reply):
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         try:
             pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
@@ -912,16 +939,29 @@ class TeeBotusEngine:
                     first_response_id if isinstance(first_response_id, str) else self.state.get_previous_response_id(event.instance, account_id),
                 )
         except OpenAIAPIError:
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         response_id = getattr(response, "response_id", None)
         if isinstance(response_id, str):
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
+        self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, response_text)
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
+
+    def _remember_youtube_interaction(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        user_text: str,
+        bot_text: str,
+    ) -> None:
+        _append_account_memory_interaction(self.account_store, account_id, event.with_account(account_id), user_text, bot_text, instructions)
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
         if self.openai_client is None:
