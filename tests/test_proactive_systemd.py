@@ -5,7 +5,7 @@ from pathlib import Path
 from TeeBotus.proactive_systemd import main, render_proactive_systemd_unit
 
 
-def test_render_proactive_systemd_unit_defaults_to_local_planner(tmp_path) -> None:
+def test_render_proactive_systemd_unit_defaults_to_llm_planner(tmp_path) -> None:
     unit = render_proactive_systemd_unit(
         repo_root=tmp_path,
         instances_dir="instances",
@@ -18,23 +18,23 @@ def test_render_proactive_systemd_unit_defaults_to_local_planner(tmp_path) -> No
     assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
     assert "EnvironmentFile=-" in unit.service_text
     assert "teebotus-proactive" in unit.service_text
-    assert "--dispatch --plan" in unit.service_text
-    assert "--llm-plan" not in unit.service_text
+    assert "--dispatch --plan --llm-plan" in unit.service_text
     assert "--tool-plan" not in unit.service_text
     assert "OnUnitActiveSec=15min" in unit.timer_text
     assert "Persistent=true" in unit.timer_text
 
 
-def test_render_proactive_systemd_unit_can_enable_llm_plan(tmp_path) -> None:
+def test_render_proactive_systemd_unit_can_disable_llm_plan(tmp_path) -> None:
     unit = render_proactive_systemd_unit(
         repo_root=tmp_path,
         instances_dir=str(tmp_path / "instances"),
         instance_name="Depressionsbot",
         interval="1h",
-        llm_plan=True,
+        llm_plan=False,
     )
 
-    assert "--dispatch --plan --llm-plan" in unit.service_text
+    assert "--dispatch --plan" in unit.service_text
+    assert "--llm-plan" not in unit.service_text
     assert f"--instances-dir {tmp_path / 'instances'}" in unit.service_text
     assert "OnUnitActiveSec=1h" in unit.timer_text
 
@@ -45,6 +45,7 @@ def test_render_proactive_systemd_unit_can_enable_tool_plan(tmp_path) -> None:
         instances_dir=str(tmp_path / "instances"),
         instance_name="Depressionsbot",
         interval="30min",
+        llm_plan=False,
         tool_plan=True,
     )
 
@@ -76,11 +77,20 @@ def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> No
     assert result == 0
     assert "# teebotus-proactive-depressionsbot.service" in captured.out
     assert "# teebotus-proactive-depressionsbot.timer" in captured.out
+    assert "--dispatch --plan --llm-plan" in captured.out
+
+
+def test_proactive_systemd_print_mode_can_disable_llm_plan(tmp_path, capsys) -> None:
+    result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--no-llm-plan", "--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
     assert "--dispatch --plan" in captured.out
+    assert "--llm-plan" not in captured.out
 
 
 def test_proactive_systemd_print_mode_can_enable_tool_plan(tmp_path, capsys) -> None:
-    result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--tool-plan", "--print"])
+    result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--no-llm-plan", "--tool-plan", "--print"])
 
     captured = capsys.readouterr()
     assert result == 0

@@ -21,7 +21,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to teebotus-proactive.")
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
     parser.add_argument("--interval", default="15min", help="systemd OnUnitActiveSec interval.")
-    parser.add_argument("--llm-plan", action="store_true", help="Include --llm-plan. Still requires the runtime LLM instance gate and OpenAI key.")
+    parser.add_argument(
+        "--llm-plan",
+        action="store_true",
+        default=True,
+        help="Include --llm-plan. This is the default for the Depressionsbot proactive scheduler.",
+    )
+    parser.add_argument("--no-llm-plan", action="store_false", dest="llm_plan", help="Disable the default --llm-plan flag.")
     parser.add_argument("--tool-plan", action="store_true", help="Include --tool-plan. Still requires the runtime LLM instance gate and OpenAI key.")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit files instead of writing them.")
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the timer after writing.")
@@ -62,7 +68,7 @@ def render_proactive_systemd_unit(
     instances_dir: str,
     instance_name: str,
     interval: str,
-    llm_plan: bool = False,
+    llm_plan: bool = True,
     tool_plan: bool = False,
 ) -> ProactiveSystemdUnit:
     if llm_plan and tool_plan:
