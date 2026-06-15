@@ -4,10 +4,13 @@ import pytest
 from pydantic import ValidationError
 
 from TeeBotus.ai_structures import (
+    BibliothekarQueryDecision,
     IntentDecision,
     MemoryCandidate,
     ReminderDecision,
+    decide_bibliothekar_query,
     decide_intent,
+    parse_bibliothekar_query_decision,
     parse_memory_candidate,
     parse_reminder_decision,
 )
@@ -60,6 +63,37 @@ def test_invalid_model_payload_falls_back_to_unknown() -> None:
 
     assert decision.intent == "unknown"
     assert decision.source == "fallback"
+
+
+def test_bibliothekar_query_decision_classic_and_model_runner_paths() -> None:
+    classic = decide_bibliothekar_query("Was sagt das Buch dazu?")
+    assert classic.should_search is True
+    assert classic.source == "classic"
+
+    calls = []
+
+    def fake_model_runner(prompt, schema):
+        calls.append((prompt, schema))
+        return {"should_search": False, "query": "", "confidence": 0.91, "reason_short": "smalltalk", "source": "model"}
+
+    decision = decide_bibliothekar_query("Wie geht es dir?", model_runner=fake_model_runner)
+
+    assert decision == BibliothekarQueryDecision(should_search=False, query="", confidence=0.91, reason_short="smalltalk", source="model")
+    assert calls and calls[0][1] is BibliothekarQueryDecision
+
+
+def test_bibliothekar_query_decision_schema_accepts_json_payloads() -> None:
+    decision = parse_bibliothekar_query_decision(
+        '{"should_search": true, "query": "Schlafhygiene Depression", "confidence": 0.88, "reason_short": "library query", "source": "model"}'
+    )
+
+    assert decision == BibliothekarQueryDecision(
+        should_search=True,
+        query="Schlafhygiene Depression",
+        confidence=0.88,
+        reason_short="library query",
+        source="model",
+    )
 
 
 def test_memory_candidate_schema_supports_safe_structured_storage_decisions() -> None:

@@ -420,6 +420,8 @@ Konfiguration in `Bot_Verhalten.md`:
 
 `backend: local` nutzt den JSONL-Store. `backend: haystack` oder `backend: qdrant` aktiviert den optionalen Haystack/Qdrant-Backendpfad hinter derselben `BibliothekarService`-Schnittstelle. Der lokale Store bleibt dabei die rebuildbare Quelle; Haystack/Qdrant ist ein Backend/Cache fuer produktivere Suche.
 
+Vor dem Bibliothekar-Kontext kann ein optionaler Pydantic-Subtask `BibliothekarQueryDecision` laufen. Er entscheidet, ob der Quellenindex fuer die aktuelle natuerliche Sprache durchsucht werden soll, und kann die Suchfrage knapp normalisieren. Ohne strukturierten Runner bleibt das alte Verhalten erhalten: der Bibliothekar sucht weiter, sobald er in der Instanz aktiviert ist.
+
 CLI:
 
 ```bash

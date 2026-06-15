@@ -491,7 +491,7 @@ class TeeBotusEngine:
             account_memory_context = account_memory_selection.prompt_text
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
-            library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text)
+            library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
             previous_response_id = self.state.get_previous_response_id(event.instance, account_id)
             response = create_reply(
                 _build_openai_user_input(
@@ -913,7 +913,12 @@ class TeeBotusEngine:
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, pipeline_text)
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, pipeline_text)
-            library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, pipeline_text)
+            library_context = _build_bibliothekar_context(
+                self.bibliothekar_store,
+                instructions,
+                pipeline_text,
+                structured_decision_runner=self.structured_decision_runner,
+            )
             response = create_reply(
                 _build_openai_user_input(
                     event.with_account(account_id),
@@ -1390,20 +1395,28 @@ def _build_bibliothekar_context(
     bibliothekar_store: BibliothekarService | BibliothekarStore | None,
     instructions: BotInstructions,
     query_text: str,
+    *,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> str:
     if bibliothekar_store is None or not instructions.bibliothekar_enabled:
         return ""
     try:
+        from TeeBotus.ai_structures import decide_bibliothekar_query
+
+        decision = decide_bibliothekar_query(query_text, model_runner=structured_decision_runner)
+        if not decision.should_search and decision.confidence >= 0.7:
+            return ""
+        search_text = decision.query or query_text
         search = getattr(bibliothekar_store, "search", None)
         if callable(search):
             return search(
-                query_text,
+                search_text,
                 max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
                 max_chunks=instructions.bibliothekar_max_chunks,
                 max_quote_chars=instructions.bibliothekar_max_quote_chars,
             ).prompt_text
         return bibliothekar_store.select(  # type: ignore[union-attr]
-            query_text,
+            search_text,
             max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
             max_chunks=instructions.bibliothekar_max_chunks,
             max_quote_chars=instructions.bibliothekar_max_quote_chars,

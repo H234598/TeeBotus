@@ -57,3 +57,16 @@ class ReminderDecision(BaseModel):
         if value is None:
             return None
         return str(value).strip()
+
+
+class BibliothekarQueryDecision(BaseModel):
+    should_search: bool
+    query: str = Field(default="", max_length=800)
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason_short: str = Field(default="", max_length=240)
+    source: Literal["classic", "model", "fallback"] = "model"
+
+    @field_validator("query", "reason_short")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return str(value or "").strip()

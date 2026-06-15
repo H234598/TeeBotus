@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from TeeBotus.ai_structures.schemas import IntentDecision, MemoryCandidate, ReminderDecision
+from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ReminderDecision
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
 from TeeBotus.core.youtube import YOUTUBE_TRANSCRIPT_COMMANDS, _has_youtube_transcript_intent
 from TeeBotus.runtime.reminder_intent import parse_reminder_intent
@@ -55,6 +55,45 @@ def parse_reminder_decision(payload: object) -> ReminderDecision:
     return _coerce_model_payload(payload, ReminderDecision)
 
 
+def decide_bibliothekar_query(text: str, *, model_runner: ModelRunner | None = None) -> BibliothekarQueryDecision:
+    value = str(text or "").strip()
+    normalized = _normalize_text(value)
+    if not value:
+        return BibliothekarQueryDecision(should_search=False, query="", confidence=1.0, reason_short="Empty text or slash command", source="classic")
+    if _command_name(value) and "youtube-transkript" not in normalized and "youtube transcript" not in normalized:
+        return BibliothekarQueryDecision(should_search=False, query="", confidence=1.0, reason_short="Slash command without generated context", source="classic")
+    explicit_needles = (
+        "bibliothek",
+        "bibliothekar",
+        "buch",
+        "buecher",
+        "bücher",
+        "quelle",
+        "quellen",
+        "zitat",
+        "zitier",
+        "literatur",
+        "dokument",
+        "pdf",
+        "epub",
+        "was sagt",
+        "steht dazu",
+    )
+    if any(needle in normalized for needle in explicit_needles):
+        return BibliothekarQueryDecision(should_search=True, query=value, confidence=0.9, reason_short="Explicit library/source wording", source="classic")
+    if model_runner is not None:
+        try:
+            decision = model_runner(_bibliothekar_query_prompt(value), BibliothekarQueryDecision)
+            return _coerce_model_payload(decision, BibliothekarQueryDecision)
+        except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+            pass
+    return BibliothekarQueryDecision(should_search=True, query=value, confidence=0.35, reason_short="Fallback keeps existing Bibliothekar behavior", source="fallback")
+
+
+def parse_bibliothekar_query_decision(payload: object) -> BibliothekarQueryDecision:
+    return _coerce_model_payload(payload, BibliothekarQueryDecision)
+
+
 def _classic_command_intent(command: str) -> IntentDecision:
     if command in YOUTUBE_TRANSCRIPT_COMMANDS:
         return IntentDecision(intent="youtube_transcript", confidence=1.0, reason_short=f"Slash command {command}", source="classic")
@@ -101,6 +140,19 @@ def _intent_prompt(text: str) -> str:
         "Slash-Commands werden klassisch verarbeitet; diese Anfrage ist natuerliche Sprache.\n\n"
         f"Nachricht:\n{text.strip()}"
     )
+
+
+def _bibliothekar_query_prompt(text: str) -> str:
+    return (
+        "Entscheide, ob TeeBotus fuer diese natuerliche Nutzerfrage den Bibliothekar/RAG-Quellenindex durchsuchen soll. "
+        "Antworte nur als JSON fuer BibliothekarQueryDecision. should_search ist true bei Fragen nach Buechern, Dokumenten, Quellen, Zitaten, Literatur oder gespeichertem Bibliothekswissen. "
+        "Wenn true, normalisiere query auf eine knappe Suchfrage. Wenn false, lasse query leer.\n\n"
+        f"Nachricht:\n{text.strip()}"
+    )
+
+
+def _normalize_text(text: str) -> str:
+    return str(text or "").casefold().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
 
 
 def _command_name(text: str) -> str:
