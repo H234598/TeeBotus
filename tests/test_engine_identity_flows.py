@@ -166,6 +166,28 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     assert client.previous_ids == [None, "resp-1"]
 
 
+def test_engine_reset_clears_previous_openai_response_id(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return OpenAIResponse("Antwort.", "resp-1", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True, openai_reset="Kontext geloescht.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "Hallo"))
+    reset_actions = engine.process(event(identity, "/reset"))
+    engine.process(event(identity, "Neu"))
+
+    assert reset_actions[0].text == "Kontext geloescht."
+    assert client.previous_ids == [None, None]
+
+
 def test_engine_reports_openai_error_for_api_failure(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):

@@ -77,6 +77,9 @@ class TeeBotusEngine:
                     build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
                 )
             ]
+        if command == "/reset":
+            self.state.reset_previous_response_id(event.instance, result.account_id)
+            return [SendText(event.chat_id, self._current_instructions().openai_reset)]
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
             return []
         instructions = self._current_instructions()
