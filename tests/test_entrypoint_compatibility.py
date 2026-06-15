@@ -133,6 +133,26 @@ def test_runtime_status_reports_llm_provider_without_secrets(monkeypatch, capsys
     assert "token=nope" not in captured.out
 
 
+def test_runtime_status_reports_runtime_llm_disabled(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("## LLM\n- enabled: ja\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_ENABLED_DEMO", "false")
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "openai-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=none model=<disabled> status=disabled" in captured.out
+    assert "openai-secret" not in captured.out
+
+
 def test_runtime_status_reports_reachable_ollama(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

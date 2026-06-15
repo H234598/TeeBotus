@@ -23,6 +23,7 @@ class AccountRunConfig:
     slot: int
     label: str
     openai_api_key: str
+    llm_enabled: str = ""
     llm_provider: str = ""
     llm_model: str = ""
     llm_fallback_models: str = ""
@@ -311,6 +312,7 @@ def _resolve_llm_runtime_kwargs(
     env: Mapping[str, str] | None,
 ) -> dict[str, str]:
     return {
+        "llm_enabled": resolve_llm_setting(instance_name, channel, slot, "ENABLED", env),
         "llm_provider": resolve_llm_setting(instance_name, channel, slot, "PROVIDER", env),
         "llm_model": resolve_llm_setting(instance_name, channel, slot, "MODEL", env),
         "llm_fallback_models": resolve_llm_setting(instance_name, channel, slot, "FALLBACK_MODELS", env),

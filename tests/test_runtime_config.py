@@ -56,6 +56,7 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
 def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     env = {
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
+        "TEEBOTUS_LLM_ENABLED_DEPRESSIONSBOT": "false",
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL": "huggingface",
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL_2": "groq",
         "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
@@ -72,6 +73,7 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     }
 
     assert resolve_llm_setting("Depressionsbot", "signal", 2, "PROVIDER", env) == "groq"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "ENABLED", env) == "false"
     assert resolve_llm_setting("Depressionsbot", "signal", 1, "PROVIDER", env) == "huggingface"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "PROVIDER", env) == "ollama"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "MODEL", env) == "llama3.1:8b"
@@ -119,6 +121,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
         "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
         "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared",
+        "TEEBOTUS_LLM_ENABLED_DEPRESSIONSBOT": "false",
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
         "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
         "TEEBOTUS_LLM_FALLBACK_MODELS_DEPRESSIONSBOT": "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini",
@@ -136,6 +139,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
 
     assert [account.channel for account in accounts] == ["telegram", "signal", "matrix"]
     assert {account.openai_api_key for account in accounts} == {"sk-shared"}
+    assert {account.llm_enabled for account in accounts} == {"false"}
     assert {account.llm_provider for account in accounts} == {"ollama"}
     assert {account.llm_model for account in accounts} == {"llama3.1:8b"}
     assert {account.llm_fallback_models for account in accounts} == {"groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini"}

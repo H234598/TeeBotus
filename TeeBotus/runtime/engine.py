@@ -111,6 +111,7 @@ class TeeBotusEngine:
         project_root: Path | None = None,
         openai_client: object | None = None,
         llm_client: object | None = None,
+        llm_enabled_override: bool | str | None = None,
         bot_address_names: Iterable[str] = (),
         working_memory_store: WorkingMemoryStore | None = None,
         bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
@@ -125,6 +126,7 @@ class TeeBotusEngine:
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
         self.llm_client = llm_client or openai_client
+        self.llm_enabled_override = _parse_optional_bool(llm_enabled_override)
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
         self.bibliothekar_store = bibliothekar_store
@@ -222,7 +224,7 @@ class TeeBotusEngine:
                             project_root=self.project_root,
                             account_store=self.account_store,
                             proactive_model_planner=instructions.proactive_model_planner,
-                            llm_enabled=instructions.text_llm_enabled(),
+                            llm_enabled=self._text_llm_enabled(instructions),
                             llm_provider=instructions.llm_provider,
                             llm_model=instructions.llm_model or instructions.openai_model,
                             llm_fallback_models=instructions.llm_fallback_models,
@@ -247,7 +249,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
-        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.text_llm_enabled())
+        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not self._text_llm_enabled(instructions))
         if reply is None:
             openai_actions = self._openai_actions(event, result.account_id, instructions)
             if openai_actions:
@@ -476,9 +478,14 @@ class TeeBotusEngine:
             return self._instructions()
         return self._instructions
 
+    def _text_llm_enabled(self, instructions: BotInstructions) -> bool:
+        if self.llm_enabled_override is not None:
+            return self.llm_enabled_override
+        return instructions.text_llm_enabled()
+
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         text = str(event.text or "").strip()
-        if not instructions.text_llm_enabled() or (not text and not event.attachments) or text.startswith("/"):
+        if not self._text_llm_enabled(instructions) or (not text and not event.attachments) or text.startswith("/"):
             return []
         if self.llm_client is None:
             return [SendText(event.chat_id, instructions.openai_missing_key)]
@@ -897,7 +904,7 @@ class TeeBotusEngine:
         source: str,
         user_text: str | None = None,
     ) -> list[OutgoingAction]:
-        if not instructions.text_llm_enabled():
+        if not self._text_llm_enabled(instructions):
             reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, reply)
             return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
@@ -1823,6 +1830,20 @@ def _parse_engine_datetime(value: str) -> datetime | None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
 
+
+def _parse_optional_bool(value: bool | str | None) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().casefold()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "ja", "on", "enabled", "an"}:
+        return True
+    if text in {"0", "false", "no", "nein", "off", "disabled", "aus"}:
+        return False
+    return None
 
 
 def _is_yes(text: str) -> bool:

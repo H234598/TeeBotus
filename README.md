@@ -348,7 +348,7 @@ Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue ne
 - temperature: 0.7
 ```
 
-Environment-Fallbacks heissen `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
+Environment-Fallbacks heissen `TEEBOTUS_LLM_ENABLED`, `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_PROFILE`, `TEEBOTUS_LLM_PURPOSE`, `TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_OUTPUT_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
 
 Ollama Quickstart:
 
@@ -372,6 +372,7 @@ LiteLLM-Security:
 Rollback:
 
 - Setze `llm_enabled: nein` oder entferne den `## LLM`-Block, um zur bisherigen OpenAI-/Regelantwort-Logik zurueckzukehren.
+- Setze `TEEBOTUS_LLM_ENABLED_<INSTANZ>=false`, um Text-LLM-Antworten per Runtime-/systemd-Override hart abzuschalten; `--runtime-status` meldet dann `provider=none status=disabled`.
 - Setze `llm_provider: openai`, wenn Textantworten wieder ueber den OpenAI-kompatiblen Legacy-Pfad laufen sollen.
 - Entferne `TEEBOTUS_LLM_*`-Overrides aus der Shell oder systemd-Unit, wenn unerwartet ein falsches Profil gewaehlt wird.
 

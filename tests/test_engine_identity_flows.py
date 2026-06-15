@@ -673,6 +673,23 @@ def test_engine_prefers_llm_client_for_free_text_when_configured(tmp_path):
     assert openai_client.calls == 0
 
 
+def test_engine_runtime_llm_disabled_override_skips_missing_key_and_model_call(tmp_path):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            raise AssertionError("runtime-disabled LLM must not be called")
+
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True, text_replies={"hallo": "Regelantwort."}),
+        llm_client=FakeLLMClient(),
+        llm_enabled_override="false",
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[0].text == "Regelantwort."
+
+
 def test_engine_turns_openai_file_block_into_attachment(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

@@ -21,6 +21,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
     )
 
     assert instructions.llm_provider == "ollama"
+    assert instructions.llm_enabled is True
     assert instructions.llm_model == "llama3.1:8b"
     assert instructions.llm_profile == "local_ollama"
     assert instructions.llm_base_url == "http://127.0.0.1:11434"
@@ -37,6 +38,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
         "TEEBOTUS_INSTANCE": "Demo",
         "TEEBOTUS_CHANNELS": "telegram",
         "TELEGRAM_BOT_TOKEN_DEMO": "telegram-token",
+        "TEEBOTUS_LLM_ENABLED_DEMO": "false",
         "TEEBOTUS_LLM_PROVIDER_DEMO": "ollama",
         "TEEBOTUS_LLM_MODEL_DEMO": "llama3.1:8b",
         "TEEBOTUS_LLM_PROFILE_DEMO": "local_ollama",
@@ -49,6 +51,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
     account = config.instances[0].accounts[0]
 
     assert account.llm_provider == "ollama"
+    assert account.llm_enabled == "false"
     assert account.llm_model == "llama3.1:8b"
     assert account.llm_profile == "local_ollama"
     assert account.llm_api_key == "runtime-key"

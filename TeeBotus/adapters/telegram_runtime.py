@@ -739,6 +739,7 @@ def build_telegram_runtime_context(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None,
     bot_identity: BotIdentity,
     llm_client: object | None = None,
+    llm_enabled_override: bool | str | None = None,
 ) -> TelegramRuntimeContext:
     engine = TeeBotusEngine(
         account_store,
@@ -747,6 +748,7 @@ def build_telegram_runtime_context(
         instructions=instruction_store.get,
         openai_client=openai_client,
         llm_client=llm_client,
+        llm_enabled_override=llm_enabled_override,
         bot_address_names=tuple(name for name in (bot_identity.display_name, bot_identity.mention) if name),
         working_memory_store=working_memory_store,
         bibliothekar_store=bibliothekar_store,
@@ -2854,6 +2856,7 @@ def run_polling(
         instructions=instruction_store.get(),
         openai_client=openai_client,
         default_api_key=resolved_openai_api_key or "",
+        enabled=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
         profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
         purpose=resolve_llm_setting(instance, "telegram", adapter_slot, "PURPOSE"),
         allow_remote_fallback=resolve_llm_setting(instance, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
@@ -2894,6 +2897,7 @@ def run_polling(
         youtube_job_runner=youtube_job_runner,
         bot_identity=bot_identity,
         llm_client=llm_client,
+        llm_enabled_override=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
     )
     process_registry = _InstanceProcessRegistry(instance)
     process_registry.cleanup_orphans()

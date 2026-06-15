@@ -187,6 +187,8 @@ def _runtime_status(argv: Sequence[str]) -> int:
 
 
 def _runtime_status_llm_line(account: Any) -> str:
+    if _parse_optional_status_bool(getattr(account, "llm_enabled", "")) is False:
+        return f"llm={account.instance_name}/{account.label} provider=none model=<disabled> status=disabled"
     provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
     model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
     if provider == "openai" and model == "<legacy>":
@@ -236,6 +238,17 @@ def _llm_key_configured(account: Any, provider: str) -> bool:
 
 def _csv_count(value: object) -> int:
     return len([part for part in str(value or "").split(",") if part.strip()])
+
+
+def _parse_optional_status_bool(value: object) -> bool | None:
+    text = str(value or "").strip().casefold()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "ja", "on", "enabled", "an"}:
+        return True
+    if text in {"0", "false", "no", "nein", "off", "disabled", "aus"}:
+        return False
+    return None
 
 
 def _sanitize_status_url(value: object) -> str:

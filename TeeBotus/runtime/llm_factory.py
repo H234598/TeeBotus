@@ -14,6 +14,7 @@ def build_runtime_text_llm_client(
     instructions: BotInstructions,
     openai_client: object | None,
     default_api_key: str = "",
+    enabled: bool | str | None = None,
     profile: str = "",
     purpose: str = "",
     allow_remote_fallback: bool | str = False,
@@ -28,6 +29,9 @@ def build_runtime_text_llm_client(
     env: Mapping[str, str] | None = None,
     openai_client_factory: Callable[[str], object] = OpenAIClient,
 ) -> object | None:
+    enabled_override = _parse_optional_bool(enabled)
+    if enabled_override is False:
+        return None
     profile_name = str(profile or instructions.llm_profile or "").strip()
     if profile_name:
         return _build_profile_client(
@@ -163,6 +167,21 @@ def _parse_bool(value: bool | str) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().casefold() in {"1", "true", "yes", "ja", "on"}
+
+
+def _parse_optional_bool(value: bool | str | None) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().casefold()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "ja", "on", "enabled", "an"}:
+        return True
+    if text in {"0", "false", "no", "nein", "off", "disabled", "aus"}:
+        return False
+    return None
 
 
 __all__ = ["build_runtime_text_llm_client"]

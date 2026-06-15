@@ -121,6 +121,19 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_returns_none_when_runtime_llm_is_disabled() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=object(),
+        enabled="false",
+        profile="local_ollama",
+        provider="litellm",
+        model="ollama_chat/llama3.1:8b",
+    )
+
+    assert client is None
+
+
 def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored-default"),
