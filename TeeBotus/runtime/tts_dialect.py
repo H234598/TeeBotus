@@ -11,6 +11,9 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 
 TTS_DIALECT_STATE_KEY = "tts_dialect"
 TTS_VOICE_STATE_KEY = "tts_voice"
+TTS_MIMIC_VOICE_STATE_KEY = "tts_mimic_voice"
+TTS_MIMIC_POSITION_BEFORE_DIALECT = "before_dialect"
+TTS_MIMIC_POSITION_AFTER_DIALECT = "after_dialect"
 OPENAI_TTS_VOICE_DOCS_URL = "https://platform.openai.com/docs/guides/text-to-speech#voice-options"
 OPENAI_TTS_VOICES = (
     "alloy",
@@ -73,6 +76,14 @@ class TtsVoiceCommandResult:
     voice: str = ""
 
 
+@dataclass(frozen=True)
+class TtsMimicVoiceCommandResult:
+    reply_text: str
+    changed: bool = False
+    enabled: bool = False
+    position: str = TTS_MIMIC_POSITION_AFTER_DIALECT
+
+
 def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id: str, text: str) -> TtsDialectUpdate:
     normalized_text = str(text or "").strip()
     if not normalized_text:
@@ -122,11 +133,17 @@ def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id:
 def voice_instructions_for_account(instructions: BotInstructions, account_store: AccountStore | None, account_id: str) -> BotInstructions:
     city = tts_dialect_city(account_store, account_id)
     voice = tts_voice_for_account(account_store, account_id, instructions)
-    if not city and not voice:
+    mimic_profile, mimic_position = tts_mimic_voice_profile(account_store, account_id)
+    if not city and not voice and not mimic_profile:
         return instructions
     adjusted = copy(instructions)
-    if city:
-        adjusted.openai_voice_instructions = _dialect_voice_instructions(instructions.openai_voice_instructions, city)
+    if city or mimic_profile:
+        adjusted.openai_voice_instructions = _compose_voice_instructions(
+            instructions.openai_voice_instructions,
+            city=city,
+            mimic_profile=mimic_profile,
+            mimic_position=mimic_position,
+        )
     if voice:
         adjusted.openai_voice = voice
     return adjusted
@@ -202,6 +219,138 @@ def handle_tts_voice_model_command(
     )
 
 
+def handle_tts_mimic_voice_command(
+    account_store: AccountStore,
+    account_id: str,
+    text: str,
+    instructions: BotInstructions,
+) -> TtsMimicVoiceCommandResult:
+    del instructions
+    parts = str(text or "").strip().split(maxsplit=1)
+    argument = re.sub(r"[^a-zA-Z0-9_äöüÄÖÜß-]+", "", parts[1].strip().casefold()) if len(parts) > 1 else ""
+    state = account_store.read_agent_state(account_id)
+    mimic_state = _mimic_state(state)
+
+    if not argument:
+        enabled = bool(mimic_state.get("enabled"))
+        position = _normalize_mimic_position(str(mimic_state.get("position") or "")) or TTS_MIMIC_POSITION_AFTER_DIALECT
+        profile = _mimic_profile_from_state(mimic_state)
+        status = "aktiv" if enabled else "aus"
+        position_text = "vor dem Dialekt" if position == TTS_MIMIC_POSITION_BEFORE_DIALECT else "nach dem Dialekt"
+        if profile:
+            return TtsMimicVoiceCommandResult(
+                f"Sprechweisen-Nachahmung: {status}, Einordnung: {position_text}.\n"
+                f"Aktuelles Profil: {profile}\n"
+                "Nutzung: /mimic_voice on|off|before|after|reset",
+                enabled=enabled,
+                position=position,
+            )
+        return TtsMimicVoiceCommandResult(
+            f"Sprechweisen-Nachahmung: {status}, Einordnung: {position_text}.\n"
+            "Ich verbessere das Profil aus deinen Sprachnachrichten, sobald Transkripte vorliegen.\n"
+            "Nutzung: /mimic_voice on|off|before|after|reset",
+            enabled=enabled,
+            position=position,
+        )
+
+    if argument in {"on", "ein", "enable", "aktivieren", "an"}:
+        _set_mimic_enabled(mimic_state, True)
+        _write_state(account_store, account_id, state)
+        return TtsMimicVoiceCommandResult(
+            "Okay, ich nutze fuer TTS eine leichte Sprechweisen-Nachahmung aus deinen Sprachnachrichten.",
+            changed=True,
+            enabled=True,
+            position=str(mimic_state.get("position") or TTS_MIMIC_POSITION_AFTER_DIALECT),
+        )
+    if argument in {"off", "aus", "disable", "deaktivieren"}:
+        _set_mimic_enabled(mimic_state, False)
+        _write_state(account_store, account_id, state)
+        return TtsMimicVoiceCommandResult(
+            "Okay, ich nutze die Sprechweisen-Nachahmung fuer TTS nicht mehr.",
+            changed=True,
+            enabled=False,
+            position=str(mimic_state.get("position") or TTS_MIMIC_POSITION_AFTER_DIALECT),
+        )
+    position = _normalize_mimic_position(argument)
+    if position:
+        _set_mimic_enabled(mimic_state, True)
+        mimic_state["position"] = position
+        mimic_state["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _write_state(account_store, account_id, state)
+        position_text = "vor dem Dialekt" if position == TTS_MIMIC_POSITION_BEFORE_DIALECT else "nach dem Dialekt"
+        return TtsMimicVoiceCommandResult(
+            f"Okay, ich setze die Sprechweisen-Nachahmung {position_text}.",
+            changed=True,
+            enabled=True,
+            position=position,
+        )
+    if argument in {"reset", "clear", "loeschen", "löschen"}:
+        changed = TTS_MIMIC_VOICE_STATE_KEY in state
+        state.pop(TTS_MIMIC_VOICE_STATE_KEY, None)
+        _write_state(account_store, account_id, state)
+        return TtsMimicVoiceCommandResult(
+            "Okay, ich habe das gespeicherte Sprechweisen-Profil geloescht.",
+            changed=changed,
+            enabled=False,
+        )
+
+    return TtsMimicVoiceCommandResult("Nutzung: /mimic_voice on|off|before|after|reset")
+
+
+def record_tts_voice_style_observation(
+    account_store: AccountStore | None,
+    account_id: str,
+    transcript: str,
+    *,
+    duration_seconds: float | int | None = None,
+) -> bool:
+    if account_store is None or not account_id:
+        return False
+    analysis = _analyze_voice_style(transcript, duration_seconds=duration_seconds)
+    if not analysis:
+        return False
+    state = account_store.read_agent_state(account_id)
+    mimic_state = _mimic_state(state)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    mimic_state.setdefault("schema_version", 1)
+    mimic_state.setdefault("enabled", False)
+    mimic_state.setdefault("position", TTS_MIMIC_POSITION_AFTER_DIALECT)
+    mimic_state["observations_count"] = int(mimic_state.get("observations_count") or 0) + 1
+    mimic_state["updated_at"] = now
+    mimic_state["last_observed_at"] = now
+    label_counts = mimic_state.setdefault("label_counts", {})
+    if not isinstance(label_counts, dict):
+        label_counts = {}
+        mimic_state["label_counts"] = label_counts
+    for label in analysis["labels"]:
+        label_counts[label] = int(label_counts.get(label) or 0) + 1
+    if analysis.get("words_per_minute") is not None:
+        previous = mimic_state.get("avg_words_per_minute")
+        wpm = float(analysis["words_per_minute"])
+        mimic_state["avg_words_per_minute"] = round(wpm if previous is None else (float(previous) * 0.7 + wpm * 0.3), 1)
+    mimic_state["last_analysis"] = {
+        "labels": analysis["labels"],
+        "word_count": analysis["word_count"],
+        "duration_seconds": analysis.get("duration_seconds"),
+        "words_per_minute": analysis.get("words_per_minute"),
+    }
+    account_store.write_agent_state(account_id, state)
+    return True
+
+
+def tts_mimic_voice_profile(account_store: AccountStore | None, account_id: str) -> tuple[str, str]:
+    if account_store is None or not account_id:
+        return "", TTS_MIMIC_POSITION_AFTER_DIALECT
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return "", TTS_MIMIC_POSITION_AFTER_DIALECT
+    mimic_state = state.get(TTS_MIMIC_VOICE_STATE_KEY)
+    if not isinstance(mimic_state, dict) or not mimic_state.get("enabled"):
+        return "", TTS_MIMIC_POSITION_AFTER_DIALECT
+    return _mimic_profile_from_state(mimic_state), _normalize_mimic_position(str(mimic_state.get("position") or "")) or TTS_MIMIC_POSITION_AFTER_DIALECT
+
+
 def tts_voice_for_account(account_store: AccountStore | None, account_id: str, instructions: BotInstructions) -> str:
     if account_store is None or not account_id:
         return ""
@@ -267,13 +416,146 @@ def extract_lifetime_city(text: str) -> str:
     return _extract_city(text, _LIFETIME_CITY_PATTERNS)
 
 
+def _compose_voice_instructions(base: str, *, city: str, mimic_profile: str, mimic_position: str) -> str:
+    parts: list[str] = [str(base or "").strip()]
+    dialect = _dialect_voice_instruction_text(city) if city else ""
+    mimic = _mimic_voice_instruction_text(mimic_profile) if mimic_profile else ""
+    if mimic_position == TTS_MIMIC_POSITION_BEFORE_DIALECT:
+        parts.extend([mimic, dialect])
+    else:
+        parts.extend([dialect, mimic])
+    return "\n".join(part for part in parts if part)
+
+
 def _dialect_voice_instructions(base: str, city: str) -> str:
     prefix = str(base or "").strip()
-    dialect = (
+    return "\n".join(part for part in (prefix, _dialect_voice_instruction_text(city)) if part)
+
+
+def _dialect_voice_instruction_text(city: str) -> str:
+    return (
         f"Nutze fuer diesen Account statt der globalen Dialektvorgabe eine leichte bis mittelleichte regionale "
         f"Faerbung aus der Gegend von {city}. Sprich weiterhin natuerlich, gut verstaendlich und nicht karikierend."
     )
-    return "\n".join(part for part in (prefix, dialect) if part)
+
+
+def _mimic_voice_instruction_text(profile: str) -> str:
+    return (
+        "Passe die Sprachausgabe leicht an die beobachtete Sprechweise des Users an: "
+        f"{profile}. Bleibe gut verstaendlich, ruhig hilfreich und ueberzeichne die Nachahmung nicht."
+    )
+
+
+def _mimic_state(state: dict[str, Any]) -> dict[str, Any]:
+    mimic_state = state.setdefault(TTS_MIMIC_VOICE_STATE_KEY, {})
+    if not isinstance(mimic_state, dict):
+        mimic_state = {}
+        state[TTS_MIMIC_VOICE_STATE_KEY] = mimic_state
+    mimic_state.setdefault("schema_version", 1)
+    mimic_state.setdefault("enabled", False)
+    mimic_state.setdefault("position", TTS_MIMIC_POSITION_AFTER_DIALECT)
+    return mimic_state
+
+
+def _set_mimic_enabled(mimic_state: dict[str, Any], enabled: bool) -> None:
+    mimic_state["schema_version"] = 1
+    mimic_state["enabled"] = enabled
+    mimic_state.setdefault("position", TTS_MIMIC_POSITION_AFTER_DIALECT)
+    mimic_state["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _normalize_mimic_position(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9_äöüß-]+", "", str(value or "").strip().casefold())
+    if normalized in {"before", "pre", "vor", "before_dialect", "vordialekt", "vor_dialekt"}:
+        return TTS_MIMIC_POSITION_BEFORE_DIALECT
+    if normalized in {"after", "post", "nach", "after_dialect", "nachdialekt", "nach_dialekt"}:
+        return TTS_MIMIC_POSITION_AFTER_DIALECT
+    return ""
+
+
+def _mimic_profile_from_state(mimic_state: dict[str, Any]) -> str:
+    label_counts = mimic_state.get("label_counts")
+    labels: list[str] = []
+    if isinstance(label_counts, dict):
+        labels = [
+            str(label)
+            for label, _count in sorted(
+                label_counts.items(),
+                key=lambda item: (-int(item[1] or 0), str(item[0])),
+            )
+            if str(label).strip()
+        ][:5]
+    if not labels:
+        last_analysis = mimic_state.get("last_analysis")
+        if isinstance(last_analysis, dict):
+            raw_labels = last_analysis.get("labels")
+            if isinstance(raw_labels, list):
+                labels = [str(label) for label in raw_labels if str(label).strip()][:5]
+    avg_wpm = mimic_state.get("avg_words_per_minute")
+    if avg_wpm is not None and not any("spricht" in label for label in labels):
+        labels.insert(0, _speed_label(float(avg_wpm)))
+    return "; ".join(dict.fromkeys(labels))
+
+
+def _analyze_voice_style(transcript: str, *, duration_seconds: float | int | None = None) -> dict[str, Any]:
+    text = str(transcript or "").strip()
+    words = re.findall(r"\b[\wÄÖÜäöüß'-]+\b", text, flags=re.UNICODE)
+    if len(words) < 2:
+        return {}
+    labels: list[str] = []
+    duration = _clean_duration(duration_seconds)
+    wpm: float | None = None
+    if duration:
+        wpm = round(len(words) / (duration / 60.0), 1)
+        labels.append(_speed_label(wpm))
+    fillers = re.findall(r"\b(?:aeh|äh|aehm|ähm|hm|hmm|also|halt|irgendwie|quasi)\b", text, flags=re.IGNORECASE)
+    if len(fillers) >= 2:
+        labels.append("nutzt mehrere Fuelllaute oder Suchwoerter")
+    if re.search(r"\b(?:angst|aengstlich|ängstlich|nervoes|nervös|panik|unsicher|sorry|entschuldigung|vielleicht|ich weiss nicht|ich weiß nicht)\b", text, re.IGNORECASE):
+        labels.append("wirkt sprachlich leicht unsicher oder aengstlich")
+    if re.search(r"(?:\[|\()(?:unverstaendlich|unverständlich|nuschelt|undeutlich)(?:\]|\))", text, re.IGNORECASE) or text.count("...") >= 2:
+        labels.append("wirkt stellenweise undeutlich oder nuschelnd")
+    dialect_label = _dialect_hint_label(text)
+    if dialect_label:
+        labels.append(dialect_label)
+    if not labels:
+        labels.append("spricht in gut verstaendlichem neutralem Deutsch")
+    return {
+        "labels": list(dict.fromkeys(labels)),
+        "word_count": len(words),
+        "duration_seconds": duration,
+        "words_per_minute": wpm,
+    }
+
+
+def _clean_duration(duration_seconds: float | int | None) -> float | None:
+    try:
+        duration = float(duration_seconds) if duration_seconds is not None else 0.0
+    except (TypeError, ValueError):
+        return None
+    if duration <= 0:
+        return None
+    return min(duration, 60.0 * 30.0)
+
+
+def _speed_label(words_per_minute: float) -> str:
+    if words_per_minute >= 210:
+        return "spricht sehr schnell und hastig"
+    if words_per_minute >= 170:
+        return "spricht schnell"
+    if words_per_minute <= 90:
+        return "spricht langsam und bedaechtig"
+    return "spricht in mittlerem Tempo"
+
+
+def _dialect_hint_label(text: str) -> str:
+    if re.search(r"\b(?:isch|nischt|gugg|nu|nue|nü|bidde)\b", text, re.IGNORECASE):
+        return "zeigt moeglicherweise einen leichten saechsischen Einschlag"
+    if re.search(r"\b(?:servus|fei|gell|ned|net|mei|bissi)\b", text, re.IGNORECASE):
+        return "zeigt moeglicherweise einen leichten sueddeutschen Einschlag"
+    if re.search(r"\b(?:moin|dat|wat|nich|nech)\b", text, re.IGNORECASE):
+        return "zeigt moeglicherweise einen leichten norddeutschen Einschlag"
+    return ""
 
 
 def _extract_city(text: str, patterns: tuple[re.Pattern[str], ...]) -> str:

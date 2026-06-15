@@ -32,6 +32,7 @@ DEFAULT_HELP_LINES = (
     "/codex Prompt - fuehrt Codex CLI lokal aus",
     "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
     "/voicemodel <stimme> - Stimme fuer deine Sprachnachrichten waehlen. OpenAI-Voices: https://platform.openai.com/docs/guides/text-to-speech#voice-options",
+    "/mimic_voice on|off|before|after - Sprechweise aus deinen Sprachnachrichten fuer TTS leicht nachahmen",
     "/youtube_transcript URL - YouTube-Untertitel laden oder per lokalem Whisper transkribieren",
     "/chatid - aktuelle Chat-ID anzeigen",
     "/reset - setzt nur den OpenAI-Verlauf dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",

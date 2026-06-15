@@ -719,7 +719,7 @@ def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
 
         def transcribe_audio(self, audio, filename, _instructions, model=None):
             self.transcriptions.append((audio, filename))
-            return "Gesprochener Inhalt."
+            return "Aehm also ich weiss nicht, ich bin nervoes und rede sehr schnell."
 
         def create_reply(self, user_text, _instructions, previous_response_id=None):
             self.user_text = user_text
@@ -728,16 +728,23 @@ def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True)
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client)
 
-    actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
+    actions = engine.process(event(identity, "", attachments=(attachment,)))
+    account_id = account_store.get_account_for_identity(identity)
+    state = account_store.read_agent_state(account_id or "")
 
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "Antwort auf Audio."
     assert client.transcriptions == [(b"audio", "voice.ogg")]
     assert "- attachments: 1" in client.user_text
-    assert "Transkript: Gesprochener Inhalt." in client.user_text
+    assert "Transkript: Aehm also ich weiss nicht" in client.user_text
     assert "Nachricht:\n<leer>" in client.user_text
+    assert "tts_mimic_voice" in state
+    assert "wirkt sprachlich leicht unsicher oder aengstlich" in str(state)
+    assert "ich weiss nicht" not in str(state)
 
 
 def test_engine_does_not_transcribe_view_once_audio_attachment(tmp_path):
@@ -1339,6 +1346,42 @@ def test_engine_voice_model_command_lists_openai_voices(tmp_path):
     assert "Aktuelle Stimme:" in actions[0].text
     assert "onyx" in actions[0].text
     assert "https://platform.openai.com/docs/guides/text-to-speech#voice-options" in actions[0].text
+
+
+def test_engine_mimic_voice_command_controls_voice_instruction_order(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.voice_instructions: list[str] = []
+
+        def create_voice(self, _text, instructions):
+            self.voice_instructions.append(instructions.openai_voice_instructions)
+            return type("Voice", (), {"audio": b"voice", "filename": "voice.ogg", "content_type": "audio/ogg"})()
+
+    from TeeBotus.runtime.tts_dialect import record_tts_voice_style_observation
+
+    account_store = store(tmp_path)
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_voice_instructions="Basisstimme."),
+        openai_client=client,
+    )
+    identity = signal_identity_key(source_uuid="mimic-engine")
+    account_id = account_store.resolve_or_create_account(identity)
+
+    engine.process(event(identity, "Ich bin in Dresden geboren.", channel="signal"))
+    record_tts_voice_style_observation(
+        account_store,
+        account_id,
+        "Aehm also isch rede sehr schnell und bin nervoes.",
+        duration_seconds=3,
+    )
+    set_actions = engine.process(event(identity, "/mimic_voice before", channel="signal"))
+    voice_actions = engine.process(event(identity, "/voice Hallo", channel="signal"))
+
+    assert "vor dem Dialekt" in set_actions[0].text
+    assert client.voice_instructions[0].index("beobachtete Sprechweise") < client.voice_instructions[0].index("Dresden")
+    assert isinstance(voice_actions[1], SendAttachment)
 
 
 def test_engine_voice_command_uses_reply_text(tmp_path):

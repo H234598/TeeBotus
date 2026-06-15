@@ -2829,6 +2829,51 @@ class BotTests(unittest.TestCase):
         self.assertIn("onyx", api.sent_messages[0][1])
         self.assertIn("https://platform.openai.com/docs/guides/text-to-speech#voice-options", api.sent_messages[0][1])
 
+    def test_transcribed_voice_updates_mimic_voice_profile_for_tts(self) -> None:
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        api.file_data["voice/file_1.oga"] = b"voice-audio"
+        openai_client = FakeOpenAIClient()
+        openai_client.transcription_text = "Aehm also ich weiss nicht, ich bin nervoes und rede sehr schnell."
+        chat_state = ChatState()
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"m" * 32))
+            instructions = BotInstructions(openai_voice_instructions="Basisstimme.", user_memory_enabled=True)
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key(456))
+            memory_store.confirm_privacy(account_id, source="telegram")
+
+            handle_update(
+                api,
+                {"message": {"voice": {"file_id": "file_1", "duration": 2}, "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store=memory_store,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "/mimic_voice on", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store=memory_store,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "/voice Hallo Welt", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store=memory_store,
+            )
+
+            state = memory_store.read_agent_state(account_id)
+
+        self.assertIn("Sprechweisen-Nachahmung", api.sent_messages[-1][1])
+        self.assertIn("beobachtete Sprechweise", openai_client.voice_instruction_texts[0])
+        self.assertIn("spricht sehr schnell und hastig", openai_client.voice_instruction_texts[0])
+        self.assertNotIn("ich weiss nicht", json.dumps(state, ensure_ascii=False))
+
     def test_logs_outgoing_voice_without_content(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

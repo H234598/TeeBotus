@@ -46,7 +46,13 @@ from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
-from TeeBotus.runtime.tts_dialect import handle_tts_voice_model_command, maybe_update_tts_dialect_preference, voice_instructions_for_account
+from TeeBotus.runtime.tts_dialect import (
+    handle_tts_mimic_voice_command,
+    handle_tts_voice_model_command,
+    maybe_update_tts_dialect_preference,
+    record_tts_voice_style_observation,
+    voice_instructions_for_account,
+)
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -841,6 +847,9 @@ def _process_text_message(
     if text and _normalize_command(text) == "/voicemodel":
         _handle_voice_model_command(api, chat_state, chat_id, message, instructions, text, user_memory_store)
         return
+    if text and _normalize_command(text) == "/mimic_voice":
+        _handle_mimic_voice_command(api, chat_state, chat_id, message, instructions, text, user_memory_store)
+        return
 
     if text and _handle_pending_youtube_local_options(
         api,
@@ -1081,6 +1090,7 @@ def _handle_incoming_voice_message(
             message.get("message_id", "unknown"),
         )
         return
+    _record_tts_voice_style_from_message(user_memory_store, transcribed_message, transcribed_text, voice)
     user_memory = _prepare_user_memory(user_memory_store, transcribed_message, instructions, transcribed_text, api)
     _process_text_message(
         api,
@@ -1881,6 +1891,35 @@ def _voice_instructions_for_message(
             except (AccountStoreError, OSError, AttributeError):
                 account_id = ""
     return voice_instructions_for_account(instructions, user_memory_store, account_id)
+
+
+def _record_tts_voice_style_from_message(
+    user_memory_store: AccountStore | None,
+    message: dict[str, Any],
+    transcribed_text: str,
+    voice: dict[str, Any],
+) -> None:
+    if user_memory_store is None:
+        return
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return
+    try:
+        account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        user_memory_store.update_identity_route(
+            identity_key,
+            channel="telegram",
+            chat_id=str(_message_chat_id(message) or ""),
+            chat_type=_telegram_chat_type(message),
+        )
+        record_tts_voice_style_observation(
+            user_memory_store,
+            account_id,
+            transcribed_text,
+            duration_seconds=voice.get("duration"),
+        )
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception("Failed to record Telegram TTS voice style observation.")
 
 
 def _account_id_from_user_memory(user_memory: UserMemoryRecord | None) -> str:
@@ -3130,6 +3169,38 @@ def _handle_voice_model_command(
     except (AccountStoreError, OSError, ValueError, AttributeError):
         LOGGER.exception("Failed to update Telegram voice model preference.")
         _send_tracked_message(api, chat_state, chat_id, "Ich konnte deine Voice-Einstellung gerade nicht speichern.")
+        return
+    _send_tracked_message(api, chat_state, chat_id, result.reply_text)
+
+
+def _handle_mimic_voice_command(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    text: str,
+    user_memory_store: AccountStore | None = None,
+) -> None:
+    if user_memory_store is None:
+        _send_tracked_message(api, chat_state, chat_id, "Sprechweisen-Einstellung ist fuer diesen Bot gerade nicht verfuegbar.")
+        return
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        _send_tracked_message(api, chat_state, chat_id, "Ich konnte deine Telegram-Identitaet fuer die Sprechweisen-Einstellung nicht zuordnen.")
+        return
+    try:
+        account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        user_memory_store.update_identity_route(
+            identity_key,
+            channel="telegram",
+            chat_id=str(_message_chat_id(message) or ""),
+            chat_type=_telegram_chat_type(message),
+        )
+        result = handle_tts_mimic_voice_command(user_memory_store, account_id, text, instructions)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception("Failed to update Telegram mimic voice preference.")
+        _send_tracked_message(api, chat_state, chat_id, "Ich konnte deine Sprechweisen-Einstellung gerade nicht speichern.")
         return
     _send_tracked_message(api, chat_state, chat_id, result.reply_text)
 
