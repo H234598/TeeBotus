@@ -683,6 +683,47 @@ def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
     assert '"selected_memory_ids": [\n    "mem_moon",\n    "mem_tea"\n  ]' in client.user_text
 
 
+def test_engine_pages_account_memory_when_model_requests_it(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.calls.append((user_text, previous_response_id))
+            if len(self.calls) == 1:
+                return OpenAIResponse('[[TEE_MEMORY_PAGE query="kaffee" exclude="mem_moon"]]', "resp-page-request", None)
+            return OpenAIResponse("Kaffee ist nachgeladen.", "resp-final", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-paging")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_moon", "keywords": ["mond"], "user_text": "Mein Lieblingswort ist Mond.", "bot_text": "Gemerkt."},
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_coffee", "keywords": ["kaffee"], "user_text": "Kaffee beruhigt beim Sortieren.", "bot_text": "Gemerkt."},
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
+        openai_client=client,
+    )
+
+    actions = engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
+
+    assert len(client.calls) == 2
+    assert "Persistentes Account-Memory:" in client.calls[0][0]
+    assert '[[TEE_MEMORY_PAGE query="kurze Suchphrase" exclude="id1,id2"]]' in client.calls[0][0]
+    assert client.calls[1][1] == "resp-page-request"
+    assert "Aktive Account-Memory-Page:" in client.calls[1][0]
+    assert '"id": "mem_coffee"' in client.calls[1][0]
+    assert '"id": "mem_moon"' not in client.calls[1][0]
+    assert actions[-1].text == "Kaffee ist nachgeladen."
+
+
 def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

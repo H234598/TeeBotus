@@ -21,7 +21,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
+from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
@@ -32,6 +32,8 @@ LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account v
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
 EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
+MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
 
 
 @dataclass
@@ -346,13 +348,32 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, instructions.openai_error)]
         try:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions)
-            account_memory_context = _build_account_memory_context(self.account_store, account_id, instructions, text)
+            account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, text)
+            account_memory_context = account_memory_selection.prompt_text
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
+            previous_response_id = self.state.get_previous_response_id(event.instance, account_id)
             response = create_reply(
                 _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context),
                 instructions,
-                self.state.get_previous_response_id(event.instance, account_id),
+                previous_response_id,
             )
+            response_text = str(getattr(response, "text", "") or "").strip()
+            page_request = _parse_memory_page_request(response_text)
+            if page_request is not None and instructions.user_memory_enabled:
+                first_response_id = getattr(response, "response_id", None)
+                page_selection = _select_account_memory(
+                    self.account_store,
+                    account_id,
+                    instructions,
+                    page_request.query or text,
+                    exclude_ids=(*account_memory_selection.selected_ids, *page_request.exclude_ids),
+                    max_prompt_chars=max(1000, min(instructions.user_memory_max_prompt_chars, 6000)),
+                )
+                response = create_reply(
+                    _build_active_memory_page_input(event, text, page_request, page_selection),
+                    instructions,
+                    first_response_id if isinstance(first_response_id, str) else previous_response_id,
+                )
         except OpenAIAPIError:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         response_id = getattr(response, "response_id", None)
@@ -739,6 +760,7 @@ def _build_openai_user_input(
                 "",
                 "Persistentes Account-Memory:",
                 "Nutze nur diese ausgewaehlten Hinweise und Eintraege fuer den aktuellen TeeBotus-Account. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
+                "Wenn diese Auswahl eindeutig nicht reicht, antworte exakt mit [[TEE_MEMORY_PAGE query=\"kurze Suchphrase\" exclude=\"id1,id2\"]]. Der Bot laedt dann lokal eine weitere Account-Memory-Page und fragt dich erneut.",
                 account_memory_context,
             ]
         )
@@ -782,17 +804,82 @@ def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str 
 
 
 def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions, query_text: str = "") -> str:
+    return _select_account_memory(account_store, account_id, instructions, query_text).prompt_text
+
+
+def _select_account_memory(
+    account_store: AccountStore,
+    account_id: str,
+    instructions: BotInstructions,
+    query_text: str = "",
+    *,
+    exclude_ids: Iterable[str] = (),
+    max_prompt_chars: int | None = None,
+) -> AccountMemorySelection:
     if not instructions.user_memory_enabled:
-        return ""
+        return AccountMemorySelection("", ())
     try:
         return account_store.select_structured_memory(
             account_id,
             query_text=query_text,
-            max_prompt_chars=instructions.user_memory_max_prompt_chars,
+            max_prompt_chars=max_prompt_chars if max_prompt_chars is not None else instructions.user_memory_max_prompt_chars,
             max_entry_chars=instructions.user_memory_max_entry_chars,
-        ).prompt_text
+            exclude_ids=exclude_ids,
+        )
     except (AccountStoreError, OSError):
-        return ""
+        return AccountMemorySelection("", ())
+
+
+@dataclass(frozen=True)
+class MemoryPageRequest:
+    query: str
+    exclude_ids: tuple[str, ...] = ()
+
+
+def _parse_memory_page_request(text: str) -> MemoryPageRequest | None:
+    match = MEMORY_PAGE_REQUEST_RE.match(str(text or ""))
+    if match is None:
+        return None
+    attrs = {
+        attr.group("key"): attr.group("value").strip()
+        for attr in MEMORY_PAGE_ATTR_RE.finditer(match.group("attrs") or "")
+    }
+    query = attrs.get("query", "")
+    exclude_ids = tuple(
+        dict.fromkeys(
+            memory_id.strip()
+            for memory_id in re.split(r"[,;\s]+", attrs.get("exclude", ""))
+            if memory_id.strip()
+        )
+    )
+    return MemoryPageRequest(query=query, exclude_ids=exclude_ids)
+
+
+def _build_active_memory_page_input(
+    event: IncomingEvent,
+    original_text: str,
+    request: MemoryPageRequest,
+    selection: AccountMemorySelection,
+) -> str:
+    page_text = selection.prompt_text or "Keine weiteren passenden Account-Memory-Eintraege gefunden."
+    return "\n".join(
+        [
+            "Aktive Account-Memory-Page:",
+            "Diese Page wurde lokal aus dem persistenten Account-Memory geladen, weil du eine TEE_MEMORY_PAGE-Anfrage gestellt hast.",
+            "Nutze nur diese Page zusaetzlich zum bereits geladenen Kontext. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
+            "Beantworte jetzt die urspruengliche Nutzerfrage. Fordere in diesem Turn keine weitere Memory-Page an.",
+            f"- instance: {_metadata_value(event.instance)}",
+            f"- channel: {_metadata_value(event.channel)}",
+            f"- account_id: {_metadata_value(event.account_id)}",
+            f"- page_query: {_metadata_value(request.query)}",
+            f"- page_selected_ids: {', '.join(selection.selected_ids) if selection.selected_ids else '<keine>'}",
+            "",
+            page_text,
+            "",
+            "Urspruengliche Nachricht:",
+            original_text or "<leer>",
+        ]
+    ).strip()
 
 
 def _append_account_memory_interaction(

@@ -17,7 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Iterable, Protocol
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -1202,10 +1202,12 @@ class AccountStore:
         max_prompt_chars: int = 12000,
         max_entry_chars: int = 2000,
         habits_max_chars: int = 4000,
+        exclude_ids: Iterable[str] = (),
     ) -> AccountMemorySelection:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if max_prompt_chars < 1:
             return AccountMemorySelection("", ())
+        excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         parts: list[str] = []
         selected_ids: list[str] = []
         total_chars = 0
@@ -1224,7 +1226,11 @@ class AccountStore:
 
         entries = self.read_memory_entries(account_id)
         index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
-        ordered_entries = self._rank_structured_memory_entries(entries, index, query_text)
+        ordered_entries = [
+            entry
+            for entry in self._rank_structured_memory_entries(entries, index, query_text)
+            if str(entry.get("id") or "").strip() not in excluded_ids
+        ]
         selected: list[dict[str, Any]] = []
         for entry in ordered_entries:
             compact = _compact_account_memory_entry(entry, max_entry_chars=max_entry_chars)

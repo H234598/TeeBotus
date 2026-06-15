@@ -63,10 +63,26 @@ The semantic cache currently uses local hash embeddings plus keyword signatures 
 ## Architecture Comparison
 
 - Generative Agents: TeeBotus keeps the memory-stream idea and ranks by relevance, recency, and importance. Reflection is represented by `summary`/`reflection` entries created by maintenance jobs. TeeBotus is not a full autonomous simulation/planning agent.
-- MemGPT/Letta: TeeBotus has fast prompt hydration plus slower encrypted JSONL archive. It does not yet expose model-driven memory paging tools, but the archive is rebuildable and selected into context.
+- MemGPT/Letta: TeeBotus has fast prompt hydration plus slower encrypted JSONL archive. It now supports one bounded active paging round per user turn: the model can request a further local account-memory page, TeeBotus retrieves it from JSONL/index data, and then asks the model for the final answer.
 - LangGraph/LangChain Memory: TeeBotus separates account long-term memory from instance working memory and now distinguishes `semantic`, `episodic`, and `procedural` account entries.
 - Mem0: TeeBotus performs local deterministic consolidation from repeated episodes into semantic summaries with provenance. It avoids a mandatory LLM/vector-service dependency.
 - Zep/Graphiti: TeeBotus now has a small local temporal graph with typed relations, validity windows, provenance, and conflict links. It is intentionally not a separate graph database.
+
+## Active Paging
+
+Normal prompt hydration selects a bounded first page from account memory. If that page is not enough, the model may answer exactly:
+
+```text
+[[TEE_MEMORY_PAGE query="short search phrase" exclude="mem_id_1,mem_id_2"]]
+```
+
+TeeBotus then loads one additional page locally with `exclude_ids` applied, updates `last_accessed_at`/`access_count` for the loaded memories, and performs one second OpenAI call with the page and the original user message. The hard one-page limit prevents model loops and keeps latency predictable on a notebook CPU. This is a local protocol today; a native OpenAI function-tool wrapper can later call the same `select_structured_memory(..., exclude_ids=...)` path.
+
+## Graph Server
+
+A graph server would mainly add durable graph queries, multi-hop traversal, consistency constraints, concurrent writes, graph algorithms, and external visualization over the same relation data. It is useful once the local JSONL/index graph becomes too large, needs multi-process access, or needs query patterns such as "find all active contradictions involving this risk hypothesis across several relation hops".
+
+For the current TeeBotus target, JSONL remains the source of truth and `index.graph` is a rebuildable local cache. That keeps privacy, portability, encryption, backups, and notebook-CPU operation simpler. A future graph server should therefore be an optional rebuildable projection, not the primary memory store.
 
 ## Maintenance
 

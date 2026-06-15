@@ -482,6 +482,31 @@ def test_structured_account_memory_semantic_embedding_matches_synonym(tmp_path):
     assert len(semantic_entry["embedding"]) == 64
 
 
+def test_structured_account_memory_selection_can_exclude_loaded_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    walk_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_walk", "kind": "coping_strategy", "user_text": "Spaziergang hilft bei Druck.", "bot_text": "Ressource notiert."},
+    )
+    tea_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_tea", "user_text": "Tee hilft beim Sortieren.", "bot_text": "Notiz."},
+    )
+
+    selection = store.select_structured_memory(
+        account_id,
+        query_text="gehen stress tee",
+        max_prompt_chars=12000,
+        max_entry_chars=2000,
+        exclude_ids=(walk_id,),
+    )
+
+    assert walk_id not in selection.selected_ids
+    assert tea_id in selection.selected_ids
+    assert '"id": "mem_walk"' not in selection.prompt_text
+
+
 def test_structured_account_memory_semantic_cache_can_be_disabled(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
