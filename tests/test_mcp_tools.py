@@ -42,6 +42,7 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
             "memory.search": {"enabled": True, "read_only": True},
             "codex.exec": {"enabled": True, "read_only": False},
         },
+        private_chat=True,
     )
 
     assert registry.tool_names == ("bibliothekar.search", "memory.search")
@@ -54,6 +55,25 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
     assert memory["selected_ids"] == ["mem_1"]
     with pytest.raises(MCPToolError, match="disabled"):
         registry.call("codex.exec", {"command": "id"})
+
+
+def test_mcp_memory_search_requires_explicit_private_chat_context(tmp_path) -> None:
+    service = _bibliothekar_service(tmp_path)
+    account_store, account_id = _account_store_with_memory(tmp_path)
+
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        bibliothekar_service=service,
+        tool_config={
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "memory.search": {"enabled": True, "read_only": True, "private_chat_only": True},
+        },
+    )
+
+    assert registry.tool_names == ("bibliothekar.search",)
+    with pytest.raises(MCPToolError, match="not registered"):
+        registry.call("memory.search", {"query": "Mond"})
 
 
 def test_mcp_registry_rejects_non_readonly_policy(tmp_path) -> None:

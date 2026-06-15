@@ -62,12 +62,14 @@ def build_readonly_mcp_registry(
     account_id: str = "",
     bibliothekar_service: BibliothekarService | None = None,
     tool_config: Mapping[str, Mapping[str, Any]] | None = None,
+    private_chat: bool = False,
 ) -> MCPToolRegistry:
     policies = _merge_tool_policies(DEFAULT_MCP_TOOL_POLICIES, tool_config or {})
     tools: dict[str, ToolCallable] = {}
     if bibliothekar_service is not None:
         tools["bibliothekar.search"] = lambda arguments: _bibliothekar_search_tool(bibliothekar_service, arguments)
-    if account_store is not None and str(account_id or "").strip():
+    memory_policy = policies.get("memory.search", DEFAULT_MCP_TOOL_POLICIES["memory.search"])
+    if account_store is not None and str(account_id or "").strip() and (private_chat or not memory_policy.private_chat_only):
         tools["memory.search"] = lambda arguments: _memory_search_tool(account_store, account_id, arguments)
     return MCPToolRegistry(policies, tools)
 
