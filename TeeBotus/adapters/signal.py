@@ -159,11 +159,33 @@ def _signal_quote_kwargs_for_context(context: Any, reply_to_ref: str) -> dict[st
     quote_message = str(getattr(message, "text", "") or "").strip()
     if not quote_author or not quote_message:
         return {}
-    return {
+    quote: dict[str, Any] = {
         "quote_author": quote_author,
         "quote_message": quote_message,
         "quote_timestamp": quote_timestamp,
     }
+    quote_mentions = _signal_quote_mentions_for_context(context)
+    if quote_mentions:
+        quote["quote_mentions"] = quote_mentions
+    return quote
+
+
+def _signal_quote_mentions_for_context(context: Any) -> list[dict[str, Any]] | None:
+    message = getattr(context, "message", None)
+    mentions = getattr(message, "mentions", None)
+    if not mentions:
+        return None
+    convert = getattr(context, "_convert_receive_mentions_into_send_mentions", None)
+    if callable(convert):
+        try:
+            converted = convert(mentions)
+        except Exception:
+            converted = None
+        if isinstance(converted, list) and converted:
+            return converted
+    if isinstance(mentions, list) and all(isinstance(mention, dict) for mention in mentions):
+        return mentions
+    return None
 
 
 def _signal_message_ref(message: Any) -> str:

@@ -334,6 +334,38 @@ def test_signal_send_text_keeps_manual_quote_for_edit_target_timestamp():
     ]
 
 
+def test_signal_manual_quote_preserves_converted_mentions():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(text="Hallo @ada", timestamp="200", type=MessageType.EDIT_MESSAGE)
+            self.message.target_sent_timestamp = 100
+            self.message.mentions = [{"uuid": "ada-uuid", "start": 6, "length": 4}]
+
+        def _convert_receive_mentions_into_send_mentions(self, mentions):
+            converted = [dict(mention) for mention in mentions]
+            converted[0]["author"] = converted[0]["uuid"]
+            return converted
+
+        async def send(self, text, **kwargs):
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Antwort", reply_to_ref="100")]))
+
+    assert sent == [456]
+    assert context.bot.calls[0][2]["quote_mentions"] == [{"uuid": "ada-uuid", "start": 6, "length": 4, "author": "ada-uuid"}]
+
+
 def test_signal_send_text_falls_back_without_matching_quote_context():
     class Context:
         def __init__(self) -> None:
