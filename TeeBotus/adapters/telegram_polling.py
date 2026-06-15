@@ -45,6 +45,7 @@ from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
+from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 
 LOGGER = logging.getLogger("TeeBotus")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -888,6 +889,7 @@ def _process_text_message(
         try:
             api.send_chat_action(chat_id, "typing")
             working_memory = _prepare_working_memory(working_memory_store, text)
+            weather_text = _prepare_weather_context(user_memory_store, user_memory, text)
             openai_response = openai_client.create_reply(
                 _build_openai_user_input(
                     message,
@@ -895,6 +897,7 @@ def _process_text_message(
                     user_memory.prompt_text if user_memory else "",
                     bot_identity,
                     working_memory.prompt_text if working_memory else "",
+                    weather_text,
                 ),
                 instructions,
                 chat_state.get_previous_response_id(chat_id),
@@ -1589,6 +1592,10 @@ def _prepare_user_memory(
             chat_type=_telegram_chat_type(message),
         )
         _record_telegram_activity(user_memory_store, account_id, identity_key, message)
+        try:
+            update_city_and_weather_context(user_memory_store, account_id, query_text)
+        except (AccountStoreError, OSError, ValueError):
+            LOGGER.exception("Failed to update Telegram weather context.")
         selection = user_memory_store.select_structured_memory(
             account_id,
             query_text=query_text,
@@ -1714,6 +1721,7 @@ def _build_openai_user_input(
     user_memory_text: str = "",
     bot_identity: BotIdentity | None = None,
     working_memory_text: str = "",
+    weather_text: str = "",
 ) -> str:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
@@ -1761,8 +1769,31 @@ def _build_openai_user_input(
                 working_memory_text.strip(),
             ]
         )
+    if weather_text.strip():
+        metadata.extend(
+            [
+                "",
+                "Lokaler Wetterkontext:",
+                "Nur als kurzer situativer Kontext fuer Timing, Stimmung und alltagspraktische Hinweise nutzen. Keine Wetterdaten erfinden.",
+                weather_text.strip(),
+            ]
+        )
     metadata.extend(["", "Nachricht:", text])
     return "\n".join(metadata).strip()
+
+
+def _prepare_weather_context(user_memory_store: AccountStore | None, user_memory: UserMemoryRecord | None, text: str) -> str:
+    if user_memory_store is None or user_memory is None:
+        return ""
+    account_id = user_memory_store.get_account_for_identity(f"telegram:user:{user_memory.sender_id}") or ""
+    if not account_id:
+        return ""
+    try:
+        update_city_and_weather_context(user_memory_store, account_id, text)
+        return weather_context_text(user_memory_store, account_id)
+    except (AccountStoreError, OSError, ValueError):
+        LOGGER.exception("Failed to prepare weather context.")
+        return ""
 
 
 def _is_first_contact(
@@ -3371,6 +3402,7 @@ def _send_youtube_transcript_to_openai_pipeline(
     try:
         api.send_chat_action(chat_id, "typing")
         working_memory = _prepare_working_memory(working_memory_store, pipeline_text)
+        weather_text = _prepare_weather_context(user_memory_store, user_memory, user_text)
         openai_response = openai_client.create_reply(
             _build_openai_user_input(
                 message,
@@ -3378,6 +3410,7 @@ def _send_youtube_transcript_to_openai_pipeline(
                 user_memory.prompt_text if user_memory else "",
                 bot_identity,
                 working_memory.prompt_text if working_memory else "",
+                weather_text,
             ),
             instructions,
             chat_state.get_previous_response_id(chat_id),

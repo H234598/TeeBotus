@@ -30,6 +30,7 @@ from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttac
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks
 from TeeBotus.runtime.state import RuntimeState
+from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 PRIVATE_ONLY = "Bitte privat."
@@ -110,6 +111,11 @@ class TeeBotusEngine:
         if result.account_id and proactive_agent_instance_enabled(event.instance):
             try:
                 record_account_activity(self.account_store, result.account_id, event)
+            except (AccountStoreError, OSError, ValueError):
+                pass
+        if result.account_id:
+            try:
+                update_city_and_weather_context(self.account_store, result.account_id, event.text)
             except (AccountStoreError, OSError, ValueError):
                 pass
         if result.handled or result.actions:
@@ -408,10 +414,11 @@ class TeeBotusEngine:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, text)
             account_memory_context = account_memory_selection.prompt_text
+            weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             previous_response_id = self.state.get_previous_response_id(event.instance, account_id)
             response = create_reply(
-                _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context),
+                _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context, weather_context),
                 instructions,
                 previous_response_id,
             )
@@ -428,7 +435,7 @@ class TeeBotusEngine:
                     max_prompt_chars=max(1000, min(instructions.user_memory_max_prompt_chars, 6000)),
                 )
                 response = create_reply(
-                    _build_active_memory_page_input(event, text, page_request, page_selection),
+                    _build_active_memory_page_input(event, text, page_request, page_selection, weather_context=weather_context),
                     instructions,
                     first_response_id if isinstance(first_response_id, str) else previous_response_id,
                 )
@@ -788,6 +795,7 @@ def _build_openai_user_input(
     attachment_context: str = "",
     account_memory_context: str = "",
     working_memory_context: str = "",
+    weather_context: str = "",
 ) -> str:
     metadata = [
         f"{event.channel.title()}-Kontext:",
@@ -843,6 +851,15 @@ def _build_openai_user_input(
                 "Instanz-Arbeitsgedaechtnis:",
                 "Dieses Arbeitsgedaechtnis gilt fuer alle User dieser Bot-Instanz. Es darf keine personenbezogenen oder user-rueckfuehrbaren Details enthalten.",
                 working_memory_context,
+            ]
+        )
+    if weather_context:
+        metadata.extend(
+            [
+                "",
+                "Lokaler Wetterkontext:",
+                "Nur als kurzer situativer Kontext fuer Timing, Stimmung und alltagspraktische Hinweise nutzen. Keine Wetterdaten erfinden.",
+                weather_context,
             ]
         )
     metadata.extend(
@@ -946,26 +963,34 @@ def _build_active_memory_page_input(
     original_text: str,
     request: MemoryPageRequest,
     selection: AccountMemorySelection,
+    *,
+    weather_context: str = "",
 ) -> str:
     page_text = selection.prompt_text or "Keine weiteren passenden Account-Memory-Eintraege gefunden."
-    return "\n".join(
-        [
-            "Aktive Account-Memory-Page:",
-            "Diese Page wurde lokal aus dem persistenten Account-Memory geladen, weil du eine TEE_MEMORY_PAGE-Anfrage gestellt hast.",
-            "Nutze nur diese Page zusaetzlich zum bereits geladenen Kontext. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
-            "Beantworte jetzt die urspruengliche Nutzerfrage. Fordere in diesem Turn keine weitere Memory-Page an.",
-            f"- instance: {_metadata_value(event.instance)}",
-            f"- channel: {_metadata_value(event.channel)}",
-            f"- account_id: {_metadata_value(event.account_id)}",
-            f"- page_query: {_metadata_value(request.query)}",
-            f"- page_selected_ids: {', '.join(selection.selected_ids) if selection.selected_ids else '<keine>'}",
-            "",
-            page_text,
-            "",
-            "Urspruengliche Nachricht:",
-            original_text or "<leer>",
-        ]
-    ).strip()
+    parts = [
+        "Aktive Account-Memory-Page:",
+        "Diese Page wurde lokal aus dem persistenten Account-Memory geladen, weil du eine TEE_MEMORY_PAGE-Anfrage gestellt hast.",
+        "Nutze nur diese Page zusaetzlich zum bereits geladenen Kontext. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
+        "Beantworte jetzt die urspruengliche Nutzerfrage. Fordere in diesem Turn keine weitere Memory-Page an.",
+        f"- instance: {_metadata_value(event.instance)}",
+        f"- channel: {_metadata_value(event.channel)}",
+        f"- account_id: {_metadata_value(event.account_id)}",
+        f"- page_query: {_metadata_value(request.query)}",
+        f"- page_selected_ids: {', '.join(selection.selected_ids) if selection.selected_ids else '<keine>'}",
+        "",
+        page_text,
+    ]
+    if weather_context:
+        parts.extend(
+            [
+                "",
+                "Lokaler Wetterkontext:",
+                "Nur als kurzer situativer Kontext fuer Timing, Stimmung und alltagspraktische Hinweise nutzen. Keine Wetterdaten erfinden.",
+                weather_context,
+            ]
+        )
+    parts.extend(["", "Urspruengliche Nachricht:", original_text or "<leer>"])
+    return "\n".join(parts).strip()
 
 
 def _append_account_memory_interaction(
