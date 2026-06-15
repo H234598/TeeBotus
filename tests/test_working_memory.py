@@ -63,3 +63,15 @@ def test_working_memory_prepare_selects_relevant_entry(tmp_path):
     assert relevant in record.selected_ids
     assert "Architekturfragen" in record.prompt_text
     assert "selected_working_memory_ids" in record.prompt_text
+
+
+def test_working_memory_appends_recent_entries_after_keyword_matches(tmp_path):
+    instances_dir = tmp_path / "instances"
+    store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    relevant = store.append_manual("Architekturfragen zuerst kurz strukturieren.")
+    recent = store.append_manual("Katzenbilder nur mit Quellenhinweis.")
+
+    record = store.prepare("Bitte eine Architekturfrage strukturieren.")
+
+    assert record.selected_ids[:2] == (relevant, recent)
+    assert record.prompt_text.index(relevant) < record.prompt_text.index(recent)
