@@ -22,6 +22,7 @@ DEFAULT_HELP_LINES = (
     "/help - Hilfe anzeigen",
     "/ping - Verbindung testen",
     "/status - Bot-Status, Version, Memory-Groesse und Userfile-Verschluesselung anzeigen",
+    "/history - GitHub-Repo, Commits und Releases anzeigen",
     "/account - TeeBotus-Account und verknuepfte Kommunikationswege anzeigen",
     "/register - Account-Secret erzeugen und anzeigen",
     "/login <account_id> <secret> - diesen Kommunikationsweg mit einem Account verbinden",

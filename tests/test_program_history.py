@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from TeeBotus.core.program_history import build_program_history_reply, recent_commits, recent_releases
+
+
+def test_program_history_uses_last_20_commits_without_releases(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for index in range(25):
+        _commit(repo, f"Feature {index:02d}")
+    _git(repo, "remote", "add", "origin", "git@github.com:example/project.git")
+
+    reply = build_program_history_reply(repo)
+
+    assert "- Repo: https://github.com/example/project" in reply
+    assert "- Commits: https://github.com/example/project/commits/main" in reply
+    assert "Letzte 20 Commits" in reply
+    assert "Letzte 5 Commits" not in reply
+    assert "Feature 24" in reply
+    assert "Feature 05" in reply
+    assert "Feature 04" not in reply
+
+
+def test_program_history_uses_last_5_commits_and_3_releases_when_tags_exist(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for index in range(8):
+        _commit(repo, f"Bugfix {index:02d}")
+        if index in {2, 4, 6, 7}:
+            _git(repo, "tag", f"v1.0.{index}")
+
+    reply = build_program_history_reply(repo)
+
+    assert "Letzte 5 Commits" in reply
+    assert "Letzte 3 Releases" in reply
+    assert "Bugfix 07" in reply
+    assert "Bugfix 03" in reply
+    assert "Bugfix 02" not in reply
+    assert "- v1.0.7 Bugfix 07" in reply
+    assert "- v1.0.6 Bugfix 06" in reply
+    assert "- v1.0.4 Bugfix 04" in reply
+    assert "- v1.0.2 Bugfix 02" not in reply
+
+
+def test_recent_history_helpers_return_empty_lists_outside_git_repo(tmp_path: Path) -> None:
+    assert recent_commits(tmp_path, limit=20) == []
+    assert recent_releases(tmp_path, limit=3) == []
+    assert "Keine lokalen Git-Daten gefunden." in build_program_history_reply(tmp_path)
+
+
+def _git_repo(path: Path) -> Path:
+    _git(path, "init")
+    _git(path, "config", "user.email", "tester@example.invalid")
+    _git(path, "config", "user.name", "TeeBotus Test")
+    return path
+
+
+def _commit(repo: Path, message: str) -> None:
+    filename = f"{message.lower().replace(' ', '_')}.txt"
+    (repo / filename).write_text(message, encoding="utf-8")
+    _git(repo, "add", filename)
+    _git(repo, "commit", "-m", message)
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, text=True, capture_output=True)

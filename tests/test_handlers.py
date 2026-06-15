@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from TeeBotus.handlers import HELP_TEXT, build_reply
+from TeeBotus.handlers import HELP_TEXT, build_reply, is_program_history_request
 from TeeBotus.instructions import BotInstructions
 
 
@@ -15,6 +15,7 @@ class HandlerTests(unittest.TestCase):
         reply = build_reply({"text": "/help"})
 
         self.assertEqual(reply, HELP_TEXT)
+        self.assertIn("/history - GitHub-Repo, Commits und Releases anzeigen", reply)
         self.assertIn("/reset - setzt nur den OpenAI-Verlauf", reply)
         self.assertIn("/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege", reply)
         self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)
@@ -43,6 +44,31 @@ class HandlerTests(unittest.TestCase):
         reply = build_reply({"text": "/status", "from": {"first_name": "Ada"}}, instructions)
 
         self.assertEqual(reply, "Laeuft fuer Ada.")
+
+    def test_program_history_command_uses_builtin_reply_before_configured_commands(self) -> None:
+        instructions = BotInstructions(commands={"/history": "Configured history."})
+
+        reply = build_reply({"text": "/history"}, instructions, project_root=Path("/does/not/exist"))
+
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertIn("GitHub", reply)
+        self.assertIn("- Repo: https://github.com/H234598/TeeBotus", reply)
+        self.assertNotEqual(reply, "Configured history.")
+
+    def test_program_history_natural_language_request_is_hardwired(self) -> None:
+        instructions = BotInstructions(openai_enabled=True)
+
+        reply = build_reply({"text": "Was ist neu?"}, instructions, include_fallback=False, project_root=Path("/does/not/exist"))
+
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertIn("- Commits: https://github.com/H234598/TeeBotus/commits/main", reply)
+
+    def test_program_history_detection_avoids_generic_commit_request(self) -> None:
+        self.assertTrue(is_program_history_request("Zeig mir bitte die Commit Historie"))
+        self.assertTrue(is_program_history_request("Welche Programmänderungen gab es?"))
+        self.assertFalse(is_program_history_request("commit bitte"))
 
     def test_uses_exact_text_reply_before_echo(self) -> None:
         instructions = BotInstructions(text_replies={"hallo": "Hallo zurueck."})

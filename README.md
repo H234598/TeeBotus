@@ -8,6 +8,7 @@ TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. E
 - `/help` zeigt die verfuegbaren Befehle
 - `/ping` antwortet mit `pong`
 - `/status` zeigt Laufstatus, TeeBotus-Version, GitHub-Commithistorie, Memory-Groesse und Userfile-Verschluesselung des anfragenden Nutzers
+- `/history` zeigt GitHub-Repo, Commits und lokale Release-Tags. Fragen wie `Was ist neu?`, `Programmhistorie`, `Commits`, `Changelog` oder `Programmänderungen` nutzen denselben Offline-Pfad.
 - `/chatid` zeigt die aktuelle Chat-ID
 - `/reset` loescht den OpenAI-Verlauf fuer den aktuellen Chat
 - `/reset_memorys` fragt nach und loescht danach nur die eigenen User-Memory-Eintraege
