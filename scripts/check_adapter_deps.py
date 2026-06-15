@@ -189,6 +189,8 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     reply_params = inspect.signature(Context.reply).parameters
     edit_params = inspect.signature(Context.edit).parameters
     bot_send_params = inspect.signature(SignalBot.send).parameters
+    bot_register_params = inspect.signature(SignalBot.register).parameters
+    bot_start_params = inspect.signature(SignalBot.start).parameters
     bot_start_typing_params = inspect.signature(SignalBot.start_typing).parameters
     bot_stop_typing_params = inspect.signature(SignalBot.stop_typing).parameters
     bot_react_params = inspect.signature(SignalBot.react).parameters
@@ -227,6 +229,10 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.send.quote_mentions": "quote_mentions" in bot_send_params,
         "SignalBot.send.quote_message": "quote_message" in bot_send_params,
         "SignalBot.send.quote_timestamp": "quote_timestamp" in bot_send_params,
+        "SignalBot.register.command": "command" in bot_register_params,
+        "SignalBot.start.run_forever": "run_forever" in bot_start_params,
+        "SignalBot.signal_cli_rest_api_mode": hasattr(SignalBot, "signal_cli_rest_api_mode"),
+        "SignalBot.signal_cli_rest_api_version": hasattr(SignalBot, "signal_cli_rest_api_version"),
         "SignalBot.react.message": "message" in bot_react_params,
         "SignalBot.react.emoji": "emoji" in bot_react_params,
         "SignalBot.receipt.message": "message" in bot_receipt_params,
@@ -242,7 +248,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=send,reply,edit,react,receipt,poll,start_typing,stop_typing,remote_delete,delete_attachment"
+    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,start_typing,stop_typing,remote_delete,delete_attachment,about"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
