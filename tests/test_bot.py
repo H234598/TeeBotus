@@ -1097,6 +1097,32 @@ class BotTests(unittest.TestCase):
             self.assertIn("- Review pending: 1", reply)
             self.assertIn("- Scheduler enabled: ja", reply)
 
+    def test_info_alias_reports_status_before_configured_command(self) -> None:
+        api = FakeAPI()
+        instructions = BotInstructions(commands={"/info": "Configured info."})
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 1,
+                    "text": "/info",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            None,
+            ChatState(),
+            None,
+        )
+
+        self.assertEqual(len(api.sent_messages), 1)
+        reply = api.sent_messages[0][1]
+        self.assertIn("Status:", reply)
+        self.assertIn("- Version:", reply)
+        self.assertNotIn("Configured info.", reply)
+
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()
         instructions = BotInstructions(commands={"/account": "configured fallback"})

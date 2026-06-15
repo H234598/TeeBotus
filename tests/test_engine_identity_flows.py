@@ -245,6 +245,17 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "Configured status." not in actions[0].text
 
 
+def test_engine_info_alias_uses_core_status_before_configured_commands(tmp_path):
+    instructions = BotInstructions(commands={"/info": "Configured info."})
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, project_root=tmp_path)
+
+    actions = engine.process(event(telegram_identity_key(1), "/info"))
+
+    assert len(actions) == 1
+    assert "Depressionsbot Status:" in actions[0].text
+    assert "Configured info." not in actions[0].text
+
+
 def test_engine_status_reports_unmapped_account_instead_of_zero_memory(tmp_path):
     account_store = store(tmp_path)
     existing_account_id = "a" * 128

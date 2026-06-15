@@ -18,7 +18,7 @@ from TeeBotus.core.youtube import (
 )
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
-from TeeBotus.core.status import build_status_reply
+from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
@@ -158,7 +158,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [SendText(event.chat_id, reminder_reply, track=False)], handled=True)
         if command in EXPORT_COMMANDS:
             return EngineResult(result.account_id, self._export_actions(event, result.account_id), handled=True)
-        if command == "/status":
+        if command in STATUS_COMMAND_ALIASES:
             return EngineResult(
                 result.account_id,
                 [

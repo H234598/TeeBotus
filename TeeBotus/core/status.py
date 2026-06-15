@@ -27,6 +27,17 @@ ACCOUNT_MEMORY_FILENAMES = frozenset(
         USER_MEMORY_ENTRIES_FILENAME,
     }
 )
+STATUS_COMMAND_ALIASES = frozenset(
+    {
+        "/status",
+        "/info",
+        "/about",
+        "/version",
+        "/versions",
+        "/programm",
+        "/program",
+    }
+)
 
 
 def build_status_reply(

@@ -20,7 +20,7 @@ from typing import Any
 
 from TeeBotus import __version__
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
-from TeeBotus.core.status import build_status_reply as build_core_status_reply
+from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply as build_core_status_reply
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
 from TeeBotus.core.youtube import (
     YOUTUBE_TRANSCRIPT_COMMANDS,
@@ -757,7 +757,7 @@ def handle_update(
     if text and _handle_account_runtime_command(api, chat_id, message, text, instance_name):
         return
 
-    if text and _normalize_command(text) == "/status":
+    if text and _normalize_command(text) in STATUS_COMMAND_ALIASES:
         reply = _build_status_reply(message, instructions, instance_name, user_memory_store)
         _send_tracked_message(api, chat_state, chat_id, _with_first_contact_intro(reply, first_contact, bot_identity))
         return
