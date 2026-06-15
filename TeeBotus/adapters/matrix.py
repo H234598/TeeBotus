@@ -382,7 +382,8 @@ async def _send_matrix_file(
 ) -> Any:
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
-    if callable(send_message) and attachment is not None and not mentions and not _matrix_is_html_text_mode(text_mode):
+    encrypt_upload = _matrix_room_is_encrypted(client, room_id)
+    if callable(send_message) and attachment is not None and not mentions and not _matrix_is_html_text_mode(text_mode) and not encrypt_upload:
         kwargs: dict[str, Any] = {"file": attachment}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -394,6 +395,7 @@ async def _send_matrix_file(
         content_type=content_type or "application/octet-stream",
         filename=filename,
         filesize=len(data),
+        encrypt=encrypt_upload,
     )
     content_uri = getattr(upload_response, "content_uri", None)
     if not content_uri:
@@ -411,6 +413,13 @@ async def _send_matrix_file(
             "size": len(data),
         },
     }
+    if encrypt_upload:
+        if not isinstance(_keys, dict):
+            raise RuntimeError("Matrix encrypted upload returned no decryption metadata")
+        encrypted_file = dict(_keys)
+        encrypted_file["url"] = str(content_uri)
+        content.pop("url", None)
+        content["file"] = encrypted_file
     _add_matrix_reply_relation(content, reply_to_ref)
     _add_matrix_mentions(content, mentions or [])
     if caption and _matrix_is_html_text_mode(text_mode):
@@ -483,6 +492,19 @@ def _add_matrix_html_format(content: dict[str, Any], html_text: str) -> None:
 
 def _matrix_is_html_text_mode(text_mode: str) -> bool:
     return str(text_mode or "").strip().casefold() in {"html", "formatted", "org.matrix.custom.html"}
+
+
+def _matrix_room_is_encrypted(client: Any, room_id: str) -> bool:
+    rooms = getattr(client, "rooms", None)
+    room = rooms.get(room_id) if isinstance(rooms, dict) else None
+    if room is None:
+        get_room = getattr(client, "room", None)
+        if callable(get_room):
+            try:
+                room = get_room(room_id)
+            except Exception:
+                room = None
+    return bool(getattr(room, "encrypted", False))
 
 
 def _matrix_plain_body_from_html(html_text: str) -> str:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import asyncio
 import json
@@ -2021,6 +2022,7 @@ def test_matrix_export_file_uploads_file_before_room_send():
                 "content_type": "application/json",
                 "filename": "report.json",
                 "filesize": 12,
+                "encrypt": False,
             },
         )
     ]
@@ -2206,6 +2208,7 @@ def test_matrix_attachment_with_mentions_uses_room_send_content():
 
     assert sent == ["$sent"]
     assert client.uploads[0][0] == b"hello"
+    assert client.uploads[0][1]["encrypt"] is False
     assert client.sends[0]["content"] == {
         "msgtype": "m.file",
         "body": "Bericht fuer @alice",
@@ -2259,6 +2262,7 @@ def test_matrix_attachment_html_caption_uses_formatted_room_send_content():
 
     assert sent == ["$sent"]
     assert client.uploads[0][0] == b"hello"
+    assert client.uploads[0][1]["encrypt"] is False
     assert client.sends[0]["content"] == {
         "msgtype": "m.file",
         "body": "Bericht",
@@ -2267,6 +2271,68 @@ def test_matrix_attachment_html_caption_uses_formatted_room_send_content():
         "info": {"mimetype": "text/plain", "size": 5},
         "format": "org.matrix.custom.html",
         "formatted_body": "<strong>Bericht</strong>",
+    }
+
+
+def test_matrix_attachment_in_encrypted_room_uploads_encrypted_file_metadata():
+    class UploadResponse:
+        content_uri = "mxc://example/secret"
+
+    class SendResponse:
+        event_id = "$sent"
+
+    keys = {
+        "v": "v2",
+        "key": {"kty": "oct", "k": "secret-key"},
+        "iv": "secret-iv",
+        "hashes": {"sha256": "secret-hash"},
+    }
+
+    class Client:
+        def __init__(self) -> None:
+            self.rooms = {"!room:example": SimpleNamespace(encrypted=True)}
+            self.uploads = []
+            self.sends = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used for encrypted Matrix uploads")
+
+        async def upload(self, data_provider, **kwargs):
+            self.uploads.append((data_provider.read(), kwargs))
+            return UploadResponse(), keys
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return SendResponse()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendAttachment("!room:example", b"secret", "secret.bin", "application/octet-stream")]))
+
+    assert sent == ["$sent"]
+    assert client.uploads == [
+        (
+            b"secret",
+            {
+                "content_type": "application/octet-stream",
+                "filename": "secret.bin",
+                "filesize": 6,
+                "encrypt": True,
+            },
+        )
+    ]
+    assert client.sends[0]["content"] == {
+        "msgtype": "m.file",
+        "body": "secret.bin",
+        "filename": "secret.bin",
+        "info": {"mimetype": "application/octet-stream", "size": 6},
+        "file": {
+            "v": "v2",
+            "key": {"kty": "oct", "k": "secret-key"},
+            "iv": "secret-iv",
+            "hashes": {"sha256": "secret-hash"},
+            "url": "mxc://example/secret",
+        },
     }
 
 

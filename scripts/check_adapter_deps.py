@@ -89,6 +89,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomEncryptedAudio",
         "RoomEncryptedVideo",
         "RoomMessageUnknown",
+        "MatrixRoom",
         "RoomSendResponse",
         "RoomSendError",
         "RoomGetEventResponse",
@@ -122,6 +123,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     fetch_message_params = inspect.signature(niobot.NioBot.fetch_message).parameters
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
+    matrix_room_params = inspect.signature(nio.MatrixRoom).parameters
     download_params = inspect.signature(nio.AsyncClient.download).parameters
     room_get_event_params = inspect.signature(nio.AsyncClient.room_get_event).parameters
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
@@ -144,6 +146,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.fetch_message.room_id": "room_id" in fetch_message_params,
         "NioBot.fetch_message.event_id": "event_id" in fetch_message_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
+        "AsyncClient.upload.encrypt": "encrypt" in upload_params,
+        "MatrixRoom.encrypted": "encrypted" in matrix_room_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_get_event.event_id": "event_id" in room_get_event_params,
         "AsyncClient.room_send.content": "content" in room_send_params,
