@@ -752,7 +752,7 @@ def handle_update(
         return
 
     if text and _normalize_command(text) == "/status":
-        reply = _build_status_reply(message, instructions, instance_name)
+        reply = _build_status_reply(message, instructions, instance_name, user_memory_store)
         _send_tracked_message(api, chat_state, chat_id, _with_first_contact_intro(reply, first_contact, bot_identity))
         return
 
@@ -975,9 +975,9 @@ def _handle_account_runtime_command(
         return True
 
 
-def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str) -> str:
+def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str, account_store: AccountStore | None = None) -> str:
     sender_id = _sender_identifier(message)
-    return build_core_status_reply(sender_id=sender_id, instance_name=instance_name, project_root=PROJECT_ROOT)
+    return build_core_status_reply(sender_id=sender_id, instance_name=instance_name, project_root=PROJECT_ROOT, account_store=account_store)
 
 
 def _handle_incoming_voice_message(

@@ -117,7 +117,12 @@ class TeeBotusEngine:
                 [
                     SendText(
                         event.chat_id,
-                        build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
+                        build_status_reply(
+                            account_id=result.account_id,
+                            instance_name=event.instance,
+                            project_root=self.project_root,
+                            account_store=self.account_store,
+                        ),
                     )
                 ],
                 handled=True,

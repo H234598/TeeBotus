@@ -213,9 +213,21 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
     assert actions[0].text == "Hallo telegram:user:1."
 
 
-def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
+def test_engine_status_uses_core_status_before_configured_commands(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     instructions = BotInstructions(commands={"/status": "Configured status."})
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, project_root=tmp_path)
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store.write_agent_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "proactive": {"enabled": True, "paused": False},
+            "consent": {"categories": ["reminder"]},
+        },
+    )
+    account_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, project_root=tmp_path)
 
     actions = engine.process(event(telegram_identity_key(1), "/status"))
 
@@ -223,6 +235,10 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert "TeeBotus Status" in actions[0].text
     assert f"- Version: {__version__}" in actions[0].text
     assert "Commits: https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert "Proactive Agent" in actions[0].text
+    assert "- Agent enabled: ja" in actions[0].text
+    assert "- Outbox queued: 1" in actions[0].text
+    assert "- Scheduler enabled: ja" in actions[0].text
     assert "Configured status." not in actions[0].text
 
 

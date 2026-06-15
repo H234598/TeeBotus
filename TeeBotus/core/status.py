@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
+from typing import Mapping
 
 from TeeBotus import __version__
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
@@ -14,6 +16,7 @@ from TeeBotus.runtime.accounts import (
     SecretToolInstanceSecretProvider,
     telegram_identity_key,
 )
+from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
 
 LOGGER = logging.getLogger("TeeBotus")
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
@@ -26,9 +29,20 @@ ACCOUNT_MEMORY_FILENAMES = frozenset(
 )
 
 
-def build_status_reply(*, sender_id: str = "", instance_name: str, project_root: Path, account_id: str = "") -> str:
-    if account_id:
-        account_dir = account_memory_dir_for_account(account_id, instance_name=instance_name, project_root=project_root)
+def build_status_reply(
+    *,
+    sender_id: str = "",
+    instance_name: str,
+    project_root: Path,
+    account_id: str = "",
+    account_store: AccountStore | None = None,
+    env: Mapping[str, str] | None = None,
+) -> str:
+    resolved_account_id = _resolve_status_account_id(sender_id=sender_id, account_id=account_id, account_store=account_store)
+    if resolved_account_id and account_store is not None:
+        account_dir = _account_memory_dir_from_store(account_store, resolved_account_id)
+    elif resolved_account_id:
+        account_dir = account_memory_dir_for_account(resolved_account_id, instance_name=instance_name, project_root=project_root)
     else:
         account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
     memory_size = memory_files_size(account_dir)
@@ -46,8 +60,77 @@ def build_status_reply(*, sender_id: str = "", instance_name: str, project_root:
             "Deine Daten",
             f"- Nutzermemory: {format_byte_size(memory_size)}",
             f"- Userfiles: {encryption_status}",
+            "",
+            *_proactive_agent_status_lines(
+                account_store=account_store,
+                account_id=resolved_account_id,
+                instance_name=instance_name,
+                env=env,
+            ),
         ]
     )
+
+
+def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store: AccountStore | None) -> str:
+    if account_id:
+        return account_id
+    if account_store is None or not sender_id:
+        return ""
+    try:
+        return account_store.get_account_for_identity(telegram_identity_key(sender_id)) or ""
+    except (AccountStoreError, OSError):
+        LOGGER.exception("Failed to resolve account id for status.")
+        return ""
+
+
+def _account_memory_dir_from_store(account_store: AccountStore, account_id: str) -> Path | None:
+    try:
+        account_dir = account_store.account_dir(account_id)
+    except (AccountStoreError, OSError):
+        LOGGER.exception("Failed to resolve account memory directory from store.")
+        return None
+    return account_dir if account_dir.is_dir() else None
+
+
+def _proactive_agent_status_lines(
+    *,
+    account_store: AccountStore | None,
+    account_id: str,
+    instance_name: str,
+    env: Mapping[str, str] | None,
+) -> list[str]:
+    scheduler_enabled = proactive_agent_instance_enabled(instance_name, env=env or os.environ)
+    if account_store is None or not account_id:
+        return [
+            "Proactive Agent",
+            "- Agent enabled: unbekannt",
+            "- Outbox queued: unbekannt",
+            f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+        ]
+    try:
+        state = account_store.read_agent_state(account_id)
+        outbox = account_store.read_proactive_outbox(account_id)
+    except (AccountStoreError, OSError):
+        LOGGER.exception("Failed to read proactive agent status.")
+        return [
+            "Proactive Agent",
+            "- Agent enabled: Fehler beim Lesen",
+            "- Outbox queued: Fehler beim Lesen",
+            f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+        ]
+    proactive = state.get("proactive") if isinstance(state, dict) else {}
+    if not isinstance(proactive, dict):
+        proactive = {}
+    enabled = bool(proactive.get("enabled"))
+    paused = bool(proactive.get("paused"))
+    queued = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "queued").strip().casefold() == "queued")
+    return [
+        "Proactive Agent",
+        f"- Agent enabled: {'ja' if enabled else 'nein'}",
+        f"- Agent paused: {'ja' if paused else 'nein'}",
+        f"- Outbox queued: {queued}",
+        f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+    ]
 
 
 def github_commit_history_url(project_root: Path) -> str:

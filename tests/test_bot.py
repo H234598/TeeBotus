@@ -1028,15 +1028,25 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
             )
             memory_store = account_memory_store(directory)
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / ("a" * 128)
-            user_dir.mkdir(parents=True)
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key(456))
+            memory_store.write_agent_state(
+                account_id,
+                {
+                    "schema_version": 1,
+                    "proactive": {"enabled": True, "paused": False},
+                    "consent": {"categories": ["reminder"]},
+                },
+            )
+            memory_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
+            user_dir = memory_store.account_dir(account_id)
+            user_dir.mkdir(parents=True, exist_ok=True)
             encrypted_payload = b'{"magic":"TMBMAP1","ciphertext":"abc"}\n'
             (user_dir / "User_Memory_Index.json").write_bytes(encrypted_payload)
             (user_dir / "User_Memory_Entries.jsonl").write_bytes(encrypted_payload)
             (user_dir / "User_Habbits_and_behave.md").write_bytes(b"z" * 512)
             (user_dir / "Secret_Verifier.json").write_bytes(b"not counted")
 
-            with patch("TeeBotus.core.status.account_memory_dir_for_sender", return_value=user_dir):
+            with patch.dict(os.environ, {"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"}):
                 handle_update(
                     api,
                     {
@@ -1061,6 +1071,10 @@ class BotTests(unittest.TestCase):
             self.assertIn("  Commits: https://github.com/H234598/TeeBotus/commits/main", reply)
             self.assertIn("- Nutzermemory:", reply)
             self.assertIn("- Userfiles: Userfiles verschluesselt", reply)
+            self.assertIn("Proactive Agent", reply)
+            self.assertIn("- Agent enabled: ja", reply)
+            self.assertIn("- Outbox queued: 1", reply)
+            self.assertIn("- Scheduler enabled: ja", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
         api = FakeAPI()
