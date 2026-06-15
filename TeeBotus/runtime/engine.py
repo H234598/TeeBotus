@@ -69,9 +69,9 @@ class EngineResult:
 class TeeBotusEngine:
     """Channel-neutral first stage engine for account/registration and built-in commands.
 
-    Telegram still owns the broader YouTube and memory stack. Signal and Matrix use
-    this engine as their channel-neutral baseline so configured replies, OpenAI
-    text/voice handling, and identity-critical commands share the same behavior.
+    Telegram, Signal, and Matrix use this engine as their channel-neutral
+    baseline so configured replies, OpenAI text/voice handling, identity-critical
+    commands, and YouTube transcript handling share the same behavior.
     """
 
     def __init__(
@@ -871,12 +871,46 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         try:
             pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
+            account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, pipeline_text)
+            weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, pipeline_text)
+            library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, pipeline_text)
             response = create_reply(
-                _build_youtube_openai_input(pipeline_text, working_memory_context),
+                _build_openai_user_input(
+                    event.with_account(account_id),
+                    pipeline_text,
+                    "",
+                    account_memory_selection.prompt_text,
+                    working_memory_context,
+                    weather_context,
+                    library_context,
+                ),
                 instructions,
                 self.state.get_previous_response_id(event.instance, account_id),
             )
+            response_text = str(getattr(response, "text", "") or "").strip()
+            page_request = _parse_memory_page_request(response_text)
+            if page_request is not None and instructions.user_memory_enabled:
+                first_response_id = getattr(response, "response_id", None)
+                page_selection = _select_account_memory(
+                    self.account_store,
+                    account_id,
+                    instructions,
+                    page_request.query or pipeline_text,
+                    exclude_ids=(*account_memory_selection.selected_ids, *page_request.exclude_ids),
+                    max_prompt_chars=max(1000, min(instructions.user_memory_max_prompt_chars, 6000)),
+                )
+                response = create_reply(
+                    _build_active_memory_page_input(
+                        event.with_account(account_id),
+                        pipeline_text,
+                        page_request,
+                        page_selection,
+                        weather_context=weather_context,
+                    ),
+                    instructions,
+                    first_response_id if isinstance(first_response_id, str) else self.state.get_previous_response_id(event.instance, account_id),
+                )
         except OpenAIAPIError:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         response_id = getattr(response, "response_id", None)
@@ -885,6 +919,8 @@ class TeeBotusEngine:
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        if _parse_memory_page_request(response_text) is not None:
+            response_text = MEMORY_PAGE_LIMIT_NOTE
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
@@ -1211,17 +1247,6 @@ def _build_bibliothekar_context(
         ).prompt_text
     except OSError:
         return ""
-
-
-def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str = "") -> str:
-    if not working_memory_context:
-        return pipeline_text
-    return (
-        "Instanz-Arbeitsgedaechtnis:\n"
-        "Dieses Arbeitsgedaechtnis gilt fuer alle User dieser Bot-Instanz. Es darf keine personenbezogenen oder user-rueckfuehrbaren Details enthalten.\n"
-        f"{working_memory_context}\n\n"
-        f"{pipeline_text}"
-    ).strip()
 
 
 def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions, query_text: str = "") -> str:

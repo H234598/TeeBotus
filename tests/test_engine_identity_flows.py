@@ -1587,6 +1587,96 @@ def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp
     assert "YouTube-Transkript:" in client.reply_inputs[0]
 
 
+def test_engine_youtube_openai_pipeline_includes_account_weather_and_library_context(monkeypatch, tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.reply_inputs: list[str] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.reply_inputs.append(user_text)
+            return OpenAIResponse("AI summary.", "resp-youtube", None)
+
+    class FakeBibliothekarStore:
+        def select(self, query_text, **_kwargs):
+            assert "YouTube-Transkript:" in query_text
+            return type("Selection", (), {"prompt_text": "Quelle: therapie.txt chunk_id=chunk-1"})()
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Therapie Transcript.", "YouTube-Untertitel"),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.engine.weather_context_text", lambda _store, _account_id: "Berlin: 12 C")
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_therapy", "keywords": ["therapie"], "user_text": "Therapie lieber strukturiert.", "bot_text": "Gemerkt."},
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, bibliothekar_enabled=True),
+        openai_client=client,
+        bibliothekar_store=FakeBibliothekarStore(),
+    )
+
+    engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123 Therapie", channel="signal"))
+
+    assert "Persistentes Account-Memory:" in client.reply_inputs[0]
+    assert "Therapie lieber strukturiert." in client.reply_inputs[0]
+    assert "Lokaler Wetterkontext:" in client.reply_inputs[0]
+    assert "Berlin: 12 C" in client.reply_inputs[0]
+    assert "Bibliothekar-Quellenkontext:" in client.reply_inputs[0]
+    assert "therapie.txt" in client.reply_inputs[0]
+
+
+def test_engine_youtube_openai_pipeline_supports_active_memory_page(monkeypatch, tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.calls.append((user_text, previous_response_id))
+            if len(self.calls) == 1:
+                return OpenAIResponse('[[TEE_MEMORY_PAGE query="kaffee" exclude="mem_moon"]]', "resp-page-request", None)
+            return OpenAIResponse("Kaffee ist nachgeladen.", "resp-final", None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Mond Transcript.", "YouTube-Untertitel"),
+    )
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_moon", "keywords": ["mond"], "user_text": "Mein Lieblingswort ist Mond.", "bot_text": "Gemerkt."},
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_coffee", "keywords": ["kaffee"], "user_text": "Kaffee beruhigt beim Sortieren.", "bot_text": "Gemerkt."},
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
+        openai_client=client,
+    )
+
+    actions = engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123 Mond", channel="matrix"))
+
+    assert len(client.calls) == 2
+    assert "Persistentes Account-Memory:" in client.calls[0][0]
+    assert '[[TEE_MEMORY_PAGE query="kurze Suchphrase" exclude="id1,id2"]]' in client.calls[0][0]
+    assert client.calls[1][1] == "resp-page-request"
+    assert "Aktive Account-Memory-Page:" in client.calls[1][0]
+    assert '"id": "mem_coffee"' in client.calls[1][0]
+    assert '"id": "mem_moon"' not in client.calls[1][0]
+    assert "YouTube-Transkript:" in client.calls[1][0]
+    assert actions[-1].text == "Kaffee ist nachgeladen."
+
+
 def test_engine_youtube_transcript_requires_link(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
 
