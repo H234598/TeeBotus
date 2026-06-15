@@ -231,6 +231,7 @@ async def _update_signal_group(context: Any, action: UpdateSignalGroup) -> None:
     update_group = getattr(bot, "update_group", None)
     if not callable(update_group):
         raise RuntimeError("SignalBot.update_group is required to update a group")
+    target = _signal_group_update_target(bot, target)
     await update_group(
         target,
         base64_avatar=action.base64_avatar,
@@ -238,6 +239,21 @@ async def _update_signal_group(context: Any, action: UpdateSignalGroup) -> None:
         expiration_in_seconds=action.expiration_in_seconds,
         name=action.name,
     )
+
+
+def _signal_group_update_target(bot: Any, group_id: str) -> str:
+    target = str(group_id or "").strip()
+    get_group = getattr(bot, "get_group", None)
+    if not callable(get_group):
+        return target
+    try:
+        group = get_group(target)
+    except Exception:
+        return target
+    if not isinstance(group, dict):
+        return target
+    resolved = str(group.get("id") or "").strip()
+    return resolved or target
 
 
 async def _send_signal_text(

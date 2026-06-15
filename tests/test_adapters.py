@@ -792,6 +792,53 @@ def test_signal_update_group_uses_signalbot_update_group():
     ]
 
 
+def test_signal_update_group_resolves_internal_id_with_signalbot_get_group():
+    class Bot:
+        def __init__(self) -> None:
+            self.get_group_calls = []
+            self.calls = []
+
+        def get_group(self, internal_id):
+            self.get_group_calls.append(internal_id)
+            return {"id": "resolved-group-id", "internal_id": internal_id, "name": "Teegruppe"}
+
+        async def update_group(self, group_id, **kwargs):
+            self.calls.append((group_id, kwargs))
+
+    class Context:
+        bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [UpdateSignalGroup("internal-group-id", name="Neu")]))
+
+    assert sent == [None]
+    assert context.bot.get_group_calls == ["internal-group-id"]
+    assert context.bot.calls == [("resolved-group-id", {"base64_avatar": None, "description": None, "expiration_in_seconds": None, "name": "Neu"})]
+
+
+def test_signal_update_group_falls_back_when_signalbot_get_group_fails():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def get_group(self, _internal_id):
+            raise RuntimeError("group cache unavailable")
+
+        async def update_group(self, group_id, **kwargs):
+            self.calls.append((group_id, kwargs))
+
+    class Context:
+        bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [UpdateSignalGroup("group-id", description="Beschreibung")]))
+
+    assert sent == [None]
+    assert context.bot.calls == [("group-id", {"base64_avatar": None, "description": "Beschreibung", "expiration_in_seconds": None, "name": None})]
+
+
 def test_signal_ignores_matrix_state_action():
     class Context:
         pass
