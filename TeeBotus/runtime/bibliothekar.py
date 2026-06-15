@@ -156,7 +156,7 @@ class BibliothekarStore:
 
     def ensure_current(self) -> None:
         index = _read_json(self.index_path)
-        if not isinstance(index, dict) or _index_is_stale(index, self.library_dir):
+        if not isinstance(index, dict) or _index_is_stale(index, self.library_dir) or _chunk_store_is_stale(index, self.chunks_path):
             self.rebuild()
 
     def select(
@@ -482,6 +482,15 @@ def _index_is_stale(index: dict[str, Any], library_dir: Path) -> bool:
         if relative:
             indexed[relative] = (int(document.get("size_bytes") or -1), int(document.get("mtime_ns") or -1))
     return current != indexed
+
+
+def _chunk_store_is_stale(index: dict[str, Any], chunks_path: Path) -> bool:
+    expected_count = int(index.get("chunk_count") or 0)
+    if expected_count < 1:
+        return False
+    if not chunks_path.exists():
+        return True
+    return len(_read_chunks(chunks_path)) != expected_count
 
 
 def _read_chunks(path: Path) -> list[dict[str, Any]]:

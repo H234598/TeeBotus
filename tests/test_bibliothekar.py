@@ -84,6 +84,21 @@ def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
     assert "genaue Quelle" in fake_client.prompt
 
 
+def test_bibliothekar_rebuilds_when_chunk_store_is_missing(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    store.chunks_path.unlink()
+
+    selection = store.select("Therapie", max_chunks=1)
+
+    payload = json.loads(selection.prompt_text)
+    assert store.chunks_path.exists()
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
 def test_bibliothekar_openai_settings_are_parsed():
     instructions = parse_instructions(
         """
