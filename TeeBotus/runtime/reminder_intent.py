@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import json
 import re
-from typing import Iterable
+from typing import Any, Callable, Iterable
 
+from pydantic import ValidationError
+
+from TeeBotus.ai_structures.schemas import ReminderDecision
 from TeeBotus.runtime.accounts import AccountStore
 from TeeBotus.runtime.proactive_agent import (
     enable_proactive_agent,
@@ -13,6 +17,8 @@ from TeeBotus.runtime.proactive_agent import (
     set_proactive_categories,
 )
 
+StructuredReminderRunner = Callable[[str, type[Any]], Any]
+
 
 @dataclass(frozen=True)
 class ReminderIntent:
@@ -20,6 +26,7 @@ class ReminderIntent:
     due_at: str = ""
     subject: str = ""
     missing_time: bool = False
+    source: str = "classic"
 
 
 REMINDER_REQUEST_RE = re.compile(
@@ -71,8 +78,11 @@ def maybe_queue_natural_reminder(
     instance_name: str,
     text: str,
     now: datetime | None = None,
+    structured_decision_runner: StructuredReminderRunner | None = None,
 ) -> str | None:
     intent = parse_reminder_intent(text, now=now)
+    if not intent.is_request and structured_decision_runner is not None:
+        intent = _structured_reminder_intent(text, structured_decision_runner=structured_decision_runner)
     if not intent.is_request:
         return None
     if not proactive_agent_instance_enabled(instance_name):
@@ -90,7 +100,7 @@ def maybe_queue_natural_reminder(
         now=now,
         risk_gate="none",
         planner={
-            "source": "natural_reminder_request",
+            "source": "structured_reminder_decision" if intent.source == "model" else "natural_reminder_request",
             "subject": intent.subject,
         },
     )
@@ -112,6 +122,44 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     due_at = _parse_due_at(raw, resolved_now)
     subject = _reminder_subject(raw)
     return ReminderIntent(True, due_at=due_at, subject=subject, missing_time=not bool(due_at))
+
+
+def _structured_reminder_intent(text: str, *, structured_decision_runner: StructuredReminderRunner) -> ReminderIntent:
+    raw = str(text or "").strip()
+    if not raw or raw.startswith("/"):
+        return ReminderIntent(False)
+    try:
+        payload = structured_decision_runner(_structured_reminder_prompt(raw), ReminderDecision)
+        decision = _coerce_reminder_decision(payload)
+    except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        return ReminderIntent(False)
+    if not decision.should_create or decision.confidence < 0.7:
+        return ReminderIntent(False)
+    subject = decision.text.strip() or "deinen Termin"
+    if not decision.datetime_iso:
+        return ReminderIntent(True, subject=subject, missing_time=True, source="model")
+    try:
+        datetime.fromisoformat(decision.datetime_iso)
+    except ValueError:
+        return ReminderIntent(True, subject=subject, missing_time=True, source="model")
+    return ReminderIntent(True, due_at=decision.datetime_iso, subject=subject[:240], missing_time=False, source="model")
+
+
+def _coerce_reminder_decision(payload: object) -> ReminderDecision:
+    if isinstance(payload, ReminderDecision):
+        return payload
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    return ReminderDecision.model_validate(payload)
+
+
+def _structured_reminder_prompt(text: str) -> str:
+    return (
+        "Pruefe, ob die natuerliche Nachricht eine Bitte ist, eine Erinnerung fuer den User anzulegen. "
+        "Antworte ausschliesslich als JSON fuer ReminderDecision. Lege nur User-gewuenschte Erinnerungen an; "
+        "keine allgemeinen Fragen, keine Bot-Aufgaben ohne Reminderwunsch.\n\n"
+        f"Nachricht:\n{text}"
+    )
 
 
 def _ensure_reminder_consent(account_store: AccountStore, account_id: str) -> None:

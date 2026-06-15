@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from TeeBotus.runtime.reminder_intent import parse_reminder_intent
+from TeeBotus.ai_structures import ReminderDecision
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder, parse_reminder_intent
+
+
+def store(tmp_path) -> AccountStore:
+    return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"r" * 32))
 
 
 def fixed_now() -> datetime:
@@ -38,3 +44,62 @@ def test_parse_non_reminder_is_not_request() -> None:
     intent = parse_reminder_intent("Was denkst du ueber den Termin?", now=fixed_now())
 
     assert intent.is_request is False
+
+
+def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    calls = []
+
+    def fake_runner(prompt, schema):
+        calls.append((prompt, schema))
+        return ReminderDecision(
+            should_create=True,
+            text="die Unterlagen mitnehmen",
+            datetime_iso="2026-06-16T08:30:00+00:00",
+            recurrence=None,
+            confidence=0.86,
+        )
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich morgen frueh wegen der Unterlagen anstupsen?",
+        now=fixed_now(),
+        structured_decision_runner=fake_runner,
+    )
+
+    assert reply == "Okay, ich erinnere dich am 16.06.2026 um 08:30: die Unterlagen mitnehmen"
+    assert calls and calls[0][1] is ReminderDecision
+    queued = account_store.read_proactive_outbox(account_id)
+    assert queued[0]["planner"]["source"] == "structured_reminder_decision"
+    assert queued[0]["due_at"] == "2026-06-16T08:30:00+00:00"
+
+
+def test_structured_reminder_fallback_ignores_low_confidence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Vielleicht irgendwann mal an Papier denken.",
+        now=fixed_now(),
+        structured_decision_runner=lambda _prompt, _schema: {
+            "should_create": True,
+            "text": "Papier",
+            "datetime_iso": "2026-06-16T08:30:00+00:00",
+            "confidence": 0.3,
+        },
+    )
+
+    assert reply is None
+    assert account_store.read_proactive_outbox(account_id) == []

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import re
 from subprocess import TimeoutExpired
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from TeeBotus.core.youtube import (
     YOUTUBE_TRANSCRIPT_COMMANDS,
@@ -116,6 +116,7 @@ class TeeBotusEngine:
         bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
         youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
         background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
+        structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -129,6 +130,7 @@ class TeeBotusEngine:
         self.bibliothekar_store = bibliothekar_store
         self.youtube_job_runner = youtube_job_runner
         self.background_action_dispatcher = background_action_dispatcher
+        self.structured_decision_runner = structured_decision_runner
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
@@ -259,6 +261,7 @@ class TeeBotusEngine:
                 account_id=account_id,
                 instance_name=event.instance,
                 text=event.text,
+                structured_decision_runner=self.structured_decision_runner,
             )
         except (AccountStoreError, OSError, ValueError):
             return "Ich konnte die Erinnerung gerade nicht speichern."

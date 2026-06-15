@@ -401,6 +401,20 @@ def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeyp
     assert account_store.read_agent_state(account_id) == {}
 
 
+def test_engine_does_not_send_slash_commands_to_structured_decision_runner(tmp_path):
+    account_store = store(tmp_path)
+
+    def fail_runner(_prompt, _schema):
+        raise AssertionError("structured decision runner must not be called for slash commands")
+
+    engine = TeeBotusEngine(account_store=account_store, project_root=tmp_path, structured_decision_runner=fail_runner)
+
+    actions = engine.process(event(telegram_identity_key(1), "/status"))
+
+    assert actions
+    assert "Status" in actions[0].text
+
+
 def test_engine_proactive_command_enables_private_account_agent_when_instance_enabled(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)
