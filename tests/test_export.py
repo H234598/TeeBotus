@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 import pytest
 
@@ -48,6 +50,48 @@ def test_pdf_degrades_to_markdown_without_engine(tmp_path):
     assert result.degraded is True
     assert result.filename.endswith(".md")
     assert b"TeeBotus Account Export" in result.data
+
+
+def test_pdf_uses_weasyprint_when_available(monkeypatch, tmp_path):
+    account_dir = make_account_dir(tmp_path)
+    captured = {}
+
+    class FakeHTML:
+        def __init__(self, *, string):
+            captured["html"] = string
+
+        def write_pdf(self):
+            return b"%PDF-1.7\nfake\n"
+
+    monkeypatch.setitem(sys.modules, "weasyprint", types.SimpleNamespace(HTML=FakeHTML))
+
+    result = export_account_data(ACCOUNT_ID, account_dir, "pdf")
+
+    assert result.degraded is False
+    assert result.filename.endswith(".pdf")
+    assert result.content_type == "application/pdf"
+    assert result.data.startswith(b"%PDF")
+    assert "secret_verifier" in captured["html"]
+    assert "do-not-export" not in captured["html"]
+
+
+def test_pdf_falls_back_when_weasyprint_render_fails(monkeypatch, tmp_path):
+    account_dir = make_account_dir(tmp_path)
+
+    class BrokenHTML:
+        def __init__(self, *, string):
+            pass
+
+        def write_pdf(self):
+            raise RuntimeError("render failed")
+
+    monkeypatch.setitem(sys.modules, "weasyprint", types.SimpleNamespace(HTML=BrokenHTML))
+
+    result = export_account_data(ACCOUNT_ID, account_dir, "pdf")
+
+    assert result.degraded is True
+    assert result.filename.endswith(".md")
+    assert result.content_type == "text/markdown"
 
 
 def test_export_from_store_decrypts_structured_memory(tmp_path):

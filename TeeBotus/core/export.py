@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import html
 import io
 import json
 from dataclasses import dataclass
@@ -68,14 +69,10 @@ def _emit_payload(account_id: str, payload: dict[str, Any], fmt: str) -> ExportR
         extension = "csv" if normalized_format == "csv" else "cls"
         return ExportResult(f"TeeBotus_account_{export_id}.{extension}", "text/csv", data)
     if normalized_format == "pdf":
-        md = _payload_to_markdown(payload)
-        return ExportResult(
-            f"TeeBotus_account_{export_id}.md",
-            "text/markdown",
-            md.encode("utf-8"),
-            True,
-            "PDF engine not configured; emitted Markdown fallback",
-        )
+        pdf = _payload_to_pdf(payload)
+        if pdf is not None:
+            return ExportResult(f"TeeBotus_account_{export_id}.pdf", "application/pdf", pdf)
+        return _pdf_markdown_fallback(export_id, payload, "PDF engine not configured; emitted Markdown fallback")
     raise ExportError(f"unsupported export format: {fmt}")
 
 
@@ -217,6 +214,55 @@ def _payload_to_markdown(payload: dict[str, Any]) -> str:
                 lines.append(json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True))
             lines.extend(["```", ""])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _payload_to_pdf(payload: dict[str, Any]) -> bytes | None:
+    try:
+        from weasyprint import HTML  # type: ignore[import-not-found]
+    except Exception:
+        return None
+    try:
+        data = HTML(string=_payload_to_html(payload)).write_pdf()
+    except Exception:
+        return None
+    return data if isinstance(data, bytes) and data.startswith(b"%PDF") else None
+
+
+def _pdf_markdown_fallback(export_id: str, payload: dict[str, Any], note: str) -> ExportResult:
+    md = _payload_to_markdown(payload)
+    return ExportResult(
+        f"TeeBotus_account_{export_id}.md",
+        "text/markdown",
+        md.encode("utf-8"),
+        True,
+        note,
+    )
+
+
+def _payload_to_html(payload: dict[str, Any]) -> str:
+    account_id = html.escape(str(payload.get("account_id", "")))
+    sections = [f"<h1>TeeBotus Account Export</h1><p><strong>Account ID:</strong> <code>{account_id}</code></p>"]
+    files = payload.get("files", {})
+    if isinstance(files, dict):
+        for filename, content in files.items():
+            sections.append(f"<h2>{html.escape(str(filename))}</h2>")
+            if isinstance(content, str):
+                body = content
+            else:
+                body = json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True)
+            sections.append(f"<pre>{html.escape(body)}</pre>")
+    return (
+        "<!doctype html><html><head><meta charset=\"utf-8\"><style>"
+        "@page { margin: 18mm; }"
+        "body { font-family: sans-serif; font-size: 10pt; line-height: 1.4; color: #111; }"
+        "h1 { font-size: 18pt; margin: 0 0 10pt; }"
+        "h2 { font-size: 13pt; margin: 16pt 0 6pt; }"
+        "code, pre { font-family: monospace; }"
+        "pre { white-space: pre-wrap; border: 1px solid #ccc; padding: 8pt; background: #f7f7f7; }"
+        "</style></head><body>"
+        + "".join(sections)
+        + "</body></html>"
+    )
 
 
 def _payload_to_latex(payload: dict[str, Any]) -> str:
