@@ -16,6 +16,8 @@ from TeeBotus.runtime.actions import (
     SendText,
     SendTyping,
     SetMatrixState,
+    UpdateSignalContact,
+    UpdateSignalGroup,
 )
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -123,7 +125,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 reply_to_ref=action.reply_to_ref,
             )
             sent.append(_matrix_event_id(response))
-        elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages)):
+        elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages, UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
     return sent
 

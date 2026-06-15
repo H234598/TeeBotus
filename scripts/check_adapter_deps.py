@@ -200,6 +200,8 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_react_params = inspect.signature(SignalBot.react).parameters
     bot_receipt_params = inspect.signature(SignalBot.receipt).parameters
     bot_poll_params = inspect.signature(SignalBot.poll).parameters
+    bot_update_contact_params = inspect.signature(SignalBot.update_contact).parameters
+    bot_update_group_params = inspect.signature(SignalBot.update_group).parameters
     bot_delete_attachment_params = inspect.signature(SignalBot.delete_attachment).parameters
     delete_params = inspect.signature(Context.remote_delete).parameters
     react_params = inspect.signature(Context.react).parameters
@@ -244,6 +246,14 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.poll.receiver": "receiver" in bot_poll_params,
         "SignalBot.poll.answers": "answers" in bot_poll_params,
         "SignalBot.poll.allow_multiple_selections": "allow_multiple_selections" in bot_poll_params,
+        "SignalBot.update_contact.receiver": "receiver" in bot_update_contact_params,
+        "SignalBot.update_contact.expiration_in_seconds": "expiration_in_seconds" in bot_update_contact_params,
+        "SignalBot.update_contact.name": "name" in bot_update_contact_params,
+        "SignalBot.update_group.group_id": "group_id" in bot_update_group_params,
+        "SignalBot.update_group.base64_avatar": "base64_avatar" in bot_update_group_params,
+        "SignalBot.update_group.description": "description" in bot_update_group_params,
+        "SignalBot.update_group.expiration_in_seconds": "expiration_in_seconds" in bot_update_group_params,
+        "SignalBot.update_group.name": "name" in bot_update_group_params,
         "SignalBot.delete_attachment.attachment_filename": "attachment_filename" in bot_delete_attachment_params,
         "SignalBot.start_typing.receiver": "receiver" in bot_start_typing_params,
         "SignalBot.stop_typing.receiver": "receiver" in bot_stop_typing_params,
@@ -252,7 +262,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,start_typing,stop_typing,remote_delete,delete_attachment,about"
+    return True, "signalbot Context contract=ok methods=register,start,send,reply,edit,react,receipt,poll,update_contact,update_group,start_typing,stop_typing,remote_delete,delete_attachment,about"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:

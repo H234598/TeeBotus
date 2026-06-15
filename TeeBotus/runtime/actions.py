@@ -86,6 +86,22 @@ class SetMatrixState:
 
 
 @dataclass(frozen=True)
+class UpdateSignalContact:
+    chat_id: str
+    expiration_in_seconds: int | None = None
+    name: str | None = None
+
+
+@dataclass(frozen=True)
+class UpdateSignalGroup:
+    chat_id: str
+    base64_avatar: str | None = None
+    description: str | None = None
+    expiration_in_seconds: int | None = None
+    name: str | None = None
+
+
+@dataclass(frozen=True)
 class ExportFile:
     chat_id: str
     filename: str
@@ -114,6 +130,8 @@ OutgoingAction = (
     | SendEdit
     | SendPoll
     | SetMatrixState
+    | UpdateSignalContact
+    | UpdateSignalGroup
     | ExportFile
     | NotifyLinkedIdentity
 )

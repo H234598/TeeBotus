@@ -19,6 +19,8 @@ from TeeBotus.runtime.actions import (
     SendText,
     SendTyping,
     SetMatrixState,
+    UpdateSignalContact,
+    UpdateSignalGroup,
 )
 
 
@@ -537,6 +539,67 @@ def test_signal_poll_rejects_too_few_answers():
         raise AssertionError("RuntimeError was not raised")
 
 
+def test_signal_update_contact_uses_signalbot_update_contact():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def update_contact(self, receiver, **kwargs):
+            self.calls.append((receiver, kwargs))
+
+    class Context:
+        bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [UpdateSignalContact("+491", expiration_in_seconds=3600, name="Ada")]))
+
+    assert sent == [None]
+    assert context.bot.calls == [("+491", {"expiration_in_seconds": 3600, "name": "Ada"})]
+
+
+def test_signal_update_group_uses_signalbot_update_group():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def update_group(self, group_id, **kwargs):
+            self.calls.append((group_id, kwargs))
+
+    class Context:
+        bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [
+                UpdateSignalGroup(
+                    "group-id",
+                    base64_avatar="YXZhdGFy",
+                    description="Beschreibung",
+                    expiration_in_seconds=7200,
+                    name="Teegruppe",
+                )
+            ],
+        )
+    )
+
+    assert sent == [None]
+    assert context.bot.calls == [
+        (
+            "group-id",
+            {
+                "base64_avatar": "YXZhdGFy",
+                "description": "Beschreibung",
+                "expiration_in_seconds": 7200,
+                "name": "Teegruppe",
+            },
+        )
+    ]
+
+
 def test_signal_ignores_matrix_state_action():
     class Context:
         pass
@@ -955,6 +1018,18 @@ def test_telegram_ignores_matrix_state_action():
     sent = send_telegram_actions(API(), [SetMatrixState("@my_channel", "m.room.topic", {"topic": "Tee"})])
 
     assert sent == [None]
+
+
+def test_telegram_ignores_signal_update_actions():
+    class API:
+        pass
+
+    sent = send_telegram_actions(
+        API(),
+        [UpdateSignalContact("@my_channel", name="Ada"), UpdateSignalGroup("@my_channel", name="Teegruppe")],
+    )
+
+    assert sent == [None, None]
 
 
 def test_matrix_message_maps_sender_and_room_to_event():
@@ -1587,6 +1662,23 @@ def test_matrix_set_state_uses_room_put_state():
             "state_key": "",
         }
     ]
+
+
+def test_matrix_ignores_signal_update_actions():
+    class Client:
+        pass
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            Client(),
+            [
+                UpdateSignalContact("!room:example", name="Ada"),
+                UpdateSignalGroup("!room:example", name="Teegruppe"),
+            ],
+        )
+    )
+
+    assert sent == [None, None]
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

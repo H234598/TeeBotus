@@ -15,6 +15,8 @@ from TeeBotus.runtime.actions import (
     SendText,
     SendTyping,
     SetMatrixState,
+    UpdateSignalContact,
+    UpdateSignalGroup,
 )
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -107,6 +109,8 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
         elif isinstance(action, DeleteTrackedMessages):
             sent.append(None)
         elif isinstance(action, SetMatrixState):
+            sent.append(None)
+        elif isinstance(action, (UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
     return sent
 

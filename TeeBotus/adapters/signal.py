@@ -18,6 +18,8 @@ from TeeBotus.runtime.actions import (
     SendText,
     SendTyping,
     SetMatrixState,
+    UpdateSignalContact,
+    UpdateSignalGroup,
 )
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -165,6 +167,12 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(None)
             elif isinstance(action, SetMatrixState):
                 sent.append(None)
+            elif isinstance(action, UpdateSignalContact):
+                await _update_signal_contact(context, action)
+                sent.append(None)
+            elif isinstance(action, UpdateSignalGroup):
+                await _update_signal_group(context, action)
+                sent.append(None)
             elif isinstance(action, ExportFile):
                 encoded = base64.b64encode(action.data).decode("ascii")
                 sent.append(
@@ -181,6 +189,38 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
         if typing_target is not None:
             await _stop_signal_typing_if_started(context, typing_target)
     return sent
+
+
+async def _update_signal_contact(context: Any, action: UpdateSignalContact) -> None:
+    target = str(action.chat_id or "").strip()
+    if not target:
+        raise RuntimeError("Signal contact update requires a chat_id")
+    bot = getattr(context, "bot", None)
+    update_contact = getattr(bot, "update_contact", None)
+    if not callable(update_contact):
+        raise RuntimeError("SignalBot.update_contact is required to update a contact")
+    await update_contact(
+        target,
+        expiration_in_seconds=action.expiration_in_seconds,
+        name=action.name,
+    )
+
+
+async def _update_signal_group(context: Any, action: UpdateSignalGroup) -> None:
+    target = str(action.chat_id or "").strip()
+    if not target:
+        raise RuntimeError("Signal group update requires a chat_id")
+    bot = getattr(context, "bot", None)
+    update_group = getattr(bot, "update_group", None)
+    if not callable(update_group):
+        raise RuntimeError("SignalBot.update_group is required to update a group")
+    await update_group(
+        target,
+        base64_avatar=action.base64_avatar,
+        description=action.description,
+        expiration_in_seconds=action.expiration_in_seconds,
+        name=action.name,
+    )
 
 
 async def _send_signal_text(
