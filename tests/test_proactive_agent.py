@@ -347,6 +347,32 @@ def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
     assert second.reason == "daily_limit_reached"
 
 
+def test_proactive_policy_default_does_not_limit_general_daily_messages(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+
+    decisions = [
+        queue_proactive_message(
+            account_store,
+            account_id,
+            category="reminder",
+            intent=f"message_{index}",
+            message_text=f"Message {index}",
+            due_at=f"2026-06-15T{12 + index}:30:00+00:00",
+            now=now,
+        )
+        for index in range(3)
+    ]
+
+    assert [decision.allowed for decision in decisions] == [True, True, True]
+    state = account_store.read_agent_state(account_id)
+    assert state["policy"]["max_messages_per_day"] == 0
+
+
 def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

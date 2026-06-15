@@ -882,7 +882,8 @@ def proactive_policy_decision(
     start_hour, end_hour = state["policy"]["allowed_hours"]
     if not _hour_in_window(hour, start_hour, end_hour):
         return ProactiveDecision(False, "outside_allowed_hours")
-    if _proactive_daily_count(account_store, account_id, resolved_now, exclude_item_id=exclude_item_id) >= int(state["policy"]["max_messages_per_day"]):
+    max_messages_per_day = int(state["policy"]["max_messages_per_day"])
+    if max_messages_per_day > 0 and _proactive_daily_count(account_store, account_id, resolved_now, exclude_item_id=exclude_item_id) >= max_messages_per_day:
         return ProactiveDecision(False, "daily_limit_reached")
     min_interval = int(state["policy"].get("min_minutes_between_messages") or 0)
     if min_interval > 0 and _proactive_last_sent_within(account_store, account_id, resolved_now, timedelta(minutes=min_interval), exclude_item_id=exclude_item_id):
@@ -2050,7 +2051,7 @@ def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(hours, list) or len(hours) != 2:
         hours = [9, 20]
     policy["allowed_hours"] = [_normalize_hour(hours[0], default=9), _normalize_hour(hours[1], default=20)]
-    policy["max_messages_per_day"] = max(0, _normalize_int(policy.get("max_messages_per_day"), default=2))
+    policy["max_messages_per_day"] = max(0, _normalize_int(policy.get("max_messages_per_day"), default=0))
     policy["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(policy.get("min_minutes_between_messages"), default=0)))
     policy["expire_queued_after_days"] = min(365, max(0, _normalize_int(policy.get("expire_queued_after_days"), default=14)))
     return state
