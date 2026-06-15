@@ -118,6 +118,50 @@ def test_runtime_sender_factory_builds_telegram_sender_from_runtime_config(tmp_p
     assert sent == [("123", "token-a:Ping")]
 
 
+def test_runtime_sender_factory_builds_lazy_matrix_sender_from_runtime_config(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    started: list[tuple[str, str, str]] = []
+    sent: list[tuple[str, str, dict[str, object]]] = []
+
+    class FakeNioBot:
+        def __init__(self, homeserver: str, user_id: str, *, device_id: str, command_prefix: str, global_message_type: str) -> None:
+            self.homeserver = homeserver
+            self.user_id = user_id
+            self.device_id = device_id
+            self.command_prefix = command_prefix
+            self.global_message_type = global_message_type
+            self.rooms = {}
+
+        async def start(self, *, access_token: str) -> None:
+            started.append((self.homeserver, self.user_id, access_token))
+
+        async def send_message(self, room: str, content: str, **kwargs):
+            sent.append((room, content, kwargs))
+            return type("Response", (), {"event_id": "$matrix-ref"})()
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: type("NioBotModule", (), {"NioBot": FakeNioBot})())
+    factory = runtime_sender_factory(
+        instances_dir,
+        env={
+            "TEEBOTUS_INSTANCES": "Depressionsbot",
+            "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix.example",
+            "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
+            "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
+            "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT": "device-a",
+            "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+        },
+    )
+
+    senders = factory("Depressionsbot", store_for(instance_dir))
+    result = asyncio.run(senders["matrix"]({"adapter_slot": 1}, SendText("!room:example", "Ping"), {}))
+
+    assert result == "$matrix-ref"
+    assert started == [("https://matrix.example", "@bot:example", "matrix-token")]
+    assert sent == [("!room:example", "Ping", {"message_type": "m.text", "clean_mentions": True})]
+
+
 def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:
     result = main(["--dry-run", "--llm-plan"])
 

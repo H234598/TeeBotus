@@ -172,6 +172,28 @@ def test_matrix_proactive_sender_reuses_full_matrix_adapter_for_exports() -> Non
     assert client.sent[0]["content"]["body"] == "Export"
 
 
+def test_matrix_proactive_sender_starts_lazy_client_before_dispatch() -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.started = False
+            self.calls = []
+
+        async def ensure_started(self) -> None:
+            self.started = True
+
+        async def send_message(self, room: str, content: str, **kwargs):
+            self.calls.append((self.started, room, content, kwargs))
+            return SimpleNamespace(event_id="$event")
+
+    client = Client()
+    sender = matrix_proactive_sender({1: client})
+
+    sent_ref = asyncio.run(sender({"adapter_slot": 1}, SendText("!room:example.org", "hi"), {}))
+
+    assert sent_ref == "$event"
+    assert client.calls == [(True, "!room:example.org", "hi", {"message_type": "m.text", "clean_mentions": True})]
+
+
 def test_proactive_sender_reports_missing_slot() -> None:
     sender = telegram_proactive_sender({2: object()})
 

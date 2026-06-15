@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
@@ -15,7 +16,7 @@ from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_openai_key
 from TeeBotus.runtime.message_tracking import MessageTracker
-from TeeBotus.runtime.proactive_backends import signal_proactive_sender, telegram_proactive_sender
+from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
     dispatch_due_proactive_outbox_items,
@@ -143,6 +144,9 @@ def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = 
         signal_bots = _signal_bots_for_accounts(accounts)
         if signal_bots:
             senders["signal"] = signal_proactive_sender(signal_bots)
+        matrix_clients = _matrix_clients_for_accounts(accounts)
+        if matrix_clients:
+            senders["matrix"] = matrix_proactive_sender(matrix_clients)
         return senders
 
     return factory
@@ -160,6 +164,77 @@ def _signal_bots_for_accounts(accounts: Iterable[AccountRunConfig]) -> dict[int,
         config = signalbot.Config(**_signalbot_config_kwargs(signalbot, account))
         bots[account.slot] = signalbot.SignalBot(config)
     return bots
+
+
+def _matrix_clients_for_accounts(accounts: Iterable[AccountRunConfig]) -> dict[int, Any]:
+    matrix_accounts = [
+        account
+        for account in accounts
+        if account.channel == "matrix" and account.matrix_homeserver and account.matrix_user_id and account.matrix_access_token
+    ]
+    if not matrix_accounts:
+        return {}
+    from TeeBotus.runtime.matrix_runner import _import_niobot
+
+    niobot = _import_niobot()
+    return {account.slot: _LazyMatrixProactiveClient(niobot, account) for account in matrix_accounts}
+
+
+class _LazyMatrixProactiveClient:
+    def __init__(self, niobot: Any, account: AccountRunConfig) -> None:
+        self._niobot = niobot
+        self._account = account
+        self._client: Any | None = None
+        self._started = False
+        self._lock: asyncio.Lock | None = None
+
+    @property
+    def rooms(self) -> Any:
+        return getattr(self._client, "rooms", {}) if self._client is not None else {}
+
+    def room(self, room_id: str) -> Any | None:
+        if self._client is None:
+            return None
+        room = getattr(self._client, "room", None)
+        if not callable(room):
+            return None
+        return room(room_id)
+
+    def __getattr__(self, name: str) -> Any:
+        async def delegated(*args: Any, **kwargs: Any) -> Any:
+            client = await self._ensure_started()
+            target = getattr(client, name)
+            result = target(*args, **kwargs)
+            if isawaitable(result):
+                return await result
+            return result
+
+        return delegated
+
+    async def _ensure_started(self) -> Any:
+        return await self.ensure_started()
+
+    async def ensure_started(self) -> Any:
+        if self._started and self._client is not None:
+            return self._client
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        async with self._lock:
+            if self._started and self._client is not None:
+                return self._client
+            client = self._niobot.NioBot(
+                self._account.matrix_homeserver,
+                self._account.matrix_user_id,
+                device_id=self._account.matrix_device_id or "teebotus",
+                command_prefix="/",
+                global_message_type="m.text",
+            )
+            result = client.start(access_token=self._account.matrix_access_token)
+            if isawaitable(result):
+                await result
+            self._client = client
+            self._started = True
+            return client
 
 
 def _load_dotenv(path: Path) -> None:

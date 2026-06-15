@@ -68,6 +68,11 @@ def matrix_proactive_sender(clients: Any | Mapping[int, Any]) -> ProactiveSender
 
     async def sender(route: dict[str, Any], action: OutgoingAction, _item: dict[str, Any]) -> Any:
         client = _object_for_route_slot(client_by_slot, route)
+        ensure_started = getattr(client, "ensure_started", None)
+        if callable(ensure_started):
+            result = ensure_started()
+            if isawaitable(result):
+                await result
         sent = await send_matrix_actions(client, [action])
         return sent[0] if sent else None
 
