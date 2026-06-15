@@ -556,7 +556,8 @@ def test_engine_includes_account_memory_in_openai_input(tmp_path):
     engine.process(event(identity, "Was weisst du noch?", channel="signal"))
 
     assert "Persistentes Account-Memory:" in client.user_text
-    assert "selected_memory_ids: mem_old" in client.user_text
+    assert '"selected_memory_ids": [' in client.user_text
+    assert '"mem_old"' in client.user_text
     assert "Mein Lieblingswort ist Mond." in client.user_text
 
 
@@ -637,9 +638,9 @@ def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
 
     engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
 
-    assert "id: mem_moon" in client.user_text
-    assert "id: mem_tea" not in client.user_text
-    assert client.user_text.split("selected_memory_ids: ", 1)[1].splitlines()[0] == "mem_moon"
+    assert '"id": "mem_moon"' in client.user_text
+    assert '"id": "mem_tea"' not in client.user_text
+    assert '"selected_memory_ids": [\n    "mem_moon"\n  ]' in client.user_text
 
 
 def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
@@ -694,8 +695,8 @@ def test_engine_appends_account_memory_after_openai_reply(tmp_path):
     assert entries[-1]["user_text"] == "Merke Mond."
     assert entries[-1]["bot_text"] == "Antwort mit Mond."
     index = account_store.read_memory_index(account_id)
-    assert entries[-1]["id"] in index["recent_ids"]
-    assert "mond" in index["keywords"]
+    assert entries[-1]["id"] in index["index"]["recent_ids"]
+    assert "mond" in index["index"]["keywords"]
 
 
 def test_engine_does_not_write_account_memory_when_disabled(tmp_path):

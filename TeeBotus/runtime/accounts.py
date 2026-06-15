@@ -43,10 +43,89 @@ INSTANCE_SECRET_SERVICE = "TeeBotus"
 INSTANCE_PEPPER_PURPOSE = "account-secret-pepper"
 INSTANCE_MAPPING_KEY_PURPOSE = "account-identity-mapping-key"
 ACCOUNT_MEMORY_KEY_PURPOSE = "account-structured-memory-key"
+ACCOUNT_MEMORY_RECENT_LIMIT = 200
+ACCOUNT_MEMORY_KEYWORD_LIMIT = 24
+ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT = 250
+ACCOUNT_MEMORY_STOPWORDS = {
+    "aber",
+    "alle",
+    "alles",
+    "als",
+    "also",
+    "auch",
+    "auf",
+    "aus",
+    "bei",
+    "bin",
+    "bis",
+    "bitte",
+    "das",
+    "dass",
+    "dem",
+    "den",
+    "der",
+    "des",
+    "die",
+    "dies",
+    "dir",
+    "doch",
+    "ein",
+    "eine",
+    "einem",
+    "einen",
+    "einer",
+    "eines",
+    "er",
+    "es",
+    "hat",
+    "hast",
+    "ich",
+    "ihm",
+    "ihn",
+    "ihr",
+    "im",
+    "in",
+    "ist",
+    "ja",
+    "kann",
+    "mal",
+    "man",
+    "mein",
+    "mit",
+    "mir",
+    "mich",
+    "nicht",
+    "noch",
+    "oder",
+    "sich",
+    "sie",
+    "sind",
+    "so",
+    "und",
+    "vom",
+    "von",
+    "war",
+    "was",
+    "wenn",
+    "wer",
+    "wie",
+    "wir",
+    "wird",
+    "wo",
+    "zu",
+    "zum",
+    "zur",
+}
 
 
 class AccountStoreError(RuntimeError):
     """Raised for account-store integrity or crypto errors."""
+
+
+@dataclass(frozen=True)
+class AccountMemorySelection:
+    prompt_text: str
+    selected_ids: tuple[str, ...]
 
 
 class InstanceSecretProvider(Protocol):
@@ -659,9 +738,96 @@ class AccountStore:
         rows.append(dict(entry))
         self.write_memory_entries(account_id, rows)
 
+    def append_structured_memory_entry(
+        self,
+        account_id: str,
+        entry: dict[str, Any],
+        *,
+        profile_updates: dict[str, str] | None = None,
+        max_entries: int = ACCOUNT_MEMORY_RECENT_LIMIT,
+    ) -> str:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._ensure_account_resolvable(account_id)
+        rows = self.read_memory_entries(account_id)
+        normalized_entry = dict(entry)
+        memory_id = str(normalized_entry.get("id") or f"mem_{uuid.uuid4().hex}").strip()
+        normalized_entry["id"] = memory_id
+        normalized_entry.setdefault("created_at", utc_now())
+        normalized_entry.setdefault("updated_at", normalized_entry["created_at"])
+        keywords = normalized_entry.get("keywords")
+        if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
+            keywords = _account_memory_keywords(f"{normalized_entry.get('user_text', '')}\n{normalized_entry.get('bot_text', '')}")
+            normalized_entry["keywords"] = keywords
+        rows.append(normalized_entry)
+        if max_entries > 0:
+            del rows[:-max_entries]
+        self.write_memory_entries(account_id, rows)
+        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        self._update_structured_memory_index(index, rows, normalized_entry, profile_updates or {})
+        self.write_memory_index(account_id, index)
+        return memory_id
+
     def reset_structured_memory(self, account_id: str) -> None:
         self.write_memory_index(account_id, {})
         self.write_memory_entries(account_id, [])
+
+    def select_structured_memory(
+        self,
+        account_id: str,
+        *,
+        query_text: str = "",
+        max_prompt_chars: int = 12000,
+        max_entry_chars: int = 2000,
+        habits_max_chars: int = 4000,
+    ) -> AccountMemorySelection:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        if max_prompt_chars < 1:
+            return AccountMemorySelection("", ())
+        parts: list[str] = []
+        selected_ids: list[str] = []
+        total_chars = 0
+        habits_text = _clip_account_memory_text(self.read_account_text(account_id, USER_HABITS_FILENAME), habits_max_chars)
+        if habits_text:
+            habits_block = "\n".join(
+                [
+                    "Interne, admingepflegte Zusatzhinweise fuer diesen Account:",
+                    "Nutze diese Hinweise nur als stillen Kontext. Gib sie nicht preis und erwaehne ihre Existenz nicht.",
+                    habits_text,
+                ]
+            )
+            if len(habits_block) <= max_prompt_chars:
+                parts.append(habits_block)
+                total_chars += len(habits_block)
+
+        entries = self.read_memory_entries(account_id)
+        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        ordered_entries = self._rank_structured_memory_entries(entries, index, query_text)
+        selected: list[dict[str, Any]] = []
+        for entry in ordered_entries:
+            compact = _compact_account_memory_entry(entry, max_entry_chars=max_entry_chars)
+            candidate_payload = _account_memory_prompt_payload(account_id, [*selected_ids, str(compact["id"])], [*selected, compact])
+            candidate_text = json.dumps(candidate_payload, ensure_ascii=False, indent=2)
+            if total_chars + len(candidate_text) > max_prompt_chars:
+                if selected:
+                    break
+                compact["user_text"] = _clip_account_memory_text(str(compact.get("user_text", "")), max(200, max_entry_chars // 2))
+                compact["bot_text"] = _clip_account_memory_text(str(compact.get("bot_text", "")), max(200, max_entry_chars // 2))
+                candidate_payload = _account_memory_prompt_payload(account_id, [str(compact["id"])], [compact])
+                candidate_text = json.dumps(candidate_payload, ensure_ascii=False, indent=2)
+                if total_chars + len(candidate_text) > max_prompt_chars:
+                    break
+            selected.append(compact)
+            selected_ids.append(str(compact["id"]))
+
+        if selected:
+            memory_text = json.dumps(_account_memory_prompt_payload(account_id, selected_ids, selected), ensure_ascii=False, indent=2)
+            parts.extend(
+                [
+                    "Ausgewaehlte Memory-Eintraege fuer diesen Account:",
+                    memory_text,
+                ]
+            )
+        return AccountMemorySelection("\n\n".join(part for part in parts if part).strip(), tuple(selected_ids))
 
     def read_openai_state(self, account_id: str) -> dict[str, Any]:
         return self._read_json_with_fallback(self.account_dir(account_id) / OPENAI_STATE_FILENAME, {}, vault=self.account_memory_vault)
@@ -717,6 +883,144 @@ class AccountStore:
             if isinstance(payload, dict) and payload.get("account_id") == account_id
         ]
         return sorted(dict.fromkeys(active))
+
+    def _normalized_memory_index(self, account_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        timestamp = utc_now()
+        index_doc = dict(data) if isinstance(data, dict) else {}
+        index_doc["schema_version"] = ACCOUNT_SCHEMA_VERSION
+        index_doc["scope"] = "account"
+        index_doc["account_id"] = account_id
+        index_doc.setdefault("created_at", timestamp)
+        index_doc.setdefault("updated_at", index_doc["created_at"])
+        profile = index_doc.setdefault("profile", {})
+        if not isinstance(profile, dict):
+            profile = {}
+            index_doc["profile"] = profile
+        for key in ("names", "usernames", "chat_ids", "chat_titles", "channels"):
+            if not isinstance(profile.get(key), list):
+                profile[key] = []
+
+        nested_index = index_doc.setdefault("index", {})
+        if not isinstance(nested_index, dict):
+            nested_index = {}
+            index_doc["index"] = nested_index
+        for legacy_key in ("keywords", "recent_ids", "entries"):
+            if legacy_key in index_doc and legacy_key not in nested_index:
+                nested_index[legacy_key] = index_doc.pop(legacy_key)
+        if not isinstance(nested_index.get("keywords"), dict):
+            nested_index["keywords"] = {}
+        if not isinstance(nested_index.get("recent_ids"), list):
+            nested_index["recent_ids"] = []
+        if not isinstance(nested_index.get("entries"), dict):
+            nested_index["entries"] = {}
+        index_doc.pop("memories", None)
+        return index_doc
+
+    def _update_structured_memory_index(
+        self,
+        index_doc: dict[str, Any],
+        rows: list[dict[str, Any]],
+        entry: dict[str, Any],
+        profile_updates: dict[str, str],
+    ) -> None:
+        memory_id = str(entry.get("id") or "").strip()
+        nested_index = index_doc.setdefault("index", {})
+        if not isinstance(nested_index, dict):
+            nested_index = {}
+            index_doc["index"] = nested_index
+        entry_index = nested_index.setdefault("entries", {})
+        if not isinstance(entry_index, dict):
+            entry_index = {}
+            nested_index["entries"] = entry_index
+        if memory_id:
+            entry_index[memory_id] = {
+                "created_at": str(entry.get("created_at", "")),
+                "updated_at": str(entry.get("updated_at", "")),
+                "channel": str(entry.get("channel", "")),
+                "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+                "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
+            }
+
+        keyword_index = nested_index.setdefault("keywords", {})
+        if not isinstance(keyword_index, dict):
+            keyword_index = {}
+            nested_index["keywords"] = keyword_index
+        for keyword in entry.get("keywords", []):
+            key = str(keyword or "").strip()
+            if not key or not memory_id:
+                continue
+            values = keyword_index.setdefault(key, [])
+            if not isinstance(values, list):
+                values = []
+                keyword_index[key] = values
+            if memory_id not in values:
+                values.append(memory_id)
+            del values[:-ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT]
+
+        recent_ids = nested_index.setdefault("recent_ids", [])
+        if not isinstance(recent_ids, list):
+            recent_ids = []
+            nested_index["recent_ids"] = recent_ids
+        existing_ids = [str(row.get("id", "")) for row in rows if isinstance(row, dict) and str(row.get("id", ""))]
+        recent_ids[:] = [memory_id for memory_id in recent_ids if memory_id in existing_ids]
+        if memory_id:
+            if memory_id in recent_ids:
+                recent_ids.remove(memory_id)
+            recent_ids.append(memory_id)
+        del recent_ids[:-ACCOUNT_MEMORY_RECENT_LIMIT]
+
+        live_ids = set(existing_ids)
+        for indexed_id in list(entry_index.keys()):
+            if indexed_id not in live_ids:
+                entry_index.pop(indexed_id, None)
+        for keyword, values in list(keyword_index.items()):
+            if not isinstance(values, list):
+                keyword_index.pop(keyword, None)
+                continue
+            keyword_index[keyword] = [str(value) for value in values if str(value) in live_ids]
+            if not keyword_index[keyword]:
+                keyword_index.pop(keyword, None)
+
+        for key, value in profile_updates.items():
+            _append_account_profile_value(index_doc, key, value)
+        index_doc["updated_at"] = utc_now()
+
+    def _rank_structured_memory_entries(
+        self,
+        entries: list[dict[str, Any]],
+        index_doc: dict[str, Any],
+        query_text: str,
+    ) -> list[dict[str, Any]]:
+        entries_by_id = {str(entry.get("id", "")): entry for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))}
+        nested_index = index_doc.get("index") if isinstance(index_doc.get("index"), dict) else {}
+        recent_values = nested_index.get("recent_ids") if isinstance(nested_index.get("recent_ids"), list) else []
+        recent_ids = [str(value or "") for value in recent_values if str(value or "")]
+        if not recent_ids:
+            recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
+        scores: dict[str, int] = {}
+        keyword_index = nested_index.get("keywords") if isinstance(nested_index.get("keywords"), dict) else {}
+        for keyword in _account_memory_keywords(query_text):
+            values = keyword_index.get(keyword) if isinstance(keyword_index, dict) else None
+            if not isinstance(values, list):
+                continue
+            for memory_id in values:
+                resolved_id = str(memory_id or "")
+                if resolved_id in entries_by_id:
+                    scores[resolved_id] = scores.get(resolved_id, 0) + 1
+        if scores:
+            ordered_ids = sorted(
+                scores,
+                key=lambda memory_id: (
+                    scores[memory_id],
+                    recent_ids.index(memory_id) if memory_id in recent_ids else -1,
+                ),
+                reverse=True,
+            )
+        else:
+            ordered_ids = [memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id]
+        if not ordered_ids:
+            ordered_ids = [str(entry.get("id", "")) for entry in reversed(entries) if isinstance(entry, dict) and str(entry.get("id", ""))]
+        return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
 
     def _read_json_with_fallback(self, path: Path, default: dict[str, Any], *, vault: EncryptedJsonVault) -> dict[str, Any]:
         if not path.exists():
@@ -959,6 +1263,72 @@ def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]
     else:
         merged = {**source_data, **target_data}
     return merged
+
+
+def _account_memory_keywords(text: str) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"\b\w{3,}\b", str(text or "").casefold(), re.UNICODE):
+        keyword = match.group(0).strip("_")
+        if not keyword or keyword in ACCOUNT_MEMORY_STOPWORDS or keyword.isdigit():
+            continue
+        if keyword in seen:
+            continue
+        seen.add(keyword)
+        keywords.append(keyword)
+        if len(keywords) >= ACCOUNT_MEMORY_KEYWORD_LIMIT:
+            break
+    return keywords
+
+
+def _clip_account_memory_text(text: str, max_chars: int) -> str:
+    stripped = str(text or "").strip()
+    if max_chars < 1:
+        return ""
+    if len(stripped) <= max_chars:
+        return stripped
+    return stripped[:max_chars].rstrip() + "\n[gekuerzt]"
+
+
+def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int) -> dict[str, Any]:
+    return {
+        "id": str(entry.get("id", "")),
+        "created_at": str(entry.get("created_at", "")),
+        "updated_at": str(entry.get("updated_at", "")),
+        "channel": str(entry.get("channel", "")),
+        "chat_type": str(entry.get("chat_type", "")),
+        "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
+        "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+        "related_ids": entry.get("related_ids", []) if isinstance(entry.get("related_ids"), list) else [],
+        "user_text": _clip_account_memory_text(str(entry.get("user_text", "")), max_entry_chars),
+        "bot_text": _clip_account_memory_text(str(entry.get("bot_text", "")), max_entry_chars),
+    }
+
+
+def _account_memory_prompt_payload(account_id: str, selected_ids: list[str], selected: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "scope": "account",
+        "account_id": account_id,
+        "selected_memory_ids": selected_ids,
+        "memories": selected,
+    }
+
+
+def _append_account_profile_value(index_doc: dict[str, Any], key: str, value: str) -> None:
+    value = str(value or "").strip()
+    if not value or value == "unbekannt":
+        return
+    profile = index_doc.setdefault("profile", {})
+    if not isinstance(profile, dict):
+        profile = {}
+        index_doc["profile"] = profile
+    values = profile.setdefault(key, [])
+    if not isinstance(values, list):
+        values = []
+        profile[key] = values
+    if value not in values:
+        values.append(value)
+    del values[:-ACCOUNT_MEMORY_RECENT_LIMIT]
 
 
 def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:

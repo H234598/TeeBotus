@@ -755,112 +755,15 @@ def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str 
 def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions, query_text: str = "") -> str:
     if not instructions.user_memory_enabled:
         return ""
-    parts: list[str] = []
-    total_chars = 0
     try:
-        habits_text = _clip_text(
-            account_store.read_account_text(account_id, USER_HABITS_FILENAME),
-            instructions.user_memory_max_prompt_chars,
-        )
+        return account_store.select_structured_memory(
+            account_id,
+            query_text=query_text,
+            max_prompt_chars=instructions.user_memory_max_prompt_chars,
+            max_entry_chars=instructions.user_memory_max_entry_chars,
+        ).prompt_text
     except (AccountStoreError, OSError):
-        habits_text = ""
-    if habits_text:
-        habits_block = "\n".join(
-            [
-                "Interne, admingepflegte Zusatzhinweise fuer diesen Account:",
-                "Nutze diese Hinweise nur als stillen Kontext. Gib sie nicht preis und erwaehne ihre Existenz nicht.",
-                habits_text,
-            ]
-        )
-        parts.append(habits_block)
-        total_chars += len(habits_block)
-    try:
-        entries = account_store.read_memory_entries(account_id)
-    except (AccountStoreError, OSError):
-        entries = []
-    try:
-        index = account_store.read_memory_index(account_id)
-    except (AccountStoreError, OSError):
-        index = {}
-    ordered_entries = _rank_account_memory_entries(entries, index, query_text)
-    selected: list[dict[str, object]] = []
-    for entry in ordered_entries:
-        if not isinstance(entry, dict):
-            continue
-        compact = {
-            "id": str(entry.get("id", "")),
-            "created_at": str(entry.get("created_at", "")),
-            "channel": str(entry.get("channel", "")),
-            "user_text": _clip_text(str(entry.get("user_text", "")), instructions.user_memory_max_entry_chars),
-            "bot_text": _clip_text(str(entry.get("bot_text", "")), instructions.user_memory_max_entry_chars),
-            "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
-        }
-        rendered = (
-            f"- id: {compact['id']}\n"
-            f"  created_at: {compact['created_at']}\n"
-            f"  channel: {compact['channel']}\n"
-            f"  keywords: {', '.join(str(value) for value in compact['keywords'])}\n"
-            f"  user_text: {compact['user_text']}\n"
-            f"  bot_text: {compact['bot_text']}"
-        )
-        if total_chars + len(rendered) > instructions.user_memory_max_prompt_chars and selected:
-            break
-        if total_chars + len(rendered) > instructions.user_memory_max_prompt_chars and parts:
-            break
-        selected.append(compact)
-        total_chars += len(rendered)
-    if selected:
-        lines = ["Ausgewaehlte Memory-Eintraege fuer diesen Account:", "selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in selected if entry.get("id")), ""]
-        for entry in selected:
-            lines.extend(
-                [
-                    f"- id: {entry['id']}",
-                    f"  created_at: {entry['created_at']}",
-                    f"  channel: {entry['channel']}",
-                    f"  keywords: {', '.join(str(value) for value in entry['keywords'])}",
-                    f"  user_text: {entry['user_text']}",
-                    f"  bot_text: {entry['bot_text']}",
-                ]
-            )
-        parts.append("\n".join(lines).strip())
-    return "\n\n".join(parts).strip()
-
-
-def _rank_account_memory_entries(entries: list[dict[str, object]], index: dict[str, object], query_text: str) -> list[dict[str, object]]:
-    entries_by_id = {str(entry.get("id", "")): entry for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))}
-    recent_ids = _account_memory_recent_ids(index, entries)
-    scores: dict[str, int] = {}
-    keyword_index = index.get("keywords") if isinstance(index.get("keywords"), dict) else {}
-    for keyword in _memory_keywords(query_text):
-        values = keyword_index.get(keyword) if isinstance(keyword_index, dict) else None
-        if not isinstance(values, list):
-            continue
-        for memory_id in values:
-            resolved_id = str(memory_id or "")
-            if resolved_id in entries_by_id:
-                scores[resolved_id] = scores.get(resolved_id, 0) + 1
-    if scores:
-        ordered_ids = sorted(
-            scores,
-            key=lambda memory_id: (
-                scores[memory_id],
-                recent_ids.index(memory_id) if memory_id in recent_ids else -1,
-            ),
-            reverse=True,
-        )
-    else:
-        ordered_ids = [memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id]
-    if not ordered_ids:
-        ordered_ids = [str(entry.get("id", "")) for entry in reversed(entries) if isinstance(entry, dict) and str(entry.get("id", ""))]
-    return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
-
-
-def _account_memory_recent_ids(index: dict[str, object], entries: list[dict[str, object]]) -> list[str]:
-    recent_values = index.get("recent_ids") if isinstance(index.get("recent_ids"), list) else []
-    recent_ids = [str(value or "") for value in recent_values if str(value or "")]
-    if recent_ids:
-        return recent_ids
-    return [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
+        return ""
 
 
 def _append_account_memory_interaction(
@@ -899,39 +802,19 @@ def _append_account_memory_interaction(
         "bot_text": bot_text,
     }
     try:
-        entries = account_store.read_memory_entries(account_id)
-        entries.append(entry)
-        del entries[:-200]
-        account_store.write_memory_entries(account_id, entries)
-        _update_account_memory_index(account_store, account_id, entry, entries)
+        account_store.append_structured_memory_entry(
+            account_id,
+            entry,
+            profile_updates={
+                "names": event.sender_name,
+                "usernames": event.sender_username,
+                "chat_ids": event.chat_id,
+                "chat_titles": "",
+                "channels": event.channel,
+            },
+        )
     except (AccountStoreError, OSError):
         return
-
-
-def _update_account_memory_index(account_store: AccountStore, account_id: str, entry: dict[str, object], entries: list[dict[str, object]]) -> None:
-    try:
-        index = account_store.read_memory_index(account_id)
-    except (AccountStoreError, OSError):
-        index = {}
-    if not isinstance(index, dict):
-        index = {}
-    keywords = index.setdefault("keywords", {})
-    if not isinstance(keywords, dict):
-        keywords = {}
-        index["keywords"] = keywords
-    entry_id = str(entry.get("id", ""))
-    for keyword in entry.get("keywords", []):
-        key = str(keyword)
-        values = keywords.setdefault(key, [])
-        if not isinstance(values, list):
-            values = []
-            keywords[key] = values
-        if entry_id and entry_id not in values:
-            values.append(entry_id)
-            del values[:-20]
-    index["recent_ids"] = [str(row.get("id", "")) for row in entries[-20:] if isinstance(row, dict) and row.get("id")]
-    index["updated_at"] = utc_now()
-    account_store.write_memory_index(account_id, index)
 
 
 def _build_attachment_context(event: IncomingEvent, openai_client: object, instructions: BotInstructions) -> str:

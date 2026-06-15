@@ -164,3 +164,66 @@ def test_account_text_helpers_reject_path_traversal(tmp_path):
         store.write_account_text(account_id, "../escape.md", "bad")
     with pytest.raises(AccountStoreError):
         store.read_account_text(account_id, "/tmp/escape.md")
+
+
+def test_structured_account_memory_updates_profile_keyword_index_and_prompt(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_account_text(account_id, "User_Habbits_and_behave.md", "Ada bevorzugt knappe Antworten.")
+
+    first_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "channel": "telegram",
+            "chat_type": "private",
+            "source": {"chat_id": "1", "sender_id": "1"},
+            "user_text": "Ich mag Mond Tee.",
+            "bot_text": "Gemerkter Mond-Tee.",
+        },
+        profile_updates={
+            "names": "Ada",
+            "usernames": "@ada",
+            "chat_ids": "1",
+            "chat_titles": "Privat",
+            "channels": "telegram",
+        },
+    )
+    store.append_structured_memory_entry(
+        account_id,
+        {
+            "channel": "signal",
+            "chat_type": "private",
+            "source": {"chat_id": "+491", "sender_id": "uuid"},
+            "user_text": "Ich mag Kaffee.",
+            "bot_text": "Gemerkter Kaffee.",
+        },
+        profile_updates={"channels": "signal"},
+    )
+
+    index = store.read_memory_index(account_id)
+    assert index["scope"] == "account"
+    assert index["profile"]["names"] == ["Ada"]
+    assert index["profile"]["usernames"] == ["@ada"]
+    assert index["profile"]["channels"] == ["telegram", "signal"]
+    assert first_id in index["index"]["keywords"]["mond"]
+    selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[0] == first_id
+    assert "Ada bevorzugt knappe Antworten." in selection.prompt_text
+    assert '"scope": "account"' in selection.prompt_text
+    assert '"user_text": "Ich mag Mond Tee."' in selection.prompt_text
+    assert "Kaffee" not in selection.prompt_text
+
+
+def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(account_id, [{"id": "mem_legacy", "user_text": "Mond", "bot_text": "Tee"}])
+    store.write_memory_index(account_id, {"keywords": {"mond": ["mem_legacy"]}, "recent_ids": ["mem_legacy"]})
+
+    store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Kaffee", "bot_text": "Tasse"})
+
+    index = store.read_memory_index(account_id)
+    assert "keywords" not in index
+    assert index["index"]["keywords"]["mond"] == ["mem_legacy"]
+    assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
