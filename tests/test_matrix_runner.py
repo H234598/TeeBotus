@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 
-from TeeBotus.runtime.accounts import StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
@@ -76,6 +76,14 @@ class FakeMatrixClient:
     async def fetch_message(self, room_id: str, event_id: str):
         self.fetch_message_calls.append((room_id, event_id))
         return self.events[(room_id, event_id)]
+
+
+class FailingAccountStore:
+    def resolve_or_create_account(self, *args, **kwargs):
+        raise AccountStoreError("account store unavailable")
+
+    def update_identity_route(self, *args, **kwargs):
+        raise AccountStoreError("account store unavailable")
 
 
 def test_matrix_bridge_routes_private_account_commands(tmp_path) -> None:
@@ -211,6 +219,34 @@ def test_matrix_group_free_text_must_address_bot(tmp_path) -> None:
 
     assert client.sent == []
     assert bridge.account_store.get_account_for_identity("matrix:user:@alice:example") is None
+
+
+def test_matrix_bridge_handles_account_store_resolution_errors(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine.should_ignore_without_account = lambda _event: False  # type: ignore[method-assign]
+    bridge.account_store = FailingAccountStore()  # type: ignore[assignment]
+    message = FakeMatrixMessage()
+    message.body = "/ping"
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
+
+    assert len(client.sent) == 1
+    assert "User-Memory" in str(client.sent[0]["content"]["body"])
 
 
 def test_matrix_group_free_text_can_address_bot_by_persistent_abbreviation(tmp_path) -> None:

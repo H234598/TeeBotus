@@ -11,7 +11,7 @@ import pytest
 from signalbot import Command
 from signalbot.message import MessageType
 
-from TeeBotus.runtime.accounts import StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
@@ -105,6 +105,14 @@ class FakeSignalBot:
     async def send(self, receiver: str, text: str) -> int:
         self.sent.append((receiver, text))
         return 123
+
+
+class FailingAccountStore:
+    def resolve_or_create_account(self, *args, **kwargs):
+        raise AccountStoreError("account store unavailable")
+
+    def update_identity_route(self, *args, **kwargs):
+        raise AccountStoreError("account store unavailable")
 
 
 def test_signal_command_is_signalbot_command_subclass(tmp_path) -> None:
@@ -591,6 +599,31 @@ def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
 
     assert context.sent == []
     assert command.account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
+
+
+def test_signal_command_handles_account_store_resolution_errors(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine.should_ignore_without_account = lambda _event: False  # type: ignore[method-assign]
+    command.account_store = FailingAccountStore()  # type: ignore[assignment]
+    context = FakeSignalContext()
+    context.message.text = "/ping"
+
+    asyncio.run(command.handle(context))
+
+    assert len(context.sent) == 1
+    assert "User-Memory" in context.sent[0]
 
 
 def test_signal_group_free_text_can_address_bot_by_persistent_alias(tmp_path) -> None:

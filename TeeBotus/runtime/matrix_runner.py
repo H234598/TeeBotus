@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import socket
 import threading
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from urllib.parse import urlsplit
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -23,6 +24,9 @@ from TeeBotus.runtime.proactive_backends import matrix_proactive_sender
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
+
+
+LOGGER = logging.getLogger("TeeBotus.matrix")
 
 
 class MatrixRuntimeError(RuntimeError):
@@ -92,22 +96,42 @@ class MatrixRuntimeBridge:
         if event is None:
             return
         should_ignore = getattr(self.engine, "should_ignore_without_account", None)
-        if callable(should_ignore):
-            ignored = bool(should_ignore(event))
-        else:
-            ignored = should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config))
+        try:
+            if callable(should_ignore):
+                ignored = bool(should_ignore(event))
+            else:
+                ignored = should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config))
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            LOGGER.exception(
+                "Matrix account lookup failed before routing instance=%s room_id=%s event_id=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
+            )
+            await self._send_memory_error(event)
+            return
         if ignored:
             return
         event = await _fetch_matrix_reply_text(self.client, event)
         event = await _download_matrix_event_attachments(self.client, event)
-        account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
-        self.account_store.update_identity_route(
-            event.identity_key,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            chat_type=event.chat_type,
-            adapter_slot=event.adapter_slot,
-        )
+        try:
+            account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+            self.account_store.update_identity_route(
+                event.identity_key,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                chat_type=event.chat_type,
+                adapter_slot=event.adapter_slot,
+            )
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            LOGGER.exception(
+                "Matrix account resolution failed instance=%s room_id=%s event_id=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
+            )
+            await self._send_memory_error(event)
+            return
         event = event.with_account(account_id)
         engine_result = _process_engine_result(self.engine, event)
         event = event.with_account(engine_result.account_id)
@@ -134,6 +158,17 @@ class MatrixRuntimeBridge:
                     message_ref=str(sent_ref),
                     ref_kind="matrix_event_id",
                 )
+            )
+
+    async def _send_memory_error(self, event: IncomingEvent) -> None:
+        try:
+            await send_matrix_actions(self.client, [SendText(event.chat_id, self.instruction_store.get().user_memory_error, track=False)])
+        except Exception:
+            LOGGER.exception(
+                "Matrix memory error notification failed instance=%s room_id=%s event_id=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
             )
 
     async def _notify_linked_identities(self, actions: list[Any]) -> None:
