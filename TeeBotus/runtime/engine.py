@@ -80,6 +80,9 @@ class TeeBotusEngine:
         result = self.process_identity_flows(event)
         if result.handled or result.actions:
             return result.actions
+        memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
+        if memory_reset_actions is not None:
+            return memory_reset_actions
         if command == "/status":
             return [
                 SendText(
@@ -335,6 +338,42 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         _append_account_memory_interaction(self.account_store, account_id, event, text, response_text, instructions)
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
+
+    def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
+        pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")
+        if pending is not None:
+            if str(pending.get("chat_id") or "") != event.chat_id or str(pending.get("channel") or "") != event.channel:
+                return []
+            if _is_memory_reset_confirmation(event.text):
+                self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                try:
+                    self.account_store.reset_structured_memory(account_id)
+                except (AccountStoreError, OSError):
+                    return [SendText(event.chat_id, instructions.user_memory_reset_error)]
+                return [SendText(event.chat_id, instructions.user_memory_reset_success)]
+            if _is_memory_reset_cancellation(event.text):
+                self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                return [SendText(event.chat_id, instructions.user_memory_reset_cancelled)]
+            if _is_memory_reset_intent(event.text):
+                if _memory_reset_targets_forbidden(event.text):
+                    self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                    return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
+                return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
+            self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+            return None
+        if not _is_memory_reset_intent(event.text):
+            return None
+        if _memory_reset_targets_forbidden(event.text):
+            return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
+        if not instructions.user_memory_enabled:
+            return [SendText(event.chat_id, instructions.user_memory_reset_unavailable)]
+        self.state.set_pending_flow(
+            event.instance,
+            account_id,
+            "memory_reset",
+            {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
+        )
+        return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
 
     def _voice_actions(self, event: IncomingEvent, instructions: BotInstructions) -> list[OutgoingAction]:
         if not instructions.openai_voice_enabled:
@@ -755,6 +794,63 @@ def _memory_keywords(text: str) -> list[str]:
         if len(keywords) >= 24:
             break
     return keywords
+
+
+def _is_memory_reset_confirmation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(re.fullmatch(r"(ja|ja bitte|jep|yes|y|ok|okay|bestaetige|bestatige|loeschen|loesch es|mach das)", normalized))
+
+
+def _is_memory_reset_cancellation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(re.fullmatch(r"(nein|no|n|abbrechen|stop|stopp|nicht loeschen|lass es|behalten)", normalized))
+
+
+def _is_memory_reset_intent(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    command = _command_name(text)
+    if command in {"/reset_memorys", "/forget_me", "/forgetme", "/delete_memory", "/memory_reset", "/reset_memory"}:
+        return True
+    if _is_negated_memory_reset_request(normalized):
+        return False
+    if not re.search(r"\b(loesch(?:e|en|t)?|geloescht|vergiss|vergessen|entfern(?:e|en|t)?|reset(?:te|ten)?|zuruecksetz(?:e|en|t)?|wipe|clear|delete)\b", normalized):
+        return False
+    if re.search(r"\b(memory|memorys|memories|erinnerung(?:en)?|gedaechtnis|speicher|daten)\b", normalized):
+        return True
+    return bool(
+        re.search(r"\b(vergiss|vergessen|loesch(?:e|en)?|reset(?:te|ten)?|wipe|clear|delete)\b", normalized)
+        and re.search(r"\b(mich|mir|alles|all das|alles ueber mich|alles von mir)\b", normalized)
+    )
+
+
+def _memory_reset_targets_forbidden(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(re.search(r"\b(instanz|arbeitsgedaechtnis|working memory|global(?:e|en)?|alle user|alle nutzer|fremde|andere)\b", normalized))
+
+
+def _is_negated_memory_reset_request(normalized_text: str) -> bool:
+    action_pattern = r"(loesch(?:e|en|t)?|vergiss|vergessen|entfern(?:e|en|t)?|reset(?:te|ten)?|delete)"
+    return bool(
+        re.search(rf"\bnicht\b.{{0,40}}\b{action_pattern}\b", normalized_text)
+        or re.search(rf"\b{action_pattern}\b.{{0,40}}\bnicht\b", normalized_text)
+    )
+
+
+def _normalize_memory_reset_text(text: str) -> str:
+    normalized = str(text or "").casefold()
+    replacements = {
+        "lösche": "loesche",
+        "löschen": "loeschen",
+        "lösch": "loesch",
+        "gedächtnis": "gedaechtnis",
+        "zurücksetzen": "zuruecksetzen",
+        "bestätige": "bestaetige",
+    }
+    for source, replacement in replacements.items():
+        normalized = normalized.replace(source, replacement)
+    normalized = re.sub(r"[_-]+", " ", normalized)
+    normalized = re.sub(r"[^0-9a-z@/]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def _metadata_value(value: object) -> str:

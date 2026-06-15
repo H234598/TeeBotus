@@ -373,6 +373,90 @@ def test_engine_does_not_write_account_memory_when_disabled(tmp_path):
     assert account_store.read_memory_entries(account_id) == []
 
 
+def test_engine_account_memory_reset_requires_confirmation_and_resets_structured_memory(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="reset-memory")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_index(account_id, {"keywords": {"mond": ["mem_old"]}})
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    account_store.write_account_text(account_id, "User_Habbits_and_behave.md", "Adminhinweis bleibt.")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    confirm_actions = engine.process(event(identity, "/reset_memorys", channel="signal"))
+    done_actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert confirm_actions[0].text == BotInstructions().user_memory_reset_confirm
+    assert done_actions[0].text == BotInstructions().user_memory_reset_success
+    assert account_store.read_memory_index(account_id) == {}
+    assert account_store.read_memory_entries(account_id) == []
+    assert account_store.read_account_text(account_id, "User_Habbits_and_behave.md") == "Adminhinweis bleibt."
+
+
+def test_engine_account_memory_reset_can_be_cancelled(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="cancel-memory")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    actions = engine.process(event(identity, "nein", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_cancelled
+    assert account_store.read_memory_entries(account_id) == [{"id": "mem_old", "user_text": "Mond"}]
+
+
+def test_engine_account_memory_reset_reports_unavailable_when_disabled(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="disabled-memory")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=False))
+
+    actions = engine.process(event(identity, "/reset_memorys", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_unavailable
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "memory_reset") is None
+
+
+def test_engine_account_memory_reset_confirmation_is_scoped_to_chat(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="scoped-memory")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+    first_chat = event(identity, "/reset_memorys", channel="signal")
+    other_chat = IncomingEvent(
+        event_id="signal:2",
+        instance="Depressionsbot",
+        channel="signal",
+        adapter_slot=1,
+        identity_key=identity,
+        chat_id="other-chat",
+        chat_type="private",
+        sender_id=identity,
+        sender_name=identity,
+        text="ja",
+        message_ref="2",
+    )
+
+    engine.process(first_chat)
+    actions = engine.process(other_chat)
+
+    assert actions == []
+    assert account_store.read_memory_entries(account_id) == [{"id": "mem_old", "user_text": "Mond"}]
+
+
+def test_engine_account_memory_reset_refuses_global_targets(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="global-memory")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    actions = engine.process(event(identity, "loesche alle user memorys", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_only_own
+
+
 def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path):
     instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
