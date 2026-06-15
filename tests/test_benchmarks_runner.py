@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from TeeBotus import __version__ as TEEBOTUS_VERSION
 from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
 
@@ -12,6 +13,10 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
 
     assert suite["schema_version"] == 1
     assert suite["ok"] is True
+    assert suite["context"]["cpu_count"] >= 1
+    assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
+    assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
+    assert suite["context"]["dependencies"]["signalbot"]["version"]
     assert {
         "account_memory",
         "bibliothekar",
@@ -26,7 +31,11 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     }.issubset(categories)
     assert all("total_ms" in result for result in suite["results"])
     assert all("throughput_ops_s" in result for result in suite["results"])
-    assert any(result["name"] == "memory_postgres" and result["skipped"] is True for result in suite["results"])
+    assert all("mode" in result and "live" in result for result in suite["results"])
+    assert any(result["name"] == "memory_postgres" and result["skipped"] is True and result["mode"] == "live_optional" for result in suite["results"])
+    migration = next(result for result in suite["results"] if result["name"] == "memory_migration_jsonl_to_sqlite")
+    assert migration["ok"] is True
+    assert migration["details"]["verified"] is True
     assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
     assert any(result["name"] == "bibliothekar_haystack_fake_query" for result in suite["results"])
     llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
@@ -42,8 +51,11 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     markdown = render_markdown(suite)
 
     assert "# TeeBotus Benchmarks" in markdown
-    assert "| name | category | status | iterations |" in markdown
+    assert "## Dependencies" in markdown
+    assert "| litellm |" in markdown
+    assert "| name | category | status | mode | iterations |" in markdown
     assert "memory_jsonl" in markdown
+    assert "memory_migration_jsonl_to_sqlite" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "keine echten Provider-Calls" in markdown
