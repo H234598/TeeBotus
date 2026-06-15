@@ -16,6 +16,7 @@ from TeeBotus.runtime.proactive_agent import (
     due_proactive_outbox_items,
     proactive_agent_instance_enabled,
     proactive_policy_decision,
+    run_proactive_reflection_planner,
 )
 
 
@@ -74,6 +75,7 @@ async def run_proactive_agent_cycle(
     store_factory: StoreFactory | None = None,
     now: datetime | None = None,
     dispatch: bool = False,
+    plan: bool = False,
     sender_factory: SenderFactory | None = None,
     message_tracker_factory: MessageTrackerFactory | None = None,
 ) -> dict[str, Any]:
@@ -95,6 +97,15 @@ async def run_proactive_agent_cycle(
         store = resolved_store_factory(instance_dir / "data" / "accounts", instance_dir.name)
         for account_dir in _account_dirs(store.accounts_dir):
             account_id = account_dir.name
+            account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
+            if plan:
+                planning = run_proactive_reflection_planner(store, account_id, now=resolved_now)
+                account_report["planning"] = {
+                    "account_id": planning.account_id,
+                    "created_memory_ids": list(planning.created_memory_ids),
+                    "queued_item_ids": list(planning.queued_item_ids),
+                    "skipped_reason": planning.skipped_reason,
+                }
             items: list[dict[str, Any]] = []
             for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                 category = str(item.get("category") or "")
@@ -111,7 +122,8 @@ async def run_proactive_agent_cycle(
                         "route": decision.route or item.get("route") or {},
                     }
                 )
-            instance_report["accounts"].append({"account_id": account_id, "due_items": items})
+            account_report["due_items"] = items
+            instance_report["accounts"].append(account_report)
             if dispatch:
                 senders = dict((sender_factory or _missing_sender_factory)(instance_dir.name, store))
                 tracker = _message_tracker_for_instance(instance_dir, instance_dir.name, message_tracker_factory)

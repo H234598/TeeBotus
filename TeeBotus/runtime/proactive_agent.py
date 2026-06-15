@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
 from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
 
@@ -31,6 +32,17 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
+PROACTIVE_PLANNER_MEMORY_KINDS = frozenset(
+    {
+        "therapy_goal",
+        "treatment_goal",
+        "coping_strategy",
+        "homework",
+        "task",
+        "next_step",
+        "treatment_plan",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -55,6 +67,14 @@ class ProactiveDispatchResult:
     reason: str
     channel: str = ""
     message_ref: str = ""
+
+
+@dataclass(frozen=True)
+class ProactivePlanningResult:
+    account_id: str
+    created_memory_ids: tuple[str, ...] = ()
+    queued_item_ids: tuple[str, ...] = ()
+    skipped_reason: str = ""
 
 
 ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
@@ -166,6 +186,7 @@ def queue_proactive_message(
     due_at: str = "",
     now: datetime | None = None,
     risk_gate: str = "none",
+    planner: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
@@ -181,6 +202,7 @@ def queue_proactive_message(
             "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
             "due_at": str(due_at or "").strip(),
             "risk_gate": normalized_risk_gate,
+            "planner": {str(key): value for key, value in (planner or {}).items()},
             "policy_result": "allowed",
             "policy_reason": decision.reason,
             "route": decision.route or {},
@@ -188,6 +210,81 @@ def queue_proactive_message(
         },
     )
     return ProactiveDecision(True, f"queued:{item_id}", decision.route)
+
+
+def run_proactive_reflection_planner(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    now: datetime | None = None,
+    max_items: int = 1,
+) -> ProactivePlanningResult:
+    resolved_now = now or datetime.now(timezone.utc)
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not state["proactive"]["enabled"]:
+        return ProactivePlanningResult(account_id, skipped_reason="proactive_disabled")
+    if active_proactive_risk_memory_ids(account_store, account_id, now=resolved_now):
+        return ProactivePlanningResult(account_id, skipped_reason="active_risk_signal")
+    created_memory_ids: list[str] = []
+    queued_item_ids: list[str] = []
+    existing_fingerprints = _existing_proactive_plan_fingerprints(account_store, account_id)
+    for source in _proactive_planner_candidates(account_store, account_id):
+        source_id = str(source.get("id") or "").strip()
+        if not source_id:
+            continue
+        fingerprint = _proactive_plan_fingerprint(account_id, source)
+        if fingerprint in existing_fingerprints:
+            continue
+        reflection_id = account_store.append_structured_memory_entry(
+            account_id,
+            {
+                "kind": "reflection",
+                "memory_type": "semantic",
+                "user_text": f"Proaktive Reflexion zu {source_id}: sanftes Follow-up ist fachlich plausibel, sofern Consent und Policy weiter passen.",
+                "bot_text": "Automatisch vom Proactive Planner erzeugt; keine Diagnose und keine direkte Sendefreigabe.",
+                "importance": 3,
+                "related_ids": [source_id],
+                "supports": [source_id],
+                "relations": [
+                    {
+                        "type": "derived_from",
+                        "target_id": source_id,
+                        "valid_from": resolved_now.isoformat(timespec="seconds"),
+                        "provenance": {"job": "proactive-reflection-planner"},
+                    }
+                ],
+                "proactive_plan_fingerprint": fingerprint,
+            },
+        )
+        decision = queue_proactive_message(
+            account_store,
+            account_id,
+            category="reminder",
+            intent="planner_follow_up",
+            message_text=_proactive_planner_message(source),
+            reason_memory_ids=(source_id, reflection_id),
+            due_at=_default_proactive_due_at(resolved_now),
+            now=resolved_now,
+            risk_gate="none",
+            planner={
+                "fingerprint": fingerprint,
+                "source_memory_id": source_id,
+                "reflection_memory_id": reflection_id,
+                "collaboration_marker": "agent_suggested",
+                "intervention_type": "reminder",
+                "review_signal": "User berichtet erledigt/nicht erledigt/Belastung",
+            },
+        )
+        if not decision.allowed:
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), decision.reason)
+        created_memory_ids.append(reflection_id)
+        queued_item_ids.append(decision.reason.removeprefix("queued:"))
+        existing_fingerprints.add(fingerprint)
+        if len(queued_item_ids) >= max_items:
+            break
+    if not queued_item_ids:
+        return ProactivePlanningResult(account_id, tuple(created_memory_ids), (), "no_candidate")
+    return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids))
 
 
 def proactive_policy_decision(
@@ -424,6 +521,61 @@ def active_proactive_risk_memory_ids(account_store: AccountStore, account_id: st
             if memory_id:
                 active.append(memory_id)
     return tuple(active)
+
+
+def _proactive_planner_candidates(account_store: AccountStore, account_id: str) -> tuple[dict[str, Any], ...]:
+    rows = [
+        entry
+        for entry in account_store.read_memory_entries(account_id)
+        if isinstance(entry, dict) and str(entry.get("kind") or "").strip().casefold() in PROACTIVE_PLANNER_MEMORY_KINDS
+    ]
+    rows.sort(key=lambda entry: (_parse_proactive_datetime(str(entry.get("updated_at") or entry.get("created_at") or "")) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
+    return tuple(rows)
+
+
+def _existing_proactive_plan_fingerprints(account_store: AccountStore, account_id: str) -> set[str]:
+    fingerprints: set[str] = set()
+    for entry in account_store.read_memory_entries(account_id):
+        if isinstance(entry, dict):
+            fingerprint = str(entry.get("proactive_plan_fingerprint") or "").strip()
+            if fingerprint:
+                fingerprints.add(fingerprint)
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict):
+            continue
+        planner = item.get("planner")
+        if isinstance(planner, dict):
+            fingerprint = str(planner.get("fingerprint") or "").strip()
+            if fingerprint:
+                fingerprints.add(fingerprint)
+    return fingerprints
+
+
+def _proactive_plan_fingerprint(account_id: str, source: Mapping[str, Any]) -> str:
+    payload = "|".join(
+        [
+            "proactive-plan-v1",
+            str(account_id),
+            str(source.get("id") or ""),
+            str(source.get("kind") or ""),
+            str(source.get("updated_at") or source.get("created_at") or ""),
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+
+
+def _proactive_planner_message(source: Mapping[str, Any]) -> str:
+    text = str(source.get("user_text") or source.get("bot_text") or "deinem Vorhaben").strip()
+    short = " ".join(text.split())
+    if len(short) > 90:
+        short = short[:87].rstrip() + "..."
+    return f"Kurzer Check-in zu deinem Vorhaben: {short} Magst du kurz sagen, ob du daran weiterarbeiten moechtest?"
+
+
+def _default_proactive_due_at(now: datetime) -> str:
+    due = now + timedelta(days=1)
+    due = due.replace(hour=10, minute=0, second=0, microsecond=0)
+    return due.isoformat()
 
 
 def select_proactive_route(account_store: AccountStore, account_id: str) -> dict[str, Any] | None:

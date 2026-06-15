@@ -18,6 +18,7 @@ from TeeBotus.runtime.proactive_agent import (
     proactive_agent_instance_enabled,
     proactive_policy_decision,
     queue_proactive_message,
+    run_proactive_reflection_planner,
     select_proactive_route,
     update_proactive_outbox_item_status,
 )
@@ -367,6 +368,105 @@ def test_dispatch_skips_queued_analysis_when_risk_memory_becomes_active(tmp_path
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "skipped"
     assert item["status_history"][-1]["reason"] == "policy:active_risk_signal"
+
+
+def test_reflection_planner_creates_reflection_and_queues_safe_reminder(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "therapy_goal",
+            "user_text": "Diese Woche zweimal zehn Minuten spazieren gehen.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+
+    result = run_proactive_reflection_planner(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.skipped_reason == ""
+    assert len(result.created_memory_ids) == 1
+    assert len(result.queued_item_ids) == 1
+    entries = account_store.read_memory_entries(account_id)
+    reflection = next(entry for entry in entries if entry["id"] == result.created_memory_ids[0])
+    assert reflection["kind"] == "reflection"
+    assert reflection["relations"][0]["type"] == "derived_from"
+    assert reflection["relations"][0]["target_id"] == source_id
+    outbox = account_store.read_proactive_outbox(account_id)
+    assert outbox[0]["id"] == result.queued_item_ids[0]
+    assert outbox[0]["category"] == "reminder"
+    assert outbox[0]["intent"] == "planner_follow_up"
+    assert outbox[0]["planner"]["source_memory_id"] == source_id
+    assert outbox[0]["reason_memory_ids"] == [source_id, result.created_memory_ids[0]]
+
+
+def test_reflection_planner_is_idempotent_per_source_memory(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "treatment_goal",
+            "user_text": "Schlafrhythmus stabilisieren.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+
+    first = run_proactive_reflection_planner(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+    second = run_proactive_reflection_planner(account_store, account_id, now=datetime(2026, 6, 15, 13, tzinfo=timezone.utc))
+
+    assert len(first.queued_item_ids) == 1
+    assert second.queued_item_ids == ()
+    assert second.skipped_reason == "no_candidate"
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
+def test_reflection_planner_skips_when_risk_memory_is_active(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "therapy_goal",
+            "user_text": "Spazieren gehen.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_risk",
+            "kind": "suicidal_ideation",
+            "user_text": "Passive Suizidgedanken.",
+            "created_at": "2026-06-15T10:00:00+00:00",
+            "updated_at": "2026-06-15T10:00:00+00:00",
+        },
+    )
+
+    result = run_proactive_reflection_planner(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert result.skipped_reason == "active_risk_signal"
+    assert result.queued_item_ids == ()
+    assert account_store.read_proactive_outbox(account_id) == []
 
 
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:

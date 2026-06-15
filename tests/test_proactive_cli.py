@@ -137,3 +137,39 @@ def test_proactive_cycle_dispatch_requires_sender_factory(tmp_path) -> None:
         assert "sender_factory is required" in str(exc)
     else:
         raise AssertionError("dispatch without sender_factory should fail")
+
+
+def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "therapy_goal",
+            "user_text": "Diese Woche zweimal zehn Minuten spazieren gehen.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            plan=True,
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert len(account["planning"]["created_memory_ids"]) == 1
+    assert len(account["planning"]["queued_item_ids"]) == 1
+    assert account["due_items"] == []
+    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T10:00:00+00:00"
