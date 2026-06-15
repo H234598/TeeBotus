@@ -212,7 +212,8 @@ def test_structured_account_memory_updates_profile_keyword_index_and_prompt(tmp_
     assert "Ada bevorzugt knappe Antworten." in selection.prompt_text
     assert '"scope": "account"' in selection.prompt_text
     assert '"user_text": "Ich mag Mond Tee."' in selection.prompt_text
-    assert "Kaffee" not in selection.prompt_text
+    assert '"user_text": "Ich mag Kaffee."' in selection.prompt_text
+    assert selection.selected_ids[-1] != first_id
 
 
 def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):

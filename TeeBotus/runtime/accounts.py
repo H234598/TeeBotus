@@ -1016,6 +1016,7 @@ class AccountStore:
                 ),
                 reverse=True,
             )
+            ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id and memory_id not in ordered_ids)
         else:
             ordered_ids = [memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id]
         if not ordered_ids:
