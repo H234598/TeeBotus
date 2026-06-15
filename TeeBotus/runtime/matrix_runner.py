@@ -64,7 +64,7 @@ class MatrixRuntimeBridge:
         )
 
     async def handle_message(self, room: Any, message: Any) -> None:
-        if str(getattr(message, "sender", "") or "") == self.run_config.matrix_user_id:
+        if _matrix_sender_is_self(message, self.run_config.matrix_user_id):
             return
         event = matrix_message_to_event(
             room,
@@ -213,6 +213,12 @@ def _matrix_bot_address_names(account: AccountRunConfig) -> tuple[str, ...]:
     user_id = str(account.matrix_user_id or "").strip()
     localpart = user_id[1:].split(":", maxsplit=1)[0] if user_id.startswith("@") else ""
     return tuple(value for value in (user_id, localpart, account.label) if value)
+
+
+def _matrix_sender_is_self(message: Any, matrix_user_id: str) -> bool:
+    sender = str(getattr(message, "sender", "") or "").strip()
+    own_user_id = str(matrix_user_id or "").strip()
+    return bool(sender and own_user_id and sender == own_user_id)
 
 
 def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
