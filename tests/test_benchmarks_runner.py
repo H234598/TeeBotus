@@ -65,6 +65,17 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert llm_router["details"]["runtime_model"] == "ollama_chat/llama3.1:8b"
     assert llm_router["details"]["fallback_models"] == ["groq/llama-3.1-8b-instant"]
     assert llm_router["details"]["network_calls"] == 0
+    proactive = next(result for result in suite["results"] if result["name"] == "proactive_tool_plan_due_dispatch_gates")
+    assert proactive["ok"] is True
+    assert proactive["details"]["tool_schema_validated"] is True
+    assert proactive["details"]["tool_plan_errors"] == []
+    assert len(proactive["details"]["tool_queued_item_ids"]) == 2
+    assert proactive["details"]["sent"] == 1
+    assert proactive["details"]["review_pending"] == 1
+    assert proactive["details"]["dispatch_simulated"] == 1
+    assert proactive["details"]["dispatch_statuses"] == ["sent"]
+    assert proactive["details"]["policy_allowed"] is True
+    assert proactive["details"]["network_calls"] == 0
     youtube_job = next(result for result in suite["results"] if result["name"] == "youtube_local_job_queue_no_llm")
     assert youtube_job["ok"] is True
     assert youtube_job["details"]["started_jobs"] == 1
@@ -98,6 +109,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
+    assert "proactive_tool_plan_due_dispatch_gates" in markdown
     assert "youtube_local_job_queue_no_llm" in markdown
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "keine echten Provider-Calls" in markdown
