@@ -19,6 +19,7 @@ from TeeBotus.runtime.signal_runner import (
     _patch_signalbot_signal_cli_api_about,
     _pid_file_process_is_running,
     _require_signal_cli_api_accounts_registered,
+    _signal_context_recipient,
     run_signal_account,
     run_signal_accounts,
 )
@@ -112,6 +113,14 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_context_recipient_tolerates_broken_signalbot_message() -> None:
+    class Message:
+        def recipient(self) -> str:
+            raise RuntimeError("signalbot recipient failed")
+
+    assert _signal_context_recipient(SimpleNamespace(message=Message())) == ""
 
 
 def test_signal_cleanup_uses_context_remote_delete_first(tmp_path) -> None:

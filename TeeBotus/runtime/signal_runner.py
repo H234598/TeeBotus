@@ -300,8 +300,13 @@ async def _remote_delete_signal_message(context: Any, receiver: str, message_ref
 
 def _signal_context_recipient(context: Any) -> str:
     message = getattr(context, "message", None)
-    recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
-    return str(recipient or "").strip()
+    recipient = getattr(message, "recipient", None)
+    if not callable(recipient):
+        return ""
+    try:
+        return str(recipient() or "").strip()
+    except Exception:
+        return ""
 
 
 def _signal_local_attachment_filenames(message: Any) -> tuple[str, ...]:
