@@ -17,6 +17,7 @@ from TeeBotus.runtime.signal_runner import (
     ensure_signal_services_available,
     _patch_signalbot_signal_cli_api_about,
     _pid_file_process_is_running,
+    _require_signal_cli_api_accounts_registered,
     run_signal_account,
     run_signal_accounts,
 )
@@ -408,6 +409,55 @@ def test_signal_pid_check_rejects_dead_process(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.run", lambda *_args, **_kwargs: Result())
 
     assert _pid_file_process_is_running(pid_file) is False
+
+
+def test_signal_cli_api_account_preflight_accepts_registered_number(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://127.0.0.1:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Demo.md", (account,)),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: ["+491"])
+
+    _require_signal_cli_api_accounts_registered(config)
+
+
+def test_signal_cli_api_account_preflight_rejects_missing_number(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://127.0.0.1:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Demo.md", (account,)),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: [])
+
+    try:
+        _require_signal_cli_api_accounts_registered(config)
+    except SignalRuntimeError as exc:
+        assert "kennt den konfigurierten Signal-Account nicht" in str(exc)
+    else:
+        raise AssertionError("SignalRuntimeError was not raised")
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:

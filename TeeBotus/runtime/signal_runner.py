@@ -5,10 +5,13 @@ import subprocess
 import shutil
 import threading
 import time
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
+from urllib.request import urlopen
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
@@ -185,6 +188,7 @@ def ensure_signal_services_available(config: RuntimeConfig) -> None:
         attempted_targets.add(health.target)
         _start_local_signal_backend_if_possible(health.account)
     _require_signal_services_reachable(config)
+    _require_signal_cli_api_accounts_registered(config)
 
 
 def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
@@ -250,6 +254,70 @@ def _signal_cli_api_command(host: str, port: int) -> list[str]:
         local_binary = Path.home() / ".cargo" / "bin" / "signal-cli-api"
         binary = str(local_binary) if local_binary.exists() else "signal-cli-api"
     return [binary, "--listen", f"{listen_host}:{port}"]
+
+
+def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
+    missing: list[str] = []
+    checked_services: set[str] = set()
+    for account in _signal_accounts(config):
+        service_key = account.signal_service.strip()
+        if service_key in checked_services:
+            continue
+        checked_services.add(service_key)
+        if not _signal_service_looks_like_signal_cli_api(account):
+            continue
+        accounts = _signal_cli_api_accounts(account)
+        configured_numbers = {
+            signal_account.signal_phone_number
+            for signal_account in _signal_accounts(config)
+            if signal_account.signal_service.strip() == service_key
+        }
+        available = {_signal_cli_api_account_identifier(value) for value in accounts}
+        missing.extend(sorted(number for number in configured_numbers if number not in available))
+    if missing:
+        details = ", ".join(missing)
+        raise SignalRuntimeError(
+            f"signal-cli-api kennt den konfigurierten Signal-Account nicht: {details}. "
+            "Registriere oder verlinke den Account zuerst mit signal-cli."
+        )
+
+
+def _signal_service_looks_like_signal_cli_api(account: AccountRunConfig) -> bool:
+    try:
+        about = _signal_service_json(account, "/v1/about")
+    except SignalRuntimeError:
+        return False
+    versions = about.get("versions")
+    return isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str)
+
+
+def _signal_cli_api_accounts(account: AccountRunConfig) -> list[Any]:
+    payload = _signal_service_json(account, "/v1/accounts")
+    if not isinstance(payload, list):
+        raise SignalRuntimeError("signal-cli-api /v1/accounts lieferte keine Liste.")
+    return payload
+
+
+def _signal_cli_api_account_identifier(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ("number", "phone_number", "account", "username"):
+            candidate = value.get(key)
+            if isinstance(candidate, str):
+                return candidate
+    return str(value)
+
+
+def _signal_service_json(account: AccountRunConfig, path: str) -> Any:
+    signal_service, scheme = _normalize_signal_service(account.signal_service)
+    base_scheme = scheme or "http"
+    url = f"{base_scheme}://{signal_service}{path}"
+    try:
+        with urlopen(url, timeout=3) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, OSError, json.JSONDecodeError) as exc:
+        raise SignalRuntimeError(f"signal-cli-api Statusabfrage fehlgeschlagen: {url}: {exc}") from exc
 
 
 def _pid_file_process_is_running(path: Path) -> bool:
