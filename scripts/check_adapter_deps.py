@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tomllib
 from io import BytesIO
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -48,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_niobot_matrix_contract(),
                 _check_matrix_file_contract(),
                 _check_signalbot_context_contract(),
+                _check_pyproject_plan2_contract(),
             ]
         )
     if not args.python_only:
@@ -110,6 +112,56 @@ def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
     if suspicious_pth:
         return False, "litellm suspicious_pth_files=" + ",".join(str(path) for path in suspicious_pth)
     return True, f"litellm supply_chain_guard=ok blocked={','.join(sorted(BAD_LITELLM_VERSIONS))}"
+
+
+def _check_pyproject_plan2_contract() -> tuple[bool, str]:
+    path = REPO_ROOT / "pyproject.toml"
+    try:
+        payload = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return False, f"pyproject plan2 contract unreadable: {type(exc).__name__}: {exc}"
+    project = payload.get("project")
+    if not isinstance(project, dict):
+        return False, "pyproject plan2 contract missing [project]"
+    errors: list[str] = []
+    if project.get("requires-python") != ">=3.10":
+        errors.append("requires-python must stay >=3.10 unless intentionally raised")
+    optional = project.get("optional-dependencies")
+    if not isinstance(optional, dict):
+        errors.append("missing optional-dependencies")
+        optional = {}
+    expected_extras = {
+        "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"},
+        "llm": {"litellm!=1.82.7,!=1.82.8", "openai", "ollama"},
+        "rag": {"haystack-ai", "qdrant-haystack", "sentence-transformers", "pypdf", "pymupdf", "ebooklib", "beautifulsoup4"},
+        "agents": {"pydantic-ai", "langgraph"},
+        "tools": {"fastmcp"},
+    }
+    for extra, expected in expected_extras.items():
+        found = set(optional.get(extra, [])) if isinstance(optional.get(extra), list) else set()
+        missing = sorted(expected - found)
+        if missing:
+            errors.append(f"{extra} missing {','.join(missing)}")
+    llm_deps = set(optional.get("llm", [])) if isinstance(optional.get("llm"), list) else set()
+    for bad_version in BAD_LITELLM_VERSIONS:
+        if f"litellm=={bad_version}" in llm_deps:
+            errors.append(f"llm pins blocked litellm version {bad_version}")
+    scripts = project.get("scripts")
+    if not isinstance(scripts, dict):
+        errors.append("missing project scripts")
+        scripts = {}
+    expected_scripts = {
+        "teebotus-bibliothekar",
+        "teebotus-proactive",
+        "teebotus-proactive-review",
+        "teebotus-proactive-systemd",
+    }
+    missing_scripts = sorted(expected_scripts - set(scripts))
+    if missing_scripts:
+        errors.append(f"scripts missing {','.join(missing_scripts)}")
+    if errors:
+        return False, "pyproject plan2 contract failed: " + "; ".join(errors)
+    return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.10"
 
 
 def _litellm_pth_files() -> list[Path]:

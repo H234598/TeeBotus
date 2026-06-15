@@ -93,6 +93,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     monkeypatch.setattr(check_adapter_deps, "_check_niobot_matrix_contract", ok("niobot_matrix"))
     monkeypatch.setattr(check_adapter_deps, "_check_matrix_file_contract", ok("matrix_file"))
     monkeypatch.setattr(check_adapter_deps, "_check_signalbot_context_contract", ok("signalbot_context"))
+    monkeypatch.setattr(check_adapter_deps, "_check_pyproject_plan2_contract", ok("pyproject_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_executable_version", ok("signal_cli"))
     monkeypatch.setattr(check_adapter_deps, "_check_signal_cli_rest_api_binary", ok("signal_cli_rest_api"))
 
@@ -101,6 +102,14 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "signal_cli" not in called
     assert "signal_cli_rest_api" not in called
     assert "package:signalbot" in called
+    assert "pyproject_contract" in called
+
+
+def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
+    ok, message = check_adapter_deps._check_pyproject_plan2_contract()
+
+    assert ok
+    assert "extras=dev,llm,rag,agents,tools" in message
 
 
 def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:
