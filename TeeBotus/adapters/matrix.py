@@ -37,7 +37,7 @@ def matrix_message_to_event(
         sender_username=sender,
         sender_number="",
         text=text,
-        message_ref=str(getattr(message, "event_id", "") or ""),
+        message_ref=_matrix_message_ref(message),
         reply_to_text=reply_to_text,
         attachments=attachments,
         raw=message,
@@ -217,7 +217,7 @@ def _matrix_room_is_private(room: Any) -> bool:
 
 
 def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
-    content = getattr(message, "source", {}).get("content", {}) if isinstance(getattr(message, "source", None), dict) else {}
+    content = _matrix_effective_content(message)
     msgtype = str(content.get("msgtype") or "").strip()
     url = str(getattr(message, "url", "") or content.get("url") or "").strip()
     if not url and not msgtype.startswith("m."):
@@ -238,9 +238,12 @@ def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
 
 
 def _matrix_message_text_and_reply(message: Any) -> tuple[str, str | None]:
-    body = str(getattr(message, "body", "") or "")
-    content = getattr(message, "source", {}).get("content", {}) if isinstance(getattr(message, "source", None), dict) else {}
+    content = _matrix_message_content(message)
     relates_to = content.get("m.relates_to") if isinstance(content.get("m.relates_to"), dict) else {}
+    if relates_to.get("rel_type") == "m.replace":
+        new_content = content.get("m.new_content") if isinstance(content.get("m.new_content"), dict) else {}
+        return str(new_content.get("body") or getattr(message, "body", "") or ""), None
+    body = str(getattr(message, "body", "") or "")
     in_reply_to = relates_to.get("m.in_reply_to") if isinstance(relates_to.get("m.in_reply_to"), dict) else {}
     if not in_reply_to:
         return body, None
@@ -259,6 +262,30 @@ def _matrix_message_text_and_reply(message: Any) -> tuple[str, str | None]:
     reply_text = "\n".join(line for line in reply_lines if line).strip() or None
     text = "\n".join(remainder).strip()
     return (text if text else body, reply_text)
+
+
+def _matrix_message_ref(message: Any) -> str:
+    content = _matrix_message_content(message)
+    relates_to = content.get("m.relates_to") if isinstance(content.get("m.relates_to"), dict) else {}
+    if relates_to.get("rel_type") == "m.replace":
+        replacement_target = str(relates_to.get("event_id") or "").strip()
+        if replacement_target:
+            return replacement_target
+    return str(getattr(message, "event_id", "") or "")
+
+
+def _matrix_effective_content(message: Any) -> dict[str, Any]:
+    content = _matrix_message_content(message)
+    relates_to = content.get("m.relates_to") if isinstance(content.get("m.relates_to"), dict) else {}
+    if relates_to.get("rel_type") == "m.replace" and isinstance(content.get("m.new_content"), dict):
+        return content["m.new_content"]
+    return content
+
+
+def _matrix_message_content(message: Any) -> dict[str, Any]:
+    source = getattr(message, "source", None)
+    content = source.get("content", {}) if isinstance(source, dict) else {}
+    return content if isinstance(content, dict) else {}
 
 
 def _matrix_content_type_for_msgtype(msgtype: str) -> str:

@@ -306,6 +306,33 @@ def test_matrix_rich_reply_fallback_is_split_from_message_text():
     assert event.reply_to_text == "<@bob:example> quoted line\nsecond line"
 
 
+def test_matrix_edit_message_uses_new_content_and_original_event_ref():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$edit"
+        sender = "@alice:example"
+        body = "* Bearbeitet"
+        source = {
+            "content": {
+                "msgtype": "m.text",
+                "body": "* Bearbeitet",
+                "m.new_content": {"msgtype": "m.text", "body": "Bearbeitet"},
+                "m.relates_to": {"rel_type": "m.replace", "event_id": "$original"},
+            }
+        }
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.event_id == "matrix:$edit"
+    assert event.message_ref == "$original"
+    assert event.text == "Bearbeitet"
+    assert event.reply_to_text is None
+
+
 def test_matrix_file_message_prefers_filename_from_content():
     class Room:
         room_id = "!room:example"

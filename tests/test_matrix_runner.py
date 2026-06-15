@@ -220,6 +220,42 @@ def test_matrix_bridge_preserves_explicit_engine_reply_context(tmp_path) -> None
     assert client.sent[0]["content"]["m.relates_to"] == {"m.in_reply_to": {"event_id": "$explicit"}}
 
 
+def test_matrix_bridge_replies_to_original_event_for_edit_message(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    class EditMessage(FakeMatrixMessage):
+        event_id = "$edit"
+        body = "* /custom"
+        source = {
+            "content": {
+                "msgtype": "m.text",
+                "body": "* /custom",
+                "m.new_content": {"msgtype": "m.text", "body": "/account"},
+                "m.relates_to": {"rel_type": "m.replace", "event_id": "$original"},
+            }
+        }
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), EditMessage()))
+
+    assert "Deine TeeBotus-Account-ID" in client.sent[0]["content"]["body"]
+    assert client.sent[0]["content"]["m.relates_to"] == {"m.in_reply_to": {"event_id": "$original"}}
+
+
 def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:
     captured: list[str] = []
 
