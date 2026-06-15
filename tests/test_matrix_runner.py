@@ -654,6 +654,63 @@ def test_matrix_bridge_downloads_inbound_media_from_disk_response(tmp_path) -> N
     assert seen[0].attachments[0].content_type == "application/pdf"
 
 
+def test_matrix_bridge_decrypts_inbound_encrypted_media(tmp_path) -> None:
+    from nio.crypto.attachments import encrypted_attachment_generator
+
+    encrypted_parts = list(encrypted_attachment_generator(b"plain image bytes"))
+    decrypt_info = encrypted_parts[-1]
+    ciphertext = b"".join(part for part in encrypted_parts[:-1] if isinstance(part, bytes))
+
+    class EncryptedDownloadClient(FakeMatrixClient):
+        async def download(self, *, mxc: str):
+            self.downloads.append(mxc)
+            return type("DownloadResponse", (), {"body": ciphertext, "content_type": "image/jpeg", "filename": "encrypted.jpg"})()
+
+    client = EncryptedDownloadClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    seen = []
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: seen.append(event) or []})()
+
+    class MediaMessage(FakeMatrixMessage):
+        body = "encrypted.jpg"
+        source = {
+            "content": {
+                "msgtype": "m.image",
+                "body": "encrypted.jpg",
+                "file": {
+                    "url": "mxc://example/encrypted",
+                    "mimetype": "image/jpeg",
+                    "key": decrypt_info["key"],
+                    "hashes": decrypt_info["hashes"],
+                    "iv": decrypt_info["iv"],
+                },
+                "info": {"mimetype": "image/jpeg"},
+            }
+        }
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), MediaMessage()))
+
+    assert client.downloads == ["mxc://example/encrypted"]
+    assert seen[0].attachments[0].data == b"plain image bytes"
+    assert seen[0].attachments[0].filename == "encrypted.jpg"
+    assert seen[0].attachments[0].content_type == "image/jpeg"
+    assert seen[0].attachments[0].base64_data == "mxc://example/encrypted"
+
+
 def test_matrix_bridge_keeps_media_metadata_when_download_fails(tmp_path) -> None:
     class FailingDownloadClient(FakeMatrixClient):
         async def download(self, *, mxc: str):
@@ -942,6 +999,10 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
         RoomMessageImage = object()
         RoomMessageAudio = object()
         RoomMessageVideo = object()
+        RoomEncryptedFile = object()
+        RoomEncryptedImage = object()
+        RoomEncryptedAudio = object()
+        RoomEncryptedVideo = object()
         RoomMessageUnknown = object()
 
     assert _matrix_message_event_classes(Nio) == (
@@ -952,6 +1013,10 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
         Nio.RoomMessageImage,
         Nio.RoomMessageAudio,
         Nio.RoomMessageVideo,
+        Nio.RoomEncryptedFile,
+        Nio.RoomEncryptedImage,
+        Nio.RoomEncryptedAudio,
+        Nio.RoomEncryptedVideo,
         Nio.RoomMessageUnknown,
     )
 

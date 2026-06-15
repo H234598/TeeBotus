@@ -471,14 +471,15 @@ def _matrix_room_is_private(room: Any) -> bool:
 def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
     content = _matrix_effective_content(message)
     msgtype = str(content.get("msgtype") or "").strip()
-    url = str(getattr(message, "url", "") or content.get("url") or "").strip()
+    file_info = content.get("file") if isinstance(content.get("file"), dict) else {}
+    url = str(getattr(message, "url", "") or content.get("url") or file_info.get("url") or "").strip()
     if not url:
         return ()
     if msgtype not in {"m.file", "m.image", "m.audio", "m.video"}:
         return ()
     filename = str(content.get("filename") or content.get("body") or getattr(message, "body", "") or "").strip() or "matrix-attachment.bin"
     info = content.get("info") if isinstance(content.get("info"), dict) else {}
-    content_type = str(info.get("mimetype") or _matrix_content_type_for_msgtype(msgtype)).strip() or "application/octet-stream"
+    content_type = str(info.get("mimetype") or file_info.get("mimetype") or _matrix_content_type_for_msgtype(msgtype)).strip() or "application/octet-stream"
     return (
         IncomingAttachment(
             filename=filename,

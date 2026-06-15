@@ -1222,7 +1222,7 @@ def test_matrix_media_message_maps_attachment_metadata():
     assert event.attachments[0].base64_data == "mxc://example/photo"
 
 
-def test_matrix_media_without_plain_url_does_not_create_empty_attachment():
+def test_matrix_encrypted_media_message_maps_attachment_metadata():
     class Room:
         room_id = "!room:example"
         joined_count = 2
@@ -1244,7 +1244,11 @@ def test_matrix_media_without_plain_url_does_not_create_empty_attachment():
 
     assert event is not None
     assert event.text == "encrypted.jpg"
-    assert event.attachments == ()
+    assert len(event.attachments) == 1
+    assert event.attachments[0].filename == "encrypted.jpg"
+    assert event.attachments[0].content_type == "image/jpeg"
+    assert event.attachments[0].data == b""
+    assert event.attachments[0].base64_data == "mxc://example/encrypted"
 
 
 def test_matrix_rich_reply_fallback_is_split_from_message_text():

@@ -241,6 +241,10 @@ def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
             "RoomMessageImage",
             "RoomMessageAudio",
             "RoomMessageVideo",
+            "RoomEncryptedFile",
+            "RoomEncryptedImage",
+            "RoomEncryptedAudio",
+            "RoomEncryptedVideo",
             "RoomMessageUnknown",
         )
         if hasattr(nio, name)
@@ -384,6 +388,10 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
         if body is None:
             downloaded.append(attachment)
             continue
+        body = _matrix_decrypt_attachment_body(body, event.raw, attachment)
+        if body is None:
+            downloaded.append(attachment)
+            continue
         filename = str(getattr(response, "filename", "") or attachment.filename or "").strip() or "matrix-attachment.bin"
         content_type = str(getattr(response, "content_type", "") or attachment.content_type or "").strip() or "application/octet-stream"
         downloaded.append(
@@ -407,6 +415,52 @@ def _matrix_download_body_bytes(body: Any) -> bytes | None:
         return Path(body).read_bytes()
     except (OSError, TypeError, ValueError):
         return None
+
+
+def _matrix_decrypt_attachment_body(body: bytes, raw_event: Any, attachment: IncomingAttachment) -> bytes | None:
+    metadata = _matrix_attachment_crypto_metadata(raw_event, attachment.base64_data)
+    if not metadata:
+        return body
+    key = metadata.get("key")
+    hashes = metadata.get("hashes")
+    iv = str(metadata.get("iv") or "").strip()
+    key_value = key.get("k") if isinstance(key, dict) else str(key or "").strip()
+    hash_value = hashes.get("sha256") if isinstance(hashes, dict) else ""
+    if not key_value or not hash_value or not iv:
+        return None
+    try:
+        from nio.crypto.attachments import decrypt_attachment  # type: ignore[import-not-found]
+    except Exception:
+        return None
+    try:
+        return decrypt_attachment(body, str(key_value), str(hash_value), iv)
+    except Exception:
+        return None
+
+
+def _matrix_attachment_crypto_metadata(raw_event: Any, mxc_url: str) -> dict[str, Any]:
+    content = _matrix_raw_content(raw_event)
+    file_info = content.get("file") if isinstance(content.get("file"), dict) else {}
+    target = str(mxc_url or "").strip()
+    if file_info:
+        file_url = str(file_info.get("url") or "").strip()
+        if not target or not file_url or target == file_url:
+            return file_info
+    raw_url = str(getattr(raw_event, "url", "") or "").strip()
+    if target and raw_url and target != raw_url:
+        return {}
+    key = getattr(raw_event, "key", None)
+    hashes = getattr(raw_event, "hashes", None)
+    iv = getattr(raw_event, "iv", None)
+    if key or hashes or iv:
+        return {"key": key, "hashes": hashes, "iv": iv}
+    return {}
+
+
+def _matrix_raw_content(raw_event: Any) -> dict[str, Any]:
+    source = getattr(raw_event, "source", None)
+    content = source.get("content", {}) if isinstance(source, dict) else {}
+    return content if isinstance(content, dict) else {}
 
 
 def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:

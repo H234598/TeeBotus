@@ -84,6 +84,10 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomMessageImage",
         "RoomMessageAudio",
         "RoomMessageVideo",
+        "RoomEncryptedFile",
+        "RoomEncryptedImage",
+        "RoomEncryptedAudio",
+        "RoomEncryptedVideo",
         "RoomMessageUnknown",
         "RoomSendResponse",
         "RoomSendError",
@@ -101,6 +105,12 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     missing_nio = [name for name in required_nio if not hasattr(nio, name)]
     if missing_nio:
         return False, f"matrix-nio missing required API: {', '.join(missing_nio)}"
+    try:
+        from nio.crypto.attachments import decrypt_attachment  # type: ignore[import-not-found]
+    except Exception as exc:
+        return False, f"matrix-nio attachment decrypt import_error={type(exc).__name__}: {exc}"
+    if not callable(decrypt_attachment):
+        return False, "matrix-nio attachment decrypt is not callable"
     if not hasattr(niobot, "NioBot"):
         return False, "nio-bot missing NioBot"
     start_params = inspect.signature(niobot.NioBot.start).parameters
