@@ -77,6 +77,47 @@ def test_route_selection_can_enable_explicit_remote_fallback() -> None:
     assert route.fallback_models == ("groq/llama-3.1-8b-instant",)
 
 
+def test_route_selection_normalizes_purpose_names() -> None:
+    profiles = {
+        "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.1:8b", "http://127.0.0.1:11434"),
+        "groq_fast": LLMProfile("groq_fast", "litellm", "groq/llama-3.1-8b-instant", api_key_env="GROQ_API_KEY"),
+    }
+    routing = {
+        "structured_decision": LLMRoutingRule(
+            purpose="structured_decision",
+            profile="local_ollama",
+            fallback="groq_fast",
+        )
+    }
+
+    space_route = select_llm_route("Structured Decision", profiles=profiles, routing=routing)
+    dash_route = select_llm_route("structured-decision", profiles=profiles, routing=routing)
+
+    assert space_route.purpose == "structured_decision"
+    assert space_route.profile_name == "local_ollama"
+    assert dash_route.purpose == "structured_decision"
+    assert dash_route.profile_name == "local_ollama"
+
+
+def test_load_llm_routing_normalizes_purpose_keys(tmp_path: Path) -> None:
+    routing_path = tmp_path / "routing.yaml"
+    routing_path.write_text(
+        """
+        default_profile: local_ollama
+        purposes:
+          structured-decision:
+            profile: local_ollama
+        """,
+        encoding="utf-8",
+    )
+
+    default_profile, routing = load_llm_routing(routing_path)
+
+    assert default_profile == "local_ollama"
+    assert "structured_decision" in routing
+    assert routing["structured_decision"].purpose == "structured_decision"
+
+
 def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> None:
     profiles = {
         "hf_mistral": LLMProfile("hf_mistral", "litellm", "huggingface/mistralai/Mistral-7B-Instruct-v0.3", api_key_env="HF_TOKEN"),
@@ -138,7 +179,7 @@ def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored-default"),
         openai_client=None,
-        purpose="structured_decision",
+        purpose="Structured Decision",
     )
 
     assert isinstance(client, LiteLLMTextClient)

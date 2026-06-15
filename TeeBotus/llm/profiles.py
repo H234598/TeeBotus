@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -84,7 +85,7 @@ def load_llm_routing(path: str | Path = DEFAULT_ROUTING_PATH) -> tuple[str, dict
         for purpose, raw_rule in raw_purposes.items():
             if not isinstance(raw_rule, Mapping):
                 continue
-            name = str(purpose)
+            name = normalize_llm_purpose(purpose)
             profile = str(raw_rule.get("profile") or "").strip()
             fallback = _optional_string(raw_rule.get("fallback"))
             if profile:
@@ -107,7 +108,7 @@ def select_llm_route(
         resolved_routing = loaded_routing
     else:
         resolved_routing = dict(routing)
-    purpose_name = str(purpose or "normal_chat").strip() or "normal_chat"
+    purpose_name = normalize_llm_purpose(purpose)
     rule = resolved_routing.get(purpose_name) or LLMRoutingRule(purpose_name, default_profile)
     profile = _require_profile(resolved_profiles, rule.profile or default_profile)
     fallback_profile_name = ""
@@ -158,6 +159,15 @@ def build_profiled_text_llm_client(
         api_key=api_key,
         api_base=route.base_url,
     )
+
+
+def normalize_llm_purpose(value: object) -> str:
+    text = str(value or "").strip().casefold()
+    if not text:
+        return "normal_chat"
+    normalized = re.sub(r"[\s-]+", "_", text)
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    return normalized or "normal_chat"
 
 
 def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfile:

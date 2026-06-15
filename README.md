@@ -364,6 +364,8 @@ Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue ne
 
 Environment-Fallbacks heissen `TEEBOTUS_LLM_ENABLED`, `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_PROFILE`, `TEEBOTUS_LLM_PURPOSE`, `TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_OUTPUT_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
 
+`TEEBOTUS_LLM_PURPOSE` wird tolerant normalisiert: Gross-/Kleinschreibung ist egal, Leerzeichen und Bindestriche werden zu Unterstrichen. `Structured Decision`, `structured-decision` und `structured_decision` routen also auf denselben Eintrag in `config/llm_routing.yaml`.
+
 Ollama Quickstart:
 
 ```bash
