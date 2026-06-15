@@ -30,6 +30,7 @@ from TeeBotus.runtime.working_memory import WorkingMemoryStore
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
+MEMORY_PAGE_LIMIT_NOTE = "Ich konnte in diesem Turn keine weitere Memory-Seite laden. Bitte frage nochmal etwas konkreter."
 EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
@@ -382,6 +383,8 @@ class TeeBotusEngine:
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        if _parse_memory_page_request(response_text) is not None:
+            response_text = MEMORY_PAGE_LIMIT_NOTE
         _append_account_memory_interaction(self.account_store, account_id, event, text, response_text, instructions)
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
 

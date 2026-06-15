@@ -7,7 +7,7 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
-from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
@@ -722,6 +722,51 @@ def test_engine_pages_account_memory_when_model_requests_it(tmp_path):
     assert '"id": "mem_coffee"' in client.calls[1][0]
     assert '"id": "mem_moon"' not in client.calls[1][0]
     assert actions[-1].text == "Kaffee ist nachgeladen."
+
+
+def test_engine_does_not_leak_repeated_memory_page_request(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.calls += 1
+            if self.calls == 1:
+                return OpenAIResponse('[[TEE_MEMORY_PAGE query="kaffee" exclude="mem_moon"]]', "resp-page-request", None)
+            return OpenAIResponse('[[TEE_MEMORY_PAGE query="noch mehr" exclude="mem_coffee"]]', "resp-repeated-page", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-paging-repeat")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(account_id, {"id": "mem_moon", "keywords": ["mond"], "user_text": "Mond", "bot_text": "Gemerkt."})
+    account_store.append_structured_memory_entry(account_id, {"id": "mem_coffee", "keywords": ["kaffee"], "user_text": "Kaffee", "bot_text": "Gemerkt."})
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    actions = engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
+
+    assert actions[-1].text == MEMORY_PAGE_LIMIT_NOTE
+    assert "TEE_MEMORY_PAGE" not in actions[-1].text
+
+
+def test_engine_does_not_leak_unexpected_memory_page_request(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse('[[TEE_MEMORY_PAGE query="kaffee" exclude="mem_moon"]]', "resp-unexpected-page", None)
+
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=False),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    actions = engine.process(event(signal_identity_key(source_uuid="unexpected-page"), "Hallo", channel="signal"))
+
+    assert actions[-1].text == MEMORY_PAGE_LIMIT_NOTE
+    assert "TEE_MEMORY_PAGE" not in actions[-1].text
 
 
 def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
