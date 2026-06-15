@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from TeeBotus.instructions import BotInstructions, InstructionStore
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, check_bibliothekar_service
+from TeeBotus.runtime.graphs import run_bibliothekar_deep_query
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +46,7 @@ def _build_parser() -> argparse.ArgumentParser:
     query.add_argument("--top-k", type=int, default=3)
     query.add_argument("--max-prompt-chars", type=int, default=5000)
     query.add_argument("--max-quote-chars", type=int, default=900)
+    query.add_argument("--deep", action="store_true", help="Run the optional Bibliothekar Deep Query graph pilot.")
     query.set_defaults(command="query")
     return parser
 
@@ -103,6 +105,24 @@ def _query(args: argparse.Namespace) -> int:
     for instance_name in _resolve_instances(instances_dir, args.instance):
         instructions = _load_instructions(instances_dir, instance_name)
         service = BibliothekarService.from_instructions(instance_name, instances_dir, instructions)
+        if args.deep:
+            graph_state = run_bibliothekar_deep_query(
+                service,
+                args.query,
+                max_prompt_chars=max(1, int(args.max_prompt_chars)),
+                max_chunks=max(1, int(args.top_k)),
+                max_quote_chars=max(1, int(args.max_quote_chars)),
+            )
+            rows.append(
+                {
+                    "instance": instance_name,
+                    "backend": service.backend_name,
+                    "selected_ids": graph_state.get("selected_ids", []),
+                    "prompt_text": graph_state.get("answer_text", ""),
+                    "graph": graph_state,
+                }
+            )
+            continue
         selection = service.search(
             args.query,
             max_prompt_chars=max(1, int(args.max_prompt_chars)),
