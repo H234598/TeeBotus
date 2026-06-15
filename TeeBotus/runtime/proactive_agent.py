@@ -2135,7 +2135,7 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
             continue
         if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
             continue
-        status = str(item.get("status") or "queued")
+        status = str(item.get("status") or "queued").strip().casefold()
         if status not in {"queued", "sent"}:
             continue
         timestamp = _parse_proactive_datetime(str(item.get("sent_at") or item.get("due_at") or item.get("created_at") or ""))

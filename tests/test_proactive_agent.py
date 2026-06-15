@@ -347,6 +347,44 @@ def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
     assert second.reason == "daily_limit_reached"
 
 
+def test_proactive_policy_daily_limit_normalizes_stored_status(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_sent",
+                "status": "SENT",
+                "category": "reminder",
+                "intent": "sent",
+                "message_text": "Schon gesendet",
+                "sent_at": "2026-06-15T09:00:00+00:00",
+                "route": {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": 1},
+                "reason_memory_ids": ["mem_sent"],
+            }
+        ],
+    )
+
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="second",
+        message_text="Second",
+        due_at="2026-06-15T13:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "daily_limit_reached"
+
+
 def test_proactive_policy_default_does_not_limit_general_daily_messages(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
