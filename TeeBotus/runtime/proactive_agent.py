@@ -199,7 +199,7 @@ def enable_proactive_agent(account_store: AccountStore, account_id: str, *, cate
 
 
 def proactive_agent_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:
-    source = env or os.environ
+    source = os.environ if env is None else env
     instance = str(instance_name or "").strip()
     if not instance:
         return False

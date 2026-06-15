@@ -78,7 +78,7 @@ def render_proactive_systemd_unit(
         _shell_quote(instances_arg),
         "--instance",
         _shell_quote(instance_name),
-        "--dry-run",
+        "--dispatch",
         "--plan",
     ]
     if llm_plan:

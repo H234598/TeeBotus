@@ -62,7 +62,7 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
 
 
 def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | None = None) -> tuple[str, ...]:
-    source = cli_channels if cli_channels is not None else (env or os.environ).get("TEEBOTUS_CHANNELS", "auto")
+    source = cli_channels if cli_channels is not None else (os.environ if env is None else env).get("TEEBOTUS_CHANNELS", "auto")
     value = str(source or "auto").strip().casefold()
     if value in {"", "auto", "all"}:
         return DEFAULT_CHANNELS
@@ -74,13 +74,13 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
 
 
 def resolve_instances_dir(env: Mapping[str, str] | None = None) -> Path:
-    source = env or os.environ
+    source = os.environ if env is None else env
     value = source.get("TEEBOTUS_INSTANCES_DIR") or source.get("TELEGRAM_BOT_INSTANCES_DIR") or DEFAULT_INSTANCES_DIR
     return Path(value)
 
 
 def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
-    source = env or os.environ
+    source = os.environ if env is None else env
     explicit = source.get("TEEBOTUS_INSTANCES") or source.get("TELEGRAM_BOT_INSTANCES")
     if explicit:
         return parse_csv(explicit)
@@ -104,7 +104,7 @@ def resolve_openai_key(
     slot: int,
     env: Mapping[str, str] | None = None,
 ) -> str:
-    source = env or os.environ
+    source = os.environ if env is None else env
     instance_token = normalize_instance_env_token(instance_name)
     channel_token = str(channel).strip().upper()
     candidates = [
@@ -144,7 +144,7 @@ def _resolve_indexed_secret(value: str | None, slot: int) -> str:
 
 
 def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
-    source = env or os.environ
+    source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
     bulk_values = _nonempty(parse_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}")))
     if bulk_values:
@@ -155,7 +155,7 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
 
 
 def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:
-    source = env or os.environ
+    source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
     services = parse_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"))
     phones = parse_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"))
@@ -175,7 +175,7 @@ def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = 
 
 
 def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str, str, str], ...]:
-    source = env or os.environ
+    source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
     homeservers = parse_csv(source.get(f"MATRIX_BOT_HOMESERVERS_{token}"))
     user_ids = parse_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"))
@@ -264,7 +264,7 @@ def build_runtime_config(
     env: Mapping[str, str] | None = None,
     cli_channels: str | None = None,
 ) -> RuntimeConfig:
-    source = env or os.environ
+    source = os.environ if env is None else env
     instances_dir = resolve_instances_dir(source)
     channels = resolve_channels(source, cli_channels)
     selected_instances = resolve_selected_instances(instances_dir, source)

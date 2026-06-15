@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run, runtime_llm_planner_factory
+from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run, runtime_llm_planner_factory, runtime_sender_factory
 from TeeBotus.runtime.actions import SendText
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
 
 
@@ -79,12 +79,43 @@ def test_proactive_cli_requires_dry_run_for_now(tmp_path, capsys) -> None:
     assert "Use exactly one of --dry-run or --dispatch" in captured.err
 
 
-def test_proactive_cli_dispatch_requires_runtime_sender_registry(tmp_path, capsys) -> None:
+def test_proactive_cli_dispatch_can_run_without_injected_sender_registry(tmp_path, capsys) -> None:
     result = main(["--instances-dir", str(tmp_path / "instances"), "--dispatch"])
 
     captured = capsys.readouterr()
-    assert result == 2
-    assert "requires a runtime-provided sender registry" in captured.err
+    assert result == 0
+    assert "proactive_dispatch" in captured.out
+
+
+def test_runtime_sender_factory_builds_telegram_sender_from_runtime_config(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    sent: list[tuple[str, str]] = []
+
+    class API:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def send_message(self, chat_id: str, text: str) -> str:
+            sent.append((chat_id, f"{self.token}:{text}"))
+            return "telegram-ref"
+
+    monkeypatch.setattr("TeeBotus.proactive.TelegramAPI", API)
+    factory = runtime_sender_factory(
+        instances_dir,
+        env={
+            "TEEBOTUS_INSTANCES": "Depressionsbot",
+            "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+            "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+        },
+    )
+
+    senders = factory("Depressionsbot", store_for(instance_dir))
+    result = senders["telegram"]({"adapter_slot": 1}, SendText("123", "Ping"), {})
+
+    assert result == "telegram-ref"
+    assert sent == [("123", "token-a:Ping")]
 
 
 def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:
@@ -196,6 +227,36 @@ def test_proactive_cycle_dispatch_requires_sender_factory(tmp_path) -> None:
         assert "sender_factory is required" in str(exc)
     else:
         raise AssertionError("dispatch without sender_factory should fail")
+
+
+def test_proactive_cycle_reports_account_store_errors_without_crashing(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_dir = instance_dir / "data" / "accounts" / "accounts" / ("a" * 128)
+    account_dir.mkdir(parents=True)
+
+    class BrokenStore:
+        accounts_dir = instance_dir / "data" / "accounts" / "accounts"
+
+        def read_agent_state(self, _account_id: str) -> dict:
+            raise AccountStoreError("boom")
+
+        def read_proactive_outbox(self, _account_id: str) -> list:
+            return []
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: BrokenStore(),
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert report["ok"] is True
+    assert account["account_id"] == "a" * 128
+    assert "AccountStoreError: boom" in account["error"]
 
 
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:

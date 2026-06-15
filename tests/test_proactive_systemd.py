@@ -18,7 +18,7 @@ def test_render_proactive_systemd_unit_defaults_to_local_planner(tmp_path) -> No
     assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
     assert "EnvironmentFile=-" in unit.service_text
     assert "teebotus-proactive" in unit.service_text
-    assert "--dry-run --plan" in unit.service_text
+    assert "--dispatch --plan" in unit.service_text
     assert "--llm-plan" not in unit.service_text
     assert "--tool-plan" not in unit.service_text
     assert "OnUnitActiveSec=15min" in unit.timer_text
@@ -34,7 +34,7 @@ def test_render_proactive_systemd_unit_can_enable_llm_plan(tmp_path) -> None:
         llm_plan=True,
     )
 
-    assert "--dry-run --plan --llm-plan" in unit.service_text
+    assert "--dispatch --plan --llm-plan" in unit.service_text
     assert f"--instances-dir {tmp_path / 'instances'}" in unit.service_text
     assert "OnUnitActiveSec=1h" in unit.timer_text
 
@@ -48,7 +48,7 @@ def test_render_proactive_systemd_unit_can_enable_tool_plan(tmp_path) -> None:
         tool_plan=True,
     )
 
-    assert "--dry-run --plan --tool-plan" in unit.service_text
+    assert "--dispatch --plan --tool-plan" in unit.service_text
     assert "--llm-plan" not in unit.service_text
     assert "OnUnitActiveSec=30min" in unit.timer_text
 
@@ -76,7 +76,7 @@ def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> No
     assert result == 0
     assert "# teebotus-proactive-depressionsbot.service" in captured.out
     assert "# teebotus-proactive-depressionsbot.timer" in captured.out
-    assert "--dry-run --plan" in captured.out
+    assert "--dispatch --plan" in captured.out
 
 
 def test_proactive_systemd_print_mode_can_enable_tool_plan(tmp_path, capsys) -> None:
@@ -84,4 +84,4 @@ def test_proactive_systemd_print_mode_can_enable_tool_plan(tmp_path, capsys) -> 
 
     captured = capsys.readouterr()
     assert result == 0
-    assert "--dry-run --plan --tool-plan" in captured.out
+    assert "--dispatch --plan --tool-plan" in captured.out

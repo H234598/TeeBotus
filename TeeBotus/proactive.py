@@ -9,11 +9,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
+from TeeBotus.adapters.telegram_polling import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.config import resolve_openai_key
+from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_openai_key
 from TeeBotus.runtime.message_tracking import MessageTracker
+from TeeBotus.runtime.proactive_backends import signal_proactive_sender, telegram_proactive_sender
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
     dispatch_due_proactive_outbox_items,
@@ -41,11 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tool-plan", action="store_true", help="Run the native tool-call planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
+    _load_dotenv(Path.cwd() / ".env")
     if args.dry_run == args.dispatch:
         print("Use exactly one of --dry-run or --dispatch.", file=sys.stderr)
-        return 2
-    if args.dispatch:
-        print("CLI dispatch requires a runtime-provided sender registry; use --dry-run here.", file=sys.stderr)
         return 2
     if args.llm_plan and not args.plan:
         print("--llm-plan requires --plan so LLM decisions cannot run as an accidental plain status check.", file=sys.stderr)
@@ -56,13 +56,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.llm_plan and args.tool_plan:
         print("Use only one model planner: --llm-plan or --tool-plan.", file=sys.stderr)
         return 2
-    report = run_proactive_agent_dry_run(
-        instances_dir=Path(args.instances_dir),
-        selected_instances=tuple(args.instance),
-        plan=bool(args.plan),
-        llm_plan=bool(args.llm_plan),
-        tool_plan=bool(args.tool_plan),
-        llm_planner_factory=runtime_llm_planner_factory(Path(args.instances_dir)) if (args.llm_plan or args.tool_plan) else None,
+    instances_dir = Path(args.instances_dir)
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=instances_dir,
+            selected_instances=tuple(args.instance),
+            dispatch=bool(args.dispatch),
+            plan=bool(args.plan),
+            llm_plan=bool(args.llm_plan),
+            tool_plan=bool(args.tool_plan),
+            sender_factory=runtime_sender_factory(instances_dir) if args.dispatch else None,
+            llm_planner_factory=runtime_llm_planner_factory(instances_dir) if (args.llm_plan or args.tool_plan) else None,
+        )
     )
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
@@ -106,7 +111,7 @@ def run_proactive_agent_dry_run(
 
 
 def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> LLMPlannerFactory:
-    source = env or os.environ
+    source = os.environ if env is None else env
 
     def factory(instance_name: str, _store: AccountStore, _account_id: str) -> tuple[Any, Any] | None:
         key = resolve_openai_key(instance_name, "proactive", 1, source)
@@ -116,6 +121,66 @@ def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | No
         return OpenAIClient(key), instructions
 
     return factory
+
+
+def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> SenderFactory:
+    source = os.environ if env is None else env
+    config = build_runtime_config(env={**source, "TEEBOTUS_INSTANCES_DIR": str(instances_dir)})
+    accounts_by_instance: dict[str, list[AccountRunConfig]] = {}
+    for instance in config.instances:
+        accounts_by_instance.setdefault(instance.instance_name, []).extend(instance.accounts)
+
+    def factory(instance_name: str, _store: AccountStore) -> Mapping[str, ProactiveSender]:
+        accounts = accounts_by_instance.get(instance_name, [])
+        senders: dict[str, ProactiveSender] = {}
+        telegram_apis = {
+            account.slot: TelegramAPI(account.telegram_token)
+            for account in accounts
+            if account.channel == "telegram" and account.telegram_token
+        }
+        if telegram_apis:
+            senders["telegram"] = telegram_proactive_sender(telegram_apis)
+        signal_bots = _signal_bots_for_accounts(accounts)
+        if signal_bots:
+            senders["signal"] = signal_proactive_sender(signal_bots)
+        return senders
+
+    return factory
+
+
+def _signal_bots_for_accounts(accounts: Iterable[AccountRunConfig]) -> dict[int, Any]:
+    signal_accounts = [account for account in accounts if account.channel == "signal" and account.signal_service and account.signal_phone_number]
+    if not signal_accounts:
+        return {}
+    from TeeBotus.runtime.signal_runner import _import_signalbot, _signalbot_config_kwargs
+
+    signalbot = _import_signalbot()
+    bots: dict[int, Any] = {}
+    for account in signal_accounts:
+        config = signalbot.Config(**_signalbot_config_kwargs(signalbot, account))
+        bots[account.slot] = signalbot.SignalBot(config)
+    return bots
+
+
+def _load_dotenv(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = _clean_dotenv_value(value)
+
+
+def _clean_dotenv_value(value: str) -> str:
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
+        return cleaned[1:-1]
+    return cleaned
 
 
 async def run_proactive_agent_cycle(
@@ -158,103 +223,106 @@ async def run_proactive_agent_cycle(
         for account_dir in _account_dirs(store.accounts_dir):
             account_id = account_dir.name
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
-            if plan:
-                planning = run_proactive_reflection_planner(store, account_id, now=resolved_now)
-                account_report["planning"] = {
-                    "account_id": planning.account_id,
-                    "created_memory_ids": list(planning.created_memory_ids),
-                    "queued_item_ids": list(planning.queued_item_ids),
-                    "skipped_reason": planning.skipped_reason,
-                }
-            if llm_plan:
-                if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
-                    account_report["llm_planning"] = {"skipped_reason": "llm_planner_instance_not_enabled"}
-                else:
-                    planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
-                    if planner_context is None:
-                        account_report["llm_planning"] = {"skipped_reason": "llm_planner_unavailable"}
-                    else:
-                        openai_client, instructions = planner_context
-                        llm_planning = run_proactive_llm_planner(
-                            store,
-                            account_id,
-                            openai_client=openai_client,
-                            instructions=instructions,
-                            now=resolved_now,
-                        )
-                        account_report["llm_planning"] = {
-                            "account_id": llm_planning.account_id,
-                            "created_memory_ids": list(llm_planning.created_memory_ids),
-                            "queued_item_ids": list(llm_planning.queued_item_ids),
-                            "errors": list(llm_planning.errors),
-                            "audit_event_ids": list(llm_planning.audit_event_ids),
-                        }
-            if tool_plan:
-                if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
-                    account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
-                else:
-                    planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
-                    if planner_context is None:
-                        account_report["tool_planning"] = {"skipped_reason": "tool_planner_unavailable"}
-                    else:
-                        openai_client, instructions = planner_context
-                        tool_planning = run_proactive_tool_agent(
-                            store,
-                            account_id,
-                            openai_client=openai_client,
-                            instructions=instructions,
-                            now=resolved_now,
-                        )
-                        account_report["tool_planning"] = {
-                            "account_id": tool_planning.account_id,
-                            "created_memory_ids": list(tool_planning.created_memory_ids),
-                            "queued_item_ids": list(tool_planning.queued_item_ids),
-                            "errors": list(tool_planning.errors),
-                            "audit_event_ids": list(tool_planning.audit_event_ids),
-                        }
-            expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
-            if expired_item_ids:
-                account_report["expired_item_ids"] = list(expired_item_ids)
-            items: list[dict[str, Any]] = []
-            for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
-                category = str(item.get("category") or "")
-                item_id = str(item.get("id") or "")
-                decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
-                items.append(
-                    {
-                        "id": item_id,
-                        "category": category,
-                        "intent": str(item.get("intent") or ""),
-                        "due_at": str(item.get("due_at") or ""),
-                        "policy_allowed": decision.allowed,
-                        "policy_reason": decision.reason,
-                        "route": decision.route or item.get("route") or {},
+            try:
+                if plan:
+                    planning = run_proactive_reflection_planner(store, account_id, now=resolved_now)
+                    account_report["planning"] = {
+                        "account_id": planning.account_id,
+                        "created_memory_ids": list(planning.created_memory_ids),
+                        "queued_item_ids": list(planning.queued_item_ids),
+                        "skipped_reason": planning.skipped_reason,
                     }
-                )
-            account_report["due_items"] = items
+                if llm_plan:
+                    if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
+                        account_report["llm_planning"] = {"skipped_reason": "llm_planner_instance_not_enabled"}
+                    else:
+                        planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                        if planner_context is None:
+                            account_report["llm_planning"] = {"skipped_reason": "llm_planner_unavailable"}
+                        else:
+                            openai_client, instructions = planner_context
+                            llm_planning = run_proactive_llm_planner(
+                                store,
+                                account_id,
+                                openai_client=openai_client,
+                                instructions=instructions,
+                                now=resolved_now,
+                            )
+                            account_report["llm_planning"] = {
+                                "account_id": llm_planning.account_id,
+                                "created_memory_ids": list(llm_planning.created_memory_ids),
+                                "queued_item_ids": list(llm_planning.queued_item_ids),
+                                "errors": list(llm_planning.errors),
+                                "audit_event_ids": list(llm_planning.audit_event_ids),
+                            }
+                if tool_plan:
+                    if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
+                        account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
+                    else:
+                        planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                        if planner_context is None:
+                            account_report["tool_planning"] = {"skipped_reason": "tool_planner_unavailable"}
+                        else:
+                            openai_client, instructions = planner_context
+                            tool_planning = run_proactive_tool_agent(
+                                store,
+                                account_id,
+                                openai_client=openai_client,
+                                instructions=instructions,
+                                now=resolved_now,
+                            )
+                            account_report["tool_planning"] = {
+                                "account_id": tool_planning.account_id,
+                                "created_memory_ids": list(tool_planning.created_memory_ids),
+                                "queued_item_ids": list(tool_planning.queued_item_ids),
+                                "errors": list(tool_planning.errors),
+                                "audit_event_ids": list(tool_planning.audit_event_ids),
+                            }
+                expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
+                if expired_item_ids:
+                    account_report["expired_item_ids"] = list(expired_item_ids)
+                items: list[dict[str, Any]] = []
+                for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
+                    category = str(item.get("category") or "")
+                    item_id = str(item.get("id") or "")
+                    decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
+                    items.append(
+                        {
+                            "id": item_id,
+                            "category": category,
+                            "intent": str(item.get("intent") or ""),
+                            "due_at": str(item.get("due_at") or ""),
+                            "policy_allowed": decision.allowed,
+                            "policy_reason": decision.reason,
+                            "route": decision.route or item.get("route") or {},
+                        }
+                    )
+                account_report["due_items"] = items
+                if dispatch:
+                    senders = dict((sender_factory or _missing_sender_factory)(instance_dir.name, store))
+                    tracker = _message_tracker_for_instance(instance_dir, instance_dir.name, message_tracker_factory)
+                    results = await dispatch_due_proactive_outbox_items(
+                        store,
+                        account_id,
+                        senders=senders,
+                        now=resolved_now,
+                        message_tracker=tracker,
+                        instance_name=instance_dir.name,
+                    )
+                    account_report["dispatch_results"] = [
+                        {
+                            "account_id": result.account_id,
+                            "item_id": result.item_id,
+                            "status": result.status,
+                            "reason": result.reason,
+                            "channel": result.channel,
+                            "message_ref": result.message_ref,
+                        }
+                        for result in results
+                    ]
+            except (AccountStoreError, OSError, ValueError) as exc:
+                account_report["error"] = f"{type(exc).__name__}: {exc}"
             instance_report["accounts"].append(account_report)
-            if dispatch:
-                senders = dict((sender_factory or _missing_sender_factory)(instance_dir.name, store))
-                tracker = _message_tracker_for_instance(instance_dir, instance_dir.name, message_tracker_factory)
-                results = await dispatch_due_proactive_outbox_items(
-                    store,
-                    account_id,
-                    senders=senders,
-                    now=resolved_now,
-                    message_tracker=tracker,
-                    instance_name=instance_dir.name,
-                )
-                instance_report["accounts"][-1]["dispatch_results"] = [
-                    {
-                        "account_id": result.account_id,
-                        "item_id": result.item_id,
-                        "status": result.status,
-                        "reason": result.reason,
-                        "channel": result.channel,
-                        "message_ref": result.message_ref,
-                    }
-                    for result in results
-                ]
         instances.append(instance_report)
     return {
         "ok": _cycle_ok(instances),
@@ -280,7 +348,7 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
 
 
 def proactive_llm_planner_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:
-    source = env or {}
+    source = os.environ if env is None else env
     instance = str(instance_name or "").strip()
     if not instance:
         return False
@@ -336,6 +404,8 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
         for account in instance.get("accounts", []):
             due_items = account.get("due_items", [])
             print(f"  account={account['account_id']} due_items={len(due_items)}")
+            if account.get("error"):
+                print(f"    error={account['error']}")
             if account.get("expired_item_ids"):
                 print(f"    expired_items={len(account['expired_item_ids'])}")
             if "llm_planning" in account:
