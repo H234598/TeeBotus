@@ -585,6 +585,8 @@ def test_matrix_homeserver_health_uses_normalized_host_port(monkeypatch) -> None
 def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
     class Nio:
         RoomMessageText = object()
+        RoomMessageNotice = object()
+        RoomMessageEmote = object()
         RoomMessageFile = object()
         RoomMessageImage = object()
         RoomMessageAudio = object()
@@ -592,6 +594,8 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
 
     assert _matrix_message_event_classes(Nio) == (
         Nio.RoomMessageText,
+        Nio.RoomMessageNotice,
+        Nio.RoomMessageEmote,
         Nio.RoomMessageFile,
         Nio.RoomMessageImage,
         Nio.RoomMessageAudio,

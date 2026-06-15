@@ -78,6 +78,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     required_nio = (
         "AsyncClient",
         "RoomMessageText",
+        "RoomMessageNotice",
+        "RoomMessageEmote",
         "RoomMessageFile",
         "RoomMessageImage",
         "RoomMessageAudio",

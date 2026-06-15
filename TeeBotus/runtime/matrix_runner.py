@@ -205,7 +205,15 @@ def _matrix_bot_address_names(account: AccountRunConfig) -> tuple[str, ...]:
 def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
     return tuple(
         getattr(nio, name)
-        for name in ("RoomMessageText", "RoomMessageFile", "RoomMessageImage", "RoomMessageAudio", "RoomMessageVideo")
+        for name in (
+            "RoomMessageText",
+            "RoomMessageNotice",
+            "RoomMessageEmote",
+            "RoomMessageFile",
+            "RoomMessageImage",
+            "RoomMessageAudio",
+            "RoomMessageVideo",
+        )
         if hasattr(nio, name)
     )
 

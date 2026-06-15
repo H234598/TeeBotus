@@ -266,6 +266,44 @@ def test_matrix_message_maps_sender_and_room_to_event():
     assert event.text == "/account"
 
 
+def test_matrix_notice_message_maps_to_text_event():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$notice"
+        sender = "@alice:example"
+        body = "Statushinweis"
+        source = {"content": {"msgtype": "m.notice", "body": "Statushinweis"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.text == "Statushinweis"
+    assert event.message_ref == "$notice"
+    assert event.attachments == ()
+
+
+def test_matrix_emote_message_maps_to_text_event():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$emote"
+        sender = "@alice:example"
+        body = "winkt"
+        source = {"content": {"msgtype": "m.emote", "body": "winkt"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.text == "winkt"
+    assert event.message_ref == "$emote"
+    assert event.attachments == ()
+
+
 def test_matrix_media_message_maps_attachment_metadata():
     class Room:
         room_id = "!room:example"
