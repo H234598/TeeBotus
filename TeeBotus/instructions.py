@@ -55,6 +55,7 @@ class BotInstructions:
     openai_enabled: bool = False
     llm_provider: str = "openai"
     llm_model: str = ""
+    llm_fallback_models: tuple[str, ...] = ()
     llm_base_url: str = ""
     llm_api_key_env: str = ""
     openai_model: str = "gpt-5.5"
@@ -592,6 +593,8 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.llm_provider = value.strip() or instructions.llm_provider
     elif normalized in {"llm_model", "text_model"}:
         instructions.llm_model = value.strip()
+    elif normalized in {"fallback_models", "llm_fallback_models", "text_fallback_models"}:
+        instructions.llm_fallback_models = tuple(_parse_id_list(value))
     elif normalized in {"base_url", "api_base", "llm_base_url", "litellm_base_url"}:
         instructions.llm_base_url = value.strip()
     elif normalized in {"api_key_env", "llm_api_key_env", "litellm_api_key_env"}:

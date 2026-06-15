@@ -59,6 +59,7 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL": "huggingface",
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL_2": "groq",
         "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
+        "TEEBOTUS_LLM_FALLBACK_MODELS_DEPRESSIONSBOT": "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini",
         "TEEBOTUS_LLM_API_KEY": "global-key",
         "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_SIGNAL": "signal-key",
         "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
@@ -68,6 +69,7 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     assert resolve_llm_setting("Depressionsbot", "signal", 1, "PROVIDER", env) == "huggingface"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "PROVIDER", env) == "ollama"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "MODEL", env) == "llama3.1:8b"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "FALLBACK_MODELS", env) == "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini"
     assert resolve_llm_setting("Depressionsbot", "signal", 1, "API_KEY", env) == "signal-key"
     assert resolve_llm_setting("Depressionsbot", "matrix", 1, "API_KEY", env) == "global-key"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "BASE_URL", env) == "http://localhost:11434"
@@ -107,6 +109,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared",
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
         "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
+        "TEEBOTUS_LLM_FALLBACK_MODELS_DEPRESSIONSBOT": "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini",
         "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT": "ollama-key",
         "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
     }
@@ -117,6 +120,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
     assert {account.openai_api_key for account in accounts} == {"sk-shared"}
     assert {account.llm_provider for account in accounts} == {"ollama"}
     assert {account.llm_model for account in accounts} == {"llama3.1:8b"}
+    assert {account.llm_fallback_models for account in accounts} == {"groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini"}
     assert {account.llm_api_key for account in accounts} == {"ollama-key"}
     assert {account.llm_base_url for account in accounts} == {"http://localhost:11434"}
 

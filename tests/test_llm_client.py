@@ -47,7 +47,11 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
 
     def completion(**kwargs):
         calls.append(kwargs)
-        return {"id": "litellm-response", "choices": [{"message": {"content": "  Hallo  "}}]}
+        return {
+            "id": "litellm-response",
+            "choices": [{"message": {"content": "  Hallo  "}}],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
+        }
 
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
     monkeypatch.setenv("HF_TOKEN", "hf-secret")
@@ -65,6 +69,8 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
 
     assert response.text == "Hallo"
     assert response.response_id == "litellm-response"
+    assert response.model == "huggingface/meta-llama/Llama-3.1-8B-Instruct"
+    assert response.usage == {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}
     assert calls == [
         {
             "model": "huggingface/meta-llama/Llama-3.1-8B-Instruct",
@@ -101,6 +107,51 @@ def test_litellm_text_client_prefixes_provider_models_from_runtime_overrides(mon
     assert "api_key" not in calls[0]
 
 
+def test_litellm_text_client_tries_fallback_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        calls.append(model)
+        if model == "ollama/broken":
+            raise RuntimeError("down")
+        return {"choices": [{"message": {"content": f"ok:{model}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        provider="ollama",
+        model="broken",
+        fallback_models=("llama3.1:8b", "ollama/llama3.1:8b"),
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert calls == ["ollama/broken", "ollama/llama3.1:8b"]
+    assert response.text == "ok:ollama/llama3.1:8b"
+    assert response.model == "ollama/llama3.1:8b"
+
+
+def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        calls.append(model)
+        if model == "ollama/broken":
+            raise RuntimeError("down")
+        return {"choices": [{"message": {"content": f"ok:{model}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        provider="ollama",
+        model="broken",
+        fallback_models=("groq/llama-3.3-70b-versatile", "openai/gpt-4.1-mini"),
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert calls == ["ollama/broken", "groq/llama-3.3-70b-versatile"]
+    assert response.model == "groq/llama-3.3-70b-versatile"
+
+
 def test_litellm_provider_alias_requires_explicit_model() -> None:
     with pytest.raises(LLMAPIError, match="requires llm_model"):
         LiteLLMTextClient(provider="ollama").create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
@@ -112,12 +163,14 @@ def test_build_text_llm_client_uses_runtime_provider_override() -> None:
         openai_client=None,
         provider="huggingface",
         model="meta-llama/Llama-3.1-8B-Instruct",
+        fallback_models="Qwen/Qwen2.5-7B-Instruct, mistralai/Mistral-7B-Instruct-v0.3",
         api_key="hf-key",
     )
 
     assert isinstance(client, LiteLLMTextClient)
     assert client.provider == "huggingface"
     assert client.model == "meta-llama/Llama-3.1-8B-Instruct"
+    assert client.fallback_models == ("Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3")
     assert client.api_key == "hf-key"
 
 

@@ -20,6 +20,7 @@ class InstructionTests(unittest.TestCase):
             - enabled: ja
             - provider: litellm
             - llm_model: ollama/llama3.1:8b
+            - llm_fallback_models: groq/llama-3.3-70b-versatile, gemini/gemini-2.5-flash
             - base_url: http://localhost:11434
             - api_key_env: OLLAMA_API_KEY
             - model: gpt-5.5
@@ -111,6 +112,7 @@ class InstructionTests(unittest.TestCase):
         self.assertTrue(instructions.openai_enabled)
         self.assertEqual(instructions.llm_provider, "litellm")
         self.assertEqual(instructions.llm_model, "ollama/llama3.1:8b")
+        self.assertEqual(instructions.llm_fallback_models, ("groq/llama-3.3-70b-versatile", "gemini/gemini-2.5-flash"))
         self.assertEqual(instructions.llm_base_url, "http://localhost:11434")
         self.assertEqual(instructions.llm_api_key_env, "OLLAMA_API_KEY")
         self.assertEqual(instructions.openai_model, "gpt-5.5")

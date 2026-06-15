@@ -25,6 +25,7 @@ class AccountRunConfig:
     openai_api_key: str
     llm_provider: str = ""
     llm_model: str = ""
+    llm_fallback_models: str = ""
     llm_api_key: str = ""
     llm_base_url: str = ""
     telegram_token: str = ""
@@ -306,6 +307,7 @@ def _resolve_llm_runtime_kwargs(
     return {
         "llm_provider": resolve_llm_setting(instance_name, channel, slot, "PROVIDER", env),
         "llm_model": resolve_llm_setting(instance_name, channel, slot, "MODEL", env),
+        "llm_fallback_models": resolve_llm_setting(instance_name, channel, slot, "FALLBACK_MODELS", env),
         "llm_api_key": resolve_llm_setting(instance_name, channel, slot, "API_KEY", env),
         "llm_base_url": resolve_llm_setting(instance_name, channel, slot, "BASE_URL", env),
     }
