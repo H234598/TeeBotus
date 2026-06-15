@@ -198,6 +198,24 @@ Zum Verbinden eines bestehenden TeeBotus-Accounts im Matrix-Privatraum:
 
 Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>`, `signal:uuid:<id>` oder `matrix:user:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
 
+Strukturierter Account-Memory kann optional auf PostgreSQL umgestellt werden:
+
+```bash
+export TEEBOTUS_ACCOUNT_MEMORY_BACKEND=postgres
+export TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN='postgresql://USER:PASSWORD@HOST:5432/DBNAME'
+python3 scripts/migrate_account_memory_to_postgres.py --instances-dir instances --dry-run
+python3 scripts/migrate_account_memory_to_postgres.py --instances-dir instances
+```
+
+PostgreSQL speichert Memory-Payloads weiterhin AES-256-GCM-verschluesselt pro Eintrag. Querybar bleiben nur Metadaten wie `id`, `kind`, `memory_type`, `importance`, `salience`, `access_count` und Keywords. Der Treiber ist als `psycopg[binary]==3.3.4` gepinnt.
+
+Benchmark:
+
+```bash
+PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend jsonl --entries 1000 --select-runs 20
+PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --entries 1000 --select-runs 20
+```
+
 Account-Report:
 
 ```bash

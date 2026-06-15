@@ -28,7 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--select-runs", type=int, default=20, help="Number of select_structured_memory runs.")
     parser.add_argument(
         "--backend",
-        choices=("jsonl", "sqlite", "all"),
+        choices=("jsonl", "sqlite", "postgres", "all"),
         default="jsonl",
         help="Storage backend candidate to benchmark.",
     )
@@ -43,12 +43,15 @@ def main(argv: list[str] | None = None) -> int:
         result = benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs)
     elif args.backend == "sqlite":
         result = benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs)
+    elif args.backend == "postgres":
+        result = benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs)
     else:
         result = {
             "backend": "comparison",
             "results": [
                 benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs),
                 benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs),
+                benchmark_postgres_backend(entries=args.entries, select_runs=args.select_runs),
             ],
         }
     if args.json:
@@ -162,6 +165,74 @@ def benchmark_sqlite_row_encrypted_projection(*, entries: int, select_runs: int)
         }
 
 
+def benchmark_postgres_backend(*, entries: int, select_runs: int) -> dict[str, Any]:
+    from TeeBotus.runtime.postgres_memory import POSTGRES_BACKEND_ENV, POSTGRES_DSN_ENV
+
+    if not os.environ.get(POSTGRES_DSN_ENV):
+        return {
+            "backend": "postgres-row-encrypted-memory",
+            "entries": entries,
+            "skipped": True,
+            "reason": f"{POSTGRES_DSN_ENV} is not set",
+        }
+    previous_backend = os.environ.get(POSTGRES_BACKEND_ENV)
+    os.environ[POSTGRES_BACKEND_ENV] = "postgres"
+    try:
+        root = Path(tempfile.mkdtemp(prefix="teebotus-memory-postgres-bench-"))
+        store = AccountStore(root / "accounts", f"Bench_{os.getpid()}_{time.time_ns()}", StaticSecretProvider(b"b" * 32))
+        account_id = store.resolve_or_create_account(signal_identity_key(source_uuid=f"bench-{time.time_ns()}"))
+        append_timings = []
+        total_start = time.perf_counter()
+        for index in range(entries):
+            append_timings.append(
+                _timed_ms(
+                    lambda index=index: store.append_structured_memory_entry(
+                        account_id,
+                        {
+                            "id": f"mem_{index:06d}",
+                            "kind": "observation",
+                            "memory_type": "episodic",
+                            "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
+                            "bot_text": "Notiert.",
+                            "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
+                        },
+                    )
+                )
+            )
+        append_total_ms = (time.perf_counter() - total_start) * 1000
+        select_timings = [
+            _timed_ms(
+                lambda: store.select_structured_memory(
+                    account_id,
+                    query_text="spaziergang kaffee",
+                    max_prompt_chars=12000,
+                    max_entry_chars=2000,
+                )
+            )
+            for _ in range(select_runs)
+        ]
+        rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
+        return {
+            "backend": "postgres-row-encrypted-memory",
+            "entries": entries,
+            "entry_bytes": 0,
+            "index_bytes": 0,
+            "append_total_ms": append_total_ms,
+            "append_last_ms": append_timings[-1],
+            "append_median_ms": statistics.median(append_timings),
+            "select_median_ms": statistics.median(select_timings),
+            "select_p95_ms": _p95(select_timings),
+            "rebuild_ms": rebuild_ms,
+            "payload_encryption": "AES-256-GCM-per-row",
+            "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
+        }
+    finally:
+        if previous_backend is None:
+            os.environ.pop(POSTGRES_BACKEND_ENV, None)
+        else:
+            os.environ[POSTGRES_BACKEND_ENV] = previous_backend
+
+
 def _init_sqlite_projection(connection: sqlite3.Connection) -> None:
     connection.executescript(
         """
@@ -240,6 +311,9 @@ def _rebuild_sqlite_projection_indexes(connection: sqlite3.Connection) -> None:
 
 def _print_result(result: dict[str, Any]) -> None:
     print(f"backend={result['backend']}")
+    if result.get("skipped"):
+        print(f"skipped=yes reason={result.get('reason', '')}")
+        return
     print(f"entries={result['entries']}")
     print(f"entry_bytes={result['entry_bytes']} index_bytes={result['index_bytes']}")
     print(f"append_total_ms={result['append_total_ms']:.2f}")

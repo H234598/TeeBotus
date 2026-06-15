@@ -572,6 +572,7 @@ class AccountStore:
     instance_name: str
     secret_provider: InstanceSecretProvider = field(default_factory=SecretToolInstanceSecretProvider)
     create_dirs: bool = True
+    _account_memory_backend: Any | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.root = Path(self.root)
@@ -588,6 +589,21 @@ class AccountStore:
     @property
     def account_memory_vault(self) -> EncryptedJsonVault:
         return self.vault_for_purpose(ACCOUNT_MEMORY_KEY_PURPOSE)
+
+    @property
+    def account_memory_backend(self) -> Any | None:
+        if self._account_memory_backend is None:
+            from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
+
+            config = PostgresMemoryConfig.from_env()
+            if config is not None:
+                self._account_memory_backend = PostgresAccountMemoryBackend(
+                    instance_name=self.instance_name,
+                    provider=self.secret_provider,
+                    purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                    config=config,
+                )
+        return self._account_memory_backend
 
     @property
     def accounts_dir(self) -> Path:
@@ -891,15 +907,33 @@ class AccountStore:
         return self._active_identities_for_account(account_id)
 
     def read_memory_index(self, account_id: str) -> dict[str, Any]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        if backend is not None:
+            return backend.read_index(account_id)
         return self._read_json_with_fallback(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, {}, vault=self.account_memory_vault)
 
     def write_memory_index(self, account_id: str, data: dict[str, Any]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        if backend is not None:
+            backend.write_index(account_id, data)
+            return
         self.account_memory_vault.write_json(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, data)
 
     def read_memory_entries(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        if backend is not None:
+            return backend.read_entries(account_id)
         return self._read_jsonl_with_fallback(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
 
     def write_memory_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        if backend is not None:
+            backend.write_entries(account_id, rows)
+            return
         self.account_memory_vault.write_jsonl(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, rows)
 
     def append_memory_entry(self, account_id: str, entry: dict[str, Any]) -> None:
