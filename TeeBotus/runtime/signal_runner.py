@@ -86,49 +86,52 @@ class TeeBotusSignalCommand:
         return None
 
     async def handle(self, context: Any) -> None:
-        event = signal_context_to_event(
-            context=context,
-            instance_name=self.run_config.instance_name,
-            adapter_slot=self.run_config.slot,
-            account_label=self.run_config.label,
-        )
-        if event is None:
-            return
-        if should_ignore_event_without_account(event, (self.run_config.signal_phone_number, self.run_config.label)):
-            return
-        account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
-        self.account_store.update_identity_route(
-            event.identity_key,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            chat_type=event.chat_type,
-            adapter_slot=event.adapter_slot,
-        )
-        event = event.with_account(account_id)
-        actions = self.engine.process(event)
-        await self._notify_linked_identities(actions)
-        await self._delete_tracked_messages(context, event, actions)
-        actions = _with_signal_reply_context(actions, event)
-        sent_refs = await send_signal_actions(context, actions)
-        for action, sent_ref in zip(actions, sent_refs):
-            if sent_ref is None:
-                continue
-            if isinstance(action, ExportFile):
-                should_track = True
-            else:
-                should_track = isinstance(action, (SendText, SendAttachment, SendPoll)) and action.track
-            if not should_track:
-                continue
-            self.message_tracker.record(
-                SentMessageRef(
-                    channel="signal",
-                    instance_name=event.instance,
-                    account_id=event.account_id,
-                    chat_id=event.chat_id,
-                    message_ref=str(sent_ref),
-                    ref_kind="signal_timestamp",
-                )
+        try:
+            event = signal_context_to_event(
+                context=context,
+                instance_name=self.run_config.instance_name,
+                adapter_slot=self.run_config.slot,
+                account_label=self.run_config.label,
             )
+            if event is None:
+                return
+            if should_ignore_event_without_account(event, (self.run_config.signal_phone_number, self.run_config.label)):
+                return
+            account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+            self.account_store.update_identity_route(
+                event.identity_key,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                chat_type=event.chat_type,
+                adapter_slot=event.adapter_slot,
+            )
+            event = event.with_account(account_id)
+            actions = self.engine.process(event)
+            await self._notify_linked_identities(actions)
+            await self._delete_tracked_messages(context, event, actions)
+            actions = _with_signal_reply_context(actions, event)
+            sent_refs = await send_signal_actions(context, actions)
+            for action, sent_ref in zip(actions, sent_refs):
+                if sent_ref is None:
+                    continue
+                if isinstance(action, ExportFile):
+                    should_track = True
+                else:
+                    should_track = isinstance(action, (SendText, SendAttachment, SendPoll)) and action.track
+                if not should_track:
+                    continue
+                self.message_tracker.record(
+                    SentMessageRef(
+                        channel="signal",
+                        instance_name=event.instance,
+                        account_id=event.account_id,
+                        chat_id=event.chat_id,
+                        message_ref=str(sent_ref),
+                        ref_kind="signal_timestamp",
+                    )
+                )
+        finally:
+            await self._delete_local_attachments(context)
 
     async def _notify_linked_identities(self, actions: list[Any]) -> None:
         for action in actions:
@@ -172,6 +175,21 @@ class TeeBotusSignalCommand:
                     await context.remote_delete(int(ref.message_ref))
                 except Exception:
                     continue
+
+    async def _delete_local_attachments(self, context: Any) -> None:
+        message = getattr(context, "message", None)
+        filenames = _signal_local_attachment_filenames(message)
+        if not filenames:
+            return
+        bot = getattr(context, "bot", None) or self.bot
+        delete_attachment = getattr(bot, "delete_attachment", None)
+        if not callable(delete_attachment):
+            return
+        for filename in filenames:
+            try:
+                await delete_attachment(filename)
+            except Exception:
+                continue
 
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
@@ -265,6 +283,16 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
         else:
             enriched.append(action)
     return enriched
+
+
+def _signal_local_attachment_filenames(message: Any) -> tuple[str, ...]:
+    values = getattr(message, "attachments_local_filenames", None) or []
+    filenames: list[str] = []
+    for value in values:
+        filename = str(value or "").strip()
+        if filename and filename not in filenames:
+            filenames.append(filename)
+    return tuple(filenames)
 
 
 def check_signal_services(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[SignalServiceHealth, ...]:

@@ -45,8 +45,9 @@ class FakeSignalContext:
         self.sent: list[str] = []
         self.bot_sent: list[tuple[str, str, dict[str, object]]] = []
         self.bot_polls: list[tuple[str, str, list[str], dict[str, object]]] = []
+        self.deleted_attachments: list[str] = []
         self.deleted: list[int] = []
-        self.bot = SimpleNamespace(send=self.send_bot, poll=self.poll_bot)
+        self.bot = SimpleNamespace(send=self.send_bot, poll=self.poll_bot, delete_attachment=self.delete_attachment)
 
     async def send(self, text: str, **_kwargs) -> int:
         self.sent.append(text)
@@ -60,6 +61,9 @@ class FakeSignalContext:
     async def poll_bot(self, receiver: str, question: str, answers: list[str], **kwargs) -> int:
         self.bot_polls.append((receiver, question, answers, kwargs))
         return 876543
+
+    async def delete_attachment(self, filename: str) -> None:
+        self.deleted_attachments.append(filename)
 
     async def start_typing(self) -> None:
         return None
@@ -389,6 +393,60 @@ def test_signal_command_tracks_polls_for_cleanup(tmp_path) -> None:
     assert len(refs) == 1
     assert refs[0].message_ref == "876543"
     assert context.bot_polls == [("+491234", "Tee?", ["Ja", "Nein"], {"allow_multiple_selections": False})]
+
+
+def test_signal_command_deletes_local_attachments_after_handling(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.attachments_local_filenames = ["voice.ogg", "", "voice.ogg", "photo.jpg"]
+
+    asyncio.run(command.handle(context))
+
+    assert context.deleted_attachments == ["voice.ogg", "photo.jpg"]
+
+
+def test_signal_command_deletes_local_attachments_when_engine_fails(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type(
+        "FailingEngine",
+        (),
+        {"process": lambda self, _event: (_ for _ in ()).throw(RuntimeError("engine failed"))},
+    )()
+    context = FakeSignalContext()
+    context.message.attachments_local_filenames = ["voice.ogg"]
+
+    try:
+        asyncio.run(command.handle(context))
+    except RuntimeError as exc:
+        assert "engine failed" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+    assert context.deleted_attachments == ["voice.ogg"]
 
 
 def test_signal_command_notifies_old_signal_identity_route(tmp_path) -> None:
