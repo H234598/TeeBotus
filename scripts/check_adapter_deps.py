@@ -221,8 +221,10 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         from signalbot.context import Context  # type: ignore[import-not-found]
         from signalbot import Command, Config, LinkPreview, SignalBot  # type: ignore[import-not-found]
         from signalbot.message import Message, MessageType  # type: ignore[import-not-found]
+        from TeeBotus.runtime.signal_runner import _patch_signalbot_signal_cli_api_about
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
+    _patch_signalbot_signal_cli_api_about(signalbot)
     missing = [
         name
         for name in ("send", "reply", "edit", "start_typing", "stop_typing", "remote_delete", "react", "receipt")

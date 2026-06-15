@@ -16,7 +16,7 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
 PROACTIVE_DEFAULT_CATEGORIES = ("reminder", "task", "tip")
-PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled"})
+PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled", "expired"})
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
@@ -557,6 +557,40 @@ def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, 
     return tuple(due)
 
 
+def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    expire_after_days = int(state["policy"].get("expire_queued_after_days") or 0)
+    if expire_after_days <= 0:
+        return ()
+    resolved_now = now or datetime.now(timezone.utc)
+    cutoff = resolved_now - timedelta(days=expire_after_days)
+    rows = account_store.read_proactive_outbox(account_id)
+    expired_ids: list[str] = []
+    timestamp = resolved_now.isoformat(timespec="seconds")
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "queued":
+            continue
+        reference = _parse_proactive_datetime(str(item.get("due_at") or item.get("created_at") or item.get("updated_at") or ""))
+        if reference is None or reference > cutoff:
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        item["status"] = "expired"
+        item["updated_at"] = timestamp
+        history = item.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            item["status_history"] = history
+        history.append({"at": timestamp, "status": "expired", "reason": f"queued_item_older_than_{expire_after_days}_days"})
+        expired_ids.append(item_id)
+    if expired_ids:
+        account_store.write_proactive_outbox(account_id, rows)
+    return tuple(expired_ids)
+
+
 def update_proactive_outbox_item_status(
     account_store: AccountStore,
     account_id: str,
@@ -604,6 +638,7 @@ async def dispatch_due_proactive_outbox_items(
     instance_name: str = "",
 ) -> tuple[ProactiveDispatchResult, ...]:
     resolved_now = now or datetime.now(timezone.utc)
+    expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
     for item in due_proactive_outbox_items(account_store, account_id, now=resolved_now):
         item_id = str(item.get("id") or "").strip()
@@ -1215,6 +1250,7 @@ def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:
     policy["allowed_hours"] = [_normalize_hour(hours[0], default=9), _normalize_hour(hours[1], default=20)]
     policy["max_messages_per_day"] = max(0, _normalize_int(policy.get("max_messages_per_day"), default=2))
     policy["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(policy.get("min_minutes_between_messages"), default=0)))
+    policy["expire_queued_after_days"] = min(365, max(0, _normalize_int(policy.get("expire_queued_after_days"), default=14)))
     return state
 
 

@@ -9,7 +9,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
@@ -704,7 +704,7 @@ def _signalbot_config_kwargs(signalbot: Any, account: AccountRunConfig) -> dict[
         "signal_service": signal_service,
         "phone_number": account.signal_phone_number,
     }
-    connection_mode = _signalbot_connection_mode(signalbot, scheme)
+    connection_mode = _signalbot_connection_mode(signalbot, scheme, signal_service)
     if connection_mode is not None:
         kwargs["connection_mode"] = connection_mode
     in_memory_config = getattr(signalbot, "InMemoryConfig", None)
@@ -743,12 +743,18 @@ def _signal_service_host_port(signal_service: str) -> tuple[str, int, str]:
     return parsed.hostname, port, target
 
 
-def _signalbot_connection_mode(signalbot: Any, scheme: str) -> Any | None:
-    if not scheme:
-        return None
+def _signalbot_connection_mode(signalbot: Any, scheme: str, signal_service: str = "") -> Any | None:
     api = getattr(signalbot, "api", None)
     connection_mode = getattr(api, "ConnectionMode", None)
     if connection_mode is None:
+        return None
+    if not scheme:
+        try:
+            host, _port, _target = _signal_service_host_port(signal_service)
+        except SignalRuntimeError:
+            return None
+        if host.casefold() in LOCAL_SIGNAL_HOSTS:
+            return getattr(connection_mode, "HTTP_ONLY", None)
         return None
     if scheme == "http":
         return getattr(connection_mode, "HTTP_ONLY", None)

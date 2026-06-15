@@ -18,6 +18,7 @@ from TeeBotus.runtime.proactive_agent import (
     dispatch_due_proactive_outbox_items,
     due_proactive_outbox_items,
     enable_proactive_agent,
+    expire_stale_proactive_outbox_items,
     pause_proactive_agent,
     proactive_agent_instance_enabled,
     proactive_policy_decision,
@@ -267,6 +268,44 @@ def test_due_proactive_outbox_items_filters_future_and_terminal_items(tmp_path) 
 
     assert due == ()
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 14, tzinfo=timezone.utc))[0]["intent"] == "future"
+
+
+def test_expire_stale_proactive_outbox_items_marks_old_queued_items(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["expire_queued_after_days"] = 7
+    account_store.write_agent_state(account_id, state)
+    old = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="old",
+        message_text="Old",
+        due_at="2026-06-01T12:00:00+00:00",
+        now=datetime(2026, 6, 1, 10, tzinfo=timezone.utc),
+    )
+    fresh = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="fresh",
+        message_text="Fresh",
+        due_at="2026-06-14T12:00:00+00:00",
+        now=datetime(2026, 6, 14, 10, tzinfo=timezone.utc),
+    )
+
+    expired = expire_stale_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert expired == (old.reason.removeprefix("queued:"),)
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["status"] == "expired"
+    assert rows[0]["status_history"][-1]["reason"] == "queued_item_older_than_7_days"
+    assert rows[1]["id"] == fresh.reason.removeprefix("queued:")
+    assert rows[1]["status"] == "queued"
+    assert [item["intent"] for item in due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))] == ["fresh"]
 
 
 def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
@@ -817,6 +856,45 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert len(refs) == 1
     assert refs[0].message_ref == "123456789"
     assert refs[0].ref_kind == "signal_timestamp"
+
+
+def test_dispatch_expires_stale_queued_items_before_sending(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["expire_queued_after_days"] = 7
+    account_store.write_agent_state(account_id, state)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="old",
+        message_text="Old",
+        due_at="2026-06-01T12:00:00+00:00",
+        now=datetime(2026, 6, 1, 10, tzinfo=timezone.utc),
+    )
+    calls = []
+
+    async def sender(route: dict, action: SendText, item: dict) -> str:
+        calls.append((route, action, item))
+        return "sent-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert results == ()
+    assert calls == []
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == queued.reason.removeprefix("queued:")
+    assert item["status"] == "expired"
 
 
 def test_dispatch_recheck_does_not_count_current_queued_item_against_daily_limit(tmp_path) -> None:

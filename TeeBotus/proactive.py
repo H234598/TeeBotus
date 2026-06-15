@@ -14,6 +14,7 @@ from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
     dispatch_due_proactive_outbox_items,
     due_proactive_outbox_items,
+    expire_stale_proactive_outbox_items,
     proactive_agent_instance_enabled,
     proactive_policy_decision,
     run_proactive_llm_planner,
@@ -138,6 +139,9 @@ async def run_proactive_agent_cycle(
                             "errors": list(llm_planning.errors),
                             "audit_event_ids": list(llm_planning.audit_event_ids),
                         }
+            expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
+            if expired_item_ids:
+                account_report["expired_item_ids"] = list(expired_item_ids)
             items: list[dict[str, Any]] = []
             for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                 category = str(item.get("category") or "")
@@ -259,6 +263,8 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
         for account in instance.get("accounts", []):
             due_items = account.get("due_items", [])
             print(f"  account={account['account_id']} due_items={len(due_items)}")
+            if account.get("expired_item_ids"):
+                print(f"    expired_items={len(account['expired_item_ids'])}")
             if "llm_planning" in account:
                 llm = account["llm_planning"]
                 if llm.get("skipped_reason"):
