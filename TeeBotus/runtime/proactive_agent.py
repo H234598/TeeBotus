@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -37,6 +38,15 @@ PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
 PROACTIVE_LLM_PLAN_SCHEMA_VERSION = 1
 PROACTIVE_LLM_MAX_DECISIONS = 5
+PROACTIVE_AGENT_TOOL_NAMES = frozenset(
+    {
+        "proactive_create_memory",
+        "proactive_queue_message",
+        "proactive_cancel_item",
+        "proactive_snooze_item",
+        "proactive_noop",
+    }
+)
 PROACTIVE_LLM_MEMORY_KINDS = frozenset(
     {
         "reflection",
@@ -103,6 +113,13 @@ class ProactiveLLMPlanningResult:
     queued_item_ids: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
     audit_event_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProactiveAgentToolCall:
+    name: str
+    arguments: Mapping[str, Any]
+    call_id: str = ""
 
 
 ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
@@ -493,6 +510,179 @@ def run_proactive_llm_planner(
     prompt = build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     response = openai_client.create_reply(prompt, instructions)
     return apply_proactive_llm_plan_text(account_store, account_id, str(getattr(response, "text", response) or ""), now=now)
+
+
+def run_proactive_tool_agent(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    openai_client: Any,
+    instructions: Any,
+    now: datetime | None = None,
+    max_memory_chars: int = 6000,
+) -> ProactiveLLMPlanningResult:
+    prompt = build_proactive_tool_agent_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
+    tool_definitions = proactive_agent_tool_definitions()
+    create_tool_calls = getattr(openai_client, "create_tool_calls", None)
+    if not callable(create_tool_calls):
+        audit_id = _append_proactive_llm_audit_event(
+            account_store,
+            account_id,
+            event_type="tool_agent_rejected",
+            reason="client_missing_create_tool_calls",
+            now=now,
+        )
+        return ProactiveLLMPlanningResult(account_id, errors=("client_missing_create_tool_calls",), audit_event_ids=(audit_id,))
+    response = create_tool_calls(prompt, instructions, tool_definitions)
+    tool_calls = extract_proactive_agent_tool_calls(response)
+    if not tool_calls:
+        audit_id = _append_proactive_llm_audit_event(
+            account_store,
+            account_id,
+            event_type="tool_agent_rejected",
+            reason="no_tool_calls",
+            payload=_safe_tool_response_payload(response),
+            now=now,
+        )
+        return ProactiveLLMPlanningResult(account_id, errors=("no_tool_calls",), audit_event_ids=(audit_id,))
+    return apply_proactive_agent_tool_calls(account_store, account_id, tool_calls, now=now)
+
+
+def build_proactive_tool_agent_prompt(account_store: AccountStore, account_id: str, *, max_memory_chars: int = 6000) -> str:
+    return "\n".join(
+        [
+            "Du bist der native Tool-Agent fuer TeeBotus Proactive Planning.",
+            "Nutze ausschliesslich die bereitgestellten Tools. Sende nie direkt Nachrichten.",
+            "Direkter Versand ist verboten; fuer spaetere Kontaktaufnahme nur proactive_queue_message verwenden.",
+            "Krisen-, Suizid- oder Selbstverletzungsinhalte nicht proaktiv senden; nutze proactive_noop oder risk_gate needs_review.",
+            "Jeder Queue-Vorschlag braucht reason_memory_ids aus dem Kontext.",
+            "",
+            build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars),
+        ]
+    )
+
+
+def proactive_agent_tool_definitions() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "name": "proactive_create_memory",
+            "description": "Create one validated internal proactive memory note. Never use for diagnoses.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "kind": {"type": "string"},
+                    "text": {"type": "string"},
+                    "source_memory_ids": {"type": "array", "items": {"type": "string"}},
+                    "importance": {"type": "integer", "minimum": 1, "maximum": 5},
+                },
+                "required": ["kind", "text"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "proactive_queue_message",
+            "description": "Queue one future proactive message after local consent, route, time and risk validation.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "category": {"type": "string"},
+                    "intent": {"type": "string"},
+                    "message_text": {"type": "string"},
+                    "reason_memory_ids": {"type": "array", "items": {"type": "string"}},
+                    "risk_gate": {"type": "string"},
+                    "due_at": {"type": "string"},
+                    "intervention_type": {"type": "string"},
+                    "expected_response": {"type": "string"},
+                    "review_signal": {"type": "string"},
+                    "collaboration_marker": {"type": "string"},
+                },
+                "required": ["category", "intent", "message_text", "reason_memory_ids"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "proactive_cancel_item",
+            "description": "Cancel one existing queued proactive outbox item.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"item_id": {"type": "string"}, "reason": {"type": "string"}},
+                "required": ["item_id"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "proactive_snooze_item",
+            "description": "Move one existing queued proactive outbox item to a later due_at.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"item_id": {"type": "string"}, "due_at": {"type": "string"}, "reason": {"type": "string"}},
+                "required": ["item_id", "due_at"],
+            },
+        },
+        {
+            "type": "function",
+            "name": "proactive_noop",
+            "description": "Explicitly do nothing when no safe useful proactive action is available.",
+            "parameters": {"type": "object", "additionalProperties": False, "properties": {"reason": {"type": "string"}}},
+        },
+    ]
+
+
+def extract_proactive_agent_tool_calls(response: Any) -> tuple[ProactiveAgentToolCall, ...]:
+    raw_calls = getattr(response, "tool_calls", None)
+    if raw_calls is None and isinstance(response, Mapping):
+        raw_calls = response.get("tool_calls")
+    if raw_calls is None:
+        raw_calls = _response_output_tool_calls(response)
+    calls: list[ProactiveAgentToolCall] = []
+    if not isinstance(raw_calls, IterableABC) or isinstance(raw_calls, (str, bytes, Mapping)):
+        return ()
+    for raw_call in raw_calls:
+        call = _normalize_proactive_agent_tool_call(raw_call)
+        if call is not None:
+            calls.append(call)
+    return tuple(calls)
+
+
+def apply_proactive_agent_tool_calls(
+    account_store: AccountStore,
+    account_id: str,
+    tool_calls: Iterable[ProactiveAgentToolCall | Mapping[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> ProactiveLLMPlanningResult:
+    decisions: list[dict[str, Any]] = []
+    errors: list[str] = []
+    audit_event_ids: list[str] = []
+    resolved_now = now or datetime.now(timezone.utc)
+    for index, raw_call in enumerate(list(tool_calls)[:PROACTIVE_LLM_MAX_DECISIONS]):
+        call = raw_call if isinstance(raw_call, ProactiveAgentToolCall) else _normalize_proactive_agent_tool_call(raw_call)
+        if call is None:
+            error = f"tool_{index}_invalid_tool_call"
+            errors.append(error)
+            audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="tool_call_rejected", reason=error, decision_index=index, decision=raw_call, now=resolved_now))
+            continue
+        if call.name not in PROACTIVE_AGENT_TOOL_NAMES:
+            error = f"tool_{index}_unsupported_tool:{call.name}"
+            errors.append(error)
+            audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="tool_call_rejected", reason=error, decision_index=index, decision=_tool_call_audit_payload(call), now=resolved_now))
+            continue
+        decisions.append(_tool_call_to_llm_decision(call))
+    result = apply_proactive_llm_plan(account_store, account_id, {"schema_version": PROACTIVE_LLM_PLAN_SCHEMA_VERSION, "decisions": decisions}, now=resolved_now)
+    if errors:
+        return ProactiveLLMPlanningResult(
+            account_id,
+            result.created_memory_ids,
+            result.queued_item_ids,
+            tuple([*errors, *result.errors]),
+            tuple([*audit_event_ids, *result.audit_event_ids]),
+        )
+    return result
 
 
 def build_proactive_llm_planner_prompt(account_store: AccountStore, account_id: str, *, max_memory_chars: int = 6000) -> str:
@@ -1164,6 +1354,95 @@ def _apply_proactive_llm_queue_decision(
     if result.reason.startswith("review_pending:"):
         return result.reason.removeprefix("review_pending:")
     return result.reason
+
+
+def _response_output_tool_calls(response: Any) -> Any:
+    output = getattr(response, "output", None)
+    if output is None and isinstance(response, Mapping):
+        output = response.get("output")
+    if not isinstance(output, list):
+        return None
+    return [item for item in output if _tool_call_name(item)]
+
+
+def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCall | None:
+    if isinstance(raw_call, ProactiveAgentToolCall):
+        return raw_call
+    name = _tool_call_name(raw_call)
+    if not name:
+        return None
+    arguments = _tool_call_arguments(raw_call)
+    call_id = ""
+    if isinstance(raw_call, Mapping):
+        call_id = str(raw_call.get("call_id") or raw_call.get("id") or "").strip()
+    else:
+        call_id = str(getattr(raw_call, "call_id", None) or getattr(raw_call, "id", "") or "").strip()
+    return ProactiveAgentToolCall(name=name, arguments=arguments, call_id=call_id)
+
+
+def _tool_call_name(raw_call: Any) -> str:
+    if isinstance(raw_call, Mapping):
+        function = raw_call.get("function")
+        if isinstance(function, Mapping):
+            return str(function.get("name") or "").strip()
+        if raw_call.get("type") in {"function_call", "tool_call"}:
+            return str(raw_call.get("name") or "").strip()
+        return str(raw_call.get("name") or "").strip()
+    function = getattr(raw_call, "function", None)
+    if function is not None:
+        return str(getattr(function, "name", "") or "").strip()
+    return str(getattr(raw_call, "name", "") or "").strip()
+
+
+def _tool_call_arguments(raw_call: Any) -> Mapping[str, Any]:
+    raw_arguments: Any
+    if isinstance(raw_call, Mapping):
+        function = raw_call.get("function")
+        if isinstance(function, Mapping) and "arguments" in function:
+            raw_arguments = function.get("arguments")
+        else:
+            raw_arguments = raw_call.get("arguments", {})
+    else:
+        function = getattr(raw_call, "function", None)
+        if function is not None and hasattr(function, "arguments"):
+            raw_arguments = getattr(function, "arguments")
+        else:
+            raw_arguments = getattr(raw_call, "arguments", {})
+    if isinstance(raw_arguments, Mapping):
+        return raw_arguments
+    if isinstance(raw_arguments, str):
+        try:
+            decoded = json.loads(raw_arguments)
+        except json.JSONDecodeError:
+            return {}
+        return decoded if isinstance(decoded, Mapping) else {}
+    return {}
+
+
+def _tool_call_to_llm_decision(call: ProactiveAgentToolCall) -> dict[str, Any]:
+    args = dict(call.arguments)
+    if call.name == "proactive_create_memory":
+        return {"action": "memory", **args}
+    if call.name == "proactive_queue_message":
+        return {"action": "queue", **args}
+    if call.name == "proactive_cancel_item":
+        return {"action": "cancel", **args}
+    if call.name == "proactive_snooze_item":
+        return {"action": "snooze", **args}
+    return {"action": "none", **args}
+
+
+def _tool_call_audit_payload(call: ProactiveAgentToolCall) -> dict[str, Any]:
+    return {"name": call.name, "arguments": dict(call.arguments), "call_id": call.call_id}
+
+
+def _safe_tool_response_payload(response: Any) -> Any:
+    if isinstance(response, Mapping):
+        return {str(key): value for key, value in response.items() if str(key) in {"id", "output", "tool_calls", "text"}}
+    return {
+        "id": str(getattr(response, "id", "") or ""),
+        "text": str(getattr(response, "text", "") or "")[:600],
+    }
 
 
 def _apply_proactive_llm_cancel_decision(

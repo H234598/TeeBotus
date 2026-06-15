@@ -23,6 +23,7 @@ from TeeBotus.runtime.proactive_agent import (
     proactive_policy_decision,
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
+    run_proactive_tool_agent,
 )
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
@@ -37,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dispatch", action="store_true", help="Dispatch due items using explicitly configured in-process senders.")
     parser.add_argument("--plan", action="store_true", help="Run the local reflection planner before due selection. This can write memory/outbox entries.")
     parser.add_argument("--llm-plan", action="store_true", help="Run the LLM planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
+    parser.add_argument("--tool-plan", action="store_true", help="Run the native tool-call planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
     if args.dry_run == args.dispatch:
@@ -48,12 +50,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.llm_plan and not args.plan:
         print("--llm-plan requires --plan so LLM decisions cannot run as an accidental plain status check.", file=sys.stderr)
         return 2
+    if args.tool_plan and not args.plan:
+        print("--tool-plan requires --plan so tool-agent decisions cannot run as an accidental plain status check.", file=sys.stderr)
+        return 2
+    if args.llm_plan and args.tool_plan:
+        print("Use only one model planner: --llm-plan or --tool-plan.", file=sys.stderr)
+        return 2
     report = run_proactive_agent_dry_run(
         instances_dir=Path(args.instances_dir),
         selected_instances=tuple(args.instance),
         plan=bool(args.plan),
         llm_plan=bool(args.llm_plan),
-        llm_planner_factory=runtime_llm_planner_factory(Path(args.instances_dir)) if args.llm_plan else None,
+        tool_plan=bool(args.tool_plan),
+        llm_planner_factory=runtime_llm_planner_factory(Path(args.instances_dir)) if (args.llm_plan or args.tool_plan) else None,
     )
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
@@ -77,6 +86,7 @@ def run_proactive_agent_dry_run(
     now: datetime | None = None,
     plan: bool = False,
     llm_plan: bool = False,
+    tool_plan: bool = False,
     llm_planner_factory: LLMPlannerFactory | None = None,
 ) -> dict[str, Any]:
     return asyncio.run(
@@ -89,6 +99,7 @@ def run_proactive_agent_dry_run(
             dispatch=False,
             plan=plan,
             llm_plan=llm_plan,
+            tool_plan=tool_plan,
             llm_planner_factory=llm_planner_factory,
         )
     )
@@ -117,6 +128,7 @@ async def run_proactive_agent_cycle(
     dispatch: bool = False,
     plan: bool = False,
     llm_plan: bool = False,
+    tool_plan: bool = False,
     sender_factory: SenderFactory | None = None,
     message_tracker_factory: MessageTrackerFactory | None = None,
     llm_planner_factory: LLMPlannerFactory | None = None,
@@ -125,6 +137,10 @@ async def run_proactive_agent_cycle(
         raise ValueError("sender_factory is required when dispatch=True")
     if llm_plan and llm_planner_factory is None:
         raise ValueError("llm_planner_factory is required when llm_plan=True")
+    if tool_plan and llm_planner_factory is None:
+        raise ValueError("llm_planner_factory is required when tool_plan=True")
+    if llm_plan and tool_plan:
+        raise ValueError("llm_plan and tool_plan are mutually exclusive")
     resolved_now = now or datetime.now(timezone.utc)
     resolved_store_factory = store_factory or AccountStore
     instances: list[dict[str, Any]] = []
@@ -172,6 +188,29 @@ async def run_proactive_agent_cycle(
                             "queued_item_ids": list(llm_planning.queued_item_ids),
                             "errors": list(llm_planning.errors),
                             "audit_event_ids": list(llm_planning.audit_event_ids),
+                        }
+            if tool_plan:
+                if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
+                    account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
+                else:
+                    planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                    if planner_context is None:
+                        account_report["tool_planning"] = {"skipped_reason": "tool_planner_unavailable"}
+                    else:
+                        openai_client, instructions = planner_context
+                        tool_planning = run_proactive_tool_agent(
+                            store,
+                            account_id,
+                            openai_client=openai_client,
+                            instructions=instructions,
+                            now=resolved_now,
+                        )
+                        account_report["tool_planning"] = {
+                            "account_id": tool_planning.account_id,
+                            "created_memory_ids": list(tool_planning.created_memory_ids),
+                            "queued_item_ids": list(tool_planning.queued_item_ids),
+                            "errors": list(tool_planning.errors),
+                            "audit_event_ids": list(tool_planning.audit_event_ids),
                         }
             expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
             if expired_item_ids:
@@ -309,6 +348,17 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
                         f"created={len(llm.get('created_memory_ids', []))} "
                         f"queued={len(llm.get('queued_item_ids', []))} "
                         f"errors={len(llm.get('errors', []))}"
+                    )
+            if "tool_planning" in account:
+                tool = account["tool_planning"]
+                if tool.get("skipped_reason"):
+                    print(f"    tool_planning skipped={tool['skipped_reason']}")
+                else:
+                    print(
+                        "    tool_planning "
+                        f"created={len(tool.get('created_memory_ids', []))} "
+                        f"queued={len(tool.get('queued_item_ids', []))} "
+                        f"errors={len(tool.get('errors', []))}"
                     )
             for item in due_items:
                 policy = "allowed" if item["policy_allowed"] else f"blocked:{item['policy_reason']}"

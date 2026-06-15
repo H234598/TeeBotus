@@ -95,6 +95,22 @@ def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:
     assert "--llm-plan requires --plan" in captured.err
 
 
+def test_proactive_cli_tool_plan_requires_explicit_plan(capsys) -> None:
+    result = main(["--dry-run", "--tool-plan"])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "--tool-plan requires --plan" in captured.err
+
+
+def test_proactive_cli_rejects_two_model_planners(capsys) -> None:
+    result = main(["--dry-run", "--plan", "--llm-plan", "--tool-plan"])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "Use only one model planner" in captured.err
+
+
 def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
@@ -227,6 +243,31 @@ def test_proactive_cycle_llm_plan_requires_planner_factory(tmp_path) -> None:
         raise AssertionError("llm_plan without llm_planner_factory should fail")
 
 
+def test_proactive_cycle_tool_plan_requires_planner_factory(tmp_path) -> None:
+    try:
+        asyncio.run(run_proactive_agent_cycle(instances_dir=tmp_path, tool_plan=True))
+    except ValueError as exc:
+        assert "llm_planner_factory is required" in str(exc)
+    else:
+        raise AssertionError("tool_plan without llm_planner_factory should fail")
+
+
+def test_proactive_cycle_rejects_llm_and_tool_plan_together(tmp_path) -> None:
+    try:
+        asyncio.run(
+            run_proactive_agent_cycle(
+                instances_dir=tmp_path,
+                llm_plan=True,
+                tool_plan=True,
+                llm_planner_factory=lambda _instance, _store, _account_id: None,
+            )
+        )
+    except ValueError as exc:
+        assert "mutually exclusive" in str(exc)
+    else:
+        raise AssertionError("llm_plan and tool_plan should be mutually exclusive")
+
+
 def test_proactive_cycle_llm_plan_respects_separate_instance_gate(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
@@ -295,6 +336,67 @@ def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_
     assert account["llm_planning"]["errors"] == []
     assert len(account["llm_planning"]["queued_item_ids"]) == 1
     assert account["due_items"][0]["intent"] == "llm_cycle_follow_up"
+    assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
+
+
+def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp_path) -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_tool_calls(self, prompt, instructions, tools):
+            self.calls += 1
+            assert instructions == "instructions"
+            assert "mem_goal" in prompt
+            assert tools[0]["name"] == "proactive_create_memory"
+            return {
+                "tool_calls": [
+                    {
+                        "name": "proactive_queue_message",
+                        "arguments": {
+                            "category": "reminder",
+                            "intent": "tool_cycle_follow_up",
+                            "message_text": "Magst du kurz berichten?",
+                            "reason_memory_ids": ["mem_goal"],
+                            "risk_gate": "none",
+                            "due_at": "2026-06-15T11:30:00+00:00",
+                        },
+                    }
+                ]
+            }
+
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+    client = Client()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={
+                "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+                "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES": "Depressionsbot",
+            },
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            tool_plan=True,
+            llm_planner_factory=lambda _instance, _store, _account_id: (client, "instructions"),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert client.calls == 1
+    assert account["tool_planning"]["errors"] == []
+    assert len(account["tool_planning"]["queued_item_ids"]) == 1
+    assert account["due_items"][0]["intent"] == "tool_cycle_follow_up"
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
 
 

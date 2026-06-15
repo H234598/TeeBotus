@@ -91,6 +91,41 @@ class OpenAIClient:
             service_tier=service_tier if isinstance(service_tier, str) else None,
         )
 
+    def create_tool_calls(
+        self,
+        user_text: str,
+        instructions: BotInstructions,
+        tools: list[dict[str, Any]],
+        previous_response_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload = build_response_payload(user_text, instructions, previous_response_id)
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            RESPONSES_URL,
+            data=data,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            timeout = instructions.openai_timeout_seconds or self.timeout
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise OpenAIAPIError(f"OpenAI tool-call network timeout: {exc}") from exc
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise OpenAIAPIError(f"OpenAI tool-call HTTP error {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise OpenAIAPIError(f"OpenAI tool-call network error: {exc.reason}") from exc
+        if not isinstance(response_payload, dict):
+            raise OpenAIAPIError("OpenAI tool-call response was not a JSON object")
+        return response_payload
+
     def create_voice(self, text: str, instructions: BotInstructions) -> OpenAIVoice:
         payload = build_speech_payload(text, instructions)
         data = json.dumps(payload).encode("utf-8")

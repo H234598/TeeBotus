@@ -10,10 +10,12 @@ from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     active_proactive_risk_memory_ids,
+    apply_proactive_agent_tool_calls,
     apply_proactive_llm_plan,
     apply_proactive_llm_plan_text,
     approve_proactive_review_item,
     build_proactive_llm_planner_prompt,
+    extract_proactive_agent_tool_calls,
     check_proactive_agent_account,
     disable_proactive_agent,
     dispatch_due_proactive_outbox_items,
@@ -26,6 +28,7 @@ from TeeBotus.runtime.proactive_agent import (
     queue_proactive_message,
     reject_proactive_review_item,
     resume_proactive_agent,
+    run_proactive_tool_agent,
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
     select_proactive_route,
@@ -1070,6 +1073,151 @@ def test_llm_planner_prompt_has_schema_and_memory_context(tmp_path) -> None:
     assert '"schema_version":1' in prompt
     assert "Du sendest nie direkt Nachrichten" in prompt
     assert "mem_goal" in prompt
+
+
+def test_tool_agent_extracts_responses_api_function_calls() -> None:
+    response = {
+        "output": [
+            {
+                "type": "function_call",
+                "call_id": "call_1",
+                "name": "proactive_create_memory",
+                "arguments": '{"kind":"reflection","text":"Sanfter Plan","source_memory_ids":["mem_goal"]}',
+            }
+        ]
+    }
+
+    calls = extract_proactive_agent_tool_calls(response)
+
+    assert len(calls) == 1
+    assert calls[0].name == "proactive_create_memory"
+    assert calls[0].call_id == "call_1"
+    assert calls[0].arguments["kind"] == "reflection"
+
+
+def test_tool_agent_applies_memory_queue_and_snooze_tools_through_validator(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="existing",
+        message_text="Old",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    queued_id = queued.reason.removeprefix("queued:")
+
+    result = apply_proactive_agent_tool_calls(
+        account_store,
+        account_id,
+        [
+            {
+                "name": "proactive_create_memory",
+                "arguments": {
+                    "kind": "reflection",
+                    "text": "Sanftes Follow-up ist plausibel.",
+                    "source_memory_ids": [source_id],
+                },
+            },
+            {
+                "name": "proactive_queue_message",
+                "arguments": {
+                    "category": "reminder",
+                    "intent": "tool_follow_up",
+                    "message_text": "Magst du kurz berichten, ob ein kleiner Spaziergang passt?",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "none",
+                },
+            },
+            {
+                "name": "proactive_snooze_item",
+                "arguments": {"item_id": queued_id, "due_at": "2026-06-16T09:30:00+00:00", "reason": "spaeter"},
+            },
+        ],
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert len(result.created_memory_ids) == 1
+    assert len(result.queued_item_ids) == 1
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["id"] == queued_id
+    assert rows[0]["due_at"] == "2026-06-16T09:30:00+00:00"
+    assert rows[1]["id"] == result.queued_item_ids[0]
+    assert rows[1]["planner"]["source"] == "llm"
+
+
+def test_tool_agent_rejects_unknown_tools_without_mutating(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_agent_tool_calls(
+        account_store,
+        account_id,
+        [{"name": "proactive_send_now", "arguments": {"message_text": "Hallo"}}],
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("tool_0_unsupported_tool:proactive_send_now",)
+    assert account_store.read_memory_entries(account_id) == []
+    assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["event_type"] == "tool_call_rejected"
+
+
+def test_tool_agent_runner_uses_client_tool_calls(tmp_path) -> None:
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def create_tool_calls(self, prompt, instructions, tools):
+            self.calls.append((prompt, instructions, tools))
+            return {
+                "tool_calls": [
+                    {
+                        "name": "proactive_queue_message",
+                        "arguments": {
+                            "category": "reminder",
+                            "intent": "tool_runner_follow_up",
+                            "message_text": "Magst du kurz berichten?",
+                            "reason_memory_ids": ["mem_goal"],
+                            "risk_gate": "none",
+                        },
+                    }
+                ]
+            }
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(account_id, {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."})
+    client = Client()
+    instructions = object()
+
+    result = run_proactive_tool_agent(
+        account_store,
+        account_id,
+        openai_client=client,
+        instructions=instructions,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert len(result.queued_item_ids) == 1
+    assert client.calls[0][1] is instructions
+    assert client.calls[0][2][0]["name"] == "proactive_create_memory"
+    assert "Nutze ausschliesslich die bereitgestellten Tools" in client.calls[0][0]
 
 
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:
