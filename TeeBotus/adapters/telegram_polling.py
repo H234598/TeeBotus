@@ -794,6 +794,8 @@ def _process_text_message(
     chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, instance_name, "incoming")
+    if text and _handle_privacy_confirmation_flow(api, chat_state, chat_id, message, user_memory_store, text):
+        return
     if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
         return
 
@@ -1385,6 +1387,42 @@ def _handle_user_memory_reset_flow(
     return True
 
 
+def _handle_privacy_confirmation_flow(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    user_memory_store: AccountStore | None,
+    text: str,
+) -> bool:
+    if user_memory_store is None or not _is_privacy_confirmation(text):
+        return False
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return False
+    try:
+        account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        user_memory_store.update_identity_route(
+            identity_key,
+            channel="telegram",
+            chat_id=str(_message_chat_id(message) or ""),
+            chat_type=_telegram_chat_type(message),
+        )
+        user_memory_store.confirm_privacy(account_id, source="telegram")
+    except (AccountStoreError, OSError, AttributeError):
+        LOGGER.exception("Failed to persist privacy confirmation for identity_key=%s.", identity_key)
+        return False
+    chat_state.mark_sender_seen(identity_key)
+    chat_state.mark_sender_seen(_sender_identifier(message))
+    _send_tracked_message(
+        api,
+        chat_state,
+        chat_id,
+        "Datenschutz ist bestätigt. Ich frage dich nicht erneut, solange diese Einstellung nicht durch /reset_memorys entfernt wird.",
+    )
+    return True
+
+
 def _reset_current_user_memory(
     user_memory_store: AccountStore | None,
     identity_key: str,
@@ -1406,6 +1444,14 @@ def _reset_current_user_memory(
 def _is_user_memory_reset_confirmation(text: str) -> bool:
     normalized = _normalize_memory_reset_text(text)
     return bool(re.fullmatch(r"(ja|ja bitte|jep|yes|y|ok|okay|bestaetige|bestatige|loeschen|loesch es|mach das)", normalized))
+
+
+def _is_privacy_confirmation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(
+        re.search(r"\b(datenschutz|privacy|datenverarbeitung|datennutzung)\b", normalized)
+        and re.search(r"\b(bestaetig(?:e|t|en)?|bestatigt|akzeptier(?:e|t|en)?|ok|okay|einverstanden|zustimm(?:e|t|en)?)\b", normalized)
+    )
 
 
 def _is_user_memory_reset_cancellation(text: str) -> bool:
@@ -1704,8 +1750,10 @@ def _is_first_contact(
         return False
     if user_memory_store is not None and instructions.user_memory_enabled:
         try:
-            if identity_key and user_memory_store.get_account_for_identity(identity_key):
-                return False
+            if identity_key:
+                account_id = user_memory_store.get_account_for_identity(identity_key)
+                if account_id:
+                    return not user_memory_store.has_privacy_confirmation(account_id)
         except (AccountStoreError, OSError, AttributeError):
             return False
     return True

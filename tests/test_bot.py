@@ -2339,6 +2339,65 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages[0], (123, "Ich bin Depressionsbot.\n\nAI: Hallo"))
         self.assertEqual(api.sent_messages[1], (123, "AI: Nochmal"))
 
+    def test_privacy_confirmation_is_persistent_until_memory_reset(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            instructions = BotInstructions(openai_enabled=True, user_memory_enabled=True)
+            bot_identity = BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot")
+            memory_store = account_memory_store(directory)
+            message_base = {
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            }
+
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "Datenschutz bestätigt"}},
+                instructions,
+                FakeOpenAIClient(),
+                ChatState(),
+                memory_store,
+                bot_identity,
+            )
+            account_id = memory_store.get_account_for_identity("telegram:user:456")
+
+            self.assertIsNotNone(account_id)
+            assert account_id is not None
+            self.assertTrue(memory_store.has_privacy_confirmation(account_id))
+            self.assertEqual(
+                api.sent_messages[-1],
+                (123, "Datenschutz ist bestätigt. Ich frage dich nicht erneut, solange diese Einstellung nicht durch /reset_memorys entfernt wird."),
+            )
+
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "Hallo"}},
+                instructions,
+                FakeOpenAIClient(),
+                ChatState(),
+                memory_store,
+                bot_identity,
+            )
+
+            self.assertEqual(api.sent_messages[-1], (123, "AI: Hallo"))
+
+            memory_store.reset_structured_memory(account_id)
+            self.assertFalse(memory_store.has_privacy_confirmation(account_id))
+
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "Nochmal"}},
+                instructions,
+                FakeOpenAIClient(),
+                ChatState(),
+                memory_store,
+                bot_identity,
+            )
+
+            self.assertEqual(api.sent_messages[-1], (123, "Ich bin Depressionsbot.\n\nAI: Nochmal"))
+
     def test_command_targeting_other_bot_is_ignored(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

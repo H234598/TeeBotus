@@ -67,6 +67,21 @@ def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     assert "395935293" not in raw_identity_file
 
 
+def test_privacy_confirmation_is_persisted_in_profile_and_reset_by_memory_reset(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+
+    assert store.has_privacy_confirmation(account_id) is False
+
+    store.confirm_privacy(account_id, source="telegram")
+
+    assert store.has_privacy_confirmation(account_id) is True
+
+    store.reset_structured_memory(account_id)
+
+    assert store.has_privacy_confirmation(account_id) is False
+
+
 def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

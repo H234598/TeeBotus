@@ -106,6 +106,16 @@ class TeeBotusEngine:
             actions = handle_proactive_command(event.with_account(result.account_id), self.account_store, result.account_id)
             if actions is not None:
                 return EngineResult(result.account_id, list(actions), handled=True)
+        if _is_privacy_confirmation(event.text):
+            try:
+                self.account_store.confirm_privacy(result.account_id, source=event.channel)
+            except (AccountStoreError, OSError):
+                return EngineResult(result.account_id, [], handled=False)
+            return EngineResult(
+                result.account_id,
+                [SendText(event.chat_id, "Datenschutz ist bestätigt. Ich frage dich nicht erneut, solange diese Einstellung nicht durch /reset_memorys entfernt wird.", track=False)],
+                handled=True,
+            )
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
             return EngineResult(result.account_id, memory_reset_actions, handled=True)
@@ -1021,6 +1031,14 @@ def _is_memory_reset_confirmation(text: str) -> bool:
     return bool(re.fullmatch(r"(ja|ja bitte|jep|yes|y|ok|okay|bestaetige|bestatige|loeschen|loesch es|mach das)", normalized))
 
 
+def _is_privacy_confirmation(text: str) -> bool:
+    normalized = _normalize_memory_reset_text(text)
+    return bool(
+        re.search(r"\b(datenschutz|privacy|datenverarbeitung|datennutzung)\b", normalized)
+        and re.search(r"\b(bestaetig(?:e|t|en)?|bestatigt|akzeptier(?:e|t|en)?|ok|okay|einverstanden|zustimm(?:e|t|en)?)\b", normalized)
+    )
+
+
 def _is_memory_reset_cancellation(text: str) -> bool:
     normalized = _normalize_memory_reset_text(text)
     return bool(re.fullmatch(r"(nein|no|n|abbrechen|stop|stopp|nicht loeschen|lass es|behalten)", normalized))
@@ -1059,12 +1077,10 @@ def _is_negated_memory_reset_request(normalized_text: str) -> bool:
 def _normalize_memory_reset_text(text: str) -> str:
     normalized = str(text or "").casefold()
     replacements = {
-        "lösche": "loesche",
-        "löschen": "loeschen",
-        "lösch": "loesch",
-        "gedächtnis": "gedaechtnis",
-        "zurücksetzen": "zuruecksetzen",
-        "bestätige": "bestaetige",
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "ß": "ss",
     }
     for source, replacement in replacements.items():
         normalized = normalized.replace(source, replacement)

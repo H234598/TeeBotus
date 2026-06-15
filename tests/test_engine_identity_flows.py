@@ -963,6 +963,25 @@ def test_engine_account_memory_reset_requires_confirmation_and_resets_structured
     assert account_store.read_account_text(account_id, "User_Habbits_and_behave.md") == "Adminhinweis bleibt."
 
 
+def test_engine_privacy_confirmation_is_persistent_until_memory_reset(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="privacy")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    confirmed = engine.process(event(identity, "Datenschutz bestätigt", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert confirmed[0].text.startswith("Datenschutz ist bestätigt.")
+    assert account_store.has_privacy_confirmation(account_id) is True
+
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    reset_done = engine.process(event(identity, "ja", channel="signal"))
+
+    assert reset_done[0].text == BotInstructions().user_memory_reset_success
+    assert account_store.has_privacy_confirmation(account_id) is False
+
+
 def test_engine_account_memory_reset_can_be_cancelled(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="cancel-memory")
