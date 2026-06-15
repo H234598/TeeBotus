@@ -31,6 +31,7 @@ from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttac
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.state import RuntimeState
+from TeeBotus.runtime.tts_dialect import maybe_update_tts_dialect_preference, voice_instructions_for_account
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -120,6 +121,13 @@ class TeeBotusEngine:
                 update_city_and_weather_context(self.account_store, result.account_id, event.text)
             except (AccountStoreError, OSError, ValueError):
                 pass
+        if result.account_id and text and not command:
+            try:
+                dialect_update = maybe_update_tts_dialect_preference(self.account_store, result.account_id, event.text)
+            except (AccountStoreError, OSError, ValueError):
+                dialect_update = None
+            if dialect_update is not None and dialect_update.reply_text:
+                return EngineResult(result.account_id, [SendText(event.chat_id, dialect_update.reply_text, track=False)], handled=True)
         if result.handled or result.actions:
             return result
         if command in PROACTIVE_COMMANDS:
@@ -167,7 +175,7 @@ class TeeBotusEngine:
             self.state.reset_previous_response_id(event.instance, result.account_id)
             return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().openai_reset)], handled=True)
         if command == "/voice":
-            return EngineResult(result.account_id, self._voice_actions(event, self._current_instructions()), handled=True)
+            return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
         if command in YOUTUBE_TRANSCRIPT_COMMANDS:
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
@@ -560,7 +568,7 @@ class TeeBotusEngine:
             caption = f"{caption}: {result.note}"
         return [ExportFile(event.chat_id, result.filename, result.content_type, result.data, caption=caption)]
 
-    def _voice_actions(self, event: IncomingEvent, instructions: BotInstructions) -> list[OutgoingAction]:
+    def _voice_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         if not instructions.openai_voice_enabled:
             return [SendText(event.chat_id, instructions.openai_voice_error)]
         if self.openai_client is None:
@@ -579,7 +587,8 @@ class TeeBotusEngine:
                 )
             ]
         try:
-            voice = create_voice(voice_text, instructions)
+            voice_instructions = voice_instructions_for_account(instructions, self.account_store, account_id)
+            voice = create_voice(voice_text, voice_instructions)
         except OpenAIAPIError:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]
         audio = getattr(voice, "audio", b"")

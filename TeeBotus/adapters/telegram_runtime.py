@@ -45,6 +45,7 @@ from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
+from TeeBotus.runtime.tts_dialect import maybe_update_tts_dialect_preference, voice_instructions_for_account
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -815,6 +816,14 @@ def _process_text_message(
     ):
         return
 
+    if text and not str(text).strip().startswith("/"):
+        dialect_reply = _handle_tts_dialect_preference(user_memory_store, user_memory, text)
+        if dialect_reply:
+            reply = _with_first_contact_intro(dialect_reply, first_contact, bot_identity)
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
+            return
+
     if text and _normalize_command(text) == "/reset":
         chat_state.reset(chat_id)
         reply = _with_first_contact_intro(instructions.openai_reset, first_contact, bot_identity)
@@ -823,7 +832,7 @@ def _process_text_message(
         return
 
     if text and _normalize_command(text) == "/voice":
-        _handle_voice_command(api, chat_state, chat_id, message, instructions, openai_client, text)
+        _handle_voice_command(api, chat_state, chat_id, message, instructions, openai_client, text, user_memory_store, user_memory)
         return
 
     if text and _handle_pending_youtube_local_options(
@@ -912,7 +921,16 @@ def _process_text_message(
         chat_state.set_previous_response_id(chat_id, openai_response.response_id)
         reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
-        _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
+        _send_openai_response(
+            api,
+            chat_state,
+            chat_id,
+            message,
+            reply,
+            instructions,
+            openai_client,
+            voice_instructions=_voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+        )
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
@@ -1794,6 +1812,32 @@ def _prepare_weather_context(user_memory_store: AccountStore | None, user_memory
     except (AccountStoreError, OSError, ValueError):
         LOGGER.exception("Failed to prepare weather context.")
         return ""
+
+
+def _handle_tts_dialect_preference(user_memory_store: AccountStore | None, user_memory: UserMemoryRecord | None, text: str) -> str:
+    account_id = _account_id_from_user_memory(user_memory)
+    if user_memory_store is None or not account_id:
+        return ""
+    try:
+        update = maybe_update_tts_dialect_preference(user_memory_store, account_id, text)
+    except (AccountStoreError, OSError, ValueError):
+        LOGGER.exception("Failed to update TTS dialect preference.")
+        return ""
+    return update.reply_text
+
+
+def _voice_instructions_for_user_memory(
+    instructions: BotInstructions,
+    user_memory_store: AccountStore | None,
+    user_memory: UserMemoryRecord | None,
+) -> BotInstructions:
+    return voice_instructions_for_account(instructions, user_memory_store, _account_id_from_user_memory(user_memory))
+
+
+def _account_id_from_user_memory(user_memory: UserMemoryRecord | None) -> str:
+    if user_memory is None:
+        return ""
+    return user_memory.path.parent.name
 
 
 def _is_first_contact(
@@ -2890,6 +2934,8 @@ def _send_openai_response(
     text: str,
     instructions: BotInstructions,
     openai_client: OpenAIClient,
+    *,
+    voice_instructions: BotInstructions | None = None,
 ) -> None:
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, chat_state.instance_name, "reply")
     if _should_consider_auto_voice(text, instructions) and chat_state.should_send_auto_voice(
@@ -2898,7 +2944,7 @@ def _send_openai_response(
     ):
         try:
             api.send_chat_action(chat_id, "record_voice")
-            voice = openai_client.create_voice(text, instructions)
+            voice = openai_client.create_voice(text, voice_instructions or instructions)
             api.send_chat_action(chat_id, "upload_voice")
             _send_tracked_voice(api, chat_state, chat_id, voice.audio, voice.filename, voice.content_type)
             return
@@ -2968,6 +3014,8 @@ def _handle_voice_command(
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
     text: str,
+    user_memory_store: AccountStore | None = None,
+    user_memory: UserMemoryRecord | None = None,
 ) -> None:
     if not instructions.openai_voice_enabled:
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_voice_error)
@@ -2992,7 +3040,10 @@ def _handle_voice_command(
 
     try:
         api.send_chat_action(chat_id, "record_voice")
-        voice = openai_client.create_voice(voice_text, instructions)
+        voice = openai_client.create_voice(
+            voice_text,
+            _voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+        )
         api.send_chat_action(chat_id, "upload_voice")
         _send_tracked_voice(api, chat_state, chat_id, voice.audio, voice.filename, voice.content_type)
     except OpenAIAPIError as exc:
@@ -3431,7 +3482,16 @@ def _send_youtube_transcript_to_openai_pipeline(
     chat_state.set_previous_response_id(chat_id, openai_response.response_id)
     reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
     try:
-        _send_openai_response(api, chat_state, chat_id, message, reply, instructions, openai_client)
+        _send_openai_response(
+            api,
+            chat_state,
+            chat_id,
+            message,
+            reply,
+            instructions,
+            openai_client,
+            voice_instructions=_voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+        )
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed while sending YouTube transcript response: %s", exc)
     _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions, api)

@@ -1271,6 +1271,32 @@ def test_engine_voice_command_sends_generated_attachment(tmp_path):
     assert actions[1].content_type == "audio/ogg"
 
 
+def test_engine_voice_command_uses_account_tts_dialect(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.voice_instructions: list[str] = []
+
+        def create_voice(self, _text, instructions):
+            self.voice_instructions.append(instructions.openai_voice_instructions)
+            return type("Voice", (), {"audio": b"voice", "filename": "voice.ogg", "content_type": "audio/ogg"})()
+
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_voice_instructions="Basisstimme."),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    engine.process(event(identity, "Ich bin in Nürnberg geboren.", channel="signal"))
+    engine.process(event(identity, "/voice Hallo", channel="signal"))
+
+    client = engine.openai_client
+    assert client is not None
+    assert "Basisstimme." in client.voice_instructions[0]
+    assert "Nürnberg" in client.voice_instructions[0]
+
+
 def test_engine_voice_command_uses_reply_text(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
