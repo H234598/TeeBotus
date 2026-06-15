@@ -28,6 +28,7 @@ from TeeBotus.core.youtube import (
     YouTubeTranscriptError,
     _InstanceProcessRegistry,
     _build_youtube_pipeline_text,
+    _default_youtube_local_options,
     _extract_youtube_url,
     _has_youtube_transcript_intent,
     _parse_youtube_local_options,
@@ -3348,39 +3349,28 @@ def _handle_youtube_transcript_request(
                     _record_youtube_parser_miss(instance_name, text, (live_enabled, llm_enabled), inferred_options, "initial-request")
                     live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
                     llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
-            if live_enabled is not None and llm_enabled is not None:
-                if sender_id:
-                    chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
-                _start_youtube_local_transcription(
-                    api,
-                    chat_state,
-                    chat_id,
-                    message,
-                    text,
-                    url,
-                    live_enabled,
-                    llm_enabled,
-                    user_memory_store,
-                    user_memory,
-                    instructions,
-                    openai_client,
-                    bot_identity,
-                    first_contact,
-                    working_memory_store,
-                    youtube_job_runner,
-                    instance_name,
-                )
-                return
+            live_enabled, llm_enabled = _default_youtube_local_options(live_enabled, llm_enabled)
             if sender_id:
-                chat_state.request_youtube_local_options(chat_id, sender_id, url)
-            reply = (
-                "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
-                "Moechtest Du den Text live ausgegeben haben?\n"
-                f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
-                "Antworte z. B. mit: live nein, llm ja"
+                chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+            _start_youtube_local_transcription(
+                api,
+                chat_state,
+                chat_id,
+                message,
+                text,
+                url,
+                live_enabled,
+                llm_enabled,
+                user_memory_store,
+                user_memory,
+                instructions,
+                openai_client,
+                bot_identity,
+                first_contact,
+                working_memory_store,
+                youtube_job_runner,
+                instance_name,
             )
-            _send_tracked_message(api, chat_state, chat_id, reply)
-            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
         reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
         _send_tracked_message(api, chat_state, chat_id, reply)

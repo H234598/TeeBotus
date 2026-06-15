@@ -1791,19 +1791,28 @@ def test_engine_youtube_transcript_uses_pending_link_followup(monkeypatch, tmp_p
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "youtube_link") is None
 
 
-def test_engine_youtube_transcript_asks_for_local_options(monkeypatch, tmp_path):
+def test_engine_youtube_transcript_starts_local_by_default_when_no_subtitles(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
-    def fake_transcribe(_url, **_kwargs):
-        raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        return "Local transcript.", "lokales Whisper"
 
     monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(openai_model="gpt-test"))
 
     actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123"))
 
-    assert "Lokale Transkription ist noetig" in actions[0].text
-    assert "gpt-test" in actions[0].text
+    assert calls == [
+        ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"}),
+        ("https://youtu.be/abc123", {"local_allowed": True, "live_callback": None, "instance_name": "Depressionsbot"}),
+    ]
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."
 
 
 def test_engine_youtube_transcript_uses_pending_local_options_followup(monkeypatch, tmp_path):
@@ -1823,12 +1832,20 @@ def test_engine_youtube_transcript_uses_pending_local_options_followup(monkeypat
     identity = telegram_identity_key(1)
     account_id = account_store.resolve_or_create_account(identity)
 
-    first = engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123", channel="matrix"))
+    engine.state.set_pending_flow(
+        "Depressionsbot",
+        account_id,
+        "youtube_options",
+        {
+            "chat_id": "chat-1",
+            "channel": "matrix",
+            "url": "https://youtu.be/abc123",
+            "original_text": "/youtube_transcript https://youtu.be/abc123",
+        },
+    )
     second = engine.process(event(identity, "live nein, llm nein", channel="matrix"))
 
-    assert "Lokale Transkription ist noetig" in first[0].text
     assert calls == [
-        ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"}),
         ("https://youtu.be/abc123", {"local_allowed": True, "live_callback": None, "instance_name": "Depressionsbot"}),
     ]
     assert isinstance(second[0], SendTyping)

@@ -565,14 +565,19 @@ def _extract_youtube_url(text: str) -> str:
 
 def _has_youtube_transcript_intent(text: str) -> bool:
     normalized = text.casefold()
-    mentions_youtube = bool(re.search(r"\byoutube\b|youtu\.be|youtube\.com", normalized))
+    mentions_youtube = bool(re.search(r"\b(?:youtube|yt)\b|youtu\.be|youtube\.com", normalized))
     mentions_transcript = bool(
         re.search(
-            r"transkrib|transcript|transkript|untertitel|abschrift|verschriftlich|mitschrift",
+            r"transkrib|transcript|transkript|transkription|untertitel|abschrift|abschreib|abtippen|verschriftlich|mitschrift",
             normalized,
         )
     )
     return mentions_youtube and mentions_transcript
+
+
+def _default_youtube_local_options(live_enabled: bool | None, llm_enabled: bool | None) -> tuple[bool, bool]:
+    """Fall back to a local transcript-only job when the user gave no options."""
+    return (live_enabled if live_enabled is not None else False, llm_enabled if llm_enabled is not None else False)
 
 
 def _validated_youtube_url(url: str) -> str:

@@ -1787,7 +1787,7 @@ class BotTests(unittest.TestCase):
         self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, "456"))
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
 
-    def test_handle_update_youtube_transcript_asks_local_options_when_no_subtitles(self) -> None:
+    def test_handle_update_youtube_transcript_starts_local_by_default_when_no_subtitles(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
@@ -1802,10 +1802,13 @@ class BotTests(unittest.TestCase):
             ) as transcribe:
                 from TeeBotus.bot import YouTubeTranscriptError
 
-                transcribe.side_effect = YouTubeTranscriptError(
-                    "keine YouTube-Untertitel gefunden.",
-                    needs_local_transcription=True,
-                )
+                transcribe.side_effect = [
+                    YouTubeTranscriptError(
+                        "keine YouTube-Untertitel gefunden.",
+                        needs_local_transcription=True,
+                    ),
+                    ("Local transcript.", "lokales Whisper"),
+                ]
                 handle_update(
                     api,
                     {
@@ -1819,10 +1822,15 @@ class BotTests(unittest.TestCase):
                     chat_state=chat_state,
                 )
 
-        transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
-        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "https://youtu.be/abc123")
-        self.assertIn("Moechtest Du den Text live ausgegeben haben?", api.sent_messages[-1][1])
-        self.assertIn("Moechtest Du, dass das Ganze an dein LLM gpt-test geht?", api.sent_messages[-1][1])
+        self.assertEqual(
+            transcribe.call_args_list,
+            [
+                call("https://youtu.be/abc123", local_allowed=False),
+                call("https://youtu.be/abc123", local_allowed=True, live_callback=None),
+            ],
+        )
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+        self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."))
 
     def test_handle_update_youtube_local_options_live_chunks_without_llm(self) -> None:
         api = FakeAPI()

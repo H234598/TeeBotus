@@ -11,6 +11,7 @@ from TeeBotus.core.youtube import (
     YOUTUBE_TRANSCRIPT_COMMANDS,
     YouTubeTranscriptError,
     _build_youtube_pipeline_text,
+    _default_youtube_local_options,
     _extract_youtube_url,
     _has_youtube_transcript_intent,
     _parse_youtube_local_options,
@@ -688,29 +689,7 @@ class TeeBotusEngine:
             transcript, source = transcribe_youtube_video(url, local_allowed=False, instance_name=event.instance)
         except YouTubeTranscriptError as exc:
             if exc.needs_local_transcription:
-                local_actions = self._youtube_local_transcript_actions(event, account_id, instructions, url)
-                if local_actions is not None:
-                    return local_actions
-                self.state.set_pending_flow(
-                    event.instance,
-                    account_id,
-                    YOUTUBE_OPTIONS_FLOW,
-                    {
-                        "chat_id": event.chat_id,
-                        "channel": event.channel,
-                        "url": url,
-                        "original_text": event.text,
-                    },
-                )
-                reply = (
-                    "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
-                    "Moechtest Du den Text live ausgegeben haben?\n"
-                    f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
-                    "Antworte z. B. mit: /youtube_transcript <URL> live nein, llm ja"
-                )
-                self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
-                actions = [SendText(event.chat_id, reply)]
-                return actions
+                return self._youtube_local_transcript_actions(event, account_id, instructions, url)
             reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
             self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
             return [SendText(event.chat_id, reply)]
@@ -765,7 +744,7 @@ class TeeBotusEngine:
         account_id: str,
         instructions: BotInstructions,
         url: str,
-    ) -> list[OutgoingAction] | None:
+    ) -> list[OutgoingAction]:
         live_enabled, llm_enabled = _parse_youtube_local_options(event.text, instance_name=event.instance)
         if live_enabled is None or llm_enabled is None:
             inferred_options = self._infer_youtube_local_options_with_llm(event.text, instructions)
@@ -773,8 +752,7 @@ class TeeBotusEngine:
                 _record_youtube_parser_miss(event.instance, event.text, (live_enabled, llm_enabled), inferred_options, "engine-initial-request")
                 live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
                 llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
-        if live_enabled is None or llm_enabled is None:
-            return None
+        live_enabled, llm_enabled = _default_youtube_local_options(live_enabled, llm_enabled)
         return self._youtube_run_local_transcript_actions(
             event,
             account_id,
