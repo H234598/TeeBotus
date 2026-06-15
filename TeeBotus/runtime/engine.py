@@ -14,6 +14,8 @@ from TeeBotus.core.youtube import (
     _extract_youtube_url,
     _has_youtube_transcript_intent,
     _parse_youtube_local_options,
+    _parse_youtube_local_options_from_llm_response,
+    _record_youtube_parser_miss,
     transcribe_youtube_video,
 )
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
@@ -49,6 +51,8 @@ CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerk
 MEMORY_PAGE_LIMIT_NOTE = "Ich konnte in diesem Turn keine weitere Memory-Seite laden. Bitte frage nochmal etwas konkreter."
 EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+YOUTUBE_LINK_FLOW = "youtube_link"
+YOUTUBE_OPTIONS_FLOW = "youtube_options"
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
 MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
 OPENAI_IMAGE_STATE_KEY = "openai_image_generation"
@@ -160,6 +164,10 @@ class TeeBotusEngine:
         notification_response = maybe_handle_notification_loudness_response(event.with_account(result.account_id), self.account_store, result.account_id)
         if notification_response is not None:
             return EngineResult(result.account_id, list(notification_response), handled=True)
+        instructions = self._current_instructions()
+        youtube_pending_actions = self._pending_youtube_actions(event, result.account_id, instructions)
+        if youtube_pending_actions is not None:
+            return EngineResult(result.account_id, youtube_pending_actions, handled=True)
         reminder_reply = self._natural_reminder_reply(event, result.account_id)
         if reminder_reply is not None:
             return EngineResult(result.account_id, [SendText(event.chat_id, reminder_reply, track=False)], handled=True)
@@ -194,7 +202,6 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
             return EngineResult(result.account_id, [], handled=False)
-        instructions = self._current_instructions()
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
@@ -638,6 +645,12 @@ class TeeBotusEngine:
     def _youtube_transcript_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         url = _extract_youtube_url(event.text)
         if not url:
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                YOUTUBE_LINK_FLOW,
+                {"chat_id": event.chat_id, "channel": event.channel},
+            )
             return [SendText(event.chat_id, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")]
         try:
             transcript, source = transcribe_youtube_video(url, local_allowed=False, instance_name=event.instance)
@@ -646,6 +659,17 @@ class TeeBotusEngine:
                 local_actions = self._youtube_local_transcript_actions(event, account_id, instructions, url)
                 if local_actions is not None:
                     return local_actions
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    YOUTUBE_OPTIONS_FLOW,
+                    {
+                        "chat_id": event.chat_id,
+                        "channel": event.channel,
+                        "url": url,
+                        "original_text": event.text,
+                    },
+                )
                 return [
                     SendText(
                         event.chat_id,
@@ -660,6 +684,41 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
         return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
 
+    def _pending_youtube_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
+        pending_link = self.state.get_pending_flow(event.instance, account_id, YOUTUBE_LINK_FLOW)
+        if pending_link is not None and _pending_flow_matches_event(pending_link, event):
+            url = _extract_youtube_url(event.text)
+            if url:
+                self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_LINK_FLOW)
+                return self._youtube_transcript_actions(event, account_id, instructions)
+        pending_options = self.state.get_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+        if pending_options is not None and _pending_flow_matches_event(pending_options, event):
+            url = str(pending_options.get("url") or "").strip()
+            if not url:
+                self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+                return [SendText(event.chat_id, "YouTube-Transkript fehlgeschlagen: gespeicherte URL fehlt.")]
+            live_enabled, llm_enabled = _parse_youtube_local_options(event.text, instance_name=event.instance)
+            if live_enabled is None or llm_enabled is None:
+                inferred_options = self._infer_youtube_local_options_with_llm(event.text, instructions)
+                if inferred_options is not None:
+                    _record_youtube_parser_miss(event.instance, event.text, (live_enabled, llm_enabled), inferred_options, "engine-pending-options")
+                    live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
+                    llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
+            if live_enabled is None or llm_enabled is None:
+                return [SendText(event.chat_id, "Bitte antworte z. B. mit: live ja, llm ja")]
+            self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+            original_text = str(pending_options.get("original_text") or event.text)
+            return self._youtube_run_local_transcript_actions(
+                event,
+                account_id,
+                instructions,
+                url,
+                live_enabled=live_enabled,
+                llm_enabled=llm_enabled,
+                user_text=original_text,
+            )
+        return None
+
     def _youtube_local_transcript_actions(
         self,
         event: IncomingEvent,
@@ -669,7 +728,34 @@ class TeeBotusEngine:
     ) -> list[OutgoingAction] | None:
         live_enabled, llm_enabled = _parse_youtube_local_options(event.text, instance_name=event.instance)
         if live_enabled is None or llm_enabled is None:
+            inferred_options = self._infer_youtube_local_options_with_llm(event.text, instructions)
+            if inferred_options is not None:
+                _record_youtube_parser_miss(event.instance, event.text, (live_enabled, llm_enabled), inferred_options, "engine-initial-request")
+                live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
+                llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
+        if live_enabled is None or llm_enabled is None:
             return None
+        return self._youtube_run_local_transcript_actions(
+            event,
+            account_id,
+            instructions,
+            url,
+            live_enabled=live_enabled,
+            llm_enabled=llm_enabled,
+            user_text=event.text,
+        )
+
+    def _youtube_run_local_transcript_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        url: str,
+        *,
+        live_enabled: bool,
+        llm_enabled: bool,
+        user_text: str,
+    ) -> list[OutgoingAction]:
         try:
             transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=None, instance_name=event.instance)
         except YouTubeTranscriptError as exc:
@@ -677,7 +763,7 @@ class TeeBotusEngine:
         except (TimeoutError, TimeoutExpired) as exc:
             return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
         if llm_enabled:
-            return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
+            return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source, user_text=user_text)
         return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
 
     def _youtube_transcript_reply_actions(
@@ -688,6 +774,7 @@ class TeeBotusEngine:
         url: str,
         transcript: str,
         source: str,
+        user_text: str | None = None,
     ) -> list[OutgoingAction]:
         if not instructions.openai_enabled:
             return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
@@ -697,7 +784,7 @@ class TeeBotusEngine:
         if not callable(create_reply):
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         try:
-            pipeline_text = _build_youtube_pipeline_text(event.text, transcript, source, url)
+            pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
             working_memory_context = _build_working_memory_context(self.working_memory_store, pipeline_text)
             response = create_reply(
                 _build_youtube_openai_input(pipeline_text, working_memory_context),
@@ -713,6 +800,26 @@ class TeeBotusEngine:
         if not response_text:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
+
+    def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
+        if self.openai_client is None:
+            return None
+        create_reply = getattr(self.openai_client, "create_reply", None)
+        if not callable(create_reply):
+            return None
+        prompt = (
+            "Klassifiziere ausschliesslich die Optionen fuer eine lokale YouTube-Transkription.\n"
+            "Setze live_output nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob waehrend der Transkription live/zwischendurch Text gesendet werden soll.\n"
+            "Setze send_to_llm nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob das fertige Transkript danach an ein LLM/KI/GPT/OpenAI zur Auswertung gehen soll.\n"
+            "Antworte nur als JSON-Objekt mit exakt diesen Feldern:\n"
+            '{"live_output": true|false|null, "send_to_llm": true|false|null}\n\n'
+            f"Nachricht:\n{text.strip()}"
+        )
+        try:
+            response = create_reply(prompt, instructions, None)
+        except OpenAIAPIError:
+            return None
+        return _parse_youtube_local_options_from_llm_response(str(getattr(response, "text", "") or ""))
 
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
         summary = self.account_store.account_summary(account_id)
@@ -856,6 +963,16 @@ def _normalize_address_text(text: str) -> str:
     normalized = re.sub(r"[_@:+().-]+", " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip()
+
+
+def _pending_flow_matches_event(pending: dict[str, object], event: IncomingEvent) -> bool:
+    chat_id = str(pending.get("chat_id") or "").strip()
+    channel = str(pending.get("channel") or "").strip()
+    if chat_id and chat_id != event.chat_id:
+        return False
+    if channel and channel != event.channel:
+        return False
+    return True
 
 
 def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:
