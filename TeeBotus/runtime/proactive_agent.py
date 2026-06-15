@@ -1182,6 +1182,8 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
         errors.extend(_proactive_outbox_status_history_errors(item, item_id or str(index), current_status=status))
         category = str(item.get("category") or "").strip().casefold()
         system_notification_item = is_notification_loudness_outbox_item(item)
+        if status in {"queued", "review_pending"} and not system_notification_item and not _proactive_outbox_item_has_provenance(item):
+            errors.append(f"{status} outbox item {item_id or index} missing provenance")
         if category not in PROACTIVE_ALLOWED_CATEGORIES and not system_notification_item:
             errors.append(f"outbox item {item_id or index} has unsupported category: {category}")
         if status == "queued" and category and category not in consented_categories and not system_notification_item:
@@ -1222,6 +1224,21 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
                     if not route_matches:
                         errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
     return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count)
+
+
+def _proactive_outbox_item_has_provenance(item: Mapping[str, Any]) -> bool:
+    reason_memory_ids = item.get("reason_memory_ids")
+    if isinstance(reason_memory_ids, list) and any(str(memory_id or "").strip() for memory_id in reason_memory_ids):
+        return True
+    planner = item.get("planner")
+    if isinstance(planner, Mapping):
+        for key in ("source_memory_id", "reflection_memory_id", "fingerprint", "source"):
+            if str(planner.get(key) or "").strip():
+                return True
+        memory_ids = planner.get("memory_ids")
+        if isinstance(memory_ids, list) and any(str(memory_id or "").strip() for memory_id in memory_ids):
+            return True
+    return False
 
 
 def _proactive_outbox_status_history_errors(item: Mapping[str, Any], item_label: str, *, current_status: str) -> list[str]:

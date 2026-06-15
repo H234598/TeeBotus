@@ -420,6 +420,7 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
         category="reminder",
         intent="follow_up",
         message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
         due_at="2026-06-15T12:30:00+00:00",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
@@ -430,6 +431,52 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.ok is True
     assert health.queued_count == 1
     assert health.review_pending_count == 0
+    assert health.errors == ()
+
+
+def test_proactive_agent_health_reports_queued_item_without_provenance(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert decision.allowed is True
+    assert health.ok is False
+    assert "queued outbox item {item_id} missing provenance".format(item_id=decision.reason.removeprefix("queued:")) in health.errors
+
+
+def test_proactive_agent_health_accepts_planner_provenance_without_reason_memory_ids(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="planner_follow_up",
+        message_text="Magst du kurz berichten?",
+        planner={"source": "local", "fingerprint": "fp_1"},
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is True
     assert health.errors == ()
 
 
@@ -620,6 +667,7 @@ def test_proactive_agent_health_reports_invalid_status_history(tmp_path) -> None
         category="reminder",
         intent="follow_up",
         message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
         due_at="2026-06-15T12:30:00+00:00",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
@@ -653,6 +701,7 @@ def test_proactive_agent_health_accepts_string_adapter_slot_in_queued_route(tmp_
         category="reminder",
         intent="follow_up",
         message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
         due_at="2026-06-15T12:30:00+00:00",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
@@ -707,6 +756,7 @@ def test_proactive_risk_gate_queues_for_human_review_without_dispatch(tmp_path) 
         category="reminder",
         intent="risk_follow_up",
         message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_risk",),
         risk_gate="needs_review",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
