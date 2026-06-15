@@ -21,27 +21,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to teebotus-proactive.")
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
     parser.add_argument("--interval", default="15min", help="systemd OnUnitActiveSec interval.")
-    parser.add_argument(
+    planner_group = parser.add_mutually_exclusive_group()
+    planner_group.add_argument(
         "--llm-plan",
-        action="store_true",
-        default=True,
-        help="Include --llm-plan. This is the default for the Depressionsbot proactive scheduler.",
+        action="store_const",
+        dest="planner",
+        const="llm",
+        help="Include --llm-plan instead of the default --tool-plan.",
     )
-    parser.add_argument("--no-llm-plan", action="store_false", dest="llm_plan", help="Disable the default --llm-plan flag.")
-    parser.add_argument("--tool-plan", action="store_true", help="Include --tool-plan. Still requires the runtime LLM instance gate and OpenAI key.")
+    planner_group.add_argument(
+        "--tool-plan",
+        action="store_const",
+        dest="planner",
+        const="tool",
+        help="Include --tool-plan. This is the default for the Depressionsbot proactive scheduler.",
+    )
+    planner_group.add_argument("--no-model-plan", action="store_const", dest="planner", const="none", help="Disable model planning and keep only the local reflection planner.")
+    parser.set_defaults(planner="tool")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit files instead of writing them.")
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the timer after writing.")
     args = parser.parse_args(argv)
-    if args.llm_plan and args.tool_plan:
-        parser.error("--llm-plan and --tool-plan are mutually exclusive")
-
     unit = render_proactive_systemd_unit(
         repo_root=Path(args.repo_root),
         instances_dir=args.instances_dir,
         instance_name=args.instance,
         interval=args.interval,
-        llm_plan=bool(args.llm_plan),
-        tool_plan=bool(args.tool_plan),
+        llm_plan=args.planner == "llm",
+        tool_plan=args.planner == "tool",
     )
     if args.print_only:
         print(f"# {unit.service_name}")
@@ -68,8 +74,8 @@ def render_proactive_systemd_unit(
     instances_dir: str,
     instance_name: str,
     interval: str,
-    llm_plan: bool = True,
-    tool_plan: bool = False,
+    llm_plan: bool = False,
+    tool_plan: bool = True,
 ) -> ProactiveSystemdUnit:
     if llm_plan and tool_plan:
         raise ValueError("llm_plan and tool_plan are mutually exclusive")
