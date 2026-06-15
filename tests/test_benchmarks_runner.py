@@ -22,6 +22,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "status_doctor",
         "database_fallback",
         "langgraph_flows",
+        "mcp_tools",
     }.issubset(categories)
     assert all("total_ms" in result for result in suite["results"])
     assert all("throughput_ops_s" in result for result in suite["results"])

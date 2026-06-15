@@ -186,6 +186,7 @@ class BotInstructions:
     security_answer_full: str = ""
     security_answer_easter_egg: str = ""
     proactive_model_planner: str = "tool"
+    mcp_tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     commands: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_COMMANDS))
     text_replies: dict[str, str] = field(default_factory=dict)
     contains_replies: dict[str, str] = field(default_factory=dict)
@@ -373,6 +374,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_codex_setting(instructions, key, value)
         elif section == "proactive":
             _apply_proactive_setting(instructions, key, value)
+        elif section == "mcp_tools":
+            _apply_mcp_tool_setting(instructions, key, value)
         elif section == "security_answers":
             _apply_security_answer(instructions, key, value)
         elif section == "commands":
@@ -503,6 +506,10 @@ def _section_name(line: str) -> str:
         "proactive agent": "proactive",
         "proactive_agent": "proactive",
         "proaktiv": "proactive",
+        "mcp": "mcp_tools",
+        "mcp tools": "mcp_tools",
+        "mcp_tools": "mcp_tools",
+        "tools": "mcp_tools",
         "textantworten": "text_replies",
         "text replies": "text_replies",
         "exact text replies": "text_replies",
@@ -800,6 +807,25 @@ def _apply_proactive_setting(instructions: BotInstructions, key: str, value: str
             value,
             default=instructions.proactive_model_planner,
         )
+
+
+def _apply_mcp_tool_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    raw_key = str(key or "").strip()
+    tool_name, separator, setting = raw_key.rpartition(".")
+    if not separator:
+        return
+    tool_name = tool_name.strip().casefold()
+    setting_name = _normalize_key(setting)
+    if not tool_name or not setting_name:
+        return
+    tools = dict(instructions.mcp_tools)
+    config = dict(tools.get(tool_name, {}))
+    if setting_name in {"enabled", "read_only", "requires_confirmation", "private_chat_only", "requires_admin", "sandbox_required"}:
+        config[setting_name] = _parse_bool(value, default=False)
+    else:
+        config[setting_name] = value
+    tools[tool_name] = config
+    instructions.mcp_tools = tools
 
 
 def _normalize_proactive_model_planner(value: str, *, default: str = "tool") -> str:

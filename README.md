@@ -447,6 +447,32 @@ Deep-Query-Pilot:
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot query "Therapie Schlaf" --deep --top-k 3
 ```
 
+## MCP/FastMCP Pilot
+
+MCP/FastMCP ist nur als streng begrenzte Tool-Schicht vorgesehen. Der erste Pilot liegt unter `TeeBotus/mcp_tools/` und registriert ausschliesslich allowlistete read-only Tools:
+
+- `bibliothekar.search`: sucht in der Instanz-Bibliothek.
+- `memory.search`: sucht im verschluesselten Account-Memory des aktuellen Accounts.
+
+Nicht registriert sind freie Shell, beliebige Dateipfade, `.env`-Zugriff, Secret-Ausgabe, ungeprueftes Loeschen, Portscans oder Codex-Ausfuehrung. Schreibende oder riskante Tools wie `youtube.transcribe`, `export.account` oder `codex.exec` bleiben bis zu einer separaten Policy-/Bestätigungsstufe draussen.
+
+Konfiguration in `Bot_Verhalten.md` ist flach und allowlistet:
+
+```text
+## MCP Tools
+- bibliothekar.search.enabled: true
+- bibliothekar.search.read_only: true
+- memory.search.enabled: true
+- memory.search.read_only: true
+- memory.search.private_chat_only: true
+```
+
+FastMCP ist optional. Ohne installiertes `fastmcp` bleibt TeeBotus importierbar; der Adapter meldet dann nur, dass das Extra `[tools]` fehlt. Installation:
+
+```bash
+python3 -m pip install '.[tools]'
+```
+
 Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.

@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+import sys
+import types
+
+import pytest
+
+from TeeBotus.instructions import parse_instructions
+from TeeBotus.mcp_tools import MCPToolError, build_readonly_mcp_registry
+from TeeBotus.mcp_tools.fastmcp_server import build_fastmcp_server, fastmcp_available
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend
+
+
+def test_mcp_tool_config_is_parsed_as_flat_allowlist() -> None:
+    instructions = parse_instructions(
+        """
+        ## MCP Tools
+        - bibliothekar.search.enabled: true
+        - bibliothekar.search.read_only: true
+        - memory.search.enabled: false
+        - codex.exec.enabled: true
+        """
+    )
+
+    assert instructions.mcp_tools["bibliothekar.search"]["enabled"] is True
+    assert instructions.mcp_tools["bibliothekar.search"]["read_only"] is True
+    assert instructions.mcp_tools["memory.search"]["enabled"] is False
+    assert instructions.mcp_tools["codex.exec"]["enabled"] is True
+
+
+def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:
+    service = _bibliothekar_service(tmp_path)
+    account_store, account_id = _account_store_with_memory(tmp_path)
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        bibliothekar_service=service,
+        tool_config={
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "memory.search": {"enabled": True, "read_only": True},
+            "codex.exec": {"enabled": True, "read_only": False},
+        },
+    )
+
+    assert registry.tool_names == ("bibliothekar.search", "memory.search")
+    library = registry.call("bibliothekar.search", {"query": "Therapie", "top_k": 1})
+    memory = registry.call("memory.search", {"query": "Mond"})
+
+    assert library["read_only"] is True
+    assert "therapie.txt" in library["prompt_text"]
+    assert memory["read_only"] is True
+    assert memory["selected_ids"] == ["mem_1"]
+    with pytest.raises(MCPToolError, match="disabled"):
+        registry.call("codex.exec", {"command": "id"})
+
+
+def test_mcp_registry_rejects_non_readonly_policy(tmp_path) -> None:
+    registry = build_readonly_mcp_registry(
+        bibliothekar_service=_bibliothekar_service(tmp_path),
+        tool_config={"bibliothekar.search": {"enabled": True, "read_only": False}},
+    )
+
+    with pytest.raises(MCPToolError, match="not read-only"):
+        registry.call("bibliothekar.search", {"query": "Therapie"})
+
+
+def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monkeypatch) -> None:
+    created = []
+
+    class FakeFastMCP:
+        def __init__(self, name):
+            self.name = name
+            self.tools = {}
+            created.append(self)
+
+        def tool(self, name):
+            def decorator(func):
+                self.tools[name] = func
+                return func
+
+            return decorator
+
+    fake_module = types.ModuleType("fastmcp")
+    fake_module.FastMCP = FakeFastMCP
+    monkeypatch.setitem(sys.modules, "fastmcp", fake_module)
+    registry = build_readonly_mcp_registry(bibliothekar_service=_bibliothekar_service(tmp_path))
+
+    server = build_fastmcp_server(registry)
+
+    assert fastmcp_available() is True
+    assert server is created[0]
+    assert "bibliothekar.search" in server.tools
+    assert "therapie.txt" in server.tools["bibliothekar.search"]("Therapie", top_k=1)["prompt_text"]
+
+
+def _bibliothekar_service(tmp_path) -> BibliothekarService:
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True, exist_ok=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    return BibliothekarService(LocalBibliothekarBackend(store))
+
+
+def _account_store_with_memory(tmp_path) -> tuple[AccountStore, str]:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"m" * 32))
+    account_id = store.resolve_or_create_account(signal_identity_key(source_uuid="mcp-user"))
+    store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_1",
+            "kind": "observation",
+            "memory_type": "episodic",
+            "user_text": "Der User erwaehnte den Mond.",
+            "keywords": ["mond"],
+        },
+    )
+    return store, account_id

@@ -20,6 +20,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "Normale Chatantworten" in text
     assert "scripts/run_benchmarks.py --quick" in text
+    assert "## MCP/FastMCP Pilot" in text
+    assert "bibliothekar.search" in text
+    assert "memory.search" in text
 
 
 def test_readme_documents_local_vs_remote_provider_boundary() -> None:

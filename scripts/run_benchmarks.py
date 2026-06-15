@@ -25,6 +25,7 @@ from scripts.benchmark_memory_store import (  # noqa: E402
 from TeeBotus.core.youtube import _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
+from TeeBotus.mcp_tools import build_readonly_mcp_registry  # noqa: E402
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
 from TeeBotus.runtime.bibliothekar import BibliothekarStore  # noqa: E402
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend, check_bibliothekar_service  # noqa: E402
@@ -78,6 +79,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_status_doctor(iterations=iterations))
     results.append(_benchmark_database_fallback_policy(iterations=iterations))
     results.append(_benchmark_langgraph_flow(iterations=iterations))
+    results.append(_benchmark_mcp_tools(iterations=iterations))
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -309,6 +311,26 @@ def _benchmark_langgraph_flow(*, iterations: int) -> BenchmarkResult:
             iterations=iterations,
             total_ms=sum(timings),
             details={"median_graph_ms": statistics.median(timings), "mode": "langgraph_or_linear_fallback"},
+        )
+
+
+def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-mcp-") as tmp:
+        root = Path(tmp)
+        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
+        library_dir.mkdir(parents=True)
+        (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+        store = BibliothekarStore("Bench", root / "instances")
+        store.rebuild()
+        service = BibliothekarService(LocalBibliothekarBackend(store))
+        registry = build_readonly_mcp_registry(bibliothekar_service=service)
+        timings = [_timed_ms(lambda: registry.call("bibliothekar.search", {"query": "Therapie", "top_k": 1})) for _ in range(iterations)]
+        return _result(
+            name="mcp_readonly_bibliothekar_search",
+            category="mcp_tools",
+            iterations=iterations,
+            total_ms=sum(timings),
+            details={"tool_names": registry.tool_names, "median_tool_ms": statistics.median(timings)},
         )
 
 
