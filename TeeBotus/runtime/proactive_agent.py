@@ -1046,6 +1046,11 @@ async def dispatch_due_proactive_outbox_items(
         if not item_id:
             results.append(ProactiveDispatchResult(account_id, "", "failed", "missing_item_id"))
             continue
+        current_item = _current_due_proactive_outbox_item(account_store, account_id, item_id, now=resolved_now)
+        if current_item is None:
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_outbox_item", _item_channel(item)))
+            continue
+        item = current_item
         category = str(item.get("category") or "").strip().casefold()
         decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
@@ -1089,7 +1094,9 @@ async def dispatch_due_proactive_outbox_items(
             continue
         message_ref = _normalize_sent_ref(sent_ref)
         dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}
-        update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="sent", now=resolved_now, dispatch=dispatch_meta)
+        if not update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="sent", now=resolved_now, dispatch=dispatch_meta):
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel, message_ref))
+            continue
         _record_proactive_sent_ref(
             message_tracker,
             instance_name=instance_name or account_store.instance_name,
@@ -1100,6 +1107,28 @@ async def dispatch_due_proactive_outbox_items(
         )
         results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
     return tuple(results)
+
+
+def _current_due_proactive_outbox_item(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    now: datetime,
+) -> dict[str, Any] | None:
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict) or str(item.get("id") or "").strip() != str(item_id or "").strip():
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "queued":
+            return None
+        due_raw = str(item.get("due_at") or "").strip()
+        due_at = _parse_proactive_datetime(due_raw)
+        if due_raw and due_at is None:
+            return None
+        if due_at is not None and due_at > now:
+            return None
+        return dict(item)
+    return None
 
 
 def _proactive_item_action(chat_id: str, message_text: str, item: Mapping[str, Any]) -> OutgoingAction | None:

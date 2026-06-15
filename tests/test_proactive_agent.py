@@ -1859,6 +1859,92 @@ def test_dispatch_recheck_does_not_count_current_queued_item_against_daily_limit
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
 
 
+def test_dispatch_skips_stale_outbox_snapshot_without_sending(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    stale_item = dict(account_store.read_proactive_outbox(account_id)[0])
+    update_proactive_outbox_item_status(account_store, account_id, item_id, status="cancelled", reason="user_cancelled", now=now)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent.due_proactive_outbox_items",
+        lambda _store, _account_id, *, now=None: (stale_item,),
+    )
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise AssertionError("stale proactive outbox item was sent")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == item_id
+    assert results[0].status == "skipped"
+    assert results[0].reason == "stale_outbox_item"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+
+
+def test_dispatch_skips_item_that_was_snoozed_after_due_snapshot(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    stale_item = dict(account_store.read_proactive_outbox(account_id)[0])
+    current_rows = account_store.read_proactive_outbox(account_id)
+    current_rows[0]["due_at"] = "2026-06-15T14:00:00+00:00"
+    account_store.write_proactive_outbox(account_id, current_rows)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent.due_proactive_outbox_items",
+        lambda _store, _account_id, *, now=None: (stale_item,),
+    )
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise AssertionError("snoozed proactive outbox item was sent")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "skipped"
+    assert results[0].reason == "stale_outbox_item"
+    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-15T14:00:00+00:00"
+
+
 def test_dispatch_fails_invalid_due_at_without_sending(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
