@@ -3,8 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from subprocess import TimeoutExpired
 from typing import Callable, Iterable
 
+from TeeBotus.core.youtube import (
+    YOUTUBE_TRANSCRIPT_COMMANDS,
+    YouTubeTranscriptError,
+    _build_youtube_pipeline_text,
+    _extract_youtube_url,
+    _has_youtube_transcript_intent,
+    _parse_youtube_local_options,
+    transcribe_youtube_video,
+)
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
@@ -82,9 +92,13 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, self._current_instructions().openai_reset)]
         if command == "/voice":
             return self._voice_actions(event, self._current_instructions())
+        if command in YOUTUBE_TRANSCRIPT_COMMANDS:
+            return self._youtube_transcript_actions(event, result.account_id, self._current_instructions())
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
             return []
         instructions = self._current_instructions()
+        if _has_youtube_transcript_intent(text):
+            return self._youtube_transcript_actions(event, result.account_id, instructions)
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
         if reply is None:
             openai_actions = self._openai_actions(event, result.account_id, instructions)
@@ -348,6 +362,83 @@ class TeeBotusEngine:
         filename = str(getattr(voice, "filename", "") or "voice.ogg")
         content_type = str(getattr(voice, "content_type", "") or "audio/ogg")
         return [SendTyping(event.chat_id), SendAttachment(event.chat_id, audio, filename, content_type)]
+
+    def _youtube_transcript_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+        url = _extract_youtube_url(event.text)
+        if not url:
+            return [SendText(event.chat_id, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")]
+        try:
+            transcript, source = transcribe_youtube_video(url, local_allowed=False, instance_name=event.instance)
+        except YouTubeTranscriptError as exc:
+            if exc.needs_local_transcription:
+                local_actions = self._youtube_local_transcript_actions(event, account_id, instructions, url)
+                if local_actions is not None:
+                    return local_actions
+                return [
+                    SendText(
+                        event.chat_id,
+                        "Keine YouTube-Untertitel gefunden. Lokale Transkription ist noetig.\n"
+                        "Moechtest Du den Text live ausgegeben haben?\n"
+                        f"Moechtest Du, dass das Ganze an dein LLM {instructions.openai_model} geht?\n"
+                        "Antworte z. B. mit: /youtube_transcript <URL> live nein, llm ja",
+                    )
+                ]
+            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: {exc}")]
+        except (TimeoutError, TimeoutExpired) as exc:
+            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
+        return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
+
+    def _youtube_local_transcript_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        url: str,
+    ) -> list[OutgoingAction] | None:
+        live_enabled, llm_enabled = _parse_youtube_local_options(event.text, instance_name=event.instance)
+        if live_enabled is None or llm_enabled is None:
+            return None
+        try:
+            transcript, source = transcribe_youtube_video(url, local_allowed=True, live_callback=None, instance_name=event.instance)
+        except YouTubeTranscriptError as exc:
+            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: {exc}")]
+        except (TimeoutError, TimeoutExpired) as exc:
+            return [SendText(event.chat_id, f"YouTube-Transkript fehlgeschlagen: Timeout bei der Transkription ({exc}).")]
+        if llm_enabled:
+            return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
+        return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
+
+    def _youtube_transcript_reply_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+        url: str,
+        transcript: str,
+        source: str,
+    ) -> list[OutgoingAction]:
+        if not instructions.openai_enabled:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, f"YouTube-Transkript ({source}):\n\n{transcript}")]
+        if self.openai_client is None:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_missing_key)]
+        create_reply = getattr(self.openai_client, "create_reply", None)
+        if not callable(create_reply):
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        try:
+            response = create_reply(
+                _build_youtube_pipeline_text(event.text, transcript, source, url),
+                instructions,
+                self.state.get_previous_response_id(event.instance, account_id),
+            )
+        except OpenAIAPIError:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        response_id = getattr(response, "response_id", None)
+        if isinstance(response_id, str):
+            self.state.set_previous_response_id(event.instance, account_id, response_id)
+        response_text = str(getattr(response, "text", "") or "").strip()
+        if not response_text:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
 
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
         summary = self.account_store.account_summary(account_id)

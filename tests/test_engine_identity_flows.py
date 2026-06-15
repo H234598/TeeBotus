@@ -423,6 +423,118 @@ def test_engine_voice_command_reports_openai_error(tmp_path):
     assert actions[1].text == "Voice kaputt."
 
 
+def test_engine_youtube_transcript_command_sends_transcript(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        return "Transcript text.", "YouTube-Untertitel"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123", channel="signal"))
+
+    assert calls == [("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"})]
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."
+
+
+def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypatch, tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.reply_inputs: list[str] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.reply_inputs.append(user_text)
+            return OpenAIResponse("AI summary.", "resp-youtube", None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Transcript text.", "YouTube-Untertitel"),
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(openai_enabled=True), openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Bitte transkribiere dieses YouTube Video https://youtu.be/abc123", channel="matrix"))
+
+    assert "YouTube-Transkript:" in client.reply_inputs[0]
+    assert "Transcript text." in client.reply_inputs[0]
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "AI summary."
+
+
+def test_engine_youtube_transcript_requires_link(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript"))
+
+    assert actions[0].text == "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
+
+
+def test_engine_youtube_transcript_asks_for_local_options(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    def fake_transcribe(_url, **_kwargs):
+        raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(openai_model="gpt-test"))
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123"))
+
+    assert "Lokale Transkription ist noetig" in actions[0].text
+    assert "gpt-test" in actions[0].text
+
+
+def test_engine_youtube_transcript_runs_local_when_options_are_explicit(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        return "Local transcript.", "lokales Whisper"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 live nein, llm nein"))
+
+    assert calls == [
+        ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"}),
+        ("https://youtu.be/abc123", {"local_allowed": True, "live_callback": None, "instance_name": "Depressionsbot"}),
+    ]
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."
+
+
+def test_engine_youtube_natural_group_request_must_address_bot(monkeypatch, tmp_path):
+    def fake_transcribe(_url, **_kwargs):
+        raise AssertionError("transcribe_youtube_video must not be called")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+    incoming = IncomingEvent(
+        event_id="matrix:1",
+        instance="Depressionsbot",
+        channel="matrix",
+        adapter_slot=1,
+        identity_key=telegram_identity_key(1),
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="alice",
+        text="Bitte transkribiere dieses YouTube Video https://youtu.be/abc123",
+        message_ref="1",
+    )
+
+    actions = engine.process(incoming)
+
+    assert actions == []
+
+
 def test_account_edit_sets_pending_flow(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
