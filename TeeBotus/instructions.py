@@ -151,6 +151,7 @@ class BotInstructions:
     security_answer_short: str = ""
     security_answer_full: str = ""
     security_answer_easter_egg: str = ""
+    proactive_model_planner: str = "tool"
     commands: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_COMMANDS))
     text_replies: dict[str, str] = field(default_factory=dict)
     contains_replies: dict[str, str] = field(default_factory=dict)
@@ -325,6 +326,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_openai_setting(instructions, key, value)
         elif section == "codex":
             _apply_codex_setting(instructions, key, value)
+        elif section == "proactive":
+            _apply_proactive_setting(instructions, key, value)
         elif section == "security_answers":
             _apply_security_answer(instructions, key, value)
         elif section == "commands":
@@ -444,6 +447,10 @@ def _section_name(line: str) -> str:
         "datenschutzantworten": "security_answers",
         "privacy answers": "security_answers",
         "codex": "codex",
+        "proactive": "proactive",
+        "proactive agent": "proactive",
+        "proactive_agent": "proactive",
+        "proaktiv": "proactive",
         "textantworten": "text_replies",
         "text replies": "text_replies",
         "exact text replies": "text_replies",
@@ -632,6 +639,26 @@ def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) ->
         instructions.codex_allowed_sender_ids = tuple(_parse_id_list(value))
     elif normalized == "timeout_seconds":
         instructions.codex_timeout_seconds = _parse_required_int(value, default=instructions.codex_timeout_seconds)
+
+
+def _apply_proactive_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized in {"model_planner", "model_plan", "planner", "planning_mode"}:
+        instructions.proactive_model_planner = _normalize_proactive_model_planner(
+            value,
+            default=instructions.proactive_model_planner,
+        )
+
+
+def _normalize_proactive_model_planner(value: str, *, default: str = "tool") -> str:
+    normalized = _normalize_key(value)
+    if normalized in {"tool", "tool_plan", "tool_planner", "tool_agent", "tools"}:
+        return "tool"
+    if normalized in {"llm", "llm_plan", "llm_planner", "json", "text", "text_json"}:
+        return "llm"
+    if normalized in {"none", "off", "aus", "nein", "false", "0", "local", "lokal"}:
+        return "none"
+    return default
 
 
 def _apply_security_answer(instructions: BotInstructions, key: str, value: str) -> None:

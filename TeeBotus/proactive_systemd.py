@@ -6,6 +6,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from TeeBotus.instructions import load_instructions
+
 
 @dataclass(frozen=True)
 class ProactiveSystemdUnit:
@@ -37,17 +39,25 @@ def main(argv: list[str] | None = None) -> int:
         help="Include --tool-plan. This is the default for the Depressionsbot proactive scheduler.",
     )
     planner_group.add_argument("--no-model-plan", action="store_const", dest="planner", const="none", help="Disable model planning and keep only the local reflection planner.")
-    parser.set_defaults(planner="tool")
+    parser.set_defaults(planner="auto")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit files instead of writing them.")
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the timer after writing.")
     args = parser.parse_args(argv)
+    repo_root = Path(args.repo_root)
+    planner = args.planner
+    if planner == "auto":
+        planner = _planner_from_instance_instructions(
+            repo_root=repo_root,
+            instances_dir=args.instances_dir,
+            instance_name=args.instance,
+        )
     unit = render_proactive_systemd_unit(
-        repo_root=Path(args.repo_root),
+        repo_root=repo_root,
         instances_dir=args.instances_dir,
         instance_name=args.instance,
         interval=args.interval,
-        llm_plan=args.planner == "llm",
-        tool_plan=args.planner == "tool",
+        llm_plan=planner == "llm",
+        tool_plan=planner == "tool",
     )
     if args.print_only:
         print(f"# {unit.service_name}")
@@ -151,6 +161,19 @@ def _shell_quote(value: str) -> str:
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):
         return value
     return "'" + value.replace("'", "'\\''") + "'"
+
+
+def _planner_from_instance_instructions(*, repo_root: Path, instances_dir: str, instance_name: str) -> str:
+    repo = repo_root.expanduser().resolve()
+    instances_path = Path(instances_dir)
+    if not instances_path.is_absolute():
+        instances_path = repo / instances_path
+    instruction_path = instances_path / instance_name / "Bot_Verhalten.md"
+    instructions = load_instructions(instruction_path)
+    planner = str(instructions.proactive_model_planner or "").strip().casefold()
+    if planner in {"llm", "tool", "none"}:
+        return planner
+    return "tool"
 
 
 if __name__ == "__main__":

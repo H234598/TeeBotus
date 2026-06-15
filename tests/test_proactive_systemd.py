@@ -71,6 +71,10 @@ def test_render_proactive_systemd_unit_rejects_multiple_planners(tmp_path) -> No
 
 
 def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Proactive\n- model_planner: tool\n", encoding="utf-8")
+
     result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--print"])
 
     captured = capsys.readouterr()
@@ -78,6 +82,19 @@ def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> No
     assert "# teebotus-proactive-depressionsbot.service" in captured.out
     assert "# teebotus-proactive-depressionsbot.timer" in captured.out
     assert "--dispatch --plan --tool-plan" in captured.out
+
+
+def test_proactive_systemd_print_mode_reads_llm_planner_from_bot_verhalten(tmp_path, capsys) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Proactive\n- model_planner: llm\n", encoding="utf-8")
+
+    result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "--dispatch --plan --llm-plan" in captured.out
+    assert "--tool-plan" not in captured.out
 
 
 def test_proactive_systemd_print_mode_can_disable_model_plan(tmp_path, capsys) -> None:
@@ -91,6 +108,10 @@ def test_proactive_systemd_print_mode_can_disable_model_plan(tmp_path, capsys) -
 
 
 def test_proactive_systemd_print_mode_can_enable_llm_plan(tmp_path, capsys) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Proactive\n- model_planner: tool\n", encoding="utf-8")
+
     result = main(["--repo-root", str(tmp_path), "--instance", "Depressionsbot", "--llm-plan", "--print"])
 
     captured = capsys.readouterr()
