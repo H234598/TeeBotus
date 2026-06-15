@@ -13,6 +13,7 @@ from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, Secr
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 
@@ -57,6 +58,7 @@ class MatrixRuntimeBridge:
             adapter_slot=self.run_config.slot,
             account_label=self.run_config.label,
         )
+        event = await _download_matrix_event_attachments(self.client, event)
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         self.account_store.update_identity_route(
             event.identity_key,
@@ -180,6 +182,40 @@ def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
         for name in ("RoomMessageText", "RoomMessageFile", "RoomMessageImage", "RoomMessageAudio", "RoomMessageVideo")
         if hasattr(nio, name)
     )
+
+
+async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) -> IncomingEvent:
+    if not event.attachments:
+        return event
+    downloaded: list[IncomingAttachment] = []
+    changed = False
+    for attachment in event.attachments:
+        if attachment.data or not attachment.base64_data.startswith("mxc://"):
+            downloaded.append(attachment)
+            continue
+        try:
+            response = await client.download(mxc=attachment.base64_data)
+        except Exception:
+            downloaded.append(attachment)
+            continue
+        body = getattr(response, "body", b"")
+        if not isinstance(body, bytes):
+            downloaded.append(attachment)
+            continue
+        filename = str(getattr(response, "filename", "") or attachment.filename or "").strip() or "matrix-attachment.bin"
+        content_type = str(getattr(response, "content_type", "") or attachment.content_type or "").strip() or "application/octet-stream"
+        downloaded.append(
+            IncomingAttachment(
+                data=body,
+                filename=filename,
+                content_type=content_type,
+                base64_data=attachment.base64_data,
+            )
+        )
+        changed = True
+    if not changed:
+        return event
+    return event.with_attachments(tuple(downloaded))
 
 
 def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:

@@ -95,6 +95,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     send_params = inspect.signature(niobot.NioBot.send_message).parameters
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
+    download_params = inspect.signature(nio.AsyncClient.download).parameters
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
     room_typing_params = inspect.signature(nio.AsyncClient.room_typing).parameters
     room_redact_params = inspect.signature(nio.AsyncClient.room_redact).parameters
@@ -104,6 +105,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.send_message.file": "file" in send_params,
         "NioBot.send_message.message_type": "message_type" in send_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
+        "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_send.content": "content" in room_send_params,
         "AsyncClient.room_typing.timeout": "timeout" in room_typing_params,
         "AsyncClient.room_redact.reason": "reason" in room_redact_params,
