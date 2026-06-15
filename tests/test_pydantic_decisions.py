@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 from pydantic import ValidationError
 
@@ -8,12 +11,15 @@ from TeeBotus.ai_structures import (
     IntentDecision,
     MemoryCandidate,
     ReminderDecision,
+    build_pydantic_ai_model_runner,
     decide_bibliothekar_query,
     decide_intent,
     parse_bibliothekar_query_decision,
     parse_memory_candidate,
     parse_reminder_decision,
+    pydantic_ai_available,
 )
+from TeeBotus.ai_structures.pydantic_ai_adapter import PydanticAIUnavailableError
 
 
 def test_intent_decision_validates_confidence_range() -> None:
@@ -128,3 +134,58 @@ def test_reminder_decision_schema_accepts_json_payloads() -> None:
         recurrence=None,
         confidence=0.88,
     )
+
+
+def test_pydantic_ai_adapter_reports_missing_optional_extra(monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "pydantic_ai", None)
+
+    assert pydantic_ai_available() is False
+    with pytest.raises(PydanticAIUnavailableError, match="pydantic-ai is not installed"):
+        build_pydantic_ai_model_runner("openai:gpt-test")
+
+
+def test_pydantic_ai_adapter_builds_model_runner_with_structured_output(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class FakeRunResult:
+        def __init__(self, output: object) -> None:
+            self.output = output
+
+    class FakeAgent:
+        def __init__(self, model: str, **kwargs: object) -> None:
+            calls.append({"model": model, **kwargs})
+            self.output_type = kwargs["output_type"]
+
+        def run_sync(self, prompt: str) -> FakeRunResult:
+            assert "Bibliothekar" in prompt
+            return FakeRunResult(
+                self.output_type(
+                    should_search=True,
+                    query="Schlaf und Tagesstruktur",
+                    confidence=0.87,
+                    reason_short="structured fake",
+                    source="model",
+                )
+            )
+
+    monkeypatch.setitem(sys.modules, "pydantic_ai", types.SimpleNamespace(Agent=FakeAgent))
+
+    runner = build_pydantic_ai_model_runner("openai:gpt-test", system_prompt="Nur JSON.")
+    decision = decide_bibliothekar_query("Bibliothekar: Was sagt das Buch?", model_runner=runner)
+
+    assert decision == BibliothekarQueryDecision(
+        should_search=True,
+        query="Bibliothekar: Was sagt das Buch?",
+        confidence=0.9,
+        reason_short="Explicit library/source wording",
+        source="classic",
+    )
+    model_decision = runner("Bibliothekar Frage", BibliothekarQueryDecision)
+    assert model_decision == BibliothekarQueryDecision(
+        should_search=True,
+        query="Schlaf und Tagesstruktur",
+        confidence=0.87,
+        reason_short="structured fake",
+        source="model",
+    )
+    assert calls == [{"model": "openai:gpt-test", "output_type": BibliothekarQueryDecision, "system_prompt": "Nur JSON."}]

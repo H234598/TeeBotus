@@ -443,7 +443,7 @@ Konfiguration in `Bot_Verhalten.md`:
 
 `backend: local` nutzt den JSONL-Store. `backend: haystack` oder `backend: qdrant` aktiviert den optionalen Haystack/Qdrant-Backendpfad hinter derselben `BibliothekarService`-Schnittstelle. Der lokale Store bleibt dabei die rebuildbare Quelle; Haystack/Qdrant ist ein Backend/Cache fuer produktivere Suche.
 
-Vor dem Bibliothekar-Kontext kann ein optionaler Pydantic-Subtask `BibliothekarQueryDecision` laufen. Er entscheidet, ob der Quellenindex fuer die aktuelle natuerliche Sprache durchsucht werden soll, und kann die Suchfrage knapp normalisieren. Ohne strukturierten Runner bleibt das alte Verhalten erhalten: der Bibliothekar sucht weiter, sobald er in der Instanz aktiviert ist.
+Vor dem Bibliothekar-Kontext kann ein optionaler Pydantic-Subtask `BibliothekarQueryDecision` laufen. Er entscheidet, ob der Quellenindex fuer die aktuelle natuerliche Sprache durchsucht werden soll, und kann die Suchfrage knapp normalisieren. Ohne strukturierten Runner bleibt das alte Verhalten erhalten: der Bibliothekar sucht weiter, sobald er in der Instanz aktiviert ist. Fuer echte Pydantic-AI-Laeufe gibt es `TeeBotus.ai_structures.build_pydantic_ai_model_runner(model)`. Der Adapter ist optional, nutzt Pydantic-AIs strukturierte `output_type`-Ausgabe und meldet klar, wenn das Extra `[agents]` nicht installiert ist.
 
 CLI:
 
@@ -460,6 +460,12 @@ Haystack/Qdrant optional:
 python3 -m pip install '.[rag]'
 qdrant --host 127.0.0.1 --port 6333
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
+```
+
+Pydantic-AI/LangGraph optional:
+
+```bash
+python3 -m pip install '.[agents]'
 ```
 
 Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. Wenn Haystack/Qdrant konfiguriert, aber zur Laufzeit nicht verfuegbar ist, faellt die Suche auf den lokalen Bibliothekar zurueck, statt normale Botantworten zu crashen.

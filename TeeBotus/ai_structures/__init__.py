@@ -12,6 +12,9 @@ __all__ = [
     "parse_bibliothekar_query_decision",
     "parse_memory_candidate",
     "parse_reminder_decision",
+    "PydanticAIUnavailableError",
+    "build_pydantic_ai_model_runner",
+    "pydantic_ai_available",
 ]
 
 
@@ -20,4 +23,8 @@ def __getattr__(name: str):
         from TeeBotus.ai_structures import decisions
 
         return getattr(decisions, name)
+    if name in {"PydanticAIUnavailableError", "build_pydantic_ai_model_runner", "pydantic_ai_available"}:
+        from TeeBotus.ai_structures import pydantic_ai_adapter
+
+        return getattr(pydantic_ai_adapter, name)
     raise AttributeError(name)
