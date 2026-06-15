@@ -22,6 +22,7 @@ from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command
+from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
@@ -119,6 +120,9 @@ class TeeBotusEngine:
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
             return EngineResult(result.account_id, memory_reset_actions, handled=True)
+        reminder_reply = self._natural_reminder_reply(event, result.account_id)
+        if reminder_reply is not None:
+            return EngineResult(result.account_id, [SendText(event.chat_id, reminder_reply, track=False)], handled=True)
         if command in EXPORT_COMMANDS:
             return EngineResult(result.account_id, self._export_actions(event, result.account_id), handled=True)
         if command == "/status":
@@ -156,6 +160,17 @@ class TeeBotusEngine:
                 return EngineResult(result.account_id, openai_actions, handled=True)
             return EngineResult(result.account_id, [], handled=False)
         return EngineResult(result.account_id, [SendText(event.chat_id, reply)], handled=True)
+
+    def _natural_reminder_reply(self, event: IncomingEvent, account_id: str) -> str | None:
+        try:
+            return maybe_queue_natural_reminder(
+                account_store=self.account_store,
+                account_id=account_id,
+                instance_name=event.instance,
+                text=event.text,
+            )
+        except (AccountStoreError, OSError, ValueError):
+            return "Ich konnte die Erinnerung gerade nicht speichern."
 
     def process_identity_flows(self, event: IncomingEvent) -> EngineResult:
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)

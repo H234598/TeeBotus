@@ -325,6 +325,59 @@ def test_engine_proactive_command_is_private_only(tmp_path):
     assert account_store.read_agent_state(account_id) == {}
 
 
+def test_engine_natural_reminder_queues_private_proactive_message(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-1", chat_type="private", adapter_slot=1)
+
+    actions = engine.process(event(identity, "Erinnere mich morgen um 9 an den Termin"))
+
+    assert "Okay, ich erinnere dich" in actions[0].text
+    state = account_store.read_agent_state(account_id)
+    assert state["proactive"]["enabled"] is True
+    assert state["consent"]["categories"] == ["reminder"]
+    rows = account_store.read_proactive_outbox(account_id)
+    assert len(rows) == 1
+    assert rows[0]["category"] == "reminder"
+    assert rows[0]["intent"] == "user_requested_reminder"
+    assert rows[0]["message_text"] == "Du wolltest erinnert werden: den Termin"
+    assert rows[0]["route"]["channel"] == "telegram"
+    assert rows[0]["route"]["chat_id"] == "chat-1"
+
+
+def test_engine_natural_reminder_requires_instance_enablement(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
+    monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "Erinnere mich morgen um 9 an den Termin"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert "nicht freigeschaltet" in actions[0].text
+    assert account_store.read_agent_state(account_id) == {}
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_engine_natural_reminder_requires_private_route(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="group-1", chat_type="group", adapter_slot=1)
+
+    actions = engine.process(event(identity, "Erinnere mich morgen um 9 an den Termin"))
+
+    assert "privaten Chat" in actions[0].text
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_engine_export_account_data_as_json(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="export")
