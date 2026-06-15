@@ -40,6 +40,7 @@ from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
+from TeeBotus.runtime.engine import account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.activity_profile import record_account_activity
@@ -753,7 +754,7 @@ def handle_update(
         )
         return
 
-    if not _should_process_for_bot(message, text, bot_identity, first_contact):
+    if not _should_process_for_bot(message, text, bot_identity, first_contact, user_memory_store):
         LOGGER.info(
             "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
             chat_id,
@@ -1090,7 +1091,7 @@ def _handle_incoming_voice_message(
     transcribed_message = dict(message)
     transcribed_message["text"] = transcribed_text
     first_contact = _is_first_contact(chat_state, user_memory_store, transcribed_message, instructions)
-    if not _should_process_for_bot(transcribed_message, transcribed_text, bot_identity, first_contact):
+    if not _should_process_for_bot(transcribed_message, transcribed_text, bot_identity, first_contact, user_memory_store):
         LOGGER.info(
             "Ignoring Telegram voice message chat_id=%s message_id=%s reason=not_addressed_to_bot",
             chat_id,
@@ -1978,16 +1979,18 @@ def _should_process_for_bot(
     text: str,
     bot_identity: BotIdentity,
     first_contact: bool,
+    user_memory_store: AccountStore | None = None,
 ) -> bool:
     if not bot_identity.has_identity():
         return True
-    if _command_targets_other_bot(text, bot_identity):
+    extra_names = _telegram_account_bot_address_names(user_memory_store, message)
+    if _command_targets_other_bot(text, bot_identity, extra_names):
         return False
     if _is_private_chat(message):
         return True
     if _is_reply_to_bot(message, bot_identity):
         return True
-    if _text_addresses_bot(text, bot_identity):
+    if _text_addresses_bot(text, bot_identity, extra_names):
         return True
     return not first_contact
 
@@ -2044,7 +2047,7 @@ def _is_reply_to_bot(message: dict[str, Any], bot_identity: BotIdentity) -> bool
     return sender.get("id") == bot_identity.id
 
 
-def _command_targets_other_bot(text: str, bot_identity: BotIdentity) -> bool:
+def _command_targets_other_bot(text: str, bot_identity: BotIdentity, extra_names: set[str] | None = None) -> bool:
     parts = text.strip().split(maxsplit=1)
     if not parts:
         return False
@@ -2052,20 +2055,28 @@ def _command_targets_other_bot(text: str, bot_identity: BotIdentity) -> bool:
     if not command.startswith("/") or "@" not in command:
         return False
     target = command.rsplit("@", maxsplit=1)[-1].strip().casefold()
-    username = bot_identity.username.strip().lstrip("@").casefold()
-    return bool(target and username and target != username)
+    known_names = set()
+    for name in _bot_known_names(bot_identity):
+        known_names.update(_bot_address_variants(name))
+    for name in extra_names or set():
+        known_names.update(_bot_address_variants(name))
+    return bool(target and known_names and _normalize_bot_address_text(target) not in known_names)
 
 
-def _text_addresses_bot(text: str, bot_identity: BotIdentity) -> bool:
+def _text_addresses_bot(text: str, bot_identity: BotIdentity, extra_names: set[str] | None = None) -> bool:
     if not text.strip():
         return False
     username = bot_identity.username.strip().lstrip("@")
     if username and f"@{username}".casefold() in text.casefold():
         return True
     normalized_text = f" {_normalize_bot_address_text(text)} "
+    known_names = set()
     for name in _bot_known_names(bot_identity):
-        normalized_name = _normalize_bot_address_text(name)
-        if len(normalized_name) >= 3 and f" {normalized_name} " in normalized_text:
+        known_names.update(_bot_address_variants(name))
+    for name in extra_names or set():
+        known_names.update(_bot_address_variants(name))
+    for variant in known_names:
+        if len(variant) >= 2 and f" {variant} " in normalized_text:
             return True
     return False
 
@@ -2077,6 +2088,33 @@ def _bot_known_names(bot_identity: BotIdentity) -> set[str]:
         bot_identity.display_name.strip(),
     }
     return {name for name in names if name}
+
+
+def _telegram_account_bot_address_names(user_memory_store: AccountStore | None, message: dict[str, Any]) -> set[str]:
+    if user_memory_store is None:
+        return set()
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return set()
+    try:
+        account_id = user_memory_store.get_account_for_identity(identity_key)
+        if not account_id:
+            return set()
+        return {_normalize_bot_address_text(name) for name in account_bot_address_names(user_memory_store, account_id)}
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        return set()
+
+
+def _bot_address_variants(name: object) -> set[str]:
+    normalized = _normalize_bot_address_text(str(name or ""))
+    if not normalized:
+        return set()
+    variants = {normalized}
+    words = [word for word in normalized.split() if word]
+    if len(words) >= 2:
+        variants.add("".join(word[:1] for word in words if word))
+        variants.add("".join(word[:2] for word in words if word))
+    return {variant for variant in variants if len(variant) >= 2}
 
 
 def _readable_bot_name(first_name: str, username: str) -> str:

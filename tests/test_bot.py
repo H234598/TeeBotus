@@ -2251,6 +2251,70 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: Hallo @BoteDerWahrheitBot.")])
 
+    def test_group_first_contact_can_address_bot_by_persistent_alias(self) -> None:
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True, user_memory_enabled=True)
+        bot_identity = BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot")
+        with tempfile.TemporaryDirectory() as directory:
+            user_memory_store = AccountStore(
+                Path(directory) / "accounts",
+                "Demo",
+                StaticSecretProvider(b"x" * 32),
+            )
+            identity = telegram_identity_key(456, display_name="Ada")
+            account_id = user_memory_store.resolve_or_create_account(identity, display_label="Ada")
+            user_memory_store.append_structured_memory_entry(
+                account_id,
+                {"id": "mem_alias", "user_text": "Ich nenne dich ab jetzt Mondhase.", "bot_text": "Okay."},
+            )
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 72,
+                        "text": "Mondhase, bitte antworte.",
+                        "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store,
+                bot_identity,
+            )
+
+        self.assertEqual(api.sent_messages, [(-100123, "Ich bin Depressionsbot.\n\nAI: Mondhase, bitte antworte.")])
+
+    def test_group_first_contact_can_address_bot_by_generated_initials(self) -> None:
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+        bot_identity = BotIdentity(id=99, first_name="Bote_der_Wahrheit Bot", username="BoteDerWahrheitBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 73,
+                    "text": "BdW, bitte antworte.",
+                    "chat": {"id": -100123, "type": "group", "title": "Debatte"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: BdW, bitte antworte.")])
+
     def test_first_contact_start_removes_configured_instance_identity(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

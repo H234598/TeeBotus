@@ -212,6 +212,37 @@ def test_matrix_group_free_text_must_address_bot(tmp_path) -> None:
     assert bridge.account_store.get_account_for_identity("matrix:user:@alice:example") is None
 
 
+def test_matrix_group_free_text_can_address_bot_by_persistent_abbreviation(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = bridge.account_store.resolve_or_create_account("matrix:user:@alice:example")
+    bridge.account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_abbrev", "user_text": "Deine Abkürzung ist MH.", "bot_text": "Okay."},
+    )
+    bridge.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+    message = FakeMatrixMessage()
+    message.body = "MH, hilf bitte"
+
+    asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), message))
+
+    assert client.sent[0]["content"]["body"] == "ok"
+
+
 def test_matrix_bridge_ignores_empty_messages_without_account_side_effects(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

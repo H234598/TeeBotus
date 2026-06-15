@@ -86,7 +86,12 @@ class MatrixRuntimeBridge:
         )
         if event is None:
             return
-        if should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config)):
+        should_ignore = getattr(self.engine, "should_ignore_without_account", None)
+        if callable(should_ignore):
+            ignored = bool(should_ignore(event))
+        else:
+            ignored = should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config))
+        if ignored:
             return
         event = await _fetch_matrix_reply_text(self.client, event)
         event = await _download_matrix_event_attachments(self.client, event)

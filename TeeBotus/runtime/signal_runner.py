@@ -120,7 +120,12 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             )
             if event is None:
                 return
-            if should_ignore_event_without_account(event, (self.run_config.signal_phone_number, self.run_config.label)):
+            should_ignore = getattr(self.engine, "should_ignore_without_account", None)
+            if callable(should_ignore):
+                ignored = bool(should_ignore(event))
+            else:
+                ignored = should_ignore_event_without_account(event, (self.run_config.signal_phone_number, self.run_config.label))
+            if ignored:
                 return
             account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
             self.account_store.update_identity_route(

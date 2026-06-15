@@ -57,6 +57,31 @@ YOUTUBE_OPTIONS_FLOW = "youtube_options"
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
 MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
 OPENAI_IMAGE_STATE_KEY = "openai_image_generation"
+BOT_ALIAS_FIELD_NAMES = (
+    "bot_address_names",
+    "bot_aliases",
+    "bot_names",
+    "bot_nicknames",
+    "bot_abbreviations",
+)
+BOT_ALIAS_PATTERNS = (
+    re.compile(
+        r"\b(?:ich\s+)?(?:nenne|nenn|ruf(?:e)?|nenn(?:e)?\s+ich)\s+dich\s+(?:ab\s+jetzt\s+|jetzt\s+|kurz\s+|einfach\s+|bitte\s+)?(?P<name>[^.!?;:\n,]{1,48})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bdu\s+(?:heißt|heisst|bist)\s+(?:ab\s+jetzt\s+|jetzt\s+|kurz\s+|einfach\s+)?(?P<name>[^.!?;:\n,]{1,48})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bdein(?:e|)\s+(?:name|spitzname|rufname|abk(?:ü|ue)rzung)\s+(?:ist|sei)\s+(?:ab\s+jetzt\s+|jetzt\s+|kurz\s+)?(?P<name>[^.!?;:\n,]{1,48})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:schreibe|spreche)\s+(?:dich|den\s+bot|[^\n.!?]{0,40})\s+als\s+(?P<name>[^.!?;:\n,]{1,48})\s+an\b",
+        re.IGNORECASE,
+    ),
+)
 
 
 @dataclass
@@ -101,7 +126,7 @@ class TeeBotusEngine:
         self.background_action_dispatcher = background_action_dispatcher
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
-        return should_ignore_event_without_account(event, self.bot_address_names)
+        return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
         return self.process_result(event).actions
@@ -205,7 +230,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, self._mimic_voice_actions(event, result.account_id, self._current_instructions()), handled=True)
         if command in YOUTUBE_TRANSCRIPT_COMMANDS:
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
-        if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
+        if not _event_is_addressed_to_bot(event.with_account(result.account_id), command, self._bot_address_names_for_event(event.with_account(result.account_id))):
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
@@ -989,6 +1014,18 @@ class TeeBotusEngine:
             if identity_key != current_identity_key:
                 yield str(identity_key)
 
+    def _bot_address_names_for_event(self, event: IncomingEvent) -> frozenset[str]:
+        names = set(self.bot_address_names)
+        account_id = str(event.account_id or "").strip()
+        if not account_id:
+            try:
+                account_id = self.account_store.get_account_for_identity(event.identity_key) or ""
+            except (AccountStoreError, OSError, ValueError):
+                account_id = ""
+        if account_id:
+            names.update(account_bot_address_names(self.account_store, account_id))
+        return frozenset(name for name in names if name)
+
 
 def redact_engine_text_for_logs(text: str) -> str:
     return redact_registration_secrets(text)
@@ -1001,6 +1038,81 @@ def should_ignore_event_without_account(event: IncomingEvent, bot_address_names:
     if _command_targets_other_bot(text, normalized_names):
         return True
     return event.chat_type == "group" and not command and not _event_is_addressed_to_bot(event, command, normalized_names)
+
+
+def account_bot_address_names(account_store: AccountStore, account_id: str) -> frozenset[str]:
+    names: set[str] = set()
+    try:
+        names.update(_bot_aliases_from_mapping(account_store.read_agent_state(account_id)))
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        pass
+    try:
+        names.update(_bot_aliases_from_mapping(account_store.read_memory_index(account_id)))
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        pass
+    try:
+        entries = account_store.read_memory_entries(account_id)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        entries = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        names.update(_bot_aliases_from_mapping(entry))
+        names.update(_bot_aliases_from_text(str(entry.get("user_text") or "")))
+    return frozenset(_normalize_address_name(name) for name in names if _usable_bot_alias(name))
+
+
+def _bot_aliases_from_mapping(data: object) -> set[str]:
+    if not isinstance(data, dict):
+        return set()
+    aliases: set[str] = set()
+    for key in BOT_ALIAS_FIELD_NAMES:
+        aliases.update(_iter_bot_alias_values(data.get(key)))
+    profile = data.get("profile")
+    if isinstance(profile, dict):
+        for key in BOT_ALIAS_FIELD_NAMES:
+            aliases.update(_iter_bot_alias_values(profile.get(key)))
+    return aliases
+
+
+def _iter_bot_alias_values(value: object) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+        return
+    if isinstance(value, dict):
+        for nested in value.values():
+            yield from _iter_bot_alias_values(nested)
+        return
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            yield from _iter_bot_alias_values(item)
+
+
+def _bot_aliases_from_text(text: str) -> set[str]:
+    aliases: set[str] = set()
+    for pattern in BOT_ALIAS_PATTERNS:
+        for match in pattern.finditer(text):
+            alias = _clean_bot_alias(match.group("name"))
+            if _usable_bot_alias(alias):
+                aliases.add(alias)
+    return aliases
+
+
+def _clean_bot_alias(value: str) -> str:
+    text = str(value or "").strip().strip("\"'`“”„«»")
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"\s+(?:bitte|ok(?:ay)?|ja|nein|danke)$", "", text, flags=re.IGNORECASE).strip()
+    text = re.sub(r"\s+(?:an|nennen|hei(?:ß|ss)en)$", "", text, flags=re.IGNORECASE).strip()
+    return text.strip("\"'`“”„«» ")
+
+
+def _usable_bot_alias(value: str) -> bool:
+    normalized = _normalize_address_name(value)
+    if len(normalized) < 2:
+        return False
+    if normalized in {"ich", "du", "dich", "bot", "teebotus", "bitte", "okay", "ok", "ja", "nein"}:
+        return False
+    return True
 
 
 def _command_name(text: str) -> str:
@@ -1023,7 +1135,10 @@ def _command_targets_other_bot(text: str, bot_address_names: frozenset[str]) -> 
     if not first.startswith("/") or "@" not in first or not bot_address_names:
         return False
     target = _normalize_command_target(first.rsplit("@", maxsplit=1)[-1])
-    return bool(target and target not in bot_address_names)
+    known_targets: set[str] = set()
+    for name in bot_address_names:
+        known_targets.update(_address_name_variants(name))
+    return bool(target and target not in known_targets)
 
 
 def _event_is_addressed_to_bot(event: IncomingEvent, command: str, bot_address_names: frozenset[str]) -> bool:
@@ -1043,8 +1158,9 @@ def _text_addresses_bot(text: str, bot_address_names: frozenset[str]) -> bool:
         return False
     normalized_text = f" {_normalize_address_text(text)} "
     for name in bot_address_names:
-        if len(name) >= 3 and f" {name} " in normalized_text:
-            return True
+        for variant in _address_name_variants(name):
+            if len(variant) >= 2 and f" {variant} " in normalized_text:
+                return True
     return False
 
 
@@ -1122,9 +1238,21 @@ def _normalize_address_name(value: object) -> str:
 
 def _normalize_address_text(text: str) -> str:
     normalized = str(text or "").casefold()
-    normalized = re.sub(r"[_@:+().-]+", " ", normalized)
+    normalized = re.sub(r"[^0-9a-zäöüß]+", " ", normalized)
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip()
+
+
+def _address_name_variants(name: object) -> frozenset[str]:
+    normalized = _normalize_address_name(name)
+    if not normalized:
+        return frozenset()
+    variants = {normalized}
+    words = [word for word in normalized.split() if word]
+    if len(words) >= 2:
+        variants.add("".join(word[:1] for word in words if word))
+        variants.add("".join(word[:2] for word in words if word))
+    return frozenset(variant for variant in variants if len(variant) >= 2)
 
 
 def _pending_flow_matches_event(pending: dict[str, object], event: IncomingEvent) -> bool:

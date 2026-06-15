@@ -164,10 +164,71 @@ def test_signal_group_event_with_dict_other_mention_is_ignored() -> None:
     assert ignored is True
 
 
+def test_engine_group_event_with_persistent_bot_alias_is_not_ignored(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = matrix_group_event("Mondhase, kannst du helfen?", raw=None).identity_key
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_bot_alias", "user_text": "Ich nenne dich ab jetzt Mondhase.", "bot_text": "Okay."},
+    )
+    engine = TeeBotusEngine(account_store=account_store, bot_address_names=("@bot:example", "bot"))
+
+    ignored = engine.should_ignore_without_account(matrix_group_event("Mondhase, kannst du helfen?", raw=None))
+
+    assert ignored is False
+
+
+def test_engine_group_event_with_persistent_bot_abbreviation_is_not_ignored(tmp_path) -> None:
+    account_store = store(tmp_path)
+    incoming = signal_group_event("MH hilf mal kurz", raw=None)
+    account_id = account_store.resolve_or_create_account(incoming.identity_key)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_bot_abbrev", "user_text": "Deine Abkürzung ist MH.", "bot_text": "Okay."},
+    )
+    engine = TeeBotusEngine(account_store=account_store, bot_address_names=("signal:1",))
+
+    assert engine.should_ignore_without_account(incoming) is False
+
+
+def test_engine_group_event_with_generated_bot_initials_is_not_ignored(tmp_path) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path), bot_address_names=("Bote der Wahrheit",))
+
+    ignored = engine.should_ignore_without_account(matrix_group_event("BdW, kannst du helfen?", raw=None))
+
+    assert ignored is False
+
+
+def test_engine_group_event_with_generated_two_letter_per_word_alias_is_not_ignored(tmp_path) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path), bot_address_names=("Bote der Wahrheit",))
+
+    ignored = engine.should_ignore_without_account(matrix_group_event("BoDeWa, kannst du helfen?", raw=None))
+
+    assert ignored is False
+
+
+def test_engine_unknown_group_sender_with_alias_text_is_still_ignored(tmp_path) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path), bot_address_names=("@bot:example", "bot"))
+
+    ignored = engine.should_ignore_without_account(matrix_group_event("Mondhase, kannst du helfen?", raw=None))
+
+    assert ignored is True
+
+
 def test_matrix_command_targeting_bot_full_user_id_is_not_ignored() -> None:
     ignored = should_ignore_event_without_account(
         matrix_group_event("/ping@bot:example", raw=None),
         bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is False
+
+
+def test_matrix_command_targeting_generated_initials_is_not_ignored() -> None:
+    ignored = should_ignore_event_without_account(
+        matrix_group_event("/ping@BdW", raw=None),
+        bot_address_names=("Bote der Wahrheit",),
     )
 
     assert ignored is False

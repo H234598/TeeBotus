@@ -592,6 +592,35 @@ def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
     assert command.account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
 
 
+def test_signal_group_free_text_can_address_bot_by_persistent_alias(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+    command.account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_alias", "user_text": "Ich nenne dich ab jetzt Mondhase.", "bot_text": "Okay."},
+    )
+    command.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+    context = FakeSignalContext()
+    context.message.group = "group-1"
+    context.message.text = "Mondhase, bist du da?"
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["ok"]
+
+
 def test_signal_group_free_text_can_address_bot_by_phone(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
