@@ -122,6 +122,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,
+                view_once=action.view_once,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
@@ -350,6 +351,7 @@ async def _send_matrix_file_or_error_notice(
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    view_once: bool = False,
 ) -> Any:
     try:
         return await _send_matrix_file(
@@ -362,6 +364,7 @@ async def _send_matrix_file_or_error_notice(
             reply_to_ref=reply_to_ref,
             mentions=mentions,
             text_mode=text_mode,
+            view_once=view_once,
         )
     except Exception as exc:
         return await _send_matrix_text(
@@ -384,7 +387,10 @@ async def _send_matrix_file(
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
     text_mode: str = "",
+    view_once: bool = False,
 ) -> Any:
+    if view_once:
+        raise RuntimeError("Matrix view_once attachments are not supported")
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
     encrypt_upload = _matrix_room_is_encrypted(client, room_id)

@@ -2477,6 +2477,46 @@ def test_matrix_attachment_in_encrypted_room_uploads_encrypted_file_metadata():
     }
 
 
+def test_matrix_view_once_attachment_sends_notice_without_uploading_file():
+    class Response:
+        event_id = "$notice"
+
+    class Client:
+        def __init__(self) -> None:
+            self.uploads = []
+            self.sends = []
+
+        async def upload(self, data_provider, **kwargs):
+            self.uploads.append((data_provider.read(), kwargs))
+            raise AssertionError("view_once Matrix attachment must not be uploaded")
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [SendAttachment("!room:example", b"secret", "secret.bin", "application/octet-stream", view_once=True)],
+        )
+    )
+
+    assert sent == ["$notice"]
+    assert client.uploads == []
+    assert client.sends == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.notice",
+                "body": "Datei konnte nicht gesendet werden: secret.bin (Matrix view_once attachments are not supported)",
+            },
+        }
+    ]
+
+
 def test_matrix_niobot_file_send_error_sends_notice():
     class Response:
         event_id = "$sent"
