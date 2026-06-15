@@ -220,8 +220,13 @@ async def _send_matrix_receipt(client: Any, room_id: str, event_id: str, receipt
         return
     room_read_markers = getattr(client, "room_read_markers", None)
     if callable(room_read_markers):
-        response = await room_read_markers(room_id, target, read_event=target)
+        if _matrix_receipt_type_name(receipt_type) == "viewed":
+            response = await room_read_markers(room_id, target, private_read_event=target)
+        else:
+            response = await room_read_markers(room_id, target, read_event=target)
         _raise_matrix_response_error(response)
+        return
+    raise RuntimeError("Matrix receipt API is required to send a receipt")
 
 
 async def _send_matrix_edit(
@@ -331,7 +336,7 @@ async def _set_matrix_state(client: Any, room_id: str, event_type: str, content:
 
 
 def _matrix_receipt_type(receipt_type: str) -> Any:
-    normalized = str(receipt_type or "read").strip().casefold()
+    normalized = _matrix_receipt_type_name(receipt_type)
     try:
         from nio import ReceiptType  # type: ignore[import-not-found]
     except Exception:
@@ -339,6 +344,11 @@ def _matrix_receipt_type(receipt_type: str) -> Any:
     if normalized == "viewed" and hasattr(ReceiptType, "read_private"):
         return ReceiptType.read_private
     return ReceiptType.read
+
+
+def _matrix_receipt_type_name(receipt_type: str) -> str:
+    normalized = str(receipt_type or "read").strip().casefold()
+    return "viewed" if normalized == "viewed" else "read"
 
 
 async def _send_matrix_file_or_error_notice(

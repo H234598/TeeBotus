@@ -1926,6 +1926,38 @@ def test_matrix_send_receipt_uses_update_receipt_marker():
     assert client.receipts[0][0:2] == ("!room:example", "$old")
 
 
+def test_matrix_send_receipt_fallback_uses_private_read_event_for_viewed():
+    class Response:
+        pass
+
+    class Client:
+        def __init__(self) -> None:
+            self.receipts = []
+
+        async def room_read_markers(self, room_id, fully_read_event, read_event=None, private_read_event=None):
+            self.receipts.append((room_id, fully_read_event, read_event, private_read_event))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendReceipt("!room:example", "$old", "viewed")]))
+
+    assert sent == [None]
+    assert client.receipts == [("!room:example", "$old", None, "$old")]
+
+
+def test_matrix_send_receipt_requires_supported_api():
+    class Client:
+        pass
+
+    try:
+        asyncio.run(send_matrix_actions(Client(), [SendReceipt("!room:example", "$old")]))
+    except RuntimeError as exc:
+        assert "Matrix receipt API is required" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_matrix_send_edit_uses_replacement_event():
     class Response:
         event_id = "$edit"
