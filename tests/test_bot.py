@@ -1253,6 +1253,54 @@ class BotTests(unittest.TestCase):
             self.assertEqual(read_user_memory_text(habits_path), "Ada mag knappe Antworten.")
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
+    def test_user_memory_reset_uses_telegram_username_fallback_identity(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            openai_client = FakeOpenAIClient()
+            chat_state = ChatState()
+            instructions = BotInstructions(openai_enabled=True, user_memory_enabled=True)
+            memory_store = account_memory_store(directory)
+            message_base = {
+                "chat": {"id": 123, "type": "private"},
+                "from": {"username": "AdaUser", "first_name": "Ada"},
+            }
+
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "Merke dir: Mein Codewort ist Mond."}},
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+            account_id = memory_store.get_account_for_identity(telegram_identity_key("", username="AdaUser"))
+            self.assertIsNotNone(account_id)
+            self.assertEqual(len(memory_store.read_memory_entries(account_id)), 1)
+
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "/reset_memorys"}},
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+            handle_update(
+                api,
+                {"message": {**message_base, "text": "ja"}},
+                instructions,
+                openai_client,
+                chat_state,
+                memory_store,
+            )
+
+            self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_success))
+            self.assertEqual(memory_store.read_memory_index(account_id), {})
+            self.assertEqual(memory_store.read_memory_entries(account_id), [])
+            self.assertEqual(len(openai_client.reply_inputs), 1)
+
     def test_user_memory_reset_can_be_cancelled(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
@@ -2216,6 +2264,41 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages[0], (-100123, "Ich bin Depressionsbot.\n\nAI: Depressionsbot, hallo."))
         self.assertEqual(api.sent_messages[1], (-100123, "AI: Kleiner Mond, bist du da?"))
+
+    def test_username_fallback_sender_is_not_first_contact_repeatedly(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+        bot_identity = BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot")
+        message_base = {
+            "chat": {"id": 123, "type": "private"},
+            "from": {"username": "AdaUser", "first_name": "Ada"},
+        }
+
+        handle_update(
+            api,
+            {"message": {**message_base, "text": "Hallo"}},
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+        handle_update(
+            api,
+            {"message": {**message_base, "text": "Nochmal"}},
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(api.sent_messages[0], (123, "Ich bin Depressionsbot.\n\nAI: Hallo"))
+        self.assertEqual(api.sent_messages[1], (123, "AI: Nochmal"))
 
     def test_command_targeting_other_bot_is_ignored(self) -> None:
         from TeeBotus.instructions import BotInstructions

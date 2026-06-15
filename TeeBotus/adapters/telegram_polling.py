@@ -790,7 +790,7 @@ def _process_text_message(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
 ) -> None:
-    chat_state.mark_sender_seen(_sender_identifier(message))
+    chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, instance_name, "incoming")
     if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
@@ -1322,32 +1322,32 @@ def _handle_user_memory_reset_flow(
     bot_identity: BotIdentity,
     first_contact: bool,
 ) -> bool:
-    sender_id = _sender_identifier(message)
-    if not sender_id:
+    sender_key = _telegram_sender_state_key(message)
+    if not sender_key:
         return False
 
-    if chat_state.has_pending_user_memory_reset(chat_id, sender_id):
+    if chat_state.has_pending_user_memory_reset(chat_id, sender_key):
         if _is_user_memory_reset_confirmation(text):
-            chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
-            reply = _reset_current_user_memory(user_memory_store, sender_id, instructions)
+            chat_state.clear_pending_user_memory_reset(chat_id, sender_key)
+            reply = _reset_current_user_memory(user_memory_store, sender_key, instructions)
             reply = _with_first_contact_intro(reply, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
             return True
         if _is_user_memory_reset_cancellation(text):
-            chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+            chat_state.clear_pending_user_memory_reset(chat_id, sender_key)
             reply = _with_first_contact_intro(instructions.user_memory_reset_cancelled, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
             return True
         if _is_user_memory_reset_intent(text):
             if _user_memory_reset_targets_forbidden(text, bot_identity):
-                chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+                chat_state.clear_pending_user_memory_reset(chat_id, sender_key)
                 reply = _with_first_contact_intro(instructions.user_memory_reset_only_own, first_contact, bot_identity)
                 _send_tracked_message(api, chat_state, chat_id, reply)
                 return True
             reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
             return True
-        chat_state.clear_pending_user_memory_reset(chat_id, sender_id)
+        chat_state.clear_pending_user_memory_reset(chat_id, sender_key)
         return False
 
     if not _is_user_memory_reset_intent(text):
@@ -1363,7 +1363,7 @@ def _handle_user_memory_reset_flow(
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    chat_state.request_user_memory_reset(chat_id, sender_id)
+    chat_state.request_user_memory_reset(chat_id, sender_key)
     reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
     _send_tracked_message(api, chat_state, chat_id, reply)
     return True
@@ -1371,18 +1371,18 @@ def _handle_user_memory_reset_flow(
 
 def _reset_current_user_memory(
     user_memory_store: AccountStore | None,
-    sender_id: str,
+    identity_key: str,
     instructions: BotInstructions,
 ) -> str:
     if user_memory_store is None or not instructions.user_memory_enabled:
         return instructions.user_memory_reset_unavailable
     try:
-        account_id = user_memory_store.get_account_for_identity(telegram_identity_key(sender_id))
+        account_id = user_memory_store.get_account_for_identity(identity_key)
         if not account_id:
             return instructions.user_memory_reset_success
         user_memory_store.reset_structured_memory(account_id)
     except (AccountStoreError, OSError, ValueError, AttributeError):
-        LOGGER.exception("Failed to reset user memory for sender_id=%s.", sender_id)
+        LOGGER.exception("Failed to reset user memory for identity_key=%s.", identity_key)
         return instructions.user_memory_reset_error
     return instructions.user_memory_reset_success
 
@@ -1682,8 +1682,9 @@ def _is_first_contact(
     identity_key = _telegram_identity_key_from_message(message)
     if not sender_id and not identity_key:
         return False
-    seen_key = sender_id or identity_key
-    if chat_state.has_seen_sender(seen_key):
+    if identity_key and chat_state.has_seen_sender(identity_key):
+        return False
+    if sender_id and chat_state.has_seen_sender(sender_id):
         return False
     if user_memory_store is not None and instructions.user_memory_enabled:
         try:
@@ -1843,6 +1844,10 @@ def _telegram_identity_key_from_message(message: dict[str, Any]) -> str:
         )
     except AccountStoreError:
         return ""
+
+
+def _telegram_sender_state_key(message: dict[str, Any]) -> str:
+    return _telegram_identity_key_from_message(message)
 
 
 def _telegram_chat_type(message: dict[str, Any]) -> str:
