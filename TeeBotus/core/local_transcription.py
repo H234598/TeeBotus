@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from TeeBotus.core.youtube import (
@@ -15,6 +16,29 @@ from TeeBotus.core.youtube import (
 
 class LocalTranscriptionError(RuntimeError):
     """Raised when a local audio transcription backend cannot produce text."""
+
+
+@dataclass(frozen=True)
+class LocalTranscriptionHealth:
+    instance_name: str
+    ok: bool
+    backend: str
+    model: str
+    engine: str = ""
+    error: str = ""
+
+
+def check_local_transcription_backend(instance_name: str, instructions: object) -> LocalTranscriptionHealth | None:
+    backend = str(getattr(instructions, "openai_transcription_backend", "openai") or "openai").strip().casefold()
+    if backend != "local":
+        return None
+    model = str(getattr(instructions, "local_transcription_model", "") or "tiny").strip() or "tiny"
+    if _has_python_module("faster_whisper"):
+        return LocalTranscriptionHealth(instance_name, True, backend, model, engine="faster-whisper")
+    whisper_path = shutil.which("whisper")
+    if whisper_path:
+        return LocalTranscriptionHealth(instance_name, True, backend, model, engine=whisper_path)
+    return LocalTranscriptionHealth(instance_name, False, backend, model, error="weder faster-whisper noch whisper ist lokal installiert")
 
 
 def transcribe_local_audio(

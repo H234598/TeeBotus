@@ -51,6 +51,49 @@ def test_runtime_status_prints_account_memory_index_health(monkeypatch, capsys) 
     assert "account_memory=Demo/abc status=broken error=recent_ids missing entries: mem_missing" in captured.out
 
 
+def test_runtime_status_reports_local_transcription_health(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## OpenAI\n- transcription_backend: local\n- local_transcription_model: tiny\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr("TeeBotus.core.local_transcription._has_python_module", lambda module: module == "faster_whisper")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper" in captured.out
+
+
+def test_runtime_status_reports_missing_local_transcription_backend(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## OpenAI\n- transcription_backend: local\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr("TeeBotus.core.local_transcription._has_python_module", lambda _module: False)
+    monkeypatch.setattr("TeeBotus.core.local_transcription.shutil.which", lambda _binary: None)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "local_transcription=Demo backend=local model=tiny status=unavailable error=weder faster-whisper noch whisper ist lokal installiert" in captured.out
+
+
 def test_runtime_status_loads_env_before_resolving_config(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls: list[tuple[str, Path]] = []

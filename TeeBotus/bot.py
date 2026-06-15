@@ -94,6 +94,8 @@ def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
         from TeeBotus.core.status import account_memory_index_health_lines
+        from TeeBotus.core.local_transcription import check_local_transcription_backend
+        from TeeBotus.instructions import InstructionStore
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
         from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
@@ -130,6 +132,18 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"
         print(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
+    for instance in config.instances:
+        try:
+            instructions = InstructionStore(instance.instruction_path).get()
+        except Exception as exc:
+            print(f"local_transcription={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            continue
+        health = check_local_transcription_backend(instance.instance_name, instructions)
+        if health is None:
+            continue
+        state = "ready" if health.ok else "unavailable"
+        detail = f" engine={health.engine}" if health.ok else f" error={health.error}"
+        print(f"local_transcription={health.instance_name} backend={health.backend} model={health.model} status={state}{detail}")
     for instance_name in config.selected_instances:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
             print(line)
