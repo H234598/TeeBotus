@@ -9,6 +9,7 @@ from signalbot.message import MessageType
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
+from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
     SignalRuntimeError,
@@ -133,6 +134,35 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_command_tracks_engine_result_account_id(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    target_account_id = "a" * 128
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {"process_result": lambda self, event: EngineResult(target_account_id, [SendText(event.chat_id, "verbunden")], handled=True)},
+    )()
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
+    assert len(refs) == 1
+    assert refs[0].account_id == target_account_id
 
 
 def test_signal_context_recipient_tolerates_broken_signalbot_message() -> None:

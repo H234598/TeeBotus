@@ -20,7 +20,7 @@ from TeeBotus.runtime.actions import (
     UpdateSignalContact,
     UpdateSignalGroup,
 )
-from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -139,7 +139,9 @@ class TelegramRuntimeBridge:
             return False
         result = self.account_commands.handle(event)
         if not result.handled:
-            actions = self.engine.process(event)
+            engine_result = _process_engine_result(self.engine, event)
+            event = event.with_account(engine_result.account_id)
+            actions = engine_result.actions
         else:
             actions = list(result.actions)
         if not actions:
@@ -200,6 +202,16 @@ class TelegramRuntimeBridge:
                     )
             elif isinstance(action, (SendReaction, SendReceipt, SetMatrixState, UpdateSignalContact, UpdateSignalGroup)):
                 continue
+
+
+def _process_engine_result(engine: Any, event: IncomingEvent) -> EngineResult:
+    process_result = getattr(engine, "process_result", None)
+    if callable(process_result):
+        result = process_result(event)
+        if isinstance(result, EngineResult):
+            return result
+    actions = engine.process(event)
+    return EngineResult(event.account_id, list(actions or []), handled=bool(actions))
 
 
 def maybe_handle_account_runtime_message(

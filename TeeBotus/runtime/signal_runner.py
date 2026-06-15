@@ -19,7 +19,7 @@ from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
-from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -114,7 +114,9 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 adapter_slot=event.adapter_slot,
             )
             event = event.with_account(account_id)
-            actions = self.engine.process(event)
+            engine_result = _process_engine_result(self.engine, event)
+            event = event.with_account(engine_result.account_id)
+            actions = engine_result.actions
             await self._notify_linked_identities(actions)
             await self._delete_tracked_messages(context, event, actions)
             actions = _with_signal_reply_context(actions, event)
@@ -291,6 +293,16 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
         else:
             enriched.append(action)
     return enriched
+
+
+def _process_engine_result(engine: Any, event: Any) -> EngineResult:
+    process_result = getattr(engine, "process_result", None)
+    if callable(process_result):
+        result = process_result(event)
+        if isinstance(result, EngineResult):
+            return result
+    actions = engine.process(event)
+    return EngineResult(event.account_id, list(actions or []), handled=bool(actions))
 
 
 async def _remote_delete_signal_message(context: Any, receiver: str, message_ref: str) -> int | None:

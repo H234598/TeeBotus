@@ -73,51 +73,66 @@ class TeeBotusEngine:
         return should_ignore_event_without_account(event, self.bot_address_names)
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
+        return self.process_result(event).actions
+
+    def process_result(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
 
         text = str(event.text or "").strip()
         command = _command_name(text)
         if self.should_ignore_without_account(event):
-            return []
+            return EngineResult(event.account_id, [], handled=True)
         if command == "/cleanup":
             parsed = _parse_cleanup_count(text)
             if parsed is None:
-                return [SendText(event.chat_id, "Nutzung: /cleanup N oder /cleanup all. Ich lösche dabei nur den aktuellen Chat.", track=False)]
-            return [DeleteTrackedMessages(event.chat_id, parsed), SendText(event.chat_id, self.cleanup_scope_text(), track=False)]
+                return EngineResult(
+                    event.account_id,
+                    [SendText(event.chat_id, "Nutzung: /cleanup N oder /cleanup all. Ich lösche dabei nur den aktuellen Chat.", track=False)],
+                    handled=True,
+                )
+            return EngineResult(
+                event.account_id,
+                [DeleteTrackedMessages(event.chat_id, parsed), SendText(event.chat_id, self.cleanup_scope_text(), track=False)],
+                handled=True,
+            )
         result = self.process_identity_flows(event)
         if result.handled or result.actions:
-            return result.actions
+            return result
         memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
         if memory_reset_actions is not None:
-            return memory_reset_actions
+            return EngineResult(result.account_id, memory_reset_actions, handled=True)
         if command in EXPORT_COMMANDS:
-            return self._export_actions(event, result.account_id)
+            return EngineResult(result.account_id, self._export_actions(event, result.account_id), handled=True)
         if command == "/status":
-            return [
-                SendText(
-                    event.chat_id,
-                    build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
-                )
-            ]
+            return EngineResult(
+                result.account_id,
+                [
+                    SendText(
+                        event.chat_id,
+                        build_status_reply(account_id=result.account_id, instance_name=event.instance, project_root=self.project_root),
+                    )
+                ],
+                handled=True,
+            )
         if command == "/reset":
             self.state.reset_previous_response_id(event.instance, result.account_id)
-            return [SendText(event.chat_id, self._current_instructions().openai_reset)]
+            return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().openai_reset)], handled=True)
         if command == "/voice":
-            return self._voice_actions(event, self._current_instructions())
+            return EngineResult(result.account_id, self._voice_actions(event, self._current_instructions()), handled=True)
         if command in YOUTUBE_TRANSCRIPT_COMMANDS:
-            return self._youtube_transcript_actions(event, result.account_id, self._current_instructions())
+            return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
-            return []
+            return EngineResult(result.account_id, [], handled=False)
         instructions = self._current_instructions()
         if _has_youtube_transcript_intent(text):
-            return self._youtube_transcript_actions(event, result.account_id, instructions)
+            return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
         if reply is None:
             openai_actions = self._openai_actions(event, result.account_id, instructions)
             if openai_actions:
-                return openai_actions
-            return []
-        return [SendText(event.chat_id, reply)]
+                return EngineResult(result.account_id, openai_actions, handled=True)
+            return EngineResult(result.account_id, [], handled=False)
+        return EngineResult(result.account_id, [SendText(event.chat_id, reply)], handled=True)
 
     def process_identity_flows(self, event: IncomingEvent) -> EngineResult:
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)

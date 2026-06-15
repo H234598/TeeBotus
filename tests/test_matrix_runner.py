@@ -5,6 +5,7 @@ import asyncio
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
+from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
@@ -97,6 +98,37 @@ def test_matrix_bridge_routes_private_account_commands(tmp_path) -> None:
 
     assert client.sent
     assert "Deine TeeBotus-Account-ID" in client.sent[0]["content"]["body"]
+
+
+def test_matrix_bridge_tracks_engine_result_account_id(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    target_account_id = "a" * 128
+    bridge.engine = type(
+        "FakeEngine",
+        (),
+        {"process_result": lambda self, event: EngineResult(target_account_id, [SendText(event.chat_id, "verbunden")], handled=True)},
+    )()
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
+    assert len(refs) == 1
+    assert refs[0].account_id == target_account_id
 
 
 def test_matrix_bridge_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
