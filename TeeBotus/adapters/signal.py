@@ -49,7 +49,7 @@ def signal_message_to_event(
         sender_username="",
         sender_number=str(getattr(message, "source_number", "") or ""),
         text=str(getattr(message, "text", "") or ""),
-        message_ref=str(getattr(message, "timestamp", "") or ""),
+        message_ref=_signal_message_ref(message),
         reply_to_text=_signal_quote_text(message),
         attachments=attachments,
         raw=message,
@@ -133,7 +133,7 @@ def _signal_quote_kwargs_for_context(context: Any, reply_to_ref: str) -> dict[st
     if not ref:
         return {}
     message = getattr(context, "message", None)
-    timestamp = str(getattr(message, "timestamp", "") or "").strip()
+    timestamp = _signal_message_ref(message)
     if not timestamp or timestamp != ref:
         return {}
     try:
@@ -149,6 +149,16 @@ def _signal_quote_kwargs_for_context(context: Any, reply_to_ref: str) -> dict[st
         "quote_message": quote_message,
         "quote_timestamp": quote_timestamp,
     }
+
+
+def _signal_message_ref(message: Any) -> str:
+    message_type = getattr(message, "type", None)
+    type_name = getattr(message_type, "name", "")
+    if type_name == "EDIT_MESSAGE":
+        target = str(getattr(message, "target_sent_timestamp", "") or "").strip()
+        if target:
+            return target
+    return str(getattr(message, "timestamp", "") or "").strip()
 
 
 async def _stop_signal_typing_if_started(context: Any, typing_started: bool) -> bool:

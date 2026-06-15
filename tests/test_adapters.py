@@ -80,6 +80,18 @@ def test_signal_quote_text_maps_to_reply_context():
     assert event.reply_to_text == "Vorheriger Text"
 
 
+def test_signal_edit_message_uses_target_timestamp_as_message_ref():
+    message = FakeSignalMessage(text="Bearbeitet", timestamp="200", type=MessageType.EDIT_MESSAGE)
+    message.target_sent_timestamp = 100
+
+    event = signal_message_to_event(message, instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.event_id == "signal:200"
+    assert event.message_ref == "100"
+    assert event.text == "Bearbeitet"
+
+
 def test_signal_non_content_message_types_are_ignored():
     for message_type in (
         MessageType.CONTACT_SYNC_MESSAGE,

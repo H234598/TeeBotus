@@ -159,6 +159,46 @@ def test_signal_command_preserves_explicit_engine_reply_context(tmp_path) -> Non
     assert context.bot_sent == []
 
 
+def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path) -> None:
+    instance_dir = tmp_path / "Demo"
+    instance_dir.mkdir()
+    (instance_dir / "Bot_Verhalten.md").write_text("## Befehle\n- /custom: Signal custom fuer {first_name}.\n", encoding="utf-8")
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.type = MessageType.EDIT_MESSAGE
+    context.message.text = "/custom"
+    context.message.timestamp = 200
+    context.message.target_sent_timestamp = 100
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["Signal custom fuer +491234."]
+    assert context.bot_sent == [
+        (
+            "+491234",
+            "Signal custom fuer +491234.",
+            {
+                "base64_attachments": None,
+                "quote_author": "+491234",
+                "quote_message": "/custom",
+                "quote_timestamp": 100,
+            },
+        )
+    ]
+
+
 def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
