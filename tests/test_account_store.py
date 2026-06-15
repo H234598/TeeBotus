@@ -978,6 +978,21 @@ def test_structured_account_memory_index_health_reports_ok(tmp_path):
     assert health.errors == ()
 
 
+def test_structured_account_memory_index_health_reports_database_decryption_errors(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = first.resolve_or_create_account(telegram_identity_key(1))
+    first.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32), create_dirs=False)
+
+    health = second.check_structured_memory_index(account_id, require_resolvable=False)
+
+    assert not health.ok
+    error_text = "\n".join(health.errors)
+    assert "database entries unreadable: skipped=1" in error_text
+    assert "database index unreadable: SQLite account memory payload could not be decrypted" in error_text
+
+
 def test_structured_account_memory_index_health_reports_broken_invariants(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

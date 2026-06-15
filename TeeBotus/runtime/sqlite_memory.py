@@ -56,6 +56,9 @@ class SQLiteAccountMemoryBackend:
         self.purpose = purpose
         self.config = config
         self._initialized = False
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
+        self.last_index_read_error = ""
 
     @property
     def key(self) -> bytes:
@@ -65,6 +68,8 @@ class SQLiteAccountMemoryBackend:
         return key
 
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
         self._ensure_schema()
         with self._connect() as connection:
             rows = connection.execute(
@@ -90,6 +95,8 @@ class SQLiteAccountMemoryBackend:
                     first_skipped_id = memory_id
                     first_error = str(exc)
         if skipped:
+            self.last_entry_read_error = first_error
+            self.last_entry_skipped = skipped
             LOGGER.critical(
                 "SQLite account-memory skipped corrupt rows instance=%s account=%s skipped=%s first_memory_id=%s error=%s",
                 self.instance_name,
@@ -117,6 +124,7 @@ class SQLiteAccountMemoryBackend:
                     self._insert_entry(connection, account_id, row, ordinal)
 
     def read_index(self, account_id: str) -> dict[str, Any]:
+        self.last_index_read_error = ""
         self._ensure_schema()
         with self._connect() as connection:
             row = connection.execute(
@@ -132,6 +140,7 @@ class SQLiteAccountMemoryBackend:
         try:
             return self._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
         except AccountStoreError as exc:
+            self.last_index_read_error = str(exc)
             LOGGER.critical(
                 "SQLite account-memory index could not be decrypted and was ignored instance=%s account=%s error=%s",
                 self.instance_name,

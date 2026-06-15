@@ -17,6 +17,9 @@ class WarningFallbackAccountMemoryBackend:
         self._last_warning_at = 0.0
         self._dirty_entries: set[str] = set()
         self._dirty_indexes: set[str] = set()
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
+        self.last_index_read_error = ""
 
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         return self._read(
@@ -55,22 +58,27 @@ class WarningFallbackAccountMemoryBackend:
             if self._account_is_dirty(operation, account_id):
                 sync_callback(account_id)
             result = callback(self.primary)
+            self._copy_diagnostics(self.primary)
             self._clear_recovered_if_clean(operation)
             return result
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, exc)
-            return callback(self.fallback)
+            result = callback(self.fallback)
+            self._copy_diagnostics(self.fallback)
+            return result
 
     def _write(self, operation: str, account_id: str, callback: Callable[[Any], Any], dirty_set: set[str]) -> None:
         try:
             callback(self.primary)
+            self._copy_diagnostics(self.primary)
             dirty_set.discard(account_id)
             self._clear_recovered_if_clean(operation)
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, exc)
             callback(self.fallback)
+            self._copy_diagnostics(self.fallback)
             dirty_set.add(account_id)
 
     def _sync_entries_from_fallback(self, account_id: str) -> None:
@@ -113,3 +121,8 @@ class WarningFallbackAccountMemoryBackend:
             operation,
             exc,
         )
+
+    def _copy_diagnostics(self, backend: Any) -> None:
+        self.last_entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "")
+        self.last_entry_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0)
+        self.last_index_read_error = str(getattr(backend, "last_index_read_error", "") or "")

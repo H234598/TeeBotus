@@ -371,8 +371,21 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
     lines: list[str] = []
     for account_dir in account_dirs:
         account_id = account_dir.name
+        profile_warning = ""
         try:
-            health = store.check_structured_memory_index(account_id)
+            store._read_account_profile(account_id)
+        except AccountStoreError as exc:
+            if store.account_memory_backend is None:
+                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+                continue
+            profile_warning = f" warning=profile_unreadable:{exc}"
+        except OSError as exc:
+            if store.account_memory_backend is None:
+                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+                continue
+            profile_warning = f" warning=profile_unreadable:{exc}"
+        try:
+            health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
         except AccountStoreError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             continue
@@ -380,9 +393,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             continue
         if health.ok:
-            lines.append(f"account_memory={instance_name}/{account_id} status=ok")
+            lines.append(f"account_memory={instance_name}/{account_id} status=ok{profile_warning}")
         else:
-            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}")
+            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}")
     return lines
 
 

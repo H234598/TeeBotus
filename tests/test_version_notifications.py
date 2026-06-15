@@ -188,6 +188,30 @@ def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path,
     assert "index.entries missing entries: mem_missing" in lines[0]
 
 
+def test_account_memory_index_health_uses_database_when_profile_envelope_is_stale(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
+    stale_profile_store = AccountStore(
+        tmp_path / "instances" / "Demo" / "data" / "accounts",
+        "Demo",
+        secret_provider=StaticSecretProvider(b"y" * 32),
+        create_dirs=False,
+    )
+    stale_profile_store._write_account_profile(
+        account_id,
+        {"schema_version": 1, "instance": "Demo", "account_id": account_id, "status": "active"},
+    )
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed"
+    ]
+
+
 def test_version_notification_text_does_not_expose_memory_files() -> None:
     text = build_version_notification_text(version="1.0.3", memory_text="User_Habbits_and_behave.md crypto secret")
 

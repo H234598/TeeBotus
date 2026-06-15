@@ -1150,11 +1150,18 @@ class AccountStore:
         rebuilt_index["updated_at"] = utc_now()
         self.write_memory_index(account_id, rebuilt_index)
 
-    def check_structured_memory_index(self, account_id: str) -> AccountMemoryIndexHealth:
+    def check_structured_memory_index(self, account_id: str, *, require_resolvable: bool = True) -> AccountMemoryIndexHealth:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        self._ensure_account_resolvable(account_id)
+        if require_resolvable:
+            self._ensure_account_resolvable(account_id)
         errors: list[str] = []
+        backend = self.account_memory_backend
         entries = self.read_memory_entries(account_id)
+        entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
+        entry_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
+        database_read_errors: list[str] = []
+        if entry_read_error:
+            database_read_errors.append(f"database entries unreadable: skipped={entry_skipped} error={entry_read_error}")
         entry_ids: list[str] = []
         for entry in entries:
             if not isinstance(entry, dict):
@@ -1168,6 +1175,11 @@ class AccountStore:
             errors.append(f"duplicate entry ids: {', '.join(duplicate_entry_ids)}")
 
         index_doc = self.read_memory_index(account_id)
+        index_read_error = str(getattr(backend, "last_index_read_error", "") or "") if backend is not None else ""
+        if index_read_error:
+            database_read_errors.append(f"database index unreadable: {index_read_error}")
+        if database_read_errors:
+            return AccountMemoryIndexHealth(account_id, False, tuple(database_read_errors))
         if not isinstance(index_doc, dict):
             errors.append("index document is not an object")
             return AccountMemoryIndexHealth(account_id, False, tuple(errors))
