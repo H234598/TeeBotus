@@ -14,7 +14,7 @@ from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
-from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -73,6 +73,10 @@ class MatrixRuntimeBridge:
             adapter_slot=self.run_config.slot,
             account_label=self.run_config.label,
         )
+        if event is None:
+            return
+        if should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config)):
+            return
         event = await _download_matrix_event_attachments(self.client, event)
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         self.account_store.update_identity_route(

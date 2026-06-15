@@ -19,7 +19,7 @@ from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
-from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -93,6 +93,8 @@ class TeeBotusSignalCommand:
             account_label=self.run_config.label,
         )
         if event is None:
+            return
+        if should_ignore_event_without_account(event, (self.run_config.signal_phone_number, self.run_config.label)):
             return
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         self.account_store.update_identity_route(

@@ -16,10 +16,13 @@ def matrix_message_to_event(
     adapter_slot: int,
     account_id: str = "",
     account_label: str = "matrix:1",
-) -> IncomingEvent:
+) -> IncomingEvent | None:
     sender = str(getattr(message, "sender", "") or "").strip()
     room_id = str(getattr(room, "room_id", "") or "").strip()
     text, reply_to_text = _matrix_message_text_and_reply(message)
+    attachments = _matrix_message_attachments(message)
+    if not text.strip() and not attachments:
+        return None
     return IncomingEvent(
         event_id=f"matrix:{getattr(message, 'event_id', '')}",
         instance=instance,
@@ -36,7 +39,7 @@ def matrix_message_to_event(
         text=text,
         message_ref=str(getattr(message, "event_id", "") or ""),
         reply_to_text=reply_to_text,
-        attachments=_matrix_message_attachments(message),
+        attachments=attachments,
         raw=message,
     )
 

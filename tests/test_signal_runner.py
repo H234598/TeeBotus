@@ -134,6 +134,7 @@ def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
     asyncio.run(command.handle(context))
 
     assert context.sent == []
+    assert command.account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
 
 
 def test_signal_group_free_text_can_address_bot_by_phone(tmp_path) -> None:

@@ -189,6 +189,7 @@ def test_matrix_message_maps_sender_and_room_to_event():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert event.channel == "matrix"
     assert event.identity_key == "matrix:user:@alice:example"
     assert event.chat_id == "!room:example"
@@ -210,6 +211,7 @@ def test_matrix_media_message_maps_attachment_metadata():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert len(event.attachments) == 1
     assert event.attachments[0].filename == "photo.jpg"
     assert event.attachments[0].content_type == "image/jpeg"
@@ -230,6 +232,7 @@ def test_matrix_rich_reply_fallback_is_split_from_message_text():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert event.text == "actual reply"
     assert event.reply_to_text == "<@bob:example> quoted line\nsecond line"
 
@@ -248,6 +251,7 @@ def test_matrix_file_message_prefers_filename_from_content():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert event.attachments[0].filename == "report.pdf"
     assert event.attachments[0].content_type == "application/octet-stream"
 
@@ -264,7 +268,22 @@ def test_matrix_room_without_member_state_is_not_private():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert event.chat_type == "group"
+
+
+def test_matrix_empty_message_is_ignored():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = ""
+        source = {"content": {"msgtype": "m.text", "body": ""}}
+
+    assert matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1) is None
 
 
 def test_matrix_room_with_only_one_known_member_is_not_private():
@@ -279,6 +298,7 @@ def test_matrix_room_with_only_one_known_member_is_not_private():
 
     event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
 
+    assert event is not None
     assert event.chat_type == "group"
 
 

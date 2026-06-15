@@ -69,13 +69,15 @@ class TeeBotusEngine:
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
 
+    def should_ignore_without_account(self, event: IncomingEvent) -> bool:
+        return should_ignore_event_without_account(event, self.bot_address_names)
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
 
         text = str(event.text or "").strip()
         command = _command_name(text)
-        if _command_targets_other_bot(text, self.bot_address_names):
+        if self.should_ignore_without_account(event):
             return []
         if command == "/cleanup":
             parsed = _parse_cleanup_count(text)
@@ -521,6 +523,15 @@ class TeeBotusEngine:
 
 def redact_engine_text_for_logs(text: str) -> str:
     return redact_registration_secrets(text)
+
+
+def should_ignore_event_without_account(event: IncomingEvent, bot_address_names: Iterable[str] = ()) -> bool:
+    normalized_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
+    text = str(event.text or "").strip()
+    command = _command_name(text)
+    if _command_targets_other_bot(text, normalized_names):
+        return True
+    return event.chat_type == "group" and not command and not _event_is_addressed_to_bot(event, command, normalized_names)
 
 
 def _command_name(text: str) -> str:

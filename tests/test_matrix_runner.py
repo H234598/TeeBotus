@@ -137,6 +137,33 @@ def test_matrix_group_free_text_must_address_bot(tmp_path) -> None:
     asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), message))
 
     assert client.sent == []
+    assert bridge.account_store.get_account_for_identity("matrix:user:@alice:example") is None
+
+
+def test_matrix_bridge_ignores_empty_messages_without_account_side_effects(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    message = FakeMatrixMessage()
+    message.body = ""
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
+
+    assert client.sent == []
+    assert bridge.account_store.get_account_for_identity("matrix:user:@alice:example") is None
 
 
 def test_matrix_group_free_text_can_address_bot_by_user_id(tmp_path) -> None:
