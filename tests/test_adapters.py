@@ -1514,6 +1514,29 @@ def test_matrix_send_reaction_uses_annotation_event():
     ]
 
 
+def test_matrix_send_reaction_prefers_niobot_add_reaction():
+    class Response:
+        event_id = "$reaction"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def add_reaction(self, room_id, event_id, emoji):
+            self.calls.append((room_id, event_id, emoji))
+            return Response()
+
+        async def room_send(self, **_kwargs):
+            raise AssertionError("room_send should not be used when add_reaction is available")
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendReaction("!room:example", "$old", "\U0001f44d")]))
+
+    assert sent == ["$reaction"]
+    assert client.calls == [("!room:example", "$old", "\U0001f44d")]
+
+
 def test_matrix_send_receipt_uses_update_receipt_marker():
     class Response:
         pass
@@ -1564,6 +1587,29 @@ def test_matrix_send_edit_uses_replacement_event():
             },
         }
     ]
+
+
+def test_matrix_send_edit_prefers_niobot_edit_message_without_mentions():
+    class Response:
+        event_id = "$edit"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def edit_message(self, room_id, event_id, content, **kwargs):
+            self.calls.append((room_id, event_id, content, kwargs))
+            return Response()
+
+        async def room_send(self, **_kwargs):
+            raise AssertionError("room_send should not be used when edit_message is available")
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
+
+    assert sent == ["$edit"]
+    assert client.calls == [("!room:example", "$old", "korrigiert", {"message_type": "m.text"})]
 
 
 def test_matrix_send_edit_preserves_mentions_in_replacement_content():

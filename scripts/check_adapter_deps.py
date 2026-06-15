@@ -105,6 +105,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         return False, "nio-bot missing NioBot"
     start_params = inspect.signature(niobot.NioBot.start).parameters
     send_params = inspect.signature(niobot.NioBot.send_message).parameters
+    add_reaction_params = inspect.signature(niobot.NioBot.add_reaction).parameters
+    edit_message_params = inspect.signature(niobot.NioBot.edit_message).parameters
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
     download_params = inspect.signature(nio.AsyncClient.download).parameters
@@ -120,6 +122,9 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.send_message.file": "file" in send_params,
         "NioBot.send_message.message_type": "message_type" in send_params,
         "NioBot.send_message.reply_to": "reply_to" in send_params,
+        "NioBot.add_reaction.emoji": "emoji" in add_reaction_params,
+        "NioBot.edit_message.content": "content" in edit_message_params,
+        "NioBot.edit_message.message_type": "message_type" in edit_message_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_get_event.event_id": "event_id" in room_get_event_params,

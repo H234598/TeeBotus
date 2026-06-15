@@ -177,6 +177,11 @@ async def _send_matrix_reaction(client: Any, room_id: str, event_id: str, emoji:
         raise RuntimeError("Matrix reaction requires a message_ref")
     if not key:
         raise RuntimeError("Matrix reaction requires an emoji")
+    add_reaction = getattr(client, "add_reaction", None)
+    if callable(add_reaction):
+        response = await add_reaction(room_id, target, key)
+        _raise_matrix_response_error(response)
+        return response
     response = await client.room_send(
         room_id=room_id,
         message_type="m.reaction",
@@ -219,6 +224,11 @@ async def _send_matrix_edit(
     if not target:
         raise RuntimeError("Matrix edit requires a message_ref")
     body = str(text or "")
+    edit_message = getattr(client, "edit_message", None)
+    if callable(edit_message) and not mentions:
+        response = await edit_message(room_id, target, body, message_type="m.text")
+        _raise_matrix_response_error(response)
+        return response
     content = {
         "msgtype": "m.text",
         "body": f"* {body}",
