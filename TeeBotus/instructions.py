@@ -126,8 +126,8 @@ class BotInstructions:
         "Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein OpenAI-Verlauf geloescht."
     )
     user_memory_reset_error: str = "Ich konnte deine User-Memory-Eintraege gerade nicht loeschen. Bitte versuche es spaeter erneut."
-    user_memory_crypto_error: str = (
-        "Ich kann dein User-Memory gerade nicht entschluesseln oder speichern. "
+    user_memory_error: str = (
+        "Ich kann dein User-Memory gerade nicht laden oder speichern. "
         "Ich antworte ohne gespeicherte Erinnerungen; vorhandene Memory-Dateien werden nicht geloescht."
     )
     user_memory_reset_only_own: str = (
@@ -139,7 +139,6 @@ class BotInstructions:
     teladi_call_cooldown: str = "Du kannst /Call_a_Teladi erst in {remaining} wieder nutzen."
     teladi_call_error: str = "Ich konnte die Emergency Message gerade nicht senden. Bitte versuche es spaeter erneut."
     user_memory_enabled: bool = False
-    user_memory_dir: str = "instances/{instance}/data/accounts/legacy_sender_memory"
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
     openai_shared_prompt: str = ""
@@ -526,8 +525,8 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.user_memory_reset_unavailable = value
     elif normalized == "user_memory_reset_error":
         instructions.user_memory_reset_error = value
-    elif normalized == "user_memory_crypto_error":
-        instructions.user_memory_crypto_error = value
+    elif normalized == "user_memory_error":
+        instructions.user_memory_error = value
     elif normalized == "user_memory_reset_only_own":
         instructions.user_memory_reset_only_own = value
     elif normalized == "teladi_call_prompt":

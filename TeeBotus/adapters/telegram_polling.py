@@ -1538,20 +1538,20 @@ def _prepare_user_memory(
         )
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to prepare user memory.")
-        _notify_user_memory_crypto_error(api, message, instructions)
+        _notify_user_memory_store_error(api, message, instructions)
         return None
 
 
-def _notify_user_memory_crypto_error(api: TelegramAPI | None, message: dict[str, Any], instructions: BotInstructions) -> None:
+def _notify_user_memory_store_error(api: TelegramAPI | None, message: dict[str, Any], instructions: BotInstructions) -> None:
     if api is None:
         return
     chat_id = _message_chat_id(message)
     if chat_id is None:
         return
     try:
-        _send_untracked_message(api, chat_id, instructions.user_memory_crypto_error)
+        _send_untracked_message(api, chat_id, instructions.user_memory_error)
     except TelegramAPIError:
-        LOGGER.exception("Failed to notify user about user memory crypto error.")
+        LOGGER.exception("Failed to notify user about user memory store error.")
 
 
 def _message_chat_id(message: dict[str, Any]) -> int | None:
@@ -1612,7 +1612,7 @@ def _record_user_memory(
         )
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
-        _notify_user_memory_crypto_error(api, message, instructions)
+        _notify_user_memory_store_error(api, message, instructions)
 
 
 def _build_openai_user_input(

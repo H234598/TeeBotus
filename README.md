@@ -319,7 +319,7 @@ Der Account-Layer speichert accountbezogene Daten unter `instances/<instance>/da
 
 Strukturierte Accountdaten werden verschluesselt gespeichert. Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene und werden Usern nicht mit Dateinamen offengelegt.
 
-Standard ist der Desktop Secret Service via `secret-tool`. Fuer Headless-Setups kannst du stattdessen `TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND=passphrase` setzen; dann wird der zufaellig erzeugte User-Key lokal verschluesselt und mit `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE` oder `TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE` geschuetzt. Wenn beides fehlt, legt der Bot automatisch eine private Passphrase-Datei im Instanz-Datenverzeichnis an.
+Die strukturierten AccountStore-Schluessel liegen instanzgebunden im Desktop Secret Service via `secret-tool`. Das alte senderbezogene `User_Memory_Key.bin`-Backend wird nicht mehr genutzt.
 
 Der Speicher ist accountbezogen und nicht mehr an `data/users/<telegram_sender_id>` gebunden. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
@@ -329,7 +329,7 @@ Kurzantwort fuer Datenschutzfragen:
 
 - Strukturierter Nutzer-Memory wird accountbezogen at rest verschluesselt.
 - Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene und werden nicht mit internen Dateinamen offengelegt.
-- Der zugehoerige Key liegt standardmaessig im Desktop Secret Service, optional im passphrase-geschuetzten lokalen Key-Store.
+- Der zugehoerige Key liegt instanzgebunden im Desktop Secret Service.
 - Ein Admin ohne passenden Key sieht in den verschluesselten Index-/Entry-Dateien keine Klartextdaten.
 - Das laufende Bot-Prozessmodell kann Daten zum Antworten trotzdem entschluesseln.
 - Wer die Laufzeit, den Speicher oder den passenden Key kontrolliert, kann weiterhin auf Klartext stossen.

@@ -47,4 +47,4 @@ Interne operatorgepflegte Hinweise sind eine separate Vertrauensebene. Sie werde
 
 ## Was geschuetzt ist
 
-Reiner Dateizugriff sieht bei strukturierten Dateien Ciphertext. Interne operatorgepflegte Hinweise und Runtime-Zugriff sind eigene Vertrauensebenen. Wer Zugriff auf den laufenden Prozess, Secret Service, Passphrase oder Debugger hat, kann weiterhin Plaintext erreichen, weil der Bot Daten zum Arbeiten entschluesseln muss.
+Reiner Dateizugriff sieht bei strukturierten Dateien Ciphertext. Interne operatorgepflegte Hinweise und Runtime-Zugriff sind eigene Vertrauensebenen. Wer Zugriff auf den laufenden Prozess, Secret Service oder Debugger hat, kann weiterhin Plaintext erreichen, weil der Bot Daten zum Arbeiten entschluesseln muss.

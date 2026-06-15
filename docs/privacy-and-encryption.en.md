@@ -47,4 +47,4 @@ Operator-maintained internal notes are a separate trust level. They are not expo
 
 ## What Is Protected
 
-Disk-only access sees ciphertext for structured files. Disk-only access still sees Markdown notes in plaintext. Anyone with access to the running process, Secret Service, passphrase, or debugger can still reach plaintext because the bot must decrypt data to operate.
+Disk-only access sees ciphertext for structured files. Disk-only access still sees Markdown notes in plaintext. Anyone with access to the running process, Secret Service, or debugger can still reach plaintext because the bot must decrypt data to operate.

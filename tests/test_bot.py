@@ -7,17 +7,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import call, patch
 
-from TeeBotus.user_memory_crypto import (
-    USER_MEMORY_KEY_FILENAME,
-    USER_MEMORY_PASSPHRASE_FILENAME,
-    UserMemoryCryptoError,
-    ensure_user_memory_key,
-    is_encrypted_payload,
-    read_json as read_encrypted_user_memory_json,
-    read_jsonl as read_encrypted_user_memory_jsonl,
-    read_text as read_encrypted_user_memory_text,
-    write_json as write_encrypted_user_memory_json,
-)
 from TeeBotus.bot import (
     BotIdentity,
     BotTokenConfig,
@@ -68,9 +57,6 @@ from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, telegram_identity_key
-
-
-STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
 
 
 class FakeAPI:
@@ -210,18 +196,6 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def read_user_memory_json(path: Path) -> dict:
-    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
-    payload, _ = read_encrypted_user_memory_json(path, key, kind="user-memory-index", default={})
-    return payload
-
-
-def read_user_memory_entries(path: Path) -> list[dict]:
-    key = ensure_user_memory_key(path.parent / USER_MEMORY_KEY_FILENAME)
-    entries, _ = read_encrypted_user_memory_jsonl(path, key, kind="user-memory-entries")
-    return entries
-
-
 def read_user_memory_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -257,208 +231,24 @@ class BotTests(unittest.TestCase):
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADUlEQVR4nGP8z8BQDwAFgwJ/lwQ+0gAAAABJRU5ErkJggg=="
     )
 
-    def setUp(self) -> None:
-        self._secret_tool_store: dict[tuple[str, ...], str] = {}
-        self._secret_tool_run_patcher = patch(
-            "TeeBotus.user_memory_crypto._run_secret_tool",
-            side_effect=self._fake_secret_tool_run,
-        )
-        self._secret_tool_run_patcher.start()
-        self.addCleanup(self._secret_tool_run_patcher.stop)
-
-    def _fake_secret_tool_run(self, command, *, input_text=""):
-        op = command[0]
-        if op == "lookup":
-            attrs = tuple(command[1:])
-            secret = self._secret_tool_store.get(attrs, "")
-            return subprocess.CompletedProcess(command, 0, f"{secret}\n" if secret else "", "")
-        if op == "store":
-            label_index = command.index("--label")
-            attrs = tuple(command[label_index + 2 :])
-            secret = input_text.strip()
-            self._secret_tool_store[attrs] = secret
-            return subprocess.CompletedProcess(command, 0, "", "")
-        if op == "clear":
-            attrs = tuple(command[1:])
-            self._secret_tool_store.pop(attrs, None)
-            return subprocess.CompletedProcess(command, 0, "", "")
-        raise AssertionError(f"unexpected secret-tool command: {command}")
-
     def test_default_instruction_path_uses_bote_der_wahrheit_instance(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
-
-    def test_user_memory_key_loads_existing_key_payload_into_secret_service(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            payload_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
-            payload_path.parent.mkdir(parents=True, exist_ok=True)
-            payload_key = bytes(range(32))
-            payload_path.write_bytes(payload_key)
-
-            key = ensure_user_memory_key(payload_path, instance_name="Depressionsbot", sender_id="456")
-
-            self.assertEqual(key, payload_key)
-            self.assertFalse(payload_path.exists())
-            self.assertEqual(
-                self._secret_tool_store[
-                    ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
-                ],
-                base64.urlsafe_b64encode(payload_key).decode("ascii"),
-            )
-
-    def test_user_memory_key_passphrase_mode_uses_explicit_passphrase(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
-            memory_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with patch.dict(
-                "os.environ",
-                {
-                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
-                },
-                clear=False,
-            ):
-                key = ensure_user_memory_key(memory_path.parent / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
-
-            key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
-            self.assertEqual(len(key), 32)
-            self.assertTrue(key_path.exists())
-            self.assertNotEqual(key_path.read_bytes(), key)
-            self.assertEqual(self._secret_tool_store, {})
-
-    def test_user_memory_key_passphrase_mode_can_migrate_from_secret_service(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
-            memory_path.parent.mkdir(parents=True, exist_ok=True)
-            key_path = memory_path.parent / USER_MEMORY_KEY_FILENAME
-
-            keyring_key = bytes(range(32))
-            attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
-            self._secret_tool_store[attrs] = base64.urlsafe_b64encode(keyring_key).decode("ascii")
-
-            with patch.dict("os.environ", {}, clear=False):
-                self.assertEqual(
-                    ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456"),
-                    keyring_key,
-                )
-
-            self.assertIn(attrs, self._secret_tool_store)
-
-            with patch.dict(
-                "os.environ",
-                {
-                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
-                },
-                clear=False,
-            ):
-                migrated_key = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
-
-            self.assertEqual(migrated_key, keyring_key)
-            self.assertNotIn(attrs, self._secret_tool_store)
-            self.assertTrue(key_path.exists())
-            self.assertNotEqual(key_path.read_bytes(), keyring_key)
-
-    def test_user_memory_key_passphrase_mode_generates_default_passphrase_file(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
-            memory_path.parent.mkdir(parents=True, exist_ok=True)
-            passphrase_path = memory_path.parents[2] / USER_MEMORY_PASSPHRASE_FILENAME
-
-            with patch.dict(
-                "os.environ",
-                {
-                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": "",
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
-                },
-                clear=False,
-            ):
-                key = ensure_user_memory_key(memory_path.parent / USER_MEMORY_KEY_FILENAME, instance_name="Depressionsbot", sender_id="456")
-
-            self.assertEqual(len(key), 32)
-            self.assertTrue(passphrase_path.exists())
-            self.assertEqual(passphrase_path.stat().st_mode & 0o777, 0o600)
-            self.assertGreaterEqual(len(passphrase_path.read_text(encoding="utf-8").strip()), 32)
-
-    def test_user_memory_keys_are_per_sender_id_and_stay_stable(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory) / "instances" / "Depressionsbot" / "data" / "users"
-            first_path = base / "111" / USER_MEMORY_KEY_FILENAME
-            second_path = base / "222" / USER_MEMORY_KEY_FILENAME
-            first_path.parent.mkdir(parents=True, exist_ok=True)
-            second_path.parent.mkdir(parents=True, exist_ok=True)
-
-            with patch.dict(
-                "os.environ",
-                {
-                    "TELEGRAM_BOT_USER_MEMORY_KEY_BACKEND": "passphrase",
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE": STRONG_PASSPHRASE,
-                    "TELEGRAM_BOT_USER_MEMORY_PASSPHRASE_FILE": "",
-                },
-                clear=False,
-            ):
-                first_key = ensure_user_memory_key(first_path, instance_name="Depressionsbot", sender_id="111")
-                first_key_again = ensure_user_memory_key(first_path, instance_name="Depressionsbot", sender_id="111")
-                second_key = ensure_user_memory_key(second_path, instance_name="Depressionsbot", sender_id="222")
-
-            self.assertEqual(first_key, first_key_again)
-            self.assertNotEqual(first_key, second_key)
-            self.assertEqual(len(first_key), 32)
-            self.assertEqual(len(second_key), 32)
-
-    def test_user_memory_keys_are_scoped_by_instance_and_sender_id(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            truth_path = Path(directory) / "instances" / "Bote_der_Wahrheit" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
-            depression_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
-
-            truth_key = ensure_user_memory_key(truth_path, instance_name="Bote_der_Wahrheit", sender_id="456")
-            depression_key = ensure_user_memory_key(depression_path, instance_name="Depressionsbot", sender_id="456")
-
-        truth_attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Bote_der_Wahrheit", "sender_id", "456")
-        depression_attrs = ("application", "telegram-bot", "purpose", "user-memory-key", "instance", "Depressionsbot", "sender_id", "456")
-        self.assertIn(truth_attrs, self._secret_tool_store)
-        self.assertIn(depression_attrs, self._secret_tool_store)
-        self.assertNotEqual(truth_key, depression_key)
-        self.assertNotEqual(self._secret_tool_store[truth_attrs], self._secret_tool_store[depression_attrs])
-
-    def test_user_memory_keyring_store_confirm_failure_falls_back_to_private_key_file(self) -> None:
-        def fake_secret_tool(command, *, input_text=""):
-            if command[0] in {"lookup", "store", "clear"}:
-                return subprocess.CompletedProcess(command, 0, "", "")
-            raise AssertionError(f"unexpected secret-tool command: {command}")
-
-        with tempfile.TemporaryDirectory() as directory:
-            key_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / USER_MEMORY_KEY_FILENAME
-            with patch("TeeBotus.user_memory_crypto._run_secret_tool", side_effect=fake_secret_tool):
-                key = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
-                key_again = ensure_user_memory_key(key_path, instance_name="Depressionsbot", sender_id="456")
-
-            self.assertEqual(key, key_again)
-            self.assertTrue(key_path.exists())
-            self.assertNotEqual(key_path.read_bytes(), key)
-            self.assertTrue((key_path.parents[2] / USER_MEMORY_PASSPHRASE_FILENAME).exists())
 
     def test_legacy_user_memory_payload_is_not_touched_by_account_store_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
-            original_key = bytes(range(32))
-            write_encrypted_user_memory_json(
-                memory_path,
-                original_key,
-                kind="user-memory-index",
-                data={"schema_version": 1, "sender_id": "456", "profile": {}, "memories": [], "memory_index": {}, "recent_memory_ids": []},
+            memory_path.write_text(
+                json.dumps({"schema_version": 1, "sender_id": "456", "profile": {}, "memories": [], "memory_index": {}, "recent_memory_ids": []}),
+                encoding="utf-8",
             )
             original_payload = memory_path.read_bytes()
 
             store = account_memory_store(directory)
             message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
             api = FakeAPI()
-            instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/accounts/legacy_sender_memory"))
+            instructions = BotInstructions(user_memory_enabled=True)
 
             record = _prepare_user_memory(store, message, instructions, "Hallo", api)
 
@@ -481,12 +271,12 @@ class BotTests(unittest.TestCase):
             )
 
         self.assertIsNone(record)
-        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
+        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_error)])
 
     def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         record = UserMemoryRecord(
             sender_id="456",
-            path=Path("instances/Demo/data/accounts/legacy_sender_memory/456/User_Memory_Index.json"),
+            path=Path("instances/Demo/data/accounts/accounts/" + ("a" * 128) + "/User_Memory_Index.json"),
             prompt_text="",
             selected_ids=(),
         )
@@ -503,7 +293,7 @@ class BotTests(unittest.TestCase):
                 instructions,
                 api,
             )
-        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
+        self.assertEqual(api.sent_messages, [(123, instructions.user_memory_error)])
 
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
@@ -1112,7 +902,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1133,7 +922,7 @@ class BotTests(unittest.TestCase):
 
             memory_path = account_memory_dir(memory_store, 456) / "User_Memory_Index.json"
             self.assertTrue(memory_path.exists())
-            self.assertFalse((memory_path.parent / USER_MEMORY_KEY_FILENAME).exists())
+            self.assertIn("TMBMAP1", memory_path.read_text(encoding="utf-8"))
             payload = read_account_memory_index(memory_store, 456)
             self.assertEqual(payload["scope"], "account")
             self.assertIn("mond", payload["index"]["keywords"])
@@ -1172,7 +961,6 @@ class BotTests(unittest.TestCase):
             api.file_data["photos/avatar.jpg"] = self.AVATAR_PNG
             instructions = BotInstructions(
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1213,7 +1001,6 @@ class BotTests(unittest.TestCase):
             api = FakeAPI()
             instructions = BotInstructions(
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
             message = {
@@ -1239,7 +1026,6 @@ class BotTests(unittest.TestCase):
             api = FakeAPI()
             instructions = BotInstructions(
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
             user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / ("a" * 128)
@@ -1308,7 +1094,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1354,7 +1139,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1405,7 +1189,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1480,7 +1263,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
 
@@ -1540,7 +1322,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
             memory_store = account_memory_store(directory)
             working_store = WorkingMemoryStore("Depressionsbot", Path(directory) / "instances")
@@ -2598,7 +2379,6 @@ class BotTests(unittest.TestCase):
             instructions = BotInstructions(
                 openai_enabled=True,
                 user_memory_enabled=True,
-                user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
 
             handle_update(
