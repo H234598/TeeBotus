@@ -1545,7 +1545,7 @@ class AccountStore:
             if indexed_id not in live_ids:
                 entry_index.pop(indexed_id, None)
         _rebuild_account_memory_graph(nested_index, rows)
-        _rebuild_account_memory_semantic_cache(nested_index, rows)
+        _update_account_memory_semantic_cache(nested_index, rows, entry)
         for keyword, values in list(keyword_index.items()):
             if not isinstance(values, list):
                 keyword_index.pop(keyword, None)
@@ -2301,19 +2301,7 @@ def _rebuild_account_memory_semantic_cache(nested_index: dict[str, Any], rows: l
     live_rows = [row for row in rows if isinstance(row, dict) and str(row.get("id", ""))]
     for row in live_rows[-ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT:]:
         memory_id = str(row.get("id", "")).strip()
-        text = f"{row.get('user_text', '')}\n{row.get('bot_text', '')}\n{row.get('text', '')}"
-        keywords = row.get("keywords") if isinstance(row.get("keywords"), list) else _account_memory_keywords(text)
-        signature = list(dict.fromkeys([*_account_memory_semantic_tokens(text), *keywords, _normalize_account_memory_kind(row.get("kind"))]))
-        entries[memory_id] = {
-            "kind": _normalize_account_memory_kind(row.get("kind")),
-            "memory_type": _normalize_account_memory_type(row.get("memory_type"), row.get("kind")),
-            "signature": signature[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
-            "embedding": _account_memory_embedding(text),
-            "salience": _normalize_account_memory_salience(row.get("salience"), row),
-            "fingerprint": hashlib.sha256(text.encode("utf-8")).hexdigest()[:24],
-            "contradicts": _normalize_account_memory_links(row.get("contradicts"), exclude_id=memory_id),
-            "supports": _normalize_account_memory_links(row.get("supports"), exclude_id=memory_id),
-        }
+        entries[memory_id] = _account_memory_semantic_cache_entry(row)
     semantic_cache.update(
         {
             "source": USER_MEMORY_ENTRIES_FILENAME,
@@ -2324,6 +2312,66 @@ def _rebuild_account_memory_semantic_cache(nested_index: dict[str, Any], rows: l
             "entries": entries,
         }
     )
+
+
+def _update_account_memory_semantic_cache(nested_index: dict[str, Any], rows: list[dict[str, Any]], entry: dict[str, Any]) -> None:
+    semantic_cache = nested_index.setdefault("semantic_cache", {})
+    if not isinstance(semantic_cache, dict):
+        semantic_cache = {}
+        nested_index["semantic_cache"] = semantic_cache
+    if semantic_cache.get("enabled") is False:
+        semantic_cache.update(
+            {
+                "source": USER_MEMORY_ENTRIES_FILENAME,
+                "rebuildable": True,
+                "enabled": False,
+                "algorithm": "local-hash-embedding-v1",
+                "dimensions": ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS,
+                "entries": {},
+            }
+        )
+        return
+    entries = semantic_cache.get("entries")
+    if not isinstance(entries, dict):
+        entries = {}
+        semantic_cache["entries"] = entries
+    live_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict) and str(row.get("id", "")).strip()}
+    for memory_id in list(entries):
+        if str(memory_id) not in live_ids:
+            entries.pop(memory_id, None)
+    memory_id = str(entry.get("id", "")).strip()
+    if memory_id:
+        entries.pop(memory_id, None)
+        entries[memory_id] = _account_memory_semantic_cache_entry(entry)
+    while len(entries) > ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT:
+        entries.pop(next(iter(entries)))
+    semantic_cache.update(
+        {
+            "source": USER_MEMORY_ENTRIES_FILENAME,
+            "rebuildable": True,
+            "enabled": True,
+            "algorithm": "local-hash-embedding-v1",
+            "dimensions": ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS,
+            "entries": entries,
+        }
+    )
+
+
+def _account_memory_semantic_cache_entry(row: dict[str, Any]) -> dict[str, Any]:
+    memory_id = str(row.get("id", "")).strip()
+    text = f"{row.get('user_text', '')}\n{row.get('bot_text', '')}\n{row.get('text', '')}"
+    keywords = row.get("keywords") if isinstance(row.get("keywords"), list) else _account_memory_keywords(text)
+    signature = list(dict.fromkeys([*_account_memory_semantic_tokens(text), *keywords, _normalize_account_memory_kind(row.get("kind"))]))
+    return {
+        "kind": _normalize_account_memory_kind(row.get("kind")),
+        "memory_type": _normalize_account_memory_type(row.get("memory_type"), row.get("kind")),
+        "signature": signature[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+        "embedding": _account_memory_embedding(text),
+        "salience": _normalize_account_memory_salience(row.get("salience"), row),
+        "fingerprint": hashlib.sha256(text.encode("utf-8")).hexdigest()[:24],
+        "contradicts": _normalize_account_memory_links(row.get("contradicts"), exclude_id=memory_id),
+        "supports": _normalize_account_memory_links(row.get("supports"), exclude_id=memory_id),
+    }
 
 
 def _clip_account_memory_text(text: str, max_chars: int) -> str:
