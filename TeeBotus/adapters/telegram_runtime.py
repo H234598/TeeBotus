@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus import __version__
-from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply as build_core_status_reply
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
@@ -41,14 +40,17 @@ from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
-from TeeBotus.runtime.engine import account_bot_address_names
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
+from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
+from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
-from TeeBotus.runtime.events import IncomingEvent
-from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
-from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     handle_tts_voice_model_command,
@@ -313,6 +315,21 @@ class TelegramAPI:
             "sendVoice",
             {"chat_id": chat_id},
             [("voice", filename, content_type, audio)],
+        )
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            return None
+        message_id = result.get("message_id")
+        return int(message_id) if isinstance(message_id, int) else None
+
+    def send_document(self, chat_id: int, data: bytes, filename: str, content_type: str, caption: str = "") -> int | None:
+        fields: dict[str, Any] = {"chat_id": chat_id}
+        if caption:
+            fields["caption"] = caption
+        payload = self.request_multipart(
+            "sendDocument",
+            fields,
+            [("document", filename, content_type, data)],
         )
         result = payload.get("result")
         if not isinstance(result, dict):
@@ -691,6 +708,279 @@ class WorkingMemoryStore:
         return payload
 
 
+@dataclass
+class TelegramRuntimeContext:
+    instance_name: str
+    adapter_slot: int
+    api: TelegramAPI
+    account_store: AccountStore
+    state_store: RuntimeStateStore
+    message_tracker: MessageTracker
+    engine: TeeBotusEngine
+    bot_identity: BotIdentity
+
+
+def build_telegram_runtime_context(
+    *,
+    api: TelegramAPI,
+    instance_name: str,
+    adapter_slot: int,
+    instruction_store: InstructionStore,
+    account_store: AccountStore,
+    state_store: RuntimeStateStore,
+    message_tracker: MessageTracker,
+    openai_client: OpenAIClient | None,
+    working_memory_store: WorkingMemoryStore | None,
+    bibliothekar_store: BibliothekarStore | None,
+    youtube_job_runner: YouTubeTranscriptionJobRunner | None,
+    bot_identity: BotIdentity,
+) -> TelegramRuntimeContext:
+    engine = TeeBotusEngine(
+        account_store,
+        state=state_store,
+        message_tracker=message_tracker,
+        instructions=instruction_store.get,
+        openai_client=openai_client,
+        bot_address_names=tuple(name for name in (bot_identity.display_name, bot_identity.mention) if name),
+        working_memory_store=working_memory_store,
+        bibliothekar_store=bibliothekar_store,
+        youtube_job_runner=youtube_job_runner,
+        background_action_dispatcher=lambda event, actions: _dispatch_modern_telegram_actions(
+            api,
+            message_tracker,
+            event,
+            actions,
+            account_store=account_store,
+            instance_name=instance_name,
+        ),
+    )
+    return TelegramRuntimeContext(
+        instance_name=instance_name,
+        adapter_slot=adapter_slot,
+        api=api,
+        account_store=account_store,
+        state_store=state_store,
+        message_tracker=message_tracker,
+        engine=engine,
+        bot_identity=bot_identity,
+    )
+
+
+def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update: dict[str, Any], chat_state: ChatState) -> bool:
+    message = update.get("message")
+    if not isinstance(message, dict):
+        return False
+    chat = message.get("chat")
+    if not isinstance(chat, dict) or "id" not in chat:
+        return False
+    chat_id = int(chat["id"])
+    chat_state.record_received_message(chat_id, _message_id_or_none(message))
+    event = telegram_message_to_event(
+        message,
+        update=update,
+        instance=context.instance_name,
+        adapter_slot=context.adapter_slot,
+    )
+    if event is None:
+        return False
+    event = _with_telegram_reply_text(event, message)
+    event = _with_telegram_attachments(context.api, event, message)
+    if context.engine.should_ignore_without_account(event):
+        LOGGER.info(
+            "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
+            chat_id,
+            message.get("message_id", "unknown"),
+        )
+        return True
+    account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+    context.account_store.update_identity_route(
+        event.identity_key,
+        channel=event.channel,
+        chat_id=event.chat_id,
+        chat_type=event.chat_type,
+        adapter_slot=event.adapter_slot,
+    )
+    event = event.with_account(account_id)
+    engine_result = context.engine.process_result(event)
+    event = event.with_account(engine_result.account_id)
+    _dispatch_modern_telegram_actions(
+        context.api,
+        context.message_tracker,
+        event,
+        engine_result.actions,
+        account_store=context.account_store,
+        instance_name=context.instance_name,
+    )
+    return bool(engine_result.handled or engine_result.actions)
+
+
+def _with_telegram_reply_text(event: IncomingEvent, message: dict[str, Any]) -> IncomingEvent:
+    reply = message.get("reply_to_message")
+    if not isinstance(reply, dict):
+        return event
+    reply_text = str(reply.get("text") or reply.get("caption") or "").strip()
+    if not reply_text:
+        return event
+    return IncomingEvent(
+        event_id=event.event_id,
+        instance=event.instance,
+        channel=event.channel,
+        adapter_slot=event.adapter_slot,
+        account_id=event.account_id,
+        identity_key=event.identity_key,
+        chat_id=event.chat_id,
+        chat_type=event.chat_type,
+        sender_id=event.sender_id,
+        sender_name=event.sender_name,
+        sender_username=event.sender_username,
+        sender_number=event.sender_number,
+        text=event.text,
+        message_ref=event.message_ref,
+        attachments=event.attachments,
+        link_previews=event.link_previews,
+        reply_to_text=reply_text,
+        raw=event.raw,
+    )
+
+
+def _with_telegram_attachments(api: TelegramAPI, event: IncomingEvent, message: dict[str, Any]) -> IncomingEvent:
+    attachments = _download_telegram_message_attachments(api, message)
+    if not attachments:
+        return event
+    return IncomingEvent(
+        event_id=event.event_id,
+        instance=event.instance,
+        channel=event.channel,
+        adapter_slot=event.adapter_slot,
+        account_id=event.account_id,
+        identity_key=event.identity_key,
+        chat_id=event.chat_id,
+        chat_type=event.chat_type,
+        sender_id=event.sender_id,
+        sender_name=event.sender_name,
+        sender_username=event.sender_username,
+        sender_number=event.sender_number,
+        text=event.text,
+        message_ref=event.message_ref,
+        attachments=tuple([*event.attachments, *attachments]),
+        link_previews=event.link_previews,
+        reply_to_text=event.reply_to_text,
+        raw=event.raw,
+    )
+
+
+def _download_telegram_message_attachments(api: TelegramAPI, message: dict[str, Any]) -> tuple[IncomingAttachment, ...]:
+    candidates: list[tuple[str, str, str]] = []
+    voice = message.get("voice")
+    if isinstance(voice, dict):
+        file_id = str(voice.get("file_id") or "").strip()
+        if file_id:
+            candidates.append((file_id, "voice.ogg", "audio/ogg"))
+    audio = message.get("audio")
+    if isinstance(audio, dict):
+        file_id = str(audio.get("file_id") or "").strip()
+        if file_id:
+            filename = str(audio.get("file_name") or "audio.ogg")
+            candidates.append((file_id, filename, str(audio.get("mime_type") or "audio/ogg")))
+    document = message.get("document")
+    if isinstance(document, dict):
+        file_id = str(document.get("file_id") or "").strip()
+        if file_id:
+            filename = str(document.get("file_name") or "document.bin")
+            candidates.append((file_id, filename, str(document.get("mime_type") or "application/octet-stream")))
+    attachments: list[IncomingAttachment] = []
+    for file_id, filename, content_type in candidates:
+        try:
+            file_path = api.get_file_path(file_id)
+            data = api.download_file(file_path)
+        except TelegramAPIError as exc:
+            LOGGER.warning("Telegram attachment download failed file_id=%s: %s", file_id, exc)
+            continue
+        attachments.append(IncomingAttachment(data=data, filename=filename, content_type=content_type))
+    return tuple(attachments)
+
+
+def _dispatch_modern_telegram_actions(
+    api: TelegramAPI,
+    message_tracker: MessageTracker,
+    event: IncomingEvent,
+    actions: list[Any],
+    *,
+    account_store: AccountStore,
+    instance_name: str,
+) -> None:
+    _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
+    _delete_tracked_telegram_messages(api, message_tracker, event, actions)
+    sent_refs = send_telegram_actions(api, actions)
+    for action, sent_ref in zip(actions, sent_refs):
+        if sent_ref is None:
+            continue
+        should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
+        if not should_track:
+            continue
+        message_tracker.record(
+            SentMessageRef(
+                channel="telegram",
+                instance_name=event.instance,
+                account_id=event.account_id,
+                chat_id=event.chat_id,
+                message_ref=str(sent_ref),
+                ref_kind="telegram_message_id",
+            )
+        )
+
+
+def _notify_telegram_linked_identities(
+    api: TelegramAPI,
+    message_tracker: MessageTracker,
+    account_store: AccountStore,
+    actions: list[Any],
+    *,
+    instance_name: str,
+) -> None:
+    for action in actions:
+        if action.__class__.__name__ != "NotifyLinkedIdentity":
+            continue
+        route = account_store.get_identity_route(action.identity_key)
+        if not route or route.get("channel") != "telegram":
+            continue
+        chat_id = str(route.get("chat_id") or "").strip()
+        if not chat_id:
+            continue
+        sent_ref = api.send_message(int(chat_id), action.text)
+        if sent_ref is None or not action.track:
+            continue
+        message_tracker.record(
+            SentMessageRef(
+                channel="telegram",
+                instance_name=instance_name,
+                account_id=action.account_id,
+                chat_id=chat_id,
+                message_ref=str(sent_ref),
+                ref_kind="telegram_message_id",
+            )
+        )
+
+
+def _delete_tracked_telegram_messages(api: TelegramAPI, message_tracker: MessageTracker, event: IncomingEvent, actions: list[Any]) -> None:
+    for action in actions:
+        if not isinstance(action, DeleteTrackedMessages):
+            continue
+        refs = message_tracker.pop_for_cleanup(
+            instance_name=event.instance,
+            channel=event.channel,
+            chat_id=event.chat_id,
+            count=action.count,
+        )
+        failed_refs: list[SentMessageRef] = []
+        for ref in refs:
+            try:
+                api.delete_message(int(ref.chat_id), int(ref.message_ref))
+            except (TelegramAPIError, ValueError):
+                failed_refs.append(ref)
+        message_tracker.restore_for_cleanup(failed_refs)
+
+
 def handle_update(
     api: TelegramAPI,
     update: dict[str, Any],
@@ -703,6 +993,7 @@ def handle_update(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
     bibliothekar_store: BibliothekarStore | None = None,
+    runtime_context: TelegramRuntimeContext | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -733,6 +1024,10 @@ def handle_update(
         message.get("message_id", "unknown"),
         _message_kind(message),
     )
+    if runtime_context is not None:
+        _handle_update_with_runtime_context(runtime_context, update, chat_state)
+        return
+
     chat_state.record_received_message(chat_id, _message_id_or_none(message))
 
     text = str(message.get("text") or "").strip()
@@ -761,9 +1056,6 @@ def handle_update(
             chat_id,
             message.get("message_id", "unknown"),
         )
-        return
-
-    if text and _handle_account_runtime_command(api, chat_id, message, text, instance_name):
         return
 
     if text and _normalize_command(text) in STATUS_COMMAND_ALIASES:
@@ -961,64 +1253,6 @@ def _process_text_message(
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, fallback, instance_name, "reply")
         _send_tracked_message(api, chat_state, chat_id, fallback)
         _record_user_memory(user_memory_store, user_memory, message, text, fallback, instructions, api)
-
-
-class _RuntimeCommandSender:
-    def __init__(self, api: TelegramAPI, chat_id: int) -> None:
-        self.api = api
-        self.chat_id = chat_id
-
-    def send_message(self, text: str) -> None:
-        _send_untracked_message(self.api, self.chat_id, text)
-
-
-def _handle_account_runtime_command(
-    api: TelegramAPI,
-    chat_id: int,
-    message: dict[str, Any],
-    text: str,
-    instance_name: str,
-) -> bool:
-    command = _normalize_command(text)
-    if command in PROACTIVE_COMMANDS:
-        if not instance_name:
-            return False
-        try:
-            return maybe_handle_account_runtime_message(
-                message,
-                _RuntimeCommandSender(api, chat_id),
-                instance_name=instance_name,
-                data_dir=PROJECT_ROOT / "instances" / instance_name / "data",
-            )
-        except Exception:
-            LOGGER.exception("Failed to handle proactive runtime command for instance=%s.", instance_name)
-            _send_untracked_message(api, chat_id, "Proaktive Account-Funktion ist gerade nicht verfuegbar. Bitte versuche es spaeter erneut.")
-            return True
-    intent = parse_registration_intent(text)
-    if intent.action not in {
-        RegistrationAction.ACCOUNT,
-        RegistrationAction.REGISTER,
-        RegistrationAction.LOGIN,
-        RegistrationAction.ROTATE_SECRET,
-        RegistrationAction.UNLINK_THIS_CHANNEL,
-        RegistrationAction.ACCOUNT_EDIT,
-        RegistrationAction.LINKED_ACCOUNTS,
-        RegistrationAction.WTF_UNLINK,
-    }:
-        return False
-    if not instance_name:
-        return False
-    try:
-        return maybe_handle_account_runtime_message(
-            message,
-            _RuntimeCommandSender(api, chat_id),
-            instance_name=instance_name,
-            data_dir=PROJECT_ROOT / "instances" / instance_name / "data",
-        )
-    except Exception:
-        LOGGER.exception("Failed to handle account runtime command for instance=%s.", instance_name)
-        _send_untracked_message(api, chat_id, "Account-Funktion ist gerade nicht verfuegbar. Bitte versuche es spaeter erneut.")
-        return True
 
 
 def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, instance_name: str, account_store: AccountStore | None = None) -> str:
@@ -2485,10 +2719,28 @@ def run_polling(
         instance,
         secret_provider=SecretToolInstanceSecretProvider(),
     )
+    instance_data_dir = _resolve_instances_dir() / instance / "data"
+    state_store = RuntimeStateStore(instance_data_dir, instance_name=instance, secret_provider=SecretToolInstanceSecretProvider())
+    message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
     bibliothekar_store = BibliothekarStore(instance, _resolve_instances_dir())
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
+    adapter_slot = int(token_label) if str(token_label).isdigit() else 1
+    runtime_context = build_telegram_runtime_context(
+        api=api,
+        instance_name=instance,
+        adapter_slot=adapter_slot,
+        instruction_store=instruction_store,
+        account_store=user_memory_store,
+        state_store=state_store,
+        message_tracker=message_tracker,
+        openai_client=openai_client,
+        working_memory_store=working_memory_store,
+        bibliothekar_store=bibliothekar_store,
+        youtube_job_runner=youtube_job_runner,
+        bot_identity=bot_identity,
+    )
     process_registry = _InstanceProcessRegistry(instance)
     process_registry.cleanup_orphans()
     LOGGER.info(
@@ -2519,6 +2771,7 @@ def run_polling(
                         youtube_job_runner,
                         instance,
                         bibliothekar_store,
+                        runtime_context=runtime_context,
                     )
                     offset = int(update["update_id"]) + 1
             except KeyboardInterrupt:

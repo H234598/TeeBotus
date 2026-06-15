@@ -22,6 +22,7 @@ from TeeBotus.bot import (
     WorkingMemoryStore,
     _build_openai_user_input,
     _bot_token_config_error,
+    build_telegram_runtime_context,
     _discover_instance_names,
     _duplicate_telegram_token_error,
     _downloaded_file_name,
@@ -59,6 +60,8 @@ from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.message_tracking import MessageTracker
+from TeeBotus.runtime.state import RuntimeStateStore
 
 
 class FakeAPI:
@@ -195,6 +198,18 @@ class FlakyPollingAPI(FakeAPI):
         self.calls += 1
         if self.calls == 1:
             raise TelegramNetworkError("Telegram network error: reset")
+        raise KeyboardInterrupt
+
+
+class OneUpdatePollingAPI(FakeAPI):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls = 0
+
+    def get_updates(self, offset, timeout=50):
+        self.calls += 1
+        if self.calls == 1:
+            return [{"update_id": 7, "message": {"message_id": 1, "text": "/ping", "chat": {"id": 123}, "from": {"id": 456}}}]
         raise KeyboardInterrupt
 
 
@@ -1127,52 +1142,6 @@ class BotTests(unittest.TestCase):
         self.assertIn("- Version:", reply)
         self.assertNotIn("Configured info.", reply)
 
-    def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:
-        api = FakeAPI()
-        instructions = BotInstructions(commands={"/account": "configured fallback"})
-
-        with patch("TeeBotus.adapters.telegram_runtime.maybe_handle_account_runtime_message", return_value=True) as handle:
-            handle_update(
-                api,
-                {
-                    "message": {
-                        "message_id": 1,
-                        "text": "/account",
-                        "chat": {"id": 123, "type": "private"},
-                        "from": {"id": 456, "first_name": "Ada"},
-                    }
-                },
-                instructions,
-                None,
-                ChatState(instance_name="Depressionsbot"),
-            )
-
-        handle.assert_called_once()
-        self.assertEqual(api.sent_messages, [])
-
-    def test_proactive_command_is_routed_through_runtime_bridge(self) -> None:
-        api = FakeAPI()
-        instructions = BotInstructions(commands={"/proactive": "configured fallback"})
-
-        with patch("TeeBotus.adapters.telegram_runtime.maybe_handle_account_runtime_message", return_value=True) as handle:
-            handle_update(
-                api,
-                {
-                    "message": {
-                        "message_id": 1,
-                        "text": "/proactive on",
-                        "chat": {"id": 123, "type": "private"},
-                        "from": {"id": 456, "first_name": "Ada"},
-                    }
-                },
-                instructions,
-                None,
-                ChatState(instance_name="Depressionsbot"),
-            )
-
-        handle.assert_called_once()
-        self.assertEqual(api.sent_messages, [])
-
     def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
@@ -1655,6 +1624,47 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/ping", "chat": {"id": 123}}})
 
         self.assertEqual(api.sent_messages, [(123, "pong")])
+
+    def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+            with patch("TeeBotus.adapters.telegram_runtime._process_text_message", side_effect=AssertionError("legacy path used")):
+                handle_update(
+                    api,
+                    {"message": {"message_id": 1, "text": "/ping", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                    chat_state=ChatState(),
+                    runtime_context=context,
+                )
+
+            account_id = account_store.get_account_for_identity(telegram_identity_key("456"))
+
+        self.assertEqual(api.sent_messages[0], ("123", "pong"))
+        self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[1][1])
+        self.assertIsNotNone(account_id)
+        self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
     def test_logs_incoming_and_outgoing_messages_without_content(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -3439,6 +3449,28 @@ class BotTests(unittest.TestCase):
         sleep.assert_any_call(5)
         self.assertEqual(api.calls, 2)
         self.assertIn("Retrying in 5 seconds", "\n".join(logs.output))
+
+    def test_run_polling_passes_modern_runtime_context_to_handle_update(self) -> None:
+        api = OneUpdatePollingAPI()
+        seen_contexts = []
+
+        def capture_handle_update(*args, **kwargs):
+            seen_contexts.append(kwargs.get("runtime_context"))
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                with patch("TeeBotus.adapters.telegram_runtime.handle_update", side_effect=capture_handle_update):
+                    run_polling(
+                        api,
+                        FakeInstructionStore(),
+                        instance_name="Demo",
+                        youtube_job_runner=FakeJobRunner(),
+                        bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+                    )
+
+        self.assertEqual(len(seen_contexts), 1)
+        self.assertIsNotNone(seen_contexts[0])
+        self.assertEqual(seen_contexts[0].instance_name, "Demo")
 
     def test_split_telegram_message_prefers_paragraph_boundaries(self) -> None:
         text = ("a" * 20) + "\n\n" + ("b" * 20) + "\n\n" + ("c" * 20)

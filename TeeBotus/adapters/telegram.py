@@ -100,6 +100,8 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
         elif isinstance(action, SendAttachment):
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):
                 sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type))
+            elif hasattr(api, "send_document"):
+                sent.append(api.send_document(action.chat_id, action.data, action.filename, action.content_type, caption=action.caption))
             else:
                 sent.append(api.send_message(action.chat_id, action.caption or f"Datei: {action.filename}"))
         elif isinstance(action, ExportFile):
