@@ -1151,6 +1151,56 @@ def test_matrix_export_upload_failure_sends_notice_and_continues_actions():
     assert client.sends[1]["content"] == {"msgtype": "m.text", "body": "danach"}
 
 
+def test_matrix_file_room_send_error_sends_notice_and_continues_actions():
+    class Response:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+    class SendError:
+        message = "send refused"
+        status_code = "M_FORBIDDEN"
+
+    class UploadResponse:
+        content_uri = "mxc://example/report"
+
+    class Client:
+        def __init__(self) -> None:
+            self.sends = []
+
+        async def upload(self, _data_provider, **_kwargs):
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            if len(self.sends) == 1:
+                return SendError()
+            return Response(f"$sent-{len(self.sends)}")
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export"),
+                SendText("!room:example", "danach"),
+            ],
+        )
+    )
+
+    assert sent == ["$sent-2", "$sent-3"]
+    assert client.sends[0]["content"]["body"] == "Export"
+    assert client.sends[1] == {
+        "room_id": "!room:example",
+        "message_type": "m.room.message",
+        "content": {
+            "msgtype": "m.notice",
+            "body": "Datei konnte nicht gesendet werden: report.json (M_FORBIDDEN: send refused)",
+        },
+    }
+    assert client.sends[2]["content"] == {"msgtype": "m.text", "body": "danach"}
+
+
 def test_matrix_export_upload_failure_prefers_niobot_notice_message():
     class Response:
         def __init__(self, event_id: str) -> None:

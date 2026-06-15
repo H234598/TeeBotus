@@ -90,11 +90,13 @@ async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: boo
         return await send_message(room_id, text, **kwargs)
     content = {"msgtype": msgtype, "body": text}
     _add_matrix_reply_relation(content, reply_to_ref)
-    return await client.room_send(
+    response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
         content=content,
     )
+    _raise_matrix_response_error(response)
+    return response
 
 
 async def _send_matrix_typing(client: Any, room_id: str) -> None:
@@ -177,11 +179,13 @@ async def _send_matrix_file(
         },
     }
     _add_matrix_reply_relation(content, reply_to_ref)
-    return await client.room_send(
+    response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
         content=content,
     )
+    _raise_matrix_response_error(response)
+    return response
 
 
 def _make_niobot_file_attachment(*, data: bytes, filename: str, content_type: str) -> Any | None:
@@ -327,3 +331,14 @@ def _matrix_event_id(response: Any) -> str | None:
     if value:
         return str(value)
     return None
+
+
+def _raise_matrix_response_error(response: Any) -> None:
+    if _matrix_event_id(response):
+        return
+    message = str(getattr(response, "message", "") or "").strip()
+    if not message:
+        return
+    status_code = str(getattr(response, "status_code", "") or "").strip()
+    detail = f"{status_code}: {message}" if status_code else message
+    raise RuntimeError(detail)
