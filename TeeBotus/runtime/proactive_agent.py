@@ -1016,6 +1016,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             review_pending_count += 1
         if status not in PROACTIVE_OUTBOX_STATUSES:
             errors.append(f"outbox item {item_id or index} has unsupported status: {status}")
+        errors.extend(_proactive_outbox_status_history_errors(item, item_id or str(index), current_status=status))
         category = str(item.get("category") or "").strip().casefold()
         if category not in PROACTIVE_ALLOWED_CATEGORIES:
             errors.append(f"outbox item {item_id or index} has unsupported category: {category}")
@@ -1046,6 +1047,35 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
                 if not _account_has_matching_proactive_route(account_store, account_id, route):
                     errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
     return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count)
+
+
+def _proactive_outbox_status_history_errors(item: Mapping[str, Any], item_label: str, *, current_status: str) -> list[str]:
+    history = item.get("status_history")
+    if history is None:
+        return []
+    if not isinstance(history, list):
+        return [f"outbox item {item_label} status_history is not a list"]
+    errors: list[str] = []
+    last_status = ""
+    for index, entry in enumerate(history):
+        if not isinstance(entry, Mapping):
+            errors.append(f"outbox item {item_label} status_history[{index}] is not an object")
+            continue
+        entry_status = str(entry.get("status") or "").strip().casefold()
+        if entry_status not in PROACTIVE_OUTBOX_STATUSES:
+            errors.append(f"outbox item {item_label} status_history[{index}] has unsupported status: {entry_status}")
+        elif entry_status:
+            last_status = entry_status
+        at = str(entry.get("at") or "").strip()
+        if not at:
+            errors.append(f"outbox item {item_label} status_history[{index}] missing at")
+        elif _parse_proactive_datetime(at) is None:
+            errors.append(f"outbox item {item_label} status_history[{index}] has invalid at")
+        if not str(entry.get("reason") or "").strip():
+            errors.append(f"outbox item {item_label} status_history[{index}] missing reason")
+    if history and last_status and current_status in PROACTIVE_OUTBOX_STATUSES and last_status != current_status:
+        errors.append(f"outbox item {item_label} status_history last status {last_status} does not match current status {current_status}")
+    return errors
 
 
 def proactive_risk_policy_decision(

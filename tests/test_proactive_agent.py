@@ -407,6 +407,39 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.errors == ()
 
 
+def test_proactive_agent_health_reports_invalid_status_history(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["status_history"] = [
+        {"at": "not-a-date", "status": "queued", "reason": ""},
+        {"at": "2026-06-15T12:01:00+00:00", "status": "sent", "reason": "sent"},
+        "broken",
+    ]
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    joined = "\n".join(health.errors)
+    assert "status_history[0] has invalid at" in joined
+    assert "status_history[0] missing reason" in joined
+    assert "status_history[2] is not an object" in joined
+    assert "last status sent does not match current status queued" in joined
+
+
 def test_proactive_agent_health_accepts_string_adapter_slot_in_queued_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
