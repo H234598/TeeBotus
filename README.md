@@ -253,6 +253,15 @@ python3 -m TeeBotus.admin accounts report --instances-dir instances
 
 Der Report liest den AccountStore read-only und erzeugt keine neuen Secrets.
 
+Wenn `/status` oder `--runtime-status` nicht entschluesselbare Account-Memory-Payloads meldet, kann vor jeder Reparatur ein read-only Recovery-Report erzeugt werden:
+
+```bash
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances --format json --output /home/teladi/Downloads/teebotus-memory-recovery.json
+```
+
+Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JSON-Dateien pro Account. Er gibt nur Zaehler, Dateipfade und Fehlerklassen aus, keine Secrets und keine rohen Memory-Payloads. Wenn kein Source als `recoverable=True` markiert ist, darf der Bot keine automatische Datenmigration oder Loeschung versuchen; dann fehlt der passende alte Schluessel oder eine lesbare Sicherung.
+
 ## Verhalten steuern
 
 Das Bot-Verhalten liegt pro Instanz in einer eigenen `Bot_Verhalten.md`:
