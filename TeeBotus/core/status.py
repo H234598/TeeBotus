@@ -48,6 +48,10 @@ def build_status_reply(
     account_id: str = "",
     account_store: AccountStore | None = None,
     proactive_model_planner: str = "",
+    llm_enabled: bool | None = None,
+    llm_provider: str = "",
+    llm_model: str = "",
+    llm_fallback_models: tuple[str, ...] | list[str] | str = (),
     env: Mapping[str, str] | None = None,
 ) -> str:
     resolved_account_id = _resolve_status_account_id(sender_id=sender_id, account_id=account_id, account_store=account_store)
@@ -75,6 +79,12 @@ def build_status_reply(
             "- Status: laeuft",
             f"- Version: {__version__} Wirt Commits {commit_history_url}",
             "",
+            "LLM",
+            f"- Textantworten: {_llm_enabled_status(llm_enabled)}",
+            f"- Provider: {_safe_status_value(llm_provider, default='openai')}",
+            f"- Modell: {_safe_status_value(llm_model, default='openai-default')}",
+            f"- Fallback-Modelle: {_fallback_model_count(llm_fallback_models)}",
+            "",
             "Deine Daten",
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
@@ -88,6 +98,25 @@ def build_status_reply(
             ),
         ]
     )
+
+
+def _llm_enabled_status(value: bool | None) -> str:
+    if value is None:
+        return "unbekannt"
+    return "ja" if value else "nein"
+
+
+def _safe_status_value(value: str, *, default: str) -> str:
+    text = str(value or "").strip()
+    return text if text else default
+
+
+def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
+    if isinstance(value, str):
+        count = len([part for part in value.split(",") if part.strip()])
+    else:
+        count = len([part for part in value if str(part or "").strip()])
+    return str(count)
 
 
 def _status_display_name(instance_name: str) -> str:

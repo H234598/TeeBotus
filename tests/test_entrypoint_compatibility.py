@@ -72,6 +72,34 @@ def test_runtime_status_reports_local_transcription_health(monkeypatch, capsys, 
     assert "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper" in captured.out
 
 
+def test_runtime_status_reports_llm_provider_without_secrets(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "litellm")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "ollama_chat/llama3.1:8b")
+    monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://user:secret@127.0.0.1:11434/api?token=nope")
+    monkeypatch.setenv("TEEBOTUS_LLM_API_KEY_DEMO", "llm-secret")
+    monkeypatch.setenv("TEEBOTUS_LLM_FALLBACK_MODELS_DEMO", "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured base_url=http://127.0.0.1:11434/api api_key=configured fallback_models=2"
+    ) in captured.out
+    assert "llm-secret" not in captured.out
+    assert "user:secret" not in captured.out
+    assert "token=nope" not in captured.out
+
+
 def test_runtime_status_reports_missing_local_transcription_backend(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

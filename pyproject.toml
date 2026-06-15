@@ -7,6 +7,36 @@ name = "teebotus"
 dynamic = ["version"]
 requires-python = ">=3.10"
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "pip-audit",
+]
+llm = [
+    "litellm!=1.82.7,!=1.82.8",
+    "openai",
+    "ollama",
+]
+agents = [
+    "pydantic-ai",
+    "langgraph",
+]
+rag = [
+    "haystack-ai",
+    "qdrant-haystack",
+    "sentence-transformers",
+    "pypdf",
+    "pymupdf",
+    "ebooklib",
+    "beautifulsoup4",
+]
+tools = [
+    "fastmcp",
+]
+
 [project.scripts]
 teebotus-bibliothekar = "TeeBotus.runtime.bibliothekar:main"
 teebotus-proactive = "TeeBotus.proactive:main"
@@ -18,3 +48,7 @@ include = ["TeeBotus*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "TeeBotus.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

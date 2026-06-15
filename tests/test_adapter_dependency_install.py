@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+import scripts.check_adapter_deps as check_adapter_deps
 from scripts.install_adapter_deps import build_python_install_commands, main, read_pins, signal_cli_release_url, signal_cli_rest_api_repo_url
 
 
@@ -54,3 +57,21 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
+
+
+def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.82.8")
+
+    assert not ok
+    assert "blocked" in message
+
+
+def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / "litellm_init.pth").write_text("bad", encoding="utf-8")
+    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda _name: "1.83.7")
+    monkeypatch.setattr(check_adapter_deps.sys, "path", [str(tmp_path)])
+
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.83.7")
+
+    assert not ok
+    assert "suspicious_pth_files" in message

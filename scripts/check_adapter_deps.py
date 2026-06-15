@@ -17,6 +17,7 @@ from urllib.request import urlopen
 
 LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
 REPO_ROOT = Path(__file__).resolve().parents[1]
+BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -31,6 +32,7 @@ def main() -> int:
         _check_python_package("h11", pins["h11"]),
         _check_python_package("faster-whisper", pins["faster-whisper"]),
         _check_python_package("litellm", pins["litellm"]),
+        _check_litellm_supply_chain_guard(pins["litellm"]),
         _check_local_transcription_contract(),
         _check_niobot_matrix_contract(),
         _check_matrix_file_contract(),
@@ -76,6 +78,37 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
         import_detail = f" import={getattr(module, '__file__', '<unknown>')}"
     ok = installed == expected and module is not None
     return ok, f"{name} installed={installed} expected={expected}{import_detail}"
+
+
+def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
+    if expected in BAD_LITELLM_VERSIONS:
+        return False, f"litellm pin={expected} is blocked due to known compromised PyPI releases"
+    try:
+        installed = importlib.metadata.version("litellm")
+    except importlib.metadata.PackageNotFoundError:
+        return False, f"litellm missing, expected {expected}"
+    if installed in BAD_LITELLM_VERSIONS:
+        return False, f"litellm installed={installed} is blocked due to known compromised PyPI releases"
+    suspicious_pth = _litellm_pth_files()
+    if suspicious_pth:
+        return False, "litellm suspicious_pth_files=" + ",".join(str(path) for path in suspicious_pth)
+    return True, f"litellm supply_chain_guard=ok blocked={','.join(sorted(BAD_LITELLM_VERSIONS))}"
+
+
+def _litellm_pth_files() -> list[Path]:
+    paths: list[Path] = []
+    for entry in sys.path:
+        try:
+            directory = Path(entry)
+        except TypeError:
+            continue
+        if not directory.is_dir():
+            continue
+        try:
+            paths.extend(sorted(directory.glob("litellm*.pth")))
+        except OSError:
+            continue
+    return paths
 
 
 def _check_niobot_matrix_contract() -> tuple[bool, str]:

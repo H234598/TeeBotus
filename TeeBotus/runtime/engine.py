@@ -218,7 +218,11 @@ class TeeBotusEngine:
                             instance_name=event.instance,
                             project_root=self.project_root,
                             account_store=self.account_store,
-                            proactive_model_planner=self._current_instructions().proactive_model_planner,
+                            proactive_model_planner=instructions.proactive_model_planner,
+                            llm_enabled=instructions.openai_enabled,
+                            llm_provider=instructions.llm_provider,
+                            llm_model=instructions.llm_model or instructions.openai_model,
+                            llm_fallback_models=instructions.llm_fallback_models,
                         ),
                     )
                 ],

@@ -280,7 +280,13 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
 
 def test_engine_status_uses_core_status_before_configured_commands(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
-    instructions = BotInstructions(commands={"/status": "Configured status."})
+    instructions = BotInstructions(
+        commands={"/status": "Configured status."},
+        openai_enabled=True,
+        llm_provider="ollama",
+        llm_model="llama3.1:8b",
+        llm_fallback_models=("groq/llama-3.3-70b-versatile",),
+    )
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
     account_store.write_agent_state(
@@ -307,6 +313,11 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Review pending: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "- Model planner: tool" in actions[0].text
+    assert "LLM" in actions[0].text
+    assert "- Textantworten: ja" in actions[0].text
+    assert "- Provider: ollama" in actions[0].text
+    assert "- Modell: llama3.1:8b" in actions[0].text
+    assert "- Fallback-Modelle: 1" in actions[0].text
     assert "Configured status." not in actions[0].text
 
 
@@ -333,10 +344,18 @@ def test_engine_status_reports_unmapped_account_instead_of_zero_memory(tmp_path)
         instance_name="Depressionsbot",
         project_root=tmp_path,
         account_store=account_store,
+        llm_enabled=False,
+        llm_provider="litellm",
+        llm_model="huggingface/meta-llama/Llama-3.1-8B-Instruct",
+        llm_fallback_models="groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini",
     )
 
     assert "- Nutzermemory: Account nicht zugeordnet" in text
     assert "- Nutzermemory: 0 B" not in text
+    assert "- Textantworten: nein" in text
+    assert "- Provider: litellm" in text
+    assert "- Modell: huggingface/meta-llama/Llama-3.1-8B-Instruct" in text
+    assert "- Fallback-Modelle: 2" in text
 
 
 def test_status_uses_account_memory_backend_payload_size(tmp_path):

@@ -1039,6 +1039,10 @@ class BotTests(unittest.TestCase):
             api = FakeAPI()
             instructions = BotInstructions(
                 user_memory_enabled=True,
+                openai_enabled=True,
+                llm_provider="huggingface",
+                llm_model="meta-llama/Llama-3.1-8B-Instruct",
+                llm_fallback_models=("groq/llama-3.3-70b-versatile", "openai/gpt-4.1-mini"),
             )
             memory_store = account_memory_store(directory)
             message = {
@@ -1064,6 +1068,10 @@ class BotTests(unittest.TestCase):
             api = FakeAPI()
             instructions = BotInstructions(
                 user_memory_enabled=True,
+                openai_enabled=True,
+                llm_provider="huggingface",
+                llm_model="meta-llama/Llama-3.1-8B-Instruct",
+                llm_fallback_models=("groq/llama-3.3-70b-versatile", "openai/gpt-4.1-mini"),
             )
             memory_store = account_memory_store(directory)
             account_id = memory_store.resolve_or_create_account(telegram_identity_key(456))
@@ -1109,7 +1117,13 @@ class BotTests(unittest.TestCase):
             self.assertIn(f"- Version: {__version__} Wirt Commits https://github.com/H234598/TeeBotus/commits/main", reply)
             self.assertNotIn("Commits:", reply)
             self.assertIn("- Nutzermemory:", reply)
-            self.assertIn("- Userfiles: Userfiles verschluesselt", reply)
+            self.assertIn("- Userfiles:", reply)
+            self.assertIn("verschluesselt", reply)
+            self.assertIn("LLM", reply)
+            self.assertIn("- Textantworten: ja", reply)
+            self.assertIn("- Provider: huggingface", reply)
+            self.assertIn("- Modell: meta-llama/Llama-3.1-8B-Instruct", reply)
+            self.assertIn("- Fallback-Modelle: 2", reply)
             self.assertIn("Proactive Agent", reply)
             self.assertIn("- Agent enabled: ja", reply)
             self.assertIn("- Outbox queued: 1", reply)

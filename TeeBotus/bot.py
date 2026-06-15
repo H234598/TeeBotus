@@ -11,6 +11,7 @@ import sys
 import types
 from collections.abc import Sequence
 from typing import Any, Callable
+from urllib.parse import urlsplit, urlunsplit
 
 from TeeBotus import __version__
 
@@ -112,6 +113,9 @@ def _runtime_status(argv: Sequence[str]) -> int:
     print(f"instances_dir={config.instances_dir}")
     print(f"instances={','.join(config.selected_instances) if config.selected_instances else 'auto'}")
     print(f"channels={','.join(config.channels)}")
+    for instance in config.instances:
+        for account in instance.accounts:
+            print(_runtime_status_llm_line(account))
     for health in check_signal_services(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"
@@ -148,6 +152,62 @@ def _runtime_status(argv: Sequence[str]) -> int:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
             print(line)
     return 0
+
+
+def _runtime_status_llm_line(account: Any) -> str:
+    provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
+    model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
+    if provider == "openai" and model == "<legacy>":
+        model = "<Bot_Verhalten/OpenAI>"
+    base_url = _sanitize_status_url(getattr(account, "llm_base_url", ""))
+    key_configured = _llm_key_configured(account, provider)
+    if provider == "openai":
+        status = "configured" if key_configured else "missing_key"
+    else:
+        status = "configured"
+    detail = (
+        f"llm={account.instance_name}/{account.label} "
+        f"provider={provider} model={model} status={status}"
+    )
+    if base_url:
+        detail += f" base_url={base_url}"
+    if provider != "openai":
+        detail += f" api_key={'configured' if key_configured else 'none'}"
+    fallback_count = _csv_count(getattr(account, "llm_fallback_models", ""))
+    if fallback_count:
+        detail += f" fallback_models={fallback_count}"
+    return detail
+
+
+def _status_value(value: object, *, default: str) -> str:
+    text = str(value or "").strip()
+    return text if text else default
+
+
+def _llm_key_configured(account: Any, provider: str) -> bool:
+    if provider == "openai":
+        return bool(str(getattr(account, "openai_api_key", "") or "").strip())
+    return bool(str(getattr(account, "llm_api_key", "") or "").strip())
+
+
+def _csv_count(value: object) -> int:
+    return len([part for part in str(value or "").split(",") if part.strip()])
+
+
+def _sanitize_status_url(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return "<invalid>"
+    if not parsed.scheme or not parsed.netloc:
+        return text
+    netloc = parsed.hostname or ""
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
 
 
 def _telegram_args_from_runtime_cli(args: list[str]) -> tuple[list[str] | None, int]:
