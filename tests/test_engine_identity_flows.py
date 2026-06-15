@@ -53,6 +53,24 @@ def matrix_group_event(text: str, raw: object) -> IncomingEvent:
     )
 
 
+def signal_group_event(text: str, raw: object) -> IncomingEvent:
+    return IncomingEvent(
+        event_id="signal:1",
+        instance="Depressionsbot",
+        channel="signal",
+        adapter_slot=1,
+        account_id="",
+        identity_key="signal:uuid:alice",
+        chat_id="group-1",
+        chat_type="group",
+        sender_id="alice",
+        sender_name="Alice",
+        text=text,
+        message_ref="1",
+        raw=raw,
+    )
+
+
 def _tokens(text: str) -> list[str]:
     return re.findall(r"\b[0-9a-f]{128}\b", text)
 
@@ -108,6 +126,30 @@ def test_matrix_group_event_with_structured_other_mention_is_ignored() -> None:
     ignored = should_ignore_event_without_account(
         matrix_group_event("Kannst du helfen?", Raw()),
         bot_address_names=("@bot:example", "bot"),
+    )
+
+    assert ignored is True
+
+
+def test_signal_group_event_with_dict_bot_mention_is_not_ignored() -> None:
+    class Raw:
+        mentions = [{"uuid": "bot-uuid", "start": 0, "length": 4}]
+
+    ignored = should_ignore_event_without_account(
+        signal_group_event("Hallo", Raw()),
+        bot_address_names=("bot-uuid",),
+    )
+
+    assert ignored is False
+
+
+def test_signal_group_event_with_dict_other_mention_is_ignored() -> None:
+    class Raw:
+        mentions = [{"uuid": "other-uuid", "start": 0, "length": 4}]
+
+    ignored = should_ignore_event_without_account(
+        signal_group_event("Hallo", Raw()),
+        bot_address_names=("bot-uuid",),
     )
 
     assert ignored is True

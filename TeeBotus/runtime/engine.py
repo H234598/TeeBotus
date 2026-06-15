@@ -583,7 +583,26 @@ def _signal_mentions_bot(raw: object, bot_address_names: frozenset[str]) -> bool
     mentions = getattr(raw, "mentions", None)
     if not mentions or not bot_address_names:
         return False
-    return any(_normalize_address_name(mention) in bot_address_names for mention in mentions)
+    return any(_normalize_address_name(candidate) in bot_address_names for candidate in _signal_mention_candidates(mentions))
+
+
+def _signal_mention_candidates(mentions: object) -> tuple[object, ...]:
+    if isinstance(mentions, (str, bytes)):
+        return (mentions,)
+    try:
+        values = tuple(mentions)  # type: ignore[arg-type]
+    except TypeError:
+        return ()
+    candidates: list[object] = []
+    for mention in values:
+        if isinstance(mention, dict):
+            for key in ("uuid", "author", "source_uuid", "source", "number"):
+                value = mention.get(key)
+                if value:
+                    candidates.append(value)
+            continue
+        candidates.append(mention)
+    return tuple(candidates)
 
 
 def _matrix_mentions_bot(raw: object, bot_address_names: frozenset[str]) -> bool:
