@@ -591,6 +591,7 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
         RoomMessageImage = object()
         RoomMessageAudio = object()
         RoomMessageVideo = object()
+        RoomMessageUnknown = object()
 
     assert _matrix_message_event_classes(Nio) == (
         Nio.RoomMessageText,
@@ -600,6 +601,7 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
         Nio.RoomMessageImage,
         Nio.RoomMessageAudio,
         Nio.RoomMessageVideo,
+        Nio.RoomMessageUnknown,
     )
 
 

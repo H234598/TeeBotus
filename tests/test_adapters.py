@@ -388,6 +388,25 @@ def test_matrix_emote_message_maps_to_text_event():
     assert event.attachments == ()
 
 
+def test_matrix_unknown_message_type_maps_readable_body_to_text_event():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$unknown"
+        sender = "@alice:example"
+        body = "Custom body"
+        source = {"content": {"msgtype": "com.example.custom", "body": "Custom body"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.text == "Custom body"
+    assert event.message_ref == "$unknown"
+    assert event.attachments == ()
+
+
 def test_matrix_media_message_maps_attachment_metadata():
     class Room:
         room_id = "!room:example"

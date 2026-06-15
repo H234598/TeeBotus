@@ -84,6 +84,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomMessageImage",
         "RoomMessageAudio",
         "RoomMessageVideo",
+        "RoomMessageUnknown",
         "RoomSendResponse",
         "SyncResponse",
         "UploadResponse",

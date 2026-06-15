@@ -213,6 +213,7 @@ def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
             "RoomMessageImage",
             "RoomMessageAudio",
             "RoomMessageVideo",
+            "RoomMessageUnknown",
         )
         if hasattr(nio, name)
     )
