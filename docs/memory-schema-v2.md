@@ -8,7 +8,13 @@ The current entry store is encrypted JSONL plus an encrypted JSON index. This is
 
 The JSONL entry store has no default total-entry limit. Runtime selection is still budgeted by prompt size, index windows, and cache size so the bot remains usable on a modern notebook CPU. The current encrypted JSONL implementation reads and writes the full entry file for append and access-recency updates, so it is expected to become the first bottleneck when accounts accumulate many entries.
 
-Use `scripts/benchmark_memory_store.py` to measure the current backend on this machine. If append/select/rebuild timings become visible in normal bot latency, the next preferred backend is SQLite with row-level AES-GCM-encrypted payloads and queryable non-sensitive metadata columns. Plain SQLite or a graph server must not become the primary store unless at-rest privacy remains at least as strong as the current vault files.
+Use `scripts/benchmark_memory_store.py` to measure the current backend on this machine. The script can compare the current encrypted JSONL store with a SQLite row-encrypted projection candidate:
+
+```bash
+python3 scripts/benchmark_memory_store.py --entries 1000 --select-runs 20 --backend all --json
+```
+
+If append/select/rebuild timings become visible in normal bot latency, the next preferred backend is SQLite with row-level AES-GCM-encrypted payloads and queryable non-sensitive metadata columns. Plain SQLite or a graph server must not become the primary store unless at-rest privacy remains at least as strong as the current vault files. The benchmark candidate intentionally keeps full memory payloads encrypted per row and exposes only lookup metadata such as ID, kind, type, importance, salience, access count, and keywords.
 
 Core V2 fields:
 

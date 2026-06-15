@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
+import sqlite3
 import statistics
 import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any, Callable
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -21,6 +26,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Benchmark TeeBotus account-memory storage operations.")
     parser.add_argument("--entries", type=int, default=1000, help="Number of synthetic entries to create.")
     parser.add_argument("--select-runs", type=int, default=20, help="Number of select_structured_memory runs.")
+    parser.add_argument(
+        "--backend",
+        choices=("jsonl", "sqlite", "all"),
+        default="jsonl",
+        help="Storage backend candidate to benchmark.",
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     args = parser.parse_args(argv)
     if args.entries < 1:
@@ -28,18 +39,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.select_runs < 1:
         parser.error("--select-runs must be >= 1")
 
-    result = benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs)
+    if args.backend == "jsonl":
+        result = benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs)
+    elif args.backend == "sqlite":
+        result = benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs)
+    else:
+        result = {
+            "backend": "comparison",
+            "results": [
+                benchmark_jsonl_backend(entries=args.entries, select_runs=args.select_runs),
+                benchmark_sqlite_row_encrypted_projection(entries=args.entries, select_runs=args.select_runs),
+            ],
+        }
     if args.json:
         print(json.dumps(result, indent=2, sort_keys=True))
     else:
-        print(f"backend={result['backend']}")
-        print(f"entries={result['entries']}")
-        print(f"entry_bytes={result['entry_bytes']} index_bytes={result['index_bytes']}")
-        print(f"append_total_ms={result['append_total_ms']:.2f}")
-        print(f"append_last_ms={result['append_last_ms']:.2f}")
-        print(f"select_median_ms={result['select_median_ms']:.2f}")
-        print(f"select_p95_ms={result['select_p95_ms']:.2f}")
-        print(f"rebuild_ms={result['rebuild_ms']:.2f}")
+        for item in result.get("results", [result]):
+            _print_result(item)
     return 0
 
 
@@ -95,6 +111,143 @@ def benchmark_jsonl_backend(*, entries: int, select_runs: int) -> dict[str, Any]
             "select_p95_ms": _p95(select_timings),
             "rebuild_ms": rebuild_ms,
         }
+
+
+def benchmark_sqlite_row_encrypted_projection(*, entries: int, select_runs: int) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="teebotus-memory-sqlite-bench-") as tmp:
+        root = Path(tmp)
+        db_path = root / "User_Memory.sqlite3"
+        key = AESGCM.generate_key(bit_length=256)
+        cipher = AESGCM(key)
+        connection = sqlite3.connect(db_path)
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute("PRAGMA synchronous=NORMAL")
+        _init_sqlite_projection(connection)
+        append_timings = []
+        total_start = time.perf_counter()
+        for index in range(entries):
+            entry = {
+                "id": f"mem_{index:06d}",
+                "kind": "observation",
+                "memory_type": "episodic",
+                "importance": 3,
+                "salience": 3,
+                "access_count": 0,
+                "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
+                "bot_text": "Notiert.",
+                "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
+            }
+            append_timings.append(_timed_ms(lambda entry=entry: _insert_sqlite_projection_entry(connection, cipher, entry)))
+        append_total_ms = (time.perf_counter() - total_start) * 1000
+
+        select_timings = [
+            _timed_ms(lambda: _select_sqlite_projection_entries(connection, ["spaziergang", "kaffee"], limit=32))
+            for _ in range(select_runs)
+        ]
+        rebuild_ms = _timed_ms(lambda: _rebuild_sqlite_projection_indexes(connection))
+        connection.close()
+        return {
+            "backend": "sqlite-row-encrypted-projection",
+            "entries": entries,
+            "entry_bytes": db_path.stat().st_size if db_path.exists() else 0,
+            "index_bytes": 0,
+            "append_total_ms": append_total_ms,
+            "append_last_ms": append_timings[-1],
+            "append_median_ms": statistics.median(append_timings),
+            "select_median_ms": statistics.median(select_timings),
+            "select_p95_ms": _p95(select_timings),
+            "rebuild_ms": rebuild_ms,
+            "payload_encryption": "AES-256-GCM-per-row",
+            "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
+        }
+
+
+def _init_sqlite_projection(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS memory_entries (
+            id TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            memory_type TEXT NOT NULL,
+            importance INTEGER NOT NULL,
+            salience INTEGER NOT NULL,
+            access_count INTEGER NOT NULL,
+            nonce TEXT NOT NULL,
+            payload_ciphertext BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memory_keywords (
+            keyword TEXT NOT NULL,
+            memory_id TEXT NOT NULL,
+            PRIMARY KEY (keyword, memory_id),
+            FOREIGN KEY (memory_id) REFERENCES memory_entries(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_keywords_keyword ON memory_keywords(keyword);
+        CREATE INDEX IF NOT EXISTS idx_memory_entries_rank ON memory_entries(salience, importance, access_count);
+        """
+    )
+
+
+def _insert_sqlite_projection_entry(connection: sqlite3.Connection, cipher: AESGCM, entry: dict[str, Any]) -> None:
+    nonce = os.urandom(12)
+    payload = json.dumps(entry, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ciphertext = cipher.encrypt(nonce, payload, str(entry["id"]).encode("utf-8"))
+    with connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO memory_entries
+            (id, kind, memory_type, importance, salience, access_count, nonce, payload_ciphertext)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["id"],
+                entry["kind"],
+                entry["memory_type"],
+                int(entry["importance"]),
+                int(entry["salience"]),
+                int(entry["access_count"]),
+                base64.b64encode(nonce).decode("ascii"),
+                ciphertext,
+            ),
+        )
+        connection.execute("DELETE FROM memory_keywords WHERE memory_id = ?", (entry["id"],))
+        connection.executemany(
+            "INSERT OR IGNORE INTO memory_keywords(keyword, memory_id) VALUES (?, ?)",
+            [(str(keyword), entry["id"]) for keyword in entry.get("keywords", [])],
+        )
+
+
+def _select_sqlite_projection_entries(connection: sqlite3.Connection, keywords: list[str], *, limit: int) -> list[str]:
+    placeholders = ",".join("?" for _ in keywords)
+    rows = connection.execute(
+        f"""
+        SELECT e.id
+        FROM memory_entries e
+        LEFT JOIN memory_keywords k ON k.memory_id = e.id AND k.keyword IN ({placeholders})
+        GROUP BY e.id
+        ORDER BY COUNT(k.keyword) DESC, e.salience DESC, e.importance DESC, e.access_count DESC, e.id DESC
+        LIMIT ?
+        """,
+        [*keywords, limit],
+    ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
+def _rebuild_sqlite_projection_indexes(connection: sqlite3.Connection) -> None:
+    with connection:
+        connection.execute("REINDEX")
+        connection.execute("ANALYZE")
+
+
+def _print_result(result: dict[str, Any]) -> None:
+    print(f"backend={result['backend']}")
+    print(f"entries={result['entries']}")
+    print(f"entry_bytes={result['entry_bytes']} index_bytes={result['index_bytes']}")
+    print(f"append_total_ms={result['append_total_ms']:.2f}")
+    print(f"append_last_ms={result['append_last_ms']:.2f}")
+    print(f"append_median_ms={result['append_median_ms']:.2f}")
+    print(f"select_median_ms={result['select_median_ms']:.2f}")
+    print(f"select_p95_ms={result['select_p95_ms']:.2f}")
+    print(f"rebuild_ms={result['rebuild_ms']:.2f}")
 
 
 def _timed_ms(callback: Callable[[], object]) -> float:

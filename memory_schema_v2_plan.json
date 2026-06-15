@@ -127,7 +127,10 @@
       "notes": [
         "Stopped treating JSON/JSONL as a permanent architecture constraint.",
         "Documented SQLite with row-level AES-GCM encrypted payloads as the next likely backend candidate.",
-        "Added a local benchmark script so backend migration can be decided from append/select/rebuild timings on the target notebook CPU."
+        "Added a local benchmark script so backend migration can be decided from append/select/rebuild timings on the target notebook CPU.",
+        "Extended scripts/benchmark_memory_store.py with --backend jsonl|sqlite|all.",
+        "Added a SQLite row-encrypted projection candidate using AES-256-GCM per payload row plus queryable non-sensitive metadata and keyword tables.",
+        "Short local sample at 50 entries showed JSONL append_last about 4.12ms/select_median about 6.84ms versus SQLite append_last about 0.04ms/select_median about 0.06ms; production migration still needs larger-account measurements and store integration."
       ],
       "status": "completed"
     }
