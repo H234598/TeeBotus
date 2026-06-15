@@ -917,6 +917,63 @@ def test_signal_send_text_passes_signalbot_send_options():
     ]
 
 
+def test_signal_send_text_coerces_link_preview_dict_to_signalbot_model():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491")
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [
+                SendText(
+                    "+491",
+                    "Link",
+                    link_preview={
+                        "base64_thumbnail": None,
+                        "title": "TeeBotus",
+                        "description": "Bot",
+                        "url": "https://example.test/tee",
+                    },
+                )
+            ],
+        )
+    )
+
+    assert sent == [123]
+    preview = context.calls[0][1]["link_preview"]
+    assert preview.model_dump() == {
+        "base64_thumbnail": None,
+        "title": "TeeBotus",
+        "description": "Bot",
+        "url": "https://example.test/tee",
+        "id": None,
+    }
+
+
+def test_signal_send_text_rejects_incomplete_link_preview_dict():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491")
+
+        async def send(self, _text, **_kwargs):
+            raise AssertionError("send should not run with invalid link preview")
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendText("+491", "Link", link_preview={"title": "missing url"})]))
+    except RuntimeError as exc:
+        assert str(exc) == "Signal link_preview requires title and url"
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_signal_send_attachment_uses_filename_when_caption_is_empty():
     class Context:
         def __init__(self) -> None:

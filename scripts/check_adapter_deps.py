@@ -207,7 +207,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     try:
         import signalbot  # type: ignore[import-not-found]
         from signalbot.context import Context  # type: ignore[import-not-found]
-        from signalbot import Command, SignalBot  # type: ignore[import-not-found]
+        from signalbot import Command, LinkPreview, SignalBot  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
     missing = [
@@ -232,6 +232,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_update_contact_params = inspect.signature(SignalBot.update_contact).parameters
     bot_update_group_params = inspect.signature(SignalBot.update_group).parameters
     bot_delete_attachment_params = inspect.signature(SignalBot.delete_attachment).parameters
+    link_preview_params = inspect.signature(LinkPreview).parameters
     delete_params = inspect.signature(Context.remote_delete).parameters
     react_params = inspect.signature(Context.react).parameters
     receipt_params = inspect.signature(Context.receipt).parameters
@@ -289,6 +290,11 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.remote_delete.receiver": "receiver" in bot_remote_delete_params,
         "SignalBot.remote_delete.timestamp": "timestamp" in bot_remote_delete_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
+        "LinkPreview.base64_thumbnail": "base64_thumbnail" in link_preview_params,
+        "LinkPreview.title": "title" in link_preview_params,
+        "LinkPreview.description": "description" in link_preview_params,
+        "LinkPreview.url": "url" in link_preview_params,
+        "LinkPreview.id": "id" in link_preview_params,
     }
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:

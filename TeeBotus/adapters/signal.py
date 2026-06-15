@@ -400,8 +400,28 @@ def _signal_send_kwargs(
     if view_once:
         kwargs["view_once"] = True
     if link_preview is not None:
-        kwargs["link_preview"] = link_preview
+        kwargs["link_preview"] = _coerce_signal_link_preview(link_preview)
     return kwargs
+
+
+def _coerce_signal_link_preview(link_preview: Any) -> Any:
+    if not isinstance(link_preview, dict):
+        return link_preview
+    try:
+        from signalbot import LinkPreview  # type: ignore[import-not-found]
+    except Exception:
+        return link_preview
+    title = str(link_preview.get("title") or "").strip()
+    url = str(link_preview.get("url") or "").strip()
+    if not title or not url:
+        raise RuntimeError("Signal link_preview requires title and url")
+    return LinkPreview(
+        base64_thumbnail=link_preview.get("base64_thumbnail"),
+        title=title,
+        description=link_preview.get("description"),
+        url=url,
+        id=link_preview.get("id"),
+    )
 
 
 async def _send_signal_poll(
