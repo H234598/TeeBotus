@@ -1870,12 +1870,34 @@ class AccountStore:
         return key
 
     def _identity_payload_for_key(self, identities: dict[str, Any], key: str) -> dict[str, Any] | None:
+        candidates = self._identity_payload_candidates_for_key(identities, key)
+        if not candidates:
+            return None
+        selected_key, selected_payload = candidates[0]
+        for candidate_key, candidate_payload in candidates:
+            account_id = candidate_payload.get("account_id")
+            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id) and self._account_is_resolvable(account_id):
+                selected_key = candidate_key
+                selected_payload = candidate_payload
+                break
+        if selected_key != key:
+            identities.pop(selected_key, None)
+            selected_payload["identity_key"] = key
+            identities[key] = selected_payload
+            account_id = selected_payload.get("account_id")
+            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                self._replace_identity_in_profile(account_id, selected_key, key)
+            self._save_identities(identities)
+        self._remove_identity_aliases_for_key(identities, key, keep_account_id=str(selected_payload.get("account_id") or ""))
+        return selected_payload
+
+    def _identity_payload_candidates_for_key(self, identities: dict[str, Any], key: str) -> list[tuple[str, dict[str, Any]]]:
+        candidates: list[tuple[str, dict[str, Any]]] = []
         payload = identities.get(key)
         if isinstance(payload, dict):
-            self._remove_identity_aliases_for_key(identities, key, keep_account_id=str(payload.get("account_id") or ""))
-            return payload
+            candidates.append((key, payload))
         for stored_key, stored_payload in list(identities.items()):
-            if not isinstance(stored_payload, dict) or not isinstance(stored_key, str):
+            if stored_key == key or not isinstance(stored_payload, dict) or not isinstance(stored_key, str):
                 continue
             try:
                 normalized_stored_key = self._normalize_identity_key(stored_key)
@@ -1883,15 +1905,8 @@ class AccountStore:
                 continue
             if normalized_stored_key != key:
                 continue
-            identities.pop(stored_key, None)
-            stored_payload["identity_key"] = key
-            identities[key] = stored_payload
-            account_id = stored_payload.get("account_id")
-            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
-                self._replace_identity_in_profile(account_id, stored_key, key)
-            self._save_identities(identities)
-            return stored_payload
-        return None
+            candidates.append((stored_key, stored_payload))
+        return candidates
 
     def _remove_identity_aliases_for_key(self, identities: dict[str, Any], key: str, *, keep_account_id: str = "") -> None:
         changed = False

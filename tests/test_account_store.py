@@ -128,6 +128,40 @@ def test_identity_lookup_removes_legacy_alias_when_canonical_key_exists(tmp_path
     assert legacy_profile["status"] == "orphaned"
 
 
+def test_identity_lookup_prefers_resolvable_legacy_alias_over_stale_canonical_key(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    canonical_key = "signal:uuid:abc-def"
+    legacy_key = "signal:uuid:ABC-DEF"
+    stale_account = store.resolve_or_create_account(canonical_key)
+    valid_account = store.resolve_or_create_account("telegram:user:valid")
+    stale_profile = store._read_account_profile(stale_account)
+    stale_profile["status"] = "tombstoned"
+    store._write_account_profile(stale_account, stale_profile)
+    identities = store._load_identities()
+    identities[legacy_key] = {
+        "schema_version": 1,
+        "instance": "Depressionsbot",
+        "identity_key": legacy_key,
+        "account_id": valid_account,
+        "first_seen_at": "2026-06-15T12:00:00+00:00",
+        "last_seen_at": "2026-06-15T12:00:00+00:00",
+    }
+    store._save_identities(identities)
+    valid_profile = store._read_account_profile(valid_account)
+    valid_profile["linked_identities"] = ["telegram:user:valid", legacy_key]
+    store._write_account_profile(valid_account, valid_profile)
+
+    assert store.get_account_for_identity(canonical_key) == valid_account
+    assert store.resolve_or_create_account(canonical_key) == valid_account
+
+    migrated_identities = store._load_identities()
+    assert migrated_identities[canonical_key]["account_id"] == valid_account
+    assert legacy_key not in migrated_identities
+    migrated_valid_profile = store._read_account_profile(valid_account)
+    assert canonical_key in migrated_valid_profile["linked_identities"]
+    assert legacy_key not in migrated_valid_profile["linked_identities"]
+
+
 def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = telegram_identity_key(395935293)
