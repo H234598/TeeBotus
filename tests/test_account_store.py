@@ -463,6 +463,117 @@ def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_pa
     assert selection.selected_ids[:2] == (semantic_id, direct_id)
 
 
+def test_structured_account_memory_semantic_embedding_matches_synonym(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    walk_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_walk", "kind": "coping_strategy", "user_text": "Spaziergang hilft bei Druck.", "bot_text": "Ressource notiert."},
+    )
+    other_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_other", "user_text": "Mond Tee.", "bot_text": "Notiz."},
+    )
+
+    selection = store.select_structured_memory(account_id, query_text="gehen stress", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[:2] == (walk_id, other_id)
+    semantic_entry = store.read_memory_index(account_id)["index"]["semantic_cache"]["entries"][walk_id]
+    assert len(semantic_entry["embedding"]) == 64
+
+
+def test_structured_account_memory_semantic_cache_can_be_disabled(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_index(account_id, {"index": {"semantic_cache": {"enabled": False, "entries": {"stale": {}}}}})
+
+    store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_walk", "kind": "coping_strategy", "user_text": "Spaziergang hilft bei Druck.", "bot_text": "Ressource notiert."},
+    )
+
+    semantic_cache = store.read_memory_index(account_id)["index"]["semantic_cache"]
+    assert semantic_cache["enabled"] is False
+    assert semantic_cache["entries"] == {}
+
+
+def test_structured_account_memory_records_access_recency(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    first_id = store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Mond", "bot_text": "Tee"})
+    second_id = store.append_structured_memory_entry(account_id, {"id": "mem_second", "user_text": "Kaffee", "bot_text": "Tasse"})
+
+    selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[:2] == (first_id, second_id)
+    entries = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    index = store.read_memory_index(account_id)["index"]
+    assert entries[first_id]["access_count"] == 1
+    assert entries[first_id]["last_accessed_at"]
+    assert index["accessed_ids"][-2:] == [first_id, second_id]
+
+
+def test_structured_account_memory_indexes_types_and_temporal_relations(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    source_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_episode", "memory_type": "episodic", "user_text": "Episode Druck.", "bot_text": "Notiert."},
+    )
+    fact_id = store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_fact",
+            "kind": "fact",
+            "memory_type": "semantic",
+            "user_text": "Druck bessert sich durch Bewegung.",
+            "bot_text": "Faktensignal notiert.",
+            "valid_from": "2026-06-15",
+            "relations": [
+                {
+                    "type": "derived_from",
+                    "target_id": source_id,
+                    "valid_from": "2026-06-15",
+                    "provenance": {"source": "test"},
+                    "confidence": 0.75,
+                }
+            ],
+        },
+    )
+
+    index = store.read_memory_index(account_id)["index"]
+
+    assert source_id in index["types"]["episodic"]
+    assert fact_id in index["types"]["semantic"]
+    assert index["entries"][fact_id]["valid_from"] == "2026-06-15"
+    assert index["entries"][fact_id]["relations"][0]["type"] == "derived_from"
+    assert {"source_id": fact_id, "target_id": source_id, "type": "derived_from", "valid_from": "2026-06-15", "valid_to": "", "provenance": {"source": "test"}, "confidence": 0.75} in index["graph"]["relations"]
+
+
+def test_structured_account_memory_maintenance_consolidates_repeated_episodes(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    for index in range(3):
+        store.append_structured_memory_entry(
+            account_id,
+            {
+                "id": f"mem_episode_{index}",
+                "memory_type": "episodic",
+                "user_text": f"Spaziergang hilft gegen Druck {index}.",
+                "bot_text": "Notiert.",
+            },
+        )
+
+    created = store.run_memory_maintenance(account_id)
+
+    assert len(created) == 1
+    entries = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    consolidated = entries[created[0]]
+    assert consolidated["memory_type"] == "semantic"
+    assert consolidated["kind"] == "summary"
+    assert consolidated["supports"] == ["mem_episode_0", "mem_episode_1", "mem_episode_2"]
+
+
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

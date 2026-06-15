@@ -58,6 +58,13 @@
       }
     ]
   },
+  "architecture_comparison": {
+    "generative_agents": "TeeBotus now mirrors the practical subset: full JSONL memory stream, retrieval over relevance/recency/importance, access-recency metadata, and reflection/summary entries created by maintenance jobs. It is not a full autonomous simulation/planning agent.",
+    "memgpt_letta": "TeeBotus keeps fast prompt context plus slower encrypted JSONL archival memory. It does not yet let the model page memory by tool calls, but the store exposes a rebuildable archive and selected prompt hydration.",
+    "langgraph_langchain": "TeeBotus now separates episodic, semantic, and procedural memory through memory_type and type indexes; account memory is long-term account-scoped, while WorkingMemory remains instance-scoped short-term/operator memory.",
+    "mem0": "TeeBotus adds local consolidation from repeated episodes into semantic summaries with provenance. It is deterministic and notebook-friendly, not a learned extraction pipeline.",
+    "zep_graphiti": "TeeBotus adds typed temporal relation edges with valid_from, valid_to, provenance, supports, contradicts, supersedes, and derived_from. It is a small local graph, not a separate graph database."
+  },
   "status": "completed",
   "steps": [
     {
@@ -92,6 +99,15 @@
       "notes": [
         "Docs now list the researched type families.",
         "Representative clinical note kinds are covered for kind normalization, decay policy, index metadata, and salience."
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "agent_memory_architecture_round",
+      "notes": [
+        "Compared TeeBotus V2 with Generative Agents, MemGPT/Letta, LangGraph/LangChain Memory, Mem0, and Zep/Graphiti.",
+        "Implement notebook-friendly subset: local semantic hash-embeddings, last_accessed_at/access_count, memory_type episodic/semantic/procedural, temporal typed relations with provenance, and deterministic background consolidation.",
+        "Keep JSONL as source of truth and make all indexes/caches rebuildable."
       ],
       "status": "completed"
     }

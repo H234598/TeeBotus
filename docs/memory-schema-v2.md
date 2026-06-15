@@ -10,11 +10,15 @@ Core V2 fields:
 
 - `schema_version`: `2`
 - `kind`: typed memory category
+- `memory_type`: `episodic`, `semantic`, or `procedural`
 - `importance`: stable user/domain importance, `1..5`
 - `salience`: retrieval urgency, `1..10`
 - `decay`: retention/compaction policy metadata
+- `last_accessed_at`, `access_count`: real recall metadata, separate from write recency
+- `valid_from`, `valid_to`: optional temporal validity for facts/hypotheses
 - `keywords`: lexical lookup terms
 - `related_ids`, `supports`, `contradicts`, `supersedes`: typed graph links to other memory IDs
+- `relations`: typed temporal relation edges with `target_id`, `valid_from`, `valid_to`, `provenance`, and optional `confidence`
 - `source`: channel/message provenance
 - `user_text`, `bot_text`: compact episodic payload
 
@@ -47,8 +51,23 @@ The V2 index contains:
 - `index.entries`: compact metadata per memory ID
 - `index.keywords`: bounded keyword-to-ID lookup
 - `index.recent_ids`: bounded recent lookup window
+- `index.accessed_ids`: bounded real recall-recency window
+- `index.types`: memory IDs split into `episodic`, `semantic`, and `procedural`
 - `index.graph.links`: typed link maps for `related_ids`, `supports`, `contradicts`, and `supersedes`
+- `index.graph.relations`: typed temporal relation edges, rebuildable from entries
 - `index.semantic_cache`: optional rebuildable cache generated from JSONL
 - `index.retention`: local policy metadata
 
-The semantic cache currently uses keyword signatures and fingerprints. It is intentionally rebuildable from JSONL and can later be replaced or extended with embeddings without changing the source-of-truth entry format.
+The semantic cache currently uses local hash embeddings plus keyword signatures and fingerprints. It is intentionally rebuildable from JSONL and can later be replaced or extended with model embeddings without changing the source-of-truth entry format. Operators can disable it by setting `index.semantic_cache.enabled` to `false`; rebuild then keeps the cache empty and keyword/recent retrieval still works.
+
+## Architecture Comparison
+
+- Generative Agents: TeeBotus keeps the memory-stream idea and ranks by relevance, recency, and importance. Reflection is represented by `summary`/`reflection` entries created by maintenance jobs. TeeBotus is not a full autonomous simulation/planning agent.
+- MemGPT/Letta: TeeBotus has fast prompt hydration plus slower encrypted JSONL archive. It does not yet expose model-driven memory paging tools, but the archive is rebuildable and selected into context.
+- LangGraph/LangChain Memory: TeeBotus separates account long-term memory from instance working memory and now distinguishes `semantic`, `episodic`, and `procedural` account entries.
+- Mem0: TeeBotus performs local deterministic consolidation from repeated episodes into semantic summaries with provenance. It avoids a mandatory LLM/vector-service dependency.
+- Zep/Graphiti: TeeBotus now has a small local temporal graph with typed relations, validity windows, provenance, and conflict links. It is intentionally not a separate graph database.
+
+## Maintenance
+
+`AccountStore.run_memory_maintenance(account_id)` is the notebook-friendly background job entrypoint. It rebuilds the index and consolidates repeated episodic themes into semantic summaries with `derived_from` relations. The hot path still writes the original episode first; heavier consolidation can run later.
