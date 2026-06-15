@@ -1334,6 +1334,76 @@ def test_llm_plan_validator_rejects_unsafe_message_and_queues_review_gate(tmp_pa
     assert audit[0]["event_type"] == "llm_decision_rejected"
 
 
+def test_llm_plan_validator_rejects_pressure_message_text(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "pressure",
+                    "message_text": "Du musst sofort antworten, sonst wird alles schlimmer.",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "none",
+                }
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.queued_item_ids == ()
+    assert result.errors == ("decision_0_unsafe_message_text",)
+    assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["event_type"] == "llm_decision_rejected"
+    assert audit[0]["reason"] == "decision_0_unsafe_message_text"
+
+
+def test_llm_plan_validator_rejects_diagnostic_memory_text(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "memory",
+                    "kind": "assessment_note",
+                    "text": "Du leidest an einer Depression.",
+                    "source_memory_ids": [],
+                }
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.created_memory_ids == ()
+    assert result.errors == ("decision_0_unsafe_memory_text",)
+    assert account_store.read_memory_entries(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["event_type"] == "llm_decision_rejected"
+    assert audit[0]["reason"] == "decision_0_unsafe_memory_text"
+
+
 def test_llm_plan_validator_audits_unsupported_actions_without_applying_them(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))

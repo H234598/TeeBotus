@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -39,6 +40,14 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
+PROACTIVE_UNSAFE_TEXT_PATTERNS = (
+    re.compile(r"\bdu\s+(?:hast|leidest\s+an)\s+(?:eine[rmn]?\s+)?(?:depression|angststoerung|ptbs|borderline|bipolare\s+stoerung)\b"),
+    re.compile(r"\b(?:ich\s+)?diagnostiziere\b"),
+    re.compile(r"\b(?:du\s+bist|das\s+ist)\s+(?:krank|pathologisch|psychotisch|manisch|suizidal)\b"),
+    re.compile(r"\bdu\s+musst\s+(?:sofort|jetzt|unbedingt)\b"),
+    re.compile(r"\b(?:wenn\s+du\s+das\s+nicht\s+(?:sofort|jetzt)\s+tust|sonst\s+(?:wird|passiert))\b"),
+    re.compile(r"\b(?:akute|lebensgefahr|notfall)\b.{0,80}\b(?:du\s+musst|sofort|jetzt)\b"),
+)
 PROACTIVE_LLM_PLAN_SCHEMA_VERSION = 1
 PROACTIVE_LLM_MAX_DECISIONS = 5
 PROACTIVE_AGENT_TOOL_NAMES = frozenset(
@@ -1832,7 +1841,7 @@ def _text_has_unsafe_clinical_claim(text: str) -> bool:
             "suizid begehen",
             "bring dich um",
         )
-    )
+    ) or any(pattern.search(normalized) for pattern in PROACTIVE_UNSAFE_TEXT_PATTERNS)
 
 
 def _bounded_int(value: Any, *, default: int, low: int, high: int) -> int:
