@@ -480,6 +480,8 @@ def _require_signal_current_message_action(context: Any, chat_id: str, message_r
     if target and current_recipient and target != current_recipient:
         raise RuntimeError(f"Signal {action_name} can only target the current message recipient")
     ref = str(message_ref or "").strip()
+    if not ref:
+        raise RuntimeError(f"Signal {action_name} requires a message_ref")
     current_ref = _signal_message_ref(getattr(context, "message", None))
     if ref and current_ref and ref != current_ref:
         raise RuntimeError(f"Signal {action_name} can only target the current message")

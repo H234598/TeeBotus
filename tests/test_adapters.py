@@ -562,6 +562,38 @@ def test_signal_reaction_rejects_non_current_message_ref():
         raise AssertionError("RuntimeError was not raised")
 
 
+def test_signal_reaction_requires_message_ref():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+
+        async def react(self, _emoji):
+            raise AssertionError("react should not be called")
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendReaction("+491", "", "\U0001f44d")]))
+    except RuntimeError as exc:
+        assert "requires a message_ref" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
+def test_signal_receipt_requires_message_ref():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+
+        async def receipt(self, _receipt_type):
+            raise AssertionError("receipt should not be called")
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendReceipt("+491", "")]))
+    except RuntimeError as exc:
+        assert "requires a message_ref" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_signal_edit_uses_context_edit_for_current_message():
     class Context:
         def __init__(self) -> None:
