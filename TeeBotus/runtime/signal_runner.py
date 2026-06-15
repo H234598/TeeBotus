@@ -671,13 +671,31 @@ def _patch_signalbot_signal_cli_api_about(signalbot: Any) -> None:
     if original_version is None or original_mode is None:
         return
 
+    def get_about_api_version(about: Mapping[str, Any]) -> str | None:
+        versions = about.get("versions")
+        if not isinstance(versions, dict):
+            return None
+        for key in ("signal-cli-api", "signal-cli-rest-api"):
+            api_version = versions.get(key)
+            if isinstance(api_version, str) and api_version.strip():
+                return api_version
+        return None
+
+    def has_signal_cli_api_shape(about: Mapping[str, Any]) -> bool:
+        versions = about.get("versions")
+        if not isinstance(versions, dict):
+            return False
+        return any(key in versions for key in ("signal-cli-api", "signal-cli-rest-api"))
+
     async def get_signal_cli_rest_api_version(self: Any) -> str:
         about = await self.get_signal_cli_about()
         version = about.get("version")
         if isinstance(version, str):
             return version
-        versions = about.get("versions")
-        if isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str):
+        api_version = get_about_api_version(about)
+        if api_version is not None:
+            return api_version
+        if has_signal_cli_api_shape(about):
             return "unset"
         return await original_version(self)
 
@@ -686,8 +704,7 @@ def _patch_signalbot_signal_cli_api_about(signalbot: Any) -> None:
         mode = about.get("mode")
         if isinstance(mode, str):
             return mode
-        versions = about.get("versions")
-        if isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str):
+        if has_signal_cli_api_shape(about):
             return "json-rpc"
         return await original_mode(self)
 

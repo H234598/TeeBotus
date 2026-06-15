@@ -1000,6 +1000,26 @@ def test_signalbot_patch_accepts_signal_cli_api_about_shape() -> None:
     _patch_signalbot_signal_cli_api_about(fake_signalbot)
 
     api = FakeSignalAPI()
+    assert asyncio.run(api.get_signal_cli_rest_api_version()) == "0.1.1"
+    assert asyncio.run(api.get_signal_cli_rest_api_mode()) == "json-rpc"
+
+
+def test_signalbot_patch_accepts_unset_signal_cli_api_about_version() -> None:
+    class FakeSignalAPI:
+        async def get_signal_cli_about(self):
+            return {"build": {"os": "linux"}, "versions": {"signal-cli-api": ""}}
+
+        async def get_signal_cli_rest_api_version(self):
+            raise KeyError("version")
+
+        async def get_signal_cli_rest_api_mode(self):
+            raise KeyError("mode")
+
+    fake_signalbot = SimpleNamespace(api=SimpleNamespace(SignalAPI=FakeSignalAPI))
+
+    _patch_signalbot_signal_cli_api_about(fake_signalbot)
+
+    api = FakeSignalAPI()
     assert asyncio.run(api.get_signal_cli_rest_api_version()) == "unset"
     assert asyncio.run(api.get_signal_cli_rest_api_mode()) == "json-rpc"
 
