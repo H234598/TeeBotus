@@ -2469,8 +2469,24 @@ def run_polling(
                 LOGGER.warning("%s. Retrying in %s seconds.", exc, retry_delay)
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
-            except TelegramAPIError:
-                LOGGER.exception("Telegram request failed. Retrying in %s seconds.", retry_delay)
+            except TelegramAPIError as exc:
+                if _is_telegram_getupdates_conflict(exc):
+                    LOGGER.error(
+                        "Telegram getUpdates conflict instance=%s token_slot=%s bot_username=%s. "
+                        "Another poller is using the same Telegram bot token. Retrying in %s seconds.",
+                        instance,
+                        token_label,
+                        bot_identity.mention or "unknown",
+                        retry_delay,
+                    )
+                else:
+                    LOGGER.exception(
+                        "Telegram request failed instance=%s token_slot=%s bot_username=%s. Retrying in %s seconds.",
+                        instance,
+                        token_label,
+                        bot_identity.mention or "unknown",
+                        retry_delay,
+                    )
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
     finally:
@@ -2481,6 +2497,11 @@ def run_polling(
 
 def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, instance_name: str) -> None:
     run_polling_all([InstanceRunConfig(instance_name, instruction_path, tuple(configs))])
+
+
+def _is_telegram_getupdates_conflict(exc: TelegramAPIError) -> bool:
+    text = str(exc)
+    return "409" in text and "getUpdates" in text
 
 
 def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:

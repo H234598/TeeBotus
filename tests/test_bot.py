@@ -16,6 +16,7 @@ from TeeBotus.bot import (
     TELADI_EMERGENCY_CHAT_ID,
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     TelegramAPI,
+    TelegramAPIError,
     TelegramNetworkError,
     UserMemoryRecord,
     WorkingMemoryStore,
@@ -40,6 +41,7 @@ from TeeBotus.bot import (
     _read_runtime_config_defaults,
     _resolve_telegram_token,
     _resolve_telegram_tokens,
+    _is_telegram_getupdates_conflict,
     _short_process_error,
     _srt_to_plain_text,
     _transcribe_audio_with_faster_whisper_model,
@@ -2928,6 +2930,15 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/voice zu lang", "chat": {"id": 123}}}, instructions, FakeOpenAIClient(), ChatState())
 
         self.assertEqual(api.sent_messages, [(123, "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: 5 Zeichen.")])
+
+    def test_telegram_getupdates_conflict_is_detected_for_clear_runtime_logging(self) -> None:
+        exc = TelegramAPIError(
+            'Telegram HTTP error 409: {"ok":false,"error_code":409,'
+            '"description":"Conflict: terminated by other getUpdates request; make sure that only one bot instance is running"}'
+        )
+
+        self.assertTrue(_is_telegram_getupdates_conflict(exc))
+        self.assertFalse(_is_telegram_getupdates_conflict(TelegramAPIError("Telegram HTTP error 401: unauthorized")))
 
     def test_codex_command_runs_locally_for_allowed_sender(self) -> None:
         from TeeBotus.instructions import BotInstructions
