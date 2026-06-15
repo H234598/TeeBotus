@@ -186,15 +186,27 @@ async def _send_matrix_file(
 
 def _make_niobot_file_attachment(*, data: bytes, filename: str, content_type: str) -> Any | None:
     try:
-        from niobot.attachment import FileAttachment  # type: ignore[import-not-found]
+        from niobot import attachment as niobot_attachment  # type: ignore[import-not-found]
     except Exception:
         return None
-    return FileAttachment(
+    attachment_class = _niobot_attachment_class(niobot_attachment, content_type)
+    return attachment_class(
         BytesIO(data),
         file_name=filename,
         mime_type=content_type or "application/octet-stream",
         size_bytes=len(data),
     )
+
+
+def _niobot_attachment_class(niobot_attachment: Any, content_type: str) -> Any:
+    normalized = str(content_type or "").casefold()
+    if normalized.startswith("image/") and hasattr(niobot_attachment, "ImageAttachment"):
+        return niobot_attachment.ImageAttachment
+    if normalized.startswith("audio/") and hasattr(niobot_attachment, "AudioAttachment"):
+        return niobot_attachment.AudioAttachment
+    if normalized.startswith("video/") and hasattr(niobot_attachment, "VideoAttachment"):
+        return niobot_attachment.VideoAttachment
+    return niobot_attachment.FileAttachment
 
 
 def _add_matrix_reply_relation(content: dict[str, Any], reply_to_ref: str) -> None:

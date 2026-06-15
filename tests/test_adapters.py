@@ -1047,6 +1047,32 @@ def test_matrix_export_file_prefers_niobot_file_attachment():
     assert file.file.getvalue() == b"{\"ok\": true}"
 
 
+def test_matrix_image_attachment_prefers_niobot_image_attachment():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, content=None, file=None, **kwargs):
+            self.calls.append((room_id, content, file, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendAttachment("!room:example", b"img", "photo.jpg", "image/jpeg")]))
+
+    assert sent == ["$sent"]
+    room_id, content, file, kwargs = client.calls[0]
+    assert room_id == "!room:example"
+    assert content == "photo.jpg"
+    assert kwargs == {}
+    assert file.as_body("photo.jpg")["msgtype"] == "m.image"
+    assert file.mime_type == "image/jpeg"
+    assert file.size == 3
+
+
 def test_matrix_file_attachment_can_reply_with_niobot_send_message():
     class Response:
         event_id = "$sent"

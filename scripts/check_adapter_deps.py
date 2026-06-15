@@ -128,9 +128,9 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
 
 def _check_matrix_file_contract() -> tuple[bool, str]:
     try:
-        from niobot.attachment import FileAttachment  # type: ignore[import-not-found]
+        from niobot.attachment import AudioAttachment, FileAttachment, ImageAttachment, VideoAttachment  # type: ignore[import-not-found]
     except Exception as exc:
-        return False, f"nio-bot FileAttachment import_error={type(exc).__name__}: {exc}"
+        return False, f"nio-bot attachment import_error={type(exc).__name__}: {exc}"
     try:
         attachment = FileAttachment(
             BytesIO(b"ok"),
@@ -143,8 +143,20 @@ def _check_matrix_file_contract() -> tuple[bool, str]:
     if attachment.file_name != "check.txt" or attachment.mime_type != "text/plain" or attachment.size != 2:
         return False, "nio-bot FileAttachment did not preserve filename/mime/size"
     body = attachment.as_body("Check")
-    ok = body.get("msgtype") == "m.file" and body.get("body") == "Check" and body.get("filename") == "check.txt"
-    return ok, f"nio-bot FileAttachment contract={'ok' if ok else 'invalid'} body_keys={','.join(sorted(body.keys()))}"
+    expected_msgtypes = {
+        "file": body,
+        "image": ImageAttachment(BytesIO(b"ok"), file_name="check.jpg", mime_type="image/jpeg", size_bytes=2).as_body("Check"),
+        "audio": AudioAttachment(BytesIO(b"ok"), file_name="check.ogg", mime_type="audio/ogg", size_bytes=2).as_body("Check"),
+        "video": VideoAttachment(BytesIO(b"ok"), file_name="check.mp4", mime_type="video/mp4", size_bytes=2).as_body("Check"),
+    }
+    failures = [
+        f"{name}={payload.get('msgtype')}"
+        for name, payload in expected_msgtypes.items()
+        if payload.get("msgtype") != f"m.{name}"
+    ]
+    ok = not failures and body.get("body") == "Check" and body.get("filename") == "check.txt"
+    details = "ok" if ok else f"invalid {' '.join(failures)}"
+    return ok, f"nio-bot attachment contract={details} body_keys={','.join(sorted(body.keys()))}"
 
 
 def _check_signalbot_context_contract() -> tuple[bool, str]:
