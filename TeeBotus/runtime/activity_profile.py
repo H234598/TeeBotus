@@ -12,6 +12,9 @@ ACTIVITY_HISTORY_LIMIT = 1000
 ACTIVITY_HISTORY_DAYS = 90
 ACTIVITY_MIN_OBSERVATIONS = 6
 ACTIVITY_RECENT_ONLINE_WINDOW = timedelta(minutes=15)
+ACTIVITY_SMOOTHING_NEIGHBOR_WEIGHT = 0.35
+ACTIVITY_WAKE_COMPONENT_GAP_HOURS = 2
+ACTIVITY_MAX_RECOMMENDED_HOURS = 6
 
 
 @dataclass(frozen=True)
@@ -106,8 +109,10 @@ def derive_activity_profile(observations: list[Any], *, now: datetime | None = N
         "profiles": profiles,
         "notes": {
             "weekday_weekend_split": "weekend profile is used when it has enough observations, otherwise all observations are used",
-            "quiet_hours": "low-observation hours outside the inferred wake span",
-            "recommended_contact_hours": "hours with the strongest recent activity signal",
+            "quiet_hours": "hours outside the inferred activity blocks",
+            "recommended_contact_hours": "hours with the strongest smoothed recent activity signal",
+            "activity_blocks": "separate clusters of observed activity so morning and evening activity do not mark the whole day as reachable",
+            "sleep_hours": "longest quiet block inferred from hours outside activity blocks",
         },
     }
 
@@ -158,40 +163,86 @@ def _build_day_profile(entries: list[dict[str, Any]]) -> dict[str, Any]:
     total = sum(counts)
     if len(entries) < 4 or total <= 0:
         return {"observation_count": len(entries), "sufficient_data": False}
-    max_count = max(counts)
-    active_threshold = max(0.55, max_count * 0.24)
-    active_hours = [hour for hour, value in enumerate(counts) if value >= active_threshold]
+    smoothed = _smooth_hour_counts(counts)
+    max_count = max(smoothed)
+    active_threshold = max(0.55, max_count * 0.32)
+    active_hours = [hour for hour, value in enumerate(smoothed) if value >= active_threshold]
     if not active_hours:
-        active_hours = [max(range(24), key=lambda hour: counts[hour])]
-    wake_hours = _expanded_hour_span(active_hours, before=1, after=2)
-    recommended_threshold = max(0.8, max_count * 0.45)
-    recommended = [hour for hour, value in enumerate(counts) if value >= recommended_threshold and hour in wake_hours]
+        active_hours = [max(range(24), key=lambda hour: smoothed[hour])]
+    activity_blocks = _activity_blocks(active_hours, max_gap=ACTIVITY_WAKE_COMPONENT_GAP_HOURS)
+    wake_hours = _wake_hours_from_blocks(activity_blocks)
+    recommended_threshold = max(0.8, max_count * 0.55)
+    recommended = [hour for hour, value in enumerate(smoothed) if value >= recommended_threshold and hour in wake_hours]
     if not recommended:
         recommended = active_hours[:]
-    work_hours = [hour for hour in range(8, 18) if counts[hour] >= active_threshold]
-    learning_hours = [hour for hour in range(18, 23) if counts[hour] >= active_threshold]
+    recommended = sorted(set(recommended), key=lambda hour: smoothed[hour], reverse=True)[:ACTIVITY_MAX_RECOMMENDED_HOURS]
+    work_hours = [hour for hour in range(8, 18) if smoothed[hour] >= active_threshold]
+    learning_hours = [hour for hour in range(18, 23) if smoothed[hour] >= active_threshold]
     quiet_hours = [hour for hour in range(24) if hour not in wake_hours]
+    sleep_hours = _longest_quiet_block(quiet_hours)
     return {
         "observation_count": len(entries),
         "sufficient_data": True,
         "wake_hours": wake_hours,
         "quiet_hours": quiet_hours,
+        "sleep_hours": sleep_hours,
         "recommended_contact_hours": sorted(set(recommended)),
         "work_hours": work_hours,
         "learning_hours": learning_hours,
-        "peak_hours": sorted(range(24), key=lambda hour: counts[hour], reverse=True)[:5],
+        "activity_blocks": activity_blocks,
+        "hour_scores": [round(value, 4) for value in smoothed],
+        "peak_hours": sorted(range(24), key=lambda hour: smoothed[hour], reverse=True)[:5],
     }
 
 
-def _expanded_hour_span(active_hours: list[int], *, before: int, after: int) -> list[int]:
-    ordered = sorted(set(active_hours))
+def _smooth_hour_counts(counts: list[float]) -> list[float]:
+    if len(counts) != 24:
+        return []
+    smoothed: list[float] = []
+    for hour, value in enumerate(counts):
+        previous_hour = (hour - 1) % 24
+        next_hour = (hour + 1) % 24
+        smoothed.append(value + counts[previous_hour] * ACTIVITY_SMOOTHING_NEIGHBOR_WEIGHT + counts[next_hour] * ACTIVITY_SMOOTHING_NEIGHBOR_WEIGHT)
+    return smoothed
+
+
+def _activity_blocks(active_hours: list[int], *, max_gap: int) -> list[dict[str, Any]]:
+    ordered = sorted(set(int(hour) for hour in active_hours if 0 <= int(hour) <= 23))
     if not ordered:
         return []
-    start = max(0, ordered[0] - before)
-    end = min(23, ordered[-1] + after)
-    if end - start > 18:
-        return list(range(24))
-    return list(range(start, end + 1))
+    groups: list[list[int]] = [[ordered[0]]]
+    for hour in ordered[1:]:
+        if hour - groups[-1][-1] <= max_gap:
+            groups[-1].append(hour)
+        else:
+            groups.append([hour])
+    if len(groups) > 1 and groups[0][0] + 24 - groups[-1][-1] <= max_gap:
+        groups[0] = groups[-1] + groups[0]
+        groups.pop()
+    blocks: list[dict[str, Any]] = []
+    for group in groups:
+        normalized = sorted({hour % 24 for hour in group})
+        blocks.append({"hours": normalized, "start": normalized[0], "end": normalized[-1], "size": len(normalized)})
+    return sorted(blocks, key=lambda block: (block["size"], -block["start"]), reverse=True)
+
+
+def _wake_hours_from_blocks(blocks: list[dict[str, Any]]) -> list[int]:
+    wake_hours: set[int] = set()
+    for block in blocks:
+        hours = block.get("hours")
+        if not isinstance(hours, list):
+            continue
+        for hour in hours:
+            if isinstance(hour, int):
+                wake_hours.update({(hour - 1) % 24, hour % 24, (hour + 1) % 24})
+    return sorted(wake_hours)
+
+
+def _longest_quiet_block(quiet_hours: list[int]) -> list[int]:
+    blocks = _activity_blocks(quiet_hours, max_gap=1)
+    if not blocks:
+        return []
+    return list(blocks[0].get("hours") or [])
 
 
 def _day_profile(derived: Mapping[str, Any], now: datetime) -> Mapping[str, Any]:

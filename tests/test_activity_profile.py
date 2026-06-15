@@ -121,6 +121,49 @@ def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) ->
     assert weekend_early.allowed is False
 
 
+def test_contact_timing_keeps_separate_activity_blocks_from_opening_whole_day(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_hours(
+        account_store,
+        account_id,
+        identity,
+        [
+            (8, 9, 0),
+            (9, 9, 10),
+            (10, 9, 20),
+            (11, 21, 0),
+            (12, 21, 10),
+            (15, 21, 20),
+        ],
+    )
+
+    morning = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 16, 9, 30, tzinfo=LOCAL))
+    noon = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 16, 14, 0, tzinfo=LOCAL))
+    evening = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 16, 21, 30, tzinfo=LOCAL))
+
+    assert morning.allowed is True
+    assert evening.allowed is True
+    assert noon.allowed is False
+    assert noon.reason == "outside_adaptive_contact_window"
+    day_profile = noon.profile["profiles"]["weekday"]
+    assert 14 in day_profile["quiet_hours"]
+    assert len(day_profile["activity_blocks"]) >= 2
+
+
+def test_activity_profile_derives_sleep_hours_from_longest_quiet_block(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_hours(account_store, account_id, identity, [(8, 8, 30), (9, 9, 0), (10, 12, 0), (11, 17, 0), (12, 18, 0), (15, 19, 0)])
+
+    decision = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 16, 3, 0, tzinfo=LOCAL))
+
+    assert decision.allowed is False
+    sleep_hours = decision.profile["profiles"]["weekday"]["sleep_hours"]
+    assert 2 in sleep_hours
+    assert 3 in sleep_hours
+
+
 def test_proactive_policy_respects_adaptive_contact_window_and_recent_online_override(tmp_path) -> None:
     account_store = store(tmp_path)
     identity, account_id = prepare_account(account_store)
