@@ -247,6 +247,21 @@ def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
     assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
 
 
+def test_append_structured_account_memory_renames_duplicate_entry_id(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    first_id = store.append_structured_memory_entry(account_id, {"id": "mem_same", "user_text": "Mond", "bot_text": "Tee"})
+    second_id = store.append_structured_memory_entry(account_id, {"id": "mem_same", "user_text": "Kaffee", "bot_text": "Tasse"})
+
+    assert first_id == "mem_same"
+    assert second_id != "mem_same"
+    entries = store.read_memory_entries(account_id)
+    assert [entry["id"] for entry in entries] == ["mem_same", second_id]
+    index = store.read_memory_index(account_id)
+    assert set(index["index"]["entries"]) == {"mem_same", second_id}
+    assert index["index"]["keywords"]["kaffee"] == [second_id]
+
+
 def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
@@ -284,6 +299,30 @@ def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
     assert list(index["index"]["entries"]) == ["mem_live"]
     entries = store.read_memory_entries(account_id)
     assert entries[0]["keywords"] == ["mond", "bleibt", "gemerkt"]
+
+
+def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {"id": "mem_same", "user_text": "Mond", "bot_text": "Tee"},
+            {"id": "mem_same", "user_text": "Kaffee", "bot_text": "Tasse"},
+        ],
+    )
+
+    store.rebuild_structured_memory_index(account_id)
+
+    entries = store.read_memory_entries(account_id)
+    ids = [entry["id"] for entry in entries]
+    assert ids[0] == "mem_same"
+    assert ids[1] != "mem_same"
+    assert len(set(ids)) == 2
+    index = store.read_memory_index(account_id)
+    assert set(index["index"]["entries"]) == set(ids)
+    assert index["index"]["keywords"]["mond"] == [ids[0]]
+    assert index["index"]["keywords"]["kaffee"] == [ids[1]]
 
 
 def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):

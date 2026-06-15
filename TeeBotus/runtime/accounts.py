@@ -774,6 +774,9 @@ class AccountStore:
         rows = self.read_memory_entries(account_id)
         normalized_entry = dict(entry)
         memory_id = str(normalized_entry.get("id") or f"mem_{uuid.uuid4().hex}").strip()
+        existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+        while not memory_id or memory_id in existing_ids:
+            memory_id = f"mem_{uuid.uuid4().hex}"
         normalized_entry["id"] = memory_id
         normalized_entry.setdefault("created_at", utc_now())
         normalized_entry.setdefault("updated_at", normalized_entry["created_at"])
@@ -800,16 +803,18 @@ class AccountStore:
         rows = self.read_memory_entries(account_id)
         changed = False
         normalized_rows: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
         for row in rows:
             if not isinstance(row, dict):
                 changed = True
                 continue
             entry = dict(row)
             memory_id = str(entry.get("id") or "").strip()
-            if not memory_id:
+            if not memory_id or memory_id in seen_ids:
                 memory_id = f"mem_{uuid.uuid4().hex}"
                 entry["id"] = memory_id
                 changed = True
+            seen_ids.add(memory_id)
             if not entry.get("created_at"):
                 entry["created_at"] = utc_now()
                 changed = True
