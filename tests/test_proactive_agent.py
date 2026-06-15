@@ -398,6 +398,55 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.errors == ()
 
 
+def test_proactive_agent_health_accepts_string_adapter_slot_in_queued_route(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["route"]["adapter_slot"] = "1"
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is True
+    assert health.errors == ()
+
+
+def test_proactive_agent_health_reports_stale_queued_route(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    account_store.update_identity_route(identity, channel="signal", chat_id="+492", chat_type="private", adapter_slot=1)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert decision.allowed is True
+    assert health.ok is False
+    assert "route is stale or not linked to account identity" in "\n".join(health.errors)
+
+
 def test_proactive_risk_gate_blocks_queueing_without_human_review(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
