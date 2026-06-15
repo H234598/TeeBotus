@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from html import unescape
+from html.parser import HTMLParser
 from io import BytesIO
 from typing import Any
 
@@ -70,6 +72,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 action.text,
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
+                text_mode=action.text_mode,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
@@ -88,6 +91,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 action.message_ref,
                 action.text,
                 mentions=list(action.mentions),
+                text_mode=action.text_mode,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendPoll):
@@ -112,6 +116,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 caption=action.caption,
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
+                text_mode=action.text_mode,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
@@ -138,17 +143,18 @@ async def _send_matrix_text(
     notice: bool = False,
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
 ) -> Any:
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
-    if callable(send_message) and not mentions:
+    if callable(send_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
         kwargs: dict[str, Any] = {"message_type": msgtype}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
         response = await send_message(room_id, text, **kwargs)
         _raise_matrix_response_error(response)
         return response
-    content = {"msgtype": msgtype, "body": text}
+    content = _matrix_text_content(msgtype, text, text_mode=text_mode)
     _add_matrix_reply_relation(content, reply_to_ref)
     _add_matrix_mentions(content, mentions or [])
     response = await client.room_send(
@@ -219,28 +225,30 @@ async def _send_matrix_edit(
     text: str,
     *,
     mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
 ) -> Any:
     target = str(event_id or "").strip()
     if not target:
         raise RuntimeError("Matrix edit requires a message_ref")
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
-    if callable(edit_message) and not mentions:
+    if callable(edit_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
         response = await edit_message(room_id, target, body, message_type="m.text")
         _raise_matrix_response_error(response)
         return response
+    new_content = _matrix_text_content("m.text", body, text_mode=text_mode)
     content = {
         "msgtype": "m.text",
-        "body": f"* {body}",
-        "m.new_content": {
-            "msgtype": "m.text",
-            "body": body,
-        },
+        "body": f"* {new_content['body']}",
+        "m.new_content": new_content,
         "m.relates_to": {
             "rel_type": "m.replace",
             "event_id": target,
         },
     }
+    if "formatted_body" in new_content:
+        content["format"] = new_content["format"]
+        content["formatted_body"] = f"* {new_content['formatted_body']}"
     _add_matrix_mentions(content, mentions or [])
     _add_matrix_mentions(content["m.new_content"], mentions or [])
     response = await client.room_send(
@@ -336,6 +344,7 @@ async def _send_matrix_file_or_error_notice(
     caption: str = "",
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
 ) -> Any:
     try:
         return await _send_matrix_file(
@@ -347,6 +356,7 @@ async def _send_matrix_file_or_error_notice(
             caption=caption,
             reply_to_ref=reply_to_ref,
             mentions=mentions,
+            text_mode=text_mode,
         )
     except Exception as exc:
         return await _send_matrix_text(
@@ -368,10 +378,11 @@ async def _send_matrix_file(
     caption: str = "",
     reply_to_ref: str = "",
     mentions: list[dict[str, Any]] | None = None,
+    text_mode: str = "",
 ) -> Any:
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
-    if callable(send_message) and attachment is not None and not mentions:
+    if callable(send_message) and attachment is not None and not mentions and not _matrix_is_html_text_mode(text_mode):
         kwargs: dict[str, Any] = {"file": attachment}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -402,6 +413,8 @@ async def _send_matrix_file(
     }
     _add_matrix_reply_relation(content, reply_to_ref)
     _add_matrix_mentions(content, mentions or [])
+    if caption and _matrix_is_html_text_mode(text_mode):
+        _add_matrix_html_format(content, caption)
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
@@ -453,6 +466,51 @@ def _add_matrix_mentions(content: dict[str, Any], mentions: list[dict[str, Any]]
                 break
     if user_ids:
         content["m.mentions"] = {"user_ids": user_ids}
+
+
+def _matrix_text_content(msgtype: str, text: str, *, text_mode: str = "") -> dict[str, Any]:
+    content = {"msgtype": msgtype, "body": str(text or "")}
+    if _matrix_is_html_text_mode(text_mode):
+        _add_matrix_html_format(content, str(text or ""))
+    return content
+
+
+def _add_matrix_html_format(content: dict[str, Any], html_text: str) -> None:
+    content["body"] = _matrix_plain_body_from_html(html_text)
+    content["format"] = "org.matrix.custom.html"
+    content["formatted_body"] = html_text
+
+
+def _matrix_is_html_text_mode(text_mode: str) -> bool:
+    return str(text_mode or "").strip().casefold() in {"html", "formatted", "org.matrix.custom.html"}
+
+
+def _matrix_plain_body_from_html(html_text: str) -> str:
+    parser = _MatrixPlainTextParser()
+    parser.feed(str(html_text or ""))
+    parser.close()
+    return parser.text.strip() or unescape(str(html_text or ""))
+
+
+class _MatrixPlainTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+
+    @property
+    def text(self) -> str:
+        return "".join(self._parts)
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"br", "p", "div", "li"} and self._parts and not self._parts[-1].endswith("\n"):
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"p", "div", "li"} and self._parts and not self._parts[-1].endswith("\n"):
+            self._parts.append("\n")
 
 
 def _matrix_room_is_private(room: Any) -> bool:

@@ -1518,6 +1518,45 @@ def test_matrix_send_text_fallback_can_reply_with_relates_to():
     }
 
 
+def test_matrix_send_text_html_uses_formatted_room_send_content():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used for Matrix HTML content")
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [SendText("!room:example", "<strong>Hallo</strong><br>Matrix", text_mode="html")],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": "Hallo\nMatrix",
+                "format": "org.matrix.custom.html",
+                "formatted_body": "<strong>Hallo</strong><br>Matrix",
+            },
+        }
+    ]
+
+
 def test_matrix_send_text_with_mentions_uses_room_send_mentions_content():
     class Response:
         event_id = "$sent"
@@ -1763,6 +1802,42 @@ def test_matrix_send_edit_preserves_mentions_in_replacement_content():
     content = client.calls[0]["content"]
     assert content["m.mentions"] == {"user_ids": ["@alice:example"]}
     assert content["m.new_content"]["m.mentions"] == {"user_ids": ["@alice:example"]}
+
+
+def test_matrix_send_edit_html_uses_formatted_replacement_content():
+    class Response:
+        event_id = "$edit"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def edit_message(self, *_args, **_kwargs):
+            raise AssertionError("edit_message should not be used for Matrix HTML content")
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "<em>neu</em>", text_mode="html")]))
+
+    assert sent == ["$edit"]
+    content = client.calls[0]["content"]
+    assert content == {
+        "msgtype": "m.text",
+        "body": "* neu",
+        "m.new_content": {
+            "msgtype": "m.text",
+            "body": "neu",
+            "format": "org.matrix.custom.html",
+            "formatted_body": "<em>neu</em>",
+        },
+        "m.relates_to": {"rel_type": "m.replace", "event_id": "$old"},
+        "format": "org.matrix.custom.html",
+        "formatted_body": "* <em>neu</em>",
+    }
 
 
 def test_matrix_send_poll_uses_poll_start_event():
@@ -2138,6 +2213,60 @@ def test_matrix_attachment_with_mentions_uses_room_send_content():
         "url": "mxc://example/report",
         "info": {"mimetype": "text/plain", "size": 5},
         "m.mentions": {"user_ids": ["@alice:example"]},
+    }
+
+
+def test_matrix_attachment_html_caption_uses_formatted_room_send_content():
+    class UploadResponse:
+        content_uri = "mxc://example/report"
+
+    class SendResponse:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.uploads = []
+            self.sends = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used for Matrix HTML captions")
+
+        async def upload(self, data_provider, **kwargs):
+            self.uploads.append((data_provider.read(), kwargs))
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return SendResponse()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendAttachment(
+                    "!room:example",
+                    b"hello",
+                    "report.txt",
+                    "text/plain",
+                    caption="<strong>Bericht</strong>",
+                    text_mode="html",
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.uploads[0][0] == b"hello"
+    assert client.sends[0]["content"] == {
+        "msgtype": "m.file",
+        "body": "Bericht",
+        "filename": "report.txt",
+        "url": "mxc://example/report",
+        "info": {"mimetype": "text/plain", "size": 5},
+        "format": "org.matrix.custom.html",
+        "formatted_body": "<strong>Bericht</strong>",
     }
 
 
