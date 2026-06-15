@@ -53,11 +53,16 @@ class BotInstructions:
     echo_enabled: bool = True
     echo_prefix: str = "Echo: "
     openai_enabled: bool = False
+    llm_enabled: bool | None = None
     llm_provider: str = "openai"
     llm_model: str = ""
     llm_fallback_models: tuple[str, ...] = ()
     llm_base_url: str = ""
     llm_api_key_env: str = ""
+    llm_timeout_seconds: int | None = None
+    llm_max_output_tokens: int | None = None
+    llm_temperature: float | None = None
+    llm_profile: str = ""
     openai_model: str = "gpt-5.5"
     openai_service_tier: str = ""
     openai_rule_file: str = "Bot_Rüstzeug.md"
@@ -185,6 +190,11 @@ class BotInstructions:
 
     def help_text(self) -> str:
         return "\n".join([self.help_title, *self.help_lines])
+
+    def text_llm_enabled(self) -> bool:
+        if self.llm_enabled is not None:
+            return self.llm_enabled
+        return self.openai_enabled
 
     def openai_instructions_text(self) -> str:
         parts = [self.openai_shared_prompt.strip(), self.openai_system_prompt.strip()]
@@ -352,6 +362,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_reply(instructions, key, value)
         elif section == "openai":
             _apply_openai_setting(instructions, key, value)
+        elif section == "llm":
+            _apply_llm_setting(instructions, key, value)
         elif section == "codex":
             _apply_codex_setting(instructions, key, value)
         elif section == "proactive":
@@ -458,6 +470,10 @@ def _section_name(line: str) -> str:
         "antworten": "replies",
         "replies": "replies",
         "openai": "openai",
+        "llm": "llm",
+        "ki": "llm",
+        "text llm": "llm",
+        "text-llm": "llm",
         "befehle": "commands",
         "commands": "commands",
         "systemprompt": "system_prompt",
@@ -585,10 +601,36 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.codex_empty = value
 
 
+def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized == "enabled":
+        instructions.llm_enabled = _parse_optional_bool(value, default=instructions.llm_enabled)
+    elif normalized in {"provider", "llm_provider", "text_provider"}:
+        instructions.llm_provider = value.strip() or instructions.llm_provider
+    elif normalized in {"model", "llm_model", "text_model"}:
+        instructions.llm_model = value.strip()
+    elif normalized in {"fallback_models", "llm_fallback_models", "text_fallback_models"}:
+        instructions.llm_fallback_models = tuple(_parse_id_list(value))
+    elif normalized in {"base_url", "api_base", "llm_base_url", "litellm_base_url"}:
+        instructions.llm_base_url = value.strip()
+    elif normalized in {"api_key_env", "llm_api_key_env", "litellm_api_key_env"}:
+        instructions.llm_api_key_env = value.strip()
+    elif normalized in {"timeout", "timeout_seconds", "llm_timeout_seconds"}:
+        instructions.llm_timeout_seconds = _parse_optional_int(value, default=instructions.llm_timeout_seconds)
+    elif normalized in {"max_output_tokens", "max_tokens", "llm_max_output_tokens"}:
+        instructions.llm_max_output_tokens = _parse_optional_int(value, default=instructions.llm_max_output_tokens)
+    elif normalized in {"temperature", "llm_temperature"}:
+        instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
+    elif normalized in {"profile", "llm_profile"}:
+        instructions.llm_profile = value.strip()
+
+
 def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -> None:
     normalized = _normalize_key(key)
     if normalized == "enabled":
         instructions.openai_enabled = _parse_bool(value, default=instructions.openai_enabled)
+    elif normalized == "llm_enabled":
+        instructions.llm_enabled = _parse_optional_bool(value, default=instructions.llm_enabled)
     elif normalized in {"provider", "llm_provider", "text_provider"}:
         instructions.llm_provider = value.strip() or instructions.llm_provider
     elif normalized in {"llm_model", "text_model"}:
@@ -599,6 +641,14 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.llm_base_url = value.strip()
     elif normalized in {"api_key_env", "llm_api_key_env", "litellm_api_key_env"}:
         instructions.llm_api_key_env = value.strip()
+    elif normalized in {"llm_timeout_seconds", "text_timeout_seconds"}:
+        instructions.llm_timeout_seconds = _parse_optional_int(value, default=instructions.llm_timeout_seconds)
+    elif normalized in {"llm_max_output_tokens", "text_max_output_tokens"}:
+        instructions.llm_max_output_tokens = _parse_optional_int(value, default=instructions.llm_max_output_tokens)
+    elif normalized in {"llm_temperature", "text_temperature"}:
+        instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
+    elif normalized in {"profile", "llm_profile"}:
+        instructions.llm_profile = value.strip()
     elif normalized == "model":
         instructions.openai_model = value
     elif normalized == "service_tier":
@@ -801,6 +851,17 @@ def _parse_bool(value: str, default: bool) -> bool:
     return default
 
 
+def _parse_optional_bool(value: str, default: bool | None) -> bool | None:
+    normalized = value.strip().casefold()
+    if normalized in {"", "none", "null", "unset"}:
+        return None
+    if normalized in {"1", "true", "yes", "ja", "on", "an"}:
+        return True
+    if normalized in {"0", "false", "no", "nein", "off", "aus"}:
+        return False
+    return default
+
+
 def _parse_id_list(value: str) -> list[str]:
     if not value.strip():
         return []
@@ -833,3 +894,14 @@ def _parse_float(value: str, default: float) -> float:
     except ValueError:
         return default
     return parsed if parsed > 0 else default
+
+
+def _parse_optional_float(value: str, default: float | None) -> float | None:
+    normalized = value.strip().casefold()
+    if normalized in {"", "none", "null", "aus", "off"}:
+        return None
+    try:
+        parsed = float(normalized)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default

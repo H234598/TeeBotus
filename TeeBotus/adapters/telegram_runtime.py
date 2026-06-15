@@ -1305,7 +1305,7 @@ def _process_text_message(
     if text and _handle_codex_command(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
         return
 
-    reply = build_reply(message, instructions, include_fallback=not instructions.openai_enabled)
+    reply = build_reply(message, instructions, include_fallback=not instructions.text_llm_enabled())
     if reply:
         if _normalize_command(text) == "/start":
             reply = _with_bot_identity_intro(reply, bot_identity)
@@ -1379,7 +1379,7 @@ def _build_status_reply(message: dict[str, Any], instructions: BotInstructions, 
         project_root=PROJECT_ROOT,
         account_store=account_store,
         proactive_model_planner=instructions.proactive_model_planner,
-        llm_enabled=instructions.openai_enabled,
+        llm_enabled=instructions.text_llm_enabled(),
         llm_provider=instructions.llm_provider,
         llm_model=instructions.llm_model or instructions.openai_model,
         llm_fallback_models=instructions.llm_fallback_models,
@@ -2849,6 +2849,9 @@ def run_polling(
         fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
         api_key=resolve_llm_setting(instance, "telegram", adapter_slot, "API_KEY"),
         api_base=resolve_llm_setting(instance, "telegram", adapter_slot, "BASE_URL"),
+        timeout=resolve_llm_setting(instance, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
+        max_tokens=resolve_llm_setting(instance, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
+        temperature=resolve_llm_setting(instance, "telegram", adapter_slot, "TEMPERATURE"),
     )
     bot_identity = bot_identity or _resolve_bot_identity(api)
     user_memory_store = AccountStore(
@@ -3772,7 +3775,7 @@ def _handle_youtube_transcript_request(
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
-    if instructions.openai_enabled and openai_client is not None:
+    if instructions.text_llm_enabled() and openai_client is not None:
         _send_youtube_transcript_to_openai_pipeline(
             api,
             chat_state,
@@ -3792,7 +3795,7 @@ def _handle_youtube_transcript_request(
         )
         return
 
-    if instructions.openai_enabled and openai_client is None:
+    if instructions.text_llm_enabled() and openai_client is None:
         reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
@@ -3965,7 +3968,7 @@ def _run_youtube_local_transcription_job(
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
-    if llm_enabled and instructions.openai_enabled and openai_client is not None:
+    if llm_enabled and instructions.text_llm_enabled() and openai_client is not None:
         _send_youtube_transcript_to_openai_pipeline(
             api,
             chat_state,
@@ -3985,7 +3988,7 @@ def _run_youtube_local_transcription_job(
         )
         return
 
-    if llm_enabled and instructions.openai_enabled and openai_client is None:
+    if llm_enabled and instructions.text_llm_enabled() and openai_client is None:
         reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"

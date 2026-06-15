@@ -100,6 +100,9 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             fallback_models=run_config.llm_fallback_models,
             api_key=run_config.llm_api_key,
             api_base=run_config.llm_base_url,
+            timeout=run_config.llm_timeout_seconds,
+            max_tokens=run_config.llm_max_output_tokens,
+            temperature=run_config.llm_temperature,
         )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
         self.bibliothekar_store = BibliothekarStore(run_config.instance_name, self.instances_dir)

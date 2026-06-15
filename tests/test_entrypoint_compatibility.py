@@ -87,13 +87,18 @@ def test_runtime_status_reports_llm_provider_without_secrets(monkeypatch, capsys
     monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://user:secret@127.0.0.1:11434/api?token=nope")
     monkeypatch.setenv("TEEBOTUS_LLM_API_KEY_DEMO", "llm-secret")
     monkeypatch.setenv("TEEBOTUS_LLM_FALLBACK_MODELS_DEMO", "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "local_ollama")
+    monkeypatch.setenv("TEEBOTUS_LLM_TIMEOUT_SECONDS_DEMO", "180")
+    monkeypatch.setenv("TEEBOTUS_LLM_MAX_OUTPUT_TOKENS_DEMO", "700")
+    monkeypatch.setenv("TEEBOTUS_LLM_TEMPERATURE_DEMO", "0.7")
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=configured base_url=http://127.0.0.1:11434/api api_key=configured fallback_models=2"
+        "status=configured profile=local_ollama base_url=http://127.0.0.1:11434/api "
+        "api_key=configured fallback_models=2 timeout_seconds=180 max_output_tokens=700 temperature=0.7"
     ) in captured.out
     assert "llm-secret" not in captured.out
     assert "user:secret" not in captured.out

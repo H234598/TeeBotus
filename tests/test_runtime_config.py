@@ -63,6 +63,10 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
         "TEEBOTUS_LLM_API_KEY": "global-key",
         "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_SIGNAL": "signal-key",
         "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT": "local_ollama",
+        "TEEBOTUS_LLM_TIMEOUT_SECONDS_DEPRESSIONSBOT": "180",
+        "TEEBOTUS_LLM_MAX_OUTPUT_TOKENS_DEPRESSIONSBOT": "700",
+        "TEEBOTUS_LLM_TEMPERATURE_DEPRESSIONSBOT": "0.7",
     }
 
     assert resolve_llm_setting("Depressionsbot", "signal", 2, "PROVIDER", env) == "groq"
@@ -73,6 +77,10 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     assert resolve_llm_setting("Depressionsbot", "signal", 1, "API_KEY", env) == "signal-key"
     assert resolve_llm_setting("Depressionsbot", "matrix", 1, "API_KEY", env) == "global-key"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "BASE_URL", env) == "http://localhost:11434"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "PROFILE", env) == "local_ollama"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "TIMEOUT_SECONDS", env) == "180"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "MAX_OUTPUT_TOKENS", env) == "700"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "TEMPERATURE", env) == "0.7"
 
 
 def test_signal_account_resolution_pairs_services_and_numbers():
@@ -112,6 +120,10 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
         "TEEBOTUS_LLM_FALLBACK_MODELS_DEPRESSIONSBOT": "groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini",
         "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT": "ollama-key",
         "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT": "local_ollama",
+        "TEEBOTUS_LLM_TIMEOUT_SECONDS_DEPRESSIONSBOT": "180",
+        "TEEBOTUS_LLM_MAX_OUTPUT_TOKENS_DEPRESSIONSBOT": "700",
+        "TEEBOTUS_LLM_TEMPERATURE_DEPRESSIONSBOT": "0.7",
     }
 
     accounts = build_account_run_configs("Depressionsbot", ("telegram", "signal", "matrix"), env)
@@ -123,6 +135,10 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
     assert {account.llm_fallback_models for account in accounts} == {"groq/llama-3.3-70b-versatile,openai/gpt-4.1-mini"}
     assert {account.llm_api_key for account in accounts} == {"ollama-key"}
     assert {account.llm_base_url for account in accounts} == {"http://localhost:11434"}
+    assert {account.llm_profile for account in accounts} == {"local_ollama"}
+    assert {account.llm_timeout_seconds for account in accounts} == {"180"}
+    assert {account.llm_max_output_tokens for account in accounts} == {"700"}
+    assert {account.llm_temperature for account in accounts} == {"0.7"}
 
 
 def test_runtime_discovers_instances(tmp_path: Path):

@@ -62,6 +62,18 @@ class InstructionTests(unittest.TestCase):
             - transcription_error: Transkription fehlgeschlagen.
             - transcription_empty: Keine Sprache erkannt.
 
+            ## LLM
+            - enabled: ja
+            - profile: local_ollama
+            - provider: ollama
+            - model: llama3.1:8b
+            - fallback_models: groq/llama-3.1-8b-instant
+            - base_url: http://127.0.0.1:11434
+            - api_key_env: LOCAL_LLM_KEY
+            - timeout_seconds: 180
+            - max_output_tokens: 456
+            - temperature: 0.7
+
             ## Codex
             - enabled: ja
             - allowed_sender_ids: 395935293, 456
@@ -110,11 +122,17 @@ class InstructionTests(unittest.TestCase):
         self.assertFalse(instructions.echo_enabled)
         self.assertEqual(instructions.echo_prefix, "Antwort:")
         self.assertTrue(instructions.openai_enabled)
-        self.assertEqual(instructions.llm_provider, "litellm")
-        self.assertEqual(instructions.llm_model, "ollama/llama3.1:8b")
-        self.assertEqual(instructions.llm_fallback_models, ("groq/llama-3.3-70b-versatile", "gemini/gemini-2.5-flash"))
-        self.assertEqual(instructions.llm_base_url, "http://localhost:11434")
-        self.assertEqual(instructions.llm_api_key_env, "OLLAMA_API_KEY")
+        self.assertTrue(instructions.llm_enabled)
+        self.assertTrue(instructions.text_llm_enabled())
+        self.assertEqual(instructions.llm_profile, "local_ollama")
+        self.assertEqual(instructions.llm_provider, "ollama")
+        self.assertEqual(instructions.llm_model, "llama3.1:8b")
+        self.assertEqual(instructions.llm_fallback_models, ("groq/llama-3.1-8b-instant",))
+        self.assertEqual(instructions.llm_base_url, "http://127.0.0.1:11434")
+        self.assertEqual(instructions.llm_api_key_env, "LOCAL_LLM_KEY")
+        self.assertEqual(instructions.llm_timeout_seconds, 180)
+        self.assertEqual(instructions.llm_max_output_tokens, 456)
+        self.assertEqual(instructions.llm_temperature, 0.7)
         self.assertEqual(instructions.openai_model, "gpt-5.5")
         self.assertEqual(instructions.openai_service_tier, "flex")
         self.assertEqual(instructions.openai_rule_file, "Analyse.md")

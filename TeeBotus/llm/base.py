@@ -10,6 +10,10 @@ class LLMError(RuntimeError):
     """Provider-neutral LLM error."""
 
 
+class LLMAPIError(LLMError):
+    """Backward-compatible text LLM error alias."""
+
+
 @dataclass(frozen=True)
 class LLMResponse:
     text: str

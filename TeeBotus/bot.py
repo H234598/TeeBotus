@@ -169,6 +169,9 @@ def _runtime_status_llm_line(account: Any) -> str:
         f"llm={account.instance_name}/{account.label} "
         f"provider={provider} model={model} status={status}"
     )
+    profile = str(getattr(account, "llm_profile", "") or "").strip()
+    if profile:
+        detail += f" profile={profile}"
     if base_url:
         detail += f" base_url={base_url}"
     if provider != "openai":
@@ -176,6 +179,15 @@ def _runtime_status_llm_line(account: Any) -> str:
     fallback_count = _csv_count(getattr(account, "llm_fallback_models", ""))
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
+    timeout = str(getattr(account, "llm_timeout_seconds", "") or "").strip()
+    if timeout:
+        detail += f" timeout_seconds={timeout}"
+    max_tokens = str(getattr(account, "llm_max_output_tokens", "") or "").strip()
+    if max_tokens:
+        detail += f" max_output_tokens={max_tokens}"
+    temperature = str(getattr(account, "llm_temperature", "") or "").strip()
+    if temperature:
+        detail += f" temperature={temperature}"
     return detail
 
 

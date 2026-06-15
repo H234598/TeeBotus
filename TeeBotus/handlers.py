@@ -55,7 +55,7 @@ def should_use_openai(message: dict[str, Any], instructions: BotInstructions | N
     text = str(message.get("text") or "").strip()
     if not text or text.startswith("/"):
         return False
-    return instructions.openai_enabled and build_reply(message, instructions, include_fallback=False) is None
+    return instructions.text_llm_enabled() and build_reply(message, instructions, include_fallback=False) is None
 
 
 def is_program_history_request(text: str) -> bool:

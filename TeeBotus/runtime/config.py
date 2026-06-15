@@ -28,6 +28,10 @@ class AccountRunConfig:
     llm_fallback_models: str = ""
     llm_api_key: str = ""
     llm_base_url: str = ""
+    llm_profile: str = ""
+    llm_timeout_seconds: str = ""
+    llm_max_output_tokens: str = ""
+    llm_temperature: str = ""
     telegram_token: str = ""
     signal_service: str = ""
     signal_phone_number: str = ""
@@ -310,6 +314,10 @@ def _resolve_llm_runtime_kwargs(
         "llm_fallback_models": resolve_llm_setting(instance_name, channel, slot, "FALLBACK_MODELS", env),
         "llm_api_key": resolve_llm_setting(instance_name, channel, slot, "API_KEY", env),
         "llm_base_url": resolve_llm_setting(instance_name, channel, slot, "BASE_URL", env),
+        "llm_profile": resolve_llm_setting(instance_name, channel, slot, "PROFILE", env),
+        "llm_timeout_seconds": resolve_llm_setting(instance_name, channel, slot, "TIMEOUT_SECONDS", env),
+        "llm_max_output_tokens": resolve_llm_setting(instance_name, channel, slot, "MAX_OUTPUT_TOKENS", env),
+        "llm_temperature": resolve_llm_setting(instance_name, channel, slot, "TEMPERATURE", env),
     }
 
 

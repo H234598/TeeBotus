@@ -219,7 +219,7 @@ class TeeBotusEngine:
                             project_root=self.project_root,
                             account_store=self.account_store,
                             proactive_model_planner=instructions.proactive_model_planner,
-                            llm_enabled=instructions.openai_enabled,
+                            llm_enabled=instructions.text_llm_enabled(),
                             llm_provider=instructions.llm_provider,
                             llm_model=instructions.llm_model or instructions.openai_model,
                             llm_fallback_models=instructions.llm_fallback_models,
@@ -243,7 +243,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
-        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
+        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.text_llm_enabled())
         if reply is None:
             openai_actions = self._openai_actions(event, result.account_id, instructions)
             if openai_actions:
@@ -473,7 +473,7 @@ class TeeBotusEngine:
 
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         text = str(event.text or "").strip()
-        if not instructions.openai_enabled or (not text and not event.attachments) or text.startswith("/"):
+        if not instructions.text_llm_enabled() or (not text and not event.attachments) or text.startswith("/"):
             return []
         if self.llm_client is None:
             return [SendText(event.chat_id, instructions.openai_missing_key)]
@@ -892,7 +892,7 @@ class TeeBotusEngine:
         source: str,
         user_text: str | None = None,
     ) -> list[OutgoingAction]:
-        if not instructions.openai_enabled:
+        if not instructions.text_llm_enabled():
             reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, reply)
             return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
