@@ -809,7 +809,6 @@ def _rank_account_memory_entries(entries: list[dict[str, object]], index: dict[s
             ),
             reverse=True,
         )
-        ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id not in ordered_ids and memory_id in entries_by_id)
     else:
         ordered_ids = [memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id]
     if not ordered_ids:

@@ -539,8 +539,9 @@ def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
 
     engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
 
-    assert client.user_text.index("id: mem_moon") < client.user_text.index("id: mem_tea")
-    assert client.user_text.split("selected_memory_ids: ", 1)[1].splitlines()[0].startswith("mem_moon")
+    assert "id: mem_moon" in client.user_text
+    assert "id: mem_tea" not in client.user_text
+    assert client.user_text.split("selected_memory_ids: ", 1)[1].splitlines()[0] == "mem_moon"
 
 
 def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
