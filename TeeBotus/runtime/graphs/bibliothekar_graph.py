@@ -9,6 +9,7 @@ from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 
 class BibliothekarDeepQueryState(TypedDict, total=False):
     query: str
+    filters: dict[str, object]
     intent: str
     confidence: float
     selected_ids: list[str]
@@ -37,10 +38,13 @@ def run_bibliothekar_deep_query(
     max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS,
     max_chunks: int = DEFAULT_MAX_CHUNKS,
     max_quote_chars: int = DEFAULT_MAX_QUOTE_CHARS,
+    filters: Mapping[str, object] | None = None,
     answer_builder: AnswerBuilder | None = None,
     prefer_langgraph: bool = True,
 ) -> BibliothekarDeepQueryState:
     state: BibliothekarDeepQueryState = {"query": str(query_text or "").strip(), "errors": []}
+    if filters:
+        state["filters"] = _serializable_filters(filters)
     if prefer_langgraph:
         graph = _build_langgraph_runner(service, max_prompt_chars=max_prompt_chars, max_chunks=max_chunks, max_quote_chars=max_quote_chars, answer_builder=answer_builder)
         if graph is not None:
@@ -131,6 +135,7 @@ def _retrieve(
     try:
         selection = service.search(
             str(state.get("query") or ""),
+            filters=state.get("filters"),
             max_prompt_chars=max_prompt_chars,
             max_chunks=max_chunks,
             max_quote_chars=max_quote_chars,
@@ -199,6 +204,19 @@ def _append_error(state: BibliothekarDeepQueryState, error: str) -> Bibliothekar
     return {**state, "errors": errors}
 
 
+def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in filters.items():
+        normalized_key = str(key).strip()
+        if not normalized_key:
+            continue
+        if isinstance(value, (list, tuple, set, frozenset)):
+            result[normalized_key] = [str(item) for item in value if str(item).strip()]
+        elif value is not None and str(value).strip():
+            result[normalized_key] = str(value)
+    return result
+
+
 def _coerce_state(value: object) -> BibliothekarDeepQueryState:
     if not isinstance(value, Mapping):
         return {"query": "", "fallback_reason": "invalid_graph_state", "answer_text": "Der Bibliothekar-Graph lieferte keinen gueltigen State.", "citation_ok": False, "errors": []}
@@ -210,6 +228,8 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
             result["confidence"] = float(item)
         elif key == "citation_ok":
             result["citation_ok"] = bool(item)
+        elif key == "filters" and isinstance(item, Mapping):
+            result["filters"] = _serializable_filters(item)
         elif key in {"selected_ids", "errors"} and isinstance(item, list):
             result[str(key)] = [str(entry) for entry in item]  # type: ignore[literal-required]
     return result

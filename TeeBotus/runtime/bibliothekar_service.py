@@ -57,6 +57,13 @@ class LocalBibliothekarBackend:
         self.store = store
 
     def search(self, query: BibliothekarQuery) -> BibliothekarSelection:
+        if query.max_prompt_chars < 1 or query.max_chunks < 1:
+            return BibliothekarSelection("", ())
+        if query.filters:
+            self.store.ensure_current()
+            index = _read_index(self.store.index_path)
+            chunks = _apply_chunk_filters(_read_chunks(self.store.chunks_path), query.filters)
+            return _selection_from_chunks(index, chunks, query)
         return self.store.select(
             query.text,
             max_prompt_chars=query.max_prompt_chars,
@@ -107,27 +114,7 @@ class HaystackBibliothekarBackend:
             return BibliothekarSelection("", ())
         self.fallback_store.ensure_current()
         index = _read_index(self.fallback_store.index_path)
-        selected = _rank_chunks(chunks, query.text)[: query.max_chunks]
-        prompt_items: list[dict[str, Any]] = []
-        selected_ids: list[str] = []
-        for chunk in selected:
-            item = _chunk_prompt_item(chunk, max_quote_chars=query.max_quote_chars)
-            candidate_text = json.dumps(_prompt_payload(index, [*prompt_items, item]), ensure_ascii=False, indent=2)
-            if len(candidate_text) > query.max_prompt_chars:
-                if prompt_items:
-                    break
-                item["quote"] = str(item.get("quote", ""))[: max(200, query.max_prompt_chars // 3)].rstrip() + "\n[gekuerzt]"
-                candidate_text = json.dumps(_prompt_payload(index, [item]), ensure_ascii=False, indent=2)
-                if len(candidate_text) > query.max_prompt_chars:
-                    break
-            prompt_items.append(item)
-            selected_ids.append(str(item["chunk_id"]))
-        if not prompt_items:
-            return BibliothekarSelection("", ())
-        return BibliothekarSelection(
-            prompt_text=json.dumps(_prompt_payload(index, prompt_items), ensure_ascii=False, indent=2),
-            selected_ids=tuple(selected_ids),
-        )
+        return _selection_from_chunks(index, _apply_chunk_filters(chunks, query.filters), query)
 
     def rebuild(self) -> dict[str, Any]:
         index = self.fallback_store.rebuild()
@@ -368,6 +355,88 @@ def _normalize_backend(value: object) -> str:
     if backend in {"haystack", "qdrant", "haystack_qdrant"}:
         return "haystack"
     return "local"
+
+
+def _selection_from_chunks(index: Mapping[str, Any], chunks: list[dict[str, Any]], query: BibliothekarQuery) -> BibliothekarSelection:
+    if not chunks or query.max_prompt_chars < 1 or query.max_chunks < 1:
+        return BibliothekarSelection("", ())
+    selected = _rank_chunks(chunks, query.text)[: query.max_chunks]
+    prompt_items: list[dict[str, Any]] = []
+    selected_ids: list[str] = []
+    for chunk in selected:
+        item = _chunk_prompt_item(chunk, max_quote_chars=query.max_quote_chars)
+        candidate_text = json.dumps(_prompt_payload(index, [*prompt_items, item]), ensure_ascii=False, indent=2)
+        if len(candidate_text) > query.max_prompt_chars:
+            if prompt_items:
+                break
+            item["quote"] = str(item.get("quote", ""))[: max(200, query.max_prompt_chars // 3)].rstrip() + "\n[gekuerzt]"
+            candidate_text = json.dumps(_prompt_payload(index, [item]), ensure_ascii=False, indent=2)
+            if len(candidate_text) > query.max_prompt_chars:
+                break
+        prompt_items.append(item)
+        selected_ids.append(str(item["chunk_id"]))
+    if not prompt_items:
+        return BibliothekarSelection("", ())
+    return BibliothekarSelection(
+        prompt_text=json.dumps(_prompt_payload(index, prompt_items), ensure_ascii=False, indent=2),
+        selected_ids=tuple(selected_ids),
+    )
+
+
+def _apply_chunk_filters(chunks: list[dict[str, Any]], filters: Mapping[str, object] | None) -> list[dict[str, Any]]:
+    if not filters:
+        return chunks
+    active = {str(key).strip().casefold(): value for key, value in filters.items() if str(key).strip() and _filter_values(value)}
+    if not active:
+        return chunks
+    return [chunk for chunk in chunks if all(_chunk_matches_filter(chunk, key, value) for key, value in active.items())]
+
+
+def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> bool:
+    values = _filter_values(value)
+    if not values:
+        return True
+    if key in {"category", "categories"}:
+        return _any_exact_match(chunk.get("categories"), values)
+    if key in {"topic", "topics", "keyword", "keywords"}:
+        return _any_exact_match(chunk.get("topics"), values)
+    if key in {"file", "path", "relative_path"}:
+        return _any_substring_match(chunk.get("relative_path"), values)
+    if key in {"suffix", "extension"}:
+        return _any_exact_match(chunk.get("suffix"), values)
+    if key in {"title"}:
+        return _any_substring_match(chunk.get("title"), values)
+    if key in {"document", "document_id"}:
+        return _any_exact_match(chunk.get("document_id"), values)
+    if key in {"chunk", "chunk_id"}:
+        return _any_exact_match(chunk.get("chunk_id"), values)
+    return _any_exact_match(chunk.get(key), values)
+
+
+def _filter_values(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        items = list(value)
+    else:
+        items = [value]
+    return tuple(_normalize_filter_text(item) for item in items if _normalize_filter_text(item))
+
+
+def _any_exact_match(candidate: object, values: tuple[str, ...]) -> bool:
+    candidate_values = _filter_values(candidate)
+    return any(item in values for item in candidate_values)
+
+
+def _any_substring_match(candidate: object, values: tuple[str, ...]) -> bool:
+    candidate_values = _filter_values(candidate)
+    return any(value in item for item in candidate_values for value in values)
+
+
+def _normalize_filter_text(value: object) -> str:
+    return str(value or "").strip().casefold()
 
 
 def _module_available(name: str) -> bool:

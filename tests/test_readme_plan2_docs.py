@@ -19,6 +19,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "## Bibliothekar, Haystack und LangGraph" in text
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "Normale Chatantworten" in text
+    assert "--category" in text
+    assert "dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend" in text
     assert "scripts/run_benchmarks.py --quick" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text

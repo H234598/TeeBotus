@@ -172,6 +172,44 @@ def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path)
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
 
 
+def test_bibliothekar_service_applies_local_metadata_filters(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    service = BibliothekarService.local("Depressionsbot", tmp_path / "instances")
+    service.rebuild()
+
+    selection = service.search("System Therapie", filters={"categories": ["technik"]}, max_chunks=3)
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "therapie.txt" not in selection.prompt_text
+
+
+def test_haystack_backend_applies_same_metadata_filters_as_local_backend(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+
+    selection = backend.search(BibliothekarQuery(text="System Therapie", filters={"topics": ["python"]}, max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "therapie.txt" not in selection.prompt_text
+
+
 def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path):
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
@@ -569,6 +607,43 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     query_output = capsys.readouterr().out
     assert "Depressionsbot: backend=local selected=1" in query_output
     assert "therapie.txt" in query_output
+
+
+def test_bibliothekar_cli_query_applies_metadata_filters(tmp_path, capsys):
+    source = tmp_path / "books"
+    source.mkdir()
+    (source / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (source / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "index", "--source", str(source)]) == 0
+    capsys.readouterr()
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "query",
+                "System Therapie",
+                "--category",
+                "technik",
+                "--top-k",
+                "3",
+            ]
+        )
+        == 0
+    )
+    query_output = capsys.readouterr().out
+
+    assert "selected=1" in query_output
+    assert "technik.txt" in query_output
+    assert "therapie.txt" not in query_output
 
 
 def test_bibliothekar_cli_default_status_ignores_data_only_directories(tmp_path, capsys):

@@ -47,6 +47,9 @@ def _build_parser() -> argparse.ArgumentParser:
     query.add_argument("--top-k", type=int, default=3)
     query.add_argument("--max-prompt-chars", type=int, default=5000)
     query.add_argument("--max-quote-chars", type=int, default=900)
+    query.add_argument("--category", action="append", default=[], help="Limit results to one or more indexed categories.")
+    query.add_argument("--topic", action="append", default=[], help="Limit results to one or more indexed topics/keywords.")
+    query.add_argument("--file", action="append", default=[], help="Limit results to source files whose relative path contains this value.")
     query.add_argument("--deep", action="store_true", help="Run the optional Bibliothekar Deep Query graph pilot.")
     query.set_defaults(command="query")
     return parser
@@ -110,6 +113,7 @@ def _query(args: argparse.Namespace) -> int:
             if args.source
             else BibliothekarService.from_instructions(instance_name, instances_dir, instructions)
         )
+        filters = _query_filters(args)
         if args.deep:
             graph_state = run_bibliothekar_deep_query(
                 service,
@@ -117,6 +121,7 @@ def _query(args: argparse.Namespace) -> int:
                 max_prompt_chars=max(1, int(args.max_prompt_chars)),
                 max_chunks=max(1, int(args.top_k)),
                 max_quote_chars=max(1, int(args.max_quote_chars)),
+                filters=filters or None,
             )
             rows.append(
                 {
@@ -130,6 +135,7 @@ def _query(args: argparse.Namespace) -> int:
             continue
         selection = service.search(
             args.query,
+            filters=filters or None,
             max_prompt_chars=max(1, int(args.max_prompt_chars)),
             max_chunks=max(1, int(args.top_k)),
             max_quote_chars=max(1, int(args.max_quote_chars)),
@@ -150,6 +156,17 @@ def _query(args: argparse.Namespace) -> int:
             if row["prompt_text"]:
                 print(row["prompt_text"])
     return 0
+
+
+def _query_filters(args: argparse.Namespace) -> dict[str, list[str]]:
+    filters: dict[str, list[str]] = {}
+    if args.category:
+        filters["categories"] = [str(item) for item in args.category if str(item).strip()]
+    if args.topic:
+        filters["topics"] = [str(item) for item in args.topic if str(item).strip()]
+    if args.file:
+        filters["relative_path"] = [str(item) for item in args.file if str(item).strip()]
+    return filters
 
 
 def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_run: bool, instructions: BotInstructions) -> dict[str, Any]:

@@ -21,6 +21,28 @@ def test_bibliothekar_deep_query_runs_without_langgraph(tmp_path) -> None:
     assert "therapie.txt" in state["answer_text"]
 
 
+def test_bibliothekar_deep_query_passes_metadata_filters(tmp_path) -> None:
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    service = BibliothekarService(LocalBibliothekarBackend(store))
+
+    state = run_bibliothekar_deep_query(
+        service,
+        "System Therapie",
+        filters={"categories": ["technik"]},
+        prefer_langgraph=False,
+    )
+
+    assert state["citation_ok"] is True
+    assert state["filters"] == {"categories": ["technik"]}
+    assert "technik.txt" in state["answer_text"]
+    assert "therapie.txt" not in state["answer_text"]
+
+
 def test_bibliothekar_deep_query_returns_serializable_fallback_state(tmp_path) -> None:
     service = _service_with_book(tmp_path)
 
