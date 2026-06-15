@@ -12,6 +12,8 @@ import types
 from collections.abc import Sequence
 from typing import Any, Callable
 
+from TeeBotus import __version__
+
 _TELEGRAM_MODULE = "TeeBotus.adapters.telegram_polling"
 _COMPAT_EXPORT_MODULES = (
     _TELEGRAM_MODULE,
@@ -263,6 +265,10 @@ def main(argv: list[str] | None = None) -> int:
     """Run TeeBotus through the productive Telegram entry point."""
 
     args = list(sys.argv[1:] if argv is None else argv)
+
+    if args and args[0] in {"--version", "version"}:
+        print(f"TeeBotus {__version__}")
+        return 0
 
     if args and args[0] in {"--runtime-status", "runtime-status"}:
         return _runtime_status(args[1:])

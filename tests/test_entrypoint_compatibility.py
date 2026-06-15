@@ -17,6 +17,18 @@ def test_bot_main_is_callable() -> None:
     assert callable(bot.main)
 
 
+def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_runtime_config_from_main_args", lambda _args: (_ for _ in ()).throw(AssertionError("runtime loaded")))
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: (_ for _ in ()).throw(AssertionError("telegram loaded")))
+
+    assert bot.main(["--version"]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out == "TeeBotus 1.1.0\n"
+    assert captured.err == ""
+
+
 def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     bot = importlib.import_module("TeeBotus.bot")
     result = bot.main(["--runtime-status", "--channels", "telegram"])
