@@ -230,6 +230,24 @@ def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(t
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
+def test_haystack_backend_search_falls_back_to_local_store_when_optional_dependencies_are_missing(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: False)
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
 def test_haystack_status_reports_unreachable_qdrant_when_dependencies_exist(tmp_path, monkeypatch):
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
     monkeypatch.setattr(

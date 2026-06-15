@@ -91,7 +91,7 @@ class HaystackBibliothekarBackend:
 
     def search(self, query: BibliothekarQuery) -> BibliothekarSelection:
         if not self.available:
-            return BibliothekarSelection("", ())
+            return LocalBibliothekarBackend(self.fallback_store).search(query)
         try:
             document_store = self._document_store()
             chunks = self._chunks_from_document_store(document_store)
