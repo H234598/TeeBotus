@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import mimetypes
 from typing import Any
 
 from TeeBotus.runtime.accounts import signal_identity_key
@@ -219,16 +220,8 @@ def _signal_quote_text(message: Any) -> str | None:
 
 
 def _guess_content_type(filename: str) -> str:
-    lower = filename.casefold()
-    if lower.endswith((".ogg", ".opus", ".oga")):
-        return "audio/ogg"
-    if lower.endswith(".mp3"):
-        return "audio/mpeg"
-    if lower.endswith(".wav"):
-        return "audio/wav"
-    if lower.endswith(".m4a"):
-        return "audio/mp4"
-    return "application/octet-stream"
+    guessed, _encoding = mimetypes.guess_type(filename)
+    return guessed or "application/octet-stream"
 
 
 def _signal_message_has_user_content(message: Any) -> bool:

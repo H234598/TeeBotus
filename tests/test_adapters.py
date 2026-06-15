@@ -67,6 +67,17 @@ def test_signal_attachment_names_and_base64_are_paired_by_index():
     assert [attachment.data for attachment in event.attachments] == [b"1", b"2"]
 
 
+def test_signal_attachment_content_type_uses_filename_mimetype():
+    event = signal_message_to_event(
+        FakeSignalMessage(attachments_local_filenames=["photo.jpg", "report.pdf"], base64_attachments=["MQ==", "Mg=="]),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert [attachment.content_type for attachment in event.attachments] == ["image/jpeg", "application/pdf"]
+
+
 def test_signal_quote_text_maps_to_reply_context():
     quote = type("Quote", (), {"text": "Vorheriger Text"})()
     event = signal_message_to_event(
