@@ -1,0 +1,26 @@
+profiles:
+  local_ollama:
+    provider: litellm
+    model: ollama_chat/llama3.1:8b
+    base_url: http://127.0.0.1:11434
+    api_key_env: ""
+
+  hf_mistral:
+    provider: litellm
+    model: huggingface/mistralai/Mistral-7B-Instruct-v0.3
+    api_key_env: HUGGINGFACE_API_KEY
+
+  groq_fast:
+    provider: litellm
+    model: groq/llama-3.1-8b-instant
+    api_key_env: GROQ_API_KEY
+
+  gemini_flash:
+    provider: litellm
+    model: gemini/gemini-2.5-flash
+    api_key_env: GEMINI_API_KEY
+
+  openai_premium:
+    provider: openai
+    model: gpt-5.5
+    api_key_env: OPENAI_API_KEY

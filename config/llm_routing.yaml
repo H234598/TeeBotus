@@ -1,0 +1,26 @@
+default_profile: local_ollama
+
+purposes:
+  normal_chat:
+    profile: local_ollama
+    fallback: null
+
+  hard_reasoning:
+    profile: openai_premium
+    fallback: gemini_flash
+
+  cheap_fast:
+    profile: groq_fast
+    fallback: local_ollama
+
+  private:
+    profile: local_ollama
+    fallback: null
+
+  bibliothekar_answer:
+    profile: gemini_flash
+    fallback: local_ollama
+
+  structured_decision:
+    profile: local_ollama
+    fallback: groq_fast
