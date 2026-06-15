@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import asyncio
+import json
 from signalbot.message import MessageType
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
@@ -23,6 +24,7 @@ class FakeSignalMessage:
     base64_attachments: list[str] | None = None
     quote: object | None = None
     type: object = MessageType.DATA_MESSAGE
+    raw_message: str | None = None
 
     def recipient(self) -> str:
         return self.source
@@ -76,6 +78,61 @@ def test_signal_attachment_content_type_uses_filename_mimetype():
 
     assert event is not None
     assert [attachment.content_type for attachment in event.attachments] == ["image/jpeg", "application/pdf"]
+
+
+def test_signal_attachment_prefers_remote_filename_from_raw_message():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "dataMessage": {
+                    "message": "Foto",
+                    "attachments": [{"id": "local-attachment-id", "filename": "photo.jpg"}],
+                }
+            }
+        }
+    )
+    event = signal_message_to_event(
+        FakeSignalMessage(
+            attachments_local_filenames=["local-attachment-id"],
+            base64_attachments=["MQ=="],
+            raw_message=raw_message,
+        ),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.attachments[0].filename == "photo.jpg"
+    assert event.attachments[0].content_type == "image/jpeg"
+
+
+def test_signal_edit_attachment_prefers_remote_filename_from_raw_message():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "editMessage": {
+                    "dataMessage": {
+                        "message": "Foto",
+                        "attachments": [{"id": "local-attachment-id", "filename": "report.pdf"}],
+                    }
+                }
+            }
+        }
+    )
+    event = signal_message_to_event(
+        FakeSignalMessage(
+            attachments_local_filenames=["local-attachment-id"],
+            base64_attachments=["MQ=="],
+            raw_message=raw_message,
+            type=MessageType.EDIT_MESSAGE,
+        ),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.attachments[0].filename == "report.pdf"
+    assert event.attachments[0].content_type == "application/pdf"
 
 
 def test_signal_quote_text_maps_to_reply_context():

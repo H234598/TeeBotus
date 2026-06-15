@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import mimetypes
 from typing import Any
 
@@ -25,11 +26,12 @@ def signal_message_to_event(
         source=str(getattr(message, "source", "") or ""),
     )
     attachment_names = list(getattr(message, "attachments_local_filenames", []) or [])
+    remote_attachment_names = _signal_raw_attachment_filenames(message)
     attachment_data = list(getattr(message, "base64_attachments", []) or [])
     attachments = tuple(
         IncomingAttachment(
-            filename=_signal_attachment_name(index, attachment_names),
-            content_type=_guess_content_type(_signal_attachment_name(index, attachment_names)),
+            filename=_signal_attachment_name(index, attachment_names, remote_attachment_names),
+            content_type=_guess_content_type(_signal_attachment_name(index, attachment_names, remote_attachment_names)),
             data=_safe_b64decode(_signal_attachment_data(index, attachment_data)),
             base64_data=_signal_attachment_data(index, attachment_data),
         )
@@ -186,12 +188,60 @@ async def _stop_signal_typing_if_started(context: Any, typing_started: bool) -> 
     return False
 
 
-def _signal_attachment_name(index: int, names: list[Any]) -> str:
+def _signal_attachment_name(index: int, names: list[Any], remote_names: list[Any] | None = None) -> str:
+    if remote_names is not None:
+        try:
+            remote_value = str(remote_names[index] or "").strip()
+        except IndexError:
+            remote_value = ""
+        if remote_value:
+            return remote_value
     try:
         value = str(names[index] or "").strip()
     except IndexError:
         value = ""
     return value or f"signal-attachment-{index + 1}.bin"
+
+
+def _signal_raw_attachment_filenames(message: Any) -> list[str]:
+    raw_message = getattr(message, "raw_message", None)
+    if not isinstance(raw_message, str) or not raw_message.strip():
+        return []
+    try:
+        payload = json.loads(raw_message)
+    except (TypeError, ValueError):
+        return []
+    envelope = payload.get("envelope") if isinstance(payload, dict) else {}
+    if not isinstance(envelope, dict):
+        return []
+    data_message = _signal_raw_data_message(envelope)
+    attachments = data_message.get("attachments") if isinstance(data_message, dict) else []
+    if not isinstance(attachments, list):
+        return []
+    filenames: list[str] = []
+    for attachment in attachments:
+        if not isinstance(attachment, dict):
+            filenames.append("")
+            continue
+        filenames.append(str(attachment.get("filename") or "").strip())
+    return filenames
+
+
+def _signal_raw_data_message(envelope: dict[str, Any]) -> dict[str, Any]:
+    data_message = envelope.get("dataMessage")
+    if isinstance(data_message, dict):
+        return data_message
+    edit_message = envelope.get("editMessage")
+    if isinstance(edit_message, dict) and isinstance(edit_message.get("dataMessage"), dict):
+        return edit_message["dataMessage"]
+    sync_message = envelope.get("syncMessage")
+    if isinstance(sync_message, dict):
+        sent_message = sync_message.get("sentMessage")
+        if isinstance(sent_message, dict):
+            if isinstance(sent_message.get("editMessage"), dict) and isinstance(sent_message["editMessage"].get("dataMessage"), dict):
+                return sent_message["editMessage"]["dataMessage"]
+            return sent_message
+    return {}
 
 
 def _safe_b64decode(data: Any) -> bytes:
