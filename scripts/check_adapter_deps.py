@@ -171,14 +171,20 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     send_params = inspect.signature(Context.send).parameters
     reply_params = inspect.signature(Context.reply).parameters
     bot_send_params = inspect.signature(SignalBot.send).parameters
+    bot_start_typing_params = inspect.signature(SignalBot.start_typing).parameters
+    bot_stop_typing_params = inspect.signature(SignalBot.stop_typing).parameters
     delete_params = inspect.signature(Context.remote_delete).parameters
     expectations = {
         "Context.send.base64_attachments": "base64_attachments" in send_params,
         "Context.reply.base64_attachments": "base64_attachments" in reply_params,
+        "SignalBot.send.receiver": "receiver" in bot_send_params,
+        "SignalBot.send.base64_attachments": "base64_attachments" in bot_send_params,
         "SignalBot.send.quote_author": "quote_author" in bot_send_params,
         "SignalBot.send.quote_mentions": "quote_mentions" in bot_send_params,
         "SignalBot.send.quote_message": "quote_message" in bot_send_params,
         "SignalBot.send.quote_timestamp": "quote_timestamp" in bot_send_params,
+        "SignalBot.start_typing.receiver": "receiver" in bot_start_typing_params,
+        "SignalBot.stop_typing.receiver": "receiver" in bot_stop_typing_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
     }
     failures = [name for name, ok in expectations.items() if not ok]
