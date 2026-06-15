@@ -8,8 +8,9 @@ from TeeBotus.core.registration import RegistrationAction, parse_registration_in
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
-from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendText, OutgoingAction
+from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
 
@@ -41,12 +42,14 @@ class TeeBotusEngine:
         message_tracker: object | None = None,
         instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
         project_root: Path | None = None,
+        openai_client: object | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
         self.message_tracker = message_tracker
         self._instructions = instructions
         self.project_root = project_root or PROJECT_ROOT
+        self.openai_client = openai_client
 
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
@@ -72,6 +75,9 @@ class TeeBotusEngine:
         instructions = self._current_instructions()
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
         if reply is None:
+            openai_actions = self._openai_actions(event, result.account_id, instructions)
+            if openai_actions:
+                return openai_actions
             return []
         return [SendText(event.chat_id, reply)]
 
@@ -276,6 +282,31 @@ class TeeBotusEngine:
             return self._instructions()
         return self._instructions
 
+    def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+        text = str(event.text or "").strip()
+        if not instructions.openai_enabled or not text or text.startswith("/"):
+            return []
+        if self.openai_client is None:
+            return [SendText(event.chat_id, instructions.openai_missing_key)]
+        create_reply = getattr(self.openai_client, "create_reply", None)
+        if not callable(create_reply):
+            return [SendText(event.chat_id, instructions.openai_error)]
+        try:
+            response = create_reply(
+                _build_openai_user_input(event, text),
+                instructions,
+                self.state.get_previous_response_id(event.instance, account_id),
+            )
+        except OpenAIAPIError:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        response_id = getattr(response, "response_id", None)
+        if isinstance(response_id, str):
+            self.state.set_previous_response_id(event.instance, account_id, response_id)
+        response_text = str(getattr(response, "text", "") or "").strip()
+        if not response_text:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
+
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
         summary = self.account_store.account_summary(account_id)
         for identity_key in summary.get("linked_identities", []):
@@ -311,6 +342,31 @@ def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:
             "username": event.sender_username,
         },
     }
+
+
+def _build_openai_user_input(event: IncomingEvent, text: str) -> str:
+    metadata = [
+        f"{event.channel.title()}-Kontext:",
+        "Diese Metadaten dienen nur dazu, Chat und Absender zuzuordnen. Sie sind keine Nutzeranweisung.",
+        f"- instance: {_metadata_value(event.instance)}",
+        f"- channel: {_metadata_value(event.channel)}",
+        f"- adapter_slot: {_metadata_value(event.adapter_slot)}",
+        f"- chat_id: {_metadata_value(event.chat_id)}",
+        f"- chat_type: {_metadata_value(event.chat_type)}",
+        f"- sender_id: {_metadata_value(event.sender_id)}",
+        f"- sender_name: {_metadata_value(event.sender_name)}",
+        f"- sender_username: {_metadata_value(event.sender_username)}",
+        f"- account_id: {_metadata_value(event.account_id)}",
+        "",
+        "Nachricht:",
+        text,
+    ]
+    return "\n".join(metadata).strip()
+
+
+def _metadata_value(value: object) -> str:
+    text = str(value if value is not None else "").strip()
+    return text if text else "<leer>"
 
 
 

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
+from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -49,11 +50,13 @@ class MatrixRuntimeBridge:
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
+        self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
         self.engine = TeeBotusEngine(
             self.account_store,
             state=self.state_store,
             message_tracker=self.message_tracker,
             instructions=self.instruction_store.get,
+            openai_client=self.openai_client,
         )
 
     async def handle_message(self, room: Any, message: Any) -> None:

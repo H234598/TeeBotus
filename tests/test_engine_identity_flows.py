@@ -4,8 +4,9 @@ import re
 
 from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages
+from TeeBotus.runtime.actions import DeleteTrackedMessages, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -110,6 +111,72 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert f"- Version: {__version__}" in actions[0].text
     assert "Commits: https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_engine_reports_missing_openai_key_for_free_text_when_openai_enabled(tmp_path):
+    instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Key fehlt."
+
+
+def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str | None]] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.calls.append((user_text, previous_response_id))
+            return OpenAIResponse("Antwort.", "resp-1", "flex")
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "Antwort."
+    assert "Telegram-Kontext:" in client.calls[0][0]
+    assert "Nachricht:\nHallo" in client.calls[0][0]
+    assert client.calls[0][1] is None
+
+
+def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return OpenAIResponse("Antwort.", f"resp-{len(self.previous_ids)}", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "Hallo"))
+    engine.process(event(identity, "Noch mal"))
+
+    assert client.previous_ids == [None, "resp-1"]
+
+
+def test_engine_reports_openai_error_for_api_failure(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            raise OpenAIAPIError("boom")
+
+    instructions = BotInstructions(openai_enabled=True, openai_error="OpenAI kaputt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "OpenAI kaputt."
 
 
 def test_account_edit_sets_pending_flow(tmp_path):

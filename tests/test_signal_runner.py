@@ -113,6 +113,32 @@ def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path)
     assert context.sent == ["Signal custom fuer +491234."]
 
 
+def test_signal_command_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:
+    captured: list[str] = []
+
+    class FakeOpenAIClient:
+        def __init__(self, api_key: str) -> None:
+            captured.append(api_key)
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.OpenAIClient", FakeOpenAIClient)
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="sk-signal",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert captured == ["sk-signal"]
+    assert command.engine.openai_client is command.openai_client
+
+
 def test_signal_command_ignores_non_content_message_types(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(

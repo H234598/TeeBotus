@@ -109,6 +109,34 @@ def test_matrix_bridge_uses_instance_instructions_for_builtin_replies(tmp_path) 
     assert client.sent[0]["content"]["body"] == "Matrix custom fuer @alice:example."
 
 
+def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:
+    captured: list[str] = []
+
+    class FakeOpenAIClient:
+        def __init__(self, api_key: str) -> None:
+            captured.append(api_key)
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.OpenAIClient", FakeOpenAIClient)
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="sk-matrix",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=FakeMatrixClient(),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert captured == ["sk-matrix"]
+    assert bridge.engine.openai_client is bridge.openai_client
+
+
 def test_matrix_cleanup_redacts_tracked_current_room_messages(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
