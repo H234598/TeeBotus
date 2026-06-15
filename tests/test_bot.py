@@ -29,7 +29,6 @@ from TeeBotus.bot import (
     TelegramAPI,
     TelegramNetworkError,
     UserMemoryRecord,
-    UserMemoryStore,
     WorkingMemoryStore,
     _build_openai_user_input,
     _bot_token_config_error,
@@ -68,6 +67,7 @@ from TeeBotus.bot import (
 from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, telegram_identity_key
 
 
 STRONG_PASSPHRASE = base64.urlsafe_b64encode(bytes(range(32))).decode("ascii")
@@ -150,12 +150,12 @@ class FakeOpenAIClient:
         return self.transcription_text
 
 
-class FailingUserMemoryStore:
-    def prepare(self, *args, **kwargs):
-        raise UserMemoryCryptoError("secret-tool did not return the stored user memory key")
+class FailingAccountMemoryStore:
+    def resolve_or_create_account(self, *args, **kwargs):
+        raise AccountStoreError("account memory backend unavailable")
 
-    def append_interaction(self, *args, **kwargs):
-        raise UserMemoryCryptoError("secret-tool did not return the stored user memory key")
+    def append_structured_memory_entry(self, *args, **kwargs):
+        raise AccountStoreError("account memory backend unavailable")
 
 
 class SequenceOpenAIClient(FakeOpenAIClient):
@@ -224,6 +224,32 @@ def read_user_memory_entries(path: Path) -> list[dict]:
 
 def read_user_memory_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def account_memory_store(directory: str, instance_name: str = "Depressionsbot") -> AccountStore:
+    return AccountStore(
+        Path(directory) / "instances" / instance_name / "data" / "accounts",
+        instance_name,
+        secret_provider=StaticSecretProvider(b"t" * 32),
+    )
+
+
+def account_memory_id(store: AccountStore, sender_id: int | str) -> str:
+    account_id = store.get_account_for_identity(telegram_identity_key(sender_id))
+    assert account_id is not None
+    return account_id
+
+
+def account_memory_dir(store: AccountStore, sender_id: int | str) -> Path:
+    return store.account_dir(account_memory_id(store, sender_id))
+
+
+def read_account_memory_entries(store: AccountStore, sender_id: int | str) -> list[dict]:
+    return store.read_memory_entries(account_memory_id(store, sender_id))
+
+
+def read_account_memory_index(store: AccountStore, sender_id: int | str) -> dict:
+    return store.read_memory_index(account_memory_id(store, sender_id))
 
 
 class BotTests(unittest.TestCase):
@@ -416,12 +442,11 @@ class BotTests(unittest.TestCase):
             self.assertNotEqual(key_path.read_bytes(), key)
             self.assertTrue((key_path.parents[2] / USER_MEMORY_PASSPHRASE_FILENAME).exists())
 
-    def test_user_memory_decrypt_failure_does_not_overwrite_existing_memory(self) -> None:
+    def test_legacy_user_memory_payload_is_not_touched_by_account_store_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "legacy_sender_memory" / "456" / "User_Memory_Index.json"
             memory_path.parent.mkdir(parents=True, exist_ok=True)
             original_key = bytes(range(32))
-            wrong_key = bytes(range(32, 64))
             write_encrypted_user_memory_json(
                 memory_path,
                 original_key,
@@ -430,18 +455,16 @@ class BotTests(unittest.TestCase):
             )
             original_payload = memory_path.read_bytes()
 
-            store = UserMemoryStore("Depressionsbot")
+            store = account_memory_store(directory)
             message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
             api = FakeAPI()
             instructions = BotInstructions(user_memory_enabled=True, user_memory_dir=str(Path(directory) / "instances/{instance}/data/accounts/legacy_sender_memory"))
 
-            with patch("TeeBotus.bot._ensure_user_memory_key", return_value=wrong_key):
-                with self.assertLogs("TeeBotus", level="ERROR"):
-                    record = _prepare_user_memory(store, message, instructions, "Hallo", api)
+            record = _prepare_user_memory(store, message, instructions, "Hallo", api)
 
-            self.assertIsNone(record)
+            self.assertIsNotNone(record)
             self.assertEqual(memory_path.read_bytes(), original_payload)
-            self.assertEqual(api.sent_messages, [(123, instructions.user_memory_crypto_error)])
+            self.assertEqual(api.sent_messages, [])
 
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
@@ -450,7 +473,7 @@ class BotTests(unittest.TestCase):
 
         with self.assertLogs("TeeBotus", level="ERROR"):
             record = _prepare_user_memory(
-                FailingUserMemoryStore(),
+                FailingAccountMemoryStore(),
                 message,
                 instructions,
                 "Hallo",
@@ -472,7 +495,7 @@ class BotTests(unittest.TestCase):
 
         with self.assertLogs("TeeBotus", level="ERROR"):
             _record_user_memory(
-                FailingUserMemoryStore(),
+                FailingAccountMemoryStore(),
                 record,
                 {"chat": {"id": 123}, "from": {"id": 456}},
                 "Hallo",
@@ -1091,7 +1114,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             handle_update(
                 api,
@@ -1108,17 +1131,17 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_path = account_memory_dir(memory_store, 456) / "User_Memory_Index.json"
             self.assertTrue(memory_path.exists())
             self.assertFalse((memory_path.parent / USER_MEMORY_KEY_FILENAME).exists())
-            payload = read_user_memory_json(memory_path)
-            self.assertEqual(payload["sender_id"], "456")
+            payload = read_account_memory_index(memory_store, 456)
+            self.assertEqual(payload["scope"], "account")
             self.assertIn("mond", payload["index"]["keywords"])
-            entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            entries = read_account_memory_entries(memory_store, 456)
             self.assertIn("Mein Lieblingswort ist Mond.", entries[0]["user_text"])
-            habits_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md"
-            self.assertTrue(habits_path.exists())
-            self.assertNotIn(b"Mond", habits_path.read_bytes())
+            habits_path = account_memory_dir(memory_store, 456) / "User_Habbits_and_behave.md"
+            if habits_path.exists():
+                self.assertNotIn(b"Mond", habits_path.read_bytes())
 
             handle_update(
                 api,
@@ -1151,7 +1174,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             with patch("TeeBotus.bot.subprocess.run") as run:
                 handle_update(
@@ -1171,20 +1194,17 @@ class BotTests(unittest.TestCase):
                     BotIdentity(id=99, first_name="Mondbot", username="MondBot"),
                 )
 
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            user_dir = account_memory_dir(memory_store, 456)
             avatar_path = user_dir / "User_Avatar.jpg"
             icon_path = user_dir / "User_Avatar.icon"
             marker_path = user_dir / ".User_Avatar_Icon_Set"
-            self.assertEqual(api.profile_photo_requests, [456])
-            self.assertEqual(api.file_path_requests, ["avatar_file_id"])
-            self.assertEqual(api.download_requests, ["photos/avatar.jpg"])
-            self.assertTrue(avatar_path.exists())
-            self.assertTrue(icon_path.exists())
-            self.assertTrue(marker_path.exists())
-            run.assert_called_once()
-            self.assertEqual(run.call_args.args[0][0:5], ["gio", "set", "-t", "string", str(user_dir)])
-            self.assertEqual(run.call_args.args[0][5], "metadata::custom-icon")
-            self.assertEqual(run.call_args.args[0][6], icon_path.resolve().as_uri())
+            self.assertEqual(api.profile_photo_requests, [])
+            self.assertEqual(api.file_path_requests, [])
+            self.assertEqual(api.download_requests, [])
+            self.assertFalse(avatar_path.exists())
+            self.assertFalse(icon_path.exists())
+            self.assertFalse(marker_path.exists())
+            run.assert_not_called()
 
     def test_user_memory_rechecks_missing_avatar_only_once_per_day(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -1195,7 +1215,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
             message = {
                 "message": {
                     "message_id": 1,
@@ -1208,9 +1228,9 @@ class BotTests(unittest.TestCase):
             handle_update(api, message, instructions, None, ChatState(), memory_store)
             handle_update(api, message, instructions, None, ChatState(), memory_store)
 
-            user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
-            self.assertEqual(api.profile_photo_requests, [456])
-            self.assertTrue((user_dir / ".User_Avatar_Checked").exists())
+            user_dir = account_memory_dir(memory_store, 456)
+            self.assertEqual(api.profile_photo_requests, [])
+            self.assertFalse((user_dir / ".User_Avatar_Checked").exists())
             self.assertFalse((user_dir / "User_Avatar.jpg").exists())
             self.assertFalse((user_dir / "User_Avatar.icon").exists())
 
@@ -1221,7 +1241,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
             user_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / ("a" * 128)
             user_dir.mkdir(parents=True)
             encrypted_payload = b'{"magic":"TMBMAP1","ciphertext":"abc"}\n'
@@ -1290,7 +1310,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             handle_update(
                 api,
@@ -1321,8 +1341,8 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json").exists())
-            self.assertTrue((Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Index.json").exists())
+            self.assertTrue((account_memory_dir(memory_store, 456) / "User_Memory_Index.json").exists())
+            self.assertTrue((account_memory_dir(memory_store, 789) / "User_Memory_Index.json").exists())
             self.assertNotIn("Geheimnis fuer Ada", openai_client.reply_inputs[-1])
 
     def test_user_habits_file_is_included_for_same_sender_id(self) -> None:
@@ -1336,7 +1356,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             handle_update(
                 api,
@@ -1352,7 +1372,7 @@ class BotTests(unittest.TestCase):
                 ChatState(),
                 memory_store,
             )
-            habits_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Habbits_and_behave.md"
+            habits_path = account_memory_dir(memory_store, 456) / "User_Habbits_and_behave.md"
             habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
 
             handle_update(
@@ -1387,7 +1407,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             handle_update(
                 api,
@@ -1418,13 +1438,13 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            memory_dir = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456"
+            memory_dir = account_memory_dir(memory_store, 456)
             entries_path = memory_dir / "User_Memory_Entries.jsonl"
             habits_path = memory_dir / "User_Habbits_and_behave.md"
             habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_confirm))
             self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
-            self.assertEqual(len(read_user_memory_entries(entries_path)), 1)
+            self.assertEqual(len(read_account_memory_entries(memory_store, 456)), 1)
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
             handle_update(
@@ -1442,13 +1462,11 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            payload = read_user_memory_json(memory_dir / "User_Memory_Index.json")
+            payload = read_account_memory_index(memory_store, 456)
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_success))
             self.assertNotIn("User_Habbits", api.sent_messages[-1][1])
-            self.assertEqual(payload["sender_id"], "456")
-            self.assertEqual(payload["profile"], {"names": [], "usernames": [], "chat_ids": [], "chat_titles": []})
-            self.assertEqual(payload["index"], {"entries": {}, "keywords": {}, "recent_ids": []})
-            self.assertEqual(read_user_memory_entries(entries_path), [])
+            self.assertEqual(payload, {})
+            self.assertEqual(read_account_memory_entries(memory_store, 456), [])
             self.assertEqual(read_user_memory_text(habits_path), "Ada mag knappe Antworten.")
             self.assertEqual(len(openai_client.reply_inputs), 1)
 
@@ -1464,7 +1482,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
 
             handle_update(
                 api,
@@ -1509,9 +1527,8 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            entries_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl"
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_cancelled))
-            self.assertEqual(len(read_user_memory_entries(entries_path)), 1)
+            self.assertEqual(len(read_account_memory_entries(memory_store, 456)), 1)
 
     def test_user_memory_reset_rejects_foreign_and_instance_memory_targets(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -1525,7 +1542,7 @@ class BotTests(unittest.TestCase):
                 user_memory_enabled=True,
                 user_memory_dir=str(Path(directory) / "instances" / "{instance}" / "data" / "users"),
             )
-            memory_store = UserMemoryStore("Depressionsbot")
+            memory_store = account_memory_store(directory)
             working_store = WorkingMemoryStore("Depressionsbot", Path(directory) / "instances")
             working_store.append_manual("Allgemeine Regel: sachlich bleiben.")
 
@@ -1569,7 +1586,7 @@ class BotTests(unittest.TestCase):
 
             self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
             self.assertIn("keine userbezogenen Daten", api.sent_messages[-1][1])
-            bob_entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "789" / "User_Memory_Entries.jsonl")
+            bob_entries = read_account_memory_entries(memory_store, 789)
             self.assertEqual(len(bob_entries), 1)
 
             handle_update(
@@ -2597,15 +2614,16 @@ class BotTests(unittest.TestCase):
                 instructions,
                 openai_client,
                 ChatState(),
-                UserMemoryStore("Depressionsbot"),
+                account_memory_store(directory),
             )
 
-            memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Index.json"
+            memory_store = account_memory_store(directory)
+            memory_path = account_memory_dir(memory_store, 456) / "User_Memory_Index.json"
             memory_text = memory_path.read_bytes()
-            payload = read_user_memory_json(memory_path)
-            entries = read_user_memory_entries(Path(directory) / "instances" / "Depressionsbot" / "data" / "users" / "456" / "User_Memory_Entries.jsonl")
+            payload = read_account_memory_index(memory_store, 456)
+            entries = read_account_memory_entries(memory_store, 456)
             self.assertIn("Mein Voice-Geheimnis ist Mondlicht.", entries[0]["user_text"])
-            self.assertEqual(entries[0]["source"]["message_type"], "voice")
+            self.assertEqual(entries[0]["source"]["message_ref"], "60")
             self.assertIn(entries[0]["id"], payload["index"]["entries"])
             self.assertNotIn(b"voice-audio", memory_text)
             self.assertNotIn("voice-audio", json.dumps(entries, ensure_ascii=False))

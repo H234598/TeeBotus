@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import json
 import logging
 import os
@@ -39,21 +38,10 @@ from TeeBotus.core.youtube import (
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
-from TeeBotus.user_memory_crypto import (
-    USER_MEMORY_KEY_FILENAME,
-    UserMemoryCryptoError,
-    ensure_user_memory_key,
-    is_encrypted_payload,
-    read_json as read_encrypted_user_memory_json,
-    read_jsonl as read_encrypted_user_memory_jsonl,
-    read_text as read_encrypted_user_memory_text,
-    write_json as write_encrypted_user_memory_json,
-    write_jsonl as write_encrypted_user_memory_jsonl,
-)
 
 LOGGER = logging.getLogger("TeeBotus")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -71,15 +59,6 @@ BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
-USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
-USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
-USER_AVATAR_BASENAME = "User_Avatar"
-USER_AVATAR_ICON_FILENAME = "User_Avatar.icon"
-USER_AVATAR_ICON_MARKER_FILENAME = ".User_Avatar_Icon_Set"
-USER_AVATAR_CHECK_MARKER_FILENAME = ".User_Avatar_Checked"
-USER_AVATAR_REFRESH_SECONDS = 7 * 24 * 60 * 60
-USER_AVATAR_MISSING_RECHECK_SECONDS = 24 * 60 * 60
-USER_HABITS_MAX_PROMPT_CHARS = 4000
 YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
@@ -697,142 +676,13 @@ class WorkingMemoryStore:
         return payload
 
 
-class UserMemoryStore:
-    def __init__(self, instance_name: str) -> None:
-        self.instance_name = instance_name
-        self._lock = threading.Lock()
-
-    def prepare(
-        self,
-        message: dict[str, Any],
-        instructions: BotInstructions,
-        query_text: str,
-        api: TelegramAPI | None = None,
-    ) -> UserMemoryRecord | None:
-        if not instructions.user_memory_enabled:
-            return None
-
-        sender_id = _sender_identifier(message)
-        if not sender_id:
-            return None
-
-        path = self._path_for_sender(sender_id, instructions)
-        with self._lock:
-            data = self._load_or_initialize(path, sender_id)
-            _ensure_user_avatar_assets(api, path, message)
-            key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
-            habits_text = _load_user_habits_text(path, key, USER_HABITS_MAX_PROMPT_CHARS)
-            memory_text, selected_ids = _select_user_memory_prompt(
-                path,
-                data,
-                query_text,
-                instructions.user_memory_max_prompt_chars,
-                key,
-            )
-            prompt_text = _combine_user_memory_prompt(habits_text, memory_text)
-        return UserMemoryRecord(
-            sender_id=sender_id,
-            path=path,
-            prompt_text=prompt_text,
-            selected_ids=tuple(selected_ids),
-        )
-
-    def append_interaction(
-        self,
-        record: UserMemoryRecord,
-        message: dict[str, Any],
-        user_text: str,
-        bot_text: str,
-        instructions: BotInstructions,
-    ) -> None:
-        with self._lock:
-            key = _ensure_user_memory_key(record.path, sender_id=record.sender_id, instance_name=self.instance_name)
-            data = self._load_or_initialize(record.path, record.sender_id)
-            _append_json_memory_interaction(
-                record.path,
-                data,
-                message,
-                user_text,
-                bot_text,
-                instructions.user_memory_max_entry_chars,
-                record.selected_ids,
-                key,
-            )
-            _write_user_memory_json(record.path, data, key)
-
-    def reset_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
-        if not instructions.user_memory_enabled:
-            raise ValueError("User memory is not enabled")
-        if not sender_id:
-            raise ValueError("sender_id must not be empty")
-
-        path = self._path_for_sender(sender_id, instructions)
-        with self._lock:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
-            _write_user_memory_json(path, _new_user_memory_data(sender_id), key)
-            _write_user_memory_entries(path, [], key)
-        return path
-
-    def has_sender(self, sender_id: str, instructions: BotInstructions) -> bool:
-        if not instructions.user_memory_enabled or not sender_id:
-            return False
-        path = self._path_for_sender(sender_id, instructions)
-        key_path = _user_memory_key_path(path)
-        return (
-            path.exists()
-            or _memory_entries_path(path).exists()
-            or _memory_habits_path(path).exists()
-            or key_path.exists()
-        )
-
-    def _path_for_sender(self, sender_id: str, instructions: BotInstructions) -> Path:
-        directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/legacy_sender_memory"
-        directory = directory.replace("{instance}", self.instance_name)
-        return Path(directory) / _safe_memory_filename(sender_id) / USER_MEMORY_INDEX_FILENAME
-
-    def _load_or_initialize(self, path: Path, sender_id: str) -> dict[str, Any]:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        key = _ensure_user_memory_key(path, sender_id=sender_id, instance_name=self.instance_name)
-        if not path.exists():
-            data = _new_user_memory_data(sender_id)
-            _write_user_memory_json(path, data, key)
-            _ensure_user_habits_file(path, key)
-            return data
-
-        try:
-            payload, migrated = read_encrypted_user_memory_json(
-                path,
-                key,
-                kind="user-memory-index",
-                default=_new_user_memory_data(sender_id),
-            )
-        except UserMemoryCryptoError:
-            LOGGER.exception("Failed to decrypt JSON user memory for sender_id=%s.", sender_id)
-            raise
-        except (json.JSONDecodeError, OSError):
-            LOGGER.exception("Failed to read JSON user memory for sender_id=%s.", sender_id)
-            payload = _new_user_memory_data(sender_id)
-            migrated = True
-        if not isinstance(payload, dict) or str(payload.get("sender_id", "")) != sender_id:
-            LOGGER.warning("Ignoring user memory with mismatched sender_id at %s.", path)
-            payload = _new_user_memory_data(sender_id)
-        elif isinstance(payload.get("memories"), list):
-            payload = _migrate_inline_json_memory(path, payload, sender_id, key)
-        _normalize_user_memory_data(payload, sender_id)
-        if migrated:
-            _write_user_memory_json(path, payload, key)
-        _ensure_user_habits_file(path, key)
-        return payload
-
-
 def handle_update(
     api: TelegramAPI,
     update: dict[str, Any],
     instructions: BotInstructions | None = None,
     openai_client: OpenAIClient | None = None,
     chat_state: ChatState | None = None,
-    user_memory_store: UserMemoryStore | None = None,
+    user_memory_store: AccountStore | None = None,
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
@@ -932,7 +782,7 @@ def _process_text_message(
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
     text: str,
-    user_memory_store: UserMemoryStore | None = None,
+    user_memory_store: AccountStore | None = None,
     user_memory: UserMemoryRecord | None = None,
     bot_identity: BotIdentity | None = None,
     first_contact: bool = False,
@@ -1121,7 +971,7 @@ def _handle_incoming_voice_message(
     message: dict[str, Any],
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
-    user_memory_store: UserMemoryStore | None = None,
+    user_memory_store: AccountStore | None = None,
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
     instance_name: str = "",
@@ -1467,7 +1317,7 @@ def _handle_user_memory_reset_flow(
     chat_id: int,
     message: dict[str, Any],
     instructions: BotInstructions,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     text: str,
     bot_identity: BotIdentity,
     first_contact: bool,
@@ -1519,38 +1369,18 @@ def _handle_user_memory_reset_flow(
     return True
 
 
-def _coerce_account_memory_store(user_memory_store: Any, instructions: BotInstructions) -> AccountStore | None:
-    if user_memory_store is None:
-        return None
-    if isinstance(user_memory_store, AccountStore):
-        return user_memory_store
-    instance_name = str(getattr(user_memory_store, "instance_name", "") or "").strip()
-    if not instance_name:
-        return None
-    directory = instructions.user_memory_dir.strip() or "instances/{instance}/data/accounts/legacy_sender_memory"
-    directory = Path(directory.replace("{instance}", instance_name))
-    if directory.name == "legacy_sender_memory":
-        root = directory.parent
-    elif directory.parent.name == "data":
-        root = directory.parent / "accounts"
-    else:
-        root = directory
-    return AccountStore(root, instance_name, secret_provider=StaticSecretProvider(b"t" * 32))
-
-
 def _reset_current_user_memory(
     user_memory_store: AccountStore | None,
     sender_id: str,
     instructions: BotInstructions,
 ) -> str:
-    account_store = _coerce_account_memory_store(user_memory_store, instructions)
-    if account_store is None or not instructions.user_memory_enabled:
+    if user_memory_store is None or not instructions.user_memory_enabled:
         return instructions.user_memory_reset_unavailable
     try:
-        account_id = account_store.get_account_for_identity(telegram_identity_key(sender_id))
+        account_id = user_memory_store.get_account_for_identity(telegram_identity_key(sender_id))
         if not account_id:
             return instructions.user_memory_reset_success
-        account_store.reset_structured_memory(account_id)
+        user_memory_store.reset_structured_memory(account_id)
     except (AccountStoreError, OSError, ValueError, AttributeError):
         LOGGER.exception("Failed to reset user memory for sender_id=%s.", sender_id)
         return instructions.user_memory_reset_error
@@ -1678,27 +1508,23 @@ def _prepare_user_memory(
     query_text: str,
     api: TelegramAPI | None = None,
 ) -> UserMemoryRecord | None:
-    account_store = _coerce_account_memory_store(user_memory_store, instructions)
     if not instructions.user_memory_enabled:
         return None
-    if account_store is None:
-        if user_memory_store is not None:
-            LOGGER.error("Failed to prepare user memory.")
-            _notify_user_memory_crypto_error(api, message, instructions)
+    if user_memory_store is None:
         return None
     try:
         sender_id = _sender_identifier(message)
         if not sender_id:
             return None
         identity_key = telegram_identity_key(sender_id)
-        account_id = account_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
-        account_store.update_identity_route(
+        account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        user_memory_store.update_identity_route(
             identity_key,
             channel="telegram",
             chat_id=str(_message_chat_id(message) or ""),
             chat_type=_telegram_chat_type(message),
         )
-        selection = account_store.select_structured_memory(
+        selection = user_memory_store.select_structured_memory(
             account_id,
             query_text=query_text,
             max_prompt_chars=instructions.user_memory_max_prompt_chars,
@@ -1706,7 +1532,7 @@ def _prepare_user_memory(
         )
         return UserMemoryRecord(
             sender_id=sender_id,
-            path=account_store.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME,
+            path=user_memory_store.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME,
             prompt_text=selection.prompt_text,
             selected_ids=selection.selected_ids,
         )
@@ -1745,13 +1571,9 @@ def _record_user_memory(
     instructions: BotInstructions,
     api: TelegramAPI | None = None,
 ) -> None:
-    account_store = _coerce_account_memory_store(user_memory_store, instructions)
     if user_memory is None:
         return
-    if account_store is None:
-        if user_memory_store is not None:
-            LOGGER.error("Failed to write user memory for sender_id=%s.", user_memory.sender_id)
-            _notify_user_memory_crypto_error(api, message, instructions)
+    if user_memory_store is None:
         return
     try:
         user_text = _clip_memory_text(user_text, instructions.user_memory_max_entry_chars)
@@ -1777,7 +1599,7 @@ def _record_user_memory(
             "bot_text": bot_text,
         }
         account_id = user_memory.path.parent.name
-        account_store.append_structured_memory_entry(
+        user_memory_store.append_structured_memory_entry(
             account_id,
             entry,
             profile_updates={
@@ -1861,10 +1683,9 @@ def _is_first_contact(
         return False
     if chat_state.has_seen_sender(sender_id):
         return False
-    account_store = _coerce_account_memory_store(user_memory_store, instructions)
-    if account_store is not None and instructions.user_memory_enabled:
+    if user_memory_store is not None and instructions.user_memory_enabled:
         try:
-            if account_store.get_account_for_identity(telegram_identity_key(sender_id)):
+            if user_memory_store.get_account_for_identity(telegram_identity_key(sender_id)):
                 return False
         except (AccountStoreError, OSError, AttributeError):
             return False
@@ -2019,62 +1840,6 @@ def _telegram_chat_type(message: dict[str, Any]) -> str:
 def _telegram_chat_title(message: dict[str, Any]) -> str:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     return str(chat.get("title") or "").strip()
-
-
-def _safe_memory_filename(sender_id: str) -> str:
-    value = sender_id.strip()
-    if re.fullmatch(r"-?\d+", value):
-        return value
-    sanitized = re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_")
-    return sanitized or "unknown"
-
-
-def _new_user_memory_data(sender_id: str) -> dict[str, Any]:
-    timestamp = _utc_timestamp()
-    return {
-        "schema_version": MEMORY_SCHEMA_VERSION,
-        "sender_id": sender_id,
-        "created_at": timestamp,
-        "updated_at": timestamp,
-        "entry_store": USER_MEMORY_ENTRIES_FILENAME,
-        "profile": {
-            "names": [],
-            "usernames": [],
-            "chat_ids": [],
-            "chat_titles": [],
-        },
-        "index": {
-            "keywords": {},
-            "recent_ids": [],
-            "entries": {},
-        },
-    }
-
-
-def _normalize_user_memory_data(data: dict[str, Any], sender_id: str) -> None:
-    data["schema_version"] = MEMORY_SCHEMA_VERSION
-    data["sender_id"] = sender_id
-    data.setdefault("created_at", _utc_timestamp())
-    data.setdefault("updated_at", data["created_at"])
-    profile = data.setdefault("profile", {})
-    if not isinstance(profile, dict):
-        profile = {}
-        data["profile"] = profile
-    for key in ("names", "usernames", "chat_ids", "chat_titles"):
-        if not isinstance(profile.get(key), list):
-            profile[key] = []
-    data["entry_store"] = USER_MEMORY_ENTRIES_FILENAME
-    index = data.setdefault("index", {})
-    if not isinstance(index, dict):
-        index = {}
-        data["index"] = index
-    if not isinstance(index.get("keywords"), dict):
-        index["keywords"] = {}
-    if not isinstance(index.get("recent_ids"), list):
-        index["recent_ids"] = []
-    if not isinstance(index.get("entries"), dict):
-        index["entries"] = {}
-    data.pop("memories", None)
 
 
 def _new_working_memory_data(instance_name: str) -> dict[str, Any]:
@@ -2288,436 +2053,6 @@ def _sanitize_working_memory_text(text: str) -> str:
     return sanitized
 
 
-def _append_json_memory_interaction(
-    index_path: Path,
-    data: dict[str, Any],
-    message: dict[str, Any],
-    user_text: str,
-    bot_text: str,
-    max_entry_chars: int,
-    related_ids: tuple[str, ...],
-    key: bytes,
-) -> None:
-    chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
-    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
-    sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
-    timestamp = _utc_timestamp()
-    sender_id = _sender_identifier(message)
-    sender_name = _sender_display_name(sender, sender_chat)
-    sender_username = _username(sender.get("username") if sender else sender_chat.get("username"))
-    chat_id = _metadata_value(chat.get("id"))
-    chat_title = _metadata_value(chat.get("title"))
-    clipped_user_text = _clip_memory_text(user_text, max_entry_chars)
-    clipped_bot_text = _clip_memory_text(bot_text, max_entry_chars)
-    entry = {
-        "id": _new_memory_id(),
-        "created_at": timestamp,
-        "updated_at": timestamp,
-        "source": {
-            "chat_id": chat_id,
-            "chat_type": _metadata_value(chat.get("type")),
-            "chat_title": chat_title,
-            "message_type": _message_kind(message),
-        },
-        "sender": {
-            "sender_id": sender_id,
-            "sender_name": sender_name,
-            "sender_username": sender_username,
-        },
-        "keywords": _memory_keywords(f"{clipped_user_text}\n{clipped_bot_text}"),
-        "related_ids": [memory_id for memory_id in related_ids if memory_id],
-        "user_text": clipped_user_text,
-        "bot_text": clipped_bot_text,
-    }
-
-    _store_memory_entry(index_path, data, entry, key)
-    _append_profile_value(data, "names", sender_name)
-    _append_profile_value(data, "usernames", sender_username)
-    _append_profile_value(data, "chat_ids", chat_id)
-    _append_profile_value(data, "chat_titles", chat_title)
-    data["updated_at"] = timestamp
-
-
-def _select_user_memory_prompt(
-    index_path: Path,
-    data: dict[str, Any],
-    query_text: str,
-    max_chars: int,
-    key: bytes,
-) -> tuple[str, list[str]]:
-    if max_chars < 1:
-        return "", []
-
-    scores: dict[str, int] = {}
-    index = data.get("index") if isinstance(data.get("index"), dict) else {}
-    entry_index = index.get("entries") if isinstance(index.get("entries"), dict) else {}
-    if not entry_index:
-        return "", []
-    entries_by_id = {
-        str(entry.get("id", "")): entry
-        for entry in _load_user_memory_entries(index_path, key)
-        if isinstance(entry, dict) and str(entry.get("id", ""))
-    }
-    keyword_index = index.get("keywords") if isinstance(index.get("keywords"), dict) else {}
-    for keyword in _memory_keywords(query_text):
-        for memory_id in keyword_index.get(keyword, []):
-            if memory_id in entry_index:
-                scores[memory_id] = scores.get(memory_id, 0) + 1
-
-    recent_ids = [str(memory_id) for memory_id in index.get("recent_ids", [])] if isinstance(index.get("recent_ids"), list) else []
-    if scores:
-        ordered_ids = sorted(
-            scores,
-            key=lambda memory_id: (
-                scores[memory_id],
-                recent_ids.index(memory_id) if memory_id in recent_ids else -1,
-            ),
-            reverse=True,
-        )
-    else:
-        ordered_ids = list(reversed(recent_ids))
-
-    if not ordered_ids:
-        ordered_ids = list(reversed(list(entry_index.keys())))
-
-    selected: list[dict[str, Any]] = []
-    selected_ids: list[str] = []
-    for memory_id in ordered_ids:
-        memory = entries_by_id.get(memory_id)
-        if memory is None or memory_id in selected_ids:
-            continue
-        candidate = _compact_memory_for_prompt(memory)
-        candidate_payload = {
-            "sender_id": str(data.get("sender_id", "")),
-            "selected_memory_ids": [*selected_ids, memory_id],
-            "memories": [*selected, candidate],
-        }
-        candidate_text = json.dumps(candidate_payload, ensure_ascii=False, indent=2)
-        if len(candidate_text) > max_chars:
-            if selected:
-                break
-            candidate["user_text"] = _clip_memory_text(str(candidate.get("user_text", "")), max(200, max_chars // 3))
-            candidate["bot_text"] = _clip_memory_text(str(candidate.get("bot_text", "")), max(200, max_chars // 3))
-            candidate_payload = {
-                "sender_id": str(data.get("sender_id", "")),
-                "selected_memory_ids": [memory_id],
-                "memories": [candidate],
-            }
-            candidate_text = json.dumps(candidate_payload, ensure_ascii=False, indent=2)
-            if len(candidate_text) > max_chars:
-                break
-        selected.append(candidate)
-        selected_ids.append(memory_id)
-
-    if not selected:
-        return "", []
-    payload = {
-        "sender_id": str(data.get("sender_id", "")),
-        "selected_memory_ids": selected_ids,
-        "memories": selected,
-    }
-    return json.dumps(payload, ensure_ascii=False, indent=2), selected_ids
-
-
-def _store_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any], key: bytes) -> None:
-    _normalize_user_memory_data(data, str(data.get("sender_id", "")))
-    memory_id = str(entry.get("id") or _new_memory_id())
-    entry["id"] = memory_id
-    keywords = entry.get("keywords")
-    if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
-        keywords = _memory_keywords(f"{entry.get('user_text', '')}\n{entry.get('bot_text', '')}")
-        entry["keywords"] = keywords
-
-    entries = _load_user_memory_entries(index_path, key)
-    entries.append(entry)
-    _write_user_memory_entries(index_path, entries, key)
-
-    index = data.setdefault("index", {})
-    entry_index = index.setdefault("entries", {})
-    if not isinstance(entry_index, dict):
-        entry_index = {}
-        index["entries"] = entry_index
-    entry_index[memory_id] = {
-        "created_at": str(entry.get("created_at", "")),
-        "updated_at": str(entry.get("updated_at", "")),
-        "keywords": keywords,
-        "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
-    }
-
-    keyword_index = index.setdefault("keywords", {})
-    if not isinstance(keyword_index, dict):
-        keyword_index = {}
-        index["keywords"] = keyword_index
-    for keyword in keywords[:MEMORY_KEYWORD_LIMIT]:
-        entries = keyword_index.setdefault(keyword, [])
-        if not isinstance(entries, list):
-            entries = []
-            keyword_index[keyword] = entries
-        if memory_id not in entries:
-            entries.append(memory_id)
-            del entries[:-MEMORY_KEYWORD_ENTRY_LIMIT]
-
-    recent_ids = index.setdefault("recent_ids", [])
-    if not isinstance(recent_ids, list):
-        recent_ids = []
-        index["recent_ids"] = recent_ids
-    if memory_id in recent_ids:
-        recent_ids.remove(memory_id)
-    recent_ids.append(memory_id)
-    del recent_ids[:-MEMORY_RECENT_LIMIT]
-
-
-def _read_memory_entry(index_path: Path, data: dict[str, Any], memory_id: str, key: bytes) -> dict[str, Any] | None:
-    entries = _load_user_memory_entries(index_path, key)
-    try:
-        for payload in entries:
-            if isinstance(payload, dict) and str(payload.get("id", "")) == memory_id:
-                return payload
-    except Exception:
-        LOGGER.exception("Failed to read JSONL user memory entry id=%s.", memory_id)
-    return None
-
-
-def _migrate_inline_json_memory(index_path: Path, payload: dict[str, Any], sender_id: str, key: bytes) -> dict[str, Any]:
-    data = _new_user_memory_data(sender_id)
-    data["created_at"] = str(payload.get("created_at") or data["created_at"])
-    data["updated_at"] = str(payload.get("updated_at") or data["updated_at"])
-    profile = payload.get("profile")
-    if isinstance(profile, dict):
-        data["profile"] = profile
-    memories: list[dict[str, Any]] = []
-    for memory in payload.get("memories", []):
-        if isinstance(memory, dict):
-            memories.append(memory)
-            _store_memory_entry(index_path, data, memory, key)
-    _write_user_memory_json(index_path, data, key)
-    if not memories:
-        _write_user_memory_entries(index_path, [], key)
-    return data
-
-
-def _memory_entries_path(index_path: Path) -> Path:
-    return index_path.parent / USER_MEMORY_ENTRIES_FILENAME
-
-
-def _memory_habits_path(index_path: Path) -> Path:
-    return index_path.parent / USER_HABITS_FILENAME
-
-
-def _memory_avatar_icon_path(index_path: Path) -> Path:
-    return index_path.parent / USER_AVATAR_ICON_FILENAME
-
-
-def _memory_avatar_icon_marker_path(index_path: Path) -> Path:
-    return index_path.parent / USER_AVATAR_ICON_MARKER_FILENAME
-
-
-def _memory_avatar_check_marker_path(index_path: Path) -> Path:
-    return index_path.parent / USER_AVATAR_CHECK_MARKER_FILENAME
-
-
-def _memory_avatar_paths(index_path: Path) -> list[Path]:
-    return sorted(
-        path
-        for path in index_path.parent.glob(f"{USER_AVATAR_BASENAME}.*")
-        if path.name not in {USER_AVATAR_ICON_FILENAME, USER_AVATAR_ICON_MARKER_FILENAME, USER_AVATAR_CHECK_MARKER_FILENAME}
-    )
-
-
-def _ensure_user_habits_file(index_path: Path, key: bytes) -> None:
-    habits_path = _memory_habits_path(index_path)
-    if not habits_path.exists():
-        habits_path.write_text("", encoding="utf-8")
-
-
-def _ensure_user_avatar_assets(api: TelegramAPI | None, index_path: Path, message: dict[str, Any]) -> None:
-    if api is None:
-        return
-
-    avatar_paths = _memory_avatar_paths(index_path)
-    icon_path = _memory_avatar_icon_path(index_path)
-    if avatar_paths and not _avatar_needs_refresh(avatar_paths[0]) and icon_path.exists():
-        _ensure_user_folder_icon(index_path)
-        return
-    if not avatar_paths and not _avatar_missing_recheck_due(index_path):
-        return
-
-    sender = message.get("from") if isinstance(message.get("from"), dict) else {}
-    user_id = sender.get("id")
-    if not isinstance(user_id, int):
-        return
-
-    try:
-        _mark_user_avatar_checked(index_path)
-        file_id = api.get_user_profile_photo_file_id(user_id)
-        if not file_id:
-            return
-        file_path = api.get_file_path(file_id)
-        image_bytes = api.download_file(file_path)
-        avatar_path = _write_user_avatar(index_path, file_path, image_bytes)
-        _write_user_avatar_icon(avatar_path, icon_path)
-        _ensure_user_folder_icon(index_path)
-    except (OSError, TelegramAPIError, ValueError) as exc:
-        LOGGER.debug("Failed to prepare user avatar for user_id=%s: %s", user_id, exc)
-
-
-def _avatar_needs_refresh(path: Path) -> bool:
-    try:
-        return time.time() - path.stat().st_mtime > USER_AVATAR_REFRESH_SECONDS
-    except FileNotFoundError:
-        return True
-
-
-def _avatar_missing_recheck_due(index_path: Path) -> bool:
-    marker_path = _memory_avatar_check_marker_path(index_path)
-    try:
-        return time.time() - marker_path.stat().st_mtime > USER_AVATAR_MISSING_RECHECK_SECONDS
-    except FileNotFoundError:
-        return True
-
-
-def _mark_user_avatar_checked(index_path: Path) -> None:
-    _memory_avatar_check_marker_path(index_path).write_text(str(int(time.time())), encoding="utf-8")
-
-
-def _write_user_avatar(index_path: Path, file_path: str, image_bytes: bytes) -> Path:
-    extension = _avatar_extension(file_path, image_bytes)
-    avatar_path = index_path.parent / f"{USER_AVATAR_BASENAME}.{extension}"
-    for existing_path in _memory_avatar_paths(index_path):
-        if existing_path != avatar_path:
-            _unlink_file_if_exists(existing_path)
-    avatar_path.write_bytes(image_bytes)
-    _unlink_file_if_exists(_memory_avatar_icon_marker_path(index_path))
-    _unlink_file_if_exists(_memory_avatar_check_marker_path(index_path))
-    return avatar_path
-
-
-def _avatar_extension(file_path: str, image_bytes: bytes) -> str:
-    suffix = Path(file_path).suffix.lower().lstrip(".")
-    if suffix in {"jpg", "jpeg", "png", "webp"}:
-        return "jpg" if suffix == "jpeg" else suffix
-    try:
-        from PIL import Image
-
-        with Image.open(io.BytesIO(image_bytes)) as image:
-            image_format = (image.format or "").casefold()
-    except Exception:
-        return "jpg"
-    return {"jpeg": "jpg", "png": "png", "webp": "webp"}.get(image_format, "jpg")
-
-
-def _write_user_avatar_icon(avatar_path: Path, icon_path: Path) -> None:
-    try:
-        from PIL import Image
-
-        with Image.open(avatar_path) as image:
-            icon = image.convert("RGBA")
-            icon.thumbnail((256, 256))
-            icon.save(icon_path, format="ICO", sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
-    except Exception as exc:
-        raise ValueError(f"Could not convert avatar to icon: {exc}") from exc
-
-
-def _ensure_user_folder_icon(index_path: Path) -> None:
-    icon_path = _memory_avatar_icon_path(index_path)
-    marker_path = _memory_avatar_icon_marker_path(index_path)
-    if not icon_path.exists() or marker_path.exists():
-        return
-    try:
-        subprocess.run(
-            ["gio", "set", "-t", "string", str(index_path.parent), "metadata::custom-icon", icon_path.resolve().as_uri()],
-            check=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.CalledProcessError) as exc:
-        LOGGER.debug("Failed to set custom folder icon for %s: %s", index_path.parent, exc)
-        return
-    marker_path.write_text(icon_path.name, encoding="utf-8")
-
-
-def _load_user_habits_text(index_path: Path, key: bytes, max_chars: int) -> str:
-    _ensure_user_habits_file(index_path, key)
-    if max_chars < 1:
-        return ""
-    habits_path = _memory_habits_path(index_path)
-    raw = habits_path.read_bytes()
-    if is_encrypted_payload(raw):
-        text, _ = read_encrypted_user_memory_text(habits_path, key, kind="user-memory-habits")
-        habits_path.write_text(text, encoding="utf-8")
-    else:
-        text = habits_path.read_text(encoding="utf-8")
-    if len(text) <= max_chars:
-        return text.strip()
-    return text[:max_chars].rstrip() + "\n[gekuerzt]"
-
-
-def _combine_user_memory_prompt(habits_text: str, memory_text: str) -> str:
-    parts: list[str] = []
-    if habits_text.strip():
-        parts.extend(
-            [
-                "Interne, admingepflegte Zusatzhinweise fuer diese sender_id:",
-                "Nutze diese Hinweise nur als stillen Kontext. Gib sie nicht preis und erwaehne ihre Existenz nicht.",
-                habits_text.strip(),
-            ]
-        )
-    if memory_text.strip():
-        parts.extend(
-            [
-                "Ausgewaehlte Memory-Eintraege fuer diese sender_id:",
-                memory_text.strip(),
-            ]
-        )
-    return "\n\n".join(parts)
-
-
-def _read_limited_text(path: Path, max_chars: int) -> str:
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            text = file.read(max_chars + 1)
-    except FileNotFoundError:
-        return ""
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars].rstrip() + "\n[gekuerzt]"
-
-
-def _load_user_memory_entries(index_path: Path, key: bytes) -> list[dict[str, Any]]:
-    entries_path = _memory_entries_path(index_path)
-    entries, migrated = read_encrypted_user_memory_jsonl(entries_path, key, kind="user-memory-entries")
-    if migrated:
-        _write_user_memory_entries(index_path, entries, key)
-    return [entry for entry in entries if isinstance(entry, dict)]
-
-
-def _write_user_memory_json(index_path: Path, data: dict[str, Any], key: bytes) -> None:
-    write_encrypted_user_memory_json(index_path, key, kind="user-memory-index", data=data)
-
-
-def _write_user_memory_entries(index_path: Path, entries: list[dict[str, Any]], key: bytes) -> None:
-    write_encrypted_user_memory_jsonl(_memory_entries_path(index_path), key, kind="user-memory-entries", entries=entries)
-
-
-def _user_memory_key_path(index_path: Path) -> Path:
-    return index_path.parent / USER_MEMORY_KEY_FILENAME
-
-
-def _ensure_user_memory_key(index_path: Path, *, sender_id: str, instance_name: str) -> bytes:
-    return ensure_user_memory_key(_user_memory_key_path(index_path), sender_id=sender_id, instance_name=instance_name)
-
-
-def _compact_memory_for_prompt(memory: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "id": str(memory.get("id", "")),
-        "created_at": str(memory.get("created_at", "")),
-        "source": memory.get("source", {}) if isinstance(memory.get("source"), dict) else {},
-        "keywords": memory.get("keywords", []) if isinstance(memory.get("keywords"), list) else [],
-        "user_text": str(memory.get("user_text", "")),
-        "bot_text": str(memory.get("bot_text", "")),
-    }
-
-
 def _write_json_file(path: Path, data: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -2738,32 +2073,6 @@ def _move_corrupt_json_file(path: Path) -> Path:
     return path
 
 
-def _unlink_file_if_exists(path: Path) -> None:
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        return
-    except IsADirectoryError:
-        LOGGER.warning("Refusing to delete directory while resetting user memory: %s.", path)
-
-
-def _append_profile_value(data: dict[str, Any], key: str, value: str) -> None:
-    value = str(value or "").strip()
-    if not value or value == "unbekannt":
-        return
-    profile = data.setdefault("profile", {})
-    if not isinstance(profile, dict):
-        profile = {}
-        data["profile"] = profile
-    values = profile.setdefault(key, [])
-    if not isinstance(values, list):
-        values = []
-        profile[key] = values
-    if value not in values:
-        values.append(value)
-        del values[:-MEMORY_RECENT_LIMIT]
-
-
 def _memory_keywords(text: str) -> list[str]:
     keywords: list[str] = []
     seen: set[str] = set()
@@ -2778,10 +2087,6 @@ def _memory_keywords(text: str) -> list[str]:
         if len(keywords) >= MEMORY_KEYWORD_LIMIT:
             break
     return keywords
-
-
-def _new_memory_id() -> str:
-    return f"mem_{uuid.uuid4().hex}"
 
 
 def _new_working_memory_id() -> str:
@@ -3577,7 +2882,7 @@ def _handle_youtube_transcript_request(
     chat_id: int,
     message: dict[str, Any],
     text: str,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
@@ -3694,7 +2999,7 @@ def _handle_pending_youtube_local_options(
     chat_id: int,
     message: dict[str, Any],
     text: str,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
@@ -3754,7 +3059,7 @@ def _start_youtube_local_transcription(
     url: str,
     live_enabled: bool,
     llm_enabled: bool,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
@@ -3821,7 +3126,7 @@ def _run_youtube_local_transcription_job(
     url: str,
     live_enabled: bool,
     llm_enabled: bool,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
@@ -3943,7 +3248,7 @@ def _send_youtube_transcript_to_openai_pipeline(
     url: str,
     instructions: BotInstructions,
     openai_client: OpenAIClient,
-    user_memory_store: UserMemoryStore | None,
+    user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     bot_identity: BotIdentity,
     first_contact: bool,
