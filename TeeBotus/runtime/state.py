@@ -64,8 +64,11 @@ class RuntimeState:
         return dict(payload) if payload is not None else None
 
     def set_previous_response_id(self, instance_name: str, account_id: str, response_id: str | None) -> None:
-        if response_id:
-            self.previous_response_ids[(instance_name, account_id)] = response_id
+        clean_response_id = str(response_id or "").strip()
+        if clean_response_id:
+            self.previous_response_ids[(instance_name, account_id)] = clean_response_id
+        else:
+            self.previous_response_ids.pop((instance_name, account_id), None)
 
     def get_previous_response_id(self, instance_name: str, account_id: str) -> str | None:
         return self.previous_response_ids.get((instance_name, account_id))
@@ -180,6 +183,8 @@ class RuntimeStateStore(RuntimeState):
         super().set_previous_response_id(instance_name, account_id, response_id)
         if response_id:
             self._write_openai_previous_response_id(account_id, response_id)
+        else:
+            self._clear_openai_previous_response_id(account_id)
 
     def get_previous_response_id(self, instance_name: str, account_id: str) -> str | None:
         cached = super().get_previous_response_id(instance_name, account_id)
