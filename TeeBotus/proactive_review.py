@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
 from TeeBotus.runtime.proactive_agent import approve_proactive_review_item, reject_proactive_review_item
 
 StoreFactory = Callable[[Path, str], AccountStore]
@@ -111,12 +111,23 @@ def review_proactive_item(
         store = resolved_factory(instances_dir / instance_name / "data" / "accounts", instance_name)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "action": action, "reason": f"store_error:{type(exc).__name__}: {exc}"}
-    if action == "approve":
-        decision = approve_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
-    elif action == "reject":
-        decision = reject_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
-    else:
-        return {"ok": False, "action": action, "reason": "unsupported_action"}
+    try:
+        if action == "approve":
+            decision = approve_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
+        elif action == "reject":
+            decision = reject_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
+        else:
+            return {"ok": False, "action": action, "reason": "unsupported_action"}
+    except (AccountStoreError, OSError, ValueError) as exc:
+        return {
+            "ok": False,
+            "action": action,
+            "instance": instance_name,
+            "account_id": account_id,
+            "item_id": item_id,
+            "reason": f"review_store_error:{type(exc).__name__}: {exc}",
+            "route": {},
+        }
     return {
         "ok": decision.allowed,
         "action": action,

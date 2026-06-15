@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from TeeBotus.proactive_review import list_proactive_review_items, main, review_proactive_item
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
 
 
@@ -71,6 +71,28 @@ def test_proactive_review_reject_cancels_item(tmp_path: Path) -> None:
     assert row["status"] == "cancelled"
     assert row["human_review"]["status"] == "rejected"
     assert row["human_review"]["reason"] == "zu riskant"
+
+
+def test_proactive_review_approve_reports_store_errors(tmp_path: Path) -> None:
+    class BrokenStore:
+        def read_proactive_outbox(self, _account_id: str) -> list:
+            raise AccountStoreError("encrypted envelope authentication failed")
+
+    report = review_proactive_item(
+        instances_dir=tmp_path / "instances",
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="approve",
+        store_factory=lambda _root, _instance: BrokenStore(),  # type: ignore[return-value]
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert report["ok"] is False
+    assert report["action"] == "approve"
+    assert report["account_id"] == "a" * 128
+    assert report["item_id"] == "pro_bad"
+    assert report["reason"] == "review_store_error:AccountStoreError: encrypted envelope authentication failed"
 
 
 def test_proactive_review_cli_prints_json(tmp_path: Path, capsys) -> None:
