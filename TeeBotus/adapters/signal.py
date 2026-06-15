@@ -6,7 +6,16 @@ import mimetypes
 from typing import Any
 
 from TeeBotus.runtime.accounts import signal_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import (
+    DeleteTrackedMessages,
+    ExportFile,
+    NotifyLinkedIdentity,
+    SendAttachment,
+    SendReaction,
+    SendReceipt,
+    SendText,
+    SendTyping,
+)
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
 
@@ -88,6 +97,12 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
             elif isinstance(action, SendTyping):
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
                 typing_target = await _start_signal_typing(context, action.chat_id)
+                sent.append(None)
+            elif isinstance(action, SendReaction):
+                await _send_signal_reaction(context, action.chat_id, action.message_ref, action.emoji)
+                sent.append(None)
+            elif isinstance(action, SendReceipt):
+                await _send_signal_receipt(context, action.chat_id, action.message_ref, action.receipt_type)
                 sent.append(None)
             elif isinstance(action, SendAttachment):
                 encoded = base64.b64encode(action.data).decode("ascii")
@@ -171,6 +186,55 @@ async def _start_signal_typing(context: Any, chat_id: str) -> str:
         return target
     await context.start_typing()
     return ""
+
+
+async def _send_signal_reaction(context: Any, chat_id: str, message_ref: str, emoji: str) -> None:
+    _require_signal_current_message_action(context, chat_id, message_ref, "reaction")
+    key = str(emoji or "").strip()
+    if not key:
+        raise RuntimeError("Signal reaction requires an emoji")
+    react = getattr(context, "react", None)
+    if callable(react):
+        await react(key)
+        return
+    bot = getattr(context, "bot", None)
+    bot_react = getattr(bot, "react", None)
+    message = getattr(context, "message", None)
+    if callable(bot_react) and message is not None:
+        await bot_react(message, key)
+        return
+    raise RuntimeError("SignalBot react API is required to send a reaction")
+
+
+async def _send_signal_receipt(context: Any, chat_id: str, message_ref: str, receipt_type: str) -> None:
+    _require_signal_current_message_action(context, chat_id, message_ref, "receipt")
+    normalized = str(receipt_type or "read").strip().casefold()
+    if normalized not in {"read", "viewed"}:
+        normalized = "read"
+    receipt = getattr(context, "receipt", None)
+    if callable(receipt):
+        await receipt(normalized)
+        return
+    bot = getattr(context, "bot", None)
+    bot_receipt = getattr(bot, "receipt", None)
+    message = getattr(context, "message", None)
+    if callable(bot_receipt) and message is not None:
+        await bot_receipt(message, normalized)
+        return
+    raise RuntimeError("SignalBot receipt API is required to send a receipt")
+
+
+def _require_signal_current_message_action(context: Any, chat_id: str, message_ref: str, action_name: str) -> None:
+    target = str(chat_id or "").strip()
+    current_recipient = _signal_context_recipient(context)
+    if target and current_recipient and target != current_recipient:
+        raise RuntimeError(f"Signal {action_name} can only target the current message recipient")
+    ref = str(message_ref or "").strip()
+    current_ref = _signal_message_ref(getattr(context, "message", None))
+    if ref and current_ref and ref != current_ref:
+        raise RuntimeError(f"Signal {action_name} can only target the current message")
+    if not current_ref:
+        raise RuntimeError(f"Signal {action_name} requires the current message")
 
 
 def _signal_can_use_context_reply(context: Any, reply_to_ref: str) -> bool:

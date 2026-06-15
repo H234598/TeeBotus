@@ -3,7 +3,16 @@ from __future__ import annotations
 from typing import Any
 
 from TeeBotus.runtime.accounts import telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import (
+    DeleteTrackedMessages,
+    ExportFile,
+    NotifyLinkedIdentity,
+    SendAttachment,
+    SendReaction,
+    SendReceipt,
+    SendText,
+    SendTyping,
+)
 from TeeBotus.runtime.events import IncomingEvent
 
 
@@ -58,6 +67,8 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             sent.append(api.send_message(action.chat_id, action.text))
         elif isinstance(action, SendTyping):
             api.send_chat_action(action.chat_id, "typing")
+            sent.append(None)
+        elif isinstance(action, (SendReaction, SendReceipt)):
             sent.append(None)
         elif isinstance(action, SendAttachment):
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):

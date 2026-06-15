@@ -9,7 +9,7 @@ from signalbot.message import MessageType
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendReaction, SendReceipt, SendText, SendTyping
 
 
 @dataclass
@@ -338,6 +338,56 @@ def test_signal_typing_stops_previous_target_before_starting_new_target():
         ("send", "+492", "hi", {"base64_attachments": None}),
         ("stop_typing", "+492"),
     ]
+
+
+def test_signal_reaction_uses_current_context_message():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+            self.reactions = []
+
+        async def react(self, emoji):
+            self.reactions.append(emoji)
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendReaction("+491", "123", "\U0001f44d")]))
+
+    assert sent == [None]
+    assert context.reactions == ["\U0001f44d"]
+
+
+def test_signal_receipt_uses_current_context_message():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+            self.receipts = []
+
+        async def receipt(self, receipt_type):
+            self.receipts.append(receipt_type)
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendReceipt("+491", "123", "viewed")]))
+
+    assert sent == [None]
+    assert context.receipts == ["viewed"]
+
+
+def test_signal_reaction_rejects_non_current_message_ref():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+
+        async def react(self, _emoji):
+            raise AssertionError("react should not be called")
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendReaction("+491", "999", "\U0001f44d")]))
+    except RuntimeError as exc:
+        assert "current message" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
 
 
 def test_signal_send_text_can_quote_current_message_with_bot_send():
@@ -1024,6 +1074,59 @@ def test_matrix_send_typing_failure_does_not_block_followup_text():
 
     assert sent == [None, "$sent"]
     assert client.sends[0]["content"] == {"msgtype": "m.text", "body": "hi"}
+
+
+def test_matrix_send_reaction_uses_annotation_event():
+    class Response:
+        event_id = "$reaction"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendReaction("!room:example", "$old", "\U0001f44d")]))
+
+    assert sent == ["$reaction"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.reaction",
+            "content": {
+                "m.relates_to": {
+                    "rel_type": "m.annotation",
+                    "event_id": "$old",
+                    "key": "\U0001f44d",
+                }
+            },
+        }
+    ]
+
+
+def test_matrix_send_receipt_uses_update_receipt_marker():
+    class Response:
+        pass
+
+    class Client:
+        def __init__(self) -> None:
+            self.receipts = []
+
+        async def update_receipt_marker(self, room_id, event_id, receipt_type=None):
+            self.receipts.append((room_id, event_id, receipt_type))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendReceipt("!room:example", "$old")]))
+
+    assert sent == [None]
+    assert len(client.receipts) == 1
+    assert client.receipts[0][0:2] == ("!room:example", "$old")
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

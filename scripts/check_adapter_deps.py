@@ -107,6 +107,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
     room_typing_params = inspect.signature(nio.AsyncClient.room_typing).parameters
     room_redact_params = inspect.signature(nio.AsyncClient.room_redact).parameters
+    update_receipt_params = inspect.signature(nio.AsyncClient.update_receipt_marker).parameters
     expectations = {
         "NioBot.command_prefix": "command_prefix" in client_params,
         "NioBot.start.access_token": "access_token" in start_params,
@@ -118,6 +119,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "AsyncClient.room_send.content": "content" in room_send_params,
         "AsyncClient.room_typing.timeout": "timeout" in room_typing_params,
         "AsyncClient.room_redact.reason": "reason" in room_redact_params,
+        "AsyncClient.update_receipt_marker.receipt_type": "receipt_type" in update_receipt_params,
+        "nio.ReceiptType.read": hasattr(getattr(nio, "ReceiptType", object), "read"),
     }
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
@@ -170,7 +173,11 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         from signalbot import SignalBot  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
-    missing = [name for name in ("send", "reply", "start_typing", "stop_typing", "remote_delete") if not hasattr(Context, name)]
+    missing = [
+        name
+        for name in ("send", "reply", "start_typing", "stop_typing", "remote_delete", "react", "receipt")
+        if not hasattr(Context, name)
+    ]
     if missing:
         return False, f"signalbot Context missing required API: {', '.join(missing)}"
     send_params = inspect.signature(Context.send).parameters
@@ -178,16 +185,26 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_send_params = inspect.signature(SignalBot.send).parameters
     bot_start_typing_params = inspect.signature(SignalBot.start_typing).parameters
     bot_stop_typing_params = inspect.signature(SignalBot.stop_typing).parameters
+    bot_react_params = inspect.signature(SignalBot.react).parameters
+    bot_receipt_params = inspect.signature(SignalBot.receipt).parameters
     delete_params = inspect.signature(Context.remote_delete).parameters
+    react_params = inspect.signature(Context.react).parameters
+    receipt_params = inspect.signature(Context.receipt).parameters
     expectations = {
         "Context.send.base64_attachments": "base64_attachments" in send_params,
         "Context.reply.base64_attachments": "base64_attachments" in reply_params,
+        "Context.react.emoji": "emoji" in react_params,
+        "Context.receipt.receipt_type": "receipt_type" in receipt_params,
         "SignalBot.send.receiver": "receiver" in bot_send_params,
         "SignalBot.send.base64_attachments": "base64_attachments" in bot_send_params,
         "SignalBot.send.quote_author": "quote_author" in bot_send_params,
         "SignalBot.send.quote_mentions": "quote_mentions" in bot_send_params,
         "SignalBot.send.quote_message": "quote_message" in bot_send_params,
         "SignalBot.send.quote_timestamp": "quote_timestamp" in bot_send_params,
+        "SignalBot.react.message": "message" in bot_react_params,
+        "SignalBot.react.emoji": "emoji" in bot_react_params,
+        "SignalBot.receipt.message": "message" in bot_receipt_params,
+        "SignalBot.receipt.receipt_type": "receipt_type" in bot_receipt_params,
         "SignalBot.start_typing.receiver": "receiver" in bot_start_typing_params,
         "SignalBot.stop_typing.receiver": "receiver" in bot_stop_typing_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
@@ -195,7 +212,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=send,reply,start_typing,stop_typing,remote_delete"
+    return True, "signalbot Context contract=ok methods=send,reply,react,receipt,start_typing,stop_typing,remote_delete"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:

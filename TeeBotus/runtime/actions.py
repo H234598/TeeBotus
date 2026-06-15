@@ -35,6 +35,20 @@ class SendTyping:
 
 
 @dataclass(frozen=True)
+class SendReaction:
+    chat_id: str
+    message_ref: str
+    emoji: str
+
+
+@dataclass(frozen=True)
+class SendReceipt:
+    chat_id: str
+    message_ref: str
+    receipt_type: Literal["read", "viewed"] = "read"
+
+
+@dataclass(frozen=True)
 class ExportFile:
     chat_id: str
     filename: str
@@ -53,4 +67,13 @@ class NotifyLinkedIdentity:
     track: bool = False
 
 
-OutgoingAction = SendText | SendAttachment | DeleteTrackedMessages | SendTyping | ExportFile | NotifyLinkedIdentity
+OutgoingAction = (
+    SendText
+    | SendAttachment
+    | DeleteTrackedMessages
+    | SendTyping
+    | SendReaction
+    | SendReceipt
+    | ExportFile
+    | NotifyLinkedIdentity
+)

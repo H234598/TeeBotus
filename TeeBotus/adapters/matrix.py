@@ -4,7 +4,16 @@ from io import BytesIO
 from typing import Any
 
 from TeeBotus.runtime.accounts import matrix_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import (
+    DeleteTrackedMessages,
+    ExportFile,
+    NotifyLinkedIdentity,
+    SendAttachment,
+    SendReaction,
+    SendReceipt,
+    SendText,
+    SendTyping,
+)
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
 
@@ -54,6 +63,12 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
+            sent.append(None)
+        elif isinstance(action, SendReaction):
+            response = await _send_matrix_reaction(client, action.chat_id, action.message_ref, action.emoji)
+            sent.append(_matrix_event_id(response))
+        elif isinstance(action, SendReceipt):
+            await _send_matrix_receipt(client, action.chat_id, action.message_ref, action.receipt_type)
             sent.append(None)
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
@@ -111,6 +126,54 @@ async def _send_matrix_typing(client: Any, room_id: str) -> None:
         await room_typing(room_id, True, timeout=3000)
     except Exception:
         return
+
+
+async def _send_matrix_reaction(client: Any, room_id: str, event_id: str, emoji: str) -> Any:
+    target = str(event_id or "").strip()
+    key = str(emoji or "").strip()
+    if not target:
+        raise RuntimeError("Matrix reaction requires a message_ref")
+    if not key:
+        raise RuntimeError("Matrix reaction requires an emoji")
+    response = await client.room_send(
+        room_id=room_id,
+        message_type="m.reaction",
+        content={
+            "m.relates_to": {
+                "rel_type": "m.annotation",
+                "event_id": target,
+                "key": key,
+            }
+        },
+    )
+    _raise_matrix_response_error(response)
+    return response
+
+
+async def _send_matrix_receipt(client: Any, room_id: str, event_id: str, receipt_type: str) -> None:
+    target = str(event_id or "").strip()
+    if not target:
+        raise RuntimeError("Matrix receipt requires a message_ref")
+    update_receipt_marker = getattr(client, "update_receipt_marker", None)
+    if callable(update_receipt_marker):
+        response = await update_receipt_marker(room_id, target, receipt_type=_matrix_receipt_type(receipt_type))
+        _raise_matrix_response_error(response)
+        return
+    room_read_markers = getattr(client, "room_read_markers", None)
+    if callable(room_read_markers):
+        response = await room_read_markers(room_id, target, read_event=target)
+        _raise_matrix_response_error(response)
+
+
+def _matrix_receipt_type(receipt_type: str) -> Any:
+    normalized = str(receipt_type or "read").strip().casefold()
+    try:
+        from nio import ReceiptType  # type: ignore[import-not-found]
+    except Exception:
+        return normalized
+    if normalized == "viewed" and hasattr(ReceiptType, "read_private"):
+        return ReceiptType.read_private
+    return ReceiptType.read
 
 
 async def _send_matrix_file_or_error_notice(
