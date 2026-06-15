@@ -508,7 +508,8 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
         purpose="structured_decision",
         allow_remote_fallback=True,
     )
-    fallback_route = select_llm_route("structured_decision", profiles=profiles, routing=routing, allow_remote_fallback=True)
+    default_route = select_llm_route("structured_decision", profiles=profiles, routing=routing)
+    explicit_fallback_route = select_llm_route("structured_decision", profiles=profiles, routing=routing, allow_remote_fallback=True)
     return _result(
         name="llm_router_structured_decision",
         category="llm_router",
@@ -523,7 +524,10 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "runtime_client": type(client).__name__,
             "runtime_provider": client.provider if isinstance(client, LiteLLMTextClient) else "",
             "runtime_model": client.model if isinstance(client, LiteLLMTextClient) else "",
-            "fallback_models": list(fallback_route.fallback_models),
+            "remote_fallback_default_enabled": bool(default_route.fallback_models),
+            "default_fallback_models": list(default_route.fallback_models),
+            "explicit_remote_fallback_enabled": bool(explicit_fallback_route.fallback_models),
+            "explicit_remote_fallback_models": list(explicit_fallback_route.fallback_models),
             "network_calls": 0,
         },
     )
