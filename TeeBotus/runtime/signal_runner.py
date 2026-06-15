@@ -96,6 +96,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             openai_client=self.openai_client,
             default_api_key=run_config.openai_api_key,
             profile=run_config.llm_profile,
+            purpose=run_config.llm_purpose,
+            allow_remote_fallback=run_config.llm_allow_remote_fallback,
             provider=run_config.llm_provider,
             model=run_config.llm_model,
             fallback_models=run_config.llm_fallback_models,

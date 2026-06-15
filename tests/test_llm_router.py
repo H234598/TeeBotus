@@ -121,6 +121,52 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored-default"),
+        openai_client=None,
+        purpose="structured_decision",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11434"
+    assert client.fallback_models == ()
+
+
+def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() -> None:
+    blocked = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+    )
+    allowed = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        allow_remote_fallback="yes",
+    )
+
+    assert isinstance(blocked, LiteLLMTextClient)
+    assert blocked.fallback_models == ()
+    assert isinstance(allowed, LiteLLMTextClient)
+    assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
+
+
+def test_runtime_text_client_direct_runtime_provider_overrides_purpose_router() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        provider="litellm",
+        model="ollama_chat/qwen2.5:7b",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.model == "ollama_chat/qwen2.5:7b"
+
+
 def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -> None:
     captured: list[str] = []
 

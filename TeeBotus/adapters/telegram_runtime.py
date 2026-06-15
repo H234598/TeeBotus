@@ -2855,6 +2855,8 @@ def run_polling(
         openai_client=openai_client,
         default_api_key=resolved_openai_api_key or "",
         profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
+        purpose=resolve_llm_setting(instance, "telegram", adapter_slot, "PURPOSE"),
+        allow_remote_fallback=resolve_llm_setting(instance, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
         provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
         model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
         fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
