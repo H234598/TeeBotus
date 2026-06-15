@@ -23,6 +23,10 @@ class AccountRunConfig:
     slot: int
     label: str
     openai_api_key: str
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_api_key: str = ""
+    llm_base_url: str = ""
     telegram_token: str = ""
     signal_service: str = ""
     signal_phone_number: str = ""
@@ -135,6 +139,33 @@ def resolve_openai_key(
     return ""
 
 
+def resolve_llm_setting(
+    instance_name: str,
+    channel: str,
+    slot: int,
+    name: str,
+    env: Mapping[str, str] | None = None,
+) -> str:
+    source = os.environ if env is None else env
+    setting = "_".join(part for part in str(name or "").strip().upper().split("_") if part)
+    if not setting:
+        raise RuntimeConfigError("LLM setting name must not be empty")
+    instance_token = normalize_instance_env_token(instance_name)
+    channel_token = str(channel).strip().upper()
+    candidates = [
+        f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}_{slot}",
+        f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}",
+        f"TEEBOTUS_LLM_{setting}_{instance_token}_{slot}",
+        f"TEEBOTUS_LLM_{setting}_{instance_token}",
+        f"TEEBOTUS_LLM_{setting}",
+    ]
+    for key in candidates:
+        value = source.get(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _resolve_indexed_secret(value: str | None, slot: int) -> str:
     values = parse_csv(value)
     index = slot - 1
@@ -217,6 +248,7 @@ def build_account_run_configs(
     if "telegram" in channels:
         for slot, token in enumerate(resolve_telegram_tokens(instance_name, env), start=1):
             openai_key = resolve_openai_key(instance_name, "telegram", slot, env)
+            llm_kwargs = _resolve_llm_runtime_kwargs(instance_name, "telegram", slot, env)
             accounts.append(
                 AccountRunConfig(
                     instance_name=instance_name,
@@ -225,11 +257,13 @@ def build_account_run_configs(
                     label=f"telegram:{slot}",
                     telegram_token=token,
                     openai_api_key=openai_key,
+                    **llm_kwargs,
                 )
             )
     if "signal" in channels:
         for slot, (service, phone) in enumerate(resolve_signal_accounts(instance_name, env), start=1):
             openai_key = resolve_openai_key(instance_name, "signal", slot, env)
+            llm_kwargs = _resolve_llm_runtime_kwargs(instance_name, "signal", slot, env)
             accounts.append(
                 AccountRunConfig(
                     instance_name=instance_name,
@@ -239,11 +273,13 @@ def build_account_run_configs(
                     signal_service=service,
                     signal_phone_number=phone,
                     openai_api_key=openai_key,
+                    **llm_kwargs,
                 )
             )
     if "matrix" in channels:
         for slot, (homeserver, user_id, access_token, device_id) in enumerate(resolve_matrix_accounts(instance_name, env), start=1):
             openai_key = resolve_openai_key(instance_name, "matrix", slot, env)
+            llm_kwargs = _resolve_llm_runtime_kwargs(instance_name, "matrix", slot, env)
             accounts.append(
                 AccountRunConfig(
                     instance_name=instance_name,
@@ -255,9 +291,24 @@ def build_account_run_configs(
                     matrix_access_token=access_token,
                     matrix_device_id=device_id,
                     openai_api_key=openai_key,
+                    **llm_kwargs,
                 )
             )
     return tuple(accounts)
+
+
+def _resolve_llm_runtime_kwargs(
+    instance_name: str,
+    channel: str,
+    slot: int,
+    env: Mapping[str, str] | None,
+) -> dict[str, str]:
+    return {
+        "llm_provider": resolve_llm_setting(instance_name, channel, slot, "PROVIDER", env),
+        "llm_model": resolve_llm_setting(instance_name, channel, slot, "MODEL", env),
+        "llm_api_key": resolve_llm_setting(instance_name, channel, slot, "API_KEY", env),
+        "llm_base_url": resolve_llm_setting(instance_name, channel, slot, "BASE_URL", env),
+    }
 
 
 def build_runtime_config(

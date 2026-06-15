@@ -95,6 +95,10 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             instructions=self.instruction_store.get(),
             openai_client=self.openai_client,
             default_api_key=run_config.openai_api_key,
+            provider=run_config.llm_provider,
+            model=run_config.llm_model,
+            api_key=run_config.llm_api_key,
+            api_base=run_config.llm_base_url,
         )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
         self.bibliothekar_store = BibliothekarStore(run_config.instance_name, self.instances_dir)

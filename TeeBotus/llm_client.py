@@ -31,6 +31,16 @@ class BaseLLMClient(Protocol):
         ...
 
 
+LITELLM_PROVIDER_ALIASES = {
+    "litellm",
+    "ollama",
+    "huggingface",
+    "hf",
+    "groq",
+    "gemini",
+}
+
+
 class LiteLLMTextClient:
     """Text-only LiteLLM adapter.
 
@@ -39,7 +49,17 @@ class LiteLLMTextClient:
     capability flags exist for other providers.
     """
 
-    def __init__(self, *, api_key: str = "", api_base: str = "", timeout: int = 90) -> None:
+    def __init__(
+        self,
+        *,
+        provider: str = "litellm",
+        model: str = "",
+        api_key: str = "",
+        api_base: str = "",
+        timeout: int = 90,
+    ) -> None:
+        self.provider = normalize_llm_provider(provider)
+        self.model = model.strip()
         self.api_key = api_key.strip()
         self.api_base = api_base.strip()
         self.timeout = timeout
@@ -55,7 +75,7 @@ class LiteLLMTextClient:
         except ImportError as exc:
             raise LLMAPIError("LiteLLM is not installed") from exc
 
-        model = (instructions.llm_model or instructions.openai_model).strip()
+        model = _resolve_litellm_model(self.provider, instructions, self.model)
         if not model:
             raise LLMAPIError("LiteLLM model must not be empty")
 
@@ -69,7 +89,7 @@ class LiteLLMTextClient:
         }
         if instructions.openai_max_output_tokens is not None:
             kwargs["max_tokens"] = instructions.openai_max_output_tokens
-        api_base = (instructions.llm_base_url or self.api_base).strip()
+        api_base = (self.api_base or instructions.llm_base_url).strip()
         if api_base:
             kwargs["api_base"] = api_base
         api_key = _resolve_litellm_api_key(instructions, self.api_key)
@@ -95,13 +115,23 @@ def build_text_llm_client(
     instructions: BotInstructions,
     openai_client: object | None,
     default_api_key: str = "",
+    provider: str = "",
+    model: str = "",
+    api_key: str = "",
+    api_base: str = "",
 ) -> object | None:
-    provider = normalize_llm_provider(instructions.llm_provider)
-    if provider == "openai":
+    resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
+    if resolved_provider == "openai":
         return openai_client
-    if provider == "litellm":
-        return LiteLLMTextClient(api_key=default_api_key, api_base=instructions.llm_base_url, timeout=instructions.openai_timeout_seconds)
-    raise LLMAPIError(f"Unsupported LLM provider: {instructions.llm_provider}")
+    if resolved_provider in LITELLM_PROVIDER_ALIASES:
+        return LiteLLMTextClient(
+            provider=resolved_provider,
+            model=model,
+            api_key=api_key or default_api_key,
+            api_base=api_base or instructions.llm_base_url,
+            timeout=instructions.openai_timeout_seconds,
+        )
+    raise LLMAPIError(f"Unsupported LLM provider: {provider or instructions.llm_provider}")
 
 
 def normalize_llm_provider(value: str) -> str:
@@ -110,7 +140,41 @@ def normalize_llm_provider(value: str) -> str:
         return "openai"
     if normalized in {"litellm", "lite_llm", "llm"}:
         return "litellm"
+    if normalized in {"ollama", "local_ollama"}:
+        return "ollama"
+    if normalized in {"huggingface", "hugging_face", "hf"}:
+        return "huggingface"
+    if normalized in {"groq"}:
+        return "groq"
+    if normalized in {"gemini", "google", "google_ai"}:
+        return "gemini"
     return normalized
+
+
+def _resolve_litellm_model(provider: str, instructions: BotInstructions, default_model: str) -> str:
+    configured_model = (default_model or instructions.llm_model).strip()
+    if not configured_model:
+        if provider == "litellm":
+            configured_model = instructions.openai_model.strip()
+        else:
+            raise LLMAPIError(f"LLM provider {provider} requires llm_model or TEEBOTUS_LLM_MODEL")
+    return _litellm_model_name(provider, configured_model)
+
+
+def _litellm_model_name(provider: str, model: str) -> str:
+    value = model.strip()
+    if not value or provider == "litellm":
+        return value
+    prefixes = {
+        "ollama": "ollama/",
+        "huggingface": "huggingface/",
+        "groq": "groq/",
+        "gemini": "gemini/",
+    }
+    prefix = prefixes.get(provider, "")
+    if prefix and not value.startswith(prefix):
+        return f"{prefix}{value}"
+    return value
 
 
 def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str) -> str:

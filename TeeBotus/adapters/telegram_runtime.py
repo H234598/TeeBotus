@@ -42,6 +42,7 @@ from TeeBotus.llm_client import build_text_llm_client
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.config import resolve_llm_setting
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
@@ -2834,10 +2835,15 @@ def run_polling(
     instruction_store = instruction_store or InstructionStore(_resolve_instruction_path(instance))
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
     openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
+    adapter_slot = int(token_label) if str(token_label).isdigit() else 1
     llm_client = build_text_llm_client(
         instructions=instruction_store.get(),
         openai_client=openai_client,
         default_api_key=resolved_openai_api_key or "",
+        provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
+        model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
+        api_key=resolve_llm_setting(instance, "telegram", adapter_slot, "API_KEY"),
+        api_base=resolve_llm_setting(instance, "telegram", adapter_slot, "BASE_URL"),
     )
     bot_identity = bot_identity or _resolve_bot_identity(api)
     user_memory_store = AccountStore(
@@ -2852,7 +2858,6 @@ def run_polling(
     working_memory_store.ensure()
     bibliothekar_store = BibliothekarStore(instance, _resolve_instances_dir())
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
-    adapter_slot = int(token_label) if str(token_label).isdigit() else 1
     runtime_context = build_telegram_runtime_context(
         api=api,
         instance_name=instance,

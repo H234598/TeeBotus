@@ -23,6 +23,9 @@ def test_build_text_llm_client_uses_openai_client_by_default() -> None:
         ("OpenAI", "openai"),
         ("lite-llm", "litellm"),
         ("LiteLLM", "litellm"),
+        ("ollama", "ollama"),
+        ("hf", "huggingface"),
+        ("Google", "gemini"),
     ],
 )
 def test_normalize_llm_provider(value: str, expected: str) -> None:
@@ -65,6 +68,47 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
             "api_key": "hf-secret",
         }
     ]
+
+
+def test_litellm_text_client_prefixes_provider_models_from_runtime_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "lokal"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        provider="ollama",
+        model="llama3.1:8b",
+        api_base="http://localhost:11434",
+    ).create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
+
+    assert response.text == "lokal"
+    assert calls[0]["model"] == "ollama/llama3.1:8b"
+    assert calls[0]["api_base"] == "http://localhost:11434"
+    assert "api_key" not in calls[0]
+
+
+def test_litellm_provider_alias_requires_explicit_model() -> None:
+    with pytest.raises(LLMAPIError, match="requires llm_model"):
+        LiteLLMTextClient(provider="ollama").create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
+
+
+def test_build_text_llm_client_uses_runtime_provider_override() -> None:
+    client = build_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        provider="huggingface",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        api_key="hf-key",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "huggingface"
+    assert client.model == "meta-llama/Llama-3.1-8B-Instruct"
+    assert client.api_key == "hf-key"
 
 
 def test_litellm_text_client_requires_installed_litellm(monkeypatch: pytest.MonkeyPatch) -> None:

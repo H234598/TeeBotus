@@ -12,6 +12,7 @@ from TeeBotus.runtime.config import (
     resolve_openai_key,
     resolve_selected_instances,
     resolve_matrix_accounts,
+    resolve_llm_setting,
     resolve_signal_accounts,
     resolve_telegram_tokens,
 )
@@ -52,6 +53,26 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
     assert resolve_openai_key("Depressionsbot", "signal", 1, env) == "sk-signal-channel"
 
 
+def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
+    env = {
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL": "huggingface",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL_2": "groq",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
+        "TEEBOTUS_LLM_API_KEY": "global-key",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_SIGNAL": "signal-key",
+        "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
+    }
+
+    assert resolve_llm_setting("Depressionsbot", "signal", 2, "PROVIDER", env) == "groq"
+    assert resolve_llm_setting("Depressionsbot", "signal", 1, "PROVIDER", env) == "huggingface"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "PROVIDER", env) == "ollama"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "MODEL", env) == "llama3.1:8b"
+    assert resolve_llm_setting("Depressionsbot", "signal", 1, "API_KEY", env) == "signal-key"
+    assert resolve_llm_setting("Depressionsbot", "matrix", 1, "API_KEY", env) == "global-key"
+    assert resolve_llm_setting("Depressionsbot", "telegram", 1, "BASE_URL", env) == "http://localhost:11434"
+
+
 def test_signal_account_resolution_pairs_services_and_numbers():
     env = {
         "SIGNAL_BOT_SERVICES_DEPRESSIONSBOT": "127.0.0.1:8080,127.0.0.1:8081",
@@ -84,12 +105,20 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
         "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
         "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "llama3.1:8b",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT": "ollama-key",
+        "TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT": "http://localhost:11434",
     }
 
     accounts = build_account_run_configs("Depressionsbot", ("telegram", "signal", "matrix"), env)
 
     assert [account.channel for account in accounts] == ["telegram", "signal", "matrix"]
     assert {account.openai_api_key for account in accounts} == {"sk-shared"}
+    assert {account.llm_provider for account in accounts} == {"ollama"}
+    assert {account.llm_model for account in accounts} == {"llama3.1:8b"}
+    assert {account.llm_api_key for account in accounts} == {"ollama-key"}
+    assert {account.llm_base_url for account in accounts} == {"http://localhost:11434"}
 
 
 def test_runtime_discovers_instances(tmp_path: Path):
