@@ -490,6 +490,59 @@ def test_engine_includes_account_memory_in_openai_input(tmp_path):
     assert "Mein Lieblingswort ist Mond." in client.user_text
 
 
+def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-ranking")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(
+        account_id,
+        [
+            {
+                "id": "mem_moon",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "channel": "signal",
+                "keywords": ["mond"],
+                "user_text": "Mein Lieblingswort ist Mond.",
+                "bot_text": "Gemerkt.",
+            },
+            {
+                "id": "mem_tea",
+                "created_at": "2026-01-02T00:00:00+00:00",
+                "channel": "matrix",
+                "keywords": ["tee"],
+                "user_text": "Ich trinke gerne Tee.",
+                "bot_text": "Gemerkt.",
+            },
+        ],
+    )
+    account_store.write_memory_index(
+        account_id,
+        {
+            "keywords": {"mond": ["mem_moon"], "tee": ["mem_tea"]},
+            "recent_ids": ["mem_moon", "mem_tea"],
+        },
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=client,
+    )
+
+    engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
+
+    assert client.user_text.index("id: mem_moon") < client.user_text.index("id: mem_tea")
+    assert client.user_text.split("selected_memory_ids: ", 1)[1].splitlines()[0].startswith("mem_moon")
+
+
 def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

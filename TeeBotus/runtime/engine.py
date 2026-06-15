@@ -331,7 +331,7 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, instructions.openai_error)]
         try:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions)
-            account_memory_context = _build_account_memory_context(self.account_store, account_id, instructions)
+            account_memory_context = _build_account_memory_context(self.account_store, account_id, instructions, text)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             response = create_reply(
                 _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context),
@@ -733,16 +733,21 @@ def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str 
     ).strip()
 
 
-def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> str:
+def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions, query_text: str = "") -> str:
     if not instructions.user_memory_enabled:
         return ""
     try:
         entries = account_store.read_memory_entries(account_id)
     except (AccountStoreError, OSError):
         return ""
+    try:
+        index = account_store.read_memory_index(account_id)
+    except (AccountStoreError, OSError):
+        index = {}
+    ordered_entries = _rank_account_memory_entries(entries, index, query_text)
     selected: list[dict[str, object]] = []
     total_chars = 0
-    for entry in reversed(entries):
+    for entry in ordered_entries:
         if not isinstance(entry, dict):
             continue
         compact = {
@@ -767,8 +772,8 @@ def _build_account_memory_context(account_store: AccountStore, account_id: str, 
         total_chars += len(rendered)
     if not selected:
         return ""
-    lines = ["selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in reversed(selected) if entry.get("id")), ""]
-    for entry in reversed(selected):
+    lines = ["selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in selected if entry.get("id")), ""]
+    for entry in selected:
         lines.extend(
             [
                 f"- id: {entry['id']}",
@@ -780,6 +785,44 @@ def _build_account_memory_context(account_store: AccountStore, account_id: str, 
             ]
         )
     return "\n".join(lines).strip()
+
+
+def _rank_account_memory_entries(entries: list[dict[str, object]], index: dict[str, object], query_text: str) -> list[dict[str, object]]:
+    entries_by_id = {str(entry.get("id", "")): entry for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))}
+    recent_ids = _account_memory_recent_ids(index, entries)
+    scores: dict[str, int] = {}
+    keyword_index = index.get("keywords") if isinstance(index.get("keywords"), dict) else {}
+    for keyword in _memory_keywords(query_text):
+        values = keyword_index.get(keyword) if isinstance(keyword_index, dict) else None
+        if not isinstance(values, list):
+            continue
+        for memory_id in values:
+            resolved_id = str(memory_id or "")
+            if resolved_id in entries_by_id:
+                scores[resolved_id] = scores.get(resolved_id, 0) + 1
+    if scores:
+        ordered_ids = sorted(
+            scores,
+            key=lambda memory_id: (
+                scores[memory_id],
+                recent_ids.index(memory_id) if memory_id in recent_ids else -1,
+            ),
+            reverse=True,
+        )
+        ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id not in ordered_ids and memory_id in entries_by_id)
+    else:
+        ordered_ids = [memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id]
+    if not ordered_ids:
+        ordered_ids = [str(entry.get("id", "")) for entry in reversed(entries) if isinstance(entry, dict) and str(entry.get("id", ""))]
+    return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
+
+
+def _account_memory_recent_ids(index: dict[str, object], entries: list[dict[str, object]]) -> list[str]:
+    recent_values = index.get("recent_ids") if isinstance(index.get("recent_ids"), list) else []
+    recent_ids = [str(value or "") for value in recent_values if str(value or "")]
+    if recent_ids:
+        return recent_ids
+    return [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
 
 
 def _append_account_memory_interaction(
