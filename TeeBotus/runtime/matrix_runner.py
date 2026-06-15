@@ -165,12 +165,21 @@ async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir:
         global_message_type="m.text",
     )
     bridge = MatrixRuntimeBridge(run_config=account, client=client, instances_dir=instances_dir)
-    client.add_event_callback(bridge.handle_message, nio.RoomMessageText)
+    for event_class in _matrix_message_event_classes(nio):
+        client.add_event_callback(bridge.handle_message, event_class)
     await client.start(access_token=account.matrix_access_token)
 
 
 def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "matrix")
+
+
+def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
+    return tuple(
+        getattr(nio, name)
+        for name in ("RoomMessageText", "RoomMessageFile", "RoomMessageImage", "RoomMessageAudio", "RoomMessageVideo")
+        if hasattr(nio, name)
+    )
 
 
 def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:

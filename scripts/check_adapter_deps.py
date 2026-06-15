@@ -75,7 +75,17 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         import niobot  # type: ignore[import-not-found]
     except Exception as exc:
         return False, f"nio-bot/matrix-nio contract import_error={type(exc).__name__}: {exc}"
-    required_nio = ("AsyncClient", "RoomMessageText", "RoomSendResponse", "SyncResponse", "UploadResponse")
+    required_nio = (
+        "AsyncClient",
+        "RoomMessageText",
+        "RoomMessageFile",
+        "RoomMessageImage",
+        "RoomMessageAudio",
+        "RoomMessageVideo",
+        "RoomSendResponse",
+        "SyncResponse",
+        "UploadResponse",
+    )
     missing_nio = [name for name in required_nio if not hasattr(nio, name)]
     if missing_nio:
         return False, f"matrix-nio missing required API: {', '.join(missing_nio)}"

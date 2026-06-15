@@ -182,6 +182,45 @@ def test_matrix_message_maps_sender_and_room_to_event():
     assert event.text == "/account"
 
 
+def test_matrix_media_message_maps_attachment_metadata():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "photo.jpg"
+        url = "mxc://example/photo"
+        source = {"content": {"msgtype": "m.image", "url": "mxc://example/photo", "info": {"mimetype": "image/jpeg"}}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert len(event.attachments) == 1
+    assert event.attachments[0].filename == "photo.jpg"
+    assert event.attachments[0].content_type == "image/jpeg"
+    assert event.attachments[0].data == b""
+    assert event.attachments[0].base64_data == "mxc://example/photo"
+
+
+def test_matrix_file_message_prefers_filename_from_content():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "fallback.bin"
+        url = "mxc://example/file"
+        source = {"content": {"msgtype": "m.file", "filename": "report.pdf", "url": "mxc://example/file"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event.attachments[0].filename == "report.pdf"
+    assert event.attachments[0].content_type == "application/octet-stream"
+
+
 def test_matrix_room_without_member_state_is_not_private():
     class Room:
         room_id = "!room:example"

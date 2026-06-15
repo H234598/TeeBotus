@@ -11,6 +11,7 @@ from TeeBotus.runtime.matrix_runner import (
     MatrixRuntimeBridge,
     MatrixRuntimeError,
     check_matrix_homeserver,
+    _matrix_message_event_classes,
     run_matrix_accounts,
 )
 
@@ -300,6 +301,23 @@ def test_matrix_homeserver_health_uses_normalized_host_port(monkeypatch) -> None
     assert health.ok
     assert health.target == "matrix.example:443"
     assert calls == [(("matrix.example", 443), 0.25)]
+
+
+def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
+    class Nio:
+        RoomMessageText = object()
+        RoomMessageFile = object()
+        RoomMessageImage = object()
+        RoomMessageAudio = object()
+        RoomMessageVideo = object()
+
+    assert _matrix_message_event_classes(Nio) == (
+        Nio.RoomMessageText,
+        Nio.RoomMessageFile,
+        Nio.RoomMessageImage,
+        Nio.RoomMessageAudio,
+        Nio.RoomMessageVideo,
+    )
 
 
 def test_matrix_homeserver_health_rejects_homeserver_with_path() -> None:

@@ -5,7 +5,7 @@ from typing import Any
 
 from TeeBotus.runtime.accounts import matrix_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
-from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
 
 def matrix_message_to_event(
@@ -34,7 +34,7 @@ def matrix_message_to_event(
         sender_number="",
         text=str(getattr(message, "body", "") or ""),
         message_ref=str(getattr(message, "event_id", "") or ""),
-        attachments=(),
+        attachments=_matrix_message_attachments(message),
         raw=message,
     )
 
@@ -171,6 +171,37 @@ def _matrix_room_is_private(room: Any) -> bool:
     if isinstance(users, dict):
         return len(users) == 2
     return False
+
+
+def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
+    content = getattr(message, "source", {}).get("content", {}) if isinstance(getattr(message, "source", None), dict) else {}
+    msgtype = str(content.get("msgtype") or "").strip()
+    url = str(getattr(message, "url", "") or content.get("url") or "").strip()
+    if not url and not msgtype.startswith("m."):
+        return ()
+    if msgtype not in {"m.file", "m.image", "m.audio", "m.video"} and not url:
+        return ()
+    filename = str(content.get("filename") or getattr(message, "body", "") or "").strip() or "matrix-attachment.bin"
+    info = content.get("info") if isinstance(content.get("info"), dict) else {}
+    content_type = str(info.get("mimetype") or _matrix_content_type_for_msgtype(msgtype)).strip() or "application/octet-stream"
+    return (
+        IncomingAttachment(
+            filename=filename,
+            content_type=content_type,
+            data=b"",
+            base64_data=url,
+        ),
+    )
+
+
+def _matrix_content_type_for_msgtype(msgtype: str) -> str:
+    if msgtype == "m.image":
+        return "image/*"
+    if msgtype == "m.audio":
+        return "audio/*"
+    if msgtype == "m.video":
+        return "video/*"
+    return "application/octet-stream"
 
 
 def _matrix_event_id(response: Any) -> str | None:
