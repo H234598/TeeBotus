@@ -21,7 +21,8 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
-from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command
+from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
+from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
@@ -106,6 +107,11 @@ class TeeBotusEngine:
                 handled=True,
             )
         result = self.process_identity_flows(event)
+        if result.account_id and proactive_agent_instance_enabled(event.instance):
+            try:
+                record_account_activity(self.account_store, result.account_id, event)
+            except (AccountStoreError, OSError, ValueError):
+                pass
         if result.handled or result.actions:
             return result
         if command in PROACTIVE_COMMANDS:

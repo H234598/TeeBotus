@@ -5,6 +5,7 @@ from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
 from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
 
 NOTIFICATION_LOUDNESS_SYSTEM_ITEM = "notification_loudness"
@@ -84,9 +85,13 @@ def queue_due_notification_loudness_prompts(
         if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
             continue
         _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
+        route = route_state.get("route")
+        if isinstance(route, Mapping):
+            adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
+            if not adaptive_decision.allowed:
+                continue
         if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=True):
             continue
-        route = route_state.get("route")
         if not _private_route(route):
             continue
         if _has_queued_notification_loudness_item(account_store, account_id, route_key):

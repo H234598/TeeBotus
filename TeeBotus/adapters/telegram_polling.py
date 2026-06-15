@@ -41,7 +41,9 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
-from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS
+from TeeBotus.runtime.activity_profile import record_account_activity
+from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -1586,6 +1588,7 @@ def _prepare_user_memory(
             chat_id=str(_message_chat_id(message) or ""),
             chat_type=_telegram_chat_type(message),
         )
+        _record_telegram_activity(user_memory_store, account_id, identity_key, message)
         selection = user_memory_store.select_structured_memory(
             account_id,
             query_text=query_text,
@@ -1614,6 +1617,34 @@ def _notify_user_memory_store_error(api: TelegramAPI | None, message: dict[str, 
         _send_untracked_message(api, chat_id, instructions.user_memory_error)
     except TelegramAPIError:
         LOGGER.exception("Failed to notify user about user memory store error.")
+
+
+def _record_telegram_activity(account_store: AccountStore, account_id: str, identity_key: str, message: dict[str, Any]) -> None:
+    if not proactive_agent_instance_enabled(account_store.instance_name):
+        return
+    try:
+        record_account_activity(
+            account_store,
+            account_id,
+            IncomingEvent(
+                event_id=f"telegram:{message.get('message_id', '')}",
+                instance=account_store.instance_name,
+                channel="telegram",
+                adapter_slot=1,
+                account_id=account_id,
+                identity_key=identity_key,
+                chat_id=str(_message_chat_id(message) or ""),
+                chat_type=_telegram_chat_type(message),
+                sender_id=str(_sender_identifier(message) or identity_key),
+                sender_name=_telegram_sender_display_label(message),
+                sender_username=_telegram_sender_username(message),
+                text=str(message.get("text") or message.get("caption") or ""),
+                message_ref=str(message.get("message_id") or ""),
+                raw=message,
+            ),
+        )
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception("Failed to record Telegram activity profile observation.")
 
 
 def _message_chat_id(message: dict[str, Any]) -> int | None:

@@ -256,6 +256,23 @@ class BotTests(unittest.TestCase):
             self.assertEqual(memory_path.read_bytes(), original_payload)
             self.assertEqual(api.sent_messages, [])
 
+    def test_prepare_user_memory_records_activity_profile_when_proactive_instance_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = account_memory_store(directory)
+            message = {"message_id": 7, "text": "Hallo", "chat": {"id": 123, "type": "private"}, "from": {"id": 456, "first_name": "Ada"}}
+            instructions = BotInstructions(user_memory_enabled=True)
+
+            with patch.dict(os.environ, {"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"}, clear=True):
+                record = _prepare_user_memory(store, message, instructions, "Hallo", None)
+
+            self.assertIsNotNone(record)
+            account_id = store.get_account_for_identity("telegram:user:456")
+            self.assertIsNotNone(account_id)
+            observations = store.read_agent_state(account_id or "")["activity_profile"]["observations"]
+            self.assertEqual(len(observations), 1)
+            self.assertEqual(observations[0]["channel"], "telegram")
+            self.assertEqual(observations[0]["text_length"], len("Hallo"))
+
     def test_prepare_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         message = {"chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}
         api = FakeAPI()

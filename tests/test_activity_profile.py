@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.activity_profile import contact_timing_decision, record_account_activity
+from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.proactive_agent import enable_proactive_agent, proactive_policy_decision, set_proactive_allowed_hours
+
+LOCAL = timezone(timedelta(hours=2))
+
+
+def store(tmp_path) -> AccountStore:
+    return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+
+
+def event(identity: str, *, text: str = "Hallo") -> IncomingEvent:
+    return IncomingEvent(
+        event_id="signal:1",
+        instance="Depressionsbot",
+        channel="signal",
+        adapter_slot=1,
+        account_id="",
+        identity_key=identity,
+        chat_id="+491",
+        chat_type="private",
+        sender_id=identity,
+        sender_name="Signal User",
+        text=text,
+        message_ref="1",
+    )
+
+
+def set_identity_last_seen(account_store: AccountStore, identity: str, when: datetime) -> None:
+    identities = account_store._load_identities()
+    payload = identities[identity]
+    timestamp = when.isoformat(timespec="seconds")
+    payload["last_seen_at"] = timestamp
+    payload["last_route"]["last_seen_at"] = timestamp
+    identities[identity] = payload
+    account_store._save_identities(identities)
+
+
+def prepare_account(account_store: AccountStore) -> tuple[str, str]:
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    set_proactive_allowed_hours(account_store, account_id, 0, 23)
+    return identity, account_id
+
+
+def record_hours(account_store: AccountStore, account_id: str, identity: str, values: list[tuple[int, int, int]]) -> None:
+    for day, hour, minute in values:
+        record_account_activity(
+            account_store,
+            account_id,
+            event(identity, text="Ich schreibe gerade etwas laenger ueber meinen Tag."),
+            now=datetime(2026, 6, day, hour, minute, tzinfo=LOCAL),
+        )
+
+
+def test_contact_timing_learns_weekday_wake_and_quiet_hours(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_hours(account_store, account_id, identity, [(8, 9, 0), (9, 9, 20), (10, 10, 0), (11, 9, 10), (12, 10, 15), (15, 9, 30)])
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 8, 0, tzinfo=LOCAL))
+
+    allowed = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 15, 9, 30, tzinfo=LOCAL))
+    quiet = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 15, 22, 0, tzinfo=LOCAL))
+
+    assert allowed.allowed is True
+    assert allowed.reason == "adaptive_contact_hour"
+    assert quiet.allowed is False
+    assert quiet.reason == "outside_adaptive_contact_window"
+
+
+def test_engine_records_private_activity_observations(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    engine.process(event(identity, text="/status"))
+
+    account_id = account_store.get_account_for_identity(identity) or ""
+    observations = account_store.read_agent_state(account_id)["activity_profile"]["observations"]
+    assert len(observations) == 1
+    assert observations[0]["channel"] == "signal"
+    assert observations[0]["text_length"] == len("/status")
+
+
+def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_hours(
+        account_store,
+        account_id,
+        identity,
+        [
+            (8, 9, 0),
+            (9, 9, 0),
+            (10, 9, 0),
+            (11, 9, 0),
+            (6, 13, 0),
+            (7, 13, 15),
+            (13, 13, 0),
+            (14, 13, 15),
+            (20, 14, 0),
+        ],
+    )
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 21, 8, 0, tzinfo=LOCAL))
+
+    weekend_late = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 21, 13, 30, tzinfo=LOCAL))
+    weekend_early = contact_timing_decision(account_store, account_id, now=datetime(2026, 6, 21, 9, 0, tzinfo=LOCAL))
+
+    assert weekend_late.allowed is True
+    assert weekend_early.allowed is False
+
+
+def test_proactive_policy_respects_adaptive_contact_window_and_recent_online_override(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_hours(account_store, account_id, identity, [(8, 9, 0), (9, 9, 10), (10, 9, 20), (11, 10, 0), (12, 9, 40), (15, 10, 10)])
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 8, 0, tzinfo=LOCAL))
+
+    blocked = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 22, 0, tzinfo=LOCAL))
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 10, 58, tzinfo=LOCAL))
+    recent = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 11, 0, tzinfo=LOCAL))
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 21, 58, tzinfo=LOCAL))
+    night_recent = proactive_policy_decision(account_store, account_id, category="reminder", now=datetime(2026, 6, 15, 22, 0, tzinfo=LOCAL))
+
+    assert blocked.allowed is False
+    assert blocked.reason == "outside_adaptive_contact_window"
+    assert recent.allowed is True
+    assert recent.reason == "allowed"
+    assert night_recent.allowed is False

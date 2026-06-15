@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
+from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -278,6 +279,7 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
     enabled = "ja" if state["proactive"]["enabled"] else "nein"
     paused = "ja" if state["proactive"]["paused"] else "nein"
     categories = ", ".join(state["consent"]["categories"]) or "keine"
+    contact_line = _adaptive_contact_status_line(account_store, account_id)
     return "\n".join(
         [
             "Proaktive Unterstützung",
@@ -286,10 +288,32 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
             f"- Kategorien: {categories}",
             f"- erlaubtes Zeitfenster: {state['policy']['allowed_hours'][0]}-{state['policy']['allowed_hours'][1]} Uhr",
             f"- Mindestabstand: {state['policy']['min_minutes_between_messages']} Minuten",
+            contact_line,
             f"- queued_outbox_items: {queued}",
             f"- review_pending_items: {review_pending}",
         ]
     )
+
+
+def _adaptive_contact_status_line(account_store: AccountStore, account_id: str) -> str:
+    decision = contact_timing_decision(account_store, account_id)
+    profile = decision.profile
+    if not profile.get("sufficient_data"):
+        count = int(profile.get("observation_count") or 0) if isinstance(profile, Mapping) else 0
+        return f"- adaptive Kontaktzeit: sammelt Daten ({count} Beobachtungen)"
+    profiles = profile.get("profiles")
+    if not isinstance(profiles, Mapping):
+        return f"- adaptive Kontaktzeit: {decision.reason}"
+    day_key = "weekend" if datetime.now(timezone.utc).astimezone().weekday() >= 5 else "weekday"
+    day_profile = profiles.get(day_key)
+    if not isinstance(day_profile, Mapping) or not day_profile.get("sufficient_data"):
+        day_profile = profiles.get("all")
+    if not isinstance(day_profile, Mapping):
+        return f"- adaptive Kontaktzeit: {decision.reason}"
+    recommended = [str(hour) for hour in day_profile.get("recommended_contact_hours", [])[:6]]
+    if not recommended:
+        return f"- adaptive Kontaktzeit: {decision.reason}"
+    return f"- adaptive Kontaktstunden: {', '.join(recommended)} Uhr ({decision.reason})"
 
 
 def queue_proactive_message(
@@ -866,6 +890,9 @@ def proactive_policy_decision(
     route = select_proactive_route(account_store, account_id)
     if route is None:
         return ProactiveDecision(False, "no_private_route")
+    adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
+    if not adaptive_decision.allowed:
+        return ProactiveDecision(False, adaptive_decision.reason)
     return ProactiveDecision(True, "allowed", route)
 
 

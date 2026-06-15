@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.notification_loudness import (
@@ -13,6 +14,8 @@ from TeeBotus.runtime.notification_loudness import (
     queue_due_notification_loudness_prompts,
 )
 from TeeBotus.runtime.proactive_agent import check_proactive_agent_account, dispatch_due_proactive_outbox_items
+
+LOCAL = timezone(timedelta(hours=2))
 
 
 def store(tmp_path) -> AccountStore:
@@ -114,6 +117,22 @@ def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_i
     windows = state["notification_loudness"]["routes"]["telegram:1:chat-1"]["prompted_windows_by_date"]["2026-06-15"]
     assert windows == ["first", "second"]
     assert check_proactive_agent_account(account_store, account_id).ok is True
+
+
+def test_scheduler_respects_adaptive_activity_profile_for_notification_loudness(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    for day in (8, 9, 10, 11, 12, 15):
+        record_account_activity(account_store, account_id, event(identity, text="Morgens bin ich erreichbar."), now=datetime(2026, 6, day, 9, 0, tzinfo=LOCAL))
+    now = datetime(2026, 6, 15, 8, 0, tzinfo=LOCAL)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
+    late_same_day = datetime(2026, 6, 15, 17, 0, tzinfo=LOCAL)
+    set_identity_last_seen(account_store, identity, late_same_day - timedelta(minutes=2))
+
+    due = queue_due_notification_loudness_prompts(account_store, account_id, now=late_same_day)
+
+    assert due == ()
 
 
 def test_notification_loudness_system_item_dispatches_without_proactive_consent(tmp_path) -> None:
