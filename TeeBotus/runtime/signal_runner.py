@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from urllib.request import urlopen
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
+from TeeBotus.instructions import InstructionStore
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -60,11 +61,18 @@ class TeeBotusSignalCommand:
         self.run_config = run_config
         self.instances_dir = Path(instances_dir)
         data_dir = self.instances_dir / run_config.instance_name / "data"
+        instruction_path = self.instances_dir / run_config.instance_name / "Bot_Verhalten.md"
+        self.instruction_store = InstructionStore(instruction_path)
         resolved_secret_provider = secret_provider or SecretToolInstanceSecretProvider()
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
-        self.engine = TeeBotusEngine(self.account_store, state=self.state_store, message_tracker=self.message_tracker)
+        self.engine = TeeBotusEngine(
+            self.account_store,
+            state=self.state_store,
+            message_tracker=self.message_tracker,
+            instructions=self.instruction_store.get,
+        )
         self.bot: Any | None = None
 
     def setup(self) -> None:

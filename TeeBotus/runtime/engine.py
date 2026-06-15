@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
+from TeeBotus.handlers import build_reply
+from TeeBotus.instructions import BotInstructions
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendText, OutgoingAction
@@ -22,17 +24,24 @@ class EngineResult:
 
 
 class TeeBotusEngine:
-    """Channel-neutral first stage engine for account/registration commands.
+    """Channel-neutral first stage engine for account/registration and built-in commands.
 
-    This intentionally handles only the identity-critical flows. Existing TeeBotus
-    command/OpenAI logic can call this first and continue with Telegram behavior when
-    ``handled`` is false.
+    Telegram still owns the broader OpenAI/voice/YouTube stack. Signal and Matrix use
+    this engine as their channel-neutral baseline so configured simple replies and
+    identity-critical commands share the same behavior.
     """
 
-    def __init__(self, account_store: AccountStore, state: RuntimeState | None = None, message_tracker: object | None = None) -> None:
+    def __init__(
+        self,
+        account_store: AccountStore,
+        state: RuntimeState | None = None,
+        message_tracker: object | None = None,
+        instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
+    ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
         self.message_tracker = message_tracker
+        self._instructions = instructions
 
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
@@ -46,7 +55,13 @@ class TeeBotusEngine:
                 return [SendText(event.chat_id, "Nutzung: /cleanup N oder /cleanup all. Ich lösche dabei nur den aktuellen Chat.", track=False)]
             return [DeleteTrackedMessages(event.chat_id, parsed), SendText(event.chat_id, self.cleanup_scope_text(), track=False)]
         result = self.process_identity_flows(event)
-        return result.actions
+        if result.handled or result.actions:
+            return result.actions
+        instructions = self._current_instructions()
+        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not instructions.openai_enabled)
+        if reply is None:
+            return []
+        return [SendText(event.chat_id, reply)]
 
     def process_identity_flows(self, event: IncomingEvent) -> EngineResult:
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
@@ -242,6 +257,13 @@ class TeeBotusEngine:
     def cleanup_scope_text(self) -> str:
         return CURRENT_CHAT_CLEANUP_NOTE
 
+    def _current_instructions(self) -> BotInstructions:
+        if self._instructions is None:
+            return BotInstructions()
+        if callable(self._instructions):
+            return self._instructions()
+        return self._instructions
+
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
         summary = self.account_store.account_summary(account_id)
         for identity_key in summary.get("linked_identities", []):
@@ -261,6 +283,22 @@ def _command_name(text: str) -> str:
     if "@" in first:
         first = first.split("@", maxsplit=1)[0]
     return first
+
+
+def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:
+    sender_name = event.sender_name or event.sender_username or event.sender_id
+    return {
+        "text": event.text,
+        "chat": {
+            "id": event.chat_id,
+            "type": event.chat_type,
+        },
+        "from": {
+            "id": event.sender_id,
+            "first_name": sender_name,
+            "username": event.sender_username,
+        },
+    }
 
 
 

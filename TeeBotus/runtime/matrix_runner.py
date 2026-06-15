@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
+from TeeBotus.instructions import InstructionStore
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -41,12 +42,19 @@ class MatrixRuntimeBridge:
     ) -> None:
         self.run_config = run_config
         self.client = client
-        data_dir = Path(instances_dir) / run_config.instance_name / "data"
+        instance_dir = Path(instances_dir) / run_config.instance_name
+        data_dir = instance_dir / "data"
+        self.instruction_store = InstructionStore(instance_dir / "Bot_Verhalten.md")
         resolved_secret_provider = secret_provider or SecretToolInstanceSecretProvider()
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
-        self.engine = TeeBotusEngine(self.account_store, state=self.state_store, message_tracker=self.message_tracker)
+        self.engine = TeeBotusEngine(
+            self.account_store,
+            state=self.state_store,
+            message_tracker=self.message_tracker,
+            instructions=self.instruction_store.get,
+        )
 
     async def handle_message(self, room: Any, message: Any) -> None:
         if str(getattr(message, "sender", "") or "") == self.run_config.matrix_user_id:

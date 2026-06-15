@@ -81,6 +81,34 @@ def test_matrix_bridge_routes_private_account_commands(tmp_path) -> None:
     assert "Deine TeeBotus-Account-ID" in client.sent[0]["content"]["body"]
 
 
+def test_matrix_bridge_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
+    instance_dir = tmp_path / "Demo"
+    instance_dir.mkdir()
+    (instance_dir / "Bot_Verhalten.md").write_text("## Befehle\n- /custom: Matrix custom fuer {first_name}.\n", encoding="utf-8")
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    message = FakeMatrixMessage()
+    message.body = "/custom"
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
+
+    assert client.sent[0]["content"]["body"] == "Matrix custom fuer @alice:example."
+
+
 def test_matrix_cleanup_redacts_tracked_current_room_messages(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

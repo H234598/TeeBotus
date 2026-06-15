@@ -88,6 +88,31 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
 
 
+def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
+    instance_dir = tmp_path / "Demo"
+    instance_dir.mkdir()
+    (instance_dir / "Bot_Verhalten.md").write_text("## Befehle\n- /custom: Signal custom fuer {first_name}.\n", encoding="utf-8")
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.text = "/custom"
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["Signal custom fuer +491234."]
+
+
 def test_signal_command_ignores_non_content_message_types(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(

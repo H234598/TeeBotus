@@ -6,6 +6,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.actions import DeleteTrackedMessages
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.instructions import BotInstructions
 
 
 def store(tmp_path):
@@ -68,13 +69,33 @@ def test_new_identity_cannot_use_wtf_notification_for_itself(tmp_path):
 def test_cleanup_requires_exact_command_and_valid_count(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path))
 
-    assert engine.process(event(telegram_identity_key(1), "/cleanupfoo")) == []
+    unknown = engine.process(event(telegram_identity_key(1), "/cleanupfoo"))
     bad = engine.process(event(telegram_identity_key(1), "/cleanup banana"))
     good = engine.process(event(telegram_identity_key(1), "/cleanup 2"))
 
+    assert "Diesen Befehl kenne ich nicht" in unknown[0].text
     assert "Nutzung:" in bad[0].text
     assert isinstance(good[0], DeleteTrackedMessages)
     assert good[0].count == 2
+
+
+def test_engine_handles_default_builtin_reply_after_identity_flows(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+
+    actions = engine.process(event(telegram_identity_key(1), "/ping"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "pong"
+
+
+def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
+    instructions = BotInstructions(commands={"/custom": "Hallo {first_name}."})
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "/custom"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Hallo telegram:user:1."
 
 
 def test_account_edit_sets_pending_flow(tmp_path):
