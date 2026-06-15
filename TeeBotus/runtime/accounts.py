@@ -1182,7 +1182,19 @@ class AccountStore:
             for memory_id in values:
                 resolved_id = str(memory_id or "")
                 if resolved_id in entries_by_id:
-                    scores[resolved_id] = scores.get(resolved_id, 0) + 1
+                    scores[resolved_id] = scores.get(resolved_id, 0) + 10
+        if scores:
+            direct_match_ids = set(scores)
+            for memory_id in list(direct_match_ids):
+                for related_id in _normalize_account_memory_related_ids(entries_by_id[memory_id].get("related_ids"), exclude_id=memory_id):
+                    if related_id in entries_by_id and related_id not in direct_match_ids:
+                        scores[related_id] = max(scores.get(related_id, 0), 3)
+            for memory_id, entry in entries_by_id.items():
+                if memory_id in direct_match_ids:
+                    continue
+                related_ids = _normalize_account_memory_related_ids(entry.get("related_ids"), exclude_id=memory_id)
+                if any(related_id in direct_match_ids for related_id in related_ids):
+                    scores[memory_id] = max(scores.get(memory_id, 0), 2)
         if scores:
             ordered_ids = sorted(
                 scores,

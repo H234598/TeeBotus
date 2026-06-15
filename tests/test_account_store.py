@@ -327,6 +327,27 @@ def test_structured_account_memory_importance_breaks_keyword_ties(tmp_path):
     assert index["index"]["entries"][high_id]["importance"] == 5
 
 
+def test_structured_account_memory_related_ids_boost_linked_entries(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    direct_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_direct", "user_text": "Mond", "bot_text": "Tee", "related_ids": ["mem_linked"]},
+    )
+    unrelated_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_unrelated", "user_text": "Kaffee", "bot_text": "Tasse"},
+    )
+    linked_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_linked", "user_text": "Blauer Planet", "bot_text": "Notiz"},
+    )
+
+    selection = store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
+
+    assert selection.selected_ids[:3] == (direct_id, linked_id, unrelated_id)
+
+
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
