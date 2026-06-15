@@ -2327,7 +2327,7 @@ def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
     client = FakeOpenAIClient()
     engine = TeeBotusEngine(
         account_store=store(tmp_path),
-        instructions=BotInstructions(openai_enabled=True),
+        instructions=BotInstructions(openai_enabled=True, youtube_option_llm_fallback=True),
         openai_client=client,
     )
 
@@ -2341,6 +2341,46 @@ def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
     assert "YouTube-Transkript:" in client.reply_inputs[1]
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "AI summary."
+
+
+def test_engine_youtube_local_options_do_not_use_llm_fallback_by_default(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.reply_inputs: list[str] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.reply_inputs.append(user_text)
+            return OpenAIResponse("unexpected", "resp-unexpected", None)
+
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        return "Local transcript.", "lokales Whisper"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    monkeypatch.setattr("TeeBotus.runtime.engine._parse_youtube_local_options", lambda _text, **_kwargs: (None, None))
+    monkeypatch.setattr("TeeBotus.runtime.engine._record_youtube_parser_miss", lambda *_args, **_kwargs: None)
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=client,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 mach bitte die passende variante", channel="signal"))
+
+    assert calls == [
+        ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"}),
+        ("https://youtu.be/abc123", {"local_allowed": True, "live_callback": None, "instance_name": "Depressionsbot"}),
+    ]
+    assert client.reply_inputs == []
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."
 
 
 def test_engine_youtube_natural_group_request_must_address_bot(monkeypatch, tmp_path):

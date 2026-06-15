@@ -1007,6 +1007,8 @@ class TeeBotusEngine:
         )
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
+        if not instructions.youtube_option_llm_fallback:
+            return None
         if self.llm_client is None:
             return None
         create_reply = getattr(self.llm_client, "create_reply", None)

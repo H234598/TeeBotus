@@ -118,6 +118,7 @@ class BotInstructions:
     openai_transcription_prompt: str = "Transkribiere deutschsprachige Telegram-Sprachnachrichten wortgetreu."
     openai_transcription_error: str = "Ich konnte die Sprachnachricht gerade nicht transkribieren. Bitte versuche es gleich nochmal."
     openai_transcription_empty: str = "Ich konnte in der Sprachnachricht keinen Text erkennen."
+    youtube_option_llm_fallback: bool = False
     openai_error: str = "Ich kann die OpenAI API gerade nicht erreichen. Bitte versuche es gleich nochmal."
     openai_missing_key: str = "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt."
     openai_reset: str = (
@@ -638,6 +639,8 @@ def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> N
         instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
     elif normalized in {"profile", "llm_profile"}:
         instructions.llm_profile = value.strip()
+    elif normalized in {"youtube_option_llm_fallback", "youtube_options_llm_fallback", "youtube_llm_fallback"}:
+        instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
 
 
 def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -> None:
@@ -750,6 +753,8 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_transcription_error = value
     elif normalized == "transcription_empty":
         instructions.openai_transcription_empty = value
+    elif normalized in {"youtube_option_llm_fallback", "youtube_options_llm_fallback", "youtube_llm_fallback"}:
+        instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
     elif normalized == "error":
         instructions.openai_error = value
     elif normalized == "missing_key":

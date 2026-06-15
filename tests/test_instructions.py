@@ -61,6 +61,7 @@ class InstructionTests(unittest.TestCase):
             - transcription_prompt: Wortgetreu transkribieren.
             - transcription_error: Transkription fehlgeschlagen.
             - transcription_empty: Keine Sprache erkannt.
+            - youtube_option_llm_fallback: ja
 
             ## LLM
             - enabled: ja
@@ -172,6 +173,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_transcription_prompt, "Wortgetreu transkribieren.")
         self.assertEqual(instructions.openai_transcription_error, "Transkription fehlgeschlagen.")
         self.assertEqual(instructions.openai_transcription_empty, "Keine Sprache erkannt.")
+        self.assertTrue(instructions.youtube_option_llm_fallback)
         self.assertTrue(instructions.codex_enabled)
         self.assertEqual(instructions.codex_allowed_sender_ids, ("395935293", "456"))
         self.assertEqual(instructions.proactive_model_planner, "llm")
