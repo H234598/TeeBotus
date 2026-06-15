@@ -39,12 +39,14 @@ def build_status_reply(
     env: Mapping[str, str] | None = None,
 ) -> str:
     resolved_account_id = _resolve_status_account_id(sender_id=sender_id, account_id=account_id, account_store=account_store)
+    account_resolved = bool(resolved_account_id)
     if resolved_account_id and account_store is not None:
         account_dir = _account_memory_dir_from_store(account_store, resolved_account_id)
     elif resolved_account_id:
         account_dir = account_memory_dir_for_account(resolved_account_id, instance_name=instance_name, project_root=project_root)
     else:
         account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
+        account_resolved = account_dir is not None
     memory_size = memory_files_size(account_dir)
     encryption_status = memory_encryption_status(account_dir)
     commit_history_url = github_commit_history_url(project_root)
@@ -58,7 +60,7 @@ def build_status_reply(
             f"- Version: {__version__} Wirt Commits {commit_history_url}",
             "",
             "Deine Daten",
-            f"- Nutzermemory: {format_byte_size(memory_size)}",
+            f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
             "",
             *_proactive_agent_status_lines(
@@ -73,6 +75,12 @@ def build_status_reply(
 
 def _status_display_name(instance_name: str) -> str:
     return str(instance_name or "").strip() or "TeeBotus"
+
+
+def _memory_status_text(*, account_resolved: bool, memory_size: int) -> str:
+    if not account_resolved:
+        return "Account nicht zugeordnet"
+    return format_byte_size(memory_size)
 
 
 def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store: AccountStore | None) -> str:

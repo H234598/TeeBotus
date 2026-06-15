@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from TeeBotus import __version__
+from TeeBotus.core.status import build_status_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
@@ -242,6 +243,24 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Review pending: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_engine_status_reports_unmapped_account_instead_of_zero_memory(tmp_path):
+    account_store = store(tmp_path)
+    existing_account_id = "a" * 128
+    account_dir = account_store.account_dir(existing_account_id)
+    account_dir.mkdir(parents=True, exist_ok=True)
+    (account_dir / "User_Memory_Index.json").write_text('{"entries": ["mem_1"]}\n', encoding="utf-8")
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=account_store,
+    )
+
+    assert "- Nutzermemory: Account nicht zugeordnet" in text
+    assert "- Nutzermemory: 0 B" not in text
 
 
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
