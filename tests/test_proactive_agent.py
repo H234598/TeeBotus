@@ -24,6 +24,7 @@ from TeeBotus.runtime.proactive_agent import (
     expire_stale_proactive_outbox_items,
     pause_proactive_agent,
     proactive_agent_instance_enabled,
+    proactive_status_text,
     proactive_policy_decision,
     queue_proactive_message,
     reject_proactive_review_item,
@@ -273,6 +274,54 @@ def test_due_proactive_outbox_items_filters_future_and_terminal_items(tmp_path) 
 
     assert due == ()
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 14, tzinfo=timezone.utc))[0]["intent"] == "future"
+
+
+def test_due_proactive_outbox_items_normalizes_stored_status(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_upper",
+                "status": "QUEUED",
+                "category": "reminder",
+                "intent": "upper",
+                "message_text": "Upper",
+                "due_at": "2026-06-15T11:00:00+00:00",
+            }
+        ],
+    )
+
+    due = due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert [item["id"] for item in due] == ["pro_upper"]
+
+
+def test_proactive_status_text_normalizes_stored_status_counts(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {"id": "pro_queued", "status": "QUEUED", "category": "reminder", "intent": "queued", "message_text": "Queued"},
+            {
+                "id": "pro_review",
+                "status": "Review_Pending",
+                "category": "reminder",
+                "intent": "review",
+                "message_text": "Review",
+            },
+        ],
+    )
+
+    text = proactive_status_text(account_store, account_id)
+
+    assert "- queued_outbox_items: 1" in text
+    assert "- review_pending_items: 1" in text
 
 
 def test_expire_stale_proactive_outbox_items_marks_old_queued_items(tmp_path) -> None:

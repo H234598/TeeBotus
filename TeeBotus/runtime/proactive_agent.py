@@ -287,8 +287,8 @@ def set_proactive_min_interval_minutes(account_store: AccountStore, account_id: 
 def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     outbox = account_store.read_proactive_outbox(account_id)
-    queued = sum(1 for item in outbox if isinstance(item, dict) and item.get("status", "queued") == "queued")
-    review_pending = sum(1 for item in outbox if isinstance(item, dict) and item.get("status") == "review_pending")
+    queued = sum(1 for item in outbox if isinstance(item, dict) and _proactive_item_status(item) == "queued")
+    review_pending = sum(1 for item in outbox if isinstance(item, dict) and _proactive_item_status(item) == "review_pending")
     enabled = "ja" if state["proactive"]["enabled"] else "nein"
     paused = "ja" if state["proactive"]["paused"] else "nein"
     categories = ", ".join(state["consent"]["categories"]) or "keine"
@@ -916,7 +916,7 @@ def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, 
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
-        if str(item.get("status") or "queued") != "queued":
+        if _proactive_item_status(item) != "queued":
             continue
         due_at = _parse_proactive_datetime(str(item.get("due_at") or ""))
         if due_at is not None and due_at > resolved_now:
@@ -925,6 +925,10 @@ def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, 
             continue
         due.append(dict(item))
     return tuple(due)
+
+
+def _proactive_item_status(item: Mapping[str, Any]) -> str:
+    return str(item.get("status") or "queued").strip().casefold()
 
 
 def fail_invalid_due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
