@@ -296,6 +296,50 @@ def test_signal_typing_to_other_chat_uses_bot_typing_and_stops_after_send():
     ]
 
 
+def test_signal_typing_stops_previous_target_before_starting_new_target():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def start_typing(self, receiver) -> None:
+            self.calls.append(("start_typing", receiver))
+
+        async def stop_typing(self, receiver) -> None:
+            self.calls.append(("stop_typing", receiver))
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append(("send", receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(source="+491")
+            self.context_calls = []
+
+        async def start_typing(self) -> None:
+            self.context_calls.append("start_typing")
+
+        async def stop_typing(self) -> None:
+            self.context_calls.append("stop_typing")
+
+        async def send(self, text, **kwargs):
+            self.context_calls.append(("send", text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendTyping("+491"), SendTyping("+492"), SendText("+492", "hi")]))
+
+    assert sent == [None, None, 456]
+    assert context.context_calls == ["start_typing", "stop_typing"]
+    assert context.bot.calls == [
+        ("start_typing", "+492"),
+        ("send", "+492", "hi", {"base64_attachments": None}),
+        ("stop_typing", "+492"),
+    ]
+
+
 def test_signal_send_text_can_quote_current_message_with_bot_send():
     class Bot:
         def __init__(self) -> None:

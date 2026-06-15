@@ -86,6 +86,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(await _send_signal_text(context, action.text, chat_id=action.chat_id, reply_to_ref=action.reply_to_ref))
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendTyping):
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
                 typing_target = await _start_signal_typing(context, action.chat_id)
                 sent.append(None)
             elif isinstance(action, SendAttachment):
