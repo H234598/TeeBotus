@@ -12,6 +12,7 @@ from TeeBotus.runtime.matrix_runner import (
     MatrixHomeserverHealth,
     MatrixRuntimeBridge,
     MatrixRuntimeError,
+    _delete_matrix_message,
     _download_matrix_event_attachments,
     check_matrix_homeserver,
     _matrix_message_event_classes,
@@ -551,6 +552,43 @@ def test_matrix_cleanup_prefers_niobot_delete_message(tmp_path) -> None:
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
 
     assert client.deleted == [("!room:example", "$old", "TeeBotus cleanup")]
+
+
+def test_delete_matrix_message_rejects_niobot_error_response() -> None:
+    class ErrorResponse:
+        message = "redact refused"
+        status_code = "M_FORBIDDEN"
+
+    class Client:
+        async def delete_message(self, room_id: str, event_id: str, reason: str | None = None):
+            return ErrorResponse()
+
+        async def room_redact(self, *_args, **_kwargs):
+            raise AssertionError("room_redact should not be used when delete_message is available")
+
+    try:
+        asyncio.run(_delete_matrix_message(Client(), "!room:example", "$old"))
+    except MatrixRuntimeError as exc:
+        assert str(exc) == "M_FORBIDDEN: redact refused"
+    else:
+        raise AssertionError("MatrixRuntimeError was not raised")
+
+
+def test_delete_matrix_message_rejects_room_redact_error_response() -> None:
+    class ErrorResponse:
+        message = "redact refused"
+        status_code = ""
+
+    class Client:
+        async def room_redact(self, room_id: str, event_id: str, reason: str | None = None):
+            return ErrorResponse()
+
+    try:
+        asyncio.run(_delete_matrix_message(Client(), "!room:example", "$old"))
+    except MatrixRuntimeError as exc:
+        assert str(exc) == "redact refused"
+    else:
+        raise AssertionError("MatrixRuntimeError was not raised")
 
 
 def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:

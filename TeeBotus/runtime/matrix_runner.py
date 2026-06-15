@@ -163,9 +163,20 @@ class MatrixRuntimeBridge:
 async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:
     delete_message = getattr(client, "delete_message", None)
     if callable(delete_message):
-        await delete_message(room_id, event_id, reason="TeeBotus cleanup")
+        response = await delete_message(room_id, event_id, reason="TeeBotus cleanup")
+        _raise_matrix_runtime_response_error(response)
         return
-    await client.room_redact(room_id, event_id, reason="TeeBotus cleanup")
+    response = await client.room_redact(room_id, event_id, reason="TeeBotus cleanup")
+    _raise_matrix_runtime_response_error(response)
+
+
+def _raise_matrix_runtime_response_error(response: Any) -> None:
+    message = str(getattr(response, "message", "") or "").strip()
+    if not message:
+        return
+    status_code = str(getattr(response, "status_code", "") or "").strip()
+    detail = f"{status_code}: {message}" if status_code else message
+    raise MatrixRuntimeError(detail)
 
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
