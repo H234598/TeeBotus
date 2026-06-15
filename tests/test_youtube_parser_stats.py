@@ -15,6 +15,13 @@ def test_youtube_parser_stats_reports_infinite_language_and_countable_atoms() ->
     stats = youtube_parser_stats.build_stats()
 
     assert stats["language_is_infinite"] is True
+    assert stats["llm_fallback"] == {
+        "default_enabled": False,
+        "config_key": "youtube_option_llm_fallback",
+        "cost_free_standard_path": True,
+    }
+    assert "optional LLM fallback can classify new phrasing at runtime" not in stats["infinite_reasons"]
+    assert "optional LLM fallback can classify new phrasing only when youtube_option_llm_fallback is enabled" in stats["infinite_reasons"]
     assert stats["result_states"] == {
         "live_output_values": 3,
         "send_to_llm_values": 3,

@@ -117,8 +117,13 @@ def build_stats() -> dict[str, object]:
             "bounded arbitrary text spans such as .{0,60}, .{0,80}, and .{0,100}",
             "unbounded repeated LLM negative filler words",
             "instance-local learned phrases from YouTube_Parser_Misses.jsonl",
-            "optional LLM fallback can classify new phrasing at runtime",
+            "optional LLM fallback can classify new phrasing only when youtube_option_llm_fallback is enabled",
         ],
+        "llm_fallback": {
+            "default_enabled": False,
+            "config_key": "youtube_option_llm_fallback",
+            "cost_free_standard_path": True,
+        },
         "result_states": {
             "live_output_values": 3,
             "send_to_llm_values": 3,

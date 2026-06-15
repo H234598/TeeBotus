@@ -39,6 +39,8 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_readme_plan2_docs.py",
     "tests/test_secret_hygiene.py",
     "tests/test_benchmarks_runner.py",
+    "tests/test_youtube_parser_stats.py",
+    "tests/test_youtube_parser_misses_report.py",
 )
 
 
