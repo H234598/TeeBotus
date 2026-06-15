@@ -4,11 +4,14 @@ from datetime import datetime, timezone
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.proactive_agent import (
+    check_proactive_agent_account,
     disable_proactive_agent,
+    due_proactive_outbox_items,
     enable_proactive_agent,
     proactive_policy_decision,
     queue_proactive_message,
     select_proactive_route,
+    update_proactive_outbox_item_status,
 )
 
 
@@ -111,3 +114,127 @@ def test_disabling_proactive_agent_blocks_future_queueing(tmp_path) -> None:
     assert decision.allowed is False
     assert decision.reason == "proactive_disabled"
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_due_proactive_outbox_items_filters_future_and_terminal_items(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id)
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    past = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="past",
+        message_text="Past",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    future = queue_proactive_message(
+        account_store,
+        account_id,
+        category="task",
+        intent="future",
+        message_text="Future",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=now,
+    )
+    assert past.allowed is True
+    assert future.allowed is True
+    past_id = past.reason.removeprefix("queued:")
+    assert update_proactive_outbox_item_status(account_store, account_id, past_id, status="skipped", reason="test", now=now)
+
+    due = due_proactive_outbox_items(account_store, account_id, now=now)
+
+    assert due == ()
+    assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 14, tzinfo=timezone.utc))[0]["intent"] == "future"
+
+
+def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="first",
+        message_text="First",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=now,
+    )
+
+    second = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="second",
+        message_text="Second",
+        due_at="2026-06-15T13:30:00+00:00",
+        now=now,
+    )
+
+    assert first.allowed is True
+    assert second.allowed is False
+    assert second.reason == "daily_limit_reached"
+
+
+def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_bad",
+                "status": "queued",
+                "category": "analysis",
+                "intent": "",
+                "message_text": "",
+                "due_at": "not-a-date",
+                "route": {"channel": "telegram", "chat_id": "-100", "chat_type": "group"},
+            }
+        ],
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    joined = "\n".join(health.errors)
+    assert "category is not consented: analysis" in joined
+    assert "missing intent" in joined
+    assert "missing message_text" in joined
+    assert "invalid due_at" in joined
+    assert "route is not private" in joined
+
+
+def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert decision.allowed is True
+    assert health.ok is True
+    assert health.errors == ()
