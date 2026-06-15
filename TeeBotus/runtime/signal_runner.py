@@ -181,7 +181,16 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             await self._notify_linked_identities(actions)
             await self._delete_tracked_messages(context, event, actions)
             actions = _with_signal_reply_context(actions, event)
-            sent_refs = await send_signal_actions(context, actions)
+            try:
+                sent_refs = await send_signal_actions(context, actions)
+            except Exception:
+                LOGGER.exception(
+                    "Signal action dispatch failed instance=%s recipient=%s message_ref=%s.",
+                    event.instance,
+                    event.chat_id,
+                    event.message_ref,
+                )
+                return
             for action, sent_ref in zip(actions, sent_refs):
                 if sent_ref is None:
                     continue

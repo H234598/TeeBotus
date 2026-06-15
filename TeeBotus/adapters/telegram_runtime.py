@@ -965,7 +965,16 @@ def _dispatch_modern_telegram_actions(
 ) -> None:
     _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
     _delete_tracked_telegram_messages(api, message_tracker, event, actions)
-    sent_refs = send_telegram_actions(api, actions)
+    try:
+        sent_refs = send_telegram_actions(api, actions)
+    except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+        LOGGER.exception(
+            "Telegram action dispatch failed instance=%s chat_id=%s message_ref=%s.",
+            event.instance,
+            event.chat_id,
+            event.message_ref,
+        )
+        return
     for action, sent_ref in zip(actions, sent_refs):
         if sent_ref is None:
             continue

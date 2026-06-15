@@ -138,6 +138,36 @@ def test_matrix_bridge_logs_sent_message_tracking_errors(tmp_path, caplog) -> No
     assert "Matrix sent message tracking failed" in caplog.text
 
 
+def test_matrix_bridge_logs_action_dispatch_errors(tmp_path, caplog) -> None:
+    class FailingSendClient(FakeMatrixClient):
+        async def room_send(self, **kwargs):
+            self.sent.append(kwargs)
+            raise RuntimeError("send refused")
+
+    client = FailingSendClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.matrix"):
+        asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert "Matrix action dispatch failed" in caplog.text
+
+
 def test_matrix_bridge_exposes_proactive_sender(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

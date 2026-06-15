@@ -1709,6 +1709,50 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [("123", "ok")])
         self.assertIn("Telegram sent message tracking failed", "\n".join(logs.output))
 
+    def test_handle_update_with_runtime_context_logs_action_dispatch_errors(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class FailingSendAPI(FakeAPI):
+            def send_message(self, chat_id: int, text: str) -> int:
+                raise TelegramAPIError("send refused")
+
+        api = FailingSendAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+
+            with self.assertLogs("TeeBotus", level="ERROR") as logs:
+                handle_update(
+                    api,
+                    {"message": {"message_id": 1, "text": "/ping", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
+                    chat_state=ChatState(),
+                    runtime_context=context,
+                )
+
+        self.assertIn("Telegram action dispatch failed", "\n".join(logs.output))
+
     def test_handle_update_with_runtime_context_handles_account_store_errors(self) -> None:
         class InstructionBox:
             def __init__(self, instructions: BotInstructions) -> None:

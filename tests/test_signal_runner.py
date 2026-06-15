@@ -214,6 +214,33 @@ def test_signal_command_logs_sent_message_tracking_errors(tmp_path, caplog) -> N
     assert "Signal sent message tracking failed" in caplog.text
 
 
+def test_signal_command_logs_action_dispatch_errors(tmp_path, caplog, monkeypatch) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+
+    async def failing_send_actions(_context, _actions):
+        raise RuntimeError("send refused")
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.send_signal_actions", failing_send_actions)
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        asyncio.run(command.handle(FakeSignalContext()))
+
+    assert "Signal action dispatch failed" in caplog.text
+
+
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:
     secret_provider = StaticSecretProvider(b"x" * 32)
     command = TeeBotusSignalCommand(
