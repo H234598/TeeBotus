@@ -433,6 +433,29 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.errors == ()
 
 
+def test_proactive_agent_health_reports_malformed_agent_state_shape(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_agent_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "proactive": [],
+            "consent": {"categories": "reminder"},
+            "policy": {"allowed_hours": [9]},
+        },
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    joined = "\n".join(health.errors)
+    assert "agent_state proactive is not an object" in joined
+    assert "agent_state consent.categories is not a list" in joined
+    assert "agent_state policy.allowed_hours is not a two-item list" in joined
+
+
 def test_proactive_agent_health_reports_agent_state_read_error() -> None:
     class BrokenStore:
         def read_agent_state(self, _account_id: str) -> dict:
@@ -458,6 +481,27 @@ def test_proactive_agent_health_reports_outbox_read_error() -> None:
 
     assert health.ok is False
     assert health.errors == ("proactive_outbox read failed: AccountStoreError: encrypted envelope authentication failed",)
+
+
+def test_proactive_agent_health_does_not_duplicate_missing_outbox_ids(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {"status": "sent", "category": "reminder", "intent": "one", "message_text": "One"},
+            {"status": "sent", "category": "reminder", "intent": "two", "message_text": "Two"},
+        ],
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    assert health.errors.count("outbox item 0 missing id") == 1
+    assert health.errors.count("outbox item 1 missing id") == 1
+    assert not any(error.startswith("duplicate outbox item id:") for error in health.errors)
 
 
 def test_proactive_dispatch_sends_generated_calendar_file(tmp_path) -> None:

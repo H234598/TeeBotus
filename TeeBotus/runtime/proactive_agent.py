@@ -1066,6 +1066,28 @@ def _proactive_item_action(chat_id: str, message_text: str, item: Mapping[str, A
     return SendText(chat_id, message_text, track=True)
 
 
+def _proactive_agent_state_shape_errors(state: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    proactive = state.get("proactive")
+    if proactive is not None and not isinstance(proactive, Mapping):
+        errors.append("agent_state proactive is not an object")
+    consent = state.get("consent")
+    if consent is not None and not isinstance(consent, Mapping):
+        errors.append("agent_state consent is not an object")
+    elif isinstance(consent, Mapping):
+        categories = consent.get("categories")
+        if categories is not None and not isinstance(categories, list):
+            errors.append("agent_state consent.categories is not a list")
+    policy = state.get("policy")
+    if policy is not None and not isinstance(policy, Mapping):
+        errors.append("agent_state policy is not an object")
+    elif isinstance(policy, Mapping):
+        allowed_hours = policy.get("allowed_hours")
+        if allowed_hours is not None and (not isinstance(allowed_hours, list) or len(allowed_hours) != 2):
+            errors.append("agent_state policy.allowed_hours is not a two-item list")
+    return errors
+
+
 def check_proactive_agent_account(account_store: AccountStore, account_id: str) -> ProactiveAgentHealth:
     errors: list[str] = []
     queued_count = 0
@@ -1077,6 +1099,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     if state:
         if state.get("schema_version") != 1:
             errors.append("agent_state schema_version is not 1")
+        errors.extend(_proactive_agent_state_shape_errors(state))
         normalized_state = _normalized_agent_state(state)
         if normalized_state["proactive"]["enabled"] and not normalized_state["consent"]["categories"]:
             errors.append("proactive enabled without consent categories")
@@ -1097,7 +1120,8 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             errors.append(f"outbox item {index} missing id")
         elif item_id in seen_ids:
             errors.append(f"duplicate outbox item id: {item_id}")
-        seen_ids.add(item_id)
+        if item_id:
+            seen_ids.add(item_id)
         status = str(item.get("status") or "queued").strip().casefold()
         if status == "queued":
             queued_count += 1
