@@ -570,18 +570,18 @@ def _has_youtube_transcript_intent(text: str) -> bool:
     normalized = re.sub(r"\s+", " ", normalized).strip()
     mentions_youtube = bool(re.search(r"\b(?:youtube|yt)\b|youtu\.be|youtube\.com", normalized))
     mentions_video = bool(re.search(r"\b(?:video|clip|aufnahme|recording)\b", normalized))
-    mentions_transcript = bool(
-        re.search(
-            r"trans(?:krib|crib)|transcript|transkript|transkription|untertitel|abschrift|abschreib|abtippen|verschriftlich|mitschrift",
-            normalized,
-        )
+    mentions_transcribe_action = bool(
+        re.search(r"trans(?:krib|crib)|abschreib|abtippen|verschriftlich", normalized)
+    )
+    mentions_transcript = mentions_transcribe_action or bool(
+        re.search(r"transcript|transkript|transkription|untertitel|abschrift|mitschrift", normalized)
     )
     mentions_text_output = bool(re.search(r"\b(?:text|texte|output|ausgabe|schrift|wortlaut)\b", normalized))
     if mentions_youtube and (mentions_transcript or mentions_text_output or mentions_video):
         return True
     if mentions_video and (mentions_transcript or mentions_text_output):
         return True
-    if mentions_transcript and re.search(r"\b(?:dies(?:e[rsn]?|en)?|das|den|diese|diesen|scheiss|scheiß|mist|ding|teil)\b", normalized):
+    if mentions_transcribe_action and re.search(r"\b(?:dies(?:e[rsn]?|en)?|das|den|diese|diesen|scheiss|scheiß|mist|ding|teil)\b", normalized):
         return True
     return False
 

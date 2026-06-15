@@ -6,6 +6,7 @@ import pytest
 
 from TeeBotus import __version__
 from TeeBotus.core.status import build_status_reply
+from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
@@ -1789,6 +1790,13 @@ def test_engine_youtube_transcript_freeform_phrases_request_link(tmp_path, text)
     actions = engine.process(event(telegram_identity_key(1), text))
 
     assert actions[0].text == "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
+
+
+def test_youtube_transcript_intent_does_not_trigger_on_plain_transcript_noun():
+    assert _has_youtube_transcript_intent("das Transkript ist gut, danke") is False
+    assert _has_youtube_transcript_intent("ich lese das Transcript nachher") is False
+    assert _has_youtube_transcript_intent("den Untertitel finde ich komisch") is False
+    assert _has_youtube_transcript_intent("transkribier das bitte") is True
 
 
 def test_engine_youtube_transcript_uses_pending_link_followup(monkeypatch, tmp_path):
