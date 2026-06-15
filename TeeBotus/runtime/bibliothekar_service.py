@@ -101,13 +101,13 @@ class HaystackBibliothekarBackend:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         try:
             document_store = self._document_store()
-            chunks = self._chunks_from_document_store(document_store)
+            chunks = self._chunks_from_document_store(document_store, filters=_document_store_filters(query.filters))
         except Exception:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
             try:
                 self.rebuild()
-                chunks = self._chunks_from_document_store(document_store)
+                chunks = self._chunks_from_document_store(document_store, filters=_document_store_filters(query.filters))
             except Exception:
                 return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
@@ -170,11 +170,11 @@ class HaystackBibliothekarBackend:
         except Exception:
             document_store.write_documents(documents)
 
-    def _chunks_from_document_store(self, document_store: Any) -> list[dict[str, Any]]:
+    def _chunks_from_document_store(self, document_store: Any, *, filters: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
-            documents = document_store.filter_documents()
+            documents = document_store.filter_documents(filters=filters) if filters else document_store.filter_documents()
         except TypeError:
-            documents = document_store.filter_documents(filters={})
+            documents = document_store.filter_documents(filters=filters or {})
         except AttributeError:
             return []
         chunks: list[dict[str, Any]] = []
@@ -390,6 +390,36 @@ def _apply_chunk_filters(chunks: list[dict[str, Any]], filters: Mapping[str, obj
     if not active:
         return chunks
     return [chunk for chunk in chunks if all(_chunk_matches_filter(chunk, key, value) for key, value in active.items())]
+
+
+def _document_store_filters(filters: Mapping[str, object] | None) -> dict[str, Any] | None:
+    if not filters:
+        return None
+    field_map = {
+        "category": "meta.categories",
+        "categories": "meta.categories",
+        "topic": "meta.topics",
+        "topics": "meta.topics",
+        "keyword": "meta.topics",
+        "keywords": "meta.topics",
+        "suffix": "meta.suffix",
+        "extension": "meta.suffix",
+        "document": "meta.document_id",
+        "document_id": "meta.document_id",
+        "chunk": "meta.chunk_id",
+        "chunk_id": "meta.chunk_id",
+    }
+    conditions = []
+    for raw_key, raw_value in filters.items():
+        key = str(raw_key or "").strip().casefold()
+        field = field_map.get(key)
+        values = list(_filter_values(raw_value))
+        if not field or not values:
+            continue
+        conditions.append({"field": field, "operator": "in", "value": values})
+    if not conditions:
+        return None
+    return {"operator": "AND", "conditions": conditions}
 
 
 def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> bool:
