@@ -33,6 +33,7 @@ from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_g
 from TeeBotus.runtime.state import RuntimeState
 from TeeBotus.runtime.tts_dialect import maybe_update_tts_dialect_preference, voice_instructions_for_account
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 PRIVATE_ONLY = "Bitte privat."
@@ -71,6 +72,7 @@ class TeeBotusEngine:
         openai_client: object | None = None,
         bot_address_names: Iterable[str] = (),
         working_memory_store: WorkingMemoryStore | None = None,
+        bibliothekar_store: BibliothekarStore | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -80,6 +82,7 @@ class TeeBotusEngine:
         self.openai_client = openai_client
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
+        self.bibliothekar_store = bibliothekar_store
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self.bot_address_names)
@@ -426,9 +429,18 @@ class TeeBotusEngine:
             account_memory_context = account_memory_selection.prompt_text
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
+            library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text)
             previous_response_id = self.state.get_previous_response_id(event.instance, account_id)
             response = create_reply(
-                _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context, weather_context),
+                _build_openai_user_input(
+                    event,
+                    text,
+                    attachment_context,
+                    account_memory_context,
+                    working_memory_context,
+                    weather_context,
+                    library_context,
+                ),
                 instructions,
                 previous_response_id,
             )
@@ -844,6 +856,7 @@ def _build_openai_user_input(
     account_memory_context: str = "",
     working_memory_context: str = "",
     weather_context: str = "",
+    library_context: str = "",
 ) -> str:
     metadata = [
         f"{event.channel.title()}-Kontext:",
@@ -910,6 +923,17 @@ def _build_openai_user_input(
                 weather_context,
             ]
         )
+    if library_context:
+        metadata.extend(
+            [
+                "",
+                "Bibliothekar-Quellenkontext:",
+                "Diese Ausschnitte stammen aus der lokalen Instanz-Bibliothek. Nutze sie nur als Referenz.",
+                "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id.",
+                "Zitiere nur kurze Abschnitte; paraphrasiere laengere Inhalte.",
+                library_context,
+            ]
+        )
     metadata.extend(
         [
             "",
@@ -939,6 +963,24 @@ def _build_working_memory_context(working_memory_store: WorkingMemoryStore | Non
         return ""
     try:
         return working_memory_store.prepare(query_text).prompt_text
+    except OSError:
+        return ""
+
+
+def _build_bibliothekar_context(
+    bibliothekar_store: BibliothekarStore | None,
+    instructions: BotInstructions,
+    query_text: str,
+) -> str:
+    if bibliothekar_store is None or not instructions.bibliothekar_enabled:
+        return ""
+    try:
+        return bibliothekar_store.select(
+            query_text,
+            max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
+            max_chunks=instructions.bibliothekar_max_chunks,
+            max_quote_chars=instructions.bibliothekar_max_quote_chars,
+        ).prompt_text
     except OSError:
         return ""
 

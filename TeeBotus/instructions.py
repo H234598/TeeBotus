@@ -155,6 +155,10 @@ class BotInstructions:
     user_memory_enabled: bool = False
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
+    bibliothekar_enabled: bool = True
+    bibliothekar_max_prompt_chars: int = 5000
+    bibliothekar_max_chunks: int = 5
+    bibliothekar_max_quote_chars: int = 900
     openai_shared_prompt: str = ""
     openai_system_prompt: str = (
         "Du bist ein hilfreicher Telegram-Bot.\n"
@@ -664,6 +668,14 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_missing_key = value
     elif normalized == "reset":
         instructions.openai_reset = value
+    elif normalized == "bibliothekar_enabled":
+        instructions.bibliothekar_enabled = _parse_bool(value, default=instructions.bibliothekar_enabled)
+    elif normalized == "bibliothekar_max_prompt_chars":
+        instructions.bibliothekar_max_prompt_chars = _parse_required_int(value, default=instructions.bibliothekar_max_prompt_chars)
+    elif normalized == "bibliothekar_max_chunks":
+        instructions.bibliothekar_max_chunks = _parse_required_int(value, default=instructions.bibliothekar_max_chunks)
+    elif normalized == "bibliothekar_max_quote_chars":
+        instructions.bibliothekar_max_quote_chars = _parse_required_int(value, default=instructions.bibliothekar_max_quote_chars)
 
 
 def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) -> None:

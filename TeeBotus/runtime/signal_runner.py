@@ -27,6 +27,7 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.proactive_backends import signal_proactive_sender
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
 
 try:
     from signalbot import Command as _SignalBotCommand  # type: ignore[import-not-found]
@@ -84,6 +85,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
+        self.bibliothekar_store = BibliothekarStore(run_config.instance_name, self.instances_dir)
         self.engine = TeeBotusEngine(
             self.account_store,
             state=self.state_store,
@@ -92,6 +94,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             openai_client=self.openai_client,
             bot_address_names=(run_config.signal_phone_number, run_config.label),
             working_memory_store=self.working_memory_store,
+            bibliothekar_store=self.bibliothekar_store,
         )
         self.bot: Any | None = None
 

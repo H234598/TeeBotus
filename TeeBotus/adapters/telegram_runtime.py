@@ -42,6 +42,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToo
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.activity_profile import record_account_activity
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
@@ -692,6 +693,7 @@ def handle_update(
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
+    bibliothekar_store: BibliothekarStore | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -776,6 +778,7 @@ def handle_update(
         working_memory_store,
         youtube_job_runner,
         instance_name,
+        bibliothekar_store,
     )
 
 
@@ -794,6 +797,7 @@ def _process_text_message(
     working_memory_store: WorkingMemoryStore | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
+    bibliothekar_store: BibliothekarStore | None = None,
 ) -> None:
     chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
@@ -899,6 +903,7 @@ def _process_text_message(
             api.send_chat_action(chat_id, "typing")
             working_memory = _prepare_working_memory(working_memory_store, text)
             weather_text = _prepare_weather_context(user_memory_store, user_memory, text)
+            library_text = _prepare_bibliothekar_context(bibliothekar_store, instructions, text)
             openai_response = openai_client.create_reply(
                 _build_openai_user_input(
                     message,
@@ -907,6 +912,7 @@ def _process_text_message(
                     bot_identity,
                     working_memory.prompt_text if working_memory else "",
                     weather_text,
+                    library_text,
                 ),
                 instructions,
                 chat_state.get_previous_response_id(chat_id),
@@ -1740,6 +1746,7 @@ def _build_openai_user_input(
     bot_identity: BotIdentity | None = None,
     working_memory_text: str = "",
     weather_text: str = "",
+    library_text: str = "",
 ) -> str:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
@@ -1796,8 +1803,38 @@ def _build_openai_user_input(
                 weather_text.strip(),
             ]
         )
+    if library_text.strip():
+        metadata.extend(
+            [
+                "",
+                "Bibliothekar-Quellenkontext:",
+                "Diese Ausschnitte stammen aus der lokalen Instanz-Bibliothek. Nutze sie nur als Referenz.",
+                "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id.",
+                "Zitiere nur kurze Abschnitte; paraphrasiere laengere Inhalte.",
+                library_text.strip(),
+            ]
+        )
     metadata.extend(["", "Nachricht:", text])
     return "\n".join(metadata).strip()
+
+
+def _prepare_bibliothekar_context(
+    bibliothekar_store: BibliothekarStore | None,
+    instructions: BotInstructions,
+    text: str,
+) -> str:
+    if bibliothekar_store is None or not instructions.bibliothekar_enabled:
+        return ""
+    try:
+        return bibliothekar_store.select(
+            text,
+            max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
+            max_chunks=instructions.bibliothekar_max_chunks,
+            max_quote_chars=instructions.bibliothekar_max_quote_chars,
+        ).prompt_text
+    except OSError:
+        LOGGER.exception("Failed to prepare Bibliothekar context.")
+        return ""
 
 
 def _prepare_weather_context(user_memory_store: AccountStore | None, user_memory: UserMemoryRecord | None, text: str) -> str:
@@ -2340,6 +2377,7 @@ def run_polling(
     )
     working_memory_store = WorkingMemoryStore(instance)
     working_memory_store.ensure()
+    bibliothekar_store = BibliothekarStore(instance, _resolve_instances_dir())
     chat_state = ChatState(_teladi_call_state_path(instance), instance)
     process_registry = _InstanceProcessRegistry(instance)
     process_registry.cleanup_orphans()
@@ -2370,6 +2408,7 @@ def run_polling(
                         working_memory_store,
                         youtube_job_runner,
                         instance,
+                        bibliothekar_store,
                     )
                     offset = int(update["update_id"]) + 1
             except KeyboardInterrupt:
