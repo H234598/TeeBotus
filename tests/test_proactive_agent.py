@@ -729,6 +729,7 @@ def test_proactive_agent_health_reports_stale_queued_route(tmp_path) -> None:
         category="reminder",
         intent="follow_up",
         message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
         due_at="2026-06-15T12:30:00+00:00",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
@@ -741,6 +742,33 @@ def test_proactive_agent_health_reports_stale_queued_route(tmp_path) -> None:
     assert health.queued_count == 1
     assert health.review_pending_count == 0
     assert "route is stale or not linked to account identity" in "\n".join(health.errors)
+
+
+def test_proactive_agent_route_matching_uses_normalized_channel_and_chat_type(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="Signal", chat_id="+491", chat_type="Private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+    route = select_proactive_route(account_store, account_id)
+
+    assert decision.allowed is True
+    assert health.ok is True
+    assert route is not None
+    assert route["channel"] == "signal"
+    assert route["chat_type"] == "private"
 
 
 def test_proactive_risk_gate_queues_for_human_review_without_dispatch(tmp_path) -> None:

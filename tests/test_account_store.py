@@ -90,6 +90,20 @@ def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     assert "395935293" not in raw_identity_file
 
 
+def test_identity_route_normalizes_channel_and_chat_type(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = signal_identity_key(source_uuid="abc")
+    store.resolve_or_create_account(identity)
+
+    store.update_identity_route(identity, channel="Signal", chat_id="+491", chat_type="Private", adapter_slot=1)
+
+    route = store.get_identity_route(identity)
+    assert route is not None
+    assert route["channel"] == "signal"
+    assert route["chat_type"] == "private"
+    assert route["chat_id"] == "+491"
+
+
 def test_privacy_confirmation_is_persisted_in_profile_and_reset_by_memory_reset(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")

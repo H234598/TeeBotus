@@ -705,9 +705,9 @@ class AccountStore:
         if not isinstance(payload, dict):
             return
         route = {
-            "channel": str(channel or "").strip(),
+            "channel": str(channel or "").strip().casefold(),
             "chat_id": str(chat_id or "").strip(),
-            "chat_type": str(chat_type or "").strip(),
+            "chat_type": str(chat_type or "").strip().casefold(),
             "last_seen_at": utc_now(),
         }
         if adapter_slot is not None:
