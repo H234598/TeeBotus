@@ -194,6 +194,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     bot_react_params = inspect.signature(SignalBot.react).parameters
     bot_receipt_params = inspect.signature(SignalBot.receipt).parameters
     bot_poll_params = inspect.signature(SignalBot.poll).parameters
+    bot_delete_attachment_params = inspect.signature(SignalBot.delete_attachment).parameters
     delete_params = inspect.signature(Context.remote_delete).parameters
     react_params = inspect.signature(Context.react).parameters
     receipt_params = inspect.signature(Context.receipt).parameters
@@ -233,6 +234,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "SignalBot.poll.receiver": "receiver" in bot_poll_params,
         "SignalBot.poll.answers": "answers" in bot_poll_params,
         "SignalBot.poll.allow_multiple_selections": "allow_multiple_selections" in bot_poll_params,
+        "SignalBot.delete_attachment.attachment_filename": "attachment_filename" in bot_delete_attachment_params,
         "SignalBot.start_typing.receiver": "receiver" in bot_start_typing_params,
         "SignalBot.stop_typing.receiver": "receiver" in bot_stop_typing_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
@@ -240,7 +242,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=send,reply,edit,react,receipt,poll,start_typing,stop_typing,remote_delete"
+    return True, "signalbot Context contract=ok methods=send,reply,edit,react,receipt,poll,start_typing,stop_typing,remote_delete,delete_attachment"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:
