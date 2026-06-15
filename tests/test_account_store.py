@@ -655,6 +655,23 @@ def test_structured_account_memory_records_access_recency(tmp_path):
     assert index["accessed_ids"][-2:] == [first_id, second_id]
 
 
+def test_rebuild_structured_account_memory_restores_access_recency(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    first_id = store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Mond", "bot_text": "Tee"})
+    second_id = store.append_structured_memory_entry(account_id, {"id": "mem_second", "user_text": "Kaffee", "bot_text": "Tasse"})
+    store.select_structured_memory(account_id, query_text="mond", max_prompt_chars=12000, max_entry_chars=2000)
+    index = store.read_memory_index(account_id)
+    index["index"]["accessed_ids"] = []
+    store.write_memory_index(account_id, index)
+
+    store.rebuild_structured_memory_index(account_id)
+
+    rebuilt = store.read_memory_index(account_id)["index"]
+    assert rebuilt["accessed_ids"][-2:] == [first_id, second_id]
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_structured_account_memory_indexes_types_and_temporal_relations(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

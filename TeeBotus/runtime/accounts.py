@@ -1131,6 +1131,9 @@ class AccountStore:
             existing_nested_index.get("semantic_cache") if isinstance(existing_nested_index.get("semantic_cache"), dict) else {}
         )
         semantic_cache_enabled = existing_semantic_cache.get("enabled") is not False
+        existing_accessed_ids = (
+            existing_nested_index.get("accessed_ids") if isinstance(existing_nested_index.get("accessed_ids"), list) else []
+        )
         rebuilt_index = self._normalized_memory_index(
             account_id,
             {
@@ -1142,6 +1145,7 @@ class AccountStore:
         rebuilt_index["index"]["semantic_cache"]["enabled"] = semantic_cache_enabled
         for entry in normalized_rows:
             self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
+        rebuilt_index["index"]["accessed_ids"] = _rebuild_account_memory_accessed_ids(normalized_rows, existing_accessed_ids)
         rebuilt_index["updated_at"] = utc_now()
         self.write_memory_index(account_id, rebuilt_index)
 
@@ -2376,6 +2380,33 @@ def _new_account_memory_index() -> dict[str, Any]:
         },
         "retention": _account_memory_retention_policy(),
     }
+
+
+def _rebuild_account_memory_accessed_ids(rows: list[dict[str, Any]], existing_accessed_ids: list[Any]) -> list[str]:
+    existing_order = {
+        str(memory_id or "").strip(): index
+        for index, memory_id in enumerate(existing_accessed_ids)
+        if str(memory_id or "").strip()
+    }
+    candidates: list[tuple[str, int, int, str]] = []
+    seen: set[str] = set()
+    for row_index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        memory_id = str(row.get("id") or "").strip()
+        if not memory_id or memory_id in seen:
+            continue
+        last_accessed_at = str(row.get("last_accessed_at") or "").strip()
+        if not last_accessed_at and memory_id not in existing_order:
+            continue
+        access_count = _normalize_nonnegative_int(row.get("access_count"))
+        if access_count <= 0 and memory_id not in existing_order:
+            continue
+        seen.add(memory_id)
+        tie_breaker = existing_order.get(memory_id, len(existing_order) + row_index)
+        candidates.append((last_accessed_at, access_count, tie_breaker, memory_id))
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [memory_id for *_unused, memory_id in candidates[-ACCOUNT_MEMORY_RECENT_LIMIT:]]
 
 
 def _account_memory_index_entry(entry: dict[str, Any]) -> dict[str, Any]:
