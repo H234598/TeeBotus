@@ -9,7 +9,17 @@ from signalbot.message import MessageType
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendPoll, SendReaction, SendReceipt, SendText, SendTyping
+from TeeBotus.runtime.actions import (
+    ExportFile,
+    SendAttachment,
+    SendEdit,
+    SendPoll,
+    SendReaction,
+    SendReceipt,
+    SendText,
+    SendTyping,
+    SetMatrixState,
+)
 
 
 @dataclass
@@ -527,6 +537,15 @@ def test_signal_poll_rejects_too_few_answers():
         raise AssertionError("RuntimeError was not raised")
 
 
+def test_signal_ignores_matrix_state_action():
+    class Context:
+        pass
+
+    sent = asyncio.run(send_signal_actions(Context(), [SetMatrixState("+491", "m.room.topic", {"topic": "Tee"})]))
+
+    assert sent == [None]
+
+
 def test_signal_send_text_can_quote_current_message_with_bot_send():
     class Bot:
         def __init__(self) -> None:
@@ -927,6 +946,15 @@ def test_telegram_send_poll_uses_optional_send_poll():
     assert api.calls == [
         ("@my_channel", "Tee?", ["Ja", "Nein"], {"allows_multiple_answers": True}),
     ]
+
+
+def test_telegram_ignores_matrix_state_action():
+    class API:
+        pass
+
+    sent = send_telegram_actions(API(), [SetMatrixState("@my_channel", "m.room.topic", {"topic": "Tee"})])
+
+    assert sent == [None]
 
 
 def test_matrix_message_maps_sender_and_room_to_event():
@@ -1493,6 +1521,38 @@ def test_matrix_send_poll_uses_poll_start_event():
         ],
     }
     assert content["body"] == "Tee?\n(Mehrfachauswahl)\n1. Ja\n2. Nein"
+
+
+def test_matrix_set_state_uses_room_put_state():
+    class Response:
+        pass
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_put_state(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [SetMatrixState("!room:example", "m.room.topic", {"topic": "Tee"}, state_key="")],
+        )
+    )
+
+    assert sent == [None]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "event_type": "m.room.topic",
+            "content": {"topic": "Tee"},
+            "state_key": "",
+        }
+    ]
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

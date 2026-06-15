@@ -15,6 +15,7 @@ from TeeBotus.runtime.actions import (
     SendReceipt,
     SendText,
     SendTyping,
+    SetMatrixState,
 )
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -90,6 +91,9 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 action.allow_multiple_selections,
             )
             sent.append(_matrix_event_id(response))
+        elif isinstance(action, SetMatrixState):
+            await _set_matrix_state(client, action.chat_id, action.event_type, action.content, state_key=action.state_key)
+            sent.append(None)
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
                 client,
@@ -260,6 +264,21 @@ def _matrix_poll_fallback(question: str, answers: list[str], allow_multiple_sele
     mode = "Mehrfachauswahl" if allow_multiple_selections else "Einzelauswahl"
     options = "\n".join(f"{index}. {answer}" for index, answer in enumerate(answers, start=1))
     return f"{question}\n({mode})\n{options}"
+
+
+async def _set_matrix_state(client: Any, room_id: str, event_type: str, content: dict[str, Any], *, state_key: str = "") -> None:
+    normalized_event_type = str(event_type or "").strip()
+    if not normalized_event_type:
+        raise RuntimeError("Matrix state event requires an event_type")
+    if not isinstance(content, dict):
+        raise RuntimeError("Matrix state event content must be a dict")
+    response = await client.room_put_state(
+        room_id=room_id,
+        event_type=normalized_event_type,
+        content=content,
+        state_key=str(state_key or ""),
+    )
+    _raise_matrix_response_error(response)
 
 
 def _matrix_receipt_type(receipt_type: str) -> Any:

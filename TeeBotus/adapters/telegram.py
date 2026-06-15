@@ -14,6 +14,7 @@ from TeeBotus.runtime.actions import (
     SendReceipt,
     SendText,
     SendTyping,
+    SetMatrixState,
 )
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -104,6 +105,8 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             # the adapter keeps it explicit instead of leaking the notice to the wrong chat.
             sent.append(None)
         elif isinstance(action, DeleteTrackedMessages):
+            sent.append(None)
+        elif isinstance(action, SetMatrixState):
             sent.append(None)
     return sent
 

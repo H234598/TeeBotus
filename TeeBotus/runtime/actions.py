@@ -78,6 +78,14 @@ class SendPoll:
 
 
 @dataclass(frozen=True)
+class SetMatrixState:
+    chat_id: str
+    event_type: str
+    content: dict[str, Any]
+    state_key: str = ""
+
+
+@dataclass(frozen=True)
 class ExportFile:
     chat_id: str
     filename: str
@@ -105,6 +113,7 @@ OutgoingAction = (
     | SendReceipt
     | SendEdit
     | SendPoll
+    | SetMatrixState
     | ExportFile
     | NotifyLinkedIdentity
 )

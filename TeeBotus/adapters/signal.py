@@ -17,6 +17,7 @@ from TeeBotus.runtime.actions import (
     SendReceipt,
     SendText,
     SendTyping,
+    SetMatrixState,
 )
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
@@ -161,6 +162,8 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
             elif isinstance(action, NotifyLinkedIdentity):
                 sent.append(None)
             elif isinstance(action, DeleteTrackedMessages):
+                sent.append(None)
+            elif isinstance(action, SetMatrixState):
                 sent.append(None)
             elif isinstance(action, ExportFile):
                 encoded = base64.b64encode(action.data).decode("ascii")

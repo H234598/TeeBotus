@@ -87,6 +87,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomMessageUnknown",
         "RoomSendResponse",
         "RoomSendError",
+        "RoomPutStateResponse",
+        "RoomPutStateError",
         "SyncResponse",
         "UploadResponse",
         "UploadError",
@@ -105,6 +107,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
     download_params = inspect.signature(nio.AsyncClient.download).parameters
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
+    room_put_state_params = inspect.signature(nio.AsyncClient.room_put_state).parameters
     room_typing_params = inspect.signature(nio.AsyncClient.room_typing).parameters
     room_redact_params = inspect.signature(nio.AsyncClient.room_redact).parameters
     update_receipt_params = inspect.signature(nio.AsyncClient.update_receipt_marker).parameters
@@ -117,6 +120,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_send.content": "content" in room_send_params,
+        "AsyncClient.room_put_state.content": "content" in room_put_state_params,
+        "AsyncClient.room_put_state.state_key": "state_key" in room_put_state_params,
         "AsyncClient.room_typing.timeout": "timeout" in room_typing_params,
         "AsyncClient.room_redact.reason": "reason" in room_redact_params,
         "AsyncClient.update_receipt_marker.receipt_type": "receipt_type" in update_receipt_params,
