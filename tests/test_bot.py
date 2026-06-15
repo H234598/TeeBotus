@@ -2114,6 +2114,10 @@ class BotTests(unittest.TestCase):
         self.assertEqual(_parse_youtube_local_options("live output false, send_to_llm false"), (False, False))
         self.assertEqual(_parse_youtube_local_options("ohne live und ohne LLM, danach auswerten"), (False, False))
         self.assertEqual(_parse_youtube_local_options("nur transkribieren, kein llm"), (None, False))
+        self.assertEqual(_parse_youtube_local_options("off off"), (False, False))
+        self.assertEqual(_parse_youtube_local_options("ja und nein"), (True, False))
+        self.assertEqual(_parse_youtube_local_options("ja, das ist richtig, nein keine ahnung"), (None, None))
+        self.assertEqual(_parse_youtube_local_options("keine ahnung, ja nein"), (None, None))
 
     def test_youtube_local_options_parse_broad_context_phrasing(self) -> None:
         cases = {

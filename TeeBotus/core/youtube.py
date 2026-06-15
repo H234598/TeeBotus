@@ -243,10 +243,25 @@ def _parse_youtube_local_options(text: str, instance_name: str = "", instances_d
     llm_option = _parse_youtube_llm_option(normalized)
     if live_option is not None or llm_option is not None:
         return live_option, llm_option
-    tokens = re.findall(rf"\b({yes_words}|{no_words})\b", normalized)
-    if len(tokens) >= 2:
-        return _yes_no_value(tokens[0]), _yes_no_value(tokens[1])
+    terse_pair = _parse_youtube_terse_bool_pair(normalized)
+    if terse_pair is not None:
+        return terse_pair
     return None, None
+
+
+def _parse_youtube_terse_bool_pair(normalized_text: str) -> tuple[bool, bool] | None:
+    """Accept short option-only replies such as "off off" without parsing prose."""
+    bool_words = {"ja", "yes", "jup", "ok", "okay", "y", "true", "wahr", "an", "ein", "on", "1", "nein", "no", "n", "nee", "false", "falsch", "aus", "off", "0"}
+    allowed_fillers = {"und", "and"}
+    tokens = re.findall(r"[a-zäöüß]+|[0-9]+", normalized_text)
+    if not tokens:
+        return None
+    bool_tokens = [token for token in tokens if token in bool_words]
+    if len(bool_tokens) != 2:
+        return None
+    if any(token not in bool_words and token not in allowed_fillers for token in tokens):
+        return None
+    return _yes_no_value(bool_tokens[0]), _yes_no_value(bool_tokens[1])
 
 
 def _parse_learned_youtube_local_options(text: str, instance_name: str, instances_dir: Path | None = None) -> tuple[bool, bool] | None:
