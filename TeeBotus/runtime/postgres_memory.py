@@ -217,14 +217,15 @@ class PostgresAccountMemoryBackend:
         )
         keywords = row.get("keywords") if isinstance(row.get("keywords"), list) else []
         if keywords:
-            connection.executemany(
-                """
-                INSERT INTO teebotus_memory_keywords(instance_name, account_id, keyword, memory_id)
-                VALUES (%s, %s, %s, %s)
-                ON CONFLICT DO NOTHING
-                """,
-                [(self.instance_name, account_id, str(keyword), memory_id) for keyword in keywords if str(keyword or "").strip()],
-            )
+            with connection.cursor() as cursor:
+                cursor.executemany(
+                    """
+                    INSERT INTO teebotus_memory_keywords(instance_name, account_id, keyword, memory_id)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    [(self.instance_name, account_id, str(keyword), memory_id) for keyword in keywords if str(keyword or "").strip()],
+                )
 
     def _encrypt_json(self, account_id: str, memory_id: str, payload: dict[str, Any]) -> tuple[bytes, bytes]:
         import json

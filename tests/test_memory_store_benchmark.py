@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider
+from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
 from scripts.benchmark_memory_store import benchmark_postgres_backend, benchmark_sqlite_row_encrypted_projection, main
 
 
@@ -56,3 +57,47 @@ def test_account_store_postgres_backend_requires_dsn(tmp_path, monkeypatch) -> N
 
     with pytest.raises(AccountStoreError, match="POSTGRES_DSN"):
         store.read_memory_entries("a" * 128)
+
+
+def test_postgres_backend_inserts_keywords_with_cursor_executemany() -> None:
+    class FakeCursor:
+        def __init__(self) -> None:
+            self.batches: list[list[tuple[str, str, str, str]]] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def executemany(self, _sql: str, params: list[tuple[str, str, str, str]]) -> None:
+            self.batches.append(params)
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.executed: list[tuple[str, tuple]] = []
+            self.cursor_obj = FakeCursor()
+
+        def execute(self, sql: str, params: tuple) -> None:
+            self.executed.append((sql, params))
+
+        def cursor(self) -> FakeCursor:
+            return self.cursor_obj
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    connection = FakeConnection()
+
+    backend._insert_entry(
+        connection,
+        "a" * 128,
+        {"id": "mem_1", "keywords": ["spaziergang", "kaffee"], "user_text": "Hallo"},
+        0,
+    )
+
+    assert len(connection.executed) == 1
+    assert connection.cursor_obj.batches == [[("Bench", "a" * 128, "spaziergang", "mem_1"), ("Bench", "a" * 128, "kaffee", "mem_1")]]
