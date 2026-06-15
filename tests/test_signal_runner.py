@@ -15,6 +15,8 @@ from TeeBotus.runtime.signal_runner import (
     TeeBotusSignalCommand,
     check_signal_service,
     ensure_signal_services_available,
+    _patch_signalbot_signal_cli_api_about,
+    _pid_file_process_is_running,
     run_signal_account,
     run_signal_accounts,
 )
@@ -259,7 +261,7 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
     )
     commands: list[list[str]] = []
-    attempts = {"count": 0}
+    service_up = {"value": False}
 
     class FakeProcess:
         pid = 4321
@@ -268,17 +270,30 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
             return None
 
     def fake_check_signal_services(_config):
-        attempts["count"] += 1
-        if attempts["count"] == 1:
-            return (SignalServiceHealth(account=account, ok=False, target="localhost:8080", error="connection refused"),)
-        return (SignalServiceHealth(account=account, ok=True, target="localhost:8080"),)
+        return (
+            SignalServiceHealth(
+                account=account,
+                ok=service_up["value"],
+                target="localhost:8080",
+                error="" if service_up["value"] else "connection refused",
+            ),
+        )
+
+    def fake_check_signal_service(_account, timeout_seconds=1.0):
+        return SignalServiceHealth(
+            account=account,
+            ok=service_up["value"],
+            target="localhost:8080",
+            error="" if service_up["value"] else "connection refused",
+        )
 
     def fake_popen(command, **_kwargs):
         commands.append(command)
+        service_up["value"] = True
         return FakeProcess()
 
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", lambda _account, timeout_seconds=1.0: fake_check_signal_services(config)[0])
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
@@ -287,6 +302,112 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
 
     assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
     assert (tmp_path / "runtime" / "signal-cli-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
+
+
+def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://localhost:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Other",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://localhost:8080",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo", "Other"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("Demo", tmp_path / "Demo.md", (accounts[0],)),
+            InstanceRunConfig("Other", tmp_path / "Other.md", (accounts[1],)),
+        ),
+    )
+    commands: list[list[str]] = []
+    service_up = {"value": False}
+
+    class FakeProcess:
+        pid = 4321
+
+        def poll(self):
+            return None
+
+    def fake_check_signal_services(_config):
+        return tuple(
+            SignalServiceHealth(
+                account=account,
+                ok=service_up["value"],
+                target="localhost:8080",
+                error="" if service_up["value"] else "connection refused",
+            )
+            for account in accounts
+        )
+
+    def fake_check_signal_service(account, timeout_seconds=1.0):
+        return SignalServiceHealth(
+            account=account,
+            ok=service_up["value"],
+            target="localhost:8080",
+            error="" if service_up["value"] else "connection refused",
+        )
+
+    def fake_popen(command, **_kwargs):
+        commands.append(command)
+        service_up["value"] = True
+        return FakeProcess()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+
+    ensure_signal_services_available(config)
+
+    assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
+
+
+def test_signalbot_patch_accepts_signal_cli_api_about_shape() -> None:
+    class FakeSignalAPI:
+        async def get_signal_cli_about(self):
+            return {"build": {"os": "linux"}, "versions": {"signal-cli-api": "0.1.1"}}
+
+        async def get_signal_cli_rest_api_version(self):
+            raise KeyError("version")
+
+        async def get_signal_cli_rest_api_mode(self):
+            raise KeyError("mode")
+
+    fake_signalbot = SimpleNamespace(api=SimpleNamespace(SignalAPI=FakeSignalAPI))
+
+    _patch_signalbot_signal_cli_api_about(fake_signalbot)
+
+    api = FakeSignalAPI()
+    assert asyncio.run(api.get_signal_cli_rest_api_version()) == "unset"
+    assert asyncio.run(api.get_signal_cli_rest_api_mode()) == "json-rpc"
+
+
+def test_signal_pid_check_rejects_dead_process(monkeypatch, tmp_path) -> None:
+    pid_file = tmp_path / "signal-cli-api.pid"
+    pid_file.write_text("999999\n", encoding="utf-8")
+
+    class Result:
+        returncode = 1
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.run", lambda *_args, **_kwargs: Result())
+
+    assert _pid_file_process_is_running(pid_file) is False
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:

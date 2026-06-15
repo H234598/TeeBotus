@@ -139,6 +139,7 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
     if account.channel != "signal":
         raise SignalRuntimeError(f"unsupported Signal account channel: {account.channel}")
     signalbot = _import_signalbot()
+    _patch_signalbot_signal_cli_api_about(signalbot)
     config_class = getattr(signalbot, "Config")
     bot_class = getattr(signalbot, "SignalBot")
     bot = bot_class(config_class(**_signalbot_config_kwargs(signalbot, account)))
@@ -177,7 +178,11 @@ def _require_signal_services_reachable(config: RuntimeConfig) -> None:
 
 def ensure_signal_services_available(config: RuntimeConfig) -> None:
     failures = [health for health in check_signal_services(config) if not health.ok]
+    attempted_targets: set[str] = set()
     for health in failures:
+        if health.target in attempted_targets:
+            continue
+        attempted_targets.add(health.target)
         _start_local_signal_backend_if_possible(health.account)
     _require_signal_services_reachable(config)
 
@@ -188,6 +193,8 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     except SignalRuntimeError:
         return
     if host not in LOCAL_SIGNAL_HOSTS:
+        return
+    if check_signal_service(account, timeout_seconds=0.25).ok:
         return
     command = _signal_cli_api_command(host, port)
     log_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.log"
@@ -253,10 +260,10 @@ def _pid_file_process_is_running(path: Path) -> bool:
     if pid <= 0:
         return False
     try:
-        subprocess.run(["kill", "-0", str(pid)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(["kill", "-0", str(pid)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         return False
-    return True
+    return result.returncode == 0
 
 
 def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:
@@ -325,6 +332,41 @@ def _signalbot_connection_mode(signalbot: Any, scheme: str) -> Any | None:
     if scheme == "https":
         return getattr(connection_mode, "HTTPS_ONLY", None)
     return None
+
+
+def _patch_signalbot_signal_cli_api_about(signalbot: Any) -> None:
+    api_module = getattr(signalbot, "api", None)
+    signal_api_class = getattr(api_module, "SignalAPI", None)
+    if signal_api_class is None or getattr(signal_api_class, "_teebotus_signal_cli_api_about_patch", False):
+        return
+    original_version = getattr(signal_api_class, "get_signal_cli_rest_api_version", None)
+    original_mode = getattr(signal_api_class, "get_signal_cli_rest_api_mode", None)
+    if original_version is None or original_mode is None:
+        return
+
+    async def get_signal_cli_rest_api_version(self: Any) -> str:
+        about = await self.get_signal_cli_about()
+        version = about.get("version")
+        if isinstance(version, str):
+            return version
+        versions = about.get("versions")
+        if isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str):
+            return "unset"
+        return await original_version(self)
+
+    async def get_signal_cli_rest_api_mode(self: Any) -> str:
+        about = await self.get_signal_cli_about()
+        mode = about.get("mode")
+        if isinstance(mode, str):
+            return mode
+        versions = about.get("versions")
+        if isinstance(versions, dict) and isinstance(versions.get("signal-cli-api"), str):
+            return "json-rpc"
+        return await original_mode(self)
+
+    signal_api_class.get_signal_cli_rest_api_version = get_signal_cli_rest_api_version
+    signal_api_class.get_signal_cli_rest_api_mode = get_signal_cli_rest_api_mode
+    signal_api_class._teebotus_signal_cli_api_about_patch = True
 
 
 def _import_signalbot() -> Any:
