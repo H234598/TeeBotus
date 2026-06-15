@@ -88,7 +88,62 @@ def test_engine_stops_notification_loudness_prompt_after_confirmation(tmp_path) 
     assert actions[0].text == "Danke, ich frage deswegen nicht weiter nach."
     assert later_prompt is None
     state = account_store.read_agent_state(account_id)
-    assert state["notification_loudness"]["routes"]["telegram:1:chat-1"]["status"] == "confirmed"
+    route_state = state["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["status"] == "confirmed"
+    assert route_state["checks_active"] is False
+    assert route_state["checks_stop_reason"] == "confirmed"
+
+
+def test_scheduler_stops_online_check_after_notification_loudness_confirmation(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 8, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
+    engine = TeeBotusEngine(account_store=account_store)
+    assert engine.process(event(identity, "ja, laut"))[0].text == "Danke, ich frage deswegen nicht weiter nach."
+    set_identity_last_seen(account_store, identity, now + timedelta(hours=7))
+
+    def fail_contact_timing(*_args, **_kwargs):
+        raise AssertionError("online/contact timing check should stop after notification loudness is decided")
+
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.contact_timing_decision", fail_contact_timing)
+
+    due = queue_due_notification_loudness_prompts(account_store, account_id, now=now + timedelta(hours=7))
+
+    assert due == ()
+    route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["checks_active"] is False
+    assert route_state["checks_stop_reason"] == "confirmed"
+
+
+def test_scheduler_does_not_online_check_unknown_notification_loudness_routes(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "unknown",
+                "route_key": "telegram:1:chat-1",
+                "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 15, tzinfo=timezone.utc))
+
+    def fail_contact_timing(*_args, **_kwargs):
+        raise AssertionError("unknown routes should not start online/contact timing checks")
+
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.contact_timing_decision", fail_contact_timing)
+
+    due = queue_due_notification_loudness_prompts(account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc))
+
+    assert due == ()
 
 
 def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_in_next_wake_half(tmp_path) -> None:

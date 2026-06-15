@@ -12,6 +12,8 @@ NOTIFICATION_LOUDNESS_SYSTEM_ITEM = "notification_loudness"
 NOTIFICATION_LOUDNESS_INTENT = "notification_loudness_check"
 NOTIFICATION_LOUDNESS_ONLINE_WINDOW = timedelta(minutes=5)
 NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
+NOTIFICATION_LOUDNESS_PENDING_STATUS = "pending"
+NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -79,10 +81,15 @@ def queue_due_notification_loudness_prompts(
         return ()
     resolved_now = now or datetime.now(timezone.utc)
     queued_ids: list[str] = []
+    state_changed = False
     for route_key, route_state in list(routes.items()):
         if not isinstance(route_state, dict):
             continue
-        if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
+        status = str(route_state.get("status") or "unknown").strip().casefold()
+        if status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+            state_changed = _mark_notification_loudness_checks_stopped(route_state, status) or state_changed
+            continue
+        if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
         _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
         route = route_state.get("route")
@@ -118,7 +125,7 @@ def queue_due_notification_loudness_prompts(
                 },
             )
         )
-    if queued_ids:
+    if queued_ids or state_changed:
         account_store.write_agent_state(account_id, state)
     return tuple(queued_ids)
 
@@ -196,6 +203,10 @@ def _set_notification_loudness_status(
     route_state["status"] = status
     route_state["decided_at"] = timestamp
     route_state["updated_at"] = timestamp
+    if status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+        route_state["checks_active"] = False
+        route_state["checks_stopped_at"] = timestamp
+        route_state["checks_stop_reason"] = status
     route_state.pop("next_check_at", None)
     account_store.write_agent_state(account_id, state)
 
@@ -244,7 +255,10 @@ def _mark_notification_loudness_prompted(route_state: dict[str, Any], event: Inc
 
 def _mark_route_state_prompted(route_state: dict[str, Any], now: datetime) -> None:
     timestamp = now.isoformat(timespec="seconds")
-    route_state["status"] = "pending"
+    route_state["status"] = NOTIFICATION_LOUDNESS_PENDING_STATUS
+    route_state["checks_active"] = True
+    route_state.pop("checks_stopped_at", None)
+    route_state.pop("checks_stop_reason", None)
     route_state["last_prompt_at"] = timestamp
     route_state.pop("next_check_at", None)
     route_state["updated_at"] = timestamp
@@ -296,6 +310,15 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
         if str(item.get("status") or "queued").strip().casefold() == "queued":
             return True
     return False
+
+
+def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
+    if route_state.get("checks_active") is False and route_state.get("checks_stop_reason"):
+        return False
+    route_state["checks_active"] = False
+    route_state["checks_stopped_at"] = utc_now()
+    route_state["checks_stop_reason"] = reason
+    return True
 
 
 def _event_route(event: IncomingEvent) -> dict[str, Any]:
