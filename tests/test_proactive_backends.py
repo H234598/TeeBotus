@@ -153,6 +153,21 @@ def test_signal_proactive_sender_sends_export_file_base64() -> None:
     assert bot.calls == [("+491", "Export: report.json", {"base64_attachments": ["eyJvayI6dHJ1ZX0="]})]
 
 
+def test_signal_proactive_sender_requires_numeric_timestamp() -> None:
+    class Bot:
+        def send(self, receiver: str, text: str, **kwargs) -> None:
+            return None
+
+    sender = signal_proactive_sender(Bot())
+
+    try:
+        asyncio.run(sender({"adapter_slot": 1}, SendText("+491", "hi"), {}))
+    except RuntimeError as exc:
+        assert "Signal proactive dispatch returned no numeric timestamp" in str(exc)
+    else:
+        raise AssertionError("missing Signal timestamp should fail proactive dispatch")
+
+
 def test_matrix_proactive_sender_calls_nio_bot_send_message() -> None:
     class Client:
         def __init__(self) -> None:

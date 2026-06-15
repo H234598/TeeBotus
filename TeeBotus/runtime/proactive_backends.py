@@ -5,7 +5,7 @@ from inspect import isawaitable
 from typing import Any, Mapping
 
 from TeeBotus.adapters.matrix import send_matrix_actions
-from TeeBotus.adapters.signal import _coerce_signal_link_preview
+from TeeBotus.adapters.signal import _coerce_signal_link_preview, _signal_required_timestamp
 from TeeBotus.adapters.telegram import send_telegram_actions
 from TeeBotus.runtime.actions import ExportFile, OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.proactive_agent import ProactiveSender
@@ -58,8 +58,8 @@ def signal_proactive_sender(bots: Any | Mapping[int, Any]) -> ProactiveSender:
         else:
             raise RuntimeError(f"Signal proactive dispatch does not support {type(action).__name__}")
         if isawaitable(result):
-            return await result
-        return result
+            result = await result
+        return _signal_required_timestamp(result, "Signal proactive dispatch")
 
     return sender
 
