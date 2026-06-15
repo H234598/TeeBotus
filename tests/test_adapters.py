@@ -118,6 +118,35 @@ def test_signal_attachment_prefers_remote_filename_from_raw_message():
     assert event.attachments[0].content_type == "image/jpeg"
 
 
+def test_signal_raw_attachment_without_local_data_is_preserved_as_metadata():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "dataMessage": {
+                    "message": "Foto",
+                    "attachments": [{"id": "remote-attachment-id", "filename": "photo.jpg"}],
+                }
+            }
+        }
+    )
+    event = signal_message_to_event(
+        FakeSignalMessage(
+            attachments_local_filenames=[],
+            base64_attachments=[],
+            raw_message=raw_message,
+        ),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert len(event.attachments) == 1
+    assert event.attachments[0].filename == "photo.jpg"
+    assert event.attachments[0].content_type == "image/jpeg"
+    assert event.attachments[0].data == b""
+    assert event.attachments[0].base64_data == ""
+
+
 def test_signal_edit_attachment_prefers_remote_filename_from_raw_message():
     raw_message = json.dumps(
         {

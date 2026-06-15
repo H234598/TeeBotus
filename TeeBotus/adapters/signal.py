@@ -54,7 +54,7 @@ def signal_message_to_event(
             data=_safe_b64decode(_signal_attachment_data(index, attachment_data)),
             base64_data=_signal_attachment_data(index, attachment_data),
         )
-        for index in range(max(len(attachment_names), len(attachment_data)))
+        for index in range(max(len(attachment_names), len(remote_attachment_names), len(attachment_data)))
     )
     recipient = message.recipient() if callable(getattr(message, "recipient", None)) else (getattr(message, "group", "") or getattr(message, "source", ""))
     recipient = str(recipient or "").strip()
@@ -616,4 +616,5 @@ def _signal_message_has_user_content(message: Any) -> bool:
         str(getattr(message, "text", "") or "")
         or (getattr(message, "base64_attachments", None) or [])
         or (getattr(message, "attachments_local_filenames", None) or [])
+        or _signal_raw_attachment_filenames(message)
     )
