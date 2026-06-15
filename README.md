@@ -104,6 +104,8 @@ teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --enable
 
 Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --tool-plan` auf. Das fuehrt lokale Reflection-Planung, Due-Selection und Versand ueber die konfigurierten Proactive-Backends aus. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer der Default. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks.
 
+Usergewuenschte Erinnerungen laufen ebenfalls ueber die Proactive-Outbox. Klassische Formulierungen werden lokal erkannt; bei optionaler strukturierter `ReminderDecision` kann `recurrence` als `daily`, `weekly`, `monthly` oder `every N minutes/hours/days/weeks` gespeichert werden. Nach erfolgreichem Versand wird ein wiederkehrendes Reminder-Item mit naechstem `due_at` erneut gequeued.
+
 Signal braucht das Python-Paket `signalbot`, die native `signal-cli-rest-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
 
 ```bash

@@ -24,6 +24,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "scripts/run_benchmarks.py --quick" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
+    assert "ReminderDecision" in text
+    assert "wiederkehrendes Reminder-Item" in text
     assert "tests/test_llm_config.py" in text
     assert "tests/test_litellm_provider.py" in text
     assert "tests/test_bibliothekar_*.py" in text

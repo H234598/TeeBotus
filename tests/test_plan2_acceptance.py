@@ -31,6 +31,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_runtime_config.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar_plan2.py" in by_label["plan2-pytest"].argv
+    assert "tests/test_reminder_intent.py" in by_label["plan2-pytest"].argv
     assert "tests/test_graphs_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert by_label["bibliothekar-dry-run"].argv[-4:] == ("index", "--source", "tests/fixtures/books", "--dry-run")
     assert by_label["bibliothekar-fixture-query"].argv[-4:] == ("tests/fixtures/books", "Therapie Schlaf", "--top-k", "2")

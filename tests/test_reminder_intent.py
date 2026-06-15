@@ -80,6 +80,35 @@ def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkey
     assert queued[0]["due_at"] == "2026-06-16T08:30:00+00:00"
 
 
+def test_structured_reminder_fallback_preserves_recurrence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Stups mich bitte jeden Tag wegen Wasser an.",
+        now=fixed_now(),
+        structured_decision_runner=lambda _prompt, _schema: ReminderDecision(
+            should_create=True,
+            text="Wasser trinken",
+            datetime_iso="2026-06-16T08:30:00+00:00",
+            recurrence="daily",
+            confidence=0.86,
+        ),
+    )
+
+    assert reply == "Okay, ich erinnere dich am 16.06.2026 um 08:30: Wasser trinken"
+    queued = account_store.read_proactive_outbox(account_id)
+    assert queued[0]["user_requested_reminder"] is True
+    assert queued[0]["recurrence"] == "daily"
+    assert queued[0]["planner"]["recurrence"] == "daily"
+
+
 def test_structured_reminder_fallback_ignores_low_confidence(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)

@@ -25,6 +25,7 @@ class ReminderIntent:
     is_request: bool
     due_at: str = ""
     subject: str = ""
+    recurrence: str = ""
     missing_time: bool = False
     source: str = "classic"
 
@@ -99,9 +100,11 @@ def maybe_queue_natural_reminder(
         due_at=intent.due_at,
         now=now,
         risk_gate="none",
+        recurrence=intent.recurrence,
         planner={
             "source": "structured_reminder_decision" if intent.source == "model" else "natural_reminder_request",
             "subject": intent.subject,
+            "recurrence": intent.recurrence,
         },
     )
     if not decision.allowed:
@@ -137,12 +140,12 @@ def _structured_reminder_intent(text: str, *, structured_decision_runner: Struct
         return ReminderIntent(False)
     subject = decision.text.strip() or "deinen Termin"
     if not decision.datetime_iso:
-        return ReminderIntent(True, subject=subject, missing_time=True, source="model")
+        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
     try:
         datetime.fromisoformat(decision.datetime_iso)
     except ValueError:
-        return ReminderIntent(True, subject=subject, missing_time=True, source="model")
-    return ReminderIntent(True, due_at=decision.datetime_iso, subject=subject[:240], missing_time=False, source="model")
+        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
+    return ReminderIntent(True, due_at=decision.datetime_iso, subject=subject[:240], recurrence=str(decision.recurrence or "").strip(), missing_time=False, source="model")
 
 
 def _coerce_reminder_decision(payload: object) -> ReminderDecision:

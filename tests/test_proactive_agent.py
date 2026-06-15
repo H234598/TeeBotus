@@ -1946,6 +1946,50 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert refs[0].ref_kind == "signal_timestamp"
 
 
+def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Du wolltest erinnert werden: Wasser trinken",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+        recurrence="daily",
+    )
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "123456789"},
+            now=now,
+        )
+    )
+
+    item_id = queued.reason.removeprefix("queued:")
+    assert [result.item_id for result in results] == [item_id]
+    assert results[0].status == "sent"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == item_id
+    assert item["status"] == "queued"
+    assert item["user_requested_reminder"] is True
+    assert item["recurrence"] == "daily"
+    assert item["due_at"] == "2026-06-16T11:00:00+00:00"
+    assert item["sent_at"] == "2026-06-15T12:00:00+00:00"
+    assert item["recurrence_count"] == 1
+    assert item["status_history"][-2]["status"] == "sent"
+    assert item["status_history"][-1] == {"at": "2026-06-15T12:00:00+00:00", "status": "queued", "reason": "recurrence:daily"}
+    assert due_proactive_outbox_items(account_store, account_id, now=now) == ()
+    assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 16, 11, tzinfo=timezone.utc))[0]["id"] == item_id
+
+
 def test_dispatch_expires_stale_queued_items_before_sending(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

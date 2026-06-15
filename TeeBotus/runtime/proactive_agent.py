@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import calendar
 from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -342,6 +343,7 @@ def queue_proactive_message(
     risk_gate: str = "none",
     planner: Mapping[str, Any] | None = None,
     file: Mapping[str, Any] | None = None,
+    recurrence: str = "",
 ) -> ProactiveDecision:
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
@@ -368,6 +370,11 @@ def queue_proactive_message(
         "route": decision.route or {},
         "status_history": [{"at": utc_now(), "status": status, "reason": "created" if status == "queued" else policy_reason}],
     }
+    if str(intent or "").strip() == "user_requested_reminder":
+        payload["user_requested_reminder"] = True
+    normalized_recurrence = _normalize_recurrence_rule(recurrence)
+    if normalized_recurrence:
+        payload["recurrence"] = normalized_recurrence
     if file is not None:
         generated_file = normalize_generated_file(file)
         if generated_file is None:
@@ -1027,6 +1034,7 @@ def update_proactive_outbox_item_status(
         item["updated_at"] = timestamp
         if normalized_status == "sent":
             item["sent_at"] = timestamp
+            item["last_sent_at"] = timestamp
         if dispatch:
             item["dispatch"] = {str(key): value for key, value in dispatch.items()}
         history = item.setdefault("status_history", [])
@@ -1034,6 +1042,15 @@ def update_proactive_outbox_item_status(
             history = []
             item["status_history"] = history
         history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
+        if normalized_status == "sent":
+            next_due_at = _next_recurrence_due_at(item, timestamp)
+            if next_due_at:
+                item["status"] = "queued"
+                item["due_at"] = next_due_at
+                item["updated_at"] = timestamp
+                count = _normalize_int(item.get("recurrence_count"), default=0) + 1
+                item["recurrence_count"] = count
+                history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})
         changed = True
         break
     if changed:
@@ -2161,12 +2178,100 @@ def _proactive_last_sent_within(account_store: AccountStore, account_id: str, no
             continue
         if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
             continue
-        if str(item.get("status") or "").strip().casefold() != "sent":
+        status = str(item.get("status") or "").strip().casefold()
+        if status != "sent" and not str(item.get("sent_at") or "").strip():
             continue
         sent_at = _parse_proactive_datetime(str(item.get("sent_at") or item.get("updated_at") or ""))
         if sent_at is not None and threshold <= sent_at <= now:
             return True
     return False
+
+
+def _normalize_recurrence_rule(value: object) -> str:
+    raw = str(value or "").strip().casefold()
+    if not raw:
+        return ""
+    aliases = {
+        "daily": "daily",
+        "taeglich": "daily",
+        "täglich": "daily",
+        "jeden tag": "daily",
+        "weekly": "weekly",
+        "woechentlich": "weekly",
+        "wöchentlich": "weekly",
+        "jede woche": "weekly",
+        "monthly": "monthly",
+        "monatlich": "monthly",
+        "jeden monat": "monthly",
+    }
+    if raw in aliases:
+        return aliases[raw]
+    match = re.fullmatch(
+        r"(?:every|alle|jede[nrms]?)\s+(?P<count>\d{1,3})?\s*(?P<unit>minute|minuten|minutes|hour|hours|stunde|stunden|day|days|tag|tage|week|weeks|woche|wochen)",
+        raw,
+    )
+    if not match:
+        return ""
+    count = int(match.group("count") or 1)
+    if count < 1:
+        return ""
+    unit = match.group("unit")
+    if unit.startswith("min"):
+        normalized_unit = "minutes"
+    elif unit in {"hour", "hours", "stunde", "stunden"}:
+        normalized_unit = "hours"
+    elif unit in {"day", "days", "tag", "tage"}:
+        normalized_unit = "days"
+    else:
+        normalized_unit = "weeks"
+    return f"every {count} {normalized_unit}"
+
+
+def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
+    recurrence = _normalize_recurrence_rule(item.get("recurrence"))
+    if not recurrence:
+        return ""
+    sent = _parse_proactive_datetime(sent_at)
+    if sent is None:
+        return ""
+    base = _parse_proactive_datetime(str(item.get("due_at") or "")) or sent
+    next_due = _advance_recurrence_due_at(base, recurrence)
+    for _ in range(366):
+        if next_due is None:
+            return ""
+        if next_due > sent:
+            return next_due.isoformat(timespec="seconds")
+        next_due = _advance_recurrence_due_at(next_due, recurrence)
+    return ""
+
+
+def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | None:
+    if recurrence == "daily":
+        return base + timedelta(days=1)
+    if recurrence == "weekly":
+        return base + timedelta(weeks=1)
+    if recurrence == "monthly":
+        return _add_month(base)
+    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks)", recurrence)
+    if not match:
+        return None
+    count = int(match.group("count"))
+    unit = match.group("unit")
+    if unit == "minutes":
+        return base + timedelta(minutes=count)
+    if unit == "hours":
+        return base + timedelta(hours=count)
+    if unit == "days":
+        return base + timedelta(days=count)
+    return base + timedelta(weeks=count)
+
+
+def _add_month(value: datetime) -> datetime:
+    month = value.month + 1
+    year = value.year + (month - 1) // 12
+    month = ((month - 1) % 12) + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
 
 
 async def _maybe_await(value: Any) -> Any:
