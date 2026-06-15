@@ -173,3 +173,83 @@ def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) ->
     assert len(account["planning"]["queued_item_ids"]) == 1
     assert account["due_items"] == []
     assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T10:00:00+00:00"
+
+
+def test_proactive_cycle_llm_plan_requires_planner_factory(tmp_path) -> None:
+    try:
+        asyncio.run(run_proactive_agent_cycle(instances_dir=tmp_path, llm_plan=True))
+    except ValueError as exc:
+        assert "llm_planner_factory is required" in str(exc)
+    else:
+        raise AssertionError("llm_plan without llm_planner_factory should fail")
+
+
+def test_proactive_cycle_llm_plan_respects_separate_instance_gate(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            llm_plan=True,
+            llm_planner_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("LLM planner must not run without gate")),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["account_id"] == account_id
+    assert account["llm_planning"] == {"skipped_reason": "llm_planner_instance_not_enabled"}
+
+
+def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_path) -> None:
+    class Response:
+        text = '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"llm_cycle_follow_up","message_text":"Magst du kurz berichten, ob du weiterarbeiten moechtest?","reason_memory_ids":["mem_goal"],"risk_gate":"none","due_at":"2026-06-15T11:30:00+00:00"}]}'
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, prompt, instructions):
+            self.calls += 1
+            assert instructions == "instructions"
+            assert "mem_goal" in prompt
+            return Response()
+
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+    client = Client()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={
+                "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+                "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES": "Depressionsbot",
+            },
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            llm_plan=True,
+            llm_planner_factory=lambda _instance, _store, _account_id: (client, "instructions"),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert client.calls == 1
+    assert account["llm_planning"]["errors"] == []
+    assert len(account["llm_planning"]["queued_item_ids"]) == 1
+    assert account["due_items"][0]["intent"] == "llm_cycle_follow_up"
+    assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"

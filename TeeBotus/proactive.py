@@ -16,8 +16,12 @@ from TeeBotus.runtime.proactive_agent import (
     due_proactive_outbox_items,
     proactive_agent_instance_enabled,
     proactive_policy_decision,
+    run_proactive_llm_planner,
     run_proactive_reflection_planner,
 )
+
+PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
+PROACTIVE_LLM_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_LLM_PLANNER_"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
 StoreFactory = Callable[[Path, str], AccountStore]
 SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
 MessageTrackerFactory = Callable[[Path, str], MessageTracker | None]
+LLMPlannerFactory = Callable[[str, AccountStore, str], tuple[Any, Any] | None]
 
 
 def run_proactive_agent_dry_run(
@@ -76,11 +81,15 @@ async def run_proactive_agent_cycle(
     now: datetime | None = None,
     dispatch: bool = False,
     plan: bool = False,
+    llm_plan: bool = False,
     sender_factory: SenderFactory | None = None,
     message_tracker_factory: MessageTrackerFactory | None = None,
+    llm_planner_factory: LLMPlannerFactory | None = None,
 ) -> dict[str, Any]:
     if dispatch and sender_factory is None:
         raise ValueError("sender_factory is required when dispatch=True")
+    if llm_plan and llm_planner_factory is None:
+        raise ValueError("llm_planner_factory is required when llm_plan=True")
     resolved_now = now or datetime.now(timezone.utc)
     resolved_store_factory = store_factory or AccountStore
     instances: list[dict[str, Any]] = []
@@ -106,6 +115,29 @@ async def run_proactive_agent_cycle(
                     "queued_item_ids": list(planning.queued_item_ids),
                     "skipped_reason": planning.skipped_reason,
                 }
+            if llm_plan:
+                if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
+                    account_report["llm_planning"] = {"skipped_reason": "llm_planner_instance_not_enabled"}
+                else:
+                    planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                    if planner_context is None:
+                        account_report["llm_planning"] = {"skipped_reason": "llm_planner_unavailable"}
+                    else:
+                        openai_client, instructions = planner_context
+                        llm_planning = run_proactive_llm_planner(
+                            store,
+                            account_id,
+                            openai_client=openai_client,
+                            instructions=instructions,
+                            now=resolved_now,
+                        )
+                        account_report["llm_planning"] = {
+                            "account_id": llm_planning.account_id,
+                            "created_memory_ids": list(llm_planning.created_memory_ids),
+                            "queued_item_ids": list(llm_planning.queued_item_ids),
+                            "errors": list(llm_planning.errors),
+                            "audit_event_ids": list(llm_planning.audit_event_ids),
+                        }
             items: list[dict[str, Any]] = []
             for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                 category = str(item.get("category") or "")
@@ -170,8 +202,34 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
     return sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
 
 
+def proactive_llm_planner_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:
+    source = env or {}
+    instance = str(instance_name or "").strip()
+    if not instance:
+        return False
+    listed = _parse_csv(source.get(PROACTIVE_LLM_INSTANCE_LIST_ENV, ""))
+    token = _instance_env_token(instance)
+    if "all" in listed or instance.casefold() in listed or token.casefold() in listed:
+        return True
+    flag = source.get(f"{PROACTIVE_LLM_INSTANCE_FLAG_PREFIX}{token}")
+    return str(flag or "").strip().casefold() in {"1", "true", "yes", "on", "enabled", "ja", "an"}
+
+
+def _parse_csv(value: str) -> set[str]:
+    return {part.strip().casefold() for part in str(value or "").split(",") if part.strip()}
+
+
+def _instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
+    return "_".join(part for part in token.split("_") if part)
+
+
 def _missing_sender_factory(_instance_name: str, _store: AccountStore) -> Mapping[str, ProactiveSender]:
     return {}
+
+
+def _missing_llm_planner_factory(_instance_name: str, _store: AccountStore, _account_id: str) -> tuple[Any, Any] | None:
+    return None
 
 
 def _message_tracker_for_instance(instance_dir: Path, instance_name: str, factory: MessageTrackerFactory | None) -> MessageTracker | None:
@@ -201,6 +259,17 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
         for account in instance.get("accounts", []):
             due_items = account.get("due_items", [])
             print(f"  account={account['account_id']} due_items={len(due_items)}")
+            if "llm_planning" in account:
+                llm = account["llm_planning"]
+                if llm.get("skipped_reason"):
+                    print(f"    llm_planning skipped={llm['skipped_reason']}")
+                else:
+                    print(
+                        "    llm_planning "
+                        f"created={len(llm.get('created_memory_ids', []))} "
+                        f"queued={len(llm.get('queued_item_ids', []))} "
+                        f"errors={len(llm.get('errors', []))}"
+                    )
             for item in due_items:
                 policy = "allowed" if item["policy_allowed"] else f"blocked:{item['policy_reason']}"
                 print(f"    item={item['id']} category={item['category']} intent={item['intent']} policy={policy}")
