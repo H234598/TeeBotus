@@ -75,7 +75,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
     try:
         for action in actions:
             if isinstance(action, SendText):
-                sent.append(await _send_signal_text(context, action.text, reply_to_ref=action.reply_to_ref))
+                sent.append(await _send_signal_text(context, action.text, chat_id=action.chat_id, reply_to_ref=action.reply_to_ref))
                 typing_started = await _stop_signal_typing_if_started(context, typing_started)
             elif isinstance(action, SendTyping):
                 await context.start_typing()
@@ -87,6 +87,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                     await _send_signal_text(
                         context,
                         action.caption or action.filename,
+                        chat_id=action.chat_id,
                         base64_attachments=[encoded],
                         reply_to_ref=action.reply_to_ref,
                     )
@@ -102,6 +103,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                     await _send_signal_text(
                         context,
                         f"Export: {action.filename}",
+                        chat_id=action.chat_id,
                         base64_attachments=[encoded],
                         reply_to_ref=action.reply_to_ref,
                     )
@@ -117,9 +119,18 @@ async def _send_signal_text(
     context: Any,
     text: str,
     *,
+    chat_id: str = "",
     base64_attachments: list[str] | None = None,
     reply_to_ref: str = "",
 ) -> int:
+    target = str(chat_id or "").strip()
+    current_recipient = _signal_context_recipient(context)
+    if target and current_recipient and target != current_recipient:
+        bot = getattr(context, "bot", None)
+        send = getattr(bot, "send", None)
+        if not callable(send):
+            raise RuntimeError(f"SignalBot.send is required to send to {target}")
+        return await send(target, text, base64_attachments=base64_attachments)
     if _signal_can_use_context_reply(context, reply_to_ref):
         reply = getattr(context, "reply", None)
         return await reply(text, base64_attachments=base64_attachments)
@@ -132,6 +143,12 @@ async def _send_signal_text(
         if callable(send) and recipient:
             return await send(recipient, text, base64_attachments=base64_attachments, **quote)
     return await context.send(text, base64_attachments=base64_attachments)
+
+
+def _signal_context_recipient(context: Any) -> str:
+    message = getattr(context, "message", None)
+    recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
+    return str(recipient or "").strip()
 
 
 def _signal_can_use_context_reply(context: Any, reply_to_ref: str) -> bool:

@@ -384,6 +384,34 @@ def test_signal_send_text_falls_back_without_matching_quote_context():
     assert context.calls == [("Antwort", {"base64_attachments": None})]
 
 
+def test_signal_send_text_to_other_chat_uses_bot_send():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(text="Original", source="+491")
+            self.context_calls = []
+
+        async def send(self, text, **kwargs):
+            self.context_calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+492", "Direktnachricht")]))
+
+    assert sent == [456]
+    assert context.context_calls == []
+    assert context.bot.calls == [("+492", "Direktnachricht", {"base64_attachments": None})]
+
+
 def test_signal_send_attachment_uses_filename_when_caption_is_empty():
     class Context:
         def __init__(self) -> None:
@@ -399,6 +427,34 @@ def test_signal_send_attachment_uses_filename_when_caption_is_empty():
 
     assert sent == [123]
     assert context.calls == [("voice.ogg", {"base64_attachments": ["aGVsbG8="]})]
+
+
+def test_signal_send_attachment_to_other_chat_uses_bot_send():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(source="+491")
+            self.context_calls = []
+
+        async def send(self, text, **kwargs):
+            self.context_calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendAttachment("+492", b"hello", "voice.ogg", "audio/ogg")]))
+
+    assert sent == [456]
+    assert context.context_calls == []
+    assert context.bot.calls == [("+492", "voice.ogg", {"base64_attachments": ["aGVsbG8="]})]
 
 
 def test_telegram_message_without_chat_id_is_rejected():
