@@ -384,6 +384,47 @@ def test_matrix_bridge_downloads_inbound_media_before_engine(tmp_path) -> None:
     assert seen[0].attachments[0].content_type == "image/png"
 
 
+def test_matrix_bridge_downloads_inbound_media_from_disk_response(tmp_path) -> None:
+    download_path = tmp_path / "download.bin"
+    download_path.write_bytes(b"from disk")
+
+    class DiskDownloadClient(FakeMatrixClient):
+        async def download(self, *, mxc: str):
+            self.downloads.append(mxc)
+            return type("DownloadResponse", (), {"body": download_path, "content_type": "application/pdf", "filename": "disk.pdf"})()
+
+    client = DiskDownloadClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    seen = []
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: seen.append(event) or []})()
+
+    class MediaMessage(FakeMatrixMessage):
+        body = "photo.jpg"
+        url = "mxc://example/photo"
+        source = {"content": {"msgtype": "m.file", "url": "mxc://example/photo", "filename": "fallback.pdf"}}
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), MediaMessage()))
+
+    assert client.downloads == ["mxc://example/photo"]
+    assert seen[0].attachments[0].data == b"from disk"
+    assert seen[0].attachments[0].filename == "disk.pdf"
+    assert seen[0].attachments[0].content_type == "application/pdf"
+
+
 def test_matrix_bridge_keeps_media_metadata_when_download_fails(tmp_path) -> None:
     class FailingDownloadClient(FakeMatrixClient):
         async def download(self, *, mxc: str):

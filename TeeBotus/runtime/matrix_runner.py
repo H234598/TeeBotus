@@ -269,8 +269,8 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
         except Exception:
             downloaded.append(attachment)
             continue
-        body = getattr(response, "body", b"")
-        if not isinstance(body, bytes):
+        body = _matrix_download_body_bytes(getattr(response, "body", b""))
+        if body is None:
             downloaded.append(attachment)
             continue
         filename = str(getattr(response, "filename", "") or attachment.filename or "").strip() or "matrix-attachment.bin"
@@ -287,6 +287,15 @@ async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) 
     if not changed:
         return event
     return event.with_attachments(tuple(downloaded))
+
+
+def _matrix_download_body_bytes(body: Any) -> bytes | None:
+    if isinstance(body, bytes):
+        return body
+    try:
+        return Path(body).read_bytes()
+    except (OSError, TypeError, ValueError):
+        return None
 
 
 def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:
