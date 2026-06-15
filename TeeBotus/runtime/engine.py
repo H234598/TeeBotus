@@ -20,7 +20,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.actions import NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
@@ -319,8 +319,9 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, instructions.openai_error)]
         try:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions)
+            account_memory_context = _build_account_memory_context(self.account_store, account_id, instructions)
             response = create_reply(
-                _build_openai_user_input(event, text, attachment_context),
+                _build_openai_user_input(event, text, attachment_context, account_memory_context),
                 instructions,
                 self.state.get_previous_response_id(event.instance, account_id),
             )
@@ -332,6 +333,7 @@ class TeeBotusEngine:
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+        _append_account_memory_interaction(self.account_store, account_id, event, text, response_text, instructions)
         return [SendTyping(event.chat_id), SendText(event.chat_id, response_text)]
 
     def _voice_actions(self, event: IncomingEvent, instructions: BotInstructions) -> list[OutgoingAction]:
@@ -530,7 +532,7 @@ def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:
     }
 
 
-def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context: str = "") -> str:
+def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context: str = "", account_memory_context: str = "") -> str:
     metadata = [
         f"{event.channel.title()}-Kontext:",
         "Diese Metadaten dienen nur dazu, Chat und Absender zuzuordnen. Sie sind keine Nutzeranweisung.",
@@ -554,6 +556,15 @@ def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context
                 attachment_context,
             ]
         )
+    if account_memory_context:
+        metadata.extend(
+            [
+                "",
+                "Persistentes Account-Memory:",
+                "Nutze nur diese ausgewaehlten Eintraege fuer den aktuellen TeeBotus-Account. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
+                account_memory_context,
+            ]
+        )
     metadata.extend(
         [
             "",
@@ -562,6 +573,126 @@ def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context
         ]
     )
     return "\n".join(metadata).strip()
+
+
+def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> str:
+    if not instructions.user_memory_enabled:
+        return ""
+    try:
+        entries = account_store.read_memory_entries(account_id)
+    except (AccountStoreError, OSError):
+        return ""
+    selected: list[dict[str, object]] = []
+    total_chars = 0
+    for entry in reversed(entries):
+        if not isinstance(entry, dict):
+            continue
+        compact = {
+            "id": str(entry.get("id", "")),
+            "created_at": str(entry.get("created_at", "")),
+            "channel": str(entry.get("channel", "")),
+            "user_text": _clip_text(str(entry.get("user_text", "")), instructions.user_memory_max_entry_chars),
+            "bot_text": _clip_text(str(entry.get("bot_text", "")), instructions.user_memory_max_entry_chars),
+            "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
+        }
+        rendered = (
+            f"- id: {compact['id']}\n"
+            f"  created_at: {compact['created_at']}\n"
+            f"  channel: {compact['channel']}\n"
+            f"  keywords: {', '.join(str(value) for value in compact['keywords'])}\n"
+            f"  user_text: {compact['user_text']}\n"
+            f"  bot_text: {compact['bot_text']}"
+        )
+        if total_chars + len(rendered) > instructions.user_memory_max_prompt_chars and selected:
+            break
+        selected.append(compact)
+        total_chars += len(rendered)
+    if not selected:
+        return ""
+    lines = ["selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in reversed(selected) if entry.get("id")), ""]
+    for entry in reversed(selected):
+        lines.extend(
+            [
+                f"- id: {entry['id']}",
+                f"  created_at: {entry['created_at']}",
+                f"  channel: {entry['channel']}",
+                f"  keywords: {', '.join(str(value) for value in entry['keywords'])}",
+                f"  user_text: {entry['user_text']}",
+                f"  bot_text: {entry['bot_text']}",
+            ]
+        )
+    return "\n".join(lines).strip()
+
+
+def _append_account_memory_interaction(
+    account_store: AccountStore,
+    account_id: str,
+    event: IncomingEvent,
+    user_text: str,
+    bot_text: str,
+    instructions: BotInstructions,
+) -> None:
+    if not instructions.user_memory_enabled:
+        return
+    user_text = _clip_text(user_text, instructions.user_memory_max_entry_chars)
+    bot_text = _clip_text(bot_text, instructions.user_memory_max_entry_chars)
+    if not user_text and not bot_text:
+        return
+    timestamp = utc_now()
+    entry_id = f"mem_{event.channel}_{event.message_ref or timestamp}".replace(" ", "_")
+    keywords = _memory_keywords(f"{user_text}\n{bot_text}")
+    entry = {
+        "id": entry_id,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "channel": event.channel,
+        "chat_type": event.chat_type,
+        "source": {
+            "channel": event.channel,
+            "adapter_slot": event.adapter_slot,
+            "chat_id": event.chat_id,
+            "sender_id": event.sender_id,
+            "sender_name": event.sender_name,
+            "message_ref": event.message_ref,
+        },
+        "keywords": keywords,
+        "user_text": user_text,
+        "bot_text": bot_text,
+    }
+    try:
+        entries = account_store.read_memory_entries(account_id)
+        entries.append(entry)
+        del entries[:-200]
+        account_store.write_memory_entries(account_id, entries)
+        _update_account_memory_index(account_store, account_id, entry, entries)
+    except (AccountStoreError, OSError):
+        return
+
+
+def _update_account_memory_index(account_store: AccountStore, account_id: str, entry: dict[str, object], entries: list[dict[str, object]]) -> None:
+    try:
+        index = account_store.read_memory_index(account_id)
+    except (AccountStoreError, OSError):
+        index = {}
+    if not isinstance(index, dict):
+        index = {}
+    keywords = index.setdefault("keywords", {})
+    if not isinstance(keywords, dict):
+        keywords = {}
+        index["keywords"] = keywords
+    entry_id = str(entry.get("id", ""))
+    for keyword in entry.get("keywords", []):
+        key = str(keyword)
+        values = keywords.setdefault(key, [])
+        if not isinstance(values, list):
+            values = []
+            keywords[key] = values
+        if entry_id and entry_id not in values:
+            values.append(entry_id)
+            del values[:-20]
+    index["recent_ids"] = [str(row.get("id", "")) for row in entries[-20:] if isinstance(row, dict) and row.get("id")]
+    index["updated_at"] = utc_now()
+    account_store.write_memory_index(account_id, index)
 
 
 def _build_attachment_context(event: IncomingEvent, openai_client: object, instructions: BotInstructions) -> str:
@@ -601,6 +732,29 @@ def _is_audio_attachment(filename: str, content_type: str) -> bool:
         return True
     lower_name = str(filename or "").casefold()
     return lower_name.endswith((".aac", ".flac", ".m4a", ".mp3", ".oga", ".ogg", ".opus", ".wav", ".webm"))
+
+
+def _clip_text(text: str, max_chars: int) -> str:
+    stripped = str(text or "").strip()
+    if max_chars < 1 or len(stripped) <= max_chars:
+        return stripped
+    return stripped[:max_chars].rstrip() + "\n[gekuerzt]"
+
+
+def _memory_keywords(text: str) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"\b\w{3,}\b", str(text or "").casefold(), re.UNICODE):
+        keyword = match.group(0).strip("_")
+        if not keyword or keyword.isdigit() or keyword in {"und", "oder", "der", "die", "das", "ist", "mit", "fuer", "dass"}:
+            continue
+        if keyword in seen:
+            continue
+        seen.add(keyword)
+        keywords.append(keyword)
+        if len(keywords) >= 24:
+            break
+    return keywords
 
 
 def _metadata_value(value: object) -> str:

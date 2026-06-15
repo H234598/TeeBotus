@@ -288,6 +288,91 @@ def test_engine_includes_reply_context_in_openai_input(tmp_path):
     assert "- reply_to_text: Vorherige Nachricht" in client.user_text
 
 
+def test_engine_includes_account_memory_in_openai_input(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="mem")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(
+        account_id,
+        [
+            {
+                "id": "mem_old",
+                "created_at": "2026-01-01T00:00:00+00:00",
+                "channel": "signal",
+                "keywords": ["mond"],
+                "user_text": "Mein Lieblingswort ist Mond.",
+                "bot_text": "Gemerkt.",
+            }
+        ],
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=client,
+    )
+
+    engine.process(event(identity, "Was weisst du noch?", channel="signal"))
+
+    assert "Persistentes Account-Memory:" in client.user_text
+    assert "selected_memory_ids: mem_old" in client.user_text
+    assert "Mein Lieblingswort ist Mond." in client.user_text
+
+
+def test_engine_appends_account_memory_after_openai_reply(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort mit Mond.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="write-memory")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    engine.process(event(identity, "Merke Mond.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    entries = account_store.read_memory_entries(account_id)
+    assert entries[-1]["channel"] == "signal"
+    assert entries[-1]["user_text"] == "Merke Mond."
+    assert entries[-1]["bot_text"] == "Antwort mit Mond."
+    index = account_store.read_memory_index(account_id)
+    assert entries[-1]["id"] in index["recent_ids"]
+    assert "mond" in index["keywords"]
+
+
+def test_engine_does_not_write_account_memory_when_disabled(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="no-memory")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=False),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    engine.process(event(identity, "Nicht speichern.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id) == []
+
+
 def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path):
     instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
