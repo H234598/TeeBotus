@@ -370,6 +370,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
     except Exception as exc:
         return [f"account_memory={instance_name} status=broken error={type(exc).__name__}: {exc}"]
     lines: list[str] = []
+    has_broken_memory = False
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_warning = ""
@@ -378,11 +379,13 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         except AccountStoreError as exc:
             if store.account_memory_backend is None:
                 lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+                has_broken_memory = True
                 continue
             profile_warning = f" warning=profile_unreadable:{exc}"
         except OSError as exc:
             if store.account_memory_backend is None:
                 lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+                has_broken_memory = True
                 continue
             profile_warning = f" warning=profile_unreadable:{exc}"
         try:
@@ -390,14 +393,22 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
         except AccountStoreError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            has_broken_memory = True
             continue
         except OSError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            has_broken_memory = True
             continue
         if health.ok:
             lines.append(f"account_memory={instance_name}/{account_id} status=ok{profile_warning}")
         else:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}")
+            has_broken_memory = True
+    if has_broken_memory:
+        instances_dir = project_root / "instances"
+        lines.append(
+            f'account_memory_recovery={instance_name} status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {instances_dir} --instances {instance_name}"'
+        )
     return lines
 
 

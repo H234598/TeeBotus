@@ -182,11 +182,14 @@ def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path,
 
     lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
 
-    assert len(lines) == 1
+    assert len(lines) == 2
     assert lines[0].startswith(f"account_memory=Demo/{account_id} status=broken error=")
     assert "index scope is not account" in lines[0]
     assert "recent_ids missing entries: mem_missing" in lines[0]
     assert "index.entries missing entries: mem_missing" in lines[0]
+    assert lines[1] == (
+        f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"'
+    )
 
 
 def test_account_memory_index_health_uses_database_when_profile_envelope_is_stale(tmp_path: Path, monkeypatch) -> None:
@@ -233,10 +236,11 @@ def test_account_memory_index_health_suppresses_expected_database_decryption_log
     with caplog.at_level("CRITICAL", logger="TeeBotus"):
         lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
 
-    assert len(lines) == 1
+    assert len(lines) == 2
     assert "status=broken" in lines[0]
     assert "database entries unreadable" in lines[0]
     assert "database index unreadable" in lines[0]
+    assert lines[1].startswith("account_memory_recovery=Demo status=needed")
     assert "SQLite account-memory skipped corrupt rows" not in caplog.text
     assert "SQLite account-memory index could not be decrypted" not in caplog.text
 
