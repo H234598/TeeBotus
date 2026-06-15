@@ -5,12 +5,14 @@ import logging
 import urllib.error
 import urllib.request
 import uuid
+import base64
 from dataclasses import dataclass
 from typing import Any
 
 from .instructions import BotInstructions
 
 RESPONSES_URL = "https://api.openai.com/v1/responses"
+IMAGES_URL = "https://api.openai.com/v1/images/generations"
 SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
 LOGGER = logging.getLogger("TeeBotus.openai_client")
@@ -30,6 +32,13 @@ class OpenAIResponse:
 @dataclass(frozen=True)
 class OpenAIVoice:
     audio: bytes
+    filename: str
+    content_type: str
+
+
+@dataclass(frozen=True)
+class OpenAIImage:
+    data: bytes
     filename: str
     content_type: str
 
@@ -90,6 +99,37 @@ class OpenAIClient:
             response_id=response_payload.get("id"),
             service_tier=service_tier if isinstance(service_tier, str) else None,
         )
+
+    def generate_image(self, prompt: str, instructions: BotInstructions, *, filename: str = "bild.png") -> OpenAIImage:
+        payload = build_image_payload(prompt, instructions)
+        data = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            IMAGES_URL,
+            data=data,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+
+        try:
+            timeout = instructions.openai_timeout_seconds or self.timeout
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise OpenAIAPIError(f"OpenAI image network timeout: {exc}") from exc
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise OpenAIAPIError(f"OpenAI image HTTP error {exc.code}: {detail}") from exc
+        except urllib.error.URLError as exc:
+            raise OpenAIAPIError(f"OpenAI image network error: {exc.reason}") from exc
+
+        image_data = extract_image_bytes(response_payload)
+        if not image_data:
+            raise OpenAIAPIError("OpenAI image response did not contain image data")
+        content_type = _image_content_type(instructions.openai_image_format)
+        return OpenAIImage(data=image_data, filename=_image_filename(filename, instructions.openai_image_format), content_type=content_type)
 
     def create_tool_calls(
         self,
@@ -237,6 +277,19 @@ def build_response_payload(
     return payload
 
 
+def build_image_payload(prompt: str, instructions: BotInstructions) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": instructions.openai_image_model,
+        "prompt": str(prompt or "").strip()[: instructions.openai_image_max_prompt_chars],
+        "size": instructions.openai_image_size,
+    }
+    if instructions.openai_image_quality:
+        payload["quality"] = instructions.openai_image_quality
+    if instructions.openai_image_format:
+        payload["output_format"] = instructions.openai_image_format
+    return payload
+
+
 def build_speech_payload(text: str, instructions: BotInstructions) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": instructions.openai_voice_model,
@@ -285,6 +338,24 @@ def _voice_content_type(response_format: str) -> str:
     }.get(response_format, "application/octet-stream")
 
 
+def _image_filename(filename: str, image_format: str) -> str:
+    safe_name = str(filename or "").rsplit("/", maxsplit=1)[-1].strip() or "bild.png"
+    format_extension = {"jpeg": "jpg", "jpg": "jpg", "png": "png", "webp": "webp"}.get(image_format.casefold(), "png")
+    if "." not in safe_name:
+        return f"{safe_name}.{format_extension}"
+    stem, _dot, _ext = safe_name.rpartition(".")
+    return f"{stem or 'bild'}.{format_extension}"
+
+
+def _image_content_type(image_format: str) -> str:
+    return {
+        "jpeg": "image/jpeg",
+        "jpg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+    }.get(image_format.casefold(), "image/png")
+
+
 def _audio_content_type(filename: str) -> str:
     extension = filename.rsplit(".", maxsplit=1)[-1].casefold() if "." in filename else ""
     return {
@@ -323,6 +394,35 @@ def extract_output_text(response_payload: dict[str, Any]) -> str:
                     parts.append(refusal)
 
     return "\n".join(part.strip() for part in parts if part.strip())
+
+
+def extract_image_bytes(response_payload: dict[str, Any]) -> bytes:
+    data = response_payload.get("data")
+    if not isinstance(data, list):
+        return b""
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        b64_json = item.get("b64_json")
+        if isinstance(b64_json, str) and b64_json.strip():
+            try:
+                return base64.b64decode(b64_json, validate=True)
+            except (ValueError, TypeError):
+                continue
+        image_base64 = item.get("base64")
+        if isinstance(image_base64, str) and image_base64.strip():
+            try:
+                return base64.b64decode(image_base64, validate=True)
+            except (ValueError, TypeError):
+                continue
+        url = item.get("url")
+        if isinstance(url, str) and url.startswith("https://"):
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    return response.read()
+            except (TimeoutError, urllib.error.URLError, urllib.error.HTTPError):
+                continue
+    return b""
 
 
 def extract_transcription_text(response_payload: dict[str, Any]) -> str:

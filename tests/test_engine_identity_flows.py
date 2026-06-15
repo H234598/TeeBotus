@@ -524,6 +524,49 @@ def test_engine_turns_openai_file_block_into_attachment(tmp_path):
     assert "Dateiausgabe:" in client.user_text
 
 
+def test_engine_turns_openai_image_block_into_generated_attachment(tmp_path):
+    class FakeImage:
+        data = b"png-bytes"
+        filename = "wetter.png"
+        content_type = "image/png"
+
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.prompt = ""
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse(
+                'Das Wetter ist grau, hier ist ein kleines Bild dazu.\n'
+                '[[TEE_IMAGE filename="wetter.png" caption="Ein ruhiger Wetterimpuls" purpose="weather_encouragement"]]\n'
+                "Ein warmes, freundliches Bild: Regen am Fenster, Tee, weiches Morgenlicht.\n"
+                "[[/TEE_IMAGE]]",
+                "resp-image",
+                None,
+            )
+
+        def generate_image(self, prompt, _instructions, *, filename="bild.png"):
+            self.prompt = prompt
+            return FakeImage()
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True, openai_image_enabled=True),
+        openai_client=client,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Wie ist die Stimmung bei Regen?"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "Das Wetter ist grau, hier ist ein kleines Bild dazu."
+    assert isinstance(actions[2], SendAttachment)
+    assert actions[2].filename == "wetter.png"
+    assert actions[2].content_type == "image/png"
+    assert actions[2].data == b"png-bytes"
+    assert actions[2].caption == "Ein ruhiger Wetterimpuls"
+    assert "Regen am Fenster" in client.prompt
+
+
 def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

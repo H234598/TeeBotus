@@ -37,6 +37,13 @@ class InstructionTests(unittest.TestCase):
             - auto_voice_every: 3
             - auto_voice_max_words: 50
             - auto_voice_skip_sources: ja
+            - image_enabled: ja
+            - image_model: gpt-image-1
+            - image_size: 1024x1024
+            - image_quality: low
+            - image_format: png
+            - image_max_prompt_chars: 1500
+            - image_error: Bild kaputt.
             - transcription_enabled: ja
             - transcription_model: gpt-4o-mini-transcribe
             - transcription_fallback_model: whisper-1
@@ -112,6 +119,14 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_auto_voice_every, 3)
         self.assertEqual(instructions.openai_auto_voice_max_words, 50)
         self.assertTrue(instructions.openai_auto_voice_skip_sources)
+        self.assertTrue(instructions.openai_image_enabled)
+        self.assertEqual(instructions.openai_image_model, "gpt-image-1")
+        self.assertEqual(instructions.openai_image_size, "1024x1024")
+        self.assertEqual(instructions.openai_image_quality, "low")
+        self.assertEqual(instructions.openai_image_format, "png")
+        self.assertEqual(instructions.openai_image_max_prompt_chars, 1500)
+        self.assertEqual(instructions.openai_image_error, "Bild kaputt.")
+        self.assertIn("[[TEE_IMAGE", instructions.openai_instructions_text())
         self.assertTrue(instructions.openai_transcription_enabled)
         self.assertEqual(instructions.openai_transcription_model, "gpt-4o-mini-transcribe")
         self.assertEqual(instructions.openai_transcription_fallback_model, "whisper-1")

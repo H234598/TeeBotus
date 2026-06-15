@@ -37,6 +37,13 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - auto_voice_every: 3
 - auto_voice_max_words: 50
 - auto_voice_skip_sources: true
+- image_enabled: false
+- image_model: gpt-image-1
+- image_size: 1024x1024
+- image_quality: low
+- image_format: png
+- image_max_prompt_chars: 2000
+- image_error: Ich konnte das Bild gerade nicht erzeugen.
 - voice_usage: "Nutzung: /voice Text fuer die Sprachnachricht"
 - voice_too_long: "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: {max_chars} Zeichen."
 - voice_error: Ich konnte die Sprachnachricht gerade nicht erzeugen. Bitte versuche es gleich nochmal.

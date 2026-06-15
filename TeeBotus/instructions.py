@@ -76,6 +76,13 @@ class BotInstructions:
     openai_voice_usage: str = "Nutzung: /voice Text fuer die Sprachnachricht"
     openai_voice_too_long: str = "Der Text ist zu lang fuer eine Sprachnachricht. Maximum: {max_chars} Zeichen."
     openai_voice_error: str = "Ich konnte die Sprachnachricht gerade nicht erzeugen. Bitte versuche es gleich nochmal."
+    openai_image_enabled: bool = False
+    openai_image_model: str = "gpt-image-1"
+    openai_image_size: str = "1024x1024"
+    openai_image_quality: str = "low"
+    openai_image_format: str = "png"
+    openai_image_max_prompt_chars: int = 2000
+    openai_image_error: str = "Ich konnte das Bild gerade nicht erzeugen."
     codex_enabled: bool = True
     codex_allowed_sender_ids: tuple[str, ...] = ("395935293",)
     codex_timeout_seconds: int = 300
@@ -169,6 +176,8 @@ class BotInstructions:
                     self.openai_rule_text.strip(),
                 ]
             )
+        if self.openai_image_enabled:
+            parts.append(_image_generation_instructions_text())
         security_templates = _security_templates_text(self)
         if security_templates:
             parts.append(security_templates)
@@ -609,6 +618,20 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_voice_too_long = value
     elif normalized == "voice_error":
         instructions.openai_voice_error = value
+    elif normalized == "image_enabled":
+        instructions.openai_image_enabled = _parse_bool(value, default=instructions.openai_image_enabled)
+    elif normalized == "image_model":
+        instructions.openai_image_model = value
+    elif normalized == "image_size":
+        instructions.openai_image_size = value
+    elif normalized == "image_quality":
+        instructions.openai_image_quality = value
+    elif normalized == "image_format":
+        instructions.openai_image_format = value.strip().casefold() or instructions.openai_image_format
+    elif normalized == "image_max_prompt_chars":
+        instructions.openai_image_max_prompt_chars = _parse_required_int(value, default=instructions.openai_image_max_prompt_chars)
+    elif normalized == "image_error":
+        instructions.openai_image_error = value
     elif normalized == "transcription_enabled":
         instructions.openai_transcription_enabled = _parse_bool(value, default=instructions.openai_transcription_enabled)
     elif normalized == "transcription_model":
@@ -684,6 +707,19 @@ def _security_templates_text(instructions: BotInstructions) -> str:
     if not lines:
         return ""
     return "Editierbare Antwortvorlagen fuer Datenschutz- und Security-Fragen:\n" + "\n\n".join(lines)
+
+
+def _image_generation_instructions_text() -> str:
+    return (
+        "Bildausgaben sind erlaubt, wenn sie fuer die konkrete Antwort hilfreich sind. "
+        "Fordere genau dann ein Bild an, indem du einen Block dieser Form in deine Antwort setzt:\n"
+        '[[TEE_IMAGE filename="bild.png" caption="kurzer Begleittext" purpose="weather_encouragement"]]\n'
+        "Praeziser Bildprompt fuer ein freundliches, nicht manipulierendes, nicht-diagnostisches Bild.\n"
+        "[[/TEE_IMAGE]]\n"
+        "Der sichtbare Antworttext bleibt ausserhalb des Blocks. Nutze Bilder als Aufmunterung, Veranschaulichung, "
+        "Wetterstimmung oder freiwilligen Reflexions-/Rateimpuls. Bei psychischer Gesundheit darf das Bild keine Diagnose "
+        "behaupten; frage stattdessen offen, was die Person darin wiedererkennt oder wie es auf sie wirkt."
+    )
 
 
 def _normalize_key(key: str) -> str:

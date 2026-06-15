@@ -1,13 +1,16 @@
 import unittest
+import base64
 from unittest.mock import patch
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import (
     OpenAIAPIError,
     OpenAIClient,
+    build_image_payload,
     build_response_payload,
     build_speech_payload,
     build_transcription_fields,
+    extract_image_bytes,
     extract_output_text,
     extract_transcription_text,
     summarize_empty_response,
@@ -67,6 +70,28 @@ class OpenAIClientTests(unittest.TestCase):
                 "response_format": "opus",
                 "speed": 1.2,
                 "instructions": "Ruhig sprechen.",
+            },
+        )
+
+    def test_build_image_payload_uses_image_settings(self) -> None:
+        instructions = BotInstructions(
+            openai_image_model="gpt-image-1",
+            openai_image_size="1024x1024",
+            openai_image_quality="low",
+            openai_image_format="png",
+            openai_image_max_prompt_chars=12,
+        )
+
+        payload = build_image_payload("Ein sehr langer Prompt", instructions)
+
+        self.assertEqual(
+            payload,
+            {
+                "model": "gpt-image-1",
+                "prompt": "Ein sehr lan",
+                "size": "1024x1024",
+                "quality": "low",
+                "output_format": "png",
             },
         )
 
@@ -143,6 +168,11 @@ class OpenAIClientTests(unittest.TestCase):
     def test_extract_transcription_text(self) -> None:
         self.assertEqual(extract_transcription_text({"text": " Hallo "}), "Hallo")
         self.assertEqual(extract_transcription_text({"text": ""}), "")
+
+    def test_extract_image_bytes_from_b64_json(self) -> None:
+        payload = {"data": [{"b64_json": base64.b64encode(b"png-data").decode("ascii")}]}
+
+        self.assertEqual(extract_image_bytes(payload), b"png-data")
 
     def test_summarize_empty_response_does_not_dump_full_payload(self) -> None:
         summary = summarize_empty_response(

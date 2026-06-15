@@ -28,7 +28,7 @@ from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
-from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks
+from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.state import RuntimeState
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
@@ -450,16 +450,47 @@ class TeeBotusEngine:
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
         visible_text, files = parse_generated_file_blocks(response_text)
+        visible_text, image_requests = parse_generated_image_blocks(visible_text)
+        generated_images: list[tuple[object, object]] = []
+        image_errors = 0
+        if image_requests and instructions.openai_image_enabled:
+            generate_image = getattr(self.openai_client, "generate_image", None)
+            if callable(generate_image):
+                for image_request in image_requests:
+                    try:
+                        generated_images.append((image_request, generate_image(image_request.prompt, instructions, filename=image_request.filename)))
+                    except OpenAIAPIError:
+                        image_errors += 1
+            else:
+                image_errors = len(image_requests)
         memory_response_text = visible_text
+        memory_notes: list[str] = []
         if files:
-            file_names = ", ".join(file.filename for file in files)
-            memory_response_text = "\n".join(part for part in (visible_text, f"[Gesendete Datei(en): {file_names}]") if part).strip()
+            memory_notes.append(f"[Gesendete Datei(en): {', '.join(file.filename for file in files)}]")
+        if generated_images:
+            memory_notes.append(
+                f"[Gesendete Bild(er): {', '.join(str(getattr(image, 'filename', '') or 'bild.png') for _request, image in generated_images)}]"
+            )
+        if image_requests and not generated_images and not visible_text:
+            visible_text = instructions.openai_image_error
+        if image_errors and visible_text:
+            visible_text = "\n".join(part for part in (visible_text, instructions.openai_image_error) if part).strip()
+        if memory_notes:
+            memory_response_text = "\n".join(part for part in (visible_text, *memory_notes) if part).strip()
         _append_account_memory_interaction(self.account_store, account_id, event, text, memory_response_text or response_text, instructions)
         actions: list[OutgoingAction] = [SendTyping(event.chat_id)]
         if visible_text:
             actions.append(SendText(event.chat_id, visible_text))
         for file in files:
             actions.append(SendAttachment(event.chat_id, file.data, file.filename, file.content_type, caption=file.caption or visible_text))
+        for request, image in generated_images:
+            data = getattr(image, "data", b"")
+            if not isinstance(data, bytes) or not data:
+                continue
+            filename = str(getattr(image, "filename", "") or getattr(request, "filename", "") or "bild.png")
+            content_type = str(getattr(image, "content_type", "") or "image/png")
+            caption = str(getattr(request, "caption", "") or visible_text or filename)
+            actions.append(SendAttachment(event.chat_id, data, filename, content_type, caption=caption))
         if len(actions) == 1:
             actions.append(SendText(event.chat_id, response_text))
         return actions
