@@ -444,6 +444,8 @@ def test_structured_account_memory_v2_has_no_default_entry_store_limit(tmp_path)
     assert len(store.read_memory_entries(account_id)) == 205
     memory_index = store.read_memory_index(account_id)
     assert memory_index["index"]["retention"]["entry_store_limit"] is None
+    assert memory_index["index"]["retention"]["storage_backend"] == "encrypted-jsonl-plus-json-index"
+    assert memory_index["index"]["retention"]["next_backend_candidate"] == "sqlite-row-encrypted-projection"
 
 
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):

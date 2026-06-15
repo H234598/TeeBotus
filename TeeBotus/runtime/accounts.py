@@ -2230,6 +2230,8 @@ def _account_memory_index_entry(entry: dict[str, Any]) -> dict[str, Any]:
 def _account_memory_retention_policy() -> dict[str, Any]:
     return {
         "source_of_truth": USER_MEMORY_ENTRIES_FILENAME,
+        "storage_backend": "encrypted-jsonl-plus-json-index",
+        "next_backend_candidate": "sqlite-row-encrypted-projection",
         "entry_store_limit": None,
         "prompt_budgeted": True,
         "index_recent_limit": ACCOUNT_MEMORY_RECENT_LIMIT,

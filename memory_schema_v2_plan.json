@@ -1,7 +1,8 @@
 {
   "constraints": [
-    "JSONL remains source of truth",
-    "Indexes and semantic cache must be rebuildable from JSONL",
+    "Encrypted JSONL plus JSON index remains the current safe default",
+    "The account-memory backend may move away from JSON/JSONL when measurements show a meaningful performance gain and at-rest privacy remains at least as strong",
+    "Indexes and semantic cache must be rebuildable from the chosen encrypted source of truth",
     "No default hard cap on account memory entries",
     "Runtime retrieval must remain feasible on a modern notebook CPU",
     "Clinical and psychoanalytic entries are signals or hypotheses, not diagnoses"
@@ -63,7 +64,8 @@
     "memgpt_letta": "TeeBotus keeps fast prompt context plus slower encrypted JSONL archival memory. It now lets the model request one bounded active local memory page per turn through a strict protocol; a native tool-call wrapper can later use the same store path.",
     "langgraph_langchain": "TeeBotus now separates episodic, semantic, and procedural memory through memory_type and type indexes; account memory is long-term account-scoped, while WorkingMemory remains instance-scoped short-term/operator memory.",
     "mem0": "TeeBotus adds local consolidation from repeated episodes into semantic summaries with provenance. It is deterministic and notebook-friendly, not a learned extraction pipeline.",
-    "zep_graphiti": "TeeBotus adds typed temporal relation edges with valid_from, valid_to, provenance, supports, contradicts, supersedes, and derived_from. It is a small local graph, not a separate graph database."
+    "zep_graphiti": "TeeBotus adds typed temporal relation edges with valid_from, valid_to, provenance, supports, contradicts, supersedes, and derived_from. It is a small local graph, not a separate graph database.",
+    "storage_backend": "TeeBotus is not locked to JSON. SQLite with row-level AES-GCM encrypted payloads is the preferred next backend candidate when benchmarks show JSONL full-file rewrites becoming a latency problem."
   },
   "status": "completed",
   "steps": [
@@ -117,6 +119,15 @@
         "Added bounded active paging: the model can request one extra local account-memory page with a strict TEE_MEMORY_PAGE protocol.",
         "Added exclude_ids support so active pages do not repeat already loaded memory IDs.",
         "Kept graphserver as optional future projection; JSONL remains the encrypted source of truth and index.graph remains rebuildable."
+      ],
+      "status": "completed"
+    },
+    {
+      "id": "storage_backend_strategy_round",
+      "notes": [
+        "Stopped treating JSON/JSONL as a permanent architecture constraint.",
+        "Documented SQLite with row-level AES-GCM encrypted payloads as the next likely backend candidate.",
+        "Added a local benchmark script so backend migration can be decided from append/select/rebuild timings on the target notebook CPU."
       ],
       "status": "completed"
     }

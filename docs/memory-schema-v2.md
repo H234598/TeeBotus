@@ -4,7 +4,11 @@ TeeBotus account memory uses `User_Memory_Entries.jsonl` as the source of truth.
 
 ## Entry Store
 
-The JSONL entry store has no default total-entry limit. Runtime selection is still budgeted by prompt size, index windows, and cache size so the bot remains usable on a modern notebook CPU.
+The current entry store is encrypted JSONL plus an encrypted JSON index. This is the safe default because it is easy to back up, export, inspect after decryption, rebuild, and encrypt as a whole vault payload. It is not a permanent architectural constraint. The store interface should be allowed to move to a faster backend when measurements show a meaningful gain without weakening privacy.
+
+The JSONL entry store has no default total-entry limit. Runtime selection is still budgeted by prompt size, index windows, and cache size so the bot remains usable on a modern notebook CPU. The current encrypted JSONL implementation reads and writes the full entry file for append and access-recency updates, so it is expected to become the first bottleneck when accounts accumulate many entries.
+
+Use `scripts/benchmark_memory_store.py` to measure the current backend on this machine. If append/select/rebuild timings become visible in normal bot latency, the next preferred backend is SQLite with row-level AES-GCM-encrypted payloads and queryable non-sensitive metadata columns. Plain SQLite or a graph server must not become the primary store unless at-rest privacy remains at least as strong as the current vault files.
 
 Core V2 fields:
 
@@ -82,7 +86,7 @@ TeeBotus then loads one additional page locally with `exclude_ids` applied, upda
 
 A graph server would mainly add durable graph queries, multi-hop traversal, consistency constraints, concurrent writes, graph algorithms, and external visualization over the same relation data. It is useful once the local JSONL/index graph becomes too large, needs multi-process access, or needs query patterns such as "find all active contradictions involving this risk hypothesis across several relation hops".
 
-For the current TeeBotus target, JSONL remains the source of truth and `index.graph` is a rebuildable local cache. That keeps privacy, portability, encryption, backups, and notebook-CPU operation simpler. A future graph server should therefore be an optional rebuildable projection, not the primary memory store.
+For the current TeeBotus target, the encrypted account store remains the source of truth and `index.graph` is a rebuildable local cache. That keeps privacy, portability, encryption, backups, and notebook-CPU operation simpler. A future graph server should therefore be an optional rebuildable projection, not the primary memory store.
 
 ## Maintenance
 
