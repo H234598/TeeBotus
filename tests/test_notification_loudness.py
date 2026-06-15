@@ -99,6 +99,7 @@ def test_scheduler_stops_online_check_after_notification_loudness_confirmation(t
     identity = telegram_identity_key(1)
     account_id = prepare_account_with_route(account_store, identity)
     now = datetime(2026, 6, 15, 8, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now)
     assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
     engine = TeeBotusEngine(account_store=account_store)
     assert engine.process(event(identity, "ja, laut"))[0].text == "Danke, ich frage deswegen nicht weiter nach."
@@ -151,6 +152,7 @@ def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_i
     identity = telegram_identity_key(1)
     account_id = prepare_account_with_route(account_store, identity)
     now = datetime(2026, 6, 15, 8, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now)
     assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
 
     same_wake_half = queue_due_notification_loudness_prompts(account_store, account_id, now=now + timedelta(hours=1))

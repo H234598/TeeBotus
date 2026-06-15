@@ -917,8 +917,38 @@ def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, 
         due_at = _parse_proactive_datetime(str(item.get("due_at") or ""))
         if due_at is not None and due_at > resolved_now:
             continue
+        if str(item.get("due_at") or "").strip() and due_at is None:
+            continue
         due.append(dict(item))
     return tuple(due)
+
+
+def fail_invalid_due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
+    rows = account_store.read_proactive_outbox(account_id)
+    failed_ids: list[str] = []
+    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "queued":
+            continue
+        due_at = str(item.get("due_at") or "").strip()
+        if not due_at or _parse_proactive_datetime(due_at) is not None:
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        item["status"] = "failed"
+        item["updated_at"] = timestamp
+        history = item.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            item["status_history"] = history
+        history.append({"at": timestamp, "status": "failed", "reason": "invalid_due_at"})
+        failed_ids.append(item_id)
+    if failed_ids:
+        account_store.write_proactive_outbox(account_id, rows)
+    return tuple(failed_ids)
 
 
 def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
@@ -1003,7 +1033,10 @@ async def dispatch_due_proactive_outbox_items(
 ) -> tuple[ProactiveDispatchResult, ...]:
     resolved_now = now or datetime.now(timezone.utc)
     expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
+    invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
+    for item_id in invalid_due_item_ids:
+        results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_due_at"))
     for item in due_proactive_outbox_items(account_store, account_id, now=resolved_now):
         item_id = str(item.get("id") or "").strip()
         if not item_id:

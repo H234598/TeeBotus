@@ -1792,6 +1792,47 @@ def test_dispatch_recheck_does_not_count_current_queued_item_against_daily_limit
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
 
 
+def test_dispatch_fails_invalid_due_at_without_sending(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="not-a-date",
+        now=now,
+    )
+    calls = []
+
+    async def sender(route: dict, action: SendText, item: dict) -> str:
+        calls.append((route, action, item))
+        return "sent-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    item_id = queued.reason.removeprefix("queued:")
+    assert [result.item_id for result in results] == [item_id]
+    assert results[0].status == "failed"
+    assert results[0].reason == "invalid_due_at"
+    assert calls == []
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "failed"
+    assert item["status_history"][-1]["reason"] == "invalid_due_at"
+
+
 def test_dispatch_due_proactive_items_fails_when_sender_is_missing(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
