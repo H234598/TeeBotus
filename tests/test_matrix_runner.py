@@ -630,6 +630,19 @@ def test_delete_matrix_message_rejects_room_redact_error_response() -> None:
         raise AssertionError("MatrixRuntimeError was not raised")
 
 
+def test_delete_matrix_message_rejects_dict_error_response() -> None:
+    class Client:
+        async def room_redact(self, room_id: str, event_id: str, reason: str | None = None):
+            return {"errcode": "M_FORBIDDEN", "error": "redact refused"}
+
+    try:
+        asyncio.run(_delete_matrix_message(Client(), "!room:example", "$old"))
+    except MatrixRuntimeError as exc:
+        assert str(exc) == "M_FORBIDDEN: redact refused"
+    else:
+        raise AssertionError("MatrixRuntimeError was not raised")
+
+
 def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(

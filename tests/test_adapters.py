@@ -1958,6 +1958,19 @@ def test_matrix_send_receipt_uses_update_receipt_marker():
     assert client.receipts[0][0:2] == ("!room:example", "$old")
 
 
+def test_matrix_send_receipt_rejects_dict_error_response():
+    class Client:
+        async def update_receipt_marker(self, _room_id, _event_id, receipt_type=None):
+            return {"errcode": "M_FORBIDDEN", "error": "receipt refused"}
+
+    try:
+        asyncio.run(send_matrix_actions(Client(), [SendReceipt("!room:example", "$old")]))
+    except RuntimeError as exc:
+        assert str(exc) == "M_FORBIDDEN: receipt refused"
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_matrix_send_receipt_fallback_uses_private_read_event_for_viewed():
     class Response:
         pass
@@ -2214,6 +2227,24 @@ def test_matrix_set_state_uses_room_put_state():
             "state_key": "",
         }
     ]
+
+
+def test_matrix_set_state_rejects_dict_error_response():
+    class Client:
+        async def room_put_state(self, **_kwargs):
+            return {"errcode": "M_FORBIDDEN", "error": "state refused"}
+
+    try:
+        asyncio.run(
+            send_matrix_actions(
+                Client(),
+                [SetMatrixState("!room:example", "m.room.topic", {"topic": "Tee"}, state_key="")],
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "M_FORBIDDEN: state refused"
+    else:
+        raise AssertionError("RuntimeError was not raised")
 
 
 def test_matrix_set_topic_prefers_niobot_update_room_topic():

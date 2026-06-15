@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
+from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
@@ -174,12 +174,10 @@ async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> No
 
 
 def _raise_matrix_runtime_response_error(response: Any) -> None:
-    message = str(getattr(response, "message", "") or "").strip()
+    message = _matrix_response_error_message(response)
     if not message:
         return
-    status_code = str(getattr(response, "status_code", "") or "").strip()
-    detail = f"{status_code}: {message}" if status_code else message
-    raise MatrixRuntimeError(detail)
+    raise MatrixRuntimeError(message)
 
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:

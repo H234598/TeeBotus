@@ -729,9 +729,19 @@ def _raise_matrix_event_response_error(response: Any, operation: str) -> None:
 def _raise_matrix_response_error(response: Any) -> None:
     if _matrix_event_id(response):
         return
-    message = str(getattr(response, "message", "") or "").strip()
+    message = _matrix_response_error_message(response)
     if not message:
         return
-    status_code = str(getattr(response, "status_code", "") or "").strip()
-    detail = f"{status_code}: {message}" if status_code else message
-    raise RuntimeError(detail)
+    raise RuntimeError(message)
+
+
+def _matrix_response_error_message(response: Any) -> str:
+    if isinstance(response, dict):
+        message = str(response.get("message") or response.get("error") or "").strip()
+        status_code = str(response.get("status_code") or response.get("errcode") or "").strip()
+    else:
+        message = str(getattr(response, "message", "") or getattr(response, "error", "") or "").strip()
+        status_code = str(getattr(response, "status_code", "") or getattr(response, "errcode", "") or "").strip()
+    if not message:
+        return ""
+    return f"{status_code}: {message}" if status_code else message
