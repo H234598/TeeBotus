@@ -233,6 +233,17 @@ python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebot
 
 Abgedeckt werden Account-Memory, Bibliothekar, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird.
 
+Plan2-Akzeptanztests:
+
+```bash
+python3 -m pytest -q tests/test_runtime_config.py tests/test_llm_config.py
+python3 -m pytest -q tests/test_litellm_provider.py
+python3 -m pytest -q tests/test_bibliothekar_*.py
+python3 -m pytest -q tests/test_llm_router.py
+python3 -m pytest -q tests/test_pydantic_decisions.py
+python3 -m pytest -q tests/test_graphs_*.py
+```
+
 Account-Report:
 
 ```bash
