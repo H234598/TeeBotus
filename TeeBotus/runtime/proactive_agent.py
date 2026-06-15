@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,6 +33,20 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
+PROACTIVE_LLM_PLAN_SCHEMA_VERSION = 1
+PROACTIVE_LLM_MAX_DECISIONS = 5
+PROACTIVE_LLM_MEMORY_KINDS = frozenset(
+    {
+        "reflection",
+        "summary",
+        "next_step",
+        "homework",
+        "treatment_plan",
+        "assessment_note",
+        "intervention_note",
+        "response_note",
+    }
+)
 PROACTIVE_PLANNER_MEMORY_KINDS = frozenset(
     {
         "therapy_goal",
@@ -75,6 +90,14 @@ class ProactivePlanningResult:
     created_memory_ids: tuple[str, ...] = ()
     queued_item_ids: tuple[str, ...] = ()
     skipped_reason: str = ""
+
+
+@dataclass(frozen=True)
+class ProactiveLLMPlanningResult:
+    account_id: str
+    created_memory_ids: tuple[str, ...] = ()
+    queued_item_ids: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
 
 
 ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
@@ -285,6 +308,109 @@ def run_proactive_reflection_planner(
     if not queued_item_ids:
         return ProactivePlanningResult(account_id, tuple(created_memory_ids), (), "no_candidate")
     return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids))
+
+
+def apply_proactive_llm_plan_text(
+    account_store: AccountStore,
+    account_id: str,
+    plan_text: str,
+    *,
+    now: datetime | None = None,
+) -> ProactiveLLMPlanningResult:
+    try:
+        payload = json.loads(_strip_json_code_fence(plan_text))
+    except json.JSONDecodeError as exc:
+        return ProactiveLLMPlanningResult(account_id, errors=(f"invalid_json:{exc.msg}",))
+    return apply_proactive_llm_plan(account_store, account_id, payload, now=now)
+
+
+def run_proactive_llm_planner(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    openai_client: Any,
+    instructions: Any,
+    now: datetime | None = None,
+    max_memory_chars: int = 6000,
+) -> ProactiveLLMPlanningResult:
+    prompt = build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
+    response = openai_client.create_reply(prompt, instructions)
+    return apply_proactive_llm_plan_text(account_store, account_id, str(getattr(response, "text", response) or ""), now=now)
+
+
+def build_proactive_llm_planner_prompt(account_store: AccountStore, account_id: str, *, max_memory_chars: int = 6000) -> str:
+    selection = account_store.select_structured_memory(
+        account_id,
+        query_text="proaktive Planung Therapie Ziel Aufgabe Follow-up Risiko Schutzfaktor",
+        max_prompt_chars=max_memory_chars,
+        max_entry_chars=1200,
+    )
+    return "\n".join(
+        [
+            "Du bist nur ein Planungsmodul fuer TeeBotus. Du sendest nie direkt Nachrichten.",
+            "Gib ausschliesslich valides JSON zurueck, ohne Markdown, ohne Erklaertext.",
+            "Schema:",
+            '{"schema_version":1,"decisions":[{"action":"none|memory|queue"}]}',
+            "Erlaubte memory actions:",
+            '{"action":"memory","kind":"reflection|summary|next_step|follow_up|homework|treatment_plan|assessment_note|intervention_note|response_note","text":"...","source_memory_ids":["mem_..."],"importance":1}',
+            "Erlaubte queue actions:",
+            '{"action":"queue","category":"reminder|task|tip|test|image|analysis|reflection","intent":"...","message_text":"...","reason_memory_ids":["mem_..."],"risk_gate":"none|needs_review|blocked","intervention_type":"...","expected_response":"...","review_signal":"..."}',
+            "Regeln:",
+            "- Keine Diagnosen behaupten.",
+            "- Keine Krisen-, Suizid- oder Selbstverletzungs-Nachrichten proaktiv vorschlagen; dann action none oder risk_gate needs_review.",
+            "- Queue-Vorschlaege brauchen reason_memory_ids.",
+            "- Maximal 5 Entscheidungen.",
+            "",
+            selection.prompt_text or "Keine nutzbaren Account-Memorys vorhanden.",
+        ]
+    )
+
+
+def apply_proactive_llm_plan(
+    account_store: AccountStore,
+    account_id: str,
+    payload: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+) -> ProactiveLLMPlanningResult:
+    resolved_now = now or datetime.now(timezone.utc)
+    if not isinstance(payload, Mapping):
+        return ProactiveLLMPlanningResult(account_id, errors=("payload_not_object",))
+    if int(payload.get("schema_version") or 0) != PROACTIVE_LLM_PLAN_SCHEMA_VERSION:
+        return ProactiveLLMPlanningResult(account_id, errors=("unsupported_schema_version",))
+    decisions = payload.get("decisions")
+    if not isinstance(decisions, list):
+        return ProactiveLLMPlanningResult(account_id, errors=("decisions_not_list",))
+    created_memory_ids: list[str] = []
+    queued_item_ids: list[str] = []
+    errors: list[str] = []
+    memory_ids = _account_memory_ids(account_store, account_id)
+    for index, raw_decision in enumerate(decisions[:PROACTIVE_LLM_MAX_DECISIONS]):
+        if not isinstance(raw_decision, Mapping):
+            errors.append(f"decision_{index}_not_object")
+            continue
+        action = str(raw_decision.get("action") or "none").strip().casefold()
+        if action == "none":
+            continue
+        if action == "memory":
+            memory_result = _apply_proactive_llm_memory_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
+            if memory_result.startswith("error:"):
+                errors.append(f"decision_{index}_{memory_result.removeprefix('error:')}")
+            else:
+                created_memory_ids.append(memory_result)
+                memory_ids.add(memory_result)
+            continue
+        if action == "queue":
+            queue_result = _apply_proactive_llm_queue_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
+            if queue_result.startswith("error:"):
+                errors.append(f"decision_{index}_{queue_result.removeprefix('error:')}")
+            else:
+                queued_item_ids.append(queue_result)
+            continue
+        errors.append(f"decision_{index}_unsupported_action:{action}")
+    if len(decisions) > PROACTIVE_LLM_MAX_DECISIONS:
+        errors.append("too_many_decisions_truncated")
+    return ProactiveLLMPlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), tuple(errors))
 
 
 def proactive_policy_decision(
@@ -576,6 +702,150 @@ def _default_proactive_due_at(now: datetime) -> str:
     due = now + timedelta(days=1)
     due = due.replace(hour=10, minute=0, second=0, microsecond=0)
     return due.isoformat()
+
+
+def _apply_proactive_llm_memory_decision(
+    account_store: AccountStore,
+    account_id: str,
+    decision: Mapping[str, Any],
+    memory_ids: set[str],
+    now: datetime,
+) -> str:
+    kind = str(decision.get("kind") or "").strip().casefold()
+    if kind not in PROACTIVE_LLM_MEMORY_KINDS:
+        return f"error:unsupported_memory_kind:{kind}"
+    text = _safe_llm_text(decision.get("text"), max_chars=1200)
+    if not text:
+        return "error:missing_memory_text"
+    if _text_has_unsafe_clinical_claim(text):
+        return "error:unsafe_memory_text"
+    source_ids = _valid_memory_ids(decision.get("source_memory_ids"), memory_ids)
+    relations = [
+        {
+            "type": "derived_from",
+            "target_id": source_id,
+            "valid_from": now.isoformat(timespec="seconds"),
+            "provenance": {"job": "proactive-llm-planner"},
+        }
+        for source_id in source_ids
+    ]
+    return account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "kind": kind,
+            "memory_type": "semantic",
+            "user_text": text,
+            "bot_text": "Validated LLM planner proposal; stored as internal hypothesis/support note, not a diagnosis.",
+            "importance": _bounded_int(decision.get("importance"), default=3, low=1, high=5),
+            "related_ids": source_ids,
+            "supports": source_ids,
+            "relations": relations,
+            "proactive_llm_plan": True,
+        },
+    )
+
+
+def _apply_proactive_llm_queue_decision(
+    account_store: AccountStore,
+    account_id: str,
+    decision: Mapping[str, Any],
+    memory_ids: set[str],
+    now: datetime,
+) -> str:
+    category = str(decision.get("category") or "").strip().casefold()
+    if category not in PROACTIVE_ALLOWED_CATEGORIES:
+        return f"error:unsupported_category:{category}"
+    message_text = _safe_llm_text(decision.get("message_text"), max_chars=800)
+    if not message_text:
+        return "error:missing_message_text"
+    if _text_has_unsafe_clinical_claim(message_text):
+        return "error:unsafe_message_text"
+    risk_gate = _normalize_risk_gate(decision.get("risk_gate"))
+    reason_memory_ids = _valid_memory_ids(decision.get("reason_memory_ids"), memory_ids)
+    if not reason_memory_ids:
+        return "error:missing_reason_memory_ids"
+    planner = {
+        "source": "llm",
+        "schema_version": PROACTIVE_LLM_PLAN_SCHEMA_VERSION,
+        "intervention_type": str(decision.get("intervention_type") or category).strip()[:80],
+        "expected_response": str(decision.get("expected_response") or "").strip()[:240],
+        "review_signal": str(decision.get("review_signal") or "").strip()[:240],
+        "collaboration_marker": str(decision.get("collaboration_marker") or "agent_suggested").strip()[:80],
+    }
+    result = queue_proactive_message(
+        account_store,
+        account_id,
+        category=category,
+        intent=str(decision.get("intent") or "llm_planner").strip()[:80] or "llm_planner",
+        message_text=message_text,
+        reason_memory_ids=reason_memory_ids,
+        due_at=str(decision.get("due_at") or _default_proactive_due_at(now)).strip(),
+        now=now,
+        risk_gate=risk_gate,
+        planner=planner,
+    )
+    if not result.allowed:
+        return f"error:policy:{result.reason}"
+    return result.reason.removeprefix("queued:")
+
+
+def _account_memory_ids(account_store: AccountStore, account_id: str) -> set[str]:
+    return {
+        str(entry.get("id") or "").strip()
+        for entry in account_store.read_memory_entries(account_id)
+        if isinstance(entry, dict) and str(entry.get("id") or "").strip()
+    }
+
+
+def _valid_memory_ids(value: Any, memory_ids: set[str]) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        memory_id = str(item or "").strip()
+        if memory_id and memory_id in memory_ids and memory_id not in result:
+            result.append(memory_id)
+    return result
+
+
+def _safe_llm_text(value: Any, *, max_chars: int) -> str:
+    text = " ".join(str(value or "").strip().split())
+    return text[:max_chars].strip()
+
+
+def _text_has_unsafe_clinical_claim(text: str) -> bool:
+    normalized = str(text or "").casefold()
+    return any(
+        phrase in normalized
+        for phrase in (
+            "du hast depression",
+            "du bist depressiv",
+            "diagnose:",
+            "ich diagnostiziere",
+            "suizid begehen",
+            "bring dich um",
+        )
+    )
+
+
+def _bounded_int(value: Any, *, default: int, low: int, high: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(high, max(low, parsed))
+
+
+def _strip_json_code_fence(text: str) -> str:
+    stripped = str(text or "").strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if lines and lines[0].strip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def select_proactive_route(account_store: AccountStore, account_id: str) -> dict[str, Any] | None:

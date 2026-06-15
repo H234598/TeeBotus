@@ -10,6 +10,9 @@ from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     active_proactive_risk_memory_ids,
+    apply_proactive_llm_plan,
+    apply_proactive_llm_plan_text,
+    build_proactive_llm_planner_prompt,
     check_proactive_agent_account,
     disable_proactive_agent,
     dispatch_due_proactive_outbox_items,
@@ -18,6 +21,7 @@ from TeeBotus.runtime.proactive_agent import (
     proactive_agent_instance_enabled,
     proactive_policy_decision,
     queue_proactive_message,
+    run_proactive_llm_planner,
     run_proactive_reflection_planner,
     select_proactive_route,
     update_proactive_outbox_item_status,
@@ -467,6 +471,175 @@ def test_reflection_planner_skips_when_risk_memory_is_active(tmp_path) -> None:
     assert result.skipped_reason == "active_risk_signal"
     assert result.queued_item_ids == ()
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_llm_plan_validator_applies_safe_memory_and_queue_decisions(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "therapy_goal",
+            "user_text": "Diese Woche zweimal zehn Minuten spazieren gehen.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "memory",
+                    "kind": "reflection",
+                    "text": "Sanftes Follow-up zu Spaziergaengen ist plausibel, sofern der User einverstanden bleibt.",
+                    "source_memory_ids": [source_id],
+                },
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "llm_follow_up",
+                    "message_text": "Magst du kurz sagen, ob ein kurzer Spaziergang heute realistisch ist?",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "none",
+                    "intervention_type": "reminder",
+                    "expected_response": "kurze Rueckmeldung",
+                    "review_signal": "erledigt/nicht erledigt/Belastung",
+                },
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert len(result.created_memory_ids) == 1
+    assert len(result.queued_item_ids) == 1
+    memory = next(entry for entry in account_store.read_memory_entries(account_id) if entry["id"] == result.created_memory_ids[0])
+    assert memory["kind"] == "reflection"
+    assert memory["relations"][0]["target_id"] == source_id
+    outbox = account_store.read_proactive_outbox(account_id)
+    assert outbox[0]["id"] == result.queued_item_ids[0]
+    assert outbox[0]["planner"]["source"] == "llm"
+    assert outbox[0]["reason_memory_ids"] == [source_id]
+
+
+def test_llm_plan_validator_rejects_malformed_json_without_mutation(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_llm_plan_text(account_store, account_id, "```json\n{not-json}\n```")
+
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert result.errors[0].startswith("invalid_json:")
+    assert account_store.read_memory_entries(account_id) == []
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_llm_plan_validator_rejects_unsafe_message_and_risk_gate(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "unsafe",
+                    "message_text": "Du hast Depression, also musst du das jetzt tun.",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "none",
+                },
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "review",
+                    "message_text": "Magst du kurz berichten?",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "needs_review",
+                },
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert "decision_0_unsafe_message_text" in result.errors
+    assert "decision_1_policy:risk_gate_needs_review:needs_review" in result.errors
+    assert result.queued_item_ids == ()
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_llm_planner_runner_uses_client_text_and_validates_before_applying(tmp_path) -> None:
+    class Response:
+        text = '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"llm_follow_up","message_text":"Magst du kurz berichten, ob du an deinem Ziel weiterarbeiten moechtest?","reason_memory_ids":["mem_goal"],"risk_gate":"none"}]}'
+
+    class Client:
+        def __init__(self) -> None:
+            self.prompts = []
+
+        def create_reply(self, prompt, instructions):
+            self.prompts.append((prompt, instructions))
+            return Response()
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+    client = Client()
+    instructions = object()
+
+    result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=client,
+        instructions=instructions,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert len(result.queued_item_ids) == 1
+    assert client.prompts[0][1] is instructions
+    assert "Gib ausschliesslich valides JSON" in client.prompts[0][0]
+    assert "mem_goal" in client.prompts[0][0]
+    assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
+
+
+def test_llm_planner_prompt_has_schema_and_memory_context(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    prompt = build_proactive_llm_planner_prompt(account_store, account_id)
+
+    assert '"schema_version":1' in prompt
+    assert "Du sendest nie direkt Nachrichten" in prompt
+    assert "mem_goal" in prompt
 
 
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:
