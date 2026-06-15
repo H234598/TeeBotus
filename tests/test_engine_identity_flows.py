@@ -339,6 +339,35 @@ def test_engine_status_reports_unmapped_account_instead_of_zero_memory(tmp_path)
     assert "- Nutzermemory: 0 B" not in text
 
 
+def test_status_uses_account_memory_backend_payload_size(tmp_path):
+    class Backend:
+        def read_entries(self, _account_id):
+            return [{"id": "mem_db", "user_text": "Mond aus der Datenbank"}]
+
+        def read_index(self, _account_id):
+            return {"index": {"entries": {"mem_db": {"kind": "observation"}}}}
+
+        def write_entries(self, _account_id, _rows):
+            return None
+
+        def write_index(self, _account_id, _data):
+            return None
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store._account_memory_backend = Backend()
+    text = build_status_reply(
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=account_store,
+    )
+
+    assert "- Nutzermemory: 0 B" not in text
+    assert "- Nutzermemory:" in text
+    assert "- Userfiles: Datenbank-Backend, Payloads verschluesselt" in text
+
+
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)

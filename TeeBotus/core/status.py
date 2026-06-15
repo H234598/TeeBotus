@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 from TeeBotus import __version__
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
@@ -59,8 +59,12 @@ def build_status_reply(
     else:
         account_dir = account_memory_dir_for_sender(sender_id, instance_name=instance_name, project_root=project_root)
         account_resolved = account_dir is not None
-    memory_size = memory_files_size(account_dir)
-    encryption_status = memory_encryption_status(account_dir)
+    memory_size = account_memory_payload_size(
+        account_store=account_store,
+        account_id=resolved_account_id,
+        fallback_directory=account_dir,
+    )
+    encryption_status = memory_encryption_status(account_dir, account_store=account_store, account_id=resolved_account_id)
     commit_history_url = github_commit_history_url(project_root)
     status_name = _status_display_name(instance_name)
     return "\n".join(
@@ -222,7 +226,25 @@ def memory_files_size(directory: Path | None) -> int:
     return total
 
 
-def memory_encryption_status(directory: Path | None) -> str:
+def account_memory_payload_size(*, account_store: AccountStore | None, account_id: str, fallback_directory: Path | None) -> int:
+    if account_store is not None and account_id:
+        try:
+            entries = account_store.read_memory_entries(account_id)
+            index = account_store.read_memory_index(account_id)
+        except (AccountStoreError, OSError):
+            LOGGER.exception("Failed to read account memory payload size from store.")
+        else:
+            payload: dict[str, Any] = {"entries": entries}
+            if index:
+                payload["index"] = index
+            raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+            return len(raw)
+    return memory_files_size(fallback_directory)
+
+
+def memory_encryption_status(directory: Path | None, *, account_store: AccountStore | None = None, account_id: str = "") -> str:
+    if account_store is not None and account_id and account_store.account_memory_backend is not None:
+        return "Datenbank-Backend, Payloads verschluesselt"
     if directory is None or not directory.exists():
         return "kein Account-Memory gefunden"
     structured_files = [directory / USER_MEMORY_INDEX_FILENAME, directory / USER_MEMORY_ENTRIES_FILENAME]
