@@ -269,6 +269,7 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
         rebuild_ms = _timed_ms(store.rebuild)
         service = BibliothekarService(LocalBibliothekarBackend(store))
         timings = [_timed_ms(lambda: service.search("Therapie Schlaf", max_chunks=2)) for _ in range(iterations)]
+        selection = service.search("Therapie Schlaf", max_chunks=2)
         index = json.loads(store.index_path.read_text(encoding="utf-8"))
         return _result(
             name="bibliothekar_local_query",
@@ -282,6 +283,7 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
                 "documents": len(index.get("documents", {})),
                 "chunks": int(index.get("chunk_count") or 0),
                 "median_query_ms": statistics.median(timings),
+                **_bibliothekar_payload_details(selection.prompt_text),
             },
         )
 
@@ -313,6 +315,14 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
             )
             for _ in range(iterations)
         ]
+        selection = backend.search(
+            BibliothekarQuery(
+                text="Therapie Schlaf",
+                max_chunks=2,
+                max_prompt_chars=5000,
+                max_quote_chars=500,
+            )
+        )
         fallback_store = backend.fallback_store
         index = json.loads(fallback_store.index_path.read_text(encoding="utf-8"))
         return _result(
@@ -329,8 +339,27 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
                 "fixture": "tests/fixtures/books",
                 "document_store_documents": len(document_store.documents),
                 "median_query_ms": statistics.median(timings),
+                **_bibliothekar_payload_details(selection.prompt_text),
             },
         )
+
+
+def _bibliothekar_payload_details(prompt_text: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(prompt_text)
+    except json.JSONDecodeError:
+        return {
+            "citation_payload_bytes": len(prompt_text.encode("utf-8")),
+            "selected_chunks": 0,
+            "has_citation_format": False,
+        }
+    chunks = payload.get("selected_library_chunks") if isinstance(payload, dict) else None
+    selected_chunks = chunks if isinstance(chunks, list) else []
+    return {
+        "citation_payload_bytes": len(prompt_text.encode("utf-8")),
+        "selected_chunks": len(selected_chunks),
+        "has_citation_format": all(bool(chunk.get("citation_format")) for chunk in selected_chunks if isinstance(chunk, dict)),
+    }
 
 
 def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
