@@ -21,6 +21,20 @@ class LLMResponse:
     service_tier: str | None = None
 
 
+@dataclass(frozen=True)
+class LLMVoice:
+    audio: bytes
+    filename: str
+    content_type: str
+
+
+@dataclass(frozen=True)
+class LLMImage:
+    data: bytes
+    filename: str
+    content_type: str
+
+
 class BaseLLMClient(Protocol):
     def create_reply(
         self,
@@ -28,6 +42,16 @@ class BaseLLMClient(Protocol):
         instructions: BotInstructions,
         previous_response_id: str | None = None,
     ) -> LLMResponse:
+        ...
+
+
+class VoiceLLMClient(Protocol):
+    def create_voice(self, text: str, instructions: BotInstructions) -> LLMVoice:
+        ...
+
+
+class ImageLLMClient(Protocol):
+    def generate_image(self, prompt: str, instructions: BotInstructions, *, filename: str = "bild.png") -> LLMImage:
         ...
 
 

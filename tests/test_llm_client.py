@@ -7,13 +7,23 @@ import builtins
 import pytest
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
+from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
 def test_build_text_llm_client_uses_openai_client_by_default() -> None:
     openai_client = object()
 
     assert build_text_llm_client(instructions=BotInstructions(), openai_client=openai_client) is openai_client
+
+
+def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
+    voice = LLMVoice(audio=b"voice", filename="voice.ogg", content_type="audio/ogg")
+    image = LLMImage(data=b"png", filename="bild.png", content_type="image/png")
+
+    assert voice.audio == b"voice"
+    assert voice.filename == "voice.ogg"
+    assert image.data == b"png"
+    assert image.content_type == "image/png"
 
 
 @pytest.mark.parametrize(
