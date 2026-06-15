@@ -48,7 +48,10 @@ def run_bibliothekar_deep_query(
     if prefer_langgraph:
         graph = _build_langgraph_runner(service, max_prompt_chars=max_prompt_chars, max_chunks=max_chunks, max_quote_chars=max_quote_chars, answer_builder=answer_builder)
         if graph is not None:
-            return _coerce_state(graph.invoke(state))
+            try:
+                return _coerce_state(graph.invoke(state))
+            except Exception as exc:  # noqa: BLE001 - optional graph runtime must not break the bot path.
+                return _fallback(_append_error({**state, "fallback_reason": "langgraph_error"}, f"{type(exc).__name__}: {exc}"))
     return _run_linear(
         service,
         state,
@@ -92,24 +95,27 @@ def _build_langgraph_runner(
         from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
     except Exception:
         return None
-    graph = StateGraph(BibliothekarDeepQueryState)
-    graph.add_node("classify", _classify)
-    graph.add_node(
-        "retrieve",
-        lambda state: _retrieve(service, state, max_prompt_chars=max_prompt_chars, max_chunks=max_chunks, max_quote_chars=max_quote_chars),
-    )
-    graph.add_node("rerank", _rerank)
-    graph.add_node("answer", lambda state: _answer(state, answer_builder=answer_builder))
-    graph.add_node("citation_check", _citation_check)
-    graph.add_node("fallback", _fallback)
-    graph.set_entry_point("classify")
-    graph.add_edge("classify", "retrieve")
-    graph.add_edge("retrieve", "rerank")
-    graph.add_edge("rerank", "answer")
-    graph.add_edge("answer", "citation_check")
-    graph.add_edge("citation_check", "fallback")
-    graph.add_edge("fallback", END)
-    return graph.compile()
+    try:
+        graph = StateGraph(BibliothekarDeepQueryState)
+        graph.add_node("classify", _classify)
+        graph.add_node(
+            "retrieve",
+            lambda state: _retrieve(service, state, max_prompt_chars=max_prompt_chars, max_chunks=max_chunks, max_quote_chars=max_quote_chars),
+        )
+        graph.add_node("rerank", _rerank)
+        graph.add_node("answer", lambda state: _answer(state, answer_builder=answer_builder))
+        graph.add_node("citation_check", _citation_check)
+        graph.add_node("fallback", _fallback)
+        graph.set_entry_point("classify")
+        graph.add_edge("classify", "retrieve")
+        graph.add_edge("retrieve", "rerank")
+        graph.add_edge("rerank", "answer")
+        graph.add_edge("answer", "citation_check")
+        graph.add_edge("citation_check", "fallback")
+        graph.add_edge("fallback", END)
+        return graph.compile()
+    except Exception:
+        return None
 
 
 def _classify(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryState:

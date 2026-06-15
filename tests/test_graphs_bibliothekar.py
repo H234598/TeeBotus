@@ -103,6 +103,76 @@ def test_bibliothekar_deep_query_can_use_langgraph_when_available(tmp_path, monk
     assert state["citation_ok"] is True
 
 
+def test_bibliothekar_deep_query_falls_back_when_langgraph_compile_fails(tmp_path, monkeypatch) -> None:
+    class BrokenStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            raise RuntimeError("compile exploded")
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = BrokenStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+    service = _service_with_book(tmp_path)
+
+    state = run_bibliothekar_deep_query(service, "Bibliothek Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is True
+    assert not state.get("fallback_reason")
+    assert "therapie.txt" in state["answer_text"]
+
+
+def test_bibliothekar_deep_query_returns_serializable_state_when_langgraph_invoke_fails(tmp_path, monkeypatch) -> None:
+    class BrokenCompiledGraph:
+        def invoke(self, _state):
+            raise RuntimeError("invoke exploded")
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return BrokenCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+    service = _service_with_book(tmp_path)
+
+    state = run_bibliothekar_deep_query(service, "Bibliothek Therapie", prefer_langgraph=True)
+
+    assert state["fallback_reason"] == "langgraph_error"
+    assert state["citation_ok"] is False
+    assert state["errors"] == ["RuntimeError: invoke exploded"]
+    assert "keine belastbare Quelle" in state["answer_text"]
+    json.dumps(state)
+
+
 def test_bibliothekar_cli_query_deep_uses_graph(tmp_path, capsys) -> None:
     instances_dir = tmp_path / "instances"
     library_dir = instances_dir / "Depressionsbot" / "data" / "Bibliothek"
