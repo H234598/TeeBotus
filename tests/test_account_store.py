@@ -53,6 +53,25 @@ def test_matrix_identity_key_uses_localpart_and_display_fallbacks() -> None:
     assert len(display_key.removeprefix("matrix:display:")) == 64
 
 
+def test_signal_identity_key_normalizes_uuid_case() -> None:
+    assert signal_identity_key(source_uuid="ABC-DEF") == "signal:uuid:abc-def"
+
+
+def test_identity_lookup_normalizes_case_insensitive_fallback_keys(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    signal_account = store.resolve_or_create_account("signal:uuid:ABC-DEF")
+    telegram_account = store.resolve_or_create_account("telegram:username:@AdaUser")
+    matrix_account = store.resolve_or_create_account("matrix:localpart:@Ada")
+
+    assert store.get_account_for_identity("signal:uuid:abc-def") == signal_account
+    assert store.resolve_or_create_account("signal:uuid:abc-def") == signal_account
+    assert store.get_account_for_identity("telegram:username:adauser") == telegram_account
+    assert store.resolve_or_create_account("telegram:username:ADAUSER") == telegram_account
+    assert store.get_account_for_identity("matrix:localpart:ada") == matrix_account
+    assert store.resolve_or_create_account("matrix:localpart:ADA") == matrix_account
+
+
 def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = telegram_identity_key(395935293)

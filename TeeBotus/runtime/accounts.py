@@ -317,7 +317,7 @@ def telegram_identity_key(sender_id: int | str = "", *, username: str = "", disp
 
 
 def signal_identity_key(*, source_uuid: str = "", source_number: str = "", source: str = "") -> str:
-    uuid_value = str(source_uuid or "").strip()
+    uuid_value = str(source_uuid or "").strip().casefold()
     if uuid_value:
         return f"signal:uuid:{uuid_value}"
     number_value = str(source_number or "").strip()
@@ -1855,6 +1855,17 @@ class AccountStore:
             raise AccountStoreError("identity key must not be empty")
         if any(ord(char) < 0x20 or ord(char) == 0x7F for char in key):
             raise AccountStoreError("identity key contains invalid control characters")
+        channel, separator, rest = key.partition(":")
+        kind, nested_separator, identifier = rest.partition(":")
+        if separator and nested_separator:
+            channel = channel.casefold()
+            kind = kind.casefold()
+            if channel == "signal" and kind == "uuid":
+                return f"signal:uuid:{identifier.casefold()}"
+            if channel == "telegram" and kind == "username":
+                return f"telegram:username:{identifier.lstrip('@').casefold()}"
+            if channel == "matrix" and kind == "localpart":
+                return f"matrix:localpart:{identifier.lstrip('@').casefold()}"
         return key
 
     def _load_identities(self) -> dict[str, Any]:
