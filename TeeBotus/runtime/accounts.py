@@ -686,6 +686,7 @@ class AccountStore:
         target_dir.mkdir(parents=True, exist_ok=True)
         self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
         self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
+        self.rebuild_structured_memory_index(target_account_id)
         self._merge_json_objects(source_dir / ACCOUNT_PROFILE_FILENAME, target_dir / ACCOUNT_PROFILE_FILENAME, preserve_target=True, vault=self.vault)
         self._merge_text(source_dir / USER_HABITS_FILENAME, target_dir / USER_HABITS_FILENAME, heading=f"Merged from {source_account_id}")
         self._merge_openai_state(source_dir / OPENAI_STATE_FILENAME, target_dir / OPENAI_STATE_FILENAME)
@@ -770,6 +771,51 @@ class AccountStore:
     def reset_structured_memory(self, account_id: str) -> None:
         self.write_memory_index(account_id, {})
         self.write_memory_entries(account_id, [])
+
+    def rebuild_structured_memory_index(self, account_id: str) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._ensure_account_resolvable(account_id)
+        rows = self.read_memory_entries(account_id)
+        changed = False
+        normalized_rows: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                changed = True
+                continue
+            entry = dict(row)
+            memory_id = str(entry.get("id") or "").strip()
+            if not memory_id:
+                memory_id = f"mem_{uuid.uuid4().hex}"
+                entry["id"] = memory_id
+                changed = True
+            if not entry.get("created_at"):
+                entry["created_at"] = utc_now()
+                changed = True
+            if not entry.get("updated_at"):
+                entry["updated_at"] = entry["created_at"]
+                changed = True
+            keywords = entry.get("keywords")
+            if not isinstance(keywords, list) or not all(isinstance(keyword, str) for keyword in keywords):
+                keywords = _account_memory_keywords(f"{entry.get('user_text', '')}\n{entry.get('bot_text', '')}\n{entry.get('text', '')}")
+                entry["keywords"] = keywords
+                changed = True
+            normalized_rows.append(entry)
+        if changed:
+            self.write_memory_entries(account_id, normalized_rows)
+
+        existing_index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        rebuilt_index = self._normalized_memory_index(
+            account_id,
+            {
+                "created_at": existing_index.get("created_at", utc_now()),
+                "profile": existing_index.get("profile", {}),
+            },
+        )
+        rebuilt_index["index"] = {"keywords": {}, "recent_ids": [], "entries": {}}
+        for entry in normalized_rows:
+            self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
+        rebuilt_index["updated_at"] = utc_now()
+        self.write_memory_index(account_id, rebuilt_index)
 
     def select_structured_memory(
         self,

@@ -94,8 +94,8 @@ def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     assert result["merged_from"] == temp
     assert store.get_account_for_identity("signal:uuid:abc") == target
     merged_entries = store.read_memory_entries(target)
-    assert {"text": "from signal"} in merged_entries
-    assert {"text": "from telegram"} in merged_entries
+    assert any(entry.get("text") == "from signal" for entry in merged_entries)
+    assert any(entry.get("text") == "from telegram" for entry in merged_entries)
     raw_entries = (target_dir / "User_Memory_Entries.jsonl").read_text(encoding="utf-8")
     assert "from signal" not in raw_entries
     assert "TMBMAP1" in raw_entries
@@ -228,3 +228,69 @@ def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
     assert "keywords" not in index
     assert index["index"]["keywords"]["mond"] == ["mem_legacy"]
     assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
+
+
+def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {
+                "id": "mem_live",
+                "channel": "telegram",
+                "source": {"chat_id": "1"},
+                "user_text": "Mond bleibt.",
+                "bot_text": "Gemerkt.",
+            }
+        ],
+    )
+    store.write_memory_index(
+        account_id,
+        {
+            "profile": {"names": ["Ada"]},
+            "index": {
+                "keywords": {"mond": ["mem_live", "mem_stale"], "stale": ["mem_stale"]},
+                "recent_ids": ["mem_stale", "mem_live"],
+                "entries": {"mem_live": {}, "mem_stale": {}},
+            },
+        },
+    )
+
+    store.rebuild_structured_memory_index(account_id)
+
+    index = store.read_memory_index(account_id)
+    assert index["profile"]["names"] == ["Ada"]
+    assert index["index"]["recent_ids"] == ["mem_live"]
+    assert index["index"]["keywords"]["mond"] == ["mem_live"]
+    assert "stale" not in index["index"]["keywords"]
+    assert list(index["index"]["entries"]) == ["mem_live"]
+    entries = store.read_memory_entries(account_id)
+    assert entries[0]["keywords"] == ["mond", "bleibt", "gemerkt"]
+
+
+def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    _, secret = store.register_account(target)
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="abc"))
+    store.write_memory_entries(
+        target,
+        [{"id": "mem_target", "user_text": "Telegram Mond.", "bot_text": "Gemerkt.", "channel": "telegram"}],
+    )
+    store.write_memory_entries(
+        source,
+        [{"id": "mem_source", "user_text": "Signal Kaffee.", "bot_text": "Gemerkt.", "channel": "signal"}],
+    )
+    store.write_memory_index(target, {"index": {"keywords": {"stale": ["mem_missing"]}, "recent_ids": ["mem_missing"], "entries": {"mem_missing": {}}}})
+    store.write_memory_index(source, {"index": {"keywords": {"ghost": ["mem_ghost"]}, "recent_ids": ["mem_ghost"], "entries": {"mem_ghost": {}}}})
+
+    store.link_identity(signal_identity_key(source_uuid="abc"), target, secret, display_label="Signal")
+
+    index = store.read_memory_index(target)
+    assert index["index"]["recent_ids"] == ["mem_target", "mem_source"]
+    assert "stale" not in index["index"]["keywords"]
+    assert "ghost" not in index["index"]["keywords"]
+    assert index["index"]["keywords"]["mond"] == ["mem_target"]
+    assert index["index"]["keywords"]["kaffee"] == ["mem_source"]
+    assert set(index["index"]["entries"]) == {"mem_target", "mem_source"}
