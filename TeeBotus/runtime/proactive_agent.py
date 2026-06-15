@@ -10,7 +10,7 @@ from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import OutgoingAction, SendText
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 
@@ -122,7 +122,7 @@ class ProactiveAgentToolCall:
     call_id: str = ""
 
 
-ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
+ProactiveSender = Callable[[dict[str, Any], OutgoingAction, dict[str, Any]], Any]
 
 
 def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, account_id: str) -> tuple[SendText, ...] | None:
