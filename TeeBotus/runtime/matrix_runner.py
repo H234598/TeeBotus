@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -58,8 +58,16 @@ class MatrixRuntimeBridge:
             account_label=self.run_config.label,
         )
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        self.account_store.update_identity_route(
+            event.identity_key,
+            channel=event.channel,
+            chat_id=event.chat_id,
+            chat_type=event.chat_type,
+            adapter_slot=event.adapter_slot,
+        )
         event = event.with_account(account_id)
         actions = self.engine.process(event)
+        await self._notify_linked_identities(actions)
         await self._delete_tracked_messages(event, actions)
         sent_refs = await send_matrix_actions(self.client, actions)
         for action, sent_ref in zip(actions, sent_refs):
@@ -81,6 +89,21 @@ class MatrixRuntimeBridge:
                     ref_kind="matrix_event_id",
                 )
             )
+
+    async def _notify_linked_identities(self, actions: list[Any]) -> None:
+        for action in actions:
+            if not isinstance(action, NotifyLinkedIdentity):
+                continue
+            route = self.account_store.get_identity_route(action.identity_key)
+            if not route or route.get("channel") != "matrix":
+                continue
+            chat_id = str(route.get("chat_id") or "").strip()
+            if not chat_id:
+                continue
+            try:
+                await send_matrix_actions(self.client, [SendText(chat_id, action.text, track=action.track)])
+            except Exception:
+                continue
 
     async def _delete_tracked_messages(self, event: Any, actions: list[Any]) -> None:
         for action in actions:

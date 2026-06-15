@@ -32,6 +32,24 @@ def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
     assert "TMBMAP1" in raw_identity_file
 
 
+def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(395935293)
+    store.resolve_or_create_account(identity, display_label="Teladi")
+
+    store.update_identity_route(identity, channel="telegram", chat_id="395935293", chat_type="private", adapter_slot=2)
+
+    route = store.get_identity_route(identity)
+    assert route is not None
+    assert route["adapter_slot"] == 2
+    assert route["channel"] == "telegram"
+    assert route["chat_id"] == "395935293"
+    assert route["chat_type"] == "private"
+    assert route["last_seen_at"]
+    raw_identity_file = (tmp_path / "accounts" / "Account_Identities.json").read_text(encoding="utf-8")
+    assert "395935293" not in raw_identity_file
+
+
 def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

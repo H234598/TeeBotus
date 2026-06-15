@@ -15,7 +15,7 @@ from urllib.request import urlopen
 
 from TeeBotus.adapters.signal import send_signal_actions, signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.maintenance import runtime_dir
@@ -80,8 +80,16 @@ class TeeBotusSignalCommand:
         if event is None:
             return
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        self.account_store.update_identity_route(
+            event.identity_key,
+            channel=event.channel,
+            chat_id=event.chat_id,
+            chat_type=event.chat_type,
+            adapter_slot=event.adapter_slot,
+        )
         event = event.with_account(account_id)
         actions = self.engine.process(event)
+        await self._notify_linked_identities(actions)
         await self._delete_tracked_messages(context, event, actions)
         sent_refs = await send_signal_actions(context, actions)
         for action, sent_ref in zip(actions, sent_refs):
@@ -103,6 +111,21 @@ class TeeBotusSignalCommand:
                     ref_kind="signal_timestamp",
                 )
             )
+
+    async def _notify_linked_identities(self, actions: list[Any]) -> None:
+        for action in actions:
+            if not isinstance(action, NotifyLinkedIdentity):
+                continue
+            route = self.account_store.get_identity_route(action.identity_key)
+            if not route or route.get("channel") != "signal":
+                continue
+            receiver = str(route.get("chat_id") or "").strip()
+            if not receiver or self.bot is None:
+                continue
+            try:
+                await self.bot.send(receiver, action.text)
+            except Exception:
+                continue
 
     async def _delete_tracked_messages(self, context: Any, event: Any, actions: list[Any]) -> None:
         for action in actions:

@@ -405,6 +405,47 @@ class AccountStore:
                     return account_id
         return None
 
+    def update_identity_route(
+        self,
+        identity_key: str,
+        *,
+        channel: str,
+        chat_id: str,
+        chat_type: str = "",
+        adapter_slot: int | None = None,
+    ) -> None:
+        key = self._normalize_identity_key(identity_key)
+        identities = self._load_identities()
+        payload = identities.get(key)
+        if not isinstance(payload, dict):
+            return
+        route = {
+            "channel": str(channel or "").strip(),
+            "chat_id": str(chat_id or "").strip(),
+            "chat_type": str(chat_type or "").strip(),
+            "last_seen_at": utc_now(),
+        }
+        if adapter_slot is not None:
+            route["adapter_slot"] = int(adapter_slot)
+        payload["last_route"] = route
+        payload["last_seen_at"] = route["last_seen_at"]
+        identities[key] = payload
+        self._save_identities(identities)
+
+    def get_identity_route(self, identity_key: str) -> dict[str, Any] | None:
+        identities = self._load_identities()
+        payload = identities.get(self._normalize_identity_key(identity_key))
+        if not isinstance(payload, dict):
+            return None
+        route = payload.get("last_route")
+        if not isinstance(route, dict):
+            return None
+        channel = str(route.get("channel") or "").strip()
+        chat_id = str(route.get("chat_id") or "").strip()
+        if not channel or not chat_id:
+            return None
+        return dict(route)
+
     def register_account(self, account_id: str) -> tuple[str, str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)

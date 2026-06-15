@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
@@ -140,6 +140,47 @@ def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:
     refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
     assert len(refs) == 1
     assert refs[0].message_ref == "$sent"
+
+
+def test_matrix_bridge_notifies_old_matrix_identity_route(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    old_identity = "matrix:user:@old:example"
+    bridge.account_store.resolve_or_create_account(old_identity)
+    bridge.account_store.update_identity_route(old_identity, channel="matrix", chat_id="!old:example", chat_type="private", adapter_slot=1)
+    bridge.engine = type(
+        "FakeEngine",
+        (),
+        {
+            "process": lambda self, event: [
+                NotifyLinkedIdentity(
+                    identity_key=old_identity,
+                    text="Ein neuer Kommunikationsweg wurde verbunden.",
+                    account_id=event.account_id,
+                    new_identity_key=event.identity_key,
+                )
+            ]
+        },
+    )()
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert client.sent[0]["room_id"] == "!old:example"
+    assert client.sent[0]["content"] == {"msgtype": "m.text", "body": "Ein neuer Kommunikationsweg wurde verbunden."}
 
 
 def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:
