@@ -1196,7 +1196,11 @@ class AccountStore:
         if not isinstance(accessed_ids, list):
             errors.append("index.accessed_ids is not a list")
             accessed_ids = []
-        missing_accessed_ids = sorted(str(memory_id) for memory_id in set(str(value or "").strip() for value in accessed_ids) if memory_id and memory_id not in entry_id_set)
+        normalized_accessed_ids = [str(value or "").strip() for value in accessed_ids if str(value or "").strip()]
+        duplicate_accessed_ids = sorted(memory_id for memory_id in set(normalized_accessed_ids) if normalized_accessed_ids.count(memory_id) > 1)
+        if duplicate_accessed_ids:
+            errors.append(f"duplicate accessed_ids: {', '.join(duplicate_accessed_ids)}")
+        missing_accessed_ids = sorted(memory_id for memory_id in set(normalized_accessed_ids) if memory_id not in entry_id_set)
         if missing_accessed_ids:
             errors.append(f"accessed_ids missing entries: {', '.join(missing_accessed_ids)}")
 
@@ -1387,7 +1391,7 @@ class AccountStore:
 
     def mark_structured_memory_accessed(self, account_id: str, memory_ids: list[str] | tuple[str, ...]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        requested_ids = [str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()]
+        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
             return
         requested = set(requested_ids)

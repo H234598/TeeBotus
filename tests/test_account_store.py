@@ -868,6 +868,20 @@ def test_rebuild_structured_account_memory_restores_access_recency(tmp_path):
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_mark_structured_account_memory_accessed_deduplicates_requested_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    memory_id = store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Mond", "bot_text": "Tee"})
+
+    store.mark_structured_memory_accessed(account_id, [memory_id, memory_id])
+
+    index = store.read_memory_index(account_id)["index"]
+    entries = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    assert index["accessed_ids"] == [memory_id]
+    assert entries[memory_id]["access_count"] == 1
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_structured_account_memory_indexes_types_and_temporal_relations(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
@@ -981,6 +995,7 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
             "keywords": {"legacy": ["mem_live"]},
             "index": {
                 "recent_ids": ["mem_live", "mem_live", "mem_missing_recent"],
+                "accessed_ids": ["mem_live", "mem_live", "mem_missing_accessed"],
                 "keywords": {"mond": ["mem_live", "mem_missing_keyword"]},
                 "entries": {"mem_live": {}, "mem_missing_entry": {}},
             },
@@ -999,6 +1014,8 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "legacy top-level keywords is present" in error_text
     assert "duplicate recent_ids: mem_live" in error_text
     assert "recent_ids missing entries: mem_missing_recent" in error_text
+    assert "duplicate accessed_ids: mem_live" in error_text
+    assert "accessed_ids missing entries: mem_missing_accessed" in error_text
     assert "keyword ids missing entries: mem_missing_keyword" in error_text
     assert "index.entries missing entries: mem_missing_entry" in error_text
     assert "related_ids missing entries: mem_missing_related" in error_text
