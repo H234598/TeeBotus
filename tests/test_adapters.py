@@ -1011,6 +1011,43 @@ def test_telegram_send_poll_uses_optional_send_poll():
     ]
 
 
+def test_telegram_export_file_uses_optional_send_document():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_document(self, chat_id, data, filename, content_type, **kwargs):
+            self.calls.append((chat_id, data, filename, content_type, kwargs))
+            return 4
+
+    api = API()
+
+    sent = send_telegram_actions(
+        api,
+        [ExportFile("@my_channel", "report.pdf", "application/pdf", b"%PDF", caption="Export")],
+    )
+
+    assert sent == [4]
+    assert api.calls == [("@my_channel", b"%PDF", "report.pdf", "application/pdf", {"caption": "Export"})]
+
+
+def test_telegram_export_file_falls_back_to_message_without_document_api():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_message(self, chat_id, text):
+            self.calls.append((chat_id, text))
+            return 5
+
+    api = API()
+
+    sent = send_telegram_actions(api, [ExportFile("@my_channel", "report.pdf", "application/pdf", b"%PDF")])
+
+    assert sent == [5]
+    assert api.calls == [("@my_channel", "Export erzeugt: report.pdf")]
+
+
 def test_telegram_ignores_matrix_state_action():
     class API:
         pass

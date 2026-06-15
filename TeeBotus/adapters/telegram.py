@@ -101,7 +101,11 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             else:
                 sent.append(api.send_message(action.chat_id, action.caption or f"Datei: {action.filename}"))
         elif isinstance(action, ExportFile):
-            sent.append(api.send_message(action.chat_id, f"Export erzeugt: {action.filename}"))
+            send_document = getattr(api, "send_document", None)
+            if callable(send_document):
+                sent.append(send_document(action.chat_id, action.data, action.filename, action.content_type, caption=action.caption))
+            else:
+                sent.append(api.send_message(action.chat_id, f"Export erzeugt: {action.filename}"))
         elif isinstance(action, NotifyLinkedIdentity):
             # Routing a notification by identity requires the production identity router;
             # the adapter keeps it explicit instead of leaking the notice to the wrong chat.
