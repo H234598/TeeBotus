@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run
+from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run, runtime_llm_planner_factory
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
@@ -85,6 +85,14 @@ def test_proactive_cli_dispatch_requires_runtime_sender_registry(tmp_path, capsy
     captured = capsys.readouterr()
     assert result == 2
     assert "requires a runtime-provided sender registry" in captured.err
+
+
+def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:
+    result = main(["--dry-run", "--llm-plan"])
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "--llm-plan requires --plan" in captured.err
 
 
 def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> None:
@@ -288,3 +296,53 @@ def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_
     assert len(account["llm_planning"]["queued_item_ids"]) == 1
     assert account["due_items"][0]["intent"] == "llm_cycle_follow_up"
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
+
+
+def test_runtime_llm_planner_factory_uses_proactive_key_and_instance_instructions(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        "\n".join(
+            [
+                "## OpenAI",
+                "- enabled: true",
+                "- model: gpt-test-proactive",
+                "- timeout_seconds: 123",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    created_keys: list[str] = []
+
+    class Client:
+        def __init__(self, key: str) -> None:
+            created_keys.append(key)
+
+    monkeypatch.setattr("TeeBotus.proactive.OpenAIClient", Client)
+    factory = runtime_llm_planner_factory(
+        instances_dir,
+        env={
+            "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
+            "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        },
+    )
+
+    context = factory("Depressionsbot", store_for(instance_dir), "account")
+
+    assert context is not None
+    client, instructions = context
+    assert isinstance(client, Client)
+    assert created_keys == ["sk-proactive"]
+    assert instructions.openai_model == "gpt-test-proactive"
+    assert instructions.openai_timeout_seconds == 123
+
+
+def test_runtime_llm_planner_factory_returns_none_without_key(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## OpenAI\n- enabled: true\n", encoding="utf-8")
+    factory = runtime_llm_planner_factory(instances_dir, env={})
+
+    assert factory("Depressionsbot", store_for(instance_dir), "account") is None

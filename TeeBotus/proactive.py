@@ -3,12 +3,16 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE
+from TeeBotus.instructions import load_instructions
+from TeeBotus.openai_client import OpenAIClient
+from TeeBotus.runtime.config import resolve_openai_key
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
@@ -29,8 +33,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run TeeBotus Proactive Agent scheduler checks.")
     parser.add_argument("--instances-dir", default="instances", help="TeeBotus instances directory.")
     parser.add_argument("--instance", action="append", default=[], help="Instance name to check. Can be repeated.")
-    parser.add_argument("--dry-run", action="store_true", help="Select due items but do not send or mutate outbox state.")
+    parser.add_argument("--dry-run", action="store_true", help="Do not send due items. Plain dry-run only inspects; --plan can still write planner output.")
     parser.add_argument("--dispatch", action="store_true", help="Dispatch due items using explicitly configured in-process senders.")
+    parser.add_argument("--plan", action="store_true", help="Run the local reflection planner before due selection. This can write memory/outbox entries.")
+    parser.add_argument("--llm-plan", action="store_true", help="Run the LLM planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
     if args.dry_run == args.dispatch:
@@ -39,7 +45,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.dispatch:
         print("CLI dispatch requires a runtime-provided sender registry; use --dry-run here.", file=sys.stderr)
         return 2
-    report = run_proactive_agent_dry_run(instances_dir=Path(args.instances_dir), selected_instances=tuple(args.instance))
+    if args.llm_plan and not args.plan:
+        print("--llm-plan requires --plan so LLM decisions cannot run as an accidental plain status check.", file=sys.stderr)
+        return 2
+    report = run_proactive_agent_dry_run(
+        instances_dir=Path(args.instances_dir),
+        selected_instances=tuple(args.instance),
+        plan=bool(args.plan),
+        llm_plan=bool(args.llm_plan),
+        llm_planner_factory=runtime_llm_planner_factory(Path(args.instances_dir)) if args.llm_plan else None,
+    )
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
     else:
@@ -60,6 +75,9 @@ def run_proactive_agent_dry_run(
     env: Mapping[str, str] | None = None,
     store_factory: StoreFactory | None = None,
     now: datetime | None = None,
+    plan: bool = False,
+    llm_plan: bool = False,
+    llm_planner_factory: LLMPlannerFactory | None = None,
 ) -> dict[str, Any]:
     return asyncio.run(
         run_proactive_agent_cycle(
@@ -69,8 +87,24 @@ def run_proactive_agent_dry_run(
             store_factory=store_factory,
             now=now,
             dispatch=False,
+            plan=plan,
+            llm_plan=llm_plan,
+            llm_planner_factory=llm_planner_factory,
         )
     )
+
+
+def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> LLMPlannerFactory:
+    source = env or os.environ
+
+    def factory(instance_name: str, _store: AccountStore, _account_id: str) -> tuple[Any, Any] | None:
+        key = resolve_openai_key(instance_name, "proactive", 1, source)
+        if not key:
+            return None
+        instructions = load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
+        return OpenAIClient(key), instructions
+
+    return factory
 
 
 async def run_proactive_agent_cycle(
