@@ -16,6 +16,7 @@ from TeeBotus.core.youtube import (
     _parse_youtube_local_options,
     transcribe_youtube_video,
 )
+from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply
@@ -1181,13 +1182,15 @@ def _build_attachment_context(
                 lines.append("  Transkript: <view-once nicht verarbeitet>")
             continue
         if _is_audio_attachment(filename, content_type) and attachment.data:
-            transcribe_audio = getattr(openai_client, "transcribe_audio", None)
-            if not callable(transcribe_audio):
-                lines.append("  Transkript: <nicht verfuegbar>")
-                continue
             try:
-                transcript = str(transcribe_audio(attachment.data, filename, instructions)).strip()
-            except OpenAIAPIError:
+                transcript = _transcribe_runtime_audio_attachment(
+                    openai_client,
+                    attachment.data,
+                    filename,
+                    instructions,
+                    instance_name=event.instance,
+                )
+            except (OpenAIAPIError, LocalTranscriptionError):
                 lines.append("  Transkript: <Transkription fehlgeschlagen>")
                 continue
             if transcript:
@@ -1199,6 +1202,29 @@ def _build_attachment_context(
         elif _is_audio_attachment(filename, content_type):
             lines.append("  Transkript: <keine Audiodaten verfuegbar>")
     return "\n".join(lines)
+
+
+def _transcribe_runtime_audio_attachment(
+    openai_client: object,
+    audio: bytes,
+    filename: str,
+    instructions: BotInstructions,
+    *,
+    instance_name: str = "",
+) -> str:
+    backend = str(instructions.openai_transcription_backend or "openai").strip().casefold()
+    if backend == "local":
+        return transcribe_local_audio(
+            audio,
+            filename,
+            model=instructions.local_transcription_model,
+            language=instructions.openai_transcription_language,
+            instance_name=instance_name,
+        ).strip()
+    transcribe_audio = getattr(openai_client, "transcribe_audio", None)
+    if not callable(transcribe_audio):
+        raise OpenAIAPIError("OpenAI transcription API is not available")
+    return str(transcribe_audio(audio, filename, instructions)).strip()
 
 
 def _extract_voice_text(event: IncomingEvent) -> str:

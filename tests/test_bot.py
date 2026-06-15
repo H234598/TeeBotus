@@ -2571,6 +2571,39 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.chat_actions, [(123, "typing"), (123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
 
+    def test_handle_update_transcribes_voice_locally_without_openai_client(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        api.file_paths["file_1"] = "voice/file_1.oga"
+        api.file_data["voice/file_1.oga"] = b"voice-audio"
+        instructions = BotInstructions(
+            openai_enabled=False,
+            openai_transcription_backend="local",
+            commands={"/ping": "pong"},
+        )
+
+        with patch("TeeBotus.adapters.telegram_runtime.transcribe_local_audio", return_value="/ping") as transcribe:
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 60,
+                        "voice": {"file_id": "file_1"},
+                        "chat": {"id": 123, "type": "group", "title": "Debatte"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                instructions,
+                None,
+                ChatState(),
+            )
+
+        transcribe.assert_called_once()
+        self.assertEqual(api.file_path_requests, ["file_1"])
+        self.assertEqual(api.download_requests, ["voice/file_1.oga"])
+        self.assertEqual(api.sent_messages, [(123, "pong")])
+
     def test_handle_update_voice_transcription_timeout_does_not_crash(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
@@ -2654,6 +2687,22 @@ class BotTests(unittest.TestCase):
         self.assertEqual(text, "Hallo aus Fallback")
         self.assertEqual(openai_client.transcription_models, ["gpt-4o-mini-transcribe", "whisper-1"])
         self.assertIn("Retrying with fallback_model=whisper-1", "\n".join(logs.output))
+
+    def test_local_voice_transcription_does_not_fallback_to_openai(self) -> None:
+        from TeeBotus.core.local_transcription import LocalTranscriptionError
+        from TeeBotus.instructions import BotInstructions
+
+        openai_client = FakeOpenAIClient()
+        instructions = BotInstructions(openai_transcription_backend="local")
+
+        with patch(
+            "TeeBotus.adapters.telegram_runtime.transcribe_local_audio",
+            side_effect=LocalTranscriptionError("kaputt"),
+        ):
+            with self.assertRaises(LocalTranscriptionError):
+                _transcribe_voice_audio(openai_client, b"voice-audio", "file_1.ogg", instructions)
+
+        self.assertEqual(openai_client.transcribed_audios, [])
 
     def test_transcribe_voice_audio_does_not_retry_when_fallback_is_disabled(self) -> None:
         from TeeBotus.instructions import BotInstructions

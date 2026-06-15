@@ -48,8 +48,10 @@ class InstructionTests(unittest.TestCase):
             - image_error: Bild kaputt.
             - image_rate_limited: Zu viele Bilder.
             - transcription_enabled: ja
+            - transcription_backend: local
             - transcription_model: gpt-4o-mini-transcribe
             - transcription_fallback_model: whisper-1
+            - local_transcription_model: small
             - transcription_language: de
             - transcription_prompt: Wortgetreu transkribieren.
             - transcription_error: Transkription fehlgeschlagen.
@@ -134,8 +136,10 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_image_rate_limited, "Zu viele Bilder.")
         self.assertIn("[[TEE_IMAGE", instructions.openai_instructions_text())
         self.assertTrue(instructions.openai_transcription_enabled)
+        self.assertEqual(instructions.openai_transcription_backend, "local")
         self.assertEqual(instructions.openai_transcription_model, "gpt-4o-mini-transcribe")
         self.assertEqual(instructions.openai_transcription_fallback_model, "whisper-1")
+        self.assertEqual(instructions.local_transcription_model, "small")
         self.assertEqual(instructions.openai_transcription_language, "de")
         self.assertEqual(instructions.openai_transcription_prompt, "Wortgetreu transkribieren.")
         self.assertEqual(instructions.openai_transcription_error, "Transkription fehlgeschlagen.")

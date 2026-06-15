@@ -21,6 +21,7 @@ from typing import Any
 from TeeBotus import __version__
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply as build_core_status_reply
+from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
 from TeeBotus.core.youtube import (
     YOUTUBE_TRANSCRIPT_COMMANDS,
@@ -1039,7 +1040,8 @@ def _handle_incoming_voice_message(
     if not instructions.openai_transcription_enabled:
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_error)
         return
-    if openai_client is None:
+    transcription_backend = str(instructions.openai_transcription_backend or "openai").strip().casefold()
+    if transcription_backend != "local" and openai_client is None:
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_missing_key)
         return
 
@@ -1062,6 +1064,7 @@ def _handle_incoming_voice_message(
             audio,
             _downloaded_file_name(file_path),
             instructions,
+            instance_name=instance_name,
         ).strip()
     except TelegramAPIError as exc:
         LOGGER.error("Telegram voice download failed: %s", exc)
@@ -1069,6 +1072,10 @@ def _handle_incoming_voice_message(
         return
     except OpenAIAPIError as exc:
         LOGGER.error("OpenAI transcription request failed: %s", exc)
+        _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_error)
+        return
+    except LocalTranscriptionError as exc:
+        LOGGER.error("Local transcription request failed: %s", exc)
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_transcription_error)
         return
     except (TimeoutError, subprocess.TimeoutExpired) as exc:
@@ -1110,11 +1117,24 @@ def _handle_incoming_voice_message(
 
 
 def _transcribe_voice_audio(
-    openai_client: OpenAIClient,
+    openai_client: OpenAIClient | None,
     audio: bytes,
     filename: str,
     instructions: BotInstructions,
+    *,
+    instance_name: str = "",
 ) -> str:
+    backend = str(instructions.openai_transcription_backend or "openai").strip().casefold()
+    if backend == "local":
+        return transcribe_local_audio(
+            audio,
+            filename,
+            model=instructions.local_transcription_model,
+            language=instructions.openai_transcription_language,
+            instance_name=instance_name,
+        ).strip()
+    if openai_client is None:
+        raise OpenAIAPIError("OpenAI transcription API is not available")
     primary_model = instructions.openai_transcription_model.strip()
     fallback_model = instructions.openai_transcription_fallback_model.strip()
     text = openai_client.transcribe_audio(audio, filename, instructions, model=primary_model or None).strip()

@@ -747,6 +747,40 @@ def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
     assert "ich weiss nicht" not in str(state)
 
 
+def test_engine_can_transcribe_audio_attachment_with_local_backend(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+            self.transcriptions: list[tuple[bytes, str]] = []
+
+        def transcribe_audio(self, audio, filename, _instructions, model=None):
+            self.transcriptions.append((audio, filename))
+            return "Soll nicht genutzt werden."
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort auf lokales Audio.", "resp-audio", None)
+
+    local_calls: list[tuple[bytes, str, str]] = []
+
+    def fake_local_transcribe(audio, filename, *, model, language, instance_name=""):
+        local_calls.append((audio, filename, model))
+        return "Lokales Whisper Transkript."
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_local_audio", fake_local_transcribe)
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True, openai_transcription_backend="local", local_transcription_model="tiny")
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
+
+    assert actions[1].text == "Antwort auf lokales Audio."
+    assert local_calls == [(b"audio", "voice.ogg", "tiny")]
+    assert client.transcriptions == []
+    assert "Transkript: Lokales Whisper Transkript." in client.user_text
+
+
 def test_engine_does_not_transcribe_view_once_audio_attachment(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

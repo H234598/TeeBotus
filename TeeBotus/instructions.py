@@ -100,8 +100,10 @@ class BotInstructions:
     codex_error: str = "Codex konnte gerade nicht ausgefuehrt werden: {error}"
     codex_empty: str = "Codex hat keine Ausgabe erzeugt."
     openai_transcription_enabled: bool = True
+    openai_transcription_backend: str = "openai"
     openai_transcription_model: str = "gpt-4o-mini-transcribe"
     openai_transcription_fallback_model: str = "whisper-1"
+    local_transcription_model: str = "tiny"
     openai_transcription_language: str = "de"
     openai_transcription_prompt: str = "Transkribiere deutschsprachige Telegram-Sprachnachrichten wortgetreu."
     openai_transcription_error: str = "Ich konnte die Sprachnachricht gerade nicht transkribieren. Bitte versuche es gleich nochmal."
@@ -652,10 +654,14 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.openai_image_rate_limited = value
     elif normalized == "transcription_enabled":
         instructions.openai_transcription_enabled = _parse_bool(value, default=instructions.openai_transcription_enabled)
+    elif normalized == "transcription_backend":
+        instructions.openai_transcription_backend = _normalize_transcription_backend(value, default=instructions.openai_transcription_backend)
     elif normalized == "transcription_model":
         instructions.openai_transcription_model = value
     elif normalized == "transcription_fallback_model":
         instructions.openai_transcription_fallback_model = value
+    elif normalized == "local_transcription_model":
+        instructions.local_transcription_model = value.strip() or instructions.local_transcription_model
     elif normalized == "transcription_language":
         instructions.openai_transcription_language = value
     elif normalized == "transcription_prompt":
@@ -707,6 +713,15 @@ def _normalize_proactive_model_planner(value: str, *, default: str = "tool") -> 
         return "llm"
     if normalized in {"none", "off", "aus", "nein", "false", "0", "local", "lokal"}:
         return "none"
+    return default
+
+
+def _normalize_transcription_backend(value: str, *, default: str = "openai") -> str:
+    normalized = _normalize_key(value)
+    if normalized in {"openai", "api", "cloud"}:
+        return "openai"
+    if normalized in {"local", "lokal", "whisper", "faster_whisper", "fasterwhisper"}:
+        return "local"
     return default
 
 
