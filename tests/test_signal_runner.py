@@ -481,6 +481,31 @@ def test_signal_cleanup_restores_ref_when_remote_delete_fails(tmp_path, caplog) 
     assert "Signal cleanup failed" in caplog.text
 
 
+def test_signal_cleanup_logs_tracking_pop_errors(tmp_path, caplog) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    command.message_tracker.pop_for_cleanup = lambda **_kwargs: (_ for _ in ()).throw(OSError("tracker refused"))  # type: ignore[method-assign]
+    context = FakeSignalContext()
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        asyncio.run(command.handle(context))
+
+    assert context.deleted == []
+    assert "Signal cleanup could not load tracked messages" in caplog.text
+
+
 def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()

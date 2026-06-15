@@ -1046,12 +1046,21 @@ def _delete_tracked_telegram_messages(api: TelegramAPI, message_tracker: Message
     for action in actions:
         if not isinstance(action, DeleteTrackedMessages):
             continue
-        refs = message_tracker.pop_for_cleanup(
-            instance_name=event.instance,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            count=action.count,
-        )
+        try:
+            refs = message_tracker.pop_for_cleanup(
+                instance_name=event.instance,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                count=action.count,
+            )
+        except Exception:
+            LOGGER.exception(
+                "Telegram cleanup could not load tracked messages instance=%s chat_id=%s count=%s.",
+                event.instance,
+                event.chat_id,
+                action.count,
+            )
+            continue
         failed_refs: list[SentMessageRef] = []
         for ref in refs:
             try:
@@ -1064,7 +1073,15 @@ def _delete_tracked_telegram_messages(api: TelegramAPI, message_tracker: Message
                     ref.message_ref,
                 )
                 failed_refs.append(ref)
-        message_tracker.restore_for_cleanup(failed_refs)
+        try:
+            message_tracker.restore_for_cleanup(failed_refs)
+        except Exception:
+            LOGGER.exception(
+                "Telegram cleanup could not restore failed refs instance=%s chat_id=%s count=%s.",
+                event.instance,
+                event.chat_id,
+                len(failed_refs),
+            )
 
 
 def handle_update(

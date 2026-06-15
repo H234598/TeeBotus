@@ -272,12 +272,21 @@ class MatrixRuntimeBridge:
         for action in actions:
             if not isinstance(action, DeleteTrackedMessages):
                 continue
-            refs = self.message_tracker.pop_for_cleanup(
-                instance_name=event.instance,
-                channel=event.channel,
-                chat_id=event.chat_id,
-                count=action.count,
-            )
+            try:
+                refs = self.message_tracker.pop_for_cleanup(
+                    instance_name=event.instance,
+                    channel=event.channel,
+                    chat_id=event.chat_id,
+                    count=action.count,
+                )
+            except Exception:
+                LOGGER.exception(
+                    "Matrix cleanup could not load tracked messages instance=%s room_id=%s count=%s.",
+                    event.instance,
+                    event.chat_id,
+                    action.count,
+                )
+                continue
             failed_refs: list[SentMessageRef] = []
             for ref in refs:
                 try:
@@ -291,7 +300,15 @@ class MatrixRuntimeBridge:
                     )
                     failed_refs.append(ref)
                     continue
-            self.message_tracker.restore_for_cleanup(failed_refs)
+            try:
+                self.message_tracker.restore_for_cleanup(failed_refs)
+            except Exception:
+                LOGGER.exception(
+                    "Matrix cleanup could not restore failed refs instance=%s room_id=%s count=%s.",
+                    event.instance,
+                    event.chat_id,
+                    len(failed_refs),
+                )
 
 
 async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:

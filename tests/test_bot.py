@@ -3494,6 +3494,34 @@ class BotTests(unittest.TestCase):
             self.assertEqual(tracker.list_for_chat("123", instance_name="Demo", channel="telegram"), [ref])
             self.assertIn("Telegram cleanup failed", "\n".join(logs.output))
 
+    def test_modern_telegram_cleanup_logs_tracking_pop_errors(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _delete_tracked_telegram_messages
+        from TeeBotus.runtime.actions import DeleteTrackedMessages
+        from TeeBotus.runtime.events import IncomingEvent
+
+        api = FakeAPI()
+        tracker = MessageTracker()
+        tracker.pop_for_cleanup = lambda **_kwargs: (_ for _ in ()).throw(OSError("tracker refused"))  # type: ignore[method-assign]
+        event = IncomingEvent(
+            event_id="telegram:1",
+            instance="Demo",
+            channel="telegram",
+            adapter_slot=1,
+            account_id="account-1",
+            identity_key="telegram:user:456",
+            chat_id="123",
+            chat_type="private",
+            sender_id="456",
+            text="/cleanup 1",
+            message_ref="1",
+        )
+
+        with self.assertLogs("TeeBotus", level="ERROR") as logs:
+            _delete_tracked_telegram_messages(api, tracker, event, [DeleteTrackedMessages("123", 1)])
+
+        self.assertEqual(api.deleted_messages, [])
+        self.assertIn("Telegram cleanup could not load tracked messages", "\n".join(logs.output))
+
     def test_modern_telegram_linked_identity_logs_send_failures(self) -> None:
         from TeeBotus.adapters.telegram_runtime import _notify_telegram_linked_identities
         from TeeBotus.runtime.actions import NotifyLinkedIdentity

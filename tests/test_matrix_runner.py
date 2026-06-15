@@ -775,6 +775,33 @@ def test_matrix_cleanup_restores_ref_when_remote_delete_fails(tmp_path, caplog) 
     assert "Matrix cleanup failed" in caplog.text
 
 
+def test_matrix_cleanup_logs_tracking_pop_errors(tmp_path, caplog) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    bridge.message_tracker.pop_for_cleanup = lambda **_kwargs: (_ for _ in ()).throw(OSError("tracker refused"))  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.matrix"):
+        asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert client.redacted == []
+    assert "Matrix cleanup could not load tracked messages" in caplog.text
+
+
 def test_delete_matrix_message_rejects_niobot_error_response() -> None:
     class ErrorResponse:
         message = "redact refused"
