@@ -100,7 +100,7 @@ teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --print
 teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --enable
 ```
 
-Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dry-run --plan` auf. Das fuehrt lokale Reflection-Planung und Due-Selection aus, sendet aber nicht selbst. LLM-Planung ist nur mit `--llm-plan` im systemd-Renderer, gesetztem `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks. Live-Dispatch bleibt im laufenden Bot-/Adapterprozess, weil dort die Telegram-, Signal- und Matrix-Clients vorhanden sind.
+Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dry-run --plan` auf. Das fuehrt lokale Reflection-Planung und Due-Selection aus, sendet aber nicht selbst. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer verfuegbar. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks. Live-Dispatch bleibt im laufenden Bot-/Adapterprozess, weil dort die Telegram-, Signal- und Matrix-Clients vorhanden sind.
 
 Signal braucht das Python-Paket `signalbot`, die native `signal-cli-rest-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
 

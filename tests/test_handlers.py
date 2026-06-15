@@ -68,6 +68,9 @@ class HandlerTests(unittest.TestCase):
     def test_program_history_detection_avoids_generic_commit_request(self) -> None:
         self.assertTrue(is_program_history_request("Zeig mir bitte die Commit Historie"))
         self.assertTrue(is_program_history_request("Welche Programmänderungen gab es?"))
+        self.assertTrue(is_program_history_request("Zeig mir die Programhistorie"))
+        self.assertTrue(is_program_history_request("Was ist mit neuen Features?"))
+        self.assertTrue(is_program_history_request("Welche Github Comitts gab es?"))
         self.assertFalse(is_program_history_request("commit bitte"))
 
     def test_uses_exact_text_reply_before_echo(self) -> None:

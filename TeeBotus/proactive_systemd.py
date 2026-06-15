@@ -22,9 +22,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
     parser.add_argument("--interval", default="15min", help="systemd OnUnitActiveSec interval.")
     parser.add_argument("--llm-plan", action="store_true", help="Include --llm-plan. Still requires the runtime LLM instance gate and OpenAI key.")
+    parser.add_argument("--tool-plan", action="store_true", help="Include --tool-plan. Still requires the runtime LLM instance gate and OpenAI key.")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit files instead of writing them.")
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the timer after writing.")
     args = parser.parse_args(argv)
+    if args.llm_plan and args.tool_plan:
+        parser.error("--llm-plan and --tool-plan are mutually exclusive")
 
     unit = render_proactive_systemd_unit(
         repo_root=Path(args.repo_root),
@@ -32,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         instance_name=args.instance,
         interval=args.interval,
         llm_plan=bool(args.llm_plan),
+        tool_plan=bool(args.tool_plan),
     )
     if args.print_only:
         print(f"# {unit.service_name}")
@@ -59,7 +63,10 @@ def render_proactive_systemd_unit(
     instance_name: str,
     interval: str,
     llm_plan: bool = False,
+    tool_plan: bool = False,
 ) -> ProactiveSystemdUnit:
+    if llm_plan and tool_plan:
+        raise ValueError("llm_plan and tool_plan are mutually exclusive")
     safe_instance = _systemd_instance_token(instance_name)
     service_name = f"teebotus-proactive-{safe_instance}.service"
     timer_name = f"teebotus-proactive-{safe_instance}.timer"
@@ -76,6 +83,8 @@ def render_proactive_systemd_unit(
     ]
     if llm_plan:
         command.append("--llm-plan")
+    if tool_plan:
+        command.append("--tool-plan")
     service_text = "\n".join(
         [
             "[Unit]",
