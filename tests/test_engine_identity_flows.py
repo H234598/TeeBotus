@@ -1387,6 +1387,113 @@ def test_engine_appends_account_memory_after_openai_reply(tmp_path):
     assert "mond" in index["index"]["keywords"]
 
 
+def test_engine_uses_structured_memory_candidate_for_safe_semantic_memory(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Ich merke mir, dass kurze Antworten gut sind.", "resp-memory", None)
+
+    calls = []
+
+    def structured_runner(prompt, schema):
+        calls.append((prompt, schema))
+        if schema.__name__ == "ReminderDecision":
+            return {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
+        return {
+            "should_store": True,
+            "memory_type": "preference",
+            "text": "User bevorzugt kurze Antworten.",
+            "sensitivity": "low",
+            "confidence": 0.91,
+        }
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-memory")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        structured_decision_runner=structured_runner,
+    )
+
+    engine.process(event(identity, "Ich mag kurze Antworten.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    entries = account_store.read_memory_entries(account_id)
+    assert [call[1].__name__ for call in calls] == ["ReminderDecision", "MemoryCandidate"]
+    assert entries[-1]["kind"] == "preference"
+    assert entries[-1]["memory_type"] == "semantic"
+    assert entries[-1]["user_text"] == "User bevorzugt kurze Antworten."
+    assert entries[-1]["structured_decision"] == {
+        "schema": "MemoryCandidate",
+        "memory_type": "preference",
+        "sensitivity": "low",
+        "confidence": 0.91,
+    }
+
+
+def test_engine_structured_memory_candidate_can_skip_memory_write(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Smalltalk.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-memory-skip")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        structured_decision_runner=lambda _prompt, schema: (
+            {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
+            if schema.__name__ == "ReminderDecision"
+            else {
+                "should_store": False,
+                "memory_type": "none",
+                "text": "",
+                "sensitivity": "low",
+                "confidence": 0.95,
+            }
+        ),
+    )
+
+    engine.process(event(identity, "Wie geht es dir?", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id) == []
+
+
+def test_engine_structured_memory_candidate_blocks_high_sensitivity_auto_write(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Ich gehe vorsichtig damit um.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-memory-high")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        structured_decision_runner=lambda _prompt, schema: (
+            {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
+            if schema.__name__ == "ReminderDecision"
+            else {
+                "should_store": True,
+                "memory_type": "profile",
+                "text": "Sehr sensible Gesundheitsinformation.",
+                "sensitivity": "high",
+                "confidence": 0.99,
+            }
+        ),
+    )
+
+    engine.process(event(identity, "Ich erzaehle dir etwas sehr Privates.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id) == []
+
+
 def test_engine_does_not_write_account_memory_when_disabled(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):

@@ -541,6 +541,8 @@ Strukturierte Accountdaten werden verschluesselt gespeichert. Interne operatorge
 
 Die strukturierten AccountStore-Schluessel liegen instanzgebunden im Desktop Secret Service via `secret-tool`. Das alte senderbezogene `User_Memory_Key.bin`-Backend wird nicht mehr genutzt.
 
+Wenn ein optionaler strukturierter Runner aktiv ist, kann der normale Antwortpfad vor dem Speichern eine `MemoryCandidate`-Entscheidung einholen. Automatisch gespeichert werden nur ausreichend sichere Kandidaten mit `confidence >= 0.7` und `sensitivity` unter `high`; `should_store=false`, `memory_type=none` oder `sensitivity=high` verhindern das automatische Schreiben.
+
 Der Speicher ist accountbezogen und nicht mehr an `data/users/<telegram_sender_id>` gebunden. `instances/*/data/` ist per `.gitignore` ausgeschlossen.
 
 Mehr zur Datenhaltung, zum Schluesselmodell und zu den Grenzen der Verschluesselung steht in [docs/privacy-and-encryption.md](docs/privacy-and-encryption.md). Deutsche und englische Fassungen liegen zusaetzlich unter [docs/privacy-and-encryption.de.md](docs/privacy-and-encryption.de.md) und [docs/privacy-and-encryption.en.md](docs/privacy-and-encryption.en.md).

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import json
 from pathlib import Path
 import re
 from subprocess import TimeoutExpired
 from typing import Any, Callable, Iterable
+
+from pydantic import ValidationError
 
 from TeeBotus.core.youtube import (
     YOUTUBE_TRANSCRIPT_COMMANDS,
@@ -574,7 +577,15 @@ class TeeBotusEngine:
             visible_text = "\n".join(part for part in (visible_text, instructions.openai_image_rate_limited) if part).strip()
         if memory_notes:
             memory_response_text = "\n".join(part for part in (visible_text, *memory_notes) if part).strip()
-        _append_account_memory_interaction(self.account_store, account_id, event, text, memory_response_text or response_text, instructions)
+        _append_account_memory_interaction(
+            self.account_store,
+            account_id,
+            event,
+            text,
+            memory_response_text or response_text,
+            instructions,
+            structured_decision_runner=self.structured_decision_runner,
+        )
         actions: list[OutgoingAction] = [SendTyping(event.chat_id)]
         if visible_text:
             actions.append(SendText(event.chat_id, visible_text))
@@ -985,7 +996,15 @@ class TeeBotusEngine:
         user_text: str,
         bot_text: str,
     ) -> None:
-        _append_account_memory_interaction(self.account_store, account_id, event.with_account(account_id), user_text, bot_text, instructions)
+        _append_account_memory_interaction(
+            self.account_store,
+            account_id,
+            event.with_account(account_id),
+            user_text,
+            bot_text,
+            instructions,
+            structured_decision_runner=self.structured_decision_runner,
+        )
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
         if self.llm_client is None:
@@ -1526,6 +1545,8 @@ def _append_account_memory_interaction(
     user_text: str,
     bot_text: str,
     instructions: BotInstructions,
+    *,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     if not instructions.user_memory_enabled:
         return
@@ -1533,14 +1554,28 @@ def _append_account_memory_interaction(
     bot_text = _clip_text(bot_text, instructions.user_memory_max_entry_chars)
     if not user_text and not bot_text:
         return
+    candidate = _memory_candidate_decision(user_text, bot_text, structured_decision_runner=structured_decision_runner)
+    if candidate is not None:
+        if not candidate.should_store or candidate.memory_type == "none" or candidate.confidence < 0.7 or candidate.sensitivity == "high":
+            return
     timestamp = utc_now()
     entry_id = f"mem_{event.channel}_{event.message_ref or timestamp}".replace(" ", "_")
-    keywords = _memory_keywords(f"{user_text}\n{bot_text}")
+    memory_user_text = user_text
+    memory_kind = "observation"
+    memory_type = "episodic"
+    sensitivity = ""
+    if candidate is not None:
+        memory_user_text = _clip_text(candidate.text or user_text, instructions.user_memory_max_entry_chars)
+        memory_kind = _memory_candidate_kind(candidate.memory_type)
+        memory_type = "semantic"
+        sensitivity = candidate.sensitivity
+    keywords = _memory_keywords(f"{memory_user_text}\n{bot_text}")
     entry = {
         "id": entry_id,
         "created_at": timestamp,
         "updated_at": timestamp,
-        "kind": "observation",
+        "kind": memory_kind,
+        "memory_type": memory_type,
         "importance": 3,
         "channel": event.channel,
         "chat_type": event.chat_type,
@@ -1553,9 +1588,16 @@ def _append_account_memory_interaction(
             "message_ref": event.message_ref,
         },
         "keywords": keywords,
-        "user_text": user_text,
+        "user_text": memory_user_text,
         "bot_text": bot_text,
     }
+    if candidate is not None:
+        entry["structured_decision"] = {
+            "schema": "MemoryCandidate",
+            "memory_type": candidate.memory_type,
+            "sensitivity": sensitivity,
+            "confidence": candidate.confidence,
+        }
     try:
         account_store.append_structured_memory_entry(
             account_id,
@@ -1570,6 +1612,46 @@ def _append_account_memory_interaction(
         )
     except (AccountStoreError, OSError):
         return
+
+
+def _memory_candidate_decision(
+    user_text: str,
+    bot_text: str,
+    *,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None,
+) -> Any | None:
+    if structured_decision_runner is None:
+        return None
+    try:
+        from TeeBotus.ai_structures import MemoryCandidate, parse_memory_candidate
+
+        payload = structured_decision_runner(_memory_candidate_prompt(user_text, bot_text), MemoryCandidate)
+        return parse_memory_candidate(payload)
+    except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        return None
+
+
+def _memory_candidate_prompt(user_text: str, bot_text: str) -> str:
+    return (
+        "Entscheide, ob diese Interaktion als persistentes Account-Memory gespeichert werden soll. "
+        "Antworte ausschliesslich als JSON fuer MemoryCandidate. "
+        "Speichere nur stabile Nutzerpraeferenzen, Profilfakten, Gewohnheiten, Projekte oder Beziehungskontext. "
+        "Setze should_store=false oder memory_type=none fuer Smalltalk, einmalige Details oder unsichere/irrelevante Inhalte. "
+        "Setze sensitivity=high fuer besonders sensible Gesundheits-, Krisen-, intime oder rechtliche Inhalte; diese werden nicht automatisch gespeichert.\n\n"
+        f"Nutzer:\n{user_text.strip()}\n\nBot:\n{bot_text.strip()}"
+    )
+
+
+def _memory_candidate_kind(memory_type: str) -> str:
+    normalized = str(memory_type or "").strip().casefold()
+    mapping = {
+        "preference": "preference",
+        "profile": "biographical_fact",
+        "habit": "self_statement",
+        "project": "fact",
+        "relationship": "relationship_pattern",
+    }
+    return mapping.get(normalized, "observation")
 
 
 def _build_attachment_context(
