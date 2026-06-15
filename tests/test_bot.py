@@ -1038,6 +1038,7 @@ class BotTests(unittest.TestCase):
                 },
             )
             memory_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
+            memory_store.append_proactive_outbox_item(account_id, {"status": "review_pending", "category": "reminder", "message_text": "Review"})
             user_dir = memory_store.account_dir(account_id)
             user_dir.mkdir(parents=True, exist_ok=True)
             encrypted_payload = b'{"magic":"TMBMAP1","ciphertext":"abc"}\n'
@@ -1074,6 +1075,7 @@ class BotTests(unittest.TestCase):
             self.assertIn("Proactive Agent", reply)
             self.assertIn("- Agent enabled: ja", reply)
             self.assertIn("- Outbox queued: 1", reply)
+            self.assertIn("- Review pending: 1", reply)
             self.assertIn("- Scheduler enabled: ja", reply)
 
     def test_account_commands_are_handled_before_configured_command_fallback(self) -> None:

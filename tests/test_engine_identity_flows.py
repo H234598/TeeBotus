@@ -227,6 +227,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
         },
     )
     account_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
+    account_store.append_proactive_outbox_item(account_id, {"status": "review_pending", "category": "reminder", "message_text": "Review"})
     engine = TeeBotusEngine(account_store=account_store, instructions=instructions, project_root=tmp_path)
 
     actions = engine.process(event(telegram_identity_key(1), "/status"))
@@ -238,6 +239,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "Proactive Agent" in actions[0].text
     assert "- Agent enabled: ja" in actions[0].text
     assert "- Outbox queued: 1" in actions[0].text
+    assert "- Review pending: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "Configured status." not in actions[0].text
 
@@ -293,6 +295,7 @@ def test_engine_proactive_policy_commands_update_account_state(tmp_path, monkeyp
     assert "180 Minuten" in interval_reply
     assert "pausiert" in pause_reply
     assert "- pausiert: ja" in status_reply
+    assert "- review_pending_items: 0" in status_reply
 
 
 def test_engine_proactive_command_is_private_only(tmp_path):

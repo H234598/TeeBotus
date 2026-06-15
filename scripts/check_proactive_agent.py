@@ -32,6 +32,8 @@ def main(argv: list[str] | None = None) -> int:
                     "account_id": health.account_id,
                     "ok": health.ok,
                     "errors": list(health.errors),
+                    "queued_count": health.queued_count,
+                    "review_pending_count": health.review_pending_count,
                 }
             )
     if args.json:
@@ -39,7 +41,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         for item in results:
             state = "ok" if item["ok"] else "ERROR"
-            print(f"{state} instance={item['instance']} account={item['account_id']}")
+            print(
+                f"{state} instance={item['instance']} account={item['account_id']} "
+                f"queued={item['queued_count']} review_pending={item['review_pending_count']}"
+            )
             for error in item["errors"]:
                 print(f"  - {error}")
     return 0 if all(item["ok"] for item in results) else 1

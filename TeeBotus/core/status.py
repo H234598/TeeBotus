@@ -105,6 +105,7 @@ def _proactive_agent_status_lines(
             "Proactive Agent",
             "- Agent enabled: unbekannt",
             "- Outbox queued: unbekannt",
+            "- Review pending: unbekannt",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
         ]
     try:
@@ -116,6 +117,7 @@ def _proactive_agent_status_lines(
             "Proactive Agent",
             "- Agent enabled: Fehler beim Lesen",
             "- Outbox queued: Fehler beim Lesen",
+            "- Review pending: Fehler beim Lesen",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
         ]
     proactive = state.get("proactive") if isinstance(state, dict) else {}
@@ -124,11 +126,13 @@ def _proactive_agent_status_lines(
     enabled = bool(proactive.get("enabled"))
     paused = bool(proactive.get("paused"))
     queued = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "queued").strip().casefold() == "queued")
+    review_pending = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "").strip().casefold() == "review_pending")
     return [
         "Proactive Agent",
         f"- Agent enabled: {'ja' if enabled else 'nein'}",
         f"- Agent paused: {'ja' if paused else 'nein'}",
         f"- Outbox queued: {queued}",
+        f"- Review pending: {review_pending}",
         f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
     ]
 

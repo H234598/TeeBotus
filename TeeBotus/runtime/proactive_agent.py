@@ -16,7 +16,9 @@ from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
 PROACTIVE_DEFAULT_CATEGORIES = ("reminder", "task", "tip")
+PROACTIVE_REVIEW_STATUSES = frozenset({"review_pending"})
 PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled", "expired"})
+PROACTIVE_OUTBOX_STATUSES = frozenset({"queued", *PROACTIVE_REVIEW_STATUSES, *PROACTIVE_TERMINAL_STATUSES})
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
@@ -72,6 +74,8 @@ class ProactiveAgentHealth:
     account_id: str
     ok: bool
     errors: tuple[str, ...] = ()
+    queued_count: int = 0
+    review_pending_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -251,6 +255,7 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     outbox = account_store.read_proactive_outbox(account_id)
     queued = sum(1 for item in outbox if isinstance(item, dict) and item.get("status", "queued") == "queued")
+    review_pending = sum(1 for item in outbox if isinstance(item, dict) and item.get("status") == "review_pending")
     enabled = "ja" if state["proactive"]["enabled"] else "nein"
     paused = "ja" if state["proactive"]["paused"] else "nein"
     categories = ", ".join(state["consent"]["categories"]) or "keine"
@@ -263,6 +268,7 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
             f"- erlaubtes Zeitfenster: {state['policy']['allowed_hours'][0]}-{state['policy']['allowed_hours'][1]} Uhr",
             f"- Mindestabstand: {state['policy']['min_minutes_between_messages']} Minuten",
             f"- queued_outbox_items: {queued}",
+            f"- review_pending_items: {review_pending}",
         ]
     )
 
@@ -282,12 +288,17 @@ def queue_proactive_message(
 ) -> ProactiveDecision:
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
-    decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=now, item={"risk_gate": normalized_risk_gate})
+    policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
+    decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=now, item=policy_item)
     if not decision.allowed:
         return decision
+    status = "review_pending" if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else "queued"
+    policy_result = "needs_review" if status == "review_pending" else "allowed"
+    policy_reason = f"risk_gate_needs_review:{normalized_risk_gate}" if status == "review_pending" else decision.reason
     item_id = account_store.append_proactive_outbox_item(
         account_id,
         {
+            "status": status,
             "category": normalized_category,
             "intent": str(intent or "").strip(),
             "message_text": str(message_text or "").strip(),
@@ -295,13 +306,92 @@ def queue_proactive_message(
             "due_at": str(due_at or "").strip(),
             "risk_gate": normalized_risk_gate,
             "planner": {str(key): value for key, value in (planner or {}).items()},
-            "policy_result": "allowed",
-            "policy_reason": decision.reason,
+            "policy_result": policy_result,
+            "policy_reason": policy_reason,
             "route": decision.route or {},
-            "status_history": [{"at": utc_now(), "status": "queued", "reason": "created"}],
+            "status_history": [{"at": utc_now(), "status": status, "reason": "created" if status == "queued" else policy_reason}],
         },
     )
+    return ProactiveDecision(True, f"{status}:{item_id}", decision.route)
+
+
+def approve_proactive_review_item(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    reviewer: str = "operator",
+    reason: str = "",
+    now: datetime | None = None,
+) -> ProactiveDecision:
+    rows = account_store.read_proactive_outbox(account_id)
+    target: dict[str, Any] | None = None
+    for item in rows:
+        if isinstance(item, dict) and str(item.get("id") or "").strip() == str(item_id or "").strip():
+            target = item
+            break
+    if target is None:
+        return ProactiveDecision(False, "item_not_found")
+    if str(target.get("status") or "queued").strip().casefold() != "review_pending":
+        return ProactiveDecision(False, "item_not_review_pending")
+    category = str(target.get("category") or "").strip().casefold()
+    decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
+    if not decision.allowed:
+        return decision
+    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    target["status"] = "queued"
+    target["risk_gate"] = "none"
+    target["updated_at"] = timestamp
+    target["policy_result"] = "allowed"
+    target["policy_reason"] = "human_review_approved"
+    target["route"] = decision.route or target.get("route") or {}
+    target["human_review"] = {
+        "status": "approved",
+        "reviewer": str(reviewer or "operator").strip()[:80],
+        "reason": str(reason or "").strip()[:240],
+        "reviewed_at": timestamp,
+    }
+    history = target.setdefault("status_history", [])
+    if not isinstance(history, list):
+        history = []
+        target["status_history"] = history
+    history.append({"at": timestamp, "status": "queued", "reason": "human_review_approved"})
+    account_store.write_proactive_outbox(account_id, rows)
     return ProactiveDecision(True, f"queued:{item_id}", decision.route)
+
+
+def reject_proactive_review_item(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    reviewer: str = "operator",
+    reason: str = "",
+    now: datetime | None = None,
+) -> ProactiveDecision:
+    rows = account_store.read_proactive_outbox(account_id)
+    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    for item in rows:
+        if not isinstance(item, dict) or str(item.get("id") or "").strip() != str(item_id or "").strip():
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "review_pending":
+            return ProactiveDecision(False, "item_not_review_pending")
+        item["status"] = "cancelled"
+        item["updated_at"] = timestamp
+        item["human_review"] = {
+            "status": "rejected",
+            "reviewer": str(reviewer or "operator").strip()[:80],
+            "reason": str(reason or "").strip()[:240],
+            "reviewed_at": timestamp,
+        }
+        history = item.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            item["status_history"] = history
+        history.append({"at": timestamp, "status": "cancelled", "reason": "human_review_rejected"})
+        account_store.write_proactive_outbox(account_id, rows)
+        return ProactiveDecision(True, f"cancelled:{item_id}")
+    return ProactiveDecision(False, "item_not_found")
 
 
 def run_proactive_reflection_planner(
@@ -626,7 +716,7 @@ def update_proactive_outbox_item_status(
     dispatch: Mapping[str, Any] | None = None,
 ) -> bool:
     normalized_status = str(status or "").strip().casefold()
-    if normalized_status not in {"queued", *PROACTIVE_TERMINAL_STATUSES}:
+    if normalized_status not in PROACTIVE_OUTBOX_STATUSES:
         raise ValueError(f"unsupported proactive outbox status: {status}")
     rows = account_store.read_proactive_outbox(account_id)
     changed = False
@@ -716,6 +806,8 @@ async def dispatch_due_proactive_outbox_items(
 
 def check_proactive_agent_account(account_store: AccountStore, account_id: str) -> ProactiveAgentHealth:
     errors: list[str] = []
+    queued_count = 0
+    review_pending_count = 0
     state = account_store.read_agent_state(account_id)
     if state:
         if state.get("schema_version") != 1:
@@ -739,7 +831,11 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             errors.append(f"duplicate outbox item id: {item_id}")
         seen_ids.add(item_id)
         status = str(item.get("status") or "queued").strip().casefold()
-        if status not in {"queued", *PROACTIVE_TERMINAL_STATUSES}:
+        if status == "queued":
+            queued_count += 1
+        elif status == "review_pending":
+            review_pending_count += 1
+        if status not in PROACTIVE_OUTBOX_STATUSES:
             errors.append(f"outbox item {item_id or index} has unsupported status: {status}")
         category = str(item.get("category") or "").strip().casefold()
         if category not in PROACTIVE_ALLOWED_CATEGORIES:
@@ -749,6 +845,8 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
         risk_gate = _normalize_risk_gate(item.get("risk_gate"))
         if status == "queued" and risk_gate in PROACTIVE_RISK_BLOCK_GATES | PROACTIVE_RISK_REVIEW_GATES:
             errors.append(f"queued outbox item {item_id or index} risk_gate blocks proactive dispatch: {risk_gate}")
+        if status == "review_pending" and risk_gate not in PROACTIVE_RISK_REVIEW_GATES:
+            errors.append(f"review_pending outbox item {item_id or index} needs review risk_gate")
         for key in ("intent", "message_text"):
             if not str(item.get(key) or "").strip():
                 errors.append(f"outbox item {item_id or index} missing {key}")
@@ -756,19 +854,19 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
         if due_at and _parse_proactive_datetime(due_at) is None:
             errors.append(f"outbox item {item_id or index} has invalid due_at")
         route = item.get("route")
-        if status == "queued":
+        if status in {"queued", "review_pending"}:
             if not isinstance(route, dict):
-                errors.append(f"queued outbox item {item_id or index} missing route")
+                errors.append(f"{status} outbox item {item_id or index} missing route")
             else:
                 if route.get("chat_type") != "private":
-                    errors.append(f"queued outbox item {item_id or index} route is not private")
+                    errors.append(f"{status} outbox item {item_id or index} route is not private")
                 if not str(route.get("channel") or "").strip():
-                    errors.append(f"queued outbox item {item_id or index} missing route channel")
+                    errors.append(f"{status} outbox item {item_id or index} missing route channel")
                 if not str(route.get("chat_id") or "").strip():
-                    errors.append(f"queued outbox item {item_id or index} missing route chat_id")
+                    errors.append(f"{status} outbox item {item_id or index} missing route chat_id")
                 if not _account_has_matching_proactive_route(account_store, account_id, route):
-                    errors.append(f"queued outbox item {item_id or index} route is stale or not linked to account identity")
-    return ProactiveAgentHealth(account_id, not errors, tuple(errors))
+                    errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
+    return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count)
 
 
 def proactive_risk_policy_decision(
@@ -943,7 +1041,11 @@ def _apply_proactive_llm_queue_decision(
     )
     if not result.allowed:
         return f"error:policy:{result.reason}"
-    return result.reason.removeprefix("queued:")
+    if result.reason.startswith("queued:"):
+        return result.reason.removeprefix("queued:")
+    if result.reason.startswith("review_pending:"):
+        return result.reason.removeprefix("review_pending:")
+    return result.reason
 
 
 def _apply_proactive_llm_cancel_decision(

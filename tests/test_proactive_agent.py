@@ -12,6 +12,7 @@ from TeeBotus.runtime.proactive_agent import (
     active_proactive_risk_memory_ids,
     apply_proactive_llm_plan,
     apply_proactive_llm_plan_text,
+    approve_proactive_review_item,
     build_proactive_llm_planner_prompt,
     check_proactive_agent_account,
     disable_proactive_agent,
@@ -23,6 +24,7 @@ from TeeBotus.runtime.proactive_agent import (
     proactive_agent_instance_enabled,
     proactive_policy_decision,
     queue_proactive_message,
+    reject_proactive_review_item,
     resume_proactive_agent,
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
@@ -366,6 +368,8 @@ def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
     health = check_proactive_agent_account(account_store, account_id)
 
     assert health.ok is False
+    assert health.queued_count == 1
+    assert health.review_pending_count == 0
     joined = "\n".join(health.errors)
     assert "category is not consented: analysis" in joined
     assert "missing intent" in joined
@@ -395,6 +399,8 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
 
     assert decision.allowed is True
     assert health.ok is True
+    assert health.queued_count == 1
+    assert health.review_pending_count == 0
     assert health.errors == ()
 
 
@@ -420,6 +426,8 @@ def test_proactive_agent_health_accepts_string_adapter_slot_in_queued_route(tmp_
     health = check_proactive_agent_account(account_store, account_id)
 
     assert health.ok is True
+    assert health.queued_count == 1
+    assert health.review_pending_count == 0
     assert health.errors == ()
 
 
@@ -444,10 +452,12 @@ def test_proactive_agent_health_reports_stale_queued_route(tmp_path) -> None:
 
     assert decision.allowed is True
     assert health.ok is False
+    assert health.queued_count == 1
+    assert health.review_pending_count == 0
     assert "route is stale or not linked to account identity" in "\n".join(health.errors)
 
 
-def test_proactive_risk_gate_blocks_queueing_without_human_review(tmp_path) -> None:
+def test_proactive_risk_gate_queues_for_human_review_without_dispatch(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
     account_id = account_store.resolve_or_create_account(identity)
@@ -464,9 +474,77 @@ def test_proactive_risk_gate_blocks_queueing_without_human_review(tmp_path) -> N
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )
 
-    assert decision.allowed is False
-    assert decision.reason == "risk_gate_needs_review:needs_review"
-    assert account_store.read_proactive_outbox(account_id) == []
+    assert decision.allowed is True
+    assert decision.reason.startswith("review_pending:pro_")
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["status"] == "review_pending"
+    assert rows[0]["risk_gate"] == "needs_review"
+    assert rows[0]["policy_result"] == "needs_review"
+    assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 13, tzinfo=timezone.utc)) == ()
+    health = check_proactive_agent_account(account_store, account_id)
+    assert health.ok is True
+    assert health.queued_count == 0
+    assert health.review_pending_count == 1
+
+
+def test_human_review_approval_makes_review_item_dispatchable(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="risk_follow_up",
+        message_text="Magst du kurz berichten?",
+        risk_gate="needs_review",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = decision.reason.removeprefix("review_pending:")
+
+    approved = approve_proactive_review_item(
+        account_store,
+        account_id,
+        item_id,
+        reviewer="tester",
+        reason="fachlich unkritischer Check-in",
+        now=datetime(2026, 6, 15, 10, 30, tzinfo=timezone.utc),
+    )
+
+    assert approved.allowed is True
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["status"] == "queued"
+    assert rows[0]["risk_gate"] == "none"
+    assert rows[0]["human_review"]["status"] == "approved"
+    assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))[0]["id"] == item_id
+
+
+def test_human_review_rejection_cancels_review_item(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="risk_follow_up",
+        message_text="Magst du kurz berichten?",
+        risk_gate="needs_review",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = decision.reason.removeprefix("review_pending:")
+
+    rejected = reject_proactive_review_item(account_store, account_id, item_id, reviewer="tester", reason="zu riskant")
+
+    assert rejected.allowed is True
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["status"] == "cancelled"
+    assert rows[0]["human_review"]["status"] == "rejected"
 
 
 def test_active_risk_memory_blocks_proactive_analysis_but_not_plain_reminder(tmp_path) -> None:
@@ -849,7 +927,7 @@ def test_llm_plan_validator_rejects_malformed_json_without_mutation(tmp_path) ->
     assert audit[0]["reason"].startswith("invalid_json:")
 
 
-def test_llm_plan_validator_rejects_unsafe_message_and_risk_gate(tmp_path) -> None:
+def test_llm_plan_validator_rejects_unsafe_message_and_queues_review_gate(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
     account_id = account_store.resolve_or_create_account(identity)
@@ -888,17 +966,16 @@ def test_llm_plan_validator_rejects_unsafe_message_and_risk_gate(tmp_path) -> No
     )
 
     assert "decision_0_unsafe_message_text" in result.errors
-    assert "decision_1_policy:risk_gate_needs_review:needs_review" in result.errors
-    assert len(result.audit_event_ids) == 2
-    assert result.queued_item_ids == ()
-    assert account_store.read_proactive_outbox(account_id) == []
+    assert len(result.audit_event_ids) == 1
+    assert len(result.queued_item_ids) == 1
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["id"] == result.queued_item_ids[0]
+    assert rows[0]["status"] == "review_pending"
+    assert rows[0]["risk_gate"] == "needs_review"
     audit = account_store.read_proactive_audit(account_id)
-    assert [event["reason"] for event in audit] == [
-        "decision_0_unsafe_message_text",
-        "decision_1_policy:risk_gate_needs_review:needs_review",
-    ]
+    assert [event["reason"] for event in audit] == ["decision_0_unsafe_message_text"]
     assert audit[0]["decision"]["intent"] == "unsafe"
-    assert audit[1]["event_type"] == "llm_decision_rejected"
+    assert audit[0]["event_type"] == "llm_decision_rejected"
 
 
 def test_llm_plan_validator_audits_unsupported_actions_without_applying_them(tmp_path) -> None:
