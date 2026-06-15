@@ -93,7 +93,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
     try:
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
-        from TeeBotus.runtime.signal_runner import check_signal_services
+        from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
         return 2
@@ -111,6 +111,18 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"
         print(f"signal_service={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
+    for health in check_signal_accounts(config):
+        if health.registered:
+            state = "registered"
+        elif health.error == "account missing in signal-cli-api /v1/accounts":
+            state = "missing"
+        else:
+            state = "unavailable"
+        detail = "" if health.ok else f" error={health.error}"
+        print(
+            f"signal_account={health.account.instance_name}/{health.account.label} "
+            f"phone={health.account.signal_phone_number} target={health.target} status={state}{detail}"
+        )
     for health in check_matrix_homeservers(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={health.error}"

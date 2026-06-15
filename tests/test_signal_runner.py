@@ -11,6 +11,7 @@ from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, Runtime
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
     SignalRuntimeError,
+    check_signal_accounts,
     SignalServiceHealth,
     TeeBotusSignalCommand,
     check_signal_service,
@@ -458,6 +459,45 @@ def test_signal_cli_api_account_preflight_rejects_missing_number(monkeypatch, tm
         assert "kennt den konfigurierten Signal-Account nicht" in str(exc)
     else:
         raise AssertionError("SignalRuntimeError was not raised")
+
+
+def test_signal_account_health_reports_registered_and_missing_numbers(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Other",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo", "Other"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("Demo", tmp_path / "Demo.md", (accounts[0],)),
+            InstanceRunConfig("Other", tmp_path / "Other.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: ["+491"])
+
+    health = check_signal_accounts(config)
+
+    assert [item.registered for item in health] == [True, False]
+    assert health[1].error == "account missing in signal-cli-api /v1/accounts"
 
 
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:

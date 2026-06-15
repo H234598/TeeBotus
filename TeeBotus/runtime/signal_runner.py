@@ -35,6 +35,15 @@ class SignalServiceHealth:
     error: str = ""
 
 
+@dataclass(frozen=True)
+class SignalAccountHealth:
+    account: AccountRunConfig
+    ok: bool
+    target: str
+    registered: bool = False
+    error: str = ""
+
+
 LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -168,6 +177,41 @@ def check_signal_service(account: AccountRunConfig, *, timeout_seconds: float = 
             return SignalServiceHealth(account=account, ok=True, target=target)
     except OSError as exc:
         return SignalServiceHealth(account=account, ok=False, target=target, error=str(exc))
+
+
+def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, ...]:
+    healths: list[SignalAccountHealth] = []
+    service_accounts_cache: dict[str, tuple[bool, list[Any], str]] = {}
+    for account in _signal_accounts(config):
+        service_key = account.signal_service.strip()
+        try:
+            _host, _port, target = _signal_service_host_port(account.signal_service)
+        except SignalRuntimeError as exc:
+            healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc)))
+            continue
+        if service_key not in service_accounts_cache:
+            try:
+                if _signal_service_looks_like_signal_cli_api(account):
+                    service_accounts_cache[service_key] = (True, _signal_cli_api_accounts(account), "")
+                else:
+                    service_accounts_cache[service_key] = (False, [], "service does not expose signal-cli-api account list")
+            except SignalRuntimeError as exc:
+                service_accounts_cache[service_key] = (False, [], str(exc))
+        ok, accounts, error = service_accounts_cache[service_key]
+        if not ok:
+            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=error))
+            continue
+        registered = account.signal_phone_number in {_signal_cli_api_account_identifier(value) for value in accounts}
+        healths.append(
+            SignalAccountHealth(
+                account=account,
+                ok=registered,
+                target=target,
+                registered=registered,
+                error="" if registered else "account missing in signal-cli-api /v1/accounts",
+            )
+        )
+    return tuple(healths)
 
 
 def _require_signal_services_reachable(config: RuntimeConfig) -> None:
