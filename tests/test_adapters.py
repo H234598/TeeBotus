@@ -256,6 +256,20 @@ def test_signal_message_without_recipient_is_rejected():
     assert event is None
 
 
+def test_signal_message_with_broken_recipient_is_rejected():
+    class Message(FakeSignalMessage):
+        def recipient(self) -> str:
+            raise RuntimeError("signalbot recipient failed")
+
+    event = signal_message_to_event(
+        Message(text="/account"),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is None
+
+
 def test_signal_typing_is_stopped_after_followup_send():
     class Context:
         def __init__(self) -> None:
@@ -348,6 +362,28 @@ def test_signal_typing_to_other_chat_uses_bot_typing_and_stops_after_send():
         ("send", "+492", "hi", {"base64_attachments": None}),
         ("stop_typing", "+492"),
     ]
+
+
+def test_signal_send_uses_context_when_current_recipient_lookup_fails():
+    class Message(FakeSignalMessage):
+        def recipient(self) -> str:
+            raise RuntimeError("signalbot recipient failed")
+
+    class Context:
+        def __init__(self) -> None:
+            self.message = Message(source="+491")
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append(("send", text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "hi")]))
+
+    assert sent == [123]
+    assert context.calls == [("send", "hi", {"base64_attachments": None})]
 
 
 def test_signal_typing_stops_previous_target_before_starting_new_target():

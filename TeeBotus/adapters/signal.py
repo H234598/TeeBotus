@@ -57,7 +57,7 @@ def signal_message_to_event(
         )
         for index in range(max(len(attachment_names), len(remote_attachment_names), len(attachment_data)))
     )
-    recipient = message.recipient() if callable(getattr(message, "recipient", None)) else (getattr(message, "group", "") or getattr(message, "source", ""))
+    recipient = _signal_message_recipient(message)
     recipient = str(recipient or "").strip()
     if not recipient:
         return None
@@ -260,7 +260,7 @@ async def _send_signal_text(
         bot = getattr(context, "bot", None)
         send = getattr(bot, "send", None)
         message = getattr(context, "message", None)
-        recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
+        recipient = _signal_message_recipient(message)
         if callable(send) and recipient:
             return await send(recipient, text, **send_kwargs, **quote)
     return await context.send(text, **send_kwargs)
@@ -268,8 +268,17 @@ async def _send_signal_text(
 
 def _signal_context_recipient(context: Any) -> str:
     message = getattr(context, "message", None)
-    recipient = message.recipient() if callable(getattr(message, "recipient", None)) else ""
-    return str(recipient or "").strip()
+    return _signal_message_recipient(message)
+
+
+def _signal_message_recipient(message: Any) -> str:
+    recipient_method = getattr(message, "recipient", None)
+    if callable(recipient_method):
+        try:
+            return str(recipient_method() or "").strip()
+        except Exception:
+            return ""
+    return str(getattr(message, "group", "") or getattr(message, "source", "") or "").strip()
 
 
 async def _start_signal_typing(context: Any, chat_id: str) -> str:
