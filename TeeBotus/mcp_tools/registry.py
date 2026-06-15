@@ -24,6 +24,9 @@ class MCPToolPolicy:
 DEFAULT_MCP_TOOL_POLICIES: dict[str, MCPToolPolicy] = {
     "bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True),
     "memory.search": MCPToolPolicy(enabled=True, read_only=True, private_chat_only=True),
+    "youtube.transcribe": MCPToolPolicy(enabled=False, read_only=True, private_chat_only=True),
+    "export.account": MCPToolPolicy(enabled=False, read_only=True, requires_confirmation=True, private_chat_only=True, requires_admin=True),
+    "codex.exec": MCPToolPolicy(enabled=False, read_only=False, requires_confirmation=True, requires_admin=True, sandbox_required=True),
 }
 
 ToolCallable = Callable[[Mapping[str, Any]], dict[str, Any]]

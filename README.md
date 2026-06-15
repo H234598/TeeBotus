@@ -509,7 +509,7 @@ MCP/FastMCP ist nur als streng begrenzte Tool-Schicht vorgesehen. Der erste Pilo
 - `bibliothekar.search`: sucht in der Instanz-Bibliothek.
 - `memory.search`: sucht im verschluesselten Account-Memory des aktuellen Accounts.
 
-Nicht registriert sind freie Shell, beliebige Dateipfade, `.env`-Zugriff, Secret-Ausgabe, ungeprueftes Loeschen, Portscans oder Codex-Ausfuehrung. Schreibende oder riskante Tools wie `youtube.transcribe`, `export.account` oder `codex.exec` bleiben bis zu einer separaten Policy-/Bestätigungsstufe draussen.
+Nicht registriert sind freie Shell, beliebige Dateipfade, `.env`-Zugriff, Secret-Ausgabe, ungeprueftes Loeschen, Portscans oder Codex-Ausfuehrung. Bekannte spaetere Tools wie `youtube.transcribe`, `export.account` oder `codex.exec` sind als Policies sichtbar, bleiben aber standardmaessig deaktiviert und werden erst mit separater Implementierung, Policy- und Bestaetigungsstufe registriert.
 `memory.search` wird nur in einem explizit privaten Chat-Kontext registriert; Gruppen- oder unklarer Kontext bekommen auch bei vorhandenen Account-Daten keinen Memory-Toolzugriff.
 
 Konfiguration in `Bot_Verhalten.md` ist flach und allowlistet:

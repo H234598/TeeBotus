@@ -409,6 +409,7 @@ def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -
         - bibliothekar.search.read_only: true
         - memory.search.enabled: false
         - codex.exec.enabled: true
+        - shell.exec.enabled: true
         """,
         encoding="utf-8",
     )
@@ -420,7 +421,7 @@ def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
-    assert "mcp_tools=Demo Read-only allowlist: bibliothekar.search Deaktiviert: memory.search Ignoriert: codex.exec" in captured.out
+    assert "mcp_tools=Demo Read-only allowlist: bibliothekar.search Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe Ignoriert: shell.exec" in captured.out
 
 
 def test_runtime_status_loads_env_before_resolving_config(monkeypatch) -> None:

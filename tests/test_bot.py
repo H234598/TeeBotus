@@ -1132,7 +1132,7 @@ class BotTests(unittest.TestCase):
             self.assertIn("- Fallback-Modelle: 2", reply)
             self.assertIn("MCP Tools", reply)
             self.assertIn("- Read-only allowlist: bibliothekar.search, memory.search (private)", reply)
-            self.assertIn("- Ignoriert: codex.exec", reply)
+            self.assertIn("- Deaktiviert: codex.exec (nicht read-only), export.account, youtube.transcribe", reply)
             self.assertIn("Proactive Agent", reply)
             self.assertIn("- Agent enabled: ja", reply)
             self.assertIn("- Outbox queued: 1", reply)

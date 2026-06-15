@@ -21,6 +21,7 @@ def test_mcp_tool_config_is_parsed_as_flat_allowlist() -> None:
         - bibliothekar.search.read_only: true
         - memory.search.enabled: false
         - codex.exec.enabled: true
+        - shell.exec.enabled: true
         """
     )
 
@@ -28,6 +29,7 @@ def test_mcp_tool_config_is_parsed_as_flat_allowlist() -> None:
     assert instructions.mcp_tools["bibliothekar.search"]["read_only"] is True
     assert instructions.mcp_tools["memory.search"]["enabled"] is False
     assert instructions.mcp_tools["codex.exec"]["enabled"] is True
+    assert instructions.mcp_tools["shell.exec"]["enabled"] is True
 
 
 def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:
@@ -41,6 +43,7 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
             "bibliothekar.search": {"enabled": True, "read_only": True},
             "memory.search": {"enabled": True, "read_only": True},
             "codex.exec": {"enabled": True, "read_only": False},
+            "shell.exec": {"enabled": True, "read_only": False},
         },
         private_chat=True,
     )
@@ -53,8 +56,28 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
     assert "therapie.txt" in library["prompt_text"]
     assert memory["read_only"] is True
     assert memory["selected_ids"] == ["mem_1"]
-    with pytest.raises(MCPToolError, match="disabled"):
+    with pytest.raises(MCPToolError, match="not read-only"):
         registry.call("codex.exec", {"command": "id"})
+    with pytest.raises(MCPToolError, match="disabled"):
+        registry.call("shell.exec", {"command": "id"})
+
+
+def test_mcp_known_future_tools_are_policy_visible_but_not_registered(tmp_path) -> None:
+    registry = build_readonly_mcp_registry(
+        bibliothekar_service=_bibliothekar_service(tmp_path),
+        tool_config={
+            "youtube.transcribe": {"enabled": True, "read_only": True},
+            "export.account": {"enabled": True, "read_only": True},
+        },
+        private_chat=True,
+    )
+
+    assert registry.policy("youtube.transcribe").enabled is True
+    assert registry.policy("export.account").requires_confirmation is True
+    assert "youtube.transcribe" not in registry.tool_names
+    assert "export.account" not in registry.tool_names
+    with pytest.raises(MCPToolError, match="not registered"):
+        registry.call("youtube.transcribe", {"query": "https://youtu.be/example"})
 
 
 def test_mcp_memory_search_requires_explicit_private_chat_context(tmp_path) -> None:

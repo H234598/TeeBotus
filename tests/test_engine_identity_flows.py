@@ -325,8 +325,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Fallback-Modelle: 1" in actions[0].text
     assert "MCP Tools" in actions[0].text
     assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
-    assert "- Deaktiviert: memory.search" in actions[0].text
-    assert "- Ignoriert: codex.exec" in actions[0].text
+    assert "- Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe" in actions[0].text
     assert "Configured status." not in actions[0].text
 
 
