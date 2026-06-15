@@ -50,6 +50,7 @@ def signal_message_to_event(
         sender_number=str(getattr(message, "source_number", "") or ""),
         text=str(getattr(message, "text", "") or ""),
         message_ref=str(getattr(message, "timestamp", "") or ""),
+        reply_to_text=_signal_quote_text(message),
         attachments=attachments,
         raw=message,
     )
@@ -130,6 +131,14 @@ def _signal_attachment_data(index: int, values: list[Any]) -> str:
     except IndexError:
         return ""
     return value if isinstance(value, str) else ""
+
+
+def _signal_quote_text(message: Any) -> str | None:
+    quote = getattr(message, "quote", None)
+    if quote is None:
+        return None
+    text = str(getattr(quote, "text", "") or "").strip()
+    return text or None
 
 
 def _guess_content_type(filename: str) -> str:

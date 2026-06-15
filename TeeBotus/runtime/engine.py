@@ -421,6 +421,7 @@ def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context
         f"- sender_name: {_metadata_value(event.sender_name)}",
         f"- sender_username: {_metadata_value(event.sender_username)}",
         f"- account_id: {_metadata_value(event.account_id)}",
+        f"- reply_to_text: {_metadata_value(event.reply_to_text)}",
         f"- attachments: {len(event.attachments)}",
     ]
     if attachment_context:

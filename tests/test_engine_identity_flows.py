@@ -252,6 +252,42 @@ def test_engine_includes_non_audio_attachment_metadata_for_openai_input(tmp_path
     assert "Nachricht:\nBitte ansehen" in client.user_text
 
 
+def test_engine_includes_reply_context_in_openai_input(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-reply", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    incoming = event(telegram_identity_key(1), "Darauf antworte ich")
+    incoming = IncomingEvent(
+        event_id=incoming.event_id,
+        instance=incoming.instance,
+        channel=incoming.channel,
+        adapter_slot=incoming.adapter_slot,
+        account_id=incoming.account_id,
+        identity_key=incoming.identity_key,
+        chat_id=incoming.chat_id,
+        chat_type=incoming.chat_type,
+        sender_id=incoming.sender_id,
+        sender_name=incoming.sender_name,
+        sender_username=incoming.sender_username,
+        sender_number=incoming.sender_number,
+        text=incoming.text,
+        message_ref=incoming.message_ref,
+        reply_to_text="Vorherige Nachricht",
+    )
+
+    engine.process(incoming)
+
+    assert "- reply_to_text: Vorherige Nachricht" in client.user_text
+
+
 def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path):
     instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")

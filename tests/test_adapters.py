@@ -21,6 +21,7 @@ class FakeSignalMessage:
     group: str = ""
     attachments_local_filenames: list[str] | None = None
     base64_attachments: list[str] | None = None
+    quote: object | None = None
     type: object = MessageType.DATA_MESSAGE
 
     def recipient(self) -> str:
@@ -64,6 +65,19 @@ def test_signal_attachment_names_and_base64_are_paired_by_index():
     assert event is not None
     assert [attachment.filename for attachment in event.attachments] == ["one.mp3", "signal-attachment-2.bin"]
     assert [attachment.data for attachment in event.attachments] == [b"1", b"2"]
+
+
+def test_signal_quote_text_maps_to_reply_context():
+    quote = type("Quote", (), {"text": "Vorheriger Text"})()
+    event = signal_message_to_event(
+        FakeSignalMessage(text="Antwort", quote=quote),  # type: ignore[call-arg]
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.text == "Antwort"
+    assert event.reply_to_text == "Vorheriger Text"
 
 
 def test_signal_non_content_message_types_are_ignored():
@@ -201,6 +215,23 @@ def test_matrix_media_message_maps_attachment_metadata():
     assert event.attachments[0].content_type == "image/jpeg"
     assert event.attachments[0].data == b""
     assert event.attachments[0].base64_data == "mxc://example/photo"
+
+
+def test_matrix_rich_reply_fallback_is_split_from_message_text():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "> <@bob:example> quoted line\n> second line\n\nactual reply"
+        source = {"content": {"msgtype": "m.text", "body": body, "m.relates_to": {"m.in_reply_to": {"event_id": "$old"}}}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event.text == "actual reply"
+    assert event.reply_to_text == "<@bob:example> quoted line\nsecond line"
 
 
 def test_matrix_file_message_prefers_filename_from_content():

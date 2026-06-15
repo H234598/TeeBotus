@@ -19,6 +19,7 @@ def matrix_message_to_event(
 ) -> IncomingEvent:
     sender = str(getattr(message, "sender", "") or "").strip()
     room_id = str(getattr(room, "room_id", "") or "").strip()
+    text, reply_to_text = _matrix_message_text_and_reply(message)
     return IncomingEvent(
         event_id=f"matrix:{getattr(message, 'event_id', '')}",
         instance=instance,
@@ -32,8 +33,9 @@ def matrix_message_to_event(
         sender_name=str(getattr(message, "sender", "") or ""),
         sender_username=sender,
         sender_number="",
-        text=str(getattr(message, "body", "") or ""),
+        text=text,
         message_ref=str(getattr(message, "event_id", "") or ""),
+        reply_to_text=reply_to_text,
         attachments=_matrix_message_attachments(message),
         raw=message,
     )
@@ -192,6 +194,30 @@ def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:
             base64_data=url,
         ),
     )
+
+
+def _matrix_message_text_and_reply(message: Any) -> tuple[str, str | None]:
+    body = str(getattr(message, "body", "") or "")
+    content = getattr(message, "source", {}).get("content", {}) if isinstance(getattr(message, "source", None), dict) else {}
+    relates_to = content.get("m.relates_to") if isinstance(content.get("m.relates_to"), dict) else {}
+    in_reply_to = relates_to.get("m.in_reply_to") if isinstance(relates_to.get("m.in_reply_to"), dict) else {}
+    if not in_reply_to:
+        return body, None
+    reply_lines: list[str] = []
+    remainder: list[str] = []
+    in_reply_block = True
+    for line in body.splitlines():
+        if in_reply_block and line.startswith(">"):
+            reply_lines.append(line.lstrip("> ").rstrip())
+            continue
+        if in_reply_block and not line.strip():
+            in_reply_block = False
+            continue
+        in_reply_block = False
+        remainder.append(line)
+    reply_text = "\n".join(line for line in reply_lines if line).strip() or None
+    text = "\n".join(remainder).strip()
+    return (text if text else body, reply_text)
 
 
 def _matrix_content_type_for_msgtype(msgtype: str) -> str:
