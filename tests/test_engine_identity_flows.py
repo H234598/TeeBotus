@@ -233,9 +233,9 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     actions = engine.process(event(telegram_identity_key(1), "/status"))
 
     assert len(actions) == 1
-    assert "TeeBotus Status" in actions[0].text
-    assert f"- Version: {__version__}" in actions[0].text
-    assert "Commits: https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert "Depressionsbot Status:" in actions[0].text
+    assert f"- Version: {__version__} Wirt Commits https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert "Commits:" not in actions[0].text
     assert "Proactive Agent" in actions[0].text
     assert "- Agent enabled: ja" in actions[0].text
     assert "- Outbox queued: 1" in actions[0].text

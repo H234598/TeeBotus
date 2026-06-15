@@ -48,14 +48,14 @@ def build_status_reply(
     memory_size = memory_files_size(account_dir)
     encryption_status = memory_encryption_status(account_dir)
     commit_history_url = github_commit_history_url(project_root)
+    status_name = _status_display_name(instance_name)
     return "\n".join(
         [
-            "TeeBotus Status",
+            f"{status_name} Status:",
             "",
             "System",
             "- Status: laeuft",
-            f"- Version: {__version__}",
-            f"  Commits: {commit_history_url}",
+            f"- Version: {__version__} Wirt Commits {commit_history_url}",
             "",
             "Deine Daten",
             f"- Nutzermemory: {format_byte_size(memory_size)}",
@@ -69,6 +69,10 @@ def build_status_reply(
             ),
         ]
     )
+
+
+def _status_display_name(instance_name: str) -> str:
+    return str(instance_name or "").strip() or "TeeBotus"
 
 
 def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store: AccountStore | None) -> str:
