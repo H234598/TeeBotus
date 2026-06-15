@@ -1,0 +1,80 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package and pinned Python adapter deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+          python -m pip install -r requirements.txt
+          python -m pip install \
+            signalbot==1.2.2 \
+            matrix-nio==0.25.0 \
+            blurhash-python==1.2.2 \
+            h11==0.16.0 \
+            "marko==2.*" \
+            "python-magic>=0.4.27" \
+            "aiofiles>=23.1.0"
+          python -m pip install --no-deps nio-bot==1.0.2.post1
+      - name: Verify entrypoints and adapter lock dry-run
+        run: |
+          python -m TeeBotus --version
+          python scripts/install_adapter_deps.py --dry-run --python-only --no-user
+      - name: Run tests
+        run: python -m pytest -q
+
+  benchmark-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install benchmark deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,llm]"
+          python -m pip install -r requirements.txt
+          python -m pip install \
+            signalbot==1.2.2 \
+            matrix-nio==0.25.0 \
+            blurhash-python==1.2.2 \
+            h11==0.16.0 \
+            "marko==2.*" \
+            "python-magic>=0.4.27" \
+            "aiofiles>=23.1.0"
+          python -m pip install --no-deps nio-bot==1.0.2.post1
+      - name: Run deterministic benchmark suite
+        run: |
+          mkdir -p reports
+          python -m pytest -q tests/test_benchmarks_runner.py
+          python scripts/run_benchmarks.py --quick --entries 2 --iterations 1 --output reports/teebotus-benchmarks.md --json-output reports/teebotus-benchmarks.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: teebotus-benchmarks
+          path: reports/teebotus-benchmarks.*
+
+  audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependency audit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,llm]"
+          python -m pip install -r requirements.txt
+          pip-audit
