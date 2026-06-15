@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
 from TeeBotus.runtime.actions import SendText
@@ -12,6 +13,8 @@ PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
 PROACTIVE_DEFAULT_CATEGORIES = ("reminder", "task", "tip")
 PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled"})
+PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
+PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,14 @@ def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, 
         return None
     if event.chat_type != "private":
         return (SendText(event.chat_id, "Bitte privat.", track=False),)
+    if not proactive_agent_instance_enabled(event.instance):
+        return (
+            SendText(
+                event.chat_id,
+                "Proaktive Unterstützung ist für diese Instanz nicht freigeschaltet.",
+                track=False,
+            ),
+        )
     subcommand = parts[1].casefold() if len(parts) > 1 else "status"
     if subcommand in {"on", "enable", "an", "ein"}:
         state = enable_proactive_agent(account_store, account_id)
@@ -76,6 +87,18 @@ def enable_proactive_agent(account_store: AccountStore, account_id: str, *, cate
     state["consent"]["updated_at"] = state["proactive"]["updated_at"]
     account_store.write_agent_state(account_id, state)
     return state
+
+
+def proactive_agent_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:
+    source = env or os.environ
+    instance = str(instance_name or "").strip()
+    if not instance:
+        return False
+    listed = _parse_csv(source.get(PROACTIVE_INSTANCE_LIST_ENV, ""))
+    if "all" in listed or instance.casefold() in listed or _instance_env_token(instance).casefold() in listed:
+        return True
+    flag = source.get(f"{PROACTIVE_INSTANCE_FLAG_PREFIX}{_instance_env_token(instance)}")
+    return str(flag or "").strip().casefold() in {"1", "true", "yes", "on", "enabled", "ja", "an"}
 
 
 def disable_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
@@ -348,6 +371,15 @@ def _normalize_int(value: Any, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _parse_csv(value: str) -> set[str]:
+    return {part.strip().casefold() for part in str(value or "").split(",") if part.strip()}
+
+
+def _instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
+    return "_".join(part for part in token.split("_") if part)
 
 
 def _hour_in_window(hour: int, start_hour: int, end_hour: int) -> bool:

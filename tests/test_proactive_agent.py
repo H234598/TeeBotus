@@ -8,6 +8,7 @@ from TeeBotus.runtime.proactive_agent import (
     disable_proactive_agent,
     due_proactive_outbox_items,
     enable_proactive_agent,
+    proactive_agent_instance_enabled,
     proactive_policy_decision,
     queue_proactive_message,
     select_proactive_route,
@@ -34,6 +35,18 @@ def test_proactive_policy_denies_without_explicit_consent(tmp_path) -> None:
     assert decision.allowed is False
     assert decision.reason == "proactive_disabled"
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_proactive_agent_instance_is_default_off_and_can_be_enabled_by_env() -> None:
+    assert proactive_agent_instance_enabled("Neue_Instanz", env={}) is False
+    assert proactive_agent_instance_enabled(
+        "Depressionsbot",
+        env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+    ) is True
+    assert proactive_agent_instance_enabled(
+        "Depressionsbot",
+        env={"TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT": "1"},
+    ) is True
 
 
 def test_proactive_message_is_queued_only_after_consent_and_private_route(tmp_path) -> None:

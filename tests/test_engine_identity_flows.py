@@ -226,7 +226,20 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path):
     assert "Configured status." not in actions[0].text
 
 
-def test_engine_proactive_command_enables_private_account_agent(tmp_path):
+def test_engine_proactive_command_requires_instance_enablement(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(telegram_identity_key(1), "/proactive on"))
+
+    account_id = account_store.get_account_for_identity(telegram_identity_key(1))
+    assert account_id is not None
+    assert "nicht freigeschaltet" in actions[0].text
+    assert account_store.read_agent_state(account_id) == {}
+
+
+def test_engine_proactive_command_enables_private_account_agent_when_instance_enabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
 
