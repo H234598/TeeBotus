@@ -17,6 +17,20 @@ PROACTIVE_DEFAULT_CATEGORIES = ("reminder", "task", "tip")
 PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled"})
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
+PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
+PROACTIVE_RISK_MEMORY_KINDS = frozenset(
+    {
+        "risk_signal",
+        "suicidal_ideation",
+        "self_harm_signal",
+        "violence_risk_signal",
+        "neglect_risk_signal",
+        "means_access",
+    }
+)
+PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
+PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
+PROACTIVE_RISK_LOOKBACK_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -151,9 +165,11 @@ def queue_proactive_message(
     reason_memory_ids: Iterable[str] = (),
     due_at: str = "",
     now: datetime | None = None,
+    risk_gate: str = "none",
 ) -> ProactiveDecision:
     normalized_category = str(category or "").strip().casefold()
-    decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=now)
+    normalized_risk_gate = _normalize_risk_gate(risk_gate)
+    decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=now, item={"risk_gate": normalized_risk_gate})
     if not decision.allowed:
         return decision
     item_id = account_store.append_proactive_outbox_item(
@@ -164,6 +180,7 @@ def queue_proactive_message(
             "message_text": str(message_text or "").strip(),
             "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
             "due_at": str(due_at or "").strip(),
+            "risk_gate": normalized_risk_gate,
             "policy_result": "allowed",
             "policy_reason": decision.reason,
             "route": decision.route or {},
@@ -180,6 +197,7 @@ def proactive_policy_decision(
     category: str,
     now: datetime | None = None,
     exclude_item_id: str = "",
+    item: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     normalized_category = str(category or "").strip().casefold()
@@ -189,6 +207,9 @@ def proactive_policy_decision(
         return ProactiveDecision(False, "proactive_disabled")
     if normalized_category not in state["consent"]["categories"]:
         return ProactiveDecision(False, "category_not_consented")
+    risk_decision = proactive_risk_policy_decision(account_store, account_id, category=normalized_category, now=now, item=item)
+    if not risk_decision.allowed:
+        return risk_decision
     resolved_now = now or datetime.now(timezone.utc)
     hour = resolved_now.astimezone().hour
     start_hour, end_hour = state["policy"]["allowed_hours"]
@@ -271,7 +292,7 @@ async def dispatch_due_proactive_outbox_items(
             results.append(ProactiveDispatchResult(account_id, "", "failed", "missing_item_id"))
             continue
         category = str(item.get("category") or "").strip().casefold()
-        decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id)
+        decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason=f"policy:{decision.reason}", now=resolved_now)
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
@@ -347,6 +368,9 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             errors.append(f"outbox item {item_id or index} has unsupported category: {category}")
         if status == "queued" and category and category not in consented_categories:
             errors.append(f"queued outbox item {item_id or index} category is not consented: {category}")
+        risk_gate = _normalize_risk_gate(item.get("risk_gate"))
+        if status == "queued" and risk_gate in PROACTIVE_RISK_BLOCK_GATES | PROACTIVE_RISK_REVIEW_GATES:
+            errors.append(f"queued outbox item {item_id or index} risk_gate blocks proactive dispatch: {risk_gate}")
         for key in ("intent", "message_text"):
             if not str(item.get(key) or "").strip():
                 errors.append(f"outbox item {item_id or index} missing {key}")
@@ -365,6 +389,41 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
                 if not str(route.get("chat_id") or "").strip():
                     errors.append(f"queued outbox item {item_id or index} missing route chat_id")
     return ProactiveAgentHealth(account_id, not errors, tuple(errors))
+
+
+def proactive_risk_policy_decision(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    category: str,
+    now: datetime | None = None,
+    item: Mapping[str, Any] | None = None,
+) -> ProactiveDecision:
+    risk_gate = _normalize_risk_gate((item or {}).get("risk_gate"))
+    if risk_gate in PROACTIVE_RISK_BLOCK_GATES:
+        return ProactiveDecision(False, f"risk_gate_blocked:{risk_gate}")
+    if risk_gate in PROACTIVE_RISK_REVIEW_GATES:
+        return ProactiveDecision(False, f"risk_gate_needs_review:{risk_gate}")
+    normalized_category = str(category or "").strip().casefold()
+    if normalized_category in PROACTIVE_RISK_BLOCK_CATEGORIES and active_proactive_risk_memory_ids(account_store, account_id, now=now):
+        return ProactiveDecision(False, "active_risk_signal")
+    return ProactiveDecision(True, "risk_ok")
+
+
+def active_proactive_risk_memory_ids(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
+    resolved_now = now or datetime.now(timezone.utc)
+    active: list[str] = []
+    for entry in account_store.read_memory_entries(account_id):
+        if not isinstance(entry, dict):
+            continue
+        kind = str(entry.get("kind") or "").strip().casefold()
+        if kind not in PROACTIVE_RISK_MEMORY_KINDS:
+            continue
+        if _risk_memory_is_active(entry, resolved_now):
+            memory_id = str(entry.get("id") or "").strip()
+            if memory_id:
+                active.append(memory_id)
+    return tuple(active)
 
 
 def select_proactive_route(account_store: AccountStore, account_id: str) -> dict[str, Any] | None:
@@ -431,6 +490,25 @@ def _normalize_sent_ref(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _normalize_risk_gate(value: Any) -> str:
+    text = str(value or "none").strip().casefold()
+    return text or "none"
+
+
+def _risk_memory_is_active(entry: Mapping[str, Any], now: datetime) -> bool:
+    valid_to = _parse_proactive_datetime(str(entry.get("valid_to") or ""))
+    if valid_to is not None:
+        return valid_to >= now
+    valid_from = _parse_proactive_datetime(str(entry.get("valid_from") or ""))
+    if valid_from is not None and valid_from > now:
+        return False
+    timestamp = _parse_proactive_datetime(str(entry.get("updated_at") or entry.get("created_at") or ""))
+    if timestamp is None:
+        return True
+    age_seconds = max(0.0, (now - timestamp).total_seconds())
+    return age_seconds <= PROACTIVE_RISK_LOOKBACK_DAYS * 24 * 60 * 60
 
 
 def _record_proactive_sent_ref(

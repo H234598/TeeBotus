@@ -9,6 +9,7 @@ from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, matrix
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
+    active_proactive_risk_memory_ids,
     check_proactive_agent_account,
     disable_proactive_agent,
     dispatch_due_proactive_outbox_items,
@@ -219,6 +220,7 @@ def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
                 "category": "analysis",
                 "intent": "",
                 "message_text": "",
+                "risk_gate": "needs_review",
                 "due_at": "not-a-date",
                 "route": {"channel": "telegram", "chat_id": "-100", "chat_type": "group"},
             }
@@ -234,6 +236,7 @@ def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
     assert "missing message_text" in joined
     assert "invalid due_at" in joined
     assert "route is not private" in joined
+    assert "risk_gate blocks proactive dispatch: needs_review" in joined
 
 
 def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
@@ -257,6 +260,113 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert decision.allowed is True
     assert health.ok is True
     assert health.errors == ()
+
+
+def test_proactive_risk_gate_blocks_queueing_without_human_review(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="risk_follow_up",
+        message_text="Magst du kurz berichten?",
+        risk_gate="needs_review",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "risk_gate_needs_review:needs_review"
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_active_risk_memory_blocks_proactive_analysis_but_not_plain_reminder(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder", "analysis"))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    memory_id = account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_risk",
+            "kind": "suicidal_ideation",
+            "user_text": "Passive Suizidgedanken.",
+            "created_at": "2026-06-15T10:00:00+00:00",
+            "updated_at": "2026-06-15T10:00:00+00:00",
+        },
+    )
+
+    analysis = queue_proactive_message(
+        account_store,
+        account_id,
+        category="analysis",
+        intent="deep_analysis",
+        message_text="Ich habe eine Analyse vorbereitet.",
+        now=now,
+    )
+    reminder = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="plain_checkin",
+        message_text="Denk bitte an deine vereinbarte Pause.",
+        now=now,
+    )
+
+    assert active_proactive_risk_memory_ids(account_store, account_id, now=now) == (memory_id,)
+    assert analysis.allowed is False
+    assert analysis.reason == "active_risk_signal"
+    assert reminder.allowed is True
+
+
+def test_dispatch_skips_queued_analysis_when_risk_memory_becomes_active(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("analysis",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="analysis",
+        intent="pre_risk_analysis",
+        message_text="Ich habe eine Analyse vorbereitet.",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 8, tzinfo=timezone.utc),
+    )
+    assert decision.allowed is True
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_risk",
+            "kind": "self_harm_signal",
+            "user_text": "Selbstverletzungsdruck.",
+            "created_at": "2026-06-15T10:00:00+00:00",
+            "updated_at": "2026-06-15T10:00:00+00:00",
+        },
+    )
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "sent-ref"},
+            now=now,
+        )
+    )
+
+    assert results[0].status == "skipped"
+    assert results[0].reason == "active_risk_signal"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "skipped"
+    assert item["status_history"][-1]["reason"] == "policy:active_risk_signal"
 
 
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:

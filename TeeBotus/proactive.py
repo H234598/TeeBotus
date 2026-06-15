@@ -99,7 +99,7 @@ async def run_proactive_agent_cycle(
             for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                 category = str(item.get("category") or "")
                 item_id = str(item.get("id") or "")
-                decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now, exclude_item_id=item_id)
+                decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
                 items.append(
                     {
                         "id": item_id,
