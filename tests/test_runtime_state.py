@@ -85,6 +85,29 @@ def test_telegram_bridge_defaults_to_secret_tool_provider(tmp_path):
     assert bridge.state_store.secret_provider is bridge.account_store.secret_provider
 
 
+def test_telegram_bridge_event_uses_username_identity_fallback(tmp_path):
+    bridge = TelegramRuntimeBridge(
+        instance_name="Bot",
+        data_dir=tmp_path / "Bot" / "data",
+        secret_provider=StaticSecretProvider(b"s" * 32),
+    )
+
+    event = bridge.event_from_message(
+        {
+            "message_id": 1,
+            "from": {"username": "Teladi", "first_name": "Te", "last_name": "Ladi"},
+            "chat": {"id": 42, "type": "private"},
+            "text": "/account",
+        }
+    )
+
+    assert event is not None
+    assert event.identity_key == "telegram:username:teladi"
+    assert event.account_id
+    assert event.sender_name == "Te Ladi"
+    assert bridge.account_store.get_account_for_identity("telegram:username:teladi") == event.account_id
+
+
 def test_telegram_bridge_dispatches_edit_and_poll_actions(tmp_path):
     class Sender:
         def __init__(self) -> None:
