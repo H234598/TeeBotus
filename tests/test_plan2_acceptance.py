@@ -29,6 +29,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     )
     assert "--all" not in " ".join(" ".join(command.argv) for command in commands)
     assert "tests/test_runtime_config.py" in by_label["plan2-pytest"].argv
+    assert "tests/test_openai_client.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar_plan2.py" in by_label["plan2-pytest"].argv
     assert "tests/test_reminder_intent.py" in by_label["plan2-pytest"].argv

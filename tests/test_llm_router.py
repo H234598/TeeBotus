@@ -27,9 +27,27 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         base_url="http://127.0.0.1:11434",
         api_key_env="",
     )
+    assert profiles["hf_mistral"] == LLMProfile(
+        name="hf_mistral",
+        provider="litellm",
+        model="huggingface/mistralai/Mistral-7B-Instruct-v0.3",
+        api_key_env="HUGGINGFACE_API_KEY",
+    )
     assert profiles["groq_fast"].api_key_env == "GROQ_API_KEY"
+    assert profiles["groq_fast"].provider == "litellm"
+    assert profiles["groq_fast"].model.startswith("groq/")
+    assert profiles["gemini_flash"] == LLMProfile(
+        name="gemini_flash",
+        provider="litellm",
+        model="gemini/gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["openai_premium"].provider == "openai"
+    assert profiles["openai_premium"].api_key_env == "OPENAI_API_KEY"
     assert routing["structured_decision"].profile == "local_ollama"
     assert routing["structured_decision"].fallback == "groq_fast"
+    assert routing["hard_reasoning"].profile == "openai_premium"
+    assert routing["hard_reasoning"].fallback == "gemini_flash"
 
 
 def test_route_selection_blocks_remote_fallback_by_default() -> None:

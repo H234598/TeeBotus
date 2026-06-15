@@ -30,6 +30,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_litellm_provider.py",
     "tests/test_llm_router.py",
     "tests/test_llm_package.py",
+    "tests/test_openai_client.py",
     "tests/test_bibliothekar.py",
     "tests/test_bibliothekar_*.py",
     "tests/test_pydantic_decisions.py",
