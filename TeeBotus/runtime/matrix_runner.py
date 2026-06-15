@@ -77,6 +77,7 @@ class MatrixRuntimeBridge:
             return
         if should_ignore_event_without_account(event, _matrix_bot_address_names(self.run_config)):
             return
+        event = await _fetch_matrix_reply_text(self.client, event)
         event = await _download_matrix_event_attachments(self.client, event)
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         self.account_store.update_identity_route(
@@ -287,6 +288,60 @@ def _with_matrix_reply_context(actions: list[Any], event: IncomingEvent) -> list
         else:
             enriched.append(action)
     return enriched
+
+
+async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent) -> IncomingEvent:
+    if event.reply_to_text:
+        return event
+    reply_event_id = _matrix_reply_event_id(event.raw)
+    if not reply_event_id:
+        return event
+    room_get_event = getattr(client, "room_get_event", None)
+    if not callable(room_get_event):
+        return event
+    try:
+        response = await room_get_event(event.chat_id, reply_event_id)
+    except Exception:
+        return event
+    reply_text = _matrix_reply_text_from_response(response)
+    if not reply_text:
+        return event
+    return event.with_reply_to_text(reply_text)
+
+
+def _matrix_reply_event_id(message: Any) -> str:
+    content = getattr(message, "source", {}).get("content", {}) if isinstance(getattr(message, "source", {}), dict) else {}
+    relates_to = content.get("m.relates_to", {})
+    if not isinstance(relates_to, dict):
+        return ""
+    in_reply_to = relates_to.get("m.in_reply_to", {})
+    if not isinstance(in_reply_to, dict):
+        return ""
+    return str(in_reply_to.get("event_id") or "").strip()
+
+
+def _matrix_reply_text_from_response(response: Any) -> str:
+    for candidate in (
+        getattr(response, "event", None),
+        response,
+    ):
+        text = _matrix_event_body(candidate)
+        if text:
+            return text
+    return ""
+
+
+def _matrix_event_body(event: Any) -> str:
+    body = str(getattr(event, "body", "") or "").strip()
+    if body:
+        return body
+    source = getattr(event, "source", {})
+    if not isinstance(source, dict):
+        return ""
+    content = source.get("content", {})
+    if not isinstance(content, dict):
+        return ""
+    return str(content.get("body") or "").strip()
 
 
 async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) -> IncomingEvent:

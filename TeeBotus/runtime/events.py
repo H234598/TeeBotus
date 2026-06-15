@@ -119,6 +119,27 @@ class IncomingEvent:
             raw=self.raw,
         )
 
+    def with_reply_to_text(self, reply_to_text: str | None) -> "IncomingEvent":
+        return IncomingEvent(
+            event_id=self.event_id,
+            instance=self.instance,
+            channel=self.channel,
+            adapter_slot=self.adapter_slot,
+            account_id=self.account_id,
+            identity_key=self.identity_key,
+            chat_id=self.chat_id,
+            chat_type=self.chat_type,
+            sender_id=self.sender_id,
+            sender_name=self.sender_name,
+            sender_username=self.sender_username,
+            sender_number=self.sender_number,
+            text=self.text,
+            message_ref=self.message_ref,
+            reply_to_text=reply_to_text,
+            attachments=self.attachments,
+            raw=self.raw,
+        )
+
     @property
     def instance_name(self) -> str:
         return self.instance

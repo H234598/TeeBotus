@@ -87,6 +87,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomMessageUnknown",
         "RoomSendResponse",
         "RoomSendError",
+        "RoomGetEventResponse",
+        "RoomGetEventError",
         "RoomPutStateResponse",
         "RoomPutStateError",
         "SyncResponse",
@@ -106,6 +108,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
     download_params = inspect.signature(nio.AsyncClient.download).parameters
+    room_get_event_params = inspect.signature(nio.AsyncClient.room_get_event).parameters
     room_send_params = inspect.signature(nio.AsyncClient.room_send).parameters
     room_put_state_params = inspect.signature(nio.AsyncClient.room_put_state).parameters
     room_typing_params = inspect.signature(nio.AsyncClient.room_typing).parameters
@@ -119,6 +122,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.send_message.reply_to": "reply_to" in send_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
+        "AsyncClient.room_get_event.event_id": "event_id" in room_get_event_params,
         "AsyncClient.room_send.content": "content" in room_send_params,
         "AsyncClient.room_put_state.content": "content" in room_put_state_params,
         "AsyncClient.room_put_state.state_key": "state_key" in room_put_state_params,
