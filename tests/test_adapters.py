@@ -1205,6 +1205,45 @@ def test_matrix_file_attachment_can_reply_with_niobot_send_message():
     assert kwargs == {"reply_to": "$old"}
 
 
+def test_matrix_niobot_file_send_error_sends_notice():
+    class Response:
+        event_id = "$sent"
+
+    class SendError:
+        message = "send refused"
+        status_code = "M_FORBIDDEN"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, content=None, file=None, **kwargs):
+            self.calls.append((room_id, content, file, kwargs))
+            if file is not None:
+                return SendError()
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [ExportFile("!room:example", "report.json", "application/json", b"{\"ok\": true}", caption="Export")],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert len(client.calls) == 2
+    assert client.calls[0][1] == "Export"
+    assert client.calls[0][2].file_name == "report.json"
+    assert client.calls[1] == (
+        "!room:example",
+        "Datei konnte nicht gesendet werden: report.json (M_FORBIDDEN: send refused)",
+        None,
+        {"message_type": "m.notice"},
+    )
+
+
 def test_matrix_export_upload_failure_sends_notice_and_continues_actions():
     class Response:
         def __init__(self, event_id: str) -> None:

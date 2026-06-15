@@ -89,7 +89,9 @@ async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: boo
         kwargs: dict[str, Any] = {"message_type": msgtype}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
-        return await send_message(room_id, text, **kwargs)
+        response = await send_message(room_id, text, **kwargs)
+        _raise_matrix_response_error(response)
+        return response
     content = {"msgtype": msgtype, "body": text}
     _add_matrix_reply_relation(content, reply_to_ref)
     response = await client.room_send(
@@ -157,7 +159,9 @@ async def _send_matrix_file(
         kwargs: dict[str, Any] = {"file": attachment}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
-        return await send_message(room_id, caption or filename, **kwargs)
+        response = await send_message(room_id, caption or filename, **kwargs)
+        _raise_matrix_response_error(response)
+        return response
     upload_response, _keys = await client.upload(
         BytesIO(data),
         content_type=content_type or "application/octet-stream",
