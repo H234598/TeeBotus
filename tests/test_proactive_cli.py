@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 
 from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run, runtime_llm_planner_factory, runtime_sender_factory
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
 
@@ -160,6 +160,56 @@ def test_runtime_sender_factory_builds_lazy_matrix_sender_from_runtime_config(tm
     assert result == "$matrix-ref"
     assert started == [("https://matrix.example", "@bot:example", "matrix-token")]
     assert sent == [("!room:example", "Ping", {"message_type": "m.text", "clean_mentions": True})]
+
+
+def test_runtime_sender_factory_matrix_lazy_client_does_not_block_on_forever_start_for_files(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    uploaded: list[tuple[bytes, dict[str, object]]] = []
+    sent: list[dict[str, object]] = []
+
+    class FakeNioBot:
+        def __init__(self, homeserver: str, user_id: str, *, device_id: str, command_prefix: str, global_message_type: str) -> None:
+            self.rooms: dict[str, object] = {}
+            self.listeners: dict[str, list[object]] = {}
+
+        def add_event_listener(self, event_name: str, func) -> None:
+            self.listeners.setdefault(event_name, []).append(func)
+
+        async def start(self, *, access_token: str) -> None:
+            self.rooms["!room:example"] = type("Room", (), {"encrypted": True})()
+            for listener in self.listeners.get("ready", []):
+                await listener(object())
+            await asyncio.Event().wait()
+
+        async def upload(self, data_provider, **kwargs):
+            uploaded.append((data_provider.read(), kwargs))
+            return type("Upload", (), {"content_uri": "mxc://example/file"})(), {"key": {"k": "abc"}, "hashes": {"sha256": "hash"}, "iv": "iv"}
+
+        async def room_send(self, **kwargs):
+            sent.append(kwargs)
+            return type("Response", (), {"event_id": "$matrix-file-ref"})()
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: type("NioBotModule", (), {"NioBot": FakeNioBot})())
+    factory = runtime_sender_factory(
+        instances_dir,
+        env={
+            "TEEBOTUS_INSTANCES": "Depressionsbot",
+            "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix.example",
+            "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@bot:example",
+            "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "matrix-token",
+            "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+        },
+    )
+
+    senders = factory("Depressionsbot", store_for(instance_dir))
+    result = asyncio.run(senders["matrix"]({"adapter_slot": 1}, SendAttachment("!room:example", b"data", "note.txt", "text/plain"), {}))
+
+    assert result == "$matrix-file-ref"
+    assert uploaded == [(b"data", {"content_type": "text/plain", "filename": "note.txt", "filesize": 4, "encrypt": True})]
+    assert "file" in sent[0]["content"]
+    assert sent[0]["content"]["file"]["url"] == "mxc://example/file"
 
 
 def test_proactive_cli_llm_plan_requires_explicit_plan(capsys) -> None:

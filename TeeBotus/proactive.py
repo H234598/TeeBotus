@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 import sys
 from datetime import datetime, timezone
@@ -32,6 +33,8 @@ from TeeBotus.runtime.proactive_agent import (
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
 PROACTIVE_LLM_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_LLM_PLANNER_"
+MATRIX_LAZY_READY_TIMEOUT_SECONDS = 35.0
+LOGGER = logging.getLogger("TeeBotus.proactive")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -188,6 +191,8 @@ class _LazyMatrixProactiveClient:
         self._client: Any | None = None
         self._started = False
         self._lock: asyncio.Lock | None = None
+        self._start_task: asyncio.Task[Any] | None = None
+        self._ready_event: asyncio.Event | None = None
 
     @property
     def rooms(self) -> Any:
@@ -230,12 +235,72 @@ class _LazyMatrixProactiveClient:
                 command_prefix="/",
                 global_message_type="m.text",
             )
+            self._ready_event = asyncio.Event()
+            _register_matrix_ready_event(client, self._ready_event)
             result = client.start(access_token=self._account.matrix_access_token)
             if isawaitable(result):
-                await result
+                self._start_task = asyncio.create_task(result, name=f"teebotus-proactive-matrix-{self._account.label}")
+                self._start_task.add_done_callback(_log_matrix_start_task_failure)
             self._client = client
             self._started = True
+            if self._start_task is not None:
+                await _wait_for_matrix_lazy_ready(client, self._ready_event, self._start_task, self._account.label)
             return client
+
+
+def _register_matrix_ready_event(client: Any, ready_event: asyncio.Event) -> None:
+    async def mark_ready(*_args: Any, **_kwargs: Any) -> None:
+        ready_event.set()
+
+    add_event_listener = getattr(client, "add_event_listener", None)
+    if callable(add_event_listener):
+        try:
+            add_event_listener("ready", mark_ready)
+            return
+        except Exception:
+            LOGGER.debug("Could not register nio-bot ready listener.", exc_info=True)
+
+
+async def _wait_for_matrix_lazy_ready(client: Any, ready_event: asyncio.Event, start_task: asyncio.Task[Any], label: str) -> None:
+    if start_task.done():
+        start_task.result()
+        return
+    if _matrix_client_has_room_state(client):
+        return
+    ready_task = asyncio.create_task(ready_event.wait(), name=f"teebotus-proactive-matrix-ready-{label}")
+    try:
+        await asyncio.wait(
+            {ready_task, start_task},
+            timeout=MATRIX_LAZY_READY_TIMEOUT_SECONDS,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if ready_event.is_set() or _matrix_client_has_room_state(client):
+            return
+        if start_task.done():
+            start_task.result()
+            return
+        LOGGER.warning(
+            "Matrix proactive lazy client did not report ready within %.1fs for slot=%s; continuing with current room state.",
+            MATRIX_LAZY_READY_TIMEOUT_SECONDS,
+            label,
+        )
+    finally:
+        if not ready_task.done():
+            ready_task.cancel()
+
+
+def _matrix_client_has_room_state(client: Any) -> bool:
+    rooms = getattr(client, "rooms", None)
+    return isinstance(rooms, dict) and bool(rooms)
+
+
+def _log_matrix_start_task_failure(task: asyncio.Task[Any]) -> None:
+    if task.cancelled():
+        return
+    try:
+        task.result()
+    except Exception:
+        LOGGER.exception("Matrix proactive lazy client stopped with an error.")
 
 
 def _load_dotenv(path: Path) -> None:
