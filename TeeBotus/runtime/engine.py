@@ -1552,6 +1552,9 @@ def _build_attachment_context(
             if _is_audio_attachment(filename, content_type):
                 lines.append("  Transkript: <view-once nicht verarbeitet>")
             continue
+        if _is_audio_attachment(filename, content_type) and not instructions.openai_transcription_enabled:
+            lines.append("  Transkript: <Transkription deaktiviert>")
+            continue
         if _is_audio_attachment(filename, content_type) and attachment.data:
             try:
                 transcript = _transcribe_runtime_audio_attachment(

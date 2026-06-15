@@ -875,6 +875,45 @@ def test_engine_can_transcribe_audio_attachment_with_local_backend(tmp_path, mon
     assert "Transkript: Lokales Whisper Transkript." in client.user_text
 
 
+def test_engine_respects_disabled_transcription_for_audio_attachment(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+            self.transcriptions: list[tuple[bytes, str]] = []
+
+        def transcribe_audio(self, audio, filename, _instructions, model=None):
+            self.transcriptions.append((audio, filename))
+            return "Soll nicht genutzt werden."
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort ohne Transkript.", "resp-audio-disabled", None)
+
+    def fake_local_transcribe(*_args, **_kwargs):
+        raise AssertionError("local transcription must not run when transcription is disabled")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_local_audio", fake_local_transcribe)
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(
+        openai_enabled=True,
+        openai_transcription_enabled=False,
+        openai_transcription_backend="local",
+    )
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(identity, "", attachments=(attachment,)))
+    account_id = account_store.get_account_for_identity(identity)
+    state = account_store.read_agent_state(account_id or "")
+
+    assert actions[1].text == "Antwort ohne Transkript."
+    assert client.transcriptions == []
+    assert "Transkript: <Transkription deaktiviert>" in client.user_text
+    assert "tts_mimic_voice" not in state
+
+
 def test_engine_does_not_transcribe_view_once_audio_attachment(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
