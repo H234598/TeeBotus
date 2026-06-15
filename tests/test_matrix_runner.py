@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
@@ -189,6 +189,35 @@ def test_matrix_group_free_text_can_address_bot_by_user_id(tmp_path) -> None:
     asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), message))
 
     assert client.sent[0]["content"]["body"] == "Echo: @bot:example hallo"
+    assert client.sent[0]["content"]["m.relates_to"] == {"m.in_reply_to": {"event_id": "$incoming"}}
+
+
+def test_matrix_bridge_preserves_explicit_engine_reply_context(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [SendText(event.chat_id, "Explizit", reply_to_ref="$explicit")]},
+    )()
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert client.sent[0]["content"]["m.relates_to"] == {"m.in_reply_to": {"event_id": "$explicit"}}
 
 
 def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:

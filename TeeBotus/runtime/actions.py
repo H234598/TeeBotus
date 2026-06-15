@@ -9,6 +9,7 @@ class SendText:
     chat_id: str
     text: str
     track: bool = True
+    reply_to_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,7 @@ class SendAttachment:
     content_type: str = "application/octet-stream"
     caption: str = ""
     track: bool = True
+    reply_to_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,7 @@ class ExportFile:
     content_type: str
     data: bytes
     caption: str = ""
+    reply_to_ref: str = ""
 
 
 @dataclass(frozen=True)

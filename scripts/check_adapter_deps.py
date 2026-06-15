@@ -104,6 +104,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.start.access_token": "access_token" in start_params,
         "NioBot.send_message.file": "file" in send_params,
         "NioBot.send_message.message_type": "message_type" in send_params,
+        "NioBot.send_message.reply_to": "reply_to" in send_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_send.content": "content" in room_send_params,

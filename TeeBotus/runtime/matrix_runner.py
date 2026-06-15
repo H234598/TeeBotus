@@ -90,6 +90,7 @@ class MatrixRuntimeBridge:
         actions = self.engine.process(event)
         await self._notify_linked_identities(actions)
         await self._delete_tracked_messages(event, actions)
+        actions = _with_matrix_reply_context(actions, event)
         sent_refs = await send_matrix_actions(self.client, actions)
         for action, sent_ref in zip(actions, sent_refs):
             if sent_ref is None:
@@ -207,6 +208,42 @@ def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
         for name in ("RoomMessageText", "RoomMessageFile", "RoomMessageImage", "RoomMessageAudio", "RoomMessageVideo")
         if hasattr(nio, name)
     )
+
+
+def _with_matrix_reply_context(actions: list[Any], event: IncomingEvent) -> list[Any]:
+    reply_to_ref = str(event.message_ref or "").strip()
+    if not reply_to_ref:
+        return actions
+    enriched: list[Any] = []
+    for action in actions:
+        if isinstance(action, SendText) and action.chat_id == event.chat_id and not action.reply_to_ref:
+            enriched.append(SendText(action.chat_id, action.text, track=action.track, reply_to_ref=reply_to_ref))
+        elif isinstance(action, SendAttachment) and action.chat_id == event.chat_id and not action.reply_to_ref:
+            enriched.append(
+                SendAttachment(
+                    action.chat_id,
+                    action.data,
+                    action.filename,
+                    action.content_type,
+                    caption=action.caption,
+                    track=action.track,
+                    reply_to_ref=reply_to_ref,
+                )
+            )
+        elif isinstance(action, ExportFile) and action.chat_id == event.chat_id and not action.reply_to_ref:
+            enriched.append(
+                ExportFile(
+                    action.chat_id,
+                    action.filename,
+                    action.content_type,
+                    action.data,
+                    caption=action.caption,
+                    reply_to_ref=reply_to_ref,
+                )
+            )
+        else:
+            enriched.append(action)
+    return enriched
 
 
 async def _download_matrix_event_attachments(client: Any, event: IncomingEvent) -> IncomingEvent:

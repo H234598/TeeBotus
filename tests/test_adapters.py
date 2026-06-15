@@ -8,7 +8,7 @@ from signalbot.message import MessageType
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import ExportFile, SendText, SendTyping
+from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendText, SendTyping
 
 
 @dataclass
@@ -348,6 +348,50 @@ def test_matrix_send_text_prefers_niobot_send_message():
     assert client.calls == [("!room:example", "hi", {"message_type": "m.text"})]
 
 
+def test_matrix_send_text_can_reply_with_niobot_send_message():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi", reply_to_ref="$old")]))
+
+    assert sent == ["$sent"]
+    assert client.calls == [("!room:example", "hi", {"message_type": "m.text", "reply_to": "$old"})]
+
+
+def test_matrix_send_text_fallback_can_reply_with_relates_to():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "hi", reply_to_ref="$old")]))
+
+    assert sent == ["$sent"]
+    assert client.calls[0]["content"] == {
+        "msgtype": "m.text",
+        "body": "hi",
+        "m.relates_to": {"m.in_reply_to": {"event_id": "$old"}},
+    }
+
+
 def test_matrix_send_typing_uses_room_typing():
     class Client:
         def __init__(self) -> None:
@@ -473,6 +517,44 @@ def test_matrix_export_file_prefers_niobot_file_attachment():
     assert file.mime_type == "application/json"
     assert file.size == 12
     assert file.file.getvalue() == b"{\"ok\": true}"
+
+
+def test_matrix_file_attachment_can_reply_with_niobot_send_message():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, content=None, file=None, **kwargs):
+            self.calls.append((room_id, content, file, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendAttachment(
+                    "!room:example",
+                    b"hello",
+                    "report.txt",
+                    "text/plain",
+                    caption="Bericht",
+                    reply_to_ref="$old",
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$sent"]
+    room_id, content, file, kwargs = client.calls[0]
+    assert room_id == "!room:example"
+    assert content == "Bericht"
+    assert file.file_name == "report.txt"
+    assert kwargs == {"reply_to": "$old"}
 
 
 def test_matrix_export_upload_failure_sends_notice_and_continues_actions():

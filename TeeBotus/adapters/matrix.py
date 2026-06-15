@@ -48,7 +48,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     sent: list[str | None] = []
     for action in actions:
         if isinstance(action, SendText):
-            response = await _send_matrix_text(client, action.chat_id, action.text)
+            response = await _send_matrix_text(client, action.chat_id, action.text, reply_to_ref=action.reply_to_ref)
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
@@ -61,6 +61,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 filename=action.filename,
                 content_type=action.content_type,
                 caption=action.caption,
+                reply_to_ref=action.reply_to_ref,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
@@ -71,6 +72,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 filename=action.filename,
                 content_type=action.content_type,
                 caption=action.caption or f"Export: {action.filename}",
+                reply_to_ref=action.reply_to_ref,
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages)):
@@ -78,15 +80,20 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
     return sent
 
 
-async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: bool = False) -> Any:
+async def _send_matrix_text(client: Any, room_id: str, text: str, *, notice: bool = False, reply_to_ref: str = "") -> Any:
     msgtype = "m.notice" if notice else "m.text"
     send_message = getattr(client, "send_message", None)
     if callable(send_message):
-        return await send_message(room_id, text, message_type=msgtype)
+        kwargs: dict[str, Any] = {"message_type": msgtype}
+        if reply_to_ref:
+            kwargs["reply_to"] = reply_to_ref
+        return await send_message(room_id, text, **kwargs)
+    content = {"msgtype": msgtype, "body": text}
+    _add_matrix_reply_relation(content, reply_to_ref)
     return await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
-        content={"msgtype": msgtype, "body": text},
+        content=content,
     )
 
 
@@ -108,6 +115,7 @@ async def _send_matrix_file_or_error_notice(
     filename: str,
     content_type: str,
     caption: str = "",
+    reply_to_ref: str = "",
 ) -> Any:
     try:
         return await _send_matrix_file(
@@ -117,9 +125,16 @@ async def _send_matrix_file_or_error_notice(
             filename=filename,
             content_type=content_type,
             caption=caption,
+            reply_to_ref=reply_to_ref,
         )
     except Exception as exc:
-        return await _send_matrix_text(client, room_id, f"Datei konnte nicht gesendet werden: {filename} ({exc})", notice=True)
+        return await _send_matrix_text(
+            client,
+            room_id,
+            f"Datei konnte nicht gesendet werden: {filename} ({exc})",
+            notice=True,
+            reply_to_ref=reply_to_ref,
+        )
 
 
 async def _send_matrix_file(
@@ -130,11 +145,15 @@ async def _send_matrix_file(
     filename: str,
     content_type: str,
     caption: str = "",
+    reply_to_ref: str = "",
 ) -> Any:
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
     if callable(send_message) and attachment is not None:
-        return await send_message(room_id, caption or filename, file=attachment)
+        kwargs: dict[str, Any] = {"file": attachment}
+        if reply_to_ref:
+            kwargs["reply_to"] = reply_to_ref
+        return await send_message(room_id, caption or filename, **kwargs)
     upload_response, _keys = await client.upload(
         BytesIO(data),
         content_type=content_type or "application/octet-stream",
@@ -146,19 +165,21 @@ async def _send_matrix_file(
         message = getattr(upload_response, "message", "") or "Matrix upload returned no content URI"
         raise RuntimeError(str(message))
     body = caption or filename
+    content = {
+        "msgtype": "m.file",
+        "body": body,
+        "filename": filename,
+        "url": str(content_uri),
+        "info": {
+            "mimetype": content_type or "application/octet-stream",
+            "size": len(data),
+        },
+    }
+    _add_matrix_reply_relation(content, reply_to_ref)
     return await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
-        content={
-            "msgtype": "m.file",
-            "body": body,
-            "filename": filename,
-            "url": str(content_uri),
-            "info": {
-                "mimetype": content_type or "application/octet-stream",
-                "size": len(data),
-            },
-        },
+        content=content,
     )
 
 
@@ -173,6 +194,13 @@ def _make_niobot_file_attachment(*, data: bytes, filename: str, content_type: st
         mime_type=content_type or "application/octet-stream",
         size_bytes=len(data),
     )
+
+
+def _add_matrix_reply_relation(content: dict[str, Any], reply_to_ref: str) -> None:
+    event_id = str(reply_to_ref or "").strip()
+    if not event_id:
+        return
+    content["m.relates_to"] = {"m.in_reply_to": {"event_id": event_id}}
 
 
 def _matrix_room_is_private(room: Any) -> bool:
