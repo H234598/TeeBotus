@@ -802,6 +802,7 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
         instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
     )
     commands: list[list[str]] = []
+    envs: list[dict[str, str]] = []
     service_up = {"value": False}
 
     class FakeProcess:
@@ -828,22 +829,77 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
             error="" if service_up["value"] else "connection refused",
         )
 
-    def fake_popen(command, **_kwargs):
+    def fake_popen(command, **kwargs):
         commands.append(command)
+        envs.append(kwargs["env"])
         service_up["value"] = True
         return FakeProcess()
+
+    def fake_which(binary, path=None):
+        if binary == "signal-cli-api":
+            return "signal-cli-api"
+        if binary == "signal-cli" and path and ".local/bin" in path:
+            return "/home/teladi/.local/bin/signal-cli"
+        return None
 
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", fake_which)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)
 
     assert commands == [["signal-cli-api", "--listen", "127.0.0.1:8080"]]
+    assert ".local/bin" in envs[0]["PATH"]
+    assert ".cargo/bin" in envs[0]["PATH"]
     assert (tmp_path / "runtime" / "signal-cli-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
+
+
+def test_signal_backend_autostart_requires_signal_cli_binary(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://localhost:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_services",
+        lambda _config: (SignalServiceHealth(account=account, ok=False, target="localhost:8080", error="connection refused"),),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_service",
+        lambda _account, timeout_seconds=1.0: SignalServiceHealth(
+            account=account,
+            ok=False,
+            target="localhost:8080",
+            error="connection refused",
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "signal-cli-api" if binary == "signal-cli-api" else None)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.subprocess.Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("signal-cli-api must not start without signal-cli")),
+    )
+
+    try:
+        ensure_signal_services_available(config)
+    except SignalRuntimeError as exc:
+        assert "signal-cli ist nicht im PATH" in str(exc)
+    else:
+        raise AssertionError("SignalRuntimeError was not raised")
 
 
 def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_path) -> None:
@@ -909,11 +965,18 @@ def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_pa
         service_up["value"] = True
         return FakeProcess()
 
+    def fake_which(binary, path=None):
+        if binary == "signal-cli-api":
+            return "signal-cli-api"
+        if binary == "signal-cli":
+            return "/home/teladi/.local/bin/signal-cli"
+        return None
+
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda _binary: "signal-cli-api")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", fake_which)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
 
     ensure_signal_services_available(config)

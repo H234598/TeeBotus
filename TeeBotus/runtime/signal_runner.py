@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
+import os
+import shutil
 import socket
 import subprocess
-import shutil
 import threading
 import time
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -428,6 +429,7 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     pid_path = runtime_dir() / f"signal-cli-api-{account.instance_name}-{account.slot}.pid"
     if _pid_file_process_is_running(pid_path):
         return
+    _require_signal_backend_binary("signal-cli")
     runtime_dir().mkdir(parents=True, exist_ok=True)
     try:
         log_file = log_path.open("ab")
@@ -439,6 +441,7 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
             stdin=subprocess.DEVNULL,
             stdout=log_file,
             stderr=subprocess.STDOUT,
+            env=_signal_backend_env(),
             start_new_session=True,
         )
     except FileNotFoundError as exc:
@@ -477,6 +480,39 @@ def _signal_cli_api_command(host: str, port: int) -> list[str]:
         local_binary = Path.home() / ".cargo" / "bin" / "signal-cli-api"
         binary = str(local_binary) if local_binary.exists() else "signal-cli-api"
     return [binary, "--listen", f"{listen_host}:{port}"]
+
+
+def _require_signal_backend_binary(binary: str) -> str:
+    path = _signal_backend_binary(binary)
+    if path is None:
+        raise SignalRuntimeError(
+            f"{binary} ist nicht im PATH. Installiere die gepinnte native Abhaengigkeit aus adapter-dependencies.lock."
+        )
+    return path
+
+
+def _signal_backend_binary(binary: str) -> str | None:
+    path = shutil.which(binary, path=_signal_backend_path())
+    if path is not None:
+        return path
+    return shutil.which(binary)
+
+
+def _signal_backend_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env["PATH"] = _signal_backend_path()
+    return env
+
+
+def _signal_backend_path() -> str:
+    extra = [str(Path.home() / ".local" / "bin"), str(Path.home() / ".cargo" / "bin")]
+    current = os.environ.get("PATH", "")
+    parts = [part for part in current.split(os.pathsep) if part]
+    merged: list[str] = []
+    for part in [*extra, *parts]:
+        if part not in merged:
+            merged.append(part)
+    return os.pathsep.join(merged)
 
 
 def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
