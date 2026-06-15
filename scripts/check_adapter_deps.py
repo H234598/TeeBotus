@@ -164,6 +164,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         "Context.send.base64_attachments": "base64_attachments" in send_params,
         "Context.reply.base64_attachments": "base64_attachments" in reply_params,
         "SignalBot.send.quote_author": "quote_author" in bot_send_params,
+        "SignalBot.send.quote_mentions": "quote_mentions" in bot_send_params,
         "SignalBot.send.quote_message": "quote_message" in bot_send_params,
         "SignalBot.send.quote_timestamp": "quote_timestamp" in bot_send_params,
         "Context.remote_delete.timestamp": "timestamp" in delete_params,
