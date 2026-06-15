@@ -114,6 +114,7 @@ class FakeOpenAIClient:
         self.reply_inputs: list[str] = []
         self.voice_texts: list[str] = []
         self.voice_instruction_texts: list[str] = []
+        self.voice_names: list[str] = []
         self.transcribed_audios: list[tuple[bytes, str]] = []
         self.transcription_models: list[str | None] = []
         self.transcription_text = "Was ist los?"
@@ -128,6 +129,7 @@ class FakeOpenAIClient:
     def create_voice(self, text, instructions):
         self.voice_texts.append(text)
         self.voice_instruction_texts.append(instructions.openai_voice_instructions)
+        self.voice_names.append(instructions.openai_voice)
         return OpenAIVoice(audio=b"voice-bytes", filename="voice.ogg", content_type="audio/ogg")
 
     def transcribe_audio(self, audio, filename, instructions, model=None):
@@ -2780,6 +2782,52 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.voice_texts, ["Hallo Welt"])
         self.assertIn("Basisstimme.", openai_client.voice_instruction_texts[0])
         self.assertIn("Nürnberg", openai_client.voice_instruction_texts[0])
+
+    def test_voice_model_command_persists_openai_voice_alias(self) -> None:
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"v" * 32))
+            instructions = BotInstructions()
+
+            handle_update(
+                api,
+                {"message": {"text": "/voicemodel onys", "chat": {"id": 123}, "from": {"id": 456}}},
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store=memory_store,
+            )
+            handle_update(
+                api,
+                {"message": {"text": "/voice Hallo Welt", "chat": {"id": 123}, "from": {"id": 456}}},
+                instructions,
+                openai_client,
+                chat_state,
+                user_memory_store=memory_store,
+            )
+
+        self.assertIn("OpenAI-Stimme onyx", api.sent_messages[0][1])
+        self.assertIn("https://platform.openai.com/docs/guides/text-to-speech#voice-options", api.sent_messages[0][1])
+        self.assertEqual(openai_client.voice_names, ["onyx"])
+
+    def test_voice_model_command_lists_openai_voices(self) -> None:
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"v" * 32))
+            handle_update(
+                api,
+                {"message": {"text": "/voicemodel", "chat": {"id": 123}, "from": {"id": 456}}},
+                BotInstructions(),
+                FakeOpenAIClient(),
+                ChatState(),
+                user_memory_store=memory_store,
+            )
+
+        self.assertIn("Aktuelle Stimme:", api.sent_messages[0][1])
+        self.assertIn("onyx", api.sent_messages[0][1])
+        self.assertIn("https://platform.openai.com/docs/guides/text-to-speech#voice-options", api.sent_messages[0][1])
 
     def test_logs_outgoing_voice_without_content(self) -> None:
         from TeeBotus.instructions import BotInstructions

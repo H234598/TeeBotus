@@ -18,6 +18,7 @@ TeeBotus ist ein kleiner Telegram-Bot in Python, ohne externe Abhaengigkeiten. E
 - `/cleanup all` loescht alle zuletzt gemerkten Nachrichten aus dem aktuellen Chat
 - `/codex Prompt` startet lokal `codex exec` aus dem Bot-Prozess heraus
 - `/voice Text` erzeugt eine Telegram-Sprachnachricht
+- `/voicemodel <stimme>` speichert die bevorzugte OpenAI-Stimme fuer eigene Sprachnachrichten; OpenAI-Voices: https://platform.openai.com/docs/guides/text-to-speech#voice-options
 - eingehende Telegram-Sprachnachrichten werden transkribiert und wie Textnachrichten verarbeitet
 - normale Textnachrichten werden per aktiver Instanz-`Bot_Verhalten.md` beantwortet oder als Echo zurueckgegeben
 - optionaler OpenAI-Fallback fuer freie Fragen
@@ -321,7 +322,7 @@ Feste Slash-Befehle werden nicht an OpenAI gesendet.
 
 Lange OpenAI-Antworten werden automatisch in mehrere Telegram-Nachrichten aufgeteilt, damit Telegrams Nachrichtenlimit nicht erreicht wird.
 
-Sprachnachrichten werden mit `/voice Text` erzeugt. Alternativ kannst du auf eine Textnachricht antworten und nur `/voice` senden; der Bot vertont dann den Text der beantworteten Nachricht. Die Stimme wird in der aktiven Instanz-`Bot_Verhalten.md` ueber `voice_model`, `voice`, `voice_format`, `voice_speed` und `voice_instructions` gesteuert. Standard ist `voice_format: opus`, passend fuer Telegram-Sprachnachrichten.
+Sprachnachrichten werden mit `/voice Text` erzeugt. Alternativ kannst du auf eine Textnachricht antworten und nur `/voice` senden; der Bot vertont dann den Text der beantworteten Nachricht. Die Default-Stimme wird in der aktiven Instanz-`Bot_Verhalten.md` ueber `voice_model`, `voice`, `voice_format`, `voice_speed` und `voice_instructions` gesteuert. Nutzer koennen mit `/voicemodel <stimme>` eine eigene OpenAI-Stimme waehlen, zum Beispiel `/voicemodel onyx`; `/voicemodel reset` nutzt wieder den Instanz-Default. Die aktuelle OpenAI-Voice-Liste steht unter https://platform.openai.com/docs/guides/text-to-speech#voice-options. Standard ist `voice_format: opus`, passend fuer Telegram-Sprachnachrichten.
 
 `/codex Prompt` startet den lokalen Codex-CLI-Prozess aus dem Bot-Prozess heraus. Zugelassen sind nur die in der aktiven Instanz-`Bot_Verhalten.md` unter `## Codex` eingetragenen Telegram-Sender-IDs. Der Bot arbeitet dabei aus dem Repository-Root und benutzt kein `shell=True`.
 

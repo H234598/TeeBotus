@@ -10,6 +10,35 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 
 TTS_DIALECT_STATE_KEY = "tts_dialect"
+TTS_VOICE_STATE_KEY = "tts_voice"
+OPENAI_TTS_VOICE_DOCS_URL = "https://platform.openai.com/docs/guides/text-to-speech#voice-options"
+OPENAI_TTS_VOICES = (
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "fable",
+    "nova",
+    "onyx",
+    "sage",
+    "shimmer",
+    "verse",
+    "marin",
+    "cedar",
+)
+OPENAI_LEGACY_TTS_VOICES = ("alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer")
+OPENAI_TTS_VOICE_ALIASES = {
+    "onys": "onyx",
+    "ony": "onyx",
+    "onyx": "onyx",
+    "marlin": "marin",
+    "standard": "",
+    "default": "",
+    "reset": "",
+    "off": "",
+    "aus": "",
+}
 
 _CITY_PATTERN = r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
 _BIRTH_CITY_PATTERNS = (
@@ -35,6 +64,13 @@ class TtsDialectUpdate:
     reply_text: str = ""
     changed: bool = False
     pending: bool = False
+
+
+@dataclass(frozen=True)
+class TtsVoiceCommandResult:
+    reply_text: str
+    changed: bool = False
+    voice: str = ""
 
 
 def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id: str, text: str) -> TtsDialectUpdate:
@@ -85,10 +121,14 @@ def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id:
 
 def voice_instructions_for_account(instructions: BotInstructions, account_store: AccountStore | None, account_id: str) -> BotInstructions:
     city = tts_dialect_city(account_store, account_id)
-    if not city:
+    voice = tts_voice_for_account(account_store, account_id, instructions)
+    if not city and not voice:
         return instructions
     adjusted = copy(instructions)
-    adjusted.openai_voice_instructions = _dialect_voice_instructions(instructions.openai_voice_instructions, city)
+    if city:
+        adjusted.openai_voice_instructions = _dialect_voice_instructions(instructions.openai_voice_instructions, city)
+    if voice:
+        adjusted.openai_voice = voice
     return adjusted
 
 
@@ -103,6 +143,120 @@ def tts_dialect_city(account_store: AccountStore | None, account_id: str) -> str
     if not isinstance(dialect_state, dict):
         return ""
     return str(dialect_state.get("city") or "").strip()
+
+
+def handle_tts_voice_model_command(
+    account_store: AccountStore,
+    account_id: str,
+    text: str,
+    instructions: BotInstructions,
+) -> TtsVoiceCommandResult:
+    parts = str(text or "").strip().split(maxsplit=1)
+    argument = parts[1].strip() if len(parts) > 1 else ""
+    if not argument:
+        current = tts_voice_for_account(account_store, account_id, instructions) or instructions.openai_voice
+        voices = ", ".join(available_openai_tts_voices(instructions))
+        return TtsVoiceCommandResult(
+            "Aktuelle Stimme: {current}\n"
+            "Nutzung: /voicemodel <stimme>, z.B. /voicemodel onyx. Mit /voicemodel reset nutzt du wieder den Instanz-Default.\n"
+            "OpenAI-Voices: {voices}\n"
+            "Doku: {url}".format(current=current, voices=voices, url=OPENAI_TTS_VOICE_DOCS_URL)
+        )
+    normalized = normalize_openai_tts_voice(argument)
+    if normalized is None:
+        voices = ", ".join(available_openai_tts_voices(instructions))
+        return TtsVoiceCommandResult(
+            "Diese OpenAI-Stimme kenne ich fuer den aktuellen Voice-Provider nicht: {voice}\n"
+            "Verfuegbar: {voices}\n"
+            "Doku: {url}".format(voice=argument, voices=voices, url=OPENAI_TTS_VOICE_DOCS_URL)
+        )
+    if not normalized:
+        changed = clear_tts_voice_preference(account_store, account_id)
+        return TtsVoiceCommandResult(
+            "Okay, fuer Sprachnachrichten nutze ich wieder den Instanz-Default: {voice}\nDoku: {url}".format(
+                voice=instructions.openai_voice,
+                url=OPENAI_TTS_VOICE_DOCS_URL,
+            ),
+            changed=changed,
+        )
+    if normalized not in available_openai_tts_voices(instructions):
+        voices = ", ".join(available_openai_tts_voices(instructions))
+        return TtsVoiceCommandResult(
+            "Die Stimme {voice} passt nicht zum aktuell eingestellten OpenAI-Voice-Modell {model}.\n"
+            "Verfuegbar: {voices}\n"
+            "Doku: {url}".format(
+                voice=normalized,
+                model=instructions.openai_voice_model,
+                voices=voices,
+                url=OPENAI_TTS_VOICE_DOCS_URL,
+            )
+        )
+    set_tts_voice_preference(account_store, account_id, normalized, provider="openai")
+    return TtsVoiceCommandResult(
+        "Okay, fuer deine Sprachnachrichten nutze ich jetzt die OpenAI-Stimme {voice}.\nDoku: {url}".format(
+            voice=normalized,
+            url=OPENAI_TTS_VOICE_DOCS_URL,
+        ),
+        changed=True,
+        voice=normalized,
+    )
+
+
+def tts_voice_for_account(account_store: AccountStore | None, account_id: str, instructions: BotInstructions) -> str:
+    if account_store is None or not account_id:
+        return ""
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return ""
+    voice_state = state.get(TTS_VOICE_STATE_KEY)
+    if not isinstance(voice_state, dict):
+        return ""
+    provider = str(voice_state.get("provider") or "openai").strip().casefold()
+    if provider != "openai":
+        return ""
+    voice = normalize_openai_tts_voice(str(voice_state.get("voice") or ""))
+    if not voice or voice not in available_openai_tts_voices(instructions):
+        return ""
+    return voice
+
+
+def set_tts_voice_preference(account_store: AccountStore, account_id: str, voice: str, *, provider: str = "openai") -> None:
+    state = account_store.read_agent_state(account_id)
+    state[TTS_VOICE_STATE_KEY] = {
+        "schema_version": 1,
+        "provider": provider,
+        "voice": voice,
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "docs_url": OPENAI_TTS_VOICE_DOCS_URL,
+    }
+    account_store.write_agent_state(account_id, state)
+
+
+def clear_tts_voice_preference(account_store: AccountStore, account_id: str) -> bool:
+    state = account_store.read_agent_state(account_id)
+    if TTS_VOICE_STATE_KEY not in state:
+        return False
+    state.pop(TTS_VOICE_STATE_KEY, None)
+    account_store.write_agent_state(account_id, state)
+    return True
+
+
+def normalize_openai_tts_voice(value: str) -> str | None:
+    normalized = re.sub(r"[^a-z0-9_-]+", "", str(value or "").strip().casefold())
+    normalized = OPENAI_TTS_VOICE_ALIASES.get(normalized, normalized)
+    if normalized == "":
+        return ""
+    if normalized in OPENAI_TTS_VOICES:
+        return normalized
+    return None
+
+
+def available_openai_tts_voices(instructions: BotInstructions) -> tuple[str, ...]:
+    model = str(instructions.openai_voice_model or "").strip().casefold()
+    if model in {"tts-1", "tts-1-hd"}:
+        return OPENAI_LEGACY_TTS_VOICES
+    return OPENAI_TTS_VOICES
 
 
 def extract_birth_city(text: str) -> str:

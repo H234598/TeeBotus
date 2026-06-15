@@ -31,7 +31,7 @@ from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttac
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.state import RuntimeState
-from TeeBotus.runtime.tts_dialect import maybe_update_tts_dialect_preference, voice_instructions_for_account
+from TeeBotus.runtime.tts_dialect import handle_tts_voice_model_command, maybe_update_tts_dialect_preference, voice_instructions_for_account
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
@@ -179,6 +179,8 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().openai_reset)], handled=True)
         if command == "/voice":
             return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
+        if command == "/voicemodel":
+            return EngineResult(result.account_id, self._voice_model_actions(event, result.account_id, self._current_instructions()), handled=True)
         if command in YOUTUBE_TRANSCRIPT_COMMANDS:
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
         if not _event_is_addressed_to_bot(event, command, self.bot_address_names):
@@ -609,6 +611,13 @@ class TeeBotusEngine:
         filename = str(getattr(voice, "filename", "") or "voice.ogg")
         content_type = str(getattr(voice, "content_type", "") or "audio/ogg")
         return [SendTyping(event.chat_id), SendAttachment(event.chat_id, audio, filename, content_type)]
+
+    def _voice_model_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+        try:
+            result = handle_tts_voice_model_command(self.account_store, account_id, event.text, instructions)
+        except (AccountStoreError, OSError, ValueError):
+            return [SendText(event.chat_id, "Ich konnte deine Voice-Einstellung gerade nicht speichern.")]
+        return [SendText(event.chat_id, result.reply_text, track=False)]
 
     def _youtube_transcript_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         url = _extract_youtube_url(event.text)

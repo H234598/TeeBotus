@@ -1308,6 +1308,39 @@ def test_engine_voice_command_uses_account_tts_dialect(tmp_path):
     assert "Nürnberg" in client.voice_instructions[0]
 
 
+def test_engine_voice_model_command_persists_openai_voice_alias(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.voice_names: list[str] = []
+
+        def create_voice(self, _text, instructions):
+            self.voice_names.append(instructions.openai_voice)
+            return type("Voice", (), {"audio": b"voice", "filename": "voice.ogg", "content_type": "audio/ogg"})()
+
+    account_store = store(tmp_path)
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(), openai_client=client)
+    identity = signal_identity_key(source_uuid="voice-model")
+
+    set_actions = engine.process(event(identity, "/voicemodel onys", channel="signal"))
+    voice_actions = engine.process(event(identity, "/voice Hallo", channel="signal"))
+
+    assert "OpenAI-Stimme onyx" in set_actions[0].text
+    assert "https://platform.openai.com/docs/guides/text-to-speech#voice-options" in set_actions[0].text
+    assert client.voice_names == ["onyx"]
+    assert isinstance(voice_actions[1], SendAttachment)
+
+
+def test_engine_voice_model_command_lists_openai_voices(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voicemodel", channel="matrix"))
+
+    assert "Aktuelle Stimme:" in actions[0].text
+    assert "onyx" in actions[0].text
+    assert "https://platform.openai.com/docs/guides/text-to-speech#voice-options" in actions[0].text
+
+
 def test_engine_voice_command_uses_reply_text(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

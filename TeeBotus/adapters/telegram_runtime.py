@@ -46,7 +46,7 @@ from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, proactive_agent_instance_enabled
 from TeeBotus.runtime.telegram_bridge import maybe_handle_account_runtime_message
-from TeeBotus.runtime.tts_dialect import maybe_update_tts_dialect_preference, voice_instructions_for_account
+from TeeBotus.runtime.tts_dialect import handle_tts_voice_model_command, maybe_update_tts_dialect_preference, voice_instructions_for_account
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -838,6 +838,9 @@ def _process_text_message(
     if text and _normalize_command(text) == "/voice":
         _handle_voice_command(api, chat_state, chat_id, message, instructions, openai_client, text, user_memory_store, user_memory)
         return
+    if text and _normalize_command(text) == "/voicemodel":
+        _handle_voice_model_command(api, chat_state, chat_id, message, instructions, text, user_memory_store)
+        return
 
     if text and _handle_pending_youtube_local_options(
         api,
@@ -935,7 +938,7 @@ def _process_text_message(
             reply,
             instructions,
             openai_client,
-            voice_instructions=_voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+            voice_instructions=_voice_instructions_for_message(instructions, user_memory_store, user_memory, message),
         )
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
@@ -1863,12 +1866,21 @@ def _handle_tts_dialect_preference(user_memory_store: AccountStore | None, user_
     return update.reply_text
 
 
-def _voice_instructions_for_user_memory(
+def _voice_instructions_for_message(
     instructions: BotInstructions,
     user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
+    message: dict[str, Any],
 ) -> BotInstructions:
-    return voice_instructions_for_account(instructions, user_memory_store, _account_id_from_user_memory(user_memory))
+    account_id = _account_id_from_user_memory(user_memory)
+    if not account_id and user_memory_store is not None:
+        identity_key = _telegram_identity_key_from_message(message)
+        if identity_key:
+            try:
+                account_id = user_memory_store.get_account_for_identity(identity_key) or ""
+            except (AccountStoreError, OSError, AttributeError):
+                account_id = ""
+    return voice_instructions_for_account(instructions, user_memory_store, account_id)
 
 
 def _account_id_from_user_memory(user_memory: UserMemoryRecord | None) -> str:
@@ -3081,13 +3093,45 @@ def _handle_voice_command(
         api.send_chat_action(chat_id, "record_voice")
         voice = openai_client.create_voice(
             voice_text,
-            _voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+            _voice_instructions_for_message(instructions, user_memory_store, user_memory, message),
         )
         api.send_chat_action(chat_id, "upload_voice")
         _send_tracked_voice(api, chat_state, chat_id, voice.audio, voice.filename, voice.content_type)
     except OpenAIAPIError as exc:
         LOGGER.error("OpenAI speech request failed: %s", exc)
         _send_tracked_message(api, chat_state, chat_id, instructions.openai_voice_error)
+
+
+def _handle_voice_model_command(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    instructions: BotInstructions,
+    text: str,
+    user_memory_store: AccountStore | None = None,
+) -> None:
+    if user_memory_store is None:
+        _send_tracked_message(api, chat_state, chat_id, "Voice-Auswahl ist fuer diesen Bot gerade nicht verfuegbar.")
+        return
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        _send_tracked_message(api, chat_state, chat_id, "Ich konnte deine Telegram-Identitaet fuer die Voice-Auswahl nicht zuordnen.")
+        return
+    try:
+        account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+        user_memory_store.update_identity_route(
+            identity_key,
+            channel="telegram",
+            chat_id=str(_message_chat_id(message) or ""),
+            chat_type=_telegram_chat_type(message),
+        )
+        result = handle_tts_voice_model_command(user_memory_store, account_id, text, instructions)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception("Failed to update Telegram voice model preference.")
+        _send_tracked_message(api, chat_state, chat_id, "Ich konnte deine Voice-Einstellung gerade nicht speichern.")
+        return
+    _send_tracked_message(api, chat_state, chat_id, result.reply_text)
 
 
 def _extract_voice_text(message: dict[str, Any], command_text: str) -> str:
@@ -3529,7 +3573,7 @@ def _send_youtube_transcript_to_openai_pipeline(
             reply,
             instructions,
             openai_client,
-            voice_instructions=_voice_instructions_for_user_memory(instructions, user_memory_store, user_memory),
+            voice_instructions=_voice_instructions_for_message(instructions, user_memory_store, user_memory, message),
         )
     except TelegramAPIError as exc:
         LOGGER.warning("Telegram request failed while sending YouTube transcript response: %s", exc)
