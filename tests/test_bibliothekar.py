@@ -165,6 +165,45 @@ def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path)
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
 
 
+def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path):
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    account_memory_dir = instance_dir / "data" / "accounts" / "accounts" / "telegram-1"
+    library_dir.mkdir(parents=True)
+    account_memory_dir.mkdir(parents=True)
+    secret_marker = "ACCOUNT_MEMORY_ONLY_SECRET_MARKER_7B3F"
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (account_memory_dir / "memory.md").write_text(
+        f"Diese Account-Memory-Datei darf nie in den Bibliothekar-Index: {secret_marker}",
+        encoding="utf-8",
+    )
+    document_store = FakeDocumentStore()
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+        fallback_store=store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+
+    local_chunks = store.chunks_path.read_text(encoding="utf-8")
+    haystack_payload = "\n".join(
+        f"{document.content}\n{json.dumps(document.meta, ensure_ascii=False, sort_keys=True)}"
+        for document in document_store.documents
+    )
+    assert index["chunk_count"] == 1
+    assert secret_marker not in local_chunks
+    assert "data/accounts" not in local_chunks
+    assert secret_marker not in haystack_payload
+    assert "data/accounts" not in haystack_payload
+    assert "therapie.txt" in local_chunks
+
+
 def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
