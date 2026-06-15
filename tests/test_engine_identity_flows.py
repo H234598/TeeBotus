@@ -8,7 +8,7 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
-from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -17,7 +17,14 @@ def store(tmp_path):
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"e" * 32))
 
 
-def event(identity_key: str, text: str, *, channel: str = "telegram", attachments: tuple[IncomingAttachment, ...] = ()) -> IncomingEvent:
+def event(
+    identity_key: str,
+    text: str,
+    *,
+    channel: str = "telegram",
+    attachments: tuple[IncomingAttachment, ...] = (),
+    link_previews: tuple[IncomingLinkPreview, ...] = (),
+) -> IncomingEvent:
     return IncomingEvent(
         event_id=f"{channel}:1",
         instance="Depressionsbot",
@@ -32,6 +39,7 @@ def event(identity_key: str, text: str, *, channel: str = "telegram", attachment
         text=text,
         message_ref="1",
         attachments=attachments,
+        link_previews=link_previews,
     )
 
 
@@ -483,6 +491,37 @@ def test_engine_includes_non_audio_attachment_metadata_for_openai_input(tmp_path
     assert actions[1].text == "Antwort auf Datei."
     assert "filename=report.pdf content_type=application/pdf bytes=3" in client.user_text
     assert "Nachricht:\nBitte ansehen" in client.user_text
+
+
+def test_engine_includes_link_preview_metadata_for_openai_input(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort auf Link.", "resp-link", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    preview = IncomingLinkPreview(
+        title="TeeBotus",
+        url="https://example.test/tee",
+        description="Botlink",
+        base64_thumbnail="aW1hZ2U=",
+        id="preview-thumb",
+    )
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Sieh mal", link_previews=(preview,)))
+
+    assert actions[1].text == "Antwort auf Link."
+    assert "- link_previews: 1" in client.user_text
+    assert "Linkpreviews:" in client.user_text
+    assert "title=TeeBotus" in client.user_text
+    assert "url=https://example.test/tee" in client.user_text
+    assert "thumbnail=yes" in client.user_text
+    assert "Nachricht:\nSieh mal" in client.user_text
 
 
 def test_engine_includes_reply_context_in_openai_input(tmp_path):

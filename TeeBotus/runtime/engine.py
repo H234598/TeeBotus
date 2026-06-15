@@ -695,6 +695,7 @@ def _build_openai_user_input(
         f"- account_id: {_metadata_value(event.account_id)}",
         f"- reply_to_text: {_metadata_value(event.reply_to_text)}",
         f"- attachments: {len(event.attachments)}",
+        f"- link_previews: {len(event.link_previews)}",
     ]
     if attachment_context:
         metadata.extend(
@@ -704,6 +705,19 @@ def _build_openai_user_input(
                 attachment_context,
             ]
         )
+    if event.link_previews:
+        metadata.extend(["", "Linkpreviews:"])
+        for index, preview in enumerate(event.link_previews, start=1):
+            metadata.append(
+                "- #{}: title={} url={} description={} thumbnail={} id={}".format(
+                    index,
+                    _metadata_value(preview.title),
+                    _metadata_value(preview.url),
+                    _metadata_value(preview.description),
+                    "yes" if preview.base64_thumbnail else "no",
+                    _metadata_value(preview.id),
+                )
+            )
     if account_memory_context:
         metadata.extend(
             [

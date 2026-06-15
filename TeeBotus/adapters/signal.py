@@ -21,7 +21,7 @@ from TeeBotus.runtime.actions import (
     UpdateSignalContact,
     UpdateSignalGroup,
 )
-from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 
 
 def signal_message_to_event(
@@ -78,6 +78,7 @@ def signal_message_to_event(
         message_ref=_signal_message_ref(message),
         reply_to_text=_signal_quote_text(message),
         attachments=attachments,
+        link_previews=_signal_link_previews(message),
         raw=message,
     )
 
@@ -623,6 +624,26 @@ def _signal_quote_text(message: Any) -> str | None:
         return None
     text = str(getattr(quote, "text", "") or "").strip()
     return text or None
+
+
+def _signal_link_previews(message: Any) -> tuple[IncomingLinkPreview, ...]:
+    previews = getattr(message, "link_previews", None) or []
+    mapped: list[IncomingLinkPreview] = []
+    for preview in previews:
+        title = str(getattr(preview, "title", "") or "").strip()
+        url = str(getattr(preview, "url", "") or "").strip()
+        if not title and not url:
+            continue
+        mapped.append(
+            IncomingLinkPreview(
+                title=title,
+                url=url,
+                description=str(getattr(preview, "description", "") or "").strip(),
+                base64_thumbnail=str(getattr(preview, "base64_thumbnail", "") or "").strip(),
+                id=str(getattr(preview, "id", "") or "").strip(),
+            )
+        )
+    return tuple(mapped)
 
 
 def _guess_content_type(filename: str) -> str:

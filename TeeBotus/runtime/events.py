@@ -16,6 +16,15 @@ class IncomingAttachment:
     view_once: bool = False
 
 
+@dataclass(frozen=True)
+class IncomingLinkPreview:
+    title: str = ""
+    url: str = ""
+    description: str = ""
+    base64_thumbnail: str = ""
+    id: str = ""
+
+
 @dataclass(frozen=True, init=False)
 class IncomingEvent:
     event_id: str
@@ -34,6 +43,7 @@ class IncomingEvent:
     sender_number: str
     reply_to_text: str | None
     attachments: tuple[IncomingAttachment, ...]
+    link_previews: tuple[IncomingLinkPreview, ...]
     raw: Any
 
     def __init__(
@@ -57,6 +67,7 @@ class IncomingEvent:
         sender_number: str = "",
         reply_to_text: str | None = None,
         attachments: tuple[IncomingAttachment, ...] = (),
+        link_previews: tuple[IncomingLinkPreview, ...] = (),
         raw: Any = None,
     ) -> None:
         object.__setattr__(self, "event_id", event_id)
@@ -75,6 +86,7 @@ class IncomingEvent:
         object.__setattr__(self, "sender_number", sender_number)
         object.__setattr__(self, "reply_to_text", reply_to_text)
         object.__setattr__(self, "attachments", attachments)
+        object.__setattr__(self, "link_previews", link_previews)
         object.__setattr__(self, "raw", raw)
 
 
@@ -96,6 +108,7 @@ class IncomingEvent:
             message_ref=self.message_ref,
             reply_to_text=self.reply_to_text,
             attachments=self.attachments,
+            link_previews=self.link_previews,
             raw=self.raw,
         )
 
@@ -117,6 +130,29 @@ class IncomingEvent:
             message_ref=self.message_ref,
             reply_to_text=self.reply_to_text,
             attachments=attachments,
+            link_previews=self.link_previews,
+            raw=self.raw,
+        )
+
+    def with_link_previews(self, link_previews: tuple[IncomingLinkPreview, ...]) -> "IncomingEvent":
+        return IncomingEvent(
+            event_id=self.event_id,
+            instance=self.instance,
+            channel=self.channel,
+            adapter_slot=self.adapter_slot,
+            account_id=self.account_id,
+            identity_key=self.identity_key,
+            chat_id=self.chat_id,
+            chat_type=self.chat_type,
+            sender_id=self.sender_id,
+            sender_name=self.sender_name,
+            sender_username=self.sender_username,
+            sender_number=self.sender_number,
+            text=self.text,
+            message_ref=self.message_ref,
+            reply_to_text=self.reply_to_text,
+            attachments=self.attachments,
+            link_previews=link_previews,
             raw=self.raw,
         )
 

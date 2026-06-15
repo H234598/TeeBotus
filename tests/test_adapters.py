@@ -36,6 +36,7 @@ class FakeSignalMessage:
     attachments_local_filenames: list[str] | None = None
     base64_attachments: list[str] | None = None
     view_once: bool = False
+    link_previews: list[object] | None = None
     quote: object | None = None
     type: object = MessageType.DATA_MESSAGE
     raw_message: str | None = None
@@ -201,6 +202,34 @@ def test_signal_quote_text_maps_to_reply_context():
     assert event is not None
     assert event.text == "Antwort"
     assert event.reply_to_text == "Vorheriger Text"
+
+
+def test_signal_link_previews_map_to_event_metadata():
+    preview = type(
+        "Preview",
+        (),
+        {
+            "title": "TeeBotus",
+            "url": "https://example.test/tee",
+            "description": "Botlink",
+            "base64_thumbnail": "aW1hZ2U=",
+            "id": "preview-thumb",
+        },
+    )()
+
+    event = signal_message_to_event(
+        FakeSignalMessage(text="Schau mal", link_previews=[preview]),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert len(event.link_previews) == 1
+    assert event.link_previews[0].title == "TeeBotus"
+    assert event.link_previews[0].url == "https://example.test/tee"
+    assert event.link_previews[0].description == "Botlink"
+    assert event.link_previews[0].base64_thumbnail == "aW1hZ2U="
+    assert event.link_previews[0].id == "preview-thumb"
 
 
 def test_signal_edit_message_uses_target_timestamp_as_message_ref():
