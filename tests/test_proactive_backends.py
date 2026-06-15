@@ -57,6 +57,48 @@ def test_signal_proactive_sender_calls_signalbot_send() -> None:
     ]
 
 
+def test_signal_proactive_sender_coerces_link_preview_dict() -> None:
+    from signalbot import LinkPreview
+
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send(self, receiver: str, text: str, **kwargs) -> int:
+            self.calls.append((receiver, text, kwargs))
+            return 123456
+
+    bot = Bot()
+    sender = signal_proactive_sender(bot)
+
+    sent_ref = asyncio.run(
+        sender(
+            {"adapter_slot": 1},
+            SendText(
+                "+491",
+                "Link",
+                link_preview={
+                    "title": "Tee",
+                    "description": "Kanne",
+                    "url": "https://example.test/tee",
+                    "base64_thumbnail": "dGVl",
+                    "id": "preview-1",
+                },
+            ),
+            {},
+        )
+    )
+
+    assert sent_ref == 123456
+    preview = bot.calls[0][2]["link_preview"]
+    assert isinstance(preview, LinkPreview)
+    assert preview.title == "Tee"
+    assert preview.description == "Kanne"
+    assert preview.url == "https://example.test/tee"
+    assert preview.base64_thumbnail == "dGVl"
+    assert preview.id == "preview-1"
+
+
 def test_signal_proactive_sender_sends_attachment_base64() -> None:
     class Bot:
         def __init__(self) -> None:

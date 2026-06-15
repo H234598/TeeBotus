@@ -5,6 +5,7 @@ from inspect import isawaitable
 from typing import Any, Mapping
 
 from TeeBotus.adapters.matrix import send_matrix_actions
+from TeeBotus.adapters.signal import _coerce_signal_link_preview
 from TeeBotus.adapters.telegram import send_telegram_actions
 from TeeBotus.runtime.actions import ExportFile, OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.proactive_agent import ProactiveSender
@@ -36,7 +37,7 @@ def signal_proactive_sender(bots: Any | Mapping[int, Any]) -> ProactiveSender:
                 mentions=list(action.mentions) or None,
                 text_mode=action.text_mode or None,
                 view_once=action.view_once,
-                link_preview=action.link_preview,
+                link_preview=_coerce_signal_link_preview(action.link_preview),
             )
         elif isinstance(action, SendAttachment):
             result = send(
@@ -46,7 +47,7 @@ def signal_proactive_sender(bots: Any | Mapping[int, Any]) -> ProactiveSender:
                 mentions=list(action.mentions) or None,
                 text_mode=action.text_mode or None,
                 view_once=action.view_once,
-                link_preview=action.link_preview,
+                link_preview=_coerce_signal_link_preview(action.link_preview),
             )
         elif isinstance(action, ExportFile):
             result = send(
