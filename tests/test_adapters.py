@@ -410,6 +410,16 @@ def test_signal_typing_is_stopped_after_followup_send():
     assert context.calls == ["start_typing", ("send", "hi"), "stop_typing"]
 
 
+def test_signal_unknown_action_preserves_result_alignment():
+    class Context:
+        async def send(self, text, **_kwargs):
+            return 123
+
+    sent = asyncio.run(send_signal_actions(Context(), [object(), SendText("+491", "hi")]))
+
+    assert sent == [None, 123]
+
+
 def test_signal_actions_accept_sync_signalbot_context_methods():
     class Context:
         def __init__(self) -> None:
@@ -1502,6 +1512,16 @@ def test_telegram_ignores_signal_update_actions():
     )
 
     assert sent == [None, None]
+
+
+def test_telegram_unknown_action_preserves_result_alignment():
+    class API:
+        def send_message(self, chat_id, text):
+            return 5
+
+    sent = send_telegram_actions(API(), [object(), SendText("@my_channel", "hi")])
+
+    assert sent == [None, 5]
 
 
 def test_matrix_message_maps_sender_and_room_to_event():
@@ -2624,6 +2644,19 @@ def test_matrix_ignores_signal_update_actions():
     )
 
     assert sent == [None, None]
+
+
+def test_matrix_unknown_action_preserves_result_alignment():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        async def send_message(self, *_args, **_kwargs):
+            return Response()
+
+    sent = asyncio.run(send_matrix_actions(Client(), [object(), SendText("!room:example", "hi")]))
+
+    assert sent == [None, "$sent"]
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

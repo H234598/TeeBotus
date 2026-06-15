@@ -146,6 +146,8 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             sent.append(_matrix_required_event_id(response, "Matrix export send"))
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages, UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
+        else:
+            sent.append(None)
     return sent
 
 

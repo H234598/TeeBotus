@@ -118,6 +118,8 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             sent.append(None)
         elif isinstance(action, (UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
+        else:
+            sent.append(None)
     return sent
 
 

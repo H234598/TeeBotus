@@ -203,6 +203,8 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                     )
                 )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
+            else:
+                sent.append(None)
     finally:
         if typing_target is not None:
             await _stop_signal_typing_if_started(context, typing_target)
