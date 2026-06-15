@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import re
 
+import pytest
+
 from TeeBotus import __version__
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.instructions import BotInstructions
@@ -1765,6 +1767,26 @@ def test_engine_youtube_transcript_requires_link(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
 
     actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript"))
+
+    assert actions[0].text == "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "alter mach aus dem Video text!",
+        "digga das yt, texte!",
+        "VERDAMMT TRANSKRIBIER DIESES VIDEO!",
+        "digga, video: output!",
+        "DeDeWa! Moege das Orm dir die Beine wegaetzen. Transkribier diesen Scheiss! : zeit: 0 - letzte Minute nein.",
+        "transcribiere dieses Video:",
+        "transcribiere das video:",
+    ],
+)
+def test_engine_youtube_transcript_freeform_phrases_request_link(tmp_path, text):
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    actions = engine.process(event(telegram_identity_key(1), text))
 
     assert actions[0].text == "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
 

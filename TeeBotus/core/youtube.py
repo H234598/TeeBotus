@@ -565,14 +565,25 @@ def _extract_youtube_url(text: str) -> str:
 
 def _has_youtube_transcript_intent(text: str) -> bool:
     normalized = text.casefold()
+    normalized = normalized.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    normalized = re.sub(r"[_-]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
     mentions_youtube = bool(re.search(r"\b(?:youtube|yt)\b|youtu\.be|youtube\.com", normalized))
+    mentions_video = bool(re.search(r"\b(?:video|clip|aufnahme|recording)\b", normalized))
     mentions_transcript = bool(
         re.search(
-            r"transkrib|transcript|transkript|transkription|untertitel|abschrift|abschreib|abtippen|verschriftlich|mitschrift",
+            r"trans(?:krib|crib)|transcript|transkript|transkription|untertitel|abschrift|abschreib|abtippen|verschriftlich|mitschrift",
             normalized,
         )
     )
-    return mentions_youtube and mentions_transcript
+    mentions_text_output = bool(re.search(r"\b(?:text|texte|output|ausgabe|schrift|wortlaut)\b", normalized))
+    if mentions_youtube and (mentions_transcript or mentions_text_output or mentions_video):
+        return True
+    if mentions_video and (mentions_transcript or mentions_text_output):
+        return True
+    if mentions_transcript and re.search(r"\b(?:dies(?:e[rsn]?|en)?|das|den|diese|diesen|scheiss|scheiß|mist|ding|teil)\b", normalized):
+        return True
+    return False
 
 
 def _default_youtube_local_options(live_enabled: bool | None, llm_enabled: bool | None) -> tuple[bool, bool]:

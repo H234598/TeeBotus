@@ -1798,6 +1798,25 @@ class BotTests(unittest.TestCase):
         self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, "456"))
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
 
+    def test_handle_update_youtube_transcript_detects_freeform_video_text_request(self) -> None:
+        api = FakeAPI()
+        chat_state = ChatState()
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "text": "alter mach aus dem Video text!",
+                    "chat": {"id": 123},
+                    "from": {"id": 456},
+                }
+            },
+            chat_state=chat_state,
+        )
+
+        self.assertEqual(api.sent_messages, [(123, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")])
+        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, "456"))
+
     def test_handle_update_youtube_transcript_starts_local_by_default_when_no_subtitles(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
