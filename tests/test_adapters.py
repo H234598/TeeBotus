@@ -1121,6 +1121,25 @@ def test_telegram_message_without_chat_id_is_rejected():
     assert event is None
 
 
+def test_telegram_message_uses_username_identity_fallback_without_sender_id():
+    event = telegram_message_to_event(
+        {
+            "message_id": 1,
+            "from": {"username": "Teladi", "first_name": "Te", "last_name": "Ladi"},
+            "chat": {"id": 42, "type": "private"},
+            "text": "hi",
+        },
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.identity_key == "telegram:username:teladi"
+    assert event.sender_id == ""
+    assert event.sender_name == "Te Ladi"
+    assert event.sender_username == "Teladi"
+
+
 def test_telegram_send_keeps_string_chat_ids_for_channels():
     class API:
         def __init__(self) -> None:
@@ -1265,6 +1284,42 @@ def test_matrix_message_without_sender_is_rejected():
         body = "/account"
 
     assert matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1) is None
+
+
+def test_matrix_message_uses_source_sender_fallback():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        body = "/account"
+        source = {"sender": "@alice:example", "content": {"body": "/account"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.identity_key == "matrix:user:@alice:example"
+    assert event.sender_id == "@alice:example"
+    assert event.sender_name == "@alice:example"
+
+
+def test_matrix_message_uses_display_name_identity_fallback_without_sender():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        body = "/account"
+        source = {"unsigned": {"sender_display_name": "Alice Example"}, "content": {"body": "/account"}}
+
+    event = matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1)
+
+    assert event is not None
+    assert event.identity_key.startswith("matrix:display:")
+    assert event.sender_id == ""
+    assert event.sender_name == "Alice Example"
 
 
 def test_matrix_message_without_room_id_is_rejected():

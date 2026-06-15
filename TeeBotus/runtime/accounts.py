@@ -157,8 +157,17 @@ def _safe_filename(value: str) -> str:
     return safe[:240]
 
 
-def telegram_identity_key(sender_id: int | str) -> str:
-    return f"telegram:user:{str(sender_id).strip()}"
+def telegram_identity_key(sender_id: int | str = "", *, username: str = "", display_name: str = "") -> str:
+    sender_value = str(sender_id or "").strip()
+    if sender_value:
+        return f"telegram:user:{sender_value}"
+    username_value = str(username or "").strip().lstrip("@").casefold()
+    if username_value:
+        return f"telegram:username:{username_value}"
+    display_value = _identity_fingerprint(display_name)
+    if display_value:
+        return f"telegram:display:{display_value}"
+    raise AccountStoreError("Telegram identity needs sender_id, username, or display_name")
 
 
 def signal_identity_key(*, source_uuid: str = "", source_number: str = "", source: str = "") -> str:
@@ -174,11 +183,24 @@ def signal_identity_key(*, source_uuid: str = "", source_number: str = "", sourc
     raise AccountStoreError("Signal identity needs source_uuid, source_number, or source")
 
 
-def matrix_identity_key(sender_id: str) -> str:
+def matrix_identity_key(sender_id: str = "", *, localpart: str = "", display_name: str = "") -> str:
     value = str(sender_id or "").strip()
-    if not value:
-        raise AccountStoreError("Matrix identity needs sender_id")
-    return f"matrix:user:{value}"
+    if value:
+        return f"matrix:user:{value}"
+    localpart_value = str(localpart or "").strip().lstrip("@").casefold()
+    if localpart_value:
+        return f"matrix:localpart:{localpart_value}"
+    display_value = _identity_fingerprint(display_name)
+    if display_value:
+        return f"matrix:display:{display_value}"
+    raise AccountStoreError("Matrix identity needs sender_id, localpart, or display_name")
+
+
+def _identity_fingerprint(value: str) -> str:
+    normalized = " ".join(str(value or "").strip().casefold().split())
+    if not normalized:
+        return ""
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)

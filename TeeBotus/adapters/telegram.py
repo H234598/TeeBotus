@@ -38,13 +38,15 @@ def telegram_message_to_event(
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender_id = str(sender.get("id") or "")
-    if not sender_id:
-        return None
     chat_id = str(chat.get("id") or "")
     if not chat_id:
         return None
     text = str(message.get("text") or message.get("caption") or "")
-    identity_key = telegram_identity_key(sender_id)
+    sender_name = " ".join(part for part in [str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()] if part)
+    try:
+        identity_key = telegram_identity_key(sender_id, username=str(sender.get("username") or ""), display_name=sender_name)
+    except Exception:
+        return None
     return IncomingEvent(
         event_id=f"telegram:{message.get('message_id', '')}",
         instance=instance_name or instance or "",
@@ -55,7 +57,7 @@ def telegram_message_to_event(
         chat_id=chat_id,
         chat_type=_normalize_telegram_chat_type(str(chat.get("type") or "unknown")),
         sender_id=sender_id,
-        sender_name=" ".join(part for part in [str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()] if part),
+        sender_name=sender_name,
         sender_username=str(sender.get("username") or ""),
         sender_number="",
         text=text,

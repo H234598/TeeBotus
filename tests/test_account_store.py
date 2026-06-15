@@ -9,6 +9,7 @@ from TeeBotus.runtime.accounts import (
     AccountStore,
     AccountStoreError,
     StaticSecretProvider,
+    matrix_identity_key,
     signal_identity_key,
     telegram_identity_key,
 )
@@ -30,6 +31,22 @@ def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
     assert account_id not in raw_identity_file
     assert "telegram:user:395935293" not in raw_identity_file
     assert "TMBMAP1" in raw_identity_file
+
+
+def test_telegram_identity_key_uses_username_and_display_fallbacks() -> None:
+    assert telegram_identity_key(395935293, username="Teladi") == "telegram:user:395935293"
+    assert telegram_identity_key("", username="@Teladi") == "telegram:username:teladi"
+    display_key = telegram_identity_key("", display_name="Teladi Example")
+    assert display_key.startswith("telegram:display:")
+    assert len(display_key.removeprefix("telegram:display:")) == 64
+
+
+def test_matrix_identity_key_uses_localpart_and_display_fallbacks() -> None:
+    assert matrix_identity_key("@ada:example.org", localpart="ada") == "matrix:user:@ada:example.org"
+    assert matrix_identity_key("", localpart="@Ada") == "matrix:localpart:ada"
+    display_key = matrix_identity_key("", display_name="Ada Lovelace")
+    assert display_key.startswith("matrix:display:")
+    assert len(display_key.removeprefix("matrix:display:")) == 64
 
 
 def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):

@@ -33,9 +33,14 @@ def matrix_message_to_event(
     account_id: str = "",
     account_label: str = "matrix:1",
 ) -> IncomingEvent | None:
-    sender = str(getattr(message, "sender", "") or "").strip()
+    sender = _matrix_message_sender(message)
     room_id = str(getattr(room, "room_id", "") or "").strip()
-    if not sender or not room_id:
+    if not room_id:
+        return None
+    display_name = _matrix_message_display_name(message)
+    try:
+        identity_key = matrix_identity_key(sender, localpart=_matrix_sender_localpart(sender), display_name=display_name)
+    except Exception:
         return None
     text, reply_to_text = _matrix_message_text_and_reply(message)
     attachments = _matrix_message_attachments(message)
@@ -47,11 +52,11 @@ def matrix_message_to_event(
         channel="matrix",
         adapter_slot=adapter_slot,
         account_id=account_id,
-        identity_key=matrix_identity_key(sender),
+        identity_key=identity_key,
         chat_id=room_id,
         chat_type="private" if _matrix_room_is_private(room) else "group",
         sender_id=sender,
-        sender_name=str(getattr(message, "sender", "") or ""),
+        sender_name=display_name or sender,
         sender_username=sender,
         sender_number="",
         text=text,
@@ -546,6 +551,40 @@ def _matrix_room_is_private(room: Any) -> bool:
     if isinstance(users, dict):
         return len(users) == 2
     return False
+
+
+def _matrix_message_sender(message: Any) -> str:
+    sender = str(getattr(message, "sender", "") or "").strip()
+    if sender:
+        return sender
+    source = getattr(message, "source", None)
+    if isinstance(source, dict):
+        return str(source.get("sender") or "").strip()
+    return ""
+
+
+def _matrix_sender_localpart(sender: str) -> str:
+    value = str(sender or "").strip()
+    if value.startswith("@") and ":" in value:
+        return value[1:].split(":", maxsplit=1)[0]
+    return value
+
+
+def _matrix_message_display_name(message: Any) -> str:
+    for attr in ("sender_name", "display_name"):
+        value = str(getattr(message, attr, "") or "").strip()
+        if value:
+            return value
+    source = getattr(message, "source", None)
+    unsigned = source.get("unsigned") if isinstance(source, dict) else None
+    if isinstance(unsigned, dict):
+        value = str(unsigned.get("sender_display_name") or "").strip()
+        if value:
+            return value
+    content = source.get("content") if isinstance(source, dict) else None
+    if isinstance(content, dict):
+        return str(content.get("displayname") or "").strip()
+    return ""
 
 
 def _matrix_message_attachments(message: Any) -> tuple[IncomingAttachment, ...]:

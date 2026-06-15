@@ -1514,9 +1514,9 @@ def _prepare_user_memory(
         return None
     try:
         sender_id = _sender_identifier(message)
-        if not sender_id:
+        identity_key = _telegram_identity_key_from_message(message)
+        if not identity_key:
             return None
-        identity_key = telegram_identity_key(sender_id)
         account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
         user_memory_store.update_identity_route(
             identity_key,
@@ -1679,13 +1679,15 @@ def _is_first_contact(
     instructions: BotInstructions,
 ) -> bool:
     sender_id = _sender_identifier(message)
-    if not sender_id:
+    identity_key = _telegram_identity_key_from_message(message)
+    if not sender_id and not identity_key:
         return False
-    if chat_state.has_seen_sender(sender_id):
+    seen_key = sender_id or identity_key
+    if chat_state.has_seen_sender(seen_key):
         return False
     if user_memory_store is not None and instructions.user_memory_enabled:
         try:
-            if user_memory_store.get_account_for_identity(telegram_identity_key(sender_id)):
+            if identity_key and user_memory_store.get_account_for_identity(identity_key):
                 return False
         except (AccountStoreError, OSError, AttributeError):
             return False
@@ -1830,6 +1832,17 @@ def _telegram_sender_username(message: dict[str, Any]) -> str:
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
     sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
     return _username(sender.get("username") if sender else sender_chat.get("username"))
+
+
+def _telegram_identity_key_from_message(message: dict[str, Any]) -> str:
+    try:
+        return telegram_identity_key(
+            _sender_identifier(message),
+            username=_telegram_sender_username(message),
+            display_name=_telegram_sender_display_label(message),
+        )
+    except AccountStoreError:
+        return ""
 
 
 def _telegram_chat_type(message: dict[str, Any]) -> str:
