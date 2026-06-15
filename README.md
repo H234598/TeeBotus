@@ -92,16 +92,14 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
-Signal braucht das Python-Paket `signalbot`, die native `signal-cli-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die Python-Adapter-Abhaengigkeiten koennen reproduzierbar installiert und danach geprueft werden mit:
+Signal braucht das Python-Paket `signalbot`, die native `signal-cli-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
 
 ```bash
 python3 scripts/install_adapter_deps.py
 python3 scripts/check_adapter_deps.py
 ```
 
-`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit und laesst danach `scripts/check_adapter_deps.py` laufen.
-
-Native Abhaengigkeiten werden weiter separat installiert und mit demselben Check verifiziert.
+`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, installiert `signal-cli-api` per Cargo und laesst danach `scripts/check_adapter_deps.py` laufen.
 
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
