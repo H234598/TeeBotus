@@ -230,7 +230,7 @@ class BibliothekarService:
         instances_dir: str | Path,
         instructions: object,
     ) -> BibliothekarService:
-        backend = str(getattr(instructions, "bibliothekar_backend", "local") or "local").strip().casefold()
+        backend = _normalize_backend(getattr(instructions, "bibliothekar_backend", "local"))
         if backend == "haystack":
             return cls(
                 HaystackBibliothekarBackend(
@@ -288,7 +288,7 @@ class BibliothekarService:
 
 
 def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, instructions: object) -> BibliothekarServiceHealth:
-    backend = str(getattr(instructions, "bibliothekar_backend", "local") or "local").strip().casefold()
+    backend = _normalize_backend(getattr(instructions, "bibliothekar_backend", "local"))
     collection = str(getattr(instructions, "bibliothekar_collection", "") or "teebotus_books")
     if not bool(getattr(instructions, "bibliothekar_enabled", True)):
         return BibliothekarServiceHealth(instance_name, backend, "disabled", collection=collection)
@@ -361,6 +361,13 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
         chunks=int(index.get("chunk_count") or 0),
         store="json",
     )
+
+
+def _normalize_backend(value: object) -> str:
+    backend = str(value or "local").strip().casefold().replace("-", "_")
+    if backend in {"haystack", "qdrant", "haystack_qdrant"}:
+        return "haystack"
+    return "local"
 
 
 def _module_available(name: str) -> bool:

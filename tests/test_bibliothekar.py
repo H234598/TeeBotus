@@ -128,10 +128,17 @@ def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
         tmp_path / "instances",
         BotInstructions(bibliothekar_backend="haystack", bibliothekar_collection="therapy_books"),
     )
+    qdrant = BibliothekarService.from_instructions(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="qdrant", bibliothekar_collection="therapy_books"),
+    )
 
     assert isinstance(local.backend, LocalBibliothekarBackend)
     assert isinstance(haystack.backend, HaystackBibliothekarBackend)
+    assert isinstance(qdrant.backend, HaystackBibliothekarBackend)
     assert haystack.collection == "therapy_books"
+    assert qdrant.collection == "therapy_books"
 
 
 def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path):
@@ -240,6 +247,24 @@ def test_haystack_status_reports_unreachable_qdrant_when_dependencies_exist(tmp_
     assert health.store == "qdrant"
     assert health.status == "unreachable"
     assert "RuntimeError: qdrant unavailable" in health.error
+
+
+def test_qdrant_backend_alias_uses_haystack_status_path(tmp_path, monkeypatch):
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.bibliothekar_service.HaystackBibliothekarBackend._document_store",
+        lambda _self: BrokenDocumentStore(),
+    )
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="qdrant", bibliothekar_collection="therapy_books"),
+    )
+
+    assert health.backend == "haystack"
+    assert health.store == "qdrant"
+    assert health.status == "unreachable"
 
 
 def test_haystack_status_reports_reachable_qdrant_with_local_index_counts(tmp_path, monkeypatch):
