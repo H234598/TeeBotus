@@ -23,6 +23,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
 class SignalRuntimeError(RuntimeError):
@@ -69,6 +70,7 @@ class TeeBotusSignalCommand:
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
+        self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
         self.engine = TeeBotusEngine(
             self.account_store,
             state=self.state_store,
@@ -76,6 +78,7 @@ class TeeBotusSignalCommand:
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
             bot_address_names=(run_config.signal_phone_number, run_config.label),
+            working_memory_store=self.working_memory_store,
         )
         self.bot: Any | None = None
 

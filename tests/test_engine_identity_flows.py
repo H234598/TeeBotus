@@ -9,6 +9,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
+from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
 def store(tmp_path):
@@ -391,6 +392,36 @@ def test_engine_includes_account_memory_in_openai_input(tmp_path):
     assert "Mein Lieblingswort ist Mond." in client.user_text
 
 
+def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-working-memory", None)
+
+    instances_dir = tmp_path / "instances"
+    working_store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    working_store.append_manual("Allgemeine Instanzregel: bei Architekturfragen erst kurz strukturieren.")
+    entries_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.entries.jsonl"
+    before = entries_path.read_text(encoding="utf-8")
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=client,
+        working_memory_store=working_store,
+    )
+
+    engine.process(event(signal_identity_key(source_uuid="working-memory"), "Bitte eine Architekturfrage strukturieren.", channel="signal"))
+
+    assert "Instanz-Arbeitsgedaechtnis:" in client.user_text
+    assert "Allgemeine Instanzregel" in client.user_text
+    assert "Persistentes Account-Memory:" not in client.user_text
+    assert entries_path.read_text(encoding="utf-8") == before
+
+
 def test_engine_appends_account_memory_after_openai_reply(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):
@@ -695,6 +726,37 @@ def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypa
     assert "Transcript text." in client.reply_inputs[0]
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "AI summary."
+
+
+def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.reply_inputs: list[str] = []
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.reply_inputs.append(user_text)
+            return OpenAIResponse("AI summary.", "resp-youtube", None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Architektur Transcript.", "YouTube-Untertitel"),
+    )
+    instances_dir = tmp_path / "instances"
+    working_store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    working_store.append_manual("Architekturfragen zuerst kurz strukturieren.")
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=client,
+        working_memory_store=working_store,
+    )
+
+    engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 Architektur", channel="matrix"))
+
+    assert "Instanz-Arbeitsgedaechtnis:" in client.reply_inputs[0]
+    assert "Architekturfragen zuerst kurz strukturieren" in client.reply_inputs[0]
+    assert "YouTube-Transkript:" in client.reply_inputs[0]
 
 
 def test_engine_youtube_transcript_requires_link(tmp_path):

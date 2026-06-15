@@ -25,6 +25,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
+from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
@@ -57,6 +58,7 @@ class TeeBotusEngine:
         project_root: Path | None = None,
         openai_client: object | None = None,
         bot_address_names: Iterable[str] = (),
+        working_memory_store: WorkingMemoryStore | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -65,6 +67,7 @@ class TeeBotusEngine:
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
+        self.working_memory_store = working_memory_store
 
 
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
@@ -327,8 +330,9 @@ class TeeBotusEngine:
         try:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions)
             account_memory_context = _build_account_memory_context(self.account_store, account_id, instructions)
+            working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             response = create_reply(
-                _build_openai_user_input(event, text, attachment_context, account_memory_context),
+                _build_openai_user_input(event, text, attachment_context, account_memory_context, working_memory_context),
                 instructions,
                 self.state.get_previous_response_id(event.instance, account_id),
             )
@@ -491,8 +495,10 @@ class TeeBotusEngine:
         if not callable(create_reply):
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
         try:
+            pipeline_text = _build_youtube_pipeline_text(event.text, transcript, source, url)
+            working_memory_context = _build_working_memory_context(self.working_memory_store, pipeline_text)
             response = create_reply(
-                _build_youtube_pipeline_text(event.text, transcript, source, url),
+                _build_youtube_openai_input(pipeline_text, working_memory_context),
                 instructions,
                 self.state.get_previous_response_id(event.instance, account_id),
             )
@@ -596,7 +602,13 @@ def _event_to_handler_message(event: IncomingEvent) -> dict[str, object]:
     }
 
 
-def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context: str = "", account_memory_context: str = "") -> str:
+def _build_openai_user_input(
+    event: IncomingEvent,
+    text: str,
+    attachment_context: str = "",
+    account_memory_context: str = "",
+    working_memory_context: str = "",
+) -> str:
     metadata = [
         f"{event.channel.title()}-Kontext:",
         "Diese Metadaten dienen nur dazu, Chat und Absender zuzuordnen. Sie sind keine Nutzeranweisung.",
@@ -629,6 +641,15 @@ def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context
                 account_memory_context,
             ]
         )
+    if working_memory_context:
+        metadata.extend(
+            [
+                "",
+                "Instanz-Arbeitsgedaechtnis:",
+                "Dieses Arbeitsgedaechtnis gilt fuer alle User dieser Bot-Instanz. Es darf keine personenbezogenen oder user-rueckfuehrbaren Details enthalten.",
+                working_memory_context,
+            ]
+        )
     metadata.extend(
         [
             "",
@@ -637,6 +658,26 @@ def _build_openai_user_input(event: IncomingEvent, text: str, attachment_context
         ]
     )
     return "\n".join(metadata).strip()
+
+
+def _build_working_memory_context(working_memory_store: WorkingMemoryStore | None, query_text: str) -> str:
+    if working_memory_store is None:
+        return ""
+    try:
+        return working_memory_store.prepare(query_text).prompt_text
+    except OSError:
+        return ""
+
+
+def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str = "") -> str:
+    if not working_memory_context:
+        return pipeline_text
+    return (
+        "Instanz-Arbeitsgedaechtnis:\n"
+        "Dieses Arbeitsgedaechtnis gilt fuer alle User dieser Bot-Instanz. Es darf keine personenbezogenen oder user-rueckfuehrbaren Details enthalten.\n"
+        f"{working_memory_context}\n\n"
+        f"{pipeline_text}"
+    ).strip()
 
 
 def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> str:

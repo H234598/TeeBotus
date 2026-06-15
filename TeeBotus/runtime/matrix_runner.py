@@ -18,6 +18,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
 class MatrixRuntimeError(RuntimeError):
@@ -51,6 +52,7 @@ class MatrixRuntimeBridge:
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
+        self.working_memory_store = WorkingMemoryStore(run_config.instance_name, Path(instances_dir))
         self.engine = TeeBotusEngine(
             self.account_store,
             state=self.state_store,
@@ -58,6 +60,7 @@ class MatrixRuntimeBridge:
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
             bot_address_names=_matrix_bot_address_names(run_config),
+            working_memory_store=self.working_memory_store,
         )
 
     async def handle_message(self, room: Any, message: Any) -> None:
