@@ -410,6 +410,29 @@ def test_signal_typing_is_stopped_after_followup_send():
     assert context.calls == ["start_typing", ("send", "hi"), "stop_typing"]
 
 
+def test_signal_actions_accept_sync_signalbot_context_methods():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def start_typing(self) -> None:
+            self.calls.append("start_typing")
+
+        def stop_typing(self) -> None:
+            self.calls.append("stop_typing")
+
+        def send(self, text, **_kwargs):
+            self.calls.append(("send", text))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendTyping("+491"), SendText("+491", "hi")]))
+
+    assert sent == [None, 123]
+    assert context.calls == ["start_typing", ("send", "hi"), "stop_typing"]
+
+
 def test_signal_typing_is_stopped_when_send_fails():
     class Context:
         def __init__(self) -> None:
@@ -474,6 +497,41 @@ def test_signal_typing_to_other_chat_uses_bot_typing_and_stops_after_send():
 
     assert sent == [None, 456]
     assert context.context_calls == []
+    assert context.bot.calls == [
+        ("start_typing", "+492"),
+        ("send", "+492", "hi", {"base64_attachments": None}),
+        ("stop_typing", "+492"),
+    ]
+
+
+def test_signal_actions_accept_sync_signalbot_bot_methods_for_other_chat():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def start_typing(self, receiver) -> None:
+            self.calls.append(("start_typing", receiver))
+
+        def stop_typing(self, receiver) -> None:
+            self.calls.append(("stop_typing", receiver))
+
+        def send(self, receiver, text, **kwargs):
+            self.calls.append(("send", receiver, text, kwargs))
+            return 456
+
+    class Context:
+        def __init__(self) -> None:
+            self.bot = Bot()
+            self.message = FakeSignalMessage(source="+491")
+
+        def send(self, _text, **_kwargs):
+            raise AssertionError("context.send should not be used for other chat")
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendTyping("+492"), SendText("+492", "hi")]))
+
+    assert sent == [None, 456]
     assert context.bot.calls == [
         ("start_typing", "+492"),
         ("send", "+492", "hi", {"base64_attachments": None}),

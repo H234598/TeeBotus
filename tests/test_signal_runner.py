@@ -300,6 +300,45 @@ def test_signal_cleanup_uses_context_remote_delete_first(tmp_path) -> None:
     assert context.bot_deleted == []
 
 
+def test_signal_cleanup_accepts_sync_context_remote_delete(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    command.message_tracker.record(
+        SentMessageRef(
+            channel="signal",
+            instance_name="Demo",
+            account_id="account-1",
+            chat_id="+491234",
+            message_ref="444",
+            ref_kind="signal_timestamp",
+        )
+    )
+    context = FakeSignalContext()
+    deleted: list[int] = []
+
+    def remote_delete(timestamp: int) -> int:
+        deleted.append(timestamp)
+        return timestamp
+
+    context.remote_delete = remote_delete
+
+    asyncio.run(command.handle(context))
+
+    assert deleted == [444]
+
+
 def test_signal_cleanup_falls_back_to_bot_remote_delete(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
@@ -683,6 +722,35 @@ def test_signal_command_deletes_local_attachments_after_handling(tmp_path) -> No
     assert context.deleted_attachments == ["voice.ogg", "photo.jpg"]
 
 
+def test_signal_command_deletes_local_attachments_with_sync_signalbot_method(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.attachments_local_filenames = ["voice.ogg", "photo.jpg"]
+    deleted: list[str] = []
+    context.bot = SimpleNamespace(
+        send=context.send_bot,
+        poll=context.poll_bot,
+        delete_attachment=lambda filename: deleted.append(filename),
+        remote_delete=context.remote_delete_bot,
+    )
+
+    asyncio.run(command.handle(context))
+
+    assert deleted == ["voice.ogg", "photo.jpg"]
+
+
 def test_signal_command_deletes_local_attachments_when_engine_fails(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
@@ -752,6 +820,45 @@ def test_signal_command_notifies_old_signal_identity_route(tmp_path) -> None:
     asyncio.run(command.handle(FakeSignalContext()))
 
     assert fake_bot.sent == [("+49999", "Ein neuer Kommunikationsweg wurde verbunden.")]
+
+
+def test_signal_command_notifies_old_signal_identity_with_sync_bot_send(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    old_identity = "signal:uuid:old"
+    command.account_store.resolve_or_create_account(old_identity)
+    command.account_store.update_identity_route(old_identity, channel="signal", chat_id="+49999", chat_type="private", adapter_slot=1)
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {
+            "process": lambda self, event: [
+                NotifyLinkedIdentity(
+                    identity_key=old_identity,
+                    text="Ein neuer Kommunikationsweg wurde verbunden.",
+                    account_id=event.account_id,
+                    new_identity_key=event.identity_key,
+                )
+            ]
+        },
+    )()
+    sent: list[tuple[str, str]] = []
+    command.bot = SimpleNamespace(send=lambda receiver, text: sent.append((receiver, text)) or 123)
+
+    asyncio.run(command.handle(FakeSignalContext()))
+
+    assert sent == [("+49999", "Ein neuer Kommunikationsweg wurde verbunden.")]
 
 
 def test_signal_command_tracks_linked_identity_notification_when_requested(tmp_path) -> None:

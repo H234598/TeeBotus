@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
+from inspect import isawaitable
 from typing import Any
 
 from TeeBotus.runtime.accounts import signal_identity_key
@@ -216,11 +217,11 @@ async def _update_signal_contact(context: Any, action: UpdateSignalContact) -> N
     update_contact = getattr(bot, "update_contact", None)
     if not callable(update_contact):
         raise RuntimeError("SignalBot.update_contact is required to update a contact")
-    await update_contact(
+    await _maybe_await(update_contact(
         target,
         expiration_in_seconds=action.expiration_in_seconds,
         name=action.name,
-    )
+    ))
 
 
 async def _update_signal_group(context: Any, action: UpdateSignalGroup) -> None:
@@ -232,13 +233,13 @@ async def _update_signal_group(context: Any, action: UpdateSignalGroup) -> None:
     if not callable(update_group):
         raise RuntimeError("SignalBot.update_group is required to update a group")
     target = _signal_group_update_target(bot, target)
-    await update_group(
+    await _maybe_await(update_group(
         target,
         base64_avatar=action.base64_avatar,
         description=action.description,
         expiration_in_seconds=action.expiration_in_seconds,
         name=action.name,
-    )
+    ))
 
 
 def _signal_group_update_target(bot: Any, group_id: str) -> str:
@@ -283,10 +284,10 @@ async def _send_signal_text(
         send = getattr(bot, "send", None)
         if not callable(send):
             raise RuntimeError(f"SignalBot.send is required to send to {target}")
-        return await send(target, text, **send_kwargs)
+        return await _maybe_await(send(target, text, **send_kwargs))
     if _signal_can_use_context_reply(context, reply_to_ref):
         reply = getattr(context, "reply", None)
-        return await reply(text, **send_kwargs)
+        return await _maybe_await(reply(text, **send_kwargs))
     quote = _signal_quote_kwargs_for_context(context, reply_to_ref)
     if quote:
         bot = getattr(context, "bot", None)
@@ -294,8 +295,8 @@ async def _send_signal_text(
         message = getattr(context, "message", None)
         recipient = _signal_message_recipient(message)
         if callable(send) and recipient:
-            return await send(recipient, text, **send_kwargs, **quote)
-    return await context.send(text, **send_kwargs)
+            return await _maybe_await(send(recipient, text, **send_kwargs, **quote))
+    return await _maybe_await(context.send(text, **send_kwargs))
 
 
 def _signal_context_recipient(context: Any) -> str:
@@ -324,9 +325,9 @@ async def _start_signal_typing(context: Any, chat_id: str) -> str:
         start_typing = getattr(bot, "start_typing", None)
         if not callable(start_typing):
             raise RuntimeError(f"SignalBot.start_typing is required to type in {target}")
-        await start_typing(target)
+        await _maybe_await(start_typing(target))
         return target
-    await context.start_typing()
+    await _maybe_await(context.start_typing())
     return ""
 
 
@@ -337,13 +338,13 @@ async def _send_signal_reaction(context: Any, chat_id: str, message_ref: str, em
         raise RuntimeError("Signal reaction requires an emoji")
     react = getattr(context, "react", None)
     if callable(react):
-        await react(key)
+        await _maybe_await(react(key))
         return
     bot = getattr(context, "bot", None)
     bot_react = getattr(bot, "react", None)
     message = getattr(context, "message", None)
     if callable(bot_react) and message is not None:
-        await bot_react(message, key)
+        await _maybe_await(bot_react(message, key))
         return
     raise RuntimeError("SignalBot react API is required to send a reaction")
 
@@ -355,13 +356,13 @@ async def _send_signal_receipt(context: Any, chat_id: str, message_ref: str, rec
         normalized = "read"
     receipt = getattr(context, "receipt", None)
     if callable(receipt):
-        await receipt(normalized)
+        await _maybe_await(receipt(normalized))
         return
     bot = getattr(context, "bot", None)
     bot_receipt = getattr(bot, "receipt", None)
     message = getattr(context, "message", None)
     if callable(bot_receipt) and message is not None:
-        await bot_receipt(message, normalized)
+        await _maybe_await(bot_receipt(message, normalized))
         return
     raise RuntimeError("SignalBot receipt API is required to send a receipt")
 
@@ -393,16 +394,16 @@ async def _send_signal_edit(
         send = getattr(bot, "send", None)
         if not callable(send):
             raise RuntimeError(f"SignalBot.send is required to edit in {target}")
-        return await send(target, text, **send_kwargs, edit_timestamp=timestamp)
+        return await _maybe_await(send(target, text, **send_kwargs, edit_timestamp=timestamp))
     current_ref = _signal_message_ref(getattr(context, "message", None))
     edit = getattr(context, "edit", None)
     if callable(edit) and current_ref and current_ref == str(message_ref or "").strip():
-        return await edit(text, timestamp, **send_kwargs)
+        return await _maybe_await(edit(text, timestamp, **send_kwargs))
     bot = getattr(context, "bot", None)
     send = getattr(bot, "send", None)
     recipient = current_recipient or target
     if callable(send) and recipient:
-        return await send(recipient, text, **send_kwargs, edit_timestamp=timestamp)
+        return await _maybe_await(send(recipient, text, **send_kwargs, edit_timestamp=timestamp))
     raise RuntimeError("SignalBot edit API is required to edit a message")
 
 
@@ -490,7 +491,7 @@ async def _send_signal_poll(
     poll = getattr(bot, "poll", None)
     if not callable(poll):
         raise RuntimeError("SignalBot.poll is required to send a poll")
-    return await poll(receiver, clean_question, clean_answers, allow_multiple_selections=allow_multiple_selections)
+    return await _maybe_await(poll(receiver, clean_question, clean_answers, allow_multiple_selections=allow_multiple_selections))
 
 
 def _require_signal_current_message_action(context: Any, chat_id: str, message_ref: str, action_name: str) -> None:
@@ -583,12 +584,18 @@ async def _stop_signal_typing_if_started(context: Any, typing_target: str | None
     if callable(stop_typing):
         try:
             if typing_target:
-                await stop_typing(typing_target)
+                await _maybe_await(stop_typing(typing_target))
             else:
-                await stop_typing()
+                await _maybe_await(stop_typing())
         except Exception:
             pass
     return None
+
+
+async def _maybe_await(value: Any) -> Any:
+    if isawaitable(value):
+        return await value
+    return value
 
 
 def _signal_attachment_name(index: int, names: list[Any], remote_names: list[Any] | None = None) -> str:

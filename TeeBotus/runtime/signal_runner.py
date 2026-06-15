@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
@@ -163,7 +164,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             if not receiver or self.bot is None:
                 continue
             try:
-                sent_ref = await self.bot.send(receiver, action.text)
+                sent_ref = await _maybe_await(self.bot.send(receiver, action.text))
             except Exception:
                 continue
             if not action.track or sent_ref is None:
@@ -209,7 +210,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             return
         for filename in filenames:
             try:
-                await delete_attachment(filename)
+                await _maybe_await(delete_attachment(filename))
             except Exception:
                 continue
 
@@ -323,13 +324,19 @@ async def _remote_delete_signal_message(context: Any, receiver: str, message_ref
     timestamp = int(str(message_ref or "").strip())
     remote_delete = getattr(context, "remote_delete", None)
     if callable(remote_delete):
-        return await remote_delete(timestamp)
+        return await _maybe_await(remote_delete(timestamp))
     bot = getattr(context, "bot", None)
     bot_remote_delete = getattr(bot, "remote_delete", None)
     target = str(receiver or "").strip() or _signal_context_recipient(context)
     if callable(bot_remote_delete) and target:
-        return await bot_remote_delete(target, timestamp)
+        return await _maybe_await(bot_remote_delete(target, timestamp))
     raise SignalRuntimeError("SignalBot.remote_delete is required to delete tracked messages")
+
+
+async def _maybe_await(value: Any) -> Any:
+    if isawaitable(value):
+        return await value
+    return value
 
 
 def _signal_context_recipient(context: Any) -> str:
