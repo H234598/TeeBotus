@@ -710,6 +710,127 @@ def test_llm_plan_validator_applies_safe_memory_and_queue_decisions(tmp_path) ->
     assert outbox[0]["reason_memory_ids"] == [source_id]
 
 
+def test_llm_plan_validator_can_cancel_and_snooze_queued_items(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="cancel_me",
+        message_text="Cancel me",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    second = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="snooze_me",
+        message_text="Snooze me",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    first_id = first.reason.removeprefix("queued:")
+    second_id = second.reason.removeprefix("queued:")
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "cancel", "item_id": first_id, "reason": "nicht mehr passend"},
+                {"action": "snooze", "item_id": second_id, "due_at": "2026-06-16T09:30:00+00:00", "reason": "spaeter besser"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert len(result.audit_event_ids) == 2
+    rows = account_store.read_proactive_outbox(account_id)
+    assert rows[0]["id"] == first_id
+    assert rows[0]["status"] == "cancelled"
+    assert rows[0]["status_history"][-1]["reason"] == "llm_cancel:nicht mehr passend"
+    assert rows[1]["id"] == second_id
+    assert rows[1]["status"] == "queued"
+    assert rows[1]["due_at"] == "2026-06-16T09:30:00+00:00"
+    assert rows[1]["status_history"][-1]["reason"] == "llm_snooze:spaeter besser"
+    audit = account_store.read_proactive_audit(account_id)
+    assert [event["event_type"] for event in audit] == ["llm_decision_applied", "llm_decision_applied"]
+    assert [event["reason"] for event in audit] == [f"cancelled:{first_id}", f"snoozed:{second_id}"]
+
+
+def test_llm_plan_validator_rejects_cancel_and_snooze_for_invalid_items(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="already_sent",
+        message_text="Already sent",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    queued_id = queued.reason.removeprefix("queued:")
+    update_proactive_outbox_item_status(account_store, account_id, queued_id, status="sent", reason="test", now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "cancel", "item_id": queued_id, "reason": "zu spaet"},
+                {"action": "snooze", "item_id": "pro_missing", "due_at": "2026-06-16T09:30:00+00:00"},
+                {"action": "snooze", "item_id": queued_id, "due_at": "not-a-date"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == (
+        "decision_0_item_not_queued",
+        "decision_1_item_not_queued",
+        "decision_2_item_not_queued",
+    )
+    assert len(result.audit_event_ids) == 3
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+    audit = account_store.read_proactive_audit(account_id)
+    assert [event["event_type"] for event in audit] == ["llm_decision_rejected", "llm_decision_rejected", "llm_decision_rejected"]
+
+
+def test_llm_planner_prompt_includes_queued_outbox_ids_for_cancel_snooze(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Follow up",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    prompt = build_proactive_llm_planner_prompt(account_store, account_id)
+
+    assert '"action":"none|memory|queue|cancel|snooze"' in prompt
+    assert "Queued Outbox fuer Cancel/Snooze:" in prompt
+    assert queued.reason.removeprefix("queued:") in prompt
+
+
 def test_llm_plan_validator_rejects_malformed_json_without_mutation(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))

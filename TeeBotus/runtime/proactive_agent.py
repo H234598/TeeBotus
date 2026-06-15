@@ -428,18 +428,24 @@ def build_proactive_llm_planner_prompt(account_store: AccountStore, account_id: 
             "Du bist nur ein Planungsmodul fuer TeeBotus. Du sendest nie direkt Nachrichten.",
             "Gib ausschliesslich valides JSON zurueck, ohne Markdown, ohne Erklaertext.",
             "Schema:",
-            '{"schema_version":1,"decisions":[{"action":"none|memory|queue"}]}',
+            '{"schema_version":1,"decisions":[{"action":"none|memory|queue|cancel|snooze"}]}',
             "Erlaubte memory actions:",
             '{"action":"memory","kind":"reflection|summary|next_step|follow_up|homework|treatment_plan|assessment_note|intervention_note|response_note","text":"...","source_memory_ids":["mem_..."],"importance":1}',
             "Erlaubte queue actions:",
             '{"action":"queue","category":"reminder|task|tip|test|image|analysis|reflection","intent":"...","message_text":"...","reason_memory_ids":["mem_..."],"risk_gate":"none|needs_review|blocked","intervention_type":"...","expected_response":"...","review_signal":"..."}',
+            "Erlaubte cancel/snooze actions fuer bestehende queued Outbox-Items:",
+            '{"action":"cancel","item_id":"pro_...","reason":"..."}',
+            '{"action":"snooze","item_id":"pro_...","due_at":"2026-06-16T10:00:00+00:00","reason":"..."}',
             "Regeln:",
             "- Keine Diagnosen behaupten.",
             "- Keine Krisen-, Suizid- oder Selbstverletzungs-Nachrichten proaktiv vorschlagen; dann action none oder risk_gate needs_review.",
             "- Queue-Vorschlaege brauchen reason_memory_ids.",
+            "- Cancel/Snooze duerfen nur unten gelistete queued Outbox-IDs betreffen.",
             "- Maximal 5 Entscheidungen.",
             "",
             selection.prompt_text or "Keine nutzbaren Account-Memorys vorhanden.",
+            "",
+            _proactive_llm_outbox_prompt_text(account_store, account_id),
         ]
     )
 
@@ -494,6 +500,24 @@ def apply_proactive_llm_plan(
                 audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
             else:
                 queued_item_ids.append(queue_result)
+            continue
+        if action == "cancel":
+            cancel_result = _apply_proactive_llm_cancel_decision(account_store, account_id, raw_decision, resolved_now)
+            if cancel_result.startswith("error:"):
+                error = f"decision_{index}_{cancel_result.removeprefix('error:')}"
+                errors.append(error)
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
+            else:
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_applied", reason=cancel_result, decision_index=index, decision=raw_decision, now=resolved_now))
+            continue
+        if action == "snooze":
+            snooze_result = _apply_proactive_llm_snooze_decision(account_store, account_id, raw_decision, resolved_now)
+            if snooze_result.startswith("error:"):
+                error = f"decision_{index}_{snooze_result.removeprefix('error:')}"
+                errors.append(error)
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
+            else:
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_applied", reason=snooze_result, decision_index=index, decision=raw_decision, now=resolved_now))
             continue
         error = f"decision_{index}_unsupported_action:{action}"
         errors.append(error)
@@ -922,12 +946,119 @@ def _apply_proactive_llm_queue_decision(
     return result.reason.removeprefix("queued:")
 
 
+def _apply_proactive_llm_cancel_decision(
+    account_store: AccountStore,
+    account_id: str,
+    decision: Mapping[str, Any],
+    now: datetime,
+) -> str:
+    item_id = str(decision.get("item_id") or "").strip()
+    if not item_id:
+        return "error:missing_item_id"
+    if not _queued_proactive_outbox_item_exists(account_store, account_id, item_id):
+        return "error:item_not_queued"
+    reason = _safe_llm_text(decision.get("reason"), max_chars=160) or "llm_cancel"
+    if not update_proactive_outbox_item_status(account_store, account_id, item_id, status="cancelled", reason=f"llm_cancel:{reason}", now=now):
+        return "error:item_not_found"
+    return f"cancelled:{item_id}"
+
+
+def _apply_proactive_llm_snooze_decision(
+    account_store: AccountStore,
+    account_id: str,
+    decision: Mapping[str, Any],
+    now: datetime,
+) -> str:
+    item_id = str(decision.get("item_id") or "").strip()
+    if not item_id:
+        return "error:missing_item_id"
+    if not _queued_proactive_outbox_item_exists(account_store, account_id, item_id):
+        return "error:item_not_queued"
+    due_at = str(decision.get("due_at") or "").strip()
+    parsed_due_at = _parse_proactive_datetime(due_at)
+    if parsed_due_at is None:
+        return "error:invalid_due_at"
+    if parsed_due_at <= now:
+        return "error:due_at_not_future"
+    reason = _safe_llm_text(decision.get("reason"), max_chars=160) or "llm_snooze"
+    if not _update_proactive_outbox_item_due_at(account_store, account_id, item_id, due_at=parsed_due_at.isoformat(timespec="seconds"), reason=f"llm_snooze:{reason}", now=now):
+        return "error:item_not_found"
+    return f"snoozed:{item_id}"
+
+
+def _queued_proactive_outbox_item_exists(account_store: AccountStore, account_id: str, item_id: str) -> bool:
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("id") or "").strip() != item_id:
+            continue
+        return str(item.get("status") or "queued").strip().casefold() == "queued"
+    return False
+
+
+def _update_proactive_outbox_item_due_at(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    due_at: str,
+    reason: str,
+    now: datetime,
+) -> bool:
+    rows = account_store.read_proactive_outbox(account_id)
+    timestamp = now.isoformat(timespec="seconds")
+    changed = False
+    for item in rows:
+        if not isinstance(item, dict) or str(item.get("id") or "").strip() != item_id:
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "queued":
+            return False
+        item["due_at"] = due_at
+        item["updated_at"] = timestamp
+        history = item.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            item["status_history"] = history
+        history.append({"at": timestamp, "status": "queued", "reason": str(reason or "").strip()})
+        changed = True
+        break
+    if changed:
+        account_store.write_proactive_outbox(account_id, rows)
+    return changed
+
+
 def _account_memory_ids(account_store: AccountStore, account_id: str) -> set[str]:
     return {
         str(entry.get("id") or "").strip()
         for entry in account_store.read_memory_entries(account_id)
         if isinstance(entry, dict) and str(entry.get("id") or "").strip()
     }
+
+
+def _proactive_llm_outbox_prompt_text(account_store: AccountStore, account_id: str, *, max_items: int = 12) -> str:
+    rows: list[dict[str, Any]] = []
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "queued").strip().casefold() != "queued":
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        rows.append(
+            {
+                "id": item_id,
+                "category": str(item.get("category") or "").strip(),
+                "intent": str(item.get("intent") or "").strip()[:120],
+                "due_at": str(item.get("due_at") or "").strip(),
+                "risk_gate": _normalize_risk_gate(item.get("risk_gate")),
+            }
+        )
+        if len(rows) >= max_items:
+            break
+    if not rows:
+        return "Queued Outbox: keine queued Items fuer Cancel/Snooze."
+    return "Queued Outbox fuer Cancel/Snooze:\n" + json.dumps(rows, ensure_ascii=False, indent=2)
 
 
 def _valid_memory_ids(value: Any, memory_ids: set[str]) -> list[str]:
