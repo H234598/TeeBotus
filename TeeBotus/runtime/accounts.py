@@ -1028,6 +1028,11 @@ class AccountStore:
             self.write_memory_entries(account_id, normalized_rows)
 
         existing_index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        existing_nested_index = existing_index.get("index") if isinstance(existing_index.get("index"), dict) else {}
+        existing_semantic_cache = (
+            existing_nested_index.get("semantic_cache") if isinstance(existing_nested_index.get("semantic_cache"), dict) else {}
+        )
+        semantic_cache_enabled = existing_semantic_cache.get("enabled") is not False
         rebuilt_index = self._normalized_memory_index(
             account_id,
             {
@@ -1036,6 +1041,7 @@ class AccountStore:
             },
         )
         rebuilt_index["index"] = _new_account_memory_index()
+        rebuilt_index["index"]["semantic_cache"]["enabled"] = semantic_cache_enabled
         for entry in normalized_rows:
             self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
         rebuilt_index["updated_at"] = utc_now()

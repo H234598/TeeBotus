@@ -497,6 +497,25 @@ def test_structured_account_memory_semantic_cache_can_be_disabled(tmp_path):
     assert semantic_cache["entries"] == {}
 
 
+def test_rebuild_structured_account_memory_keeps_semantic_cache_disabled(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_walk", "kind": "coping_strategy", "user_text": "Spaziergang hilft bei Druck.", "bot_text": "Ressource notiert."},
+    )
+    index = store.read_memory_index(account_id)
+    index["index"]["semantic_cache"]["enabled"] = False
+    index["index"]["semantic_cache"]["entries"] = {"stale": {}}
+    store.write_memory_index(account_id, index)
+
+    store.rebuild_structured_memory_index(account_id)
+
+    semantic_cache = store.read_memory_index(account_id)["index"]["semantic_cache"]
+    assert semantic_cache["enabled"] is False
+    assert semantic_cache["entries"] == {}
+
+
 def test_structured_account_memory_records_access_recency(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
