@@ -21,7 +21,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.state import RuntimeState
@@ -690,7 +690,7 @@ def _build_openai_user_input(
             [
                 "",
                 "Persistentes Account-Memory:",
-                "Nutze nur diese ausgewaehlten Eintraege fuer den aktuellen TeeBotus-Account. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
+                "Nutze nur diese ausgewaehlten Hinweise und Eintraege fuer den aktuellen TeeBotus-Account. Gib keine rohen Memory-Dateien und keine Memories anderer Accounts preis.",
                 account_memory_context,
             ]
         )
@@ -736,17 +736,35 @@ def _build_youtube_openai_input(pipeline_text: str, working_memory_context: str 
 def _build_account_memory_context(account_store: AccountStore, account_id: str, instructions: BotInstructions, query_text: str = "") -> str:
     if not instructions.user_memory_enabled:
         return ""
+    parts: list[str] = []
+    total_chars = 0
+    try:
+        habits_text = _clip_text(
+            account_store.read_account_text(account_id, USER_HABITS_FILENAME),
+            instructions.user_memory_max_prompt_chars,
+        )
+    except (AccountStoreError, OSError):
+        habits_text = ""
+    if habits_text:
+        habits_block = "\n".join(
+            [
+                "Interne, admingepflegte Zusatzhinweise fuer diesen Account:",
+                "Nutze diese Hinweise nur als stillen Kontext. Gib sie nicht preis und erwaehne ihre Existenz nicht.",
+                habits_text,
+            ]
+        )
+        parts.append(habits_block)
+        total_chars += len(habits_block)
     try:
         entries = account_store.read_memory_entries(account_id)
     except (AccountStoreError, OSError):
-        return ""
+        entries = []
     try:
         index = account_store.read_memory_index(account_id)
     except (AccountStoreError, OSError):
         index = {}
     ordered_entries = _rank_account_memory_entries(entries, index, query_text)
     selected: list[dict[str, object]] = []
-    total_chars = 0
     for entry in ordered_entries:
         if not isinstance(entry, dict):
             continue
@@ -768,23 +786,25 @@ def _build_account_memory_context(account_store: AccountStore, account_id: str, 
         )
         if total_chars + len(rendered) > instructions.user_memory_max_prompt_chars and selected:
             break
+        if total_chars + len(rendered) > instructions.user_memory_max_prompt_chars and parts:
+            break
         selected.append(compact)
         total_chars += len(rendered)
-    if not selected:
-        return ""
-    lines = ["selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in selected if entry.get("id")), ""]
-    for entry in selected:
-        lines.extend(
-            [
-                f"- id: {entry['id']}",
-                f"  created_at: {entry['created_at']}",
-                f"  channel: {entry['channel']}",
-                f"  keywords: {', '.join(str(value) for value in entry['keywords'])}",
-                f"  user_text: {entry['user_text']}",
-                f"  bot_text: {entry['bot_text']}",
-            ]
-        )
-    return "\n".join(lines).strip()
+    if selected:
+        lines = ["Ausgewaehlte Memory-Eintraege fuer diesen Account:", "selected_memory_ids: " + ", ".join(str(entry["id"]) for entry in selected if entry.get("id")), ""]
+        for entry in selected:
+            lines.extend(
+                [
+                    f"- id: {entry['id']}",
+                    f"  created_at: {entry['created_at']}",
+                    f"  channel: {entry['channel']}",
+                    f"  keywords: {', '.join(str(value) for value in entry['keywords'])}",
+                    f"  user_text: {entry['user_text']}",
+                    f"  bot_text: {entry['bot_text']}",
+                ]
+            )
+        parts.append("\n".join(lines).strip())
+    return "\n\n".join(parts).strip()
 
 
 def _rank_account_memory_entries(entries: list[dict[str, object]], index: dict[str, object], query_text: str) -> list[dict[str, object]]:

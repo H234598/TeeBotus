@@ -490,6 +490,34 @@ def test_engine_includes_account_memory_in_openai_input(tmp_path):
     assert "Mein Lieblingswort ist Mond." in client.user_text
 
 
+def test_engine_includes_account_habits_in_openai_input_without_filename(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-habits", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="habits")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_account_text(account_id, "User_Habbits_and_behave.md", "Ada mag knappe Antworten.")
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=client,
+    )
+
+    engine.process(event(identity, "Wie sollst du antworten?", channel="signal"))
+
+    assert "Persistentes Account-Memory:" in client.user_text
+    assert "Interne, admingepflegte Zusatzhinweise fuer diesen Account:" in client.user_text
+    assert "Ada mag knappe Antworten." in client.user_text
+    assert "User_Habbits_and_behave" not in client.user_text
+
+
 def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
