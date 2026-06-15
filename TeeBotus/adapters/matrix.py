@@ -165,8 +165,9 @@ async def _send_matrix_file(
         message = getattr(upload_response, "message", "") or "Matrix upload returned no content URI"
         raise RuntimeError(str(message))
     body = caption or filename
+    msgtype = _matrix_msgtype_for_content_type(content_type)
     content = {
-        "msgtype": "m.file",
+        "msgtype": msgtype,
         "body": body,
         "filename": filename,
         "url": str(content_uri),
@@ -296,6 +297,17 @@ def _matrix_content_type_for_msgtype(msgtype: str) -> str:
     if msgtype == "m.video":
         return "video/*"
     return "application/octet-stream"
+
+
+def _matrix_msgtype_for_content_type(content_type: str) -> str:
+    normalized = str(content_type or "").strip().casefold()
+    if normalized.startswith("image/"):
+        return "m.image"
+    if normalized.startswith("audio/"):
+        return "m.audio"
+    if normalized.startswith("video/"):
+        return "m.video"
+    return "m.file"
 
 
 def _matrix_event_id(response: Any) -> str | None:

@@ -751,6 +751,33 @@ def test_matrix_export_file_uploads_file_before_room_send():
     ]
 
 
+def test_matrix_send_attachment_fallback_uses_media_msgtype_from_content_type():
+    class UploadResponse:
+        content_uri = "mxc://example/photo"
+
+    class SendResponse:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.sends = []
+
+        async def upload(self, _data_provider, **_kwargs):
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return SendResponse()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendAttachment("!room:example", b"img", "photo.jpg", "image/jpeg")]))
+
+    assert sent == ["$sent"]
+    assert client.sends[0]["content"]["msgtype"] == "m.image"
+    assert client.sends[0]["content"]["info"]["mimetype"] == "image/jpeg"
+
+
 def test_matrix_export_file_prefers_niobot_file_attachment():
     class Response:
         event_id = "$sent"
