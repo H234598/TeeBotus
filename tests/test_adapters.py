@@ -501,6 +501,28 @@ def test_signal_send_attachment_to_other_chat_uses_bot_send():
     assert context.bot.calls == [("+492", "voice.ogg", {"base64_attachments": ["aGVsbG8="]})]
 
 
+def test_signal_export_file_uses_caption_when_present():
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return 123
+
+    context = Context()
+
+    sent = asyncio.run(
+        send_signal_actions(
+            context,
+            [ExportFile("+491", "report.json", "application/json", b"{\"ok\": true}", caption="TeeBotus Account Export")],
+        )
+    )
+
+    assert sent == [123]
+    assert context.calls == [("TeeBotus Account Export", {"base64_attachments": ["eyJvayI6IHRydWV9"]})]
+
+
 def test_telegram_message_without_chat_id_is_rejected():
     event = telegram_message_to_event(
         {"message_id": 1, "from": {"id": 42}, "chat": {}, "text": "hi"},

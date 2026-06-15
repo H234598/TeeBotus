@@ -101,7 +101,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(
                     await _send_signal_text(
                         context,
-                        f"Export: {action.filename}",
+                        action.caption or f"Export: {action.filename}",
                         chat_id=action.chat_id,
                         base64_attachments=[encoded],
                         reply_to_ref=action.reply_to_ref,
