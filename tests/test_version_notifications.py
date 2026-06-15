@@ -10,7 +10,8 @@ from TeeBotus.core.version_notifications import (
     recent_telegram_recipients,
 )
 from TeeBotus.core.status import account_memory_index_health_lines, github_commit_history_url
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider
+from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
 def _store(tmp_path: Path) -> AccountStore:
@@ -210,6 +211,34 @@ def test_account_memory_index_health_uses_database_when_profile_envelope_is_stal
     assert lines == [
         f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed"
     ]
+
+
+def test_account_memory_index_health_suppresses_expected_database_decryption_logs(tmp_path: Path, monkeypatch, caplog) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    old_backend = SQLiteAccountMemoryBackend(
+        instance_name="Demo",
+        provider=StaticSecretProvider(b"y" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(
+            path=tmp_path / "instances" / "Demo" / "data" / "accounts" / "Account_Memory.sqlite3",
+            fallback_path=None,
+        ),
+    )
+    old_backend.write_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
+    old_backend.write_index(account_id, {"scope": "account", "index": {}})
+
+    with caplog.at_level("CRITICAL", logger="TeeBotus"):
+        lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert len(lines) == 1
+    assert "status=broken" in lines[0]
+    assert "database entries unreadable" in lines[0]
+    assert "database index unreadable" in lines[0]
+    assert "SQLite account-memory skipped corrupt rows" not in caplog.text
+    assert "SQLite account-memory index could not be decrypted" not in caplog.text
 
 
 def test_version_notification_text_does_not_expose_memory_files() -> None:

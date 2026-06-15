@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -385,7 +386,8 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 continue
             profile_warning = f" warning=profile_unreadable:{exc}"
         try:
-            health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
+            with _suppress_expected_account_memory_health_logs():
+                health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
         except AccountStoreError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             continue
@@ -397,6 +399,16 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         else:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}")
     return lines
+
+
+@contextlib.contextmanager
+def _suppress_expected_account_memory_health_logs():
+    previous_disabled = LOGGER.disabled
+    LOGGER.disabled = True
+    try:
+        yield
+    finally:
+        LOGGER.disabled = previous_disabled
 
 
 def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
