@@ -80,7 +80,13 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             await _send_matrix_receipt(client, action.chat_id, action.message_ref, action.receipt_type)
             sent.append(None)
         elif isinstance(action, SendEdit):
-            response = await _send_matrix_edit(client, action.chat_id, action.message_ref, action.text)
+            response = await _send_matrix_edit(
+                client,
+                action.chat_id,
+                action.message_ref,
+                action.text,
+                mentions=list(action.mentions),
+            )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendPoll):
             response = await _send_matrix_poll(
@@ -198,7 +204,14 @@ async def _send_matrix_receipt(client: Any, room_id: str, event_id: str, receipt
         _raise_matrix_response_error(response)
 
 
-async def _send_matrix_edit(client: Any, room_id: str, event_id: str, text: str) -> Any:
+async def _send_matrix_edit(
+    client: Any,
+    room_id: str,
+    event_id: str,
+    text: str,
+    *,
+    mentions: list[dict[str, Any]] | None = None,
+) -> Any:
     target = str(event_id or "").strip()
     if not target:
         raise RuntimeError("Matrix edit requires a message_ref")
@@ -215,6 +228,8 @@ async def _send_matrix_edit(client: Any, room_id: str, event_id: str, text: str)
             "event_id": target,
         },
     }
+    _add_matrix_mentions(content, mentions or [])
+    _add_matrix_mentions(content["m.new_content"], mentions or [])
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",

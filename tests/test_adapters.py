@@ -1491,6 +1491,40 @@ def test_matrix_send_edit_uses_replacement_event():
     ]
 
 
+def test_matrix_send_edit_preserves_mentions_in_replacement_content():
+    class Response:
+        event_id = "$edit"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendEdit(
+                    "!room:example",
+                    "$old",
+                    "hi @alice",
+                    mentions=({"user_id": "@alice:example"}, {"author": "signal-user"}),
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$edit"]
+    content = client.calls[0]["content"]
+    assert content["m.mentions"] == {"user_ids": ["@alice:example"]}
+    assert content["m.new_content"]["m.mentions"] == {"user_ids": ["@alice:example"]}
+
+
 def test_matrix_send_poll_uses_poll_start_event():
     class Response:
         event_id = "$poll"
