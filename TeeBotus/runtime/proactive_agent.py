@@ -998,16 +998,23 @@ def update_proactive_outbox_item_status(
     reason: str = "",
     now: datetime | None = None,
     dispatch: Mapping[str, Any] | None = None,
+    expected_status: str = "",
 ) -> bool:
     normalized_status = str(status or "").strip().casefold()
     if normalized_status not in PROACTIVE_OUTBOX_STATUSES:
         raise ValueError(f"unsupported proactive outbox status: {status}")
+    expected = str(expected_status or "").strip().casefold()
+    if expected and expected not in PROACTIVE_OUTBOX_STATUSES:
+        raise ValueError(f"unsupported proactive outbox expected status: {expected_status}")
     rows = account_store.read_proactive_outbox(account_id)
     changed = False
     timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
     for item in rows:
         if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
             continue
+        current_status = str(item.get("status") or "queued").strip().casefold()
+        if expected and current_status != expected:
+            return False
         item["status"] = normalized_status
         item["updated_at"] = timestamp
         if normalized_status == "sent":
@@ -1054,7 +1061,15 @@ async def dispatch_due_proactive_outbox_items(
         category = str(item.get("category") or "").strip().casefold()
         decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason=f"policy:{decision.reason}", now=resolved_now)
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="skipped",
+                reason=f"policy:{decision.reason}",
+                now=resolved_now,
+                expected_status="queued",
+            )
             _append_proactive_safety_audit_event(
                 account_store,
                 account_id,
@@ -1068,33 +1083,58 @@ async def dispatch_due_proactive_outbox_items(
         channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
         if route.get("chat_type") != "private" or not channel or not chat_id:
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now)
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
             continue
         sender = senders.get(channel)
         if sender is None:
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason=f"missing_sender:{channel}", now=resolved_now)
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="failed",
+                reason=f"missing_sender:{channel}",
+                now=resolved_now,
+                expected_status="queued",
+            )
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_sender", channel))
             continue
         message_text = str(item.get("message_text") or "").strip()
         if not message_text:
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="missing_message_text", now=resolved_now)
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="missing_message_text", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_message_text", channel))
             continue
         action = _proactive_item_action(chat_id, message_text, item)
         if action is None:
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="invalid_file", now=resolved_now)
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="invalid_file", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
             continue
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
-            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason=f"send_error:{type(exc).__name__}", now=resolved_now)
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="failed",
+                reason=f"send_error:{type(exc).__name__}",
+                now=resolved_now,
+                expected_status="queued",
+            )
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", f"send_error:{type(exc).__name__}", channel))
             continue
         message_ref = _normalize_sent_ref(sent_ref)
         dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}
-        if not update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="sent", now=resolved_now, dispatch=dispatch_meta):
+        if not update_proactive_outbox_item_status(
+            account_store,
+            account_id,
+            item_id,
+            status="sent",
+            reason="sent",
+            now=resolved_now,
+            dispatch=dispatch_meta,
+            expected_status="queued",
+        ):
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel, message_ref))
             continue
         _record_proactive_sent_ref(
@@ -1776,8 +1816,16 @@ def _apply_proactive_llm_cancel_decision(
     if not _queued_proactive_outbox_item_exists(account_store, account_id, item_id):
         return "error:item_not_queued"
     reason = _safe_llm_text(decision.get("reason"), max_chars=160) or "llm_cancel"
-    if not update_proactive_outbox_item_status(account_store, account_id, item_id, status="cancelled", reason=f"llm_cancel:{reason}", now=now):
-        return "error:item_not_found"
+    if not update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        item_id,
+        status="cancelled",
+        reason=f"llm_cancel:{reason}",
+        now=now,
+        expected_status="queued",
+    ):
+        return "error:item_not_queued"
     return f"cancelled:{item_id}"
 
 

@@ -1242,6 +1242,50 @@ def test_llm_plan_validator_rejects_cancel_and_snooze_for_invalid_items(tmp_path
     assert [event["event_type"] for event in audit] == ["llm_decision_rejected", "llm_decision_rejected", "llm_decision_rejected"]
 
 
+def test_llm_cancel_does_not_overwrite_terminal_item_after_stale_precheck(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="already_sent",
+        message_text="Already sent",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        item_id,
+        status="sent",
+        reason="sent_before_cancel",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.proactive_agent._queued_proactive_outbox_item_exists", lambda *_args: True)
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "cancel", "item_id": item_id, "reason": "zu spaet"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_item_not_queued",)
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "sent"
+    assert item["status_history"][-1]["reason"] == "sent_before_cancel"
+
+
 def test_llm_planner_prompt_includes_queued_outbox_ids_for_cancel_snooze(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
@@ -1943,6 +1987,56 @@ def test_dispatch_skips_item_that_was_snoozed_after_due_snapshot(tmp_path, monke
     assert results[0].status == "skipped"
     assert results[0].reason == "stale_outbox_item"
     assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-15T14:00:00+00:00"
+
+
+def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    tracker = MessageTracker(tmp_path / "refs.json")
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        update_proactive_outbox_item_status(
+            account_store,
+            account_id,
+            item_id,
+            status="cancelled",
+            reason="cancelled_during_send",
+            now=now,
+        )
+        return "sent-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+            message_tracker=tracker,
+            instance_name="Depressionsbot",
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "cancelled"
+    assert item["status_history"][-1]["reason"] == "cancelled_during_send"
+    assert tracker.list_for_chat("+491", instance_name="Depressionsbot", channel="signal") == []
 
 
 def test_dispatch_fails_invalid_due_at_without_sending(tmp_path) -> None:
