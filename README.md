@@ -231,7 +231,7 @@ Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JS
 python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
 ```
 
-Abgedeckt werden Account-Memory, Bibliothekar, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird.
+Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird.
 
 Plan2-Akzeptanztests:
 

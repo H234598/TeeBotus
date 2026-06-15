@@ -28,7 +28,13 @@ from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_ll
 from TeeBotus.mcp_tools import build_readonly_mcp_registry  # noqa: E402
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
 from TeeBotus.runtime.bibliothekar import BibliothekarStore  # noqa: E402
-from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend, check_bibliothekar_service  # noqa: E402
+from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
+    BibliothekarQuery,
+    BibliothekarService,
+    HaystackBibliothekarBackend,
+    LocalBibliothekarBackend,
+    check_bibliothekar_service,
+)
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query  # noqa: E402
 from TeeBotus.runtime.proactive_agent import (  # noqa: E402
     due_proactive_outbox_items,
@@ -72,6 +78,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results: list[BenchmarkResult] = []
     results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn))
     results.append(_benchmark_bibliothekar(iterations=iterations))
+    results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
     results.append(_benchmark_llm_router(iterations=iterations))
     results.append(_benchmark_proactive(iterations=iterations))
     results.append(_benchmark_adapter_contracts(iterations=iterations))
@@ -175,6 +182,57 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
             payload_bytes=store.chunks_path.stat().st_size,
             index_bytes=store.index_path.stat().st_size,
             details={"documents": len(index.get("documents", {})), "chunks": int(index.get("chunk_count") or 0), "median_query_ms": statistics.median(timings)},
+        )
+
+
+def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-haystack-") as tmp:
+        root = Path(tmp)
+        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
+        library_dir.mkdir(parents=True)
+        for index in range(3):
+            (library_dir / f"therapie_{index}.txt").write_text(
+                f"Depression Therapie Aktivierung Schlaf Tagesstruktur Haystack Quelle {index}.",
+                encoding="utf-8",
+            )
+        document_store = _BenchmarkDocumentStore()
+        backend = HaystackBibliothekarBackend(
+            instance_name="Bench",
+            instances_dir=root / "instances",
+            collection="bench_books",
+            document_store_factory=lambda: document_store,
+            document_class=_BenchmarkDocument,
+        )
+        rebuild_ms = _timed_ms(backend.rebuild)
+        timings = [
+            _timed_ms(
+                lambda: backend.search(
+                    BibliothekarQuery(
+                        text="Therapie Schlaf",
+                        max_chunks=2,
+                        max_prompt_chars=5000,
+                        max_quote_chars=500,
+                    )
+                )
+            )
+            for _ in range(iterations)
+        ]
+        fallback_store = backend.fallback_store
+        index = json.loads(fallback_store.index_path.read_text(encoding="utf-8"))
+        return _result(
+            name="bibliothekar_haystack_fake_query",
+            category="bibliothekar",
+            iterations=iterations,
+            total_ms=rebuild_ms + sum(timings),
+            payload_bytes=fallback_store.chunks_path.stat().st_size,
+            index_bytes=fallback_store.index_path.stat().st_size,
+            note="fake_haystack_document_store",
+            details={
+                "documents": len(index.get("documents", {})),
+                "chunks": int(index.get("chunk_count") or 0),
+                "document_store_documents": len(document_store.documents),
+                "median_query_ms": statistics.median(timings),
+            },
         )
 
 
@@ -380,6 +438,27 @@ def _context() -> dict[str, Any]:
         "machine": platform.machine(),
         "processor": platform.processor(),
     }
+
+
+class _BenchmarkDocument:
+    def __init__(self, *, content: str, meta: dict[str, Any], id: str | None = None) -> None:
+        self.content = content
+        self.meta = meta
+        self.id = id or str(meta.get("chunk_id", ""))
+
+
+class _BenchmarkDocumentStore:
+    def __init__(self) -> None:
+        self.documents: list[_BenchmarkDocument] = []
+
+    def write_documents(self, documents: list[_BenchmarkDocument], **_kwargs: Any) -> None:
+        by_id = {document.id: document for document in self.documents}
+        for document in documents:
+            by_id[document.id] = document
+        self.documents = list(by_id.values())
+
+    def filter_documents(self, **_kwargs: Any) -> list[_BenchmarkDocument]:
+        return list(self.documents)
 
 
 if __name__ == "__main__":

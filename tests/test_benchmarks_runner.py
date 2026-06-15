@@ -27,6 +27,8 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert all("total_ms" in result for result in suite["results"])
     assert all("throughput_ops_s" in result for result in suite["results"])
     assert any(result["name"] == "memory_postgres" and result["skipped"] is True for result in suite["results"])
+    assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
+    assert any(result["name"] == "bibliothekar_haystack_fake_query" for result in suite["results"])
 
 
 def test_benchmark_markdown_contains_comparison_table() -> None:
@@ -37,6 +39,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "# TeeBotus Benchmarks" in markdown
     assert "| name | category | status | iterations |" in markdown
     assert "memory_jsonl" in markdown
+    assert "bibliothekar_haystack_fake_query" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "keine echten Provider-Calls" in markdown
 
