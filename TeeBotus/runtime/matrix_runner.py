@@ -153,11 +153,14 @@ class MatrixRuntimeBridge:
                 chat_id=event.chat_id,
                 count=action.count,
             )
+            failed_refs: list[SentMessageRef] = []
             for ref in refs:
                 try:
                     await _delete_matrix_message(self.client, event.chat_id, ref.message_ref)
                 except Exception:
+                    failed_refs.append(ref)
                     continue
+            self.message_tracker.restore_for_cleanup(failed_refs)
 
 
 async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:

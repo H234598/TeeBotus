@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
@@ -552,6 +552,45 @@ def test_matrix_cleanup_prefers_niobot_delete_message(tmp_path) -> None:
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), message))
 
     assert client.deleted == [("!room:example", "$old", "TeeBotus cleanup")]
+
+
+def test_matrix_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
+    class FailingDeleteClient(FakeMatrixClient):
+        async def room_redact(self, room_id: str, event_id: str, reason: str | None = None):
+            self.redacted.append((room_id, event_id, reason))
+            raise RuntimeError("redact refused")
+
+    client = FailingDeleteClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    ref = SentMessageRef(
+        channel="matrix",
+        instance_name="Demo",
+        account_id="account-1",
+        chat_id="!room:example",
+        message_ref="$old",
+        ref_kind="matrix_event_id",
+    )
+    bridge.message_tracker.record(ref)
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert client.redacted == [("!room:example", "$old", "TeeBotus cleanup")]
+    assert bridge.message_tracker.list_for_chat("!room:example", instance_name="Demo", channel="matrix") == [ref]
 
 
 def test_delete_matrix_message_rejects_niobot_error_response() -> None:

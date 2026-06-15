@@ -180,11 +180,14 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 chat_id=event.chat_id,
                 count=action.count,
             )
+            failed_refs: list[SentMessageRef] = []
             for ref in refs:
                 try:
                     await _remote_delete_signal_message(context, event.chat_id, ref.message_ref)
                 except Exception:
+                    failed_refs.append(ref)
                     continue
+            self.message_tracker.restore_for_cleanup(failed_refs)
 
     async def _delete_local_attachments(self, context: Any) -> None:
         message = getattr(context, "message", None)

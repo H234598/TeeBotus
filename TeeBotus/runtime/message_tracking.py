@@ -46,6 +46,27 @@ class MessageTracker:
         del values[:-self.max_refs_per_chat]
         self._save()
 
+    def restore_for_cleanup(self, refs: list[SentMessageRef]) -> None:
+        if not refs:
+            return
+        changed = False
+        grouped: dict[tuple[str, str, str], list[SentMessageRef]] = {}
+        for ref in refs:
+            grouped.setdefault((ref.instance_name, ref.channel, ref.chat_id), []).append(ref)
+        for key, popped_refs in grouped.items():
+            values = self.refs.setdefault(key, [])
+            existing = {(ref.account_id, ref.message_ref, ref.ref_kind) for ref in values}
+            for ref in reversed(popped_refs):
+                ref_key = (ref.account_id, ref.message_ref, ref.ref_kind)
+                if ref_key in existing:
+                    continue
+                values.append(ref)
+                existing.add(ref_key)
+                changed = True
+            del values[:-self.max_refs_per_chat]
+        if changed:
+            self._save()
+
     def list_for_chat(self, chat_id: str, *, instance_name: str | None = None, channel: str | None = None) -> list[SentMessageRef]:
         selected: list[SentMessageRef] = []
         for (inst, ch, cid), values in self.refs.items():

@@ -240,6 +240,42 @@ def test_signal_cleanup_falls_back_to_bot_remote_delete(tmp_path) -> None:
     assert context.bot_deleted == [("+491234", 555)]
 
 
+def test_signal_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type("FakeEngine", (), {"process": lambda self, event: [DeleteTrackedMessages(event.chat_id, 1)]})()
+    ref = SentMessageRef(
+        channel="signal",
+        instance_name="Demo",
+        account_id="account-1",
+        chat_id="+491234",
+        message_ref="666",
+        ref_kind="signal_timestamp",
+    )
+    command.message_tracker.record(ref)
+    context = FakeSignalContext()
+
+    async def failing_remote_delete(_timestamp: int) -> int:
+        raise RuntimeError("delete refused")
+
+    context.remote_delete = failing_remote_delete
+
+    asyncio.run(command.handle(context))
+
+    assert command.message_tracker.list_for_chat("+491234", instance_name="Demo", channel="signal") == [ref]
+
+
 def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()
