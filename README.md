@@ -242,6 +242,7 @@ python3 -m pytest -q tests/test_bibliothekar_*.py
 python3 -m pytest -q tests/test_llm_router.py
 python3 -m pytest -q tests/test_pydantic_decisions.py
 python3 -m pytest -q tests/test_graphs_*.py
+python3 -m pytest -q tests/test_secret_hygiene.py
 ```
 
 Account-Report:

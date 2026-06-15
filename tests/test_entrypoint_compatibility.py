@@ -35,6 +35,34 @@ def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     assert result == 0
 
 
+def test_main_delegates_default_start_to_telegram_entrypoint(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(list(args)) or 0)
+
+    assert bot.main([]) == 0
+
+    assert calls == [[]]
+
+
+def test_main_delegates_all_start_to_telegram_entrypoint(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls: list[list[str]] = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(list(args)) or 0)
+
+    assert bot.main(["--all"]) == 0
+
+    assert calls == [["--all"]]
+
+
 def test_runtime_status_prints_account_memory_index_health(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

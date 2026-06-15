@@ -23,6 +23,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "tests/test_llm_config.py" in text
     assert "tests/test_litellm_provider.py" in text
     assert "tests/test_bibliothekar_*.py" in text
+    assert "tests/test_secret_hygiene.py" in text
     assert "## MCP/FastMCP Pilot" in text
     assert "bibliothekar.search" in text
     assert "memory.search" in text
