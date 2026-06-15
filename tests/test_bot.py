@@ -3408,6 +3408,78 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_success.format(count=5))])
         self.assertEqual(chat_state.pop_recent_messages(123, 10), [101])
 
+    def test_modern_telegram_cleanup_logs_and_restores_failed_deletes(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _delete_tracked_telegram_messages
+        from TeeBotus.runtime.actions import DeleteTrackedMessages
+        from TeeBotus.runtime.events import IncomingEvent
+        from TeeBotus.runtime.message_tracking import SentMessageRef
+
+        class FailingDeleteAPI(FakeAPI):
+            def delete_message(self, chat_id: int, message_id: int) -> None:
+                super().delete_message(chat_id, message_id)
+                raise TelegramAPIError("delete refused")
+
+        api = FailingDeleteAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            tracker = MessageTracker(Path(directory) / "Sent_Message_Refs.json")
+            ref = SentMessageRef(
+                channel="telegram",
+                instance_name="Demo",
+                account_id="account-1",
+                chat_id="123",
+                message_ref="99",
+                ref_kind="telegram_message_id",
+            )
+            tracker.record(ref)
+            event = IncomingEvent(
+                event_id="telegram:1",
+                instance="Demo",
+                channel="telegram",
+                adapter_slot=1,
+                account_id="account-1",
+                identity_key="telegram:user:456",
+                chat_id="123",
+                chat_type="private",
+                sender_id="456",
+                text="/cleanup 1",
+                message_ref="1",
+            )
+
+            with self.assertLogs("TeeBotus", level="ERROR") as logs:
+                _delete_tracked_telegram_messages(api, tracker, event, [DeleteTrackedMessages("123", 1)])
+
+            self.assertEqual(api.deleted_messages, [(123, 99)])
+            self.assertEqual(tracker.list_for_chat("123", instance_name="Demo", channel="telegram"), [ref])
+            self.assertIn("Telegram cleanup failed", "\n".join(logs.output))
+
+    def test_modern_telegram_linked_identity_logs_send_failures(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _notify_telegram_linked_identities
+        from TeeBotus.runtime.actions import NotifyLinkedIdentity
+
+        class FailingSendAPI(FakeAPI):
+            def send_message(self, chat_id: int, text: str) -> int:
+                raise TelegramAPIError("send refused")
+
+        api = FailingSendAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            tracker = MessageTracker(root / "Sent_Message_Refs.json")
+            old_identity = telegram_identity_key("999")
+            account_store.resolve_or_create_account(old_identity)
+            account_store.update_identity_route(old_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+            action = NotifyLinkedIdentity(
+                identity_key=old_identity,
+                text="Ein neuer Kommunikationsweg wurde verbunden.",
+                account_id="account-1",
+                new_identity_key=telegram_identity_key("456"),
+            )
+
+            with self.assertLogs("TeeBotus", level="ERROR") as logs:
+                _notify_telegram_linked_identities(api, tracker, account_store, [action], instance_name="Demo")
+
+            self.assertIn("Telegram linked identity notification failed", "\n".join(logs.output))
+
     def test_call_a_teladi_prompts_and_forwards_next_message(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

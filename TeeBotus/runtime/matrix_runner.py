@@ -194,6 +194,12 @@ class MatrixRuntimeBridge:
             try:
                 sent_refs = await send_matrix_actions(self.client, [SendText(chat_id, action.text, track=action.track)])
             except Exception:
+                LOGGER.exception(
+                    "Matrix linked identity notification failed instance=%s room_id=%s identity_key=%s.",
+                    self.run_config.instance_name,
+                    chat_id,
+                    action.identity_key,
+                )
                 continue
             sent_ref = sent_refs[0] if sent_refs else None
             if not action.track or sent_ref is None:
@@ -262,6 +268,12 @@ class MatrixRuntimeBridge:
                 try:
                     await _delete_matrix_message(self.client, event.chat_id, ref.message_ref)
                 except Exception:
+                    LOGGER.exception(
+                        "Matrix cleanup failed instance=%s room_id=%s event_id=%s.",
+                        event.instance,
+                        event.chat_id,
+                        ref.message_ref,
+                    )
                     failed_refs.append(ref)
                     continue
             self.message_tracker.restore_for_cleanup(failed_refs)

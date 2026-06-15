@@ -1001,7 +1001,16 @@ def _notify_telegram_linked_identities(
         chat_id = str(route.get("chat_id") or "").strip()
         if not chat_id:
             continue
-        sent_ref = api.send_message(int(chat_id), action.text)
+        try:
+            sent_ref = api.send_message(int(chat_id), action.text)
+        except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+            LOGGER.exception(
+                "Telegram linked identity notification failed instance=%s chat_id=%s identity_key=%s.",
+                instance_name,
+                chat_id,
+                action.identity_key,
+            )
+            continue
         if sent_ref is None or not action.track:
             continue
         message_tracker.record(
@@ -1030,7 +1039,13 @@ def _delete_tracked_telegram_messages(api: TelegramAPI, message_tracker: Message
         for ref in refs:
             try:
                 api.delete_message(int(ref.chat_id), int(ref.message_ref))
-            except (TelegramAPIError, ValueError):
+            except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+                LOGGER.exception(
+                    "Telegram cleanup failed instance=%s chat_id=%s message_id=%s.",
+                    event.instance,
+                    ref.chat_id,
+                    ref.message_ref,
+                )
                 failed_refs.append(ref)
         message_tracker.restore_for_cleanup(failed_refs)
 

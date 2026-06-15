@@ -707,7 +707,7 @@ def test_matrix_cleanup_prefers_niobot_delete_message(tmp_path) -> None:
     assert client.deleted == [("!room:example", "$old", "TeeBotus cleanup")]
 
 
-def test_matrix_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
+def test_matrix_cleanup_restores_ref_when_remote_delete_fails(tmp_path, caplog) -> None:
     class FailingDeleteClient(FakeMatrixClient):
         async def room_redact(self, room_id: str, event_id: str, reason: str | None = None):
             self.redacted.append((room_id, event_id, reason))
@@ -740,10 +740,12 @@ def test_matrix_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
     )
     bridge.message_tracker.record(ref)
 
-    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.matrix"):
+        asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
 
     assert client.redacted == [("!room:example", "$old", "TeeBotus cleanup")]
     assert bridge.message_tracker.list_for_chat("!room:example", instance_name="Demo", channel="matrix") == [ref]
+    assert "Matrix cleanup failed" in caplog.text
 
 
 def test_delete_matrix_message_rejects_niobot_error_response() -> None:
@@ -1149,6 +1151,52 @@ def test_matrix_bridge_notifies_old_matrix_identity_route(tmp_path) -> None:
 
     assert client.sent[0]["room_id"] == "!old:example"
     assert client.sent[0]["content"] == {"msgtype": "m.text", "body": "Ein neuer Kommunikationsweg wurde verbunden."}
+
+
+def test_matrix_bridge_logs_linked_identity_notification_failure(tmp_path, caplog) -> None:
+    class FailingSendClient(FakeMatrixClient):
+        async def room_send(self, **kwargs):
+            self.sent.append(kwargs)
+            raise RuntimeError("send refused")
+
+    client = FailingSendClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    old_identity = "matrix:user:@old:example"
+    bridge.account_store.resolve_or_create_account(old_identity)
+    bridge.account_store.update_identity_route(old_identity, channel="matrix", chat_id="!old:example", chat_type="private", adapter_slot=1)
+    bridge.engine = type(
+        "FakeEngine",
+        (),
+        {
+            "process": lambda self, event: [
+                NotifyLinkedIdentity(
+                    identity_key=old_identity,
+                    text="Ein neuer Kommunikationsweg wurde verbunden.",
+                    account_id=event.account_id,
+                    new_identity_key=event.identity_key,
+                )
+            ]
+        },
+    )()
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.matrix"):
+        asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert "Matrix linked identity notification failed" in caplog.text
 
 
 def test_matrix_bridge_tracks_linked_identity_notification_when_requested(tmp_path) -> None:

@@ -418,7 +418,7 @@ def test_signal_cleanup_falls_back_to_bot_remote_delete(tmp_path) -> None:
     assert context.bot_deleted == [("+491234", 555)]
 
 
-def test_signal_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
+def test_signal_cleanup_restores_ref_when_remote_delete_fails(tmp_path, caplog) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
             instance_name="Demo",
@@ -449,9 +449,11 @@ def test_signal_cleanup_restores_ref_when_remote_delete_fails(tmp_path) -> None:
 
     context.remote_delete = failing_remote_delete
 
-    asyncio.run(command.handle(context))
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        asyncio.run(command.handle(context))
 
     assert command.message_tracker.list_for_chat("+491234", instance_name="Demo", channel="signal") == [ref]
+    assert "Signal cleanup failed" in caplog.text
 
 
 def test_signal_command_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
@@ -964,6 +966,49 @@ def test_signal_command_notifies_old_signal_identity_route(tmp_path) -> None:
     asyncio.run(command.handle(FakeSignalContext()))
 
     assert fake_bot.sent == [("+49999", "Ein neuer Kommunikationsweg wurde verbunden.")]
+
+
+def test_signal_command_logs_linked_identity_notification_failure(tmp_path, caplog) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    old_identity = "signal:uuid:old"
+    command.account_store.resolve_or_create_account(old_identity)
+    command.account_store.update_identity_route(old_identity, channel="signal", chat_id="+49999", chat_type="private", adapter_slot=1)
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {
+            "process": lambda self, event: [
+                NotifyLinkedIdentity(
+                    identity_key=old_identity,
+                    text="Ein neuer Kommunikationsweg wurde verbunden.",
+                    account_id=event.account_id,
+                    new_identity_key=event.identity_key,
+                )
+            ]
+        },
+    )()
+
+    async def failing_send(_receiver: str, _text: str):
+        raise RuntimeError("send refused")
+
+    command.bot = SimpleNamespace(send=failing_send)
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        asyncio.run(command.handle(FakeSignalContext()))
+
+    assert "Signal linked identity notification failed" in caplog.text
 
 
 def test_signal_command_notifies_old_signal_identity_with_sync_bot_send(tmp_path) -> None:

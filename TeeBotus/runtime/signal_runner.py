@@ -228,6 +228,12 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             try:
                 sent_ref = await _maybe_await(self.bot.send(receiver, action.text))
             except Exception:
+                LOGGER.exception(
+                    "Signal linked identity notification failed instance=%s recipient=%s identity_key=%s.",
+                    self.run_config.instance_name,
+                    receiver,
+                    action.identity_key,
+                )
                 continue
             if not action.track:
                 continue
@@ -305,6 +311,12 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 try:
                     await _remote_delete_signal_message(context, event.chat_id, ref.message_ref)
                 except Exception:
+                    LOGGER.exception(
+                        "Signal cleanup failed instance=%s recipient=%s message_ref=%s.",
+                        event.instance,
+                        event.chat_id,
+                        ref.message_ref,
+                    )
                     failed_refs.append(ref)
                     continue
             self.message_tracker.restore_for_cleanup(failed_refs)
