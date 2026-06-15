@@ -220,6 +220,13 @@ class MatrixRuntimeBridge:
                     on_scheduled_result=lambda sent_ref, action=action: self._track_background_action(event, action, sent_ref),
                 )
             except Exception:
+                LOGGER.exception(
+                    "Matrix background action dispatch failed instance=%s room_id=%s event_id=%s action=%s.",
+                    self.run_config.instance_name,
+                    event.chat_id,
+                    event.message_ref,
+                    action.__class__.__name__,
+                )
                 continue
             self._track_background_action(event, action, sent_ref)
 

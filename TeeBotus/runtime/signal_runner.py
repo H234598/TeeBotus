@@ -259,6 +259,13 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     on_scheduled_result=lambda sent_ref, action=action: self._track_background_action(event, action, sent_ref),
                 )
             except Exception:
+                LOGGER.exception(
+                    "Signal background action dispatch failed instance=%s recipient=%s message_ref=%s action=%s.",
+                    self.run_config.instance_name,
+                    event.chat_id,
+                    event.message_ref,
+                    action.__class__.__name__,
+                )
                 continue
             self._track_background_action(event, action, sent_ref)
 

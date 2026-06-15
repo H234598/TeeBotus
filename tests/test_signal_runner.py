@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import threading
 from pathlib import Path
@@ -1085,6 +1086,35 @@ def test_signal_background_dispatch_uses_captured_runtime_loop(monkeypatch, tmp_
     assert loop_matches == [True]
     refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
     assert [ref.message_ref for ref in refs] == ["456789"]
+
+
+def test_signal_background_dispatch_logs_failures(monkeypatch, tmp_path, caplog) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.bot = FakeSignalBot()
+    event = SimpleNamespace(instance="Demo", account_id="acc", chat_id="+491234", message_ref="123456")
+
+    def fail_dispatch(*_args, **_kwargs):
+        raise RuntimeError("dispatch failed")
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.run_background_coroutine", fail_dispatch)
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
+        command._dispatch_background_actions(event, [SendText("+491234", "hi")])
+
+    assert "Signal background action dispatch failed" in caplog.text
+    assert "action=SendText" in caplog.text
 
 
 def test_signal_command_does_not_track_linked_identity_notification_without_timestamp(tmp_path) -> None:

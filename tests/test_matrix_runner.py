@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 
 from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
@@ -1244,6 +1245,47 @@ def test_matrix_background_dispatch_uses_captured_runtime_loop(monkeypatch, tmp_
     assert loop_matches == [True]
     refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
     assert [ref.message_ref for ref in refs] == ["$background"]
+
+
+def test_matrix_background_dispatch_logs_failures(monkeypatch, tmp_path, caplog) -> None:
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=FakeMatrixClient(),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    event = IncomingEvent(
+        event_id="matrix:$incoming",
+        instance="Demo",
+        channel="matrix",
+        adapter_slot=1,
+        identity_key="matrix:user:@alice:example",
+        chat_id="!room:example",
+        chat_type="private",
+        sender_id="@alice:example",
+        text="",
+        message_ref="$incoming",
+    )
+
+    def fail_dispatch(*_args, **_kwargs):
+        raise RuntimeError("dispatch failed")
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.run_background_coroutine", fail_dispatch)
+
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.matrix"):
+        bridge._dispatch_background_actions(event, [SendText("!room:example", "hi")])
+
+    assert "Matrix background action dispatch failed" in caplog.text
+    assert "action=SendText" in caplog.text
 
 
 def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:

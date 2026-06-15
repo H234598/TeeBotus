@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from collections.abc import Callable, Coroutine
 from typing import Any
 
 
+LOGGER = logging.getLogger("TeeBotus.async_bridge")
 BACKGROUND_DISPATCH_TIMEOUT_SECONDS = 60.0
 
 
@@ -44,5 +46,9 @@ def _handle_scheduled_result(task: asyncio.Task[Any], callback: Callable[[Any], 
     try:
         result = task.result()
     except Exception:
+        LOGGER.exception("Background coroutine scheduled on runtime loop failed.")
         return
-    callback(result)
+    try:
+        callback(result)
+    except Exception:
+        LOGGER.exception("Background coroutine result callback failed.")
