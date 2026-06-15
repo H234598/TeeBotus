@@ -29,6 +29,11 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert any(result["name"] == "memory_postgres" and result["skipped"] is True for result in suite["results"])
     assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
     assert any(result["name"] == "bibliothekar_haystack_fake_query" for result in suite["results"])
+    llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
+    assert llm_router["details"]["runtime_provider"] == "litellm"
+    assert llm_router["details"]["runtime_model"] == "ollama_chat/llama3.1:8b"
+    assert llm_router["details"]["fallback_models"] == ["groq/llama-3.1-8b-instant"]
+    assert llm_router["details"]["network_calls"] == 0
 
 
 def test_benchmark_markdown_contains_comparison_table() -> None:

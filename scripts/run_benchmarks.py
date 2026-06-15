@@ -23,9 +23,12 @@ from scripts.benchmark_memory_store import (  # noqa: E402
     benchmark_sqlite_row_encrypted_projection,
 )
 from TeeBotus.core.youtube import _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
+from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
+from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
 from TeeBotus.mcp_tools import build_readonly_mcp_registry  # noqa: E402
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client  # noqa: E402
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
 from TeeBotus.runtime.bibliothekar import BibliothekarStore  # noqa: E402
 from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
@@ -239,13 +242,50 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
 def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
     profiles = load_llm_profiles()
     _default_profile, routing = load_llm_routing()
-    timings = [_timed_ms(lambda: select_llm_route("structured_decision", profiles=profiles, routing=routing)) for _ in range(iterations)]
+    route_timings = [_timed_ms(lambda: select_llm_route("structured_decision", profiles=profiles, routing=routing)) for _ in range(iterations)]
+    runtime_timings = [
+        _timed_ms(
+            lambda: build_runtime_text_llm_client(
+                instructions=BotInstructions(),
+                openai_client=None,
+                purpose="structured_decision",
+                allow_remote_fallback=True,
+            )
+        )
+        for _ in range(iterations)
+    ]
+    decision_payload = {
+        "should_search": True,
+        "query": "Therapie Schlaf Tagesstruktur",
+        "confidence": 0.91,
+        "reason_short": "benchmark fake structured decision",
+        "source": "model",
+    }
+    decision_timings = [_timed_ms(lambda: parse_bibliothekar_query_decision(decision_payload)) for _ in range(iterations)]
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        allow_remote_fallback=True,
+    )
+    fallback_route = select_llm_route("structured_decision", profiles=profiles, routing=routing, allow_remote_fallback=True)
     return _result(
         name="llm_router_structured_decision",
         category="llm_router",
-        iterations=iterations,
-        total_ms=sum(timings),
-        details={"median_route_ms": statistics.median(timings), "profile_count": len(profiles), "route_count": len(routing)},
+        iterations=iterations * 3,
+        total_ms=sum(route_timings) + sum(runtime_timings) + sum(decision_timings),
+        details={
+            "median_route_ms": statistics.median(route_timings),
+            "median_runtime_client_ms": statistics.median(runtime_timings),
+            "median_structured_decision_ms": statistics.median(decision_timings),
+            "profile_count": len(profiles),
+            "route_count": len(routing),
+            "runtime_client": type(client).__name__,
+            "runtime_provider": client.provider if isinstance(client, LiteLLMTextClient) else "",
+            "runtime_model": client.model if isinstance(client, LiteLLMTextClient) else "",
+            "fallback_models": list(fallback_route.fallback_models),
+            "network_calls": 0,
+        },
     )
 
 
