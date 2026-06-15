@@ -212,7 +212,7 @@ def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) ->
     )
 
     account = report["instances"][0]["accounts"][0]
-    assert len(account["planning"]["created_memory_ids"]) == 1
+    assert len(account["planning"]["created_memory_ids"]) == 9
     assert len(account["planning"]["queued_item_ids"]) == 1
     assert account["due_items"] == []
     assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T10:00:00+00:00"

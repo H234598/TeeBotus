@@ -417,34 +417,22 @@ def run_proactive_reflection_planner(
         fingerprint = _proactive_plan_fingerprint(account_id, source)
         if fingerprint in existing_fingerprints:
             continue
-        reflection_id = account_store.append_structured_memory_entry(
+        plan_memory_ids = _append_proactive_planner_memory_entries(
+            account_store,
             account_id,
-            {
-                "kind": "reflection",
-                "memory_type": "semantic",
-                "user_text": f"Proaktive Reflexion zu {source_id}: sanftes Follow-up ist fachlich plausibel, sofern Consent und Policy weiter passen.",
-                "bot_text": "Automatisch vom Proactive Planner erzeugt; keine Diagnose und keine direkte Sendefreigabe.",
-                "importance": 3,
-                "related_ids": [source_id],
-                "supports": [source_id],
-                "relations": [
-                    {
-                        "type": "derived_from",
-                        "target_id": source_id,
-                        "valid_from": resolved_now.isoformat(timespec="seconds"),
-                        "provenance": {"job": "proactive-reflection-planner"},
-                    }
-                ],
-                "proactive_plan_fingerprint": fingerprint,
-            },
+            source,
+            source_id=source_id,
+            fingerprint=fingerprint,
+            now=resolved_now,
         )
+        reflection_id = plan_memory_ids[0]
         decision = queue_proactive_message(
             account_store,
             account_id,
             category="reminder",
             intent="planner_follow_up",
             message_text=_proactive_planner_message(source),
-            reason_memory_ids=(source_id, reflection_id),
+            reason_memory_ids=(source_id, *plan_memory_ids),
             due_at=_default_proactive_due_at(resolved_now),
             now=resolved_now,
             risk_gate="none",
@@ -452,6 +440,7 @@ def run_proactive_reflection_planner(
                 "fingerprint": fingerprint,
                 "source_memory_id": source_id,
                 "reflection_memory_id": reflection_id,
+                "memory_ids": list(plan_memory_ids),
                 "collaboration_marker": "agent_suggested",
                 "intervention_type": "reminder",
                 "review_signal": "User berichtet erledigt/nicht erledigt/Belastung",
@@ -459,7 +448,7 @@ def run_proactive_reflection_planner(
         )
         if not decision.allowed:
             return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), decision.reason)
-        created_memory_ids.append(reflection_id)
+        created_memory_ids.extend(plan_memory_ids)
         queued_item_ids.append(decision.reason.removeprefix("queued:"))
         existing_fingerprints.add(fingerprint)
         if len(queued_item_ids) >= max_items:
@@ -908,10 +897,32 @@ def _proactive_planner_candidates(account_store: AccountStore, account_id: str) 
     rows = [
         entry
         for entry in account_store.read_memory_entries(account_id)
-        if isinstance(entry, dict) and str(entry.get("kind") or "").strip().casefold() in PROACTIVE_PLANNER_MEMORY_KINDS
+        if (
+            isinstance(entry, dict)
+            and str(entry.get("kind") or "").strip().casefold() in PROACTIVE_PLANNER_MEMORY_KINDS
+            and not _is_proactive_planner_generated_memory(entry)
+        )
     ]
     rows.sort(key=lambda entry: (_parse_proactive_datetime(str(entry.get("updated_at") or entry.get("created_at") or "")) or datetime.min.replace(tzinfo=timezone.utc)), reverse=True)
     return tuple(rows)
+
+
+def _is_proactive_planner_generated_memory(entry: Mapping[str, Any]) -> bool:
+    if entry.get("proactive_plan_fingerprint"):
+        return True
+    planner = entry.get("proactive_planner")
+    if isinstance(planner, Mapping) and str(planner.get("source") or "").strip().casefold() == "local":
+        return True
+    relations = entry.get("relations")
+    if isinstance(relations, list):
+        for relation in relations:
+            if not isinstance(relation, Mapping):
+                continue
+            provenance = relation.get("provenance")
+            if isinstance(provenance, Mapping) and provenance.get("job") == "proactive-reflection-planner":
+                return True
+    bot_text = str(entry.get("bot_text") or "")
+    return "Proactive Planner" in bot_text
 
 
 def _existing_proactive_plan_fingerprints(account_store: AccountStore, account_id: str) -> set[str]:
@@ -921,6 +932,11 @@ def _existing_proactive_plan_fingerprints(account_store: AccountStore, account_i
             fingerprint = str(entry.get("proactive_plan_fingerprint") or "").strip()
             if fingerprint:
                 fingerprints.add(fingerprint)
+            planner = entry.get("proactive_planner")
+            if isinstance(planner, dict):
+                fingerprint = str(planner.get("fingerprint") or "").strip()
+                if fingerprint:
+                    fingerprints.add(fingerprint)
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
@@ -930,6 +946,102 @@ def _existing_proactive_plan_fingerprints(account_store: AccountStore, account_i
             if fingerprint:
                 fingerprints.add(fingerprint)
     return fingerprints
+
+
+def _append_proactive_planner_memory_entries(
+    account_store: AccountStore,
+    account_id: str,
+    source: Mapping[str, Any],
+    *,
+    source_id: str,
+    fingerprint: str,
+    now: datetime,
+) -> tuple[str, ...]:
+    return tuple(
+        account_store.append_structured_memory_entry(account_id, payload)
+        for payload in _proactive_planner_memory_payloads(source, source_id=source_id, fingerprint=fingerprint, now=now)
+    )
+
+
+def _proactive_planner_memory_payloads(
+    source: Mapping[str, Any],
+    *,
+    source_id: str,
+    fingerprint: str,
+    now: datetime,
+) -> tuple[dict[str, Any], ...]:
+    source_kind = str(source.get("kind") or "memory").strip().casefold() or "memory"
+    short = _proactive_source_excerpt(source)
+    timestamp = now.isoformat(timespec="seconds")
+    relation = {
+        "type": "derived_from",
+        "target_id": source_id,
+        "valid_from": timestamp,
+        "provenance": {"job": "proactive-reflection-planner"},
+    }
+    common = {
+        "memory_type": "semantic",
+        "importance": 3,
+        "related_ids": [source_id],
+        "supports": [source_id],
+        "relations": [relation],
+        "proactive_plan_fingerprint": fingerprint,
+        "proactive_planner": {
+            "source": "local",
+            "fingerprint": fingerprint,
+            "source_memory_id": source_id,
+            "source_kind": source_kind,
+            "created_at": timestamp,
+        },
+    }
+    templates = (
+        (
+            "reflection",
+            f"Proaktive Reflexion zu {source_id}: sanftes Follow-up ist fachlich plausibel, sofern Consent und Policy weiter passen.",
+            "Automatisch vom Proactive Planner erzeugt; keine Diagnose und keine direkte Sendefreigabe.",
+        ),
+        (
+            "summary",
+            f"Proaktive Kurz-Zusammenfassung aus {source_kind}: {short}",
+            "Stabile Arbeitszusammenfassung fuer spaetere, begruendete Follow-ups.",
+        ),
+        (
+            "assessment_note",
+            f"Assessment-Hypothese ohne Diagnose: Aus {source_kind} ergibt sich ein moeglicher, niedrigschwelliger Unterstuetzungsbedarf.",
+            "Nur als interne Hypothese mit Provenienz speichern; keine klinische Feststellung.",
+        ),
+        (
+            "intervention_note",
+            "Geeignete Intervention: kurzer, nicht druckvoller Check-in oder Erinnerung, falls Opt-in, Kategorie und Zeitfenster passen.",
+            "Intervention bleibt policy-abhaengig und wird nicht direkt gesendet.",
+        ),
+        (
+            "response_note",
+            "Erwartete Response: kurze Rueckmeldung, ob das Vorhaben passt, erledigt wurde oder gerade zu belastend ist.",
+            "Diese Note beschreibt erwartbare Auswertung, nicht eine bereits erfolgte User-Antwort.",
+        ),
+        (
+            "next_step",
+            f"Naechster Schritt: bei passender Policy behutsam anknuepfen an: {short}",
+            "Konkreter interner Schritt fuer den Scheduler/Planner.",
+        ),
+        (
+            "follow_up",
+            "Follow-up geplant: spaeter pruefen, ob der User weiter an dem benannten Thema arbeiten moechte.",
+            "Follow-up braucht weiter Consent, private Route und Risk-Guard.",
+        ),
+        (
+            "treatment_plan",
+            "Behandlungsplan-Hypothese: Zielbezug erhalten, niedrigschwellige Handlung anbieten und spaetere Rueckmeldung auswerten.",
+            "Kein Ersatz fuer professionelle Behandlung; nur interne Planstruktur.",
+        ),
+        (
+            "homework",
+            "Moegliche Hausaufgabe: eine kleine, freiwillige Handlung oder Reflexion nur anbieten, wenn der User dafuer offen bleibt.",
+            "Nicht als verpflichtende Aufgabe formulieren; spaeter auf Belastungssignale achten.",
+        ),
+    )
+    return tuple({**common, "kind": kind, "user_text": user_text, "bot_text": bot_text} for kind, user_text, bot_text in templates)
 
 
 def _proactive_plan_fingerprint(account_id: str, source: Mapping[str, Any]) -> str:
@@ -945,9 +1057,15 @@ def _proactive_plan_fingerprint(account_id: str, source: Mapping[str, Any]) -> s
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
+def _proactive_source_excerpt(source: Mapping[str, Any], *, max_chars: int = 140) -> str:
+    text = " ".join(str(source.get("user_text") or source.get("bot_text") or "dem gespeicherten Thema").split())
+    if len(text) > max_chars:
+        text = text[: max_chars - 3].rstrip() + "..."
+    return text or "dem gespeicherten Thema"
+
+
 def _proactive_planner_message(source: Mapping[str, Any]) -> str:
-    text = str(source.get("user_text") or source.get("bot_text") or "deinem Vorhaben").strip()
-    short = " ".join(text.split())
+    short = _proactive_source_excerpt(source, max_chars=90)
     if len(short) > 90:
         short = short[:87].rstrip() + "..."
     return f"Kurzer Check-in zu deinem Vorhaben: {short} Magst du kurz sagen, ob du daran weiterarbeiten moechtest?"

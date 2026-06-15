@@ -656,19 +656,34 @@ def test_reflection_planner_creates_reflection_and_queues_safe_reminder(tmp_path
     )
 
     assert result.skipped_reason == ""
-    assert len(result.created_memory_ids) == 1
+    assert len(result.created_memory_ids) == 9
     assert len(result.queued_item_ids) == 1
     entries = account_store.read_memory_entries(account_id)
+    created = [entry for entry in entries if entry["id"] in result.created_memory_ids]
+    assert [entry["kind"] for entry in created] == [
+        "reflection",
+        "summary",
+        "assessment_note",
+        "intervention_note",
+        "response_note",
+        "next_step",
+        "follow_up",
+        "treatment_plan",
+        "homework",
+    ]
     reflection = next(entry for entry in entries if entry["id"] == result.created_memory_ids[0])
     assert reflection["kind"] == "reflection"
     assert reflection["relations"][0]["type"] == "derived_from"
     assert reflection["relations"][0]["target_id"] == source_id
+    assert all(entry["relations"][0]["target_id"] == source_id for entry in created)
+    assert all(entry["proactive_planner"]["source"] == "local" for entry in created)
     outbox = account_store.read_proactive_outbox(account_id)
     assert outbox[0]["id"] == result.queued_item_ids[0]
     assert outbox[0]["category"] == "reminder"
     assert outbox[0]["intent"] == "planner_follow_up"
     assert outbox[0]["planner"]["source_memory_id"] == source_id
-    assert outbox[0]["reason_memory_ids"] == [source_id, result.created_memory_ids[0]]
+    assert outbox[0]["planner"]["memory_ids"] == list(result.created_memory_ids)
+    assert outbox[0]["reason_memory_ids"] == [source_id, *result.created_memory_ids]
 
 
 def test_reflection_planner_is_idempotent_per_source_memory(tmp_path) -> None:
@@ -695,6 +710,7 @@ def test_reflection_planner_is_idempotent_per_source_memory(tmp_path) -> None:
     assert second.queued_item_ids == ()
     assert second.skipped_reason == "no_candidate"
     assert len(account_store.read_proactive_outbox(account_id)) == 1
+    assert len([entry for entry in account_store.read_memory_entries(account_id) if entry.get("proactive_plan_fingerprint")]) == 9
 
 
 def test_reflection_planner_skips_when_risk_memory_is_active(tmp_path) -> None:
