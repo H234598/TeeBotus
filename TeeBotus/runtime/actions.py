@@ -49,6 +49,14 @@ class SendReceipt:
 
 
 @dataclass(frozen=True)
+class SendEdit:
+    chat_id: str
+    message_ref: str
+    text: str
+    track: bool = False
+
+
+@dataclass(frozen=True)
 class ExportFile:
     chat_id: str
     filename: str
@@ -74,6 +82,7 @@ OutgoingAction = (
     | SendTyping
     | SendReaction
     | SendReceipt
+    | SendEdit
     | ExportFile
     | NotifyLinkedIdentity
 )

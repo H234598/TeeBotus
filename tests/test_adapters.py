@@ -9,7 +9,7 @@ from signalbot.message import MessageType
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendReaction, SendReceipt, SendText, SendTyping
+from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendReaction, SendReceipt, SendText, SendTyping
 
 
 @dataclass
@@ -390,6 +390,58 @@ def test_signal_reaction_rejects_non_current_message_ref():
         raise AssertionError("RuntimeError was not raised")
 
 
+def test_signal_edit_uses_context_edit_for_current_message():
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+            self.edits = []
+
+        async def edit(self, text, edit_timestamp, **kwargs):
+            self.edits.append((text, edit_timestamp, kwargs))
+            return 456
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendEdit("+491", "123", "korrigiert")]))
+
+    assert sent == [456]
+    assert context.edits == [("korrigiert", 123, {})]
+
+
+def test_signal_edit_to_other_chat_uses_bot_edit_timestamp():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, receiver, text, **kwargs):
+            self.calls.append((receiver, text, kwargs))
+            return 789
+
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491", timestamp="123")
+            self.bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendEdit("+492", "555", "extern korrigiert")]))
+
+    assert sent == [789]
+    assert context.bot.calls == [("+492", "extern korrigiert", {"edit_timestamp": 555})]
+
+
+def test_signal_edit_rejects_non_numeric_message_ref():
+    class Context:
+        message = FakeSignalMessage(source="+491", timestamp="123")
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendEdit("+491", "$event", "nope")]))
+    except RuntimeError as exc:
+        assert "numeric message_ref" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_signal_send_text_can_quote_current_message_with_bot_send():
     class Bot:
         def __init__(self) -> None:
@@ -668,6 +720,23 @@ def test_telegram_send_keeps_string_chat_ids_for_channels():
     send_telegram_actions(api, [SendText("@my_channel", "hi"), SendTyping("@my_channel")])
 
     assert api.calls == [("message", "@my_channel", "hi"), ("action", "@my_channel", "typing")]
+
+
+def test_telegram_send_edit_uses_optional_edit_message_text():
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str]] = []
+
+        def edit_message_text(self, chat_id, message_id, text):
+            self.calls.append((chat_id, message_id, text))
+            return 2
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendEdit("@my_channel", "99", "korrigiert")])
+
+    assert sent == [2]
+    assert api.calls == [("@my_channel", "99", "korrigiert")]
 
 
 def test_matrix_message_maps_sender_and_room_to_event():
@@ -1127,6 +1196,37 @@ def test_matrix_send_receipt_uses_update_receipt_marker():
     assert sent == [None]
     assert len(client.receipts) == 1
     assert client.receipts[0][0:2] == ("!room:example", "$old")
+
+
+def test_matrix_send_edit_uses_replacement_event():
+    class Response:
+        event_id = "$edit"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
+
+    assert sent == ["$edit"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": "* korrigiert",
+                "m.new_content": {"msgtype": "m.text", "body": "korrigiert"},
+                "m.relates_to": {"rel_type": "m.replace", "event_id": "$old"},
+            },
+        }
+    ]
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

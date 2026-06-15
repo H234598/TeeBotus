@@ -8,6 +8,7 @@ from TeeBotus.runtime.actions import (
     ExportFile,
     NotifyLinkedIdentity,
     SendAttachment,
+    SendEdit,
     SendReaction,
     SendReceipt,
     SendText,
@@ -70,6 +71,12 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             sent.append(None)
         elif isinstance(action, (SendReaction, SendReceipt)):
             sent.append(None)
+        elif isinstance(action, SendEdit):
+            edit_message_text = getattr(api, "edit_message_text", None)
+            if callable(edit_message_text):
+                sent.append(edit_message_text(action.chat_id, action.message_ref, action.text))
+            else:
+                sent.append(None)
         elif isinstance(action, SendAttachment):
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):
                 sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type))

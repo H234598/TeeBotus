@@ -175,13 +175,14 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
         return False, f"signalbot Context import_error={type(exc).__name__}: {exc}"
     missing = [
         name
-        for name in ("send", "reply", "start_typing", "stop_typing", "remote_delete", "react", "receipt")
+        for name in ("send", "reply", "edit", "start_typing", "stop_typing", "remote_delete", "react", "receipt")
         if not hasattr(Context, name)
     ]
     if missing:
         return False, f"signalbot Context missing required API: {', '.join(missing)}"
     send_params = inspect.signature(Context.send).parameters
     reply_params = inspect.signature(Context.reply).parameters
+    edit_params = inspect.signature(Context.edit).parameters
     bot_send_params = inspect.signature(SignalBot.send).parameters
     bot_start_typing_params = inspect.signature(SignalBot.start_typing).parameters
     bot_stop_typing_params = inspect.signature(SignalBot.stop_typing).parameters
@@ -193,10 +194,12 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     expectations = {
         "Context.send.base64_attachments": "base64_attachments" in send_params,
         "Context.reply.base64_attachments": "base64_attachments" in reply_params,
+        "Context.edit.edit_timestamp": "edit_timestamp" in edit_params,
         "Context.react.emoji": "emoji" in react_params,
         "Context.receipt.receipt_type": "receipt_type" in receipt_params,
         "SignalBot.send.receiver": "receiver" in bot_send_params,
         "SignalBot.send.base64_attachments": "base64_attachments" in bot_send_params,
+        "SignalBot.send.edit_timestamp": "edit_timestamp" in bot_send_params,
         "SignalBot.send.quote_author": "quote_author" in bot_send_params,
         "SignalBot.send.quote_mentions": "quote_mentions" in bot_send_params,
         "SignalBot.send.quote_message": "quote_message" in bot_send_params,
@@ -212,7 +215,7 @@ def _check_signalbot_context_contract() -> tuple[bool, str]:
     failures = [name for name, ok in expectations.items() if not ok]
     if failures:
         return False, f"signalbot Context contract missing: {', '.join(failures)}"
-    return True, "signalbot Context contract=ok methods=send,reply,react,receipt,start_typing,stop_typing,remote_delete"
+    return True, "signalbot Context contract=ok methods=send,reply,edit,react,receipt,start_typing,stop_typing,remote_delete"
 
 
 def _check_executable_version(binary: str, expected: str, args: list[str]) -> tuple[bool, str]:

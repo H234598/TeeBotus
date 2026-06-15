@@ -11,6 +11,7 @@ from TeeBotus.runtime.actions import (
     ExportFile,
     NotifyLinkedIdentity,
     SendAttachment,
+    SendEdit,
     SendReaction,
     SendReceipt,
     SendText,
@@ -104,6 +105,9 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
             elif isinstance(action, SendReceipt):
                 await _send_signal_receipt(context, action.chat_id, action.message_ref, action.receipt_type)
                 sent.append(None)
+            elif isinstance(action, SendEdit):
+                sent.append(await _send_signal_edit(context, action.chat_id, action.message_ref, action.text))
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendAttachment):
                 encoded = base64.b64encode(action.data).decode("ascii")
                 sent.append(
@@ -222,6 +226,38 @@ async def _send_signal_receipt(context: Any, chat_id: str, message_ref: str, rec
         await bot_receipt(message, normalized)
         return
     raise RuntimeError("SignalBot receipt API is required to send a receipt")
+
+
+async def _send_signal_edit(context: Any, chat_id: str, message_ref: str, text: str) -> int:
+    target = str(chat_id or "").strip()
+    current_recipient = _signal_context_recipient(context)
+    timestamp = _signal_edit_timestamp(message_ref)
+    if target and current_recipient and target != current_recipient:
+        bot = getattr(context, "bot", None)
+        send = getattr(bot, "send", None)
+        if not callable(send):
+            raise RuntimeError(f"SignalBot.send is required to edit in {target}")
+        return await send(target, text, edit_timestamp=timestamp)
+    current_ref = _signal_message_ref(getattr(context, "message", None))
+    edit = getattr(context, "edit", None)
+    if callable(edit) and current_ref and current_ref == str(message_ref or "").strip():
+        return await edit(text, timestamp)
+    bot = getattr(context, "bot", None)
+    send = getattr(bot, "send", None)
+    recipient = current_recipient or target
+    if callable(send) and recipient:
+        return await send(recipient, text, edit_timestamp=timestamp)
+    raise RuntimeError("SignalBot edit API is required to edit a message")
+
+
+def _signal_edit_timestamp(message_ref: str) -> int:
+    ref = str(message_ref or "").strip()
+    if not ref:
+        raise RuntimeError("Signal edit requires a message_ref")
+    try:
+        return int(ref)
+    except ValueError as exc:
+        raise RuntimeError("Signal edit requires a numeric message_ref") from exc
 
 
 def _require_signal_current_message_action(context: Any, chat_id: str, message_ref: str, action_name: str) -> None:

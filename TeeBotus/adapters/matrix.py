@@ -9,6 +9,7 @@ from TeeBotus.runtime.actions import (
     ExportFile,
     NotifyLinkedIdentity,
     SendAttachment,
+    SendEdit,
     SendReaction,
     SendReceipt,
     SendText,
@@ -70,6 +71,9 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
         elif isinstance(action, SendReceipt):
             await _send_matrix_receipt(client, action.chat_id, action.message_ref, action.receipt_type)
             sent.append(None)
+        elif isinstance(action, SendEdit):
+            response = await _send_matrix_edit(client, action.chat_id, action.message_ref, action.text)
+            sent.append(_matrix_event_id(response))
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
                 client,
@@ -163,6 +167,32 @@ async def _send_matrix_receipt(client: Any, room_id: str, event_id: str, receipt
     if callable(room_read_markers):
         response = await room_read_markers(room_id, target, read_event=target)
         _raise_matrix_response_error(response)
+
+
+async def _send_matrix_edit(client: Any, room_id: str, event_id: str, text: str) -> Any:
+    target = str(event_id or "").strip()
+    if not target:
+        raise RuntimeError("Matrix edit requires a message_ref")
+    body = str(text or "")
+    content = {
+        "msgtype": "m.text",
+        "body": f"* {body}",
+        "m.new_content": {
+            "msgtype": "m.text",
+            "body": body,
+        },
+        "m.relates_to": {
+            "rel_type": "m.replace",
+            "event_id": target,
+        },
+    }
+    response = await client.room_send(
+        room_id=room_id,
+        message_type="m.room.message",
+        content=content,
+    )
+    _raise_matrix_response_error(response)
+    return response
 
 
 def _matrix_receipt_type(receipt_type: str) -> Any:
