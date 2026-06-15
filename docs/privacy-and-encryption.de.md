@@ -40,6 +40,7 @@ Verschluesselte strukturierte Memory-Dateien:
 - `OpenAI_State.json`
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
+- `Proactive_Audit.jsonl`
 
 Auch Account-Index, Identity-Mapping, Secret-Verifier, Profile und Tombstones werden verschluesselt gespeichert.
 

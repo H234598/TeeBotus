@@ -98,6 +98,7 @@ class ProactiveLLMPlanningResult:
     created_memory_ids: tuple[str, ...] = ()
     queued_item_ids: tuple[str, ...] = ()
     errors: tuple[str, ...] = ()
+    audit_event_ids: tuple[str, ...] = ()
 
 
 ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
@@ -388,7 +389,16 @@ def apply_proactive_llm_plan_text(
     try:
         payload = json.loads(_strip_json_code_fence(plan_text))
     except json.JSONDecodeError as exc:
-        return ProactiveLLMPlanningResult(account_id, errors=(f"invalid_json:{exc.msg}",))
+        error = f"invalid_json:{exc.msg}"
+        audit_id = _append_proactive_llm_audit_event(
+            account_store,
+            account_id,
+            event_type="llm_plan_rejected",
+            reason=error,
+            plan_text=plan_text,
+            now=now,
+        )
+        return ProactiveLLMPlanningResult(account_id, errors=(error,), audit_event_ids=(audit_id,))
     return apply_proactive_llm_plan(account_store, account_id, payload, now=now)
 
 
@@ -443,19 +453,25 @@ def apply_proactive_llm_plan(
 ) -> ProactiveLLMPlanningResult:
     resolved_now = now or datetime.now(timezone.utc)
     if not isinstance(payload, Mapping):
-        return ProactiveLLMPlanningResult(account_id, errors=("payload_not_object",))
+        audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="payload_not_object", payload=payload, now=resolved_now)
+        return ProactiveLLMPlanningResult(account_id, errors=("payload_not_object",), audit_event_ids=(audit_id,))
     if int(payload.get("schema_version") or 0) != PROACTIVE_LLM_PLAN_SCHEMA_VERSION:
-        return ProactiveLLMPlanningResult(account_id, errors=("unsupported_schema_version",))
+        audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="unsupported_schema_version", payload=payload, now=resolved_now)
+        return ProactiveLLMPlanningResult(account_id, errors=("unsupported_schema_version",), audit_event_ids=(audit_id,))
     decisions = payload.get("decisions")
     if not isinstance(decisions, list):
-        return ProactiveLLMPlanningResult(account_id, errors=("decisions_not_list",))
+        audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="decisions_not_list", payload=payload, now=resolved_now)
+        return ProactiveLLMPlanningResult(account_id, errors=("decisions_not_list",), audit_event_ids=(audit_id,))
     created_memory_ids: list[str] = []
     queued_item_ids: list[str] = []
     errors: list[str] = []
+    audit_event_ids: list[str] = []
     memory_ids = _account_memory_ids(account_store, account_id)
     for index, raw_decision in enumerate(decisions[:PROACTIVE_LLM_MAX_DECISIONS]):
         if not isinstance(raw_decision, Mapping):
-            errors.append(f"decision_{index}_not_object")
+            error = f"decision_{index}_not_object"
+            errors.append(error)
+            audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
             continue
         action = str(raw_decision.get("action") or "none").strip().casefold()
         if action == "none":
@@ -463,7 +479,9 @@ def apply_proactive_llm_plan(
         if action == "memory":
             memory_result = _apply_proactive_llm_memory_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
             if memory_result.startswith("error:"):
-                errors.append(f"decision_{index}_{memory_result.removeprefix('error:')}")
+                error = f"decision_{index}_{memory_result.removeprefix('error:')}"
+                errors.append(error)
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
             else:
                 created_memory_ids.append(memory_result)
                 memory_ids.add(memory_result)
@@ -471,14 +489,19 @@ def apply_proactive_llm_plan(
         if action == "queue":
             queue_result = _apply_proactive_llm_queue_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
             if queue_result.startswith("error:"):
-                errors.append(f"decision_{index}_{queue_result.removeprefix('error:')}")
+                error = f"decision_{index}_{queue_result.removeprefix('error:')}"
+                errors.append(error)
+                audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
             else:
                 queued_item_ids.append(queue_result)
             continue
-        errors.append(f"decision_{index}_unsupported_action:{action}")
+        error = f"decision_{index}_unsupported_action:{action}"
+        errors.append(error)
+        audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
     if len(decisions) > PROACTIVE_LLM_MAX_DECISIONS:
         errors.append("too_many_decisions_truncated")
-    return ProactiveLLMPlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), tuple(errors))
+        audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_truncated", reason="too_many_decisions_truncated", payload={"decision_count": len(decisions)}, now=resolved_now))
+    return ProactiveLLMPlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), tuple(errors), tuple(audit_event_ids))
 
 
 def proactive_policy_decision(
@@ -919,6 +942,56 @@ def _strip_json_code_fence(text: str) -> str:
     if lines and lines[-1].strip() == "```":
         lines = lines[:-1]
     return "\n".join(lines).strip()
+
+
+def _append_proactive_llm_audit_event(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    event_type: str,
+    reason: str,
+    decision_index: int | None = None,
+    decision: Any = None,
+    payload: Any = None,
+    plan_text: str = "",
+    now: datetime | None = None,
+) -> str:
+    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    event: dict[str, Any] = {
+        "event_type": str(event_type or "llm_decision_rejected").strip(),
+        "source": "proactive_llm_planner",
+        "reason": str(reason or "").strip()[:240],
+        "created_at": timestamp,
+    }
+    if decision_index is not None:
+        event["decision_index"] = int(decision_index)
+    if decision is not None:
+        event["decision"] = _compact_audit_value(decision)
+    if payload is not None:
+        event["payload"] = _compact_audit_value(payload)
+    if plan_text:
+        event["plan_text_preview"] = _safe_llm_text(plan_text, max_chars=600)
+    return account_store.append_proactive_audit_event(account_id, event)
+
+
+def _compact_audit_value(value: Any, *, max_string_chars: int = 400, max_items: int = 12) -> Any:
+    if isinstance(value, Mapping):
+        compact: dict[str, Any] = {}
+        for key, item in list(value.items())[:max_items]:
+            compact[str(key)[:80]] = _compact_audit_value(item, max_string_chars=max_string_chars, max_items=max_items)
+        if len(value) > max_items:
+            compact["_truncated_keys"] = len(value) - max_items
+        return compact
+    if isinstance(value, list):
+        compact_list = [_compact_audit_value(item, max_string_chars=max_string_chars, max_items=max_items) for item in value[:max_items]]
+        if len(value) > max_items:
+            compact_list.append({"_truncated_items": len(value) - max_items})
+        return compact_list
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        if isinstance(value, str):
+            return _safe_llm_text(value, max_chars=max_string_chars)
+        return value
+    return _safe_llm_text(repr(value), max_chars=max_string_chars)
 
 
 def _handle_proactive_category_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:

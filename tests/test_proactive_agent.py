@@ -631,8 +631,13 @@ def test_llm_plan_validator_rejects_malformed_json_without_mutation(tmp_path) ->
     assert result.created_memory_ids == ()
     assert result.queued_item_ids == ()
     assert result.errors[0].startswith("invalid_json:")
+    assert len(result.audit_event_ids) == 1
     assert account_store.read_memory_entries(account_id) == []
     assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["id"] == result.audit_event_ids[0]
+    assert audit[0]["event_type"] == "llm_plan_rejected"
+    assert audit[0]["reason"].startswith("invalid_json:")
 
 
 def test_llm_plan_validator_rejects_unsafe_message_and_risk_gate(tmp_path) -> None:
@@ -675,8 +680,39 @@ def test_llm_plan_validator_rejects_unsafe_message_and_risk_gate(tmp_path) -> No
 
     assert "decision_0_unsafe_message_text" in result.errors
     assert "decision_1_policy:risk_gate_needs_review:needs_review" in result.errors
+    assert len(result.audit_event_ids) == 2
     assert result.queued_item_ids == ()
     assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert [event["reason"] for event in audit] == [
+        "decision_0_unsafe_message_text",
+        "decision_1_policy:risk_gate_needs_review:needs_review",
+    ]
+    assert audit[0]["decision"]["intent"] == "unsafe"
+    assert audit[1]["event_type"] == "llm_decision_rejected"
+
+
+def test_llm_plan_validator_audits_unsupported_actions_without_applying_them(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {"schema_version": 1, "decisions": [{"action": "send_now", "message_text": "Hallo"}]},
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_unsupported_action:send_now",)
+    assert len(result.audit_event_ids) == 1
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert account_store.read_memory_entries(account_id) == []
+    assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["id"] == result.audit_event_ids[0]
+    assert audit[0]["decision_index"] == 0
+    assert audit[0]["decision"]["action"] == "send_now"
 
 
 def test_llm_planner_runner_uses_client_text_and_validates_before_applying(tmp_path) -> None:

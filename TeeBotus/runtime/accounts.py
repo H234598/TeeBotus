@@ -41,6 +41,7 @@ USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
 OPENAI_STATE_FILENAME = "OpenAI_State.json"
 AGENT_STATE_FILENAME = "Agent_State.json"
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
+PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 SECRET_TOOL_COMMAND = "secret-tool"
 INSTANCE_KEY_SIZE_BYTES = 32
 INSTANCE_SECRET_SERVICE = "TeeBotus"
@@ -1422,6 +1423,30 @@ class AccountStore:
         rows.append(normalized)
         self.write_proactive_outbox(account_id, rows)
         return item_id
+
+    def read_proactive_audit(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_jsonl_with_fallback(self.account_dir(account_id) / PROACTIVE_AUDIT_FILENAME, vault=self.account_memory_vault)
+
+    def write_proactive_audit(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self.account_memory_vault.write_jsonl(self.account_dir(account_id) / PROACTIVE_AUDIT_FILENAME, list(rows))
+
+    def append_proactive_audit_event(self, account_id: str, event: dict[str, Any]) -> str:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        rows = self.read_proactive_audit(account_id)
+        normalized = dict(event)
+        event_id = str(normalized.get("id") or f"paud_{uuid.uuid4().hex}").strip()
+        existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+        while not event_id or event_id in existing_ids:
+            event_id = f"paud_{uuid.uuid4().hex}"
+        timestamp = utc_now()
+        normalized["id"] = event_id
+        normalized.setdefault("schema_version", 1)
+        normalized.setdefault("created_at", timestamp)
+        rows.append(normalized)
+        self.write_proactive_audit(account_id, rows)
+        return event_id
 
     def read_account_text(self, account_id: str, filename: str) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")

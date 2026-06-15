@@ -120,6 +120,7 @@ def test_export_from_store_decrypts_structured_memory(tmp_path):
     assert payload["files"]["User_Memory_Entries.jsonl"] == [{"entry": "encrypted hello"}]
     assert payload["files"]["Agent_State.json"] == {}
     assert payload["files"]["Proactive_Outbox.jsonl"] == []
+    assert payload["files"]["Proactive_Audit.jsonl"] == []
     assert "User_Habbits_and_behave.md" not in payload["files"]
 
 
@@ -128,14 +129,18 @@ def test_export_from_store_decrypts_proactive_agent_files(tmp_path):
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     store.write_agent_state(account_id, {"proactive": {"enabled": True}})
     store.append_proactive_outbox_item(account_id, {"message_text": "Erinnerung spaeter", "category": "reminder"})
+    store.append_proactive_audit_event(account_id, {"event_type": "llm_decision_rejected", "reason": "unsafe_message_text"})
 
     raw = (store.account_dir(account_id) / "Proactive_Outbox.jsonl").read_text(encoding="utf-8")
     assert "Erinnerung spaeter" not in raw
+    raw_audit = (store.account_dir(account_id) / "Proactive_Audit.jsonl").read_text(encoding="utf-8")
+    assert "unsafe_message_text" not in raw_audit
     result = export_account_data_from_store(store, account_id, "json")
     payload = json.loads(result.data.decode("utf-8"))
 
     assert payload["files"]["Agent_State.json"]["proactive"]["enabled"] is True
     assert payload["files"]["Proactive_Outbox.jsonl"][0]["message_text"] == "Erinnerung spaeter"
+    assert payload["files"]["Proactive_Audit.jsonl"][0]["reason"] == "unsafe_message_text"
 
 
 def test_raw_export_refuses_encrypted_account_files_without_vault(tmp_path):
