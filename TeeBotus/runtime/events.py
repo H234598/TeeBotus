@@ -174,6 +174,7 @@ class IncomingEvent:
             message_ref=self.message_ref,
             reply_to_text=reply_to_text,
             attachments=self.attachments,
+            link_previews=self.link_previews,
             raw=self.raw,
         )
 

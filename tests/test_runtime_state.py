@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, StaticSecretProvider
 from TeeBotus.runtime.actions import SendEdit, SendPoll, SendReaction, SendReceipt, SetMatrixState, UpdateSignalContact, UpdateSignalGroup
-from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.telegram_bridge import TelegramRuntimeBridge
 from TeeBotus.runtime.state import RuntimeStateStore
 
@@ -76,6 +76,29 @@ def test_runtime_state_store_keeps_invalid_previous_response_account_id_in_memor
 
     assert state.get_previous_response_id("Bot", "not-a-real-account-id") == "resp-1"
     assert state.openai_state_persistence_error
+
+
+def test_incoming_event_with_reply_to_text_preserves_link_previews() -> None:
+    preview = IncomingLinkPreview(title="TeeBotus", url="https://example.test/tee")
+    event = IncomingEvent(
+        event_id="signal:1",
+        instance="Bot",
+        channel="signal",
+        adapter_slot=1,
+        account_id="",
+        identity_key="signal:uuid:1",
+        chat_id="+491",
+        chat_type="private",
+        sender_id="1",
+        text="Antwort",
+        message_ref="1",
+        link_previews=(preview,),
+    )
+
+    updated = event.with_reply_to_text("Vorher")
+
+    assert updated.reply_to_text == "Vorher"
+    assert updated.link_previews == (preview,)
 
 
 def test_telegram_bridge_defaults_to_secret_tool_provider(tmp_path):
