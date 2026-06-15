@@ -123,9 +123,22 @@ class MatrixRuntimeBridge:
             if not chat_id:
                 continue
             try:
-                await send_matrix_actions(self.client, [SendText(chat_id, action.text, track=action.track)])
+                sent_refs = await send_matrix_actions(self.client, [SendText(chat_id, action.text, track=action.track)])
             except Exception:
                 continue
+            sent_ref = sent_refs[0] if sent_refs else None
+            if not action.track or sent_ref is None:
+                continue
+            self.message_tracker.record(
+                SentMessageRef(
+                    channel="matrix",
+                    instance_name=self.run_config.instance_name,
+                    account_id=action.account_id,
+                    chat_id=chat_id,
+                    message_ref=str(sent_ref),
+                    ref_kind="matrix_event_id",
+                )
+            )
 
     async def _delete_tracked_messages(self, event: Any, actions: list[Any]) -> None:
         for action in actions:

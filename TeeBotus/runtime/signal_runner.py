@@ -141,9 +141,21 @@ class TeeBotusSignalCommand:
             if not receiver or self.bot is None:
                 continue
             try:
-                await self.bot.send(receiver, action.text)
+                sent_ref = await self.bot.send(receiver, action.text)
             except Exception:
                 continue
+            if not action.track or sent_ref is None:
+                continue
+            self.message_tracker.record(
+                SentMessageRef(
+                    channel="signal",
+                    instance_name=self.run_config.instance_name,
+                    account_id=action.account_id,
+                    chat_id=receiver,
+                    message_ref=str(sent_ref),
+                    ref_kind="signal_timestamp",
+                )
+            )
 
     async def _delete_tracked_messages(self, context: Any, event: Any, actions: list[Any]) -> None:
         for action in actions:
