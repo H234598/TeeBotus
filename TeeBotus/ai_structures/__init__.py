@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ReminderDecision
+from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ProactiveToolCallDecision, ReminderDecision
 
 __all__ = [
     "BibliothekarQueryDecision",
     "IntentDecision",
     "MemoryCandidate",
+    "ProactiveToolCallDecision",
     "ReminderDecision",
     "decide_bibliothekar_query",
     "decide_intent",

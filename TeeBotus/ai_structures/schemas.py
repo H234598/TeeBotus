@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 IntentName = Literal[
@@ -70,3 +70,73 @@ class BibliothekarQueryDecision(BaseModel):
     @classmethod
     def _strip_text(cls, value: str) -> str:
         return str(value or "").strip()
+
+
+PROACTIVE_TOOL_ARGUMENTS: dict[str, dict[str, set[str]]] = {
+    "proactive_create_memory": {
+        "required": {"kind", "text"},
+        "allowed": {"kind", "text", "source_memory_ids", "importance"},
+    },
+    "proactive_queue_message": {
+        "required": {"category", "intent", "message_text", "reason_memory_ids"},
+        "allowed": {
+            "category",
+            "intent",
+            "message_text",
+            "reason_memory_ids",
+            "risk_gate",
+            "due_at",
+            "intervention_type",
+            "expected_response",
+            "review_signal",
+            "collaboration_marker",
+            "file",
+        },
+    },
+    "proactive_cancel_item": {
+        "required": {"item_id"},
+        "allowed": {"item_id", "reason"},
+    },
+    "proactive_snooze_item": {
+        "required": {"item_id", "due_at"},
+        "allowed": {"item_id", "due_at", "reason"},
+    },
+    "proactive_noop": {
+        "required": set(),
+        "allowed": {"reason"},
+    },
+}
+
+
+class ProactiveToolCallDecision(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    call_id: str = Field(default="", max_length=160)
+
+    @field_validator("name", "call_id")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @field_validator("arguments", mode="before")
+    @classmethod
+    def _coerce_arguments(cls, value: Any) -> dict[str, Any]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("tool arguments must be an object")
+        return {str(key): item for key, item in value.items()}
+
+    @model_validator(mode="after")
+    def _validate_known_tool_arguments(self) -> "ProactiveToolCallDecision":
+        rule = PROACTIVE_TOOL_ARGUMENTS.get(self.name)
+        if rule is None:
+            return self
+        keys = set(self.arguments)
+        missing = sorted(rule["required"] - keys)
+        if missing:
+            raise ValueError(f"missing required arguments for {self.name}: {', '.join(missing)}")
+        unknown = sorted(keys - rule["allowed"])
+        if unknown:
+            raise ValueError(f"unsupported arguments for {self.name}: {', '.join(unknown)}")
+        return self

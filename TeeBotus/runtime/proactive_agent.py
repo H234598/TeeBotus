@@ -11,6 +11,9 @@ import hashlib
 from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
 
+from pydantic import ValidationError
+
+from TeeBotus.ai_structures.schemas import ProactiveToolCallDecision
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
@@ -1751,17 +1754,23 @@ def _response_output_text(response: Any) -> str:
 
 def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCall | None:
     if isinstance(raw_call, ProactiveAgentToolCall):
-        return raw_call
-    name = _tool_call_name(raw_call)
-    if not name:
-        return None
-    arguments = _tool_call_arguments(raw_call)
-    call_id = ""
-    if isinstance(raw_call, Mapping):
-        call_id = str(raw_call.get("call_id") or raw_call.get("id") or "").strip()
+        payload = {"name": raw_call.name, "arguments": dict(raw_call.arguments), "call_id": raw_call.call_id}
     else:
-        call_id = str(getattr(raw_call, "call_id", None) or getattr(raw_call, "id", "") or "").strip()
-    return ProactiveAgentToolCall(name=name, arguments=arguments, call_id=call_id)
+        name = _tool_call_name(raw_call)
+        if not name:
+            return None
+        arguments = _tool_call_arguments(raw_call)
+        call_id = ""
+        if isinstance(raw_call, Mapping):
+            call_id = str(raw_call.get("call_id") or raw_call.get("id") or "").strip()
+        else:
+            call_id = str(getattr(raw_call, "call_id", None) or getattr(raw_call, "id", "") or "").strip()
+        payload = {"name": name, "arguments": dict(arguments), "call_id": call_id}
+    try:
+        validated = ProactiveToolCallDecision.model_validate(payload)
+    except ValidationError:
+        return None
+    return ProactiveAgentToolCall(name=validated.name, arguments=validated.arguments, call_id=validated.call_id)
 
 
 def _tool_call_name(raw_call: Any) -> str:

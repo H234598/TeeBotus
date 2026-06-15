@@ -102,7 +102,7 @@ teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --print
 teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --enable
 ```
 
-Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --tool-plan` auf. Das fuehrt lokale Reflection-Planung, Due-Selection und Versand ueber die konfigurierten Proactive-Backends aus. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer der Default. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks.
+Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --tool-plan` auf. Das fuehrt lokale Reflection-Planung, Due-Selection und Versand ueber die konfigurierten Proactive-Backends aus. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer der Default. Toolcalls laufen zusaetzlich durch `ProactiveToolCallDecision`, damit bekannte Tools nur mit Pflichtargumenten und erlaubten Argumenten in die Plananwendung kommen. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passendem OpenAI-Key aktiv. Fuer den Proactive-Key wird bevorzugt `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` genutzt, danach die instanzweiten OpenAI-Key-Fallbacks.
 
 Usergewuenschte Erinnerungen laufen ebenfalls ueber die Proactive-Outbox. Klassische Formulierungen werden lokal erkannt; bei optionaler strukturierter `ReminderDecision` kann `recurrence` als `daily`, `weekly`, `monthly` oder `every N minutes/hours/days/weeks` gespeichert werden. Nach erfolgreichem Versand wird ein wiederkehrendes Reminder-Item mit naechstem `due_at` erneut gequeued.
 
@@ -484,7 +484,7 @@ qdrant --host 127.0.0.1 --port 6333
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
 ```
 
-Pydantic-AI/LangGraph optional:
+Pydantic-AI/LangGraph optional. Pydantic-Schemas werden nur fuer strukturierte Subtasks genutzt, darunter `IntentDecision`, `MemoryCandidate`, `ReminderDecision`, `BibliothekarQueryDecision` und `ProactiveToolCallDecision`; Slash-Commands bleiben klassische Parser.
 
 ```bash
 python3 -m pip install '.[agents]'

@@ -10,6 +10,7 @@ from TeeBotus.ai_structures import (
     BibliothekarQueryDecision,
     IntentDecision,
     MemoryCandidate,
+    ProactiveToolCallDecision,
     ReminderDecision,
     build_pydantic_ai_model_runner,
     decide_bibliothekar_query,
@@ -134,6 +135,43 @@ def test_reminder_decision_schema_accepts_json_payloads() -> None:
         recurrence=None,
         confidence=0.88,
     )
+
+
+def test_proactive_tool_call_decision_validates_known_tool_arguments() -> None:
+    call = ProactiveToolCallDecision.model_validate(
+        {
+            "name": " proactive_queue_message ",
+            "call_id": " call_1 ",
+            "arguments": {
+                "category": "reminder",
+                "intent": "follow_up",
+                "message_text": "Magst du kurz berichten?",
+                "reason_memory_ids": ["mem_goal"],
+            },
+        }
+    )
+
+    assert call.name == "proactive_queue_message"
+    assert call.call_id == "call_1"
+    assert call.arguments["reason_memory_ids"] == ["mem_goal"]
+
+
+def test_proactive_tool_call_decision_rejects_missing_or_extra_known_tool_arguments() -> None:
+    with pytest.raises(ValidationError, match="missing required arguments"):
+        ProactiveToolCallDecision.model_validate(
+            {
+                "name": "proactive_queue_message",
+                "arguments": {"category": "reminder", "intent": "follow_up", "message_text": "Hallo"},
+            }
+        )
+
+    with pytest.raises(ValidationError, match="unsupported arguments"):
+        ProactiveToolCallDecision.model_validate(
+            {
+                "name": "proactive_create_memory",
+                "arguments": {"kind": "reflection", "text": "Plan", "send_now": True},
+            }
+        )
 
 
 def test_pydantic_ai_adapter_reports_missing_optional_extra(monkeypatch) -> None:

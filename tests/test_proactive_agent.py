@@ -1814,6 +1814,33 @@ def test_tool_agent_rejects_unknown_tools_without_mutating(tmp_path) -> None:
     assert audit[0]["event_type"] == "tool_call_rejected"
 
 
+def test_tool_agent_rejects_known_tool_with_invalid_arguments_without_mutating(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_agent_tool_calls(
+        account_store,
+        account_id,
+        [
+            {
+                "name": "proactive_queue_message",
+                "arguments": {
+                    "category": "reminder",
+                    "intent": "missing_reasons",
+                    "message_text": "Hallo",
+                },
+            }
+        ],
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("tool_0_invalid_tool_call",)
+    assert account_store.read_memory_entries(account_id) == []
+    assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["event_type"] == "tool_call_rejected"
+
+
 def test_tool_agent_runner_uses_client_tool_calls(tmp_path) -> None:
     class Client:
         def __init__(self) -> None:
