@@ -108,6 +108,7 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     add_reaction_params = inspect.signature(niobot.NioBot.add_reaction).parameters
     delete_message_params = inspect.signature(niobot.NioBot.delete_message).parameters
     edit_message_params = inspect.signature(niobot.NioBot.edit_message).parameters
+    update_room_topic_params = inspect.signature(niobot.NioBot.update_room_topic).parameters
     client_params = inspect.signature(niobot.NioBot).parameters
     upload_params = inspect.signature(nio.AsyncClient.upload).parameters
     download_params = inspect.signature(nio.AsyncClient.download).parameters
@@ -127,6 +128,8 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "NioBot.delete_message.reason": "reason" in delete_message_params,
         "NioBot.edit_message.content": "content" in edit_message_params,
         "NioBot.edit_message.message_type": "message_type" in edit_message_params,
+        "NioBot.update_room_topic.room_id": "room_id" in update_room_topic_params,
+        "NioBot.update_room_topic.topic": "topic" in update_room_topic_params,
         "AsyncClient.upload.filesize": "filesize" in upload_params,
         "AsyncClient.download.mxc": "mxc" in download_params,
         "AsyncClient.room_get_event.event_id": "event_id" in room_get_event_params,

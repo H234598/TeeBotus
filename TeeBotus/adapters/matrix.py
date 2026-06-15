@@ -300,6 +300,12 @@ async def _set_matrix_state(client: Any, room_id: str, event_type: str, content:
         raise RuntimeError("Matrix state event requires an event_type")
     if not isinstance(content, dict):
         raise RuntimeError("Matrix state event content must be a dict")
+    update_room_topic = getattr(client, "update_room_topic", None)
+    topic = str(content.get("topic") or "")
+    if normalized_event_type == "m.room.topic" and not state_key and callable(update_room_topic) and topic:
+        response = await update_room_topic(room_id, topic)
+        _raise_matrix_response_error(response)
+        return
     response = await client.room_put_state(
         room_id=room_id,
         event_type=normalized_event_type,

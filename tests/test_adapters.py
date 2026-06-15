@@ -1747,6 +1747,69 @@ def test_matrix_set_state_uses_room_put_state():
     ]
 
 
+def test_matrix_set_topic_prefers_niobot_update_room_topic():
+    class Response:
+        pass
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def update_room_topic(self, room_id, topic):
+            self.calls.append(("update_room_topic", room_id, topic))
+            return Response()
+
+        async def room_put_state(self, **_kwargs):
+            raise AssertionError("room_put_state should not be used when update_room_topic is available")
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [SetMatrixState("!room:example", "m.room.topic", {"topic": "Tee"}, state_key="")],
+        )
+    )
+
+    assert sent == [None]
+    assert client.calls == [("update_room_topic", "!room:example", "Tee")]
+
+
+def test_matrix_set_topic_with_state_key_uses_room_put_state():
+    class Response:
+        pass
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def update_room_topic(self, _room_id, _topic):
+            raise AssertionError("update_room_topic cannot set non-empty state_key")
+
+        async def room_put_state(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [SetMatrixState("!room:example", "m.room.topic", {"topic": "Tee"}, state_key="@ada:example")],
+        )
+    )
+
+    assert sent == [None]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "event_type": "m.room.topic",
+            "content": {"topic": "Tee"},
+            "state_key": "@ada:example",
+        }
+    ]
+
+
 def test_matrix_ignores_signal_update_actions():
     class Client:
         pass
