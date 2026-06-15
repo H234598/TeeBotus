@@ -86,8 +86,13 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
         "RoomMessageVideo",
         "RoomMessageUnknown",
         "RoomSendResponse",
+        "RoomSendError",
         "SyncResponse",
         "UploadResponse",
+        "UploadError",
+        "MemoryDownloadResponse",
+        "DiskDownloadResponse",
+        "DownloadError",
     )
     missing_nio = [name for name in required_nio if not hasattr(nio, name)]
     if missing_nio:
