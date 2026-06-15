@@ -178,6 +178,30 @@ def test_signal_non_content_message_types_are_ignored():
         assert event is None
 
 
+def test_signal_message_without_identity_is_rejected():
+    event = signal_message_to_event(
+        FakeSignalMessage(source_uuid="", source_number="", source="", text="/account"),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is None
+
+
+def test_signal_message_without_recipient_is_rejected():
+    class Message(FakeSignalMessage):
+        def recipient(self) -> str:
+            return ""
+
+    event = signal_message_to_event(
+        Message(text="/account"),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is None
+
+
 def test_signal_typing_is_stopped_after_followup_send():
     class Context:
         def __init__(self) -> None:
@@ -570,6 +594,32 @@ def test_matrix_message_maps_sender_and_room_to_event():
     assert event.chat_id == "!room:example"
     assert event.chat_type == "private"
     assert event.text == "/account"
+
+
+def test_matrix_message_without_sender_is_rejected():
+    class Room:
+        room_id = "!room:example"
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = ""
+        body = "/account"
+
+    assert matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1) is None
+
+
+def test_matrix_message_without_room_id_is_rejected():
+    class Room:
+        room_id = ""
+        joined_count = 2
+
+    class Message:
+        event_id = "$event"
+        sender = "@alice:example"
+        body = "/account"
+
+    assert matrix_message_to_event(Room(), Message(), instance="Bot", adapter_slot=1) is None
 
 
 def test_matrix_notice_message_maps_to_text_event():

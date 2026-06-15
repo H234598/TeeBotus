@@ -19,6 +19,8 @@ def matrix_message_to_event(
 ) -> IncomingEvent | None:
     sender = str(getattr(message, "sender", "") or "").strip()
     room_id = str(getattr(room, "room_id", "") or "").strip()
+    if not sender or not room_id:
+        return None
     text, reply_to_text = _matrix_message_text_and_reply(message)
     attachments = _matrix_message_attachments(message)
     if not text.strip() and not attachments:

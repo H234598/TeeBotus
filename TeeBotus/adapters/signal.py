@@ -20,10 +20,15 @@ def signal_message_to_event(
 ) -> IncomingEvent | None:
     if not _signal_message_has_user_content(message):
         return None
+    source_uuid = str(getattr(message, "source_uuid", "") or "")
+    source_number = str(getattr(message, "source_number", "") or "")
+    source = str(getattr(message, "source", "") or "")
+    if not (source_uuid.strip() or source_number.strip() or source.strip()):
+        return None
     identity_key = signal_identity_key(
-        source_uuid=str(getattr(message, "source_uuid", "") or ""),
-        source_number=str(getattr(message, "source_number", "") or ""),
-        source=str(getattr(message, "source", "") or ""),
+        source_uuid=source_uuid,
+        source_number=source_number,
+        source=source,
     )
     attachment_names = list(getattr(message, "attachments_local_filenames", []) or [])
     remote_attachment_names = _signal_raw_attachment_filenames(message)
@@ -38,6 +43,9 @@ def signal_message_to_event(
         for index in range(max(len(attachment_names), len(attachment_data)))
     )
     recipient = message.recipient() if callable(getattr(message, "recipient", None)) else (getattr(message, "group", "") or getattr(message, "source", ""))
+    recipient = str(recipient or "").strip()
+    if not recipient:
+        return None
     return IncomingEvent(
         event_id=f"signal:{getattr(message, 'timestamp', '')}",
         instance=instance,
@@ -45,7 +53,7 @@ def signal_message_to_event(
         adapter_slot=adapter_slot,
         account_id=account_id,
         identity_key=identity_key,
-        chat_id=str(recipient),
+        chat_id=recipient,
         chat_type="group" if getattr(message, "group", None) else "private",
         sender_id=str(getattr(message, "source_uuid", "") or getattr(message, "source", "") or ""),
         sender_name=str(getattr(message, "source_number", "") or getattr(message, "source", "") or ""),
