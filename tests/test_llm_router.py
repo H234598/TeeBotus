@@ -12,6 +12,7 @@ from TeeBotus.llm.profiles import (
     select_llm_route,
 )
 from TeeBotus.llm_client import LiteLLMTextClient
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 
 
 def test_default_profile_files_define_plan2_provider_profiles() -> None:
@@ -95,6 +96,48 @@ def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> N
     assert client.provider == "litellm"
     assert client.model == "huggingface/mistralai/Mistral-7B-Instruct-v0.3"
     assert client.api_key == "hf-secret"
+
+
+def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        profile="local_ollama",
+        fallback_models="ollama_chat/qwen2.5:7b",
+        api_key="runtime-key",
+        timeout="180",
+        max_tokens="700",
+        temperature="0.4",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11434"
+    assert client.fallback_models == ("ollama_chat/qwen2.5:7b",)
+    assert client.api_key == "runtime-key"
+    assert client.timeout == 180
+    assert client.max_tokens == 700
+    assert client.temperature == 0.4
+
+
+def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -> None:
+    captured: list[str] = []
+
+    class FakeOpenAIClient:
+        def __init__(self, api_key: str) -> None:
+            captured.append(api_key)
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="openai_premium",
+        env={"OPENAI_API_KEY": "profile-openai-key"},
+        openai_client_factory=FakeOpenAIClient,
+    )
+
+    assert isinstance(client, FakeOpenAIClient)
+    assert captured == ["profile-openai-key"]
 
 
 def test_simple_yaml_fallback_parser_handles_plan2_shape(tmp_path: Path, monkeypatch) -> None:

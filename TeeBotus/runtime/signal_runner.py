@@ -19,8 +19,8 @@ from urllib.request import urlopen
 
 from TeeBotus.adapters.signal import _signal_required_timestamp, send_signal_actions, signal_context_to_event
 from TeeBotus.instructions import InstructionStore
-from TeeBotus.llm_client import build_text_llm_client
 from TeeBotus.openai_client import OpenAIClient
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
@@ -91,10 +91,11 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
-        self.llm_client = build_text_llm_client(
+        self.llm_client = build_runtime_text_llm_client(
             instructions=self.instruction_store.get(),
             openai_client=self.openai_client,
             default_api_key=run_config.openai_api_key,
+            profile=run_config.llm_profile,
             provider=run_config.llm_provider,
             model=run_config.llm_model,
             fallback_models=run_config.llm_fallback_models,

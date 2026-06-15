@@ -15,6 +15,7 @@ from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
+from TeeBotus.llm_client import LiteLLMTextClient
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.message_tracking import SentMessageRef
@@ -817,6 +818,27 @@ def test_signal_command_constructs_openai_client_from_run_config(monkeypatch, tm
 
     assert captured == ["sk-signal"]
     assert command.engine.openai_client is command.openai_client
+
+
+def test_signal_command_uses_llm_profile_for_text_client(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            llm_profile="local_ollama",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert isinstance(command.llm_client, LiteLLMTextClient)
+    assert command.llm_client.model == "ollama_chat/llama3.1:8b"
+    assert command.engine.llm_client is command.llm_client
 
 
 def test_signal_command_ignores_non_content_message_types(tmp_path) -> None:

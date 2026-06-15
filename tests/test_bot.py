@@ -3776,13 +3776,28 @@ class BotTests(unittest.TestCase):
     def test_run_polling_passes_modern_runtime_context_to_handle_update(self) -> None:
         api = OneUpdatePollingAPI()
         seen_contexts = []
+        factory_calls = []
 
         def capture_handle_update(*args, **kwargs):
             seen_contexts.append(kwargs.get("runtime_context"))
 
+        def fake_build_runtime_text_llm_client(**kwargs):
+            factory_calls.append(kwargs)
+            return "profile-client"
+
         with tempfile.TemporaryDirectory() as directory:
-            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
-                with patch("TeeBotus.adapters.telegram_runtime.handle_update", side_effect=capture_handle_update):
+            with patch.dict(
+                os.environ,
+                {
+                    "TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances"),
+                    "TEEBOTUS_LLM_PROFILE_DEMO": "local_ollama",
+                },
+                clear=False,
+            ):
+                with (
+                    patch("TeeBotus.adapters.telegram_runtime.handle_update", side_effect=capture_handle_update),
+                    patch("TeeBotus.adapters.telegram_runtime.build_runtime_text_llm_client", side_effect=fake_build_runtime_text_llm_client),
+                ):
                     run_polling(
                         api,
                         FakeInstructionStore(),
@@ -3794,6 +3809,8 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(seen_contexts), 1)
         self.assertIsNotNone(seen_contexts[0])
         self.assertEqual(seen_contexts[0].instance_name, "Demo")
+        self.assertEqual(factory_calls[0]["profile"], "local_ollama")
+        self.assertEqual(seen_contexts[0].engine.llm_client, "profile-client")
 
     def test_split_telegram_message_prefers_paragraph_boundaries(self) -> None:
         text = ("a" * 20) + "\n\n" + ("b" * 20) + "\n\n" + ("c" * 20)

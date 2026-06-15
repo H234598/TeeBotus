@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 
+from TeeBotus.llm_client import LiteLLMTextClient
 from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
@@ -677,6 +678,29 @@ def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp
 
     assert captured == ["sk-matrix"]
     assert bridge.engine.openai_client is bridge.openai_client
+
+
+def test_matrix_bridge_uses_llm_profile_for_text_client(tmp_path) -> None:
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            llm_profile="local_ollama",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=FakeMatrixClient(),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert isinstance(bridge.llm_client, LiteLLMTextClient)
+    assert bridge.llm_client.model == "ollama_chat/llama3.1:8b"
+    assert bridge.engine.llm_client is bridge.llm_client
 
 
 def test_matrix_cleanup_redacts_tracked_current_room_messages(tmp_path) -> None:

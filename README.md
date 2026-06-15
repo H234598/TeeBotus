@@ -311,6 +311,8 @@ Die zentralen Profil-Dateien sind:
 
 Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama, Hugging Face, Groq, Gemini und OpenAI-kompatible LiteLLM-Modelle. Remote-Fallbacks sind standardmaessig aus. Ein Fallback auf ein Remote-Profil wird nur genutzt, wenn der jeweilige Codepfad explizit `allow_remote_fallback=True` setzt.
 
+Zur Laufzeit kann ein konkretes Profil ueber `profile: ...` in `Bot_Verhalten.md` oder ueber `TEEBOTUS_LLM_PROFILE_<INSTANZ>` und kanalspezifische Varianten gesetzt werden. Telegram, Signal und Matrix bauen ihren Text-LLM-Client dann aus diesem Profil; ohne Profil bleibt das bisherige direkte Provider-/OpenAI-Verhalten erhalten.
+
 Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue neutrale Felder sind:
 
 ```text

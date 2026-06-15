@@ -38,8 +38,8 @@ from TeeBotus.core.youtube import (
 )
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
-from TeeBotus.llm_client import build_text_llm_client
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import resolve_llm_setting
@@ -2850,10 +2850,11 @@ def run_polling(
     resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
     openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
     adapter_slot = int(token_label) if str(token_label).isdigit() else 1
-    llm_client = build_text_llm_client(
+    llm_client = build_runtime_text_llm_client(
         instructions=instruction_store.get(),
         openai_client=openai_client,
         default_api_key=resolved_openai_api_key or "",
+        profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
         provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
         model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
         fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
