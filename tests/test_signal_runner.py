@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -985,6 +986,47 @@ def test_signal_command_tracks_linked_identity_notification_when_requested(tmp_p
     refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+49999", count=1)
     assert len(refs) == 1
     assert refs[0].message_ref == "123"
+
+
+def test_signal_background_dispatch_uses_captured_runtime_loop(monkeypatch, tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.bot = FakeSignalBot()
+    loop_matches: list[bool] = []
+
+    async def main() -> None:
+        runtime_loop = asyncio.get_running_loop()
+        command._dispatch_loop = runtime_loop
+        command._dispatch_loop_thread_id = threading.get_ident()
+
+        async def fake_sender(_route, _action, _item):
+            loop_matches.append(asyncio.get_running_loop() is runtime_loop)
+            return 456789
+
+        monkeypatch.setattr("TeeBotus.runtime.signal_runner.signal_proactive_sender", lambda _bots: fake_sender)
+        event = SimpleNamespace(instance="Demo", account_id="acc", chat_id="+491234")
+        worker = threading.Thread(target=lambda: command._dispatch_background_actions(event, [SendText("+491234", "hi")]))
+        worker.start()
+        while worker.is_alive():
+            await asyncio.sleep(0.01)
+        worker.join()
+
+    asyncio.run(main())
+
+    assert loop_matches == [True]
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
+    assert [ref.message_ref for ref in refs] == ["456789"]
 
 
 def test_signal_command_does_not_track_linked_identity_notification_without_timestamp(tmp_path) -> None:

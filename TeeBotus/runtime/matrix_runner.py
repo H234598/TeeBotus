@@ -13,6 +13,7 @@ from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
@@ -70,11 +71,15 @@ class MatrixRuntimeBridge:
             youtube_job_runner=self.youtube_job_runner,
             background_action_dispatcher=self._dispatch_background_actions,
         )
+        self._dispatch_loop: asyncio.AbstractEventLoop | None = None
+        self._dispatch_loop_thread_id: int | None = None
 
     def proactive_sender(self):
         return matrix_proactive_sender({self.run_config.slot: self.client})
 
     async def handle_message(self, room: Any, message: Any) -> None:
+        self._dispatch_loop = asyncio.get_running_loop()
+        self._dispatch_loop_thread_id = threading.get_ident()
         if _matrix_sender_is_self(message, self.run_config.matrix_user_id):
             return
         event = matrix_message_to_event(
@@ -163,7 +168,12 @@ class MatrixRuntimeBridge:
         sender = matrix_proactive_sender({self.run_config.slot: self.client})
         for action in actions:
             try:
-                sent_ref = asyncio.run(sender({"adapter_slot": self.run_config.slot, "chat_id": event.chat_id}, action, {}))
+                sent_ref = run_background_coroutine(
+                    lambda action=action: sender({"adapter_slot": self.run_config.slot, "chat_id": event.chat_id}, action, {}),
+                    loop=self._dispatch_loop,
+                    loop_thread_id=self._dispatch_loop_thread_id,
+                    on_scheduled_result=lambda sent_ref, action=action: self._track_background_action(event, action, sent_ref),
+                )
             except Exception:
                 continue
             self._track_background_action(event, action, sent_ref)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
@@ -1126,6 +1127,59 @@ def test_matrix_bridge_tracks_linked_identity_notification_when_requested(tmp_pa
     refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!old:example", count=1)
     assert len(refs) == 1
     assert refs[0].message_ref == "$sent"
+
+
+def test_matrix_background_dispatch_uses_captured_runtime_loop(monkeypatch, tmp_path) -> None:
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=FakeMatrixClient(),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    loop_matches: list[bool] = []
+
+    async def main() -> None:
+        runtime_loop = asyncio.get_running_loop()
+        bridge._dispatch_loop = runtime_loop
+        bridge._dispatch_loop_thread_id = threading.get_ident()
+
+        async def fake_sender(_route, _action, _item):
+            loop_matches.append(asyncio.get_running_loop() is runtime_loop)
+            return "$background"
+
+        monkeypatch.setattr("TeeBotus.runtime.matrix_runner.matrix_proactive_sender", lambda _clients: fake_sender)
+        event = IncomingEvent(
+            event_id="matrix:$incoming",
+            instance="Demo",
+            channel="matrix",
+            adapter_slot=1,
+            identity_key="matrix:user:@alice:example",
+            chat_id="!room:example",
+            chat_type="private",
+            sender_id="@alice:example",
+            text="",
+            message_ref="$incoming",
+        )
+        worker = threading.Thread(target=lambda: bridge._dispatch_background_actions(event, [SendText("!room:example", "hi")]))
+        worker.start()
+        while worker.is_alive():
+            await asyncio.sleep(0.01)
+        worker.join()
+
+    asyncio.run(main())
+
+    assert loop_matches == [True]
+    refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
+    assert [ref.message_ref for ref in refs] == ["$background"]
 
 
 def test_matrix_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:
