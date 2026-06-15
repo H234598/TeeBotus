@@ -40,6 +40,7 @@ Encrypted structured memory files:
 - `OpenAI_State.json`
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
+- `Proactive_Audit.jsonl`
 
 Encrypted account files include identity mappings, account index, account secrets/verifiers, account profiles, and tombstones.
 
