@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Mapping
+from inspect import isawaitable
+from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
@@ -29,6 +31,19 @@ class ProactiveAgentHealth:
     account_id: str
     ok: bool
     errors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProactiveDispatchResult:
+    account_id: str
+    item_id: str
+    status: str
+    reason: str
+    channel: str = ""
+    message_ref: str = ""
+
+
+ProactiveSender = Callable[[dict[str, Any], SendText, dict[str, Any]], Any]
 
 
 def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, account_id: str) -> tuple[SendText, ...] | None:
@@ -164,6 +179,7 @@ def proactive_policy_decision(
     *,
     category: str,
     now: datetime | None = None,
+    exclude_item_id: str = "",
 ) -> ProactiveDecision:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     normalized_category = str(category or "").strip().casefold()
@@ -178,7 +194,7 @@ def proactive_policy_decision(
     start_hour, end_hour = state["policy"]["allowed_hours"]
     if not _hour_in_window(hour, start_hour, end_hour):
         return ProactiveDecision(False, "outside_allowed_hours")
-    if _proactive_daily_count(account_store, account_id, resolved_now) >= int(state["policy"]["max_messages_per_day"]):
+    if _proactive_daily_count(account_store, account_id, resolved_now, exclude_item_id=exclude_item_id) >= int(state["policy"]["max_messages_per_day"]):
         return ProactiveDecision(False, "daily_limit_reached")
     route = select_proactive_route(account_store, account_id)
     if route is None:
@@ -209,6 +225,7 @@ def update_proactive_outbox_item_status(
     status: str,
     reason: str = "",
     now: datetime | None = None,
+    dispatch: Mapping[str, Any] | None = None,
 ) -> bool:
     normalized_status = str(status or "").strip().casefold()
     if normalized_status not in {"queued", *PROACTIVE_TERMINAL_STATUSES}:
@@ -223,6 +240,8 @@ def update_proactive_outbox_item_status(
         item["updated_at"] = timestamp
         if normalized_status == "sent":
             item["sent_at"] = timestamp
+        if dispatch:
+            item["dispatch"] = {str(key): value for key, value in dispatch.items()}
         history = item.setdefault("status_history", [])
         if not isinstance(history, list):
             history = []
@@ -233,6 +252,67 @@ def update_proactive_outbox_item_status(
     if changed:
         account_store.write_proactive_outbox(account_id, rows)
     return changed
+
+
+async def dispatch_due_proactive_outbox_items(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    senders: Mapping[str, ProactiveSender],
+    now: datetime | None = None,
+    message_tracker: MessageTracker | None = None,
+    instance_name: str = "",
+) -> tuple[ProactiveDispatchResult, ...]:
+    resolved_now = now or datetime.now(timezone.utc)
+    results: list[ProactiveDispatchResult] = []
+    for item in due_proactive_outbox_items(account_store, account_id, now=resolved_now):
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            results.append(ProactiveDispatchResult(account_id, "", "failed", "missing_item_id"))
+            continue
+        category = str(item.get("category") or "").strip().casefold()
+        decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id)
+        if not decision.allowed:
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason=f"policy:{decision.reason}", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
+            continue
+        route = decision.route or _item_route(item)
+        channel = str(route.get("channel") or "").strip().casefold()
+        chat_id = str(route.get("chat_id") or "").strip()
+        if route.get("chat_type") != "private" or not channel or not chat_id:
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
+            continue
+        sender = senders.get(channel)
+        if sender is None:
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason=f"missing_sender:{channel}", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_sender", channel))
+            continue
+        message_text = str(item.get("message_text") or "").strip()
+        if not message_text:
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="missing_message_text", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_message_text", channel))
+            continue
+        action = SendText(chat_id, message_text, track=True)
+        try:
+            sent_ref = await _maybe_await(sender(route, action, item))
+        except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
+            update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason=f"send_error:{type(exc).__name__}", now=resolved_now)
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", f"send_error:{type(exc).__name__}", channel))
+            continue
+        message_ref = _normalize_sent_ref(sent_ref)
+        dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}
+        update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="sent", now=resolved_now, dispatch=dispatch_meta)
+        _record_proactive_sent_ref(
+            message_tracker,
+            instance_name=instance_name or account_store.instance_name,
+            account_id=account_id,
+            channel=channel,
+            chat_id=chat_id,
+            message_ref=message_ref,
+        )
+        results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
+    return tuple(results)
 
 
 def check_proactive_agent_account(account_store: AccountStore, account_id: str) -> ProactiveAgentHealth:
@@ -305,13 +385,15 @@ def select_proactive_route(account_store: AccountStore, account_id: str) -> dict
         routes.append(dict(route))
     if not routes:
         return None
-    return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel")), 99), str(route.get("last_seen_at") or "")))[0]
+    return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel")), 99), -_route_seen_timestamp(route)))[0]
 
 
-def _proactive_daily_count(account_store: AccountStore, account_id: str, now: datetime) -> int:
+def _proactive_daily_count(account_store: AccountStore, account_id: str, now: datetime, *, exclude_item_id: str = "") -> int:
     count = 0
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
+            continue
+        if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
             continue
         status = str(item.get("status") or "queued")
         if status not in {"queued", "sent"}:
@@ -322,6 +404,70 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
         if timestamp.astimezone().date() == now.astimezone().date():
             count += 1
     return count
+
+
+async def _maybe_await(value: Any) -> Any:
+    if isawaitable(value):
+        return await value
+    return value
+
+
+def _item_route(item: Mapping[str, Any]) -> dict[str, Any]:
+    route = item.get("route")
+    return dict(route) if isinstance(route, dict) else {}
+
+
+def _item_channel(item: Mapping[str, Any]) -> str:
+    return str(_item_route(item).get("channel") or "").strip().casefold()
+
+
+def _normalize_sent_ref(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            normalized = _normalize_sent_ref(item)
+            if normalized:
+                return normalized
+        return ""
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _record_proactive_sent_ref(
+    message_tracker: MessageTracker | None,
+    *,
+    instance_name: str,
+    account_id: str,
+    channel: str,
+    chat_id: str,
+    message_ref: str,
+) -> None:
+    if message_tracker is None or not message_ref:
+        return
+    ref_kind = {
+        "telegram": "telegram_message_id",
+        "signal": "signal_timestamp",
+        "matrix": "matrix_event_id",
+    }.get(channel)
+    if ref_kind is None:
+        return
+    message_tracker.record(
+        SentMessageRef(
+            channel=channel,
+            instance_name=instance_name,
+            account_id=account_id,
+            chat_id=chat_id,
+            message_ref=message_ref,
+            ref_kind=ref_kind,  # type: ignore[arg-type]
+        )
+    )
+
+
+def _route_seen_timestamp(route: Mapping[str, Any]) -> float:
+    parsed = _parse_proactive_datetime(str(route.get("last_seen_at") or ""))
+    if parsed is None:
+        return 0.0
+    return parsed.timestamp()
 
 
 def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:

@@ -63,10 +63,11 @@ def run_proactive_agent_dry_run(
             items: list[dict[str, Any]] = []
             for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                 category = str(item.get("category") or "")
-                decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now)
+                item_id = str(item.get("id") or "")
+                decision = proactive_policy_decision(store, account_id, category=category, now=resolved_now, exclude_item_id=item_id)
                 items.append(
                     {
-                        "id": str(item.get("id") or ""),
+                        "id": item_id,
                         "category": category,
                         "intent": str(item.get("intent") or ""),
                         "due_at": str(item.get("due_at") or ""),

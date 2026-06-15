@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key, telegram_identity_key
+import pytest
+
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, matrix_identity_key, signal_identity_key, telegram_identity_key
+from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     check_proactive_agent_account,
     disable_proactive_agent,
+    dispatch_due_proactive_outbox_items,
     due_proactive_outbox_items,
     enable_proactive_agent,
     proactive_agent_instance_enabled,
@@ -251,3 +257,156 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert decision.allowed is True
     assert health.ok is True
     assert health.errors == ()
+
+
+def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    calls = []
+
+    async def sender(route: dict, action: SendText, item: dict) -> str:
+        calls.append((route, action, item))
+        return "123456789"
+
+    tracker = MessageTracker(tmp_path / "sent_refs.json")
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+            message_tracker=tracker,
+            instance_name="Depressionsbot",
+        )
+    )
+
+    item_id = queued.reason.removeprefix("queued:")
+    assert [result.item_id for result in results] == [item_id]
+    assert results[0].status == "sent"
+    assert results[0].message_ref == "123456789"
+    assert calls[0][1] == SendText("+491", "Magst du kurz berichten?", track=True)
+    sent_item = account_store.read_proactive_outbox(account_id)[0]
+    assert sent_item["status"] == "sent"
+    assert sent_item["dispatch"]["channel"] == "signal"
+    assert sent_item["dispatch"]["message_ref"] == "123456789"
+    refs = tracker.list_for_chat("+491", instance_name="Depressionsbot", channel="signal")
+    assert len(refs) == 1
+    assert refs[0].message_ref == "123456789"
+    assert refs[0].ref_kind == "signal_timestamp"
+
+
+def test_dispatch_recheck_does_not_count_current_queued_item_against_daily_limit(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    assert queued.allowed is True
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "sent-ref"},
+            now=now,
+        )
+    )
+
+    assert results[0].status == "sent"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+
+
+def test_dispatch_due_proactive_items_fails_when_sender_is_missing(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(account_store, account_id, senders={}, now=now)
+    )
+
+    assert results[0].status == "failed"
+    assert results[0].reason == "missing_sender"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "failed"
+    assert item["status_history"][-1]["reason"] == "missing_sender:signal"
+
+
+@pytest.mark.parametrize(
+    ("channel", "identity", "chat_id", "message_ref", "ref_kind"),
+    [
+        ("telegram", telegram_identity_key(1001), "1001", "42", "telegram_message_id"),
+        ("signal", signal_identity_key(source_uuid="signal-user"), "+491", "123456789", "signal_timestamp"),
+        ("matrix", matrix_identity_key("@user:example.org"), "!room:example.org", "$event", "matrix_event_id"),
+    ],
+)
+def test_dispatch_tracks_sent_refs_for_all_supported_channels(tmp_path, channel: str, identity: str, chat_id: str, message_ref: str, ref_kind: str) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel=channel, chat_id=chat_id, chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    tracker = MessageTracker(tmp_path / f"{channel}_refs.json")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={channel: lambda _route, _action, _item: message_ref},
+            now=now,
+            message_tracker=tracker,
+            instance_name="Depressionsbot",
+        )
+    )
+
+    assert results[0].channel == channel
+    assert results[0].message_ref == message_ref
+    refs = tracker.list_for_chat(chat_id, instance_name="Depressionsbot", channel=channel)
+    assert len(refs) == 1
+    assert refs[0].ref_kind == ref_kind
