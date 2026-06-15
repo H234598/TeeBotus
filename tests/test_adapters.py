@@ -1768,6 +1768,59 @@ def test_matrix_file_attachment_can_reply_with_niobot_send_message():
     assert kwargs == {"reply_to": "$old"}
 
 
+def test_matrix_attachment_with_mentions_uses_room_send_content():
+    class UploadResponse:
+        content_uri = "mxc://example/report"
+
+    class SendResponse:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.uploads = []
+            self.sends = []
+
+        async def send_message(self, *_args, **_kwargs):
+            raise AssertionError("send_message should not be used when m.mentions are needed")
+
+        async def upload(self, data_provider, **kwargs):
+            self.uploads.append((data_provider.read(), kwargs))
+            return UploadResponse(), None
+
+        async def room_send(self, **kwargs):
+            self.sends.append(kwargs)
+            return SendResponse()
+
+    client = Client()
+
+    sent = asyncio.run(
+        send_matrix_actions(
+            client,
+            [
+                SendAttachment(
+                    "!room:example",
+                    b"hello",
+                    "report.txt",
+                    "text/plain",
+                    caption="Bericht fuer @alice",
+                    mentions=({"user_id": "@alice:example"}, {"author": "signal-user"}),
+                )
+            ],
+        )
+    )
+
+    assert sent == ["$sent"]
+    assert client.uploads[0][0] == b"hello"
+    assert client.sends[0]["content"] == {
+        "msgtype": "m.file",
+        "body": "Bericht fuer @alice",
+        "filename": "report.txt",
+        "url": "mxc://example/report",
+        "info": {"mimetype": "text/plain", "size": 5},
+        "m.mentions": {"user_ids": ["@alice:example"]},
+    }
+
+
 def test_matrix_niobot_file_send_error_sends_notice():
     class Response:
         event_id = "$sent"

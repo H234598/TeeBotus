@@ -109,6 +109,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 content_type=action.content_type,
                 caption=action.caption,
                 reply_to_ref=action.reply_to_ref,
+                mentions=list(action.mentions),
             )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, ExportFile):
@@ -316,6 +317,7 @@ async def _send_matrix_file_or_error_notice(
     content_type: str,
     caption: str = "",
     reply_to_ref: str = "",
+    mentions: list[dict[str, Any]] | None = None,
 ) -> Any:
     try:
         return await _send_matrix_file(
@@ -326,6 +328,7 @@ async def _send_matrix_file_or_error_notice(
             content_type=content_type,
             caption=caption,
             reply_to_ref=reply_to_ref,
+            mentions=mentions,
         )
     except Exception as exc:
         return await _send_matrix_text(
@@ -346,10 +349,11 @@ async def _send_matrix_file(
     content_type: str,
     caption: str = "",
     reply_to_ref: str = "",
+    mentions: list[dict[str, Any]] | None = None,
 ) -> Any:
     send_message = getattr(client, "send_message", None)
     attachment = _make_niobot_file_attachment(data=data, filename=filename, content_type=content_type)
-    if callable(send_message) and attachment is not None:
+    if callable(send_message) and attachment is not None and not mentions:
         kwargs: dict[str, Any] = {"file": attachment}
         if reply_to_ref:
             kwargs["reply_to"] = reply_to_ref
@@ -379,6 +383,7 @@ async def _send_matrix_file(
         },
     }
     _add_matrix_reply_relation(content, reply_to_ref)
+    _add_matrix_mentions(content, mentions or [])
     response = await client.room_send(
         room_id=room_id,
         message_type="m.room.message",
