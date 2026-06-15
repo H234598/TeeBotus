@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm.base import LLMImage, LLMResponse, LLMVoice
-from TeeBotus.openai_client import OpenAIClient
+from TeeBotus.llm.base import LLMError, LLMImage, LLMResponse, LLMVoice
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 
 
 class OpenAIProvider:
@@ -24,7 +24,10 @@ class OpenAIProvider:
         instructions: BotInstructions,
         previous_response_id: str | None = None,
     ) -> LLMResponse:
-        response = self.client.create_reply(user_text, instructions, previous_response_id)
+        try:
+            response = self.client.create_reply(user_text, instructions, previous_response_id)
+        except OpenAIAPIError as exc:
+            raise LLMError(str(exc)) from exc
         return LLMResponse(
             text=response.text,
             response_id=response.response_id,
@@ -34,11 +37,17 @@ class OpenAIProvider:
         )
 
     def create_voice(self, text: str, instructions: BotInstructions) -> LLMVoice:
-        voice = self.client.create_voice(text, instructions)
+        try:
+            voice = self.client.create_voice(text, instructions)
+        except OpenAIAPIError as exc:
+            raise LLMError(str(exc)) from exc
         return LLMVoice(audio=voice.audio, filename=voice.filename, content_type=voice.content_type)
 
     def generate_image(self, prompt: str, instructions: BotInstructions, *, filename: str = "bild.png") -> LLMImage:
-        image = self.client.generate_image(prompt, instructions, filename=filename)
+        try:
+            image = self.client.generate_image(prompt, instructions, filename=filename)
+        except OpenAIAPIError as exc:
+            raise LLMError(str(exc)) from exc
         return LLMImage(data=image.data, filename=image.filename, content_type=image.content_type)
 
     def transcribe_audio(
@@ -48,4 +57,7 @@ class OpenAIProvider:
         instructions: BotInstructions,
         model: str | None = None,
     ) -> str:
-        return self.client.transcribe_audio(audio, filename, instructions, model=model)
+        try:
+            return self.client.transcribe_audio(audio, filename, instructions, model=model)
+        except OpenAIAPIError as exc:
+            raise LLMError(str(exc)) from exc

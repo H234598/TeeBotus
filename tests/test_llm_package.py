@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm import (
+    LLMError,
     LLMImage,
     LLMResponse,
     LLMVoice,
@@ -11,7 +14,7 @@ from TeeBotus.llm import (
     normalize_llm_provider,
 )
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES, OPENAI_CAPABILITIES
-from TeeBotus.openai_client import OpenAIImage, OpenAIResponse, OpenAIVoice
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIImage, OpenAIResponse, OpenAIVoice
 
 
 def test_plan1_llm_package_exports_existing_router_and_litellm_adapter() -> None:
@@ -70,3 +73,28 @@ def test_openai_provider_maps_existing_client_payloads_to_neutral_types() -> Non
     assert fake_client.voice_calls == [("Sag Hallo", "onyx")]
     assert fake_client.image_calls == [("Bild", "gpt-image-test", "custom.png")]
     assert fake_client.transcription_calls == [(b"audio", "voice.ogg", "de", "whisper-test")]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "args", "kwargs"),
+    [
+        ("create_reply", ("Ping", BotInstructions(), None), {}),
+        ("create_voice", ("Sag Hallo", BotInstructions()), {}),
+        ("generate_image", ("Bild", BotInstructions()), {"filename": "bild.png"}),
+        ("transcribe_audio", (b"audio", "voice.ogg", BotInstructions()), {"model": "whisper-test"}),
+    ],
+)
+def test_openai_provider_wraps_openai_api_errors_as_neutral_llm_errors(method_name, args, kwargs) -> None:
+    class BrokenOpenAIClient:
+        def __getattr__(self, _name):
+            def fail(*_args, **_kwargs):
+                raise OpenAIAPIError("openai boom")
+
+            return fail
+
+    provider = OpenAIProvider(BrokenOpenAIClient())  # type: ignore[arg-type]
+
+    with pytest.raises(LLMError, match="openai boom") as error:
+        getattr(provider, method_name)(*args, **kwargs)
+
+    assert isinstance(error.value.__cause__, OpenAIAPIError)
