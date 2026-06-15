@@ -958,6 +958,48 @@ def test_signal_command_tracks_linked_identity_notification_when_requested(tmp_p
     assert refs[0].message_ref == "123"
 
 
+def test_signal_command_does_not_track_linked_identity_notification_without_timestamp(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    old_identity = "signal:uuid:old"
+    command.account_store.resolve_or_create_account(old_identity)
+    command.account_store.update_identity_route(old_identity, channel="signal", chat_id="+49999", chat_type="private", adapter_slot=1)
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {
+            "process": lambda self, event: [
+                NotifyLinkedIdentity(
+                    identity_key=old_identity,
+                    text="Ein neuer Kommunikationsweg wurde verbunden.",
+                    account_id=event.account_id,
+                    new_identity_key=event.identity_key,
+                    track=True,
+                )
+            ]
+        },
+    )()
+    sent: list[tuple[str, str]] = []
+    command.bot = SimpleNamespace(send=lambda receiver, text: sent.append((receiver, text)) or None)
+
+    asyncio.run(command.handle(FakeSignalContext()))
+
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+49999", count=1)
+    assert sent == [("+49999", "Ein neuer Kommunikationsweg wurde verbunden.")]
+    assert refs == []
+
+
 def test_signal_only_multi_slot_start_backgrounds_additional_slots(monkeypatch, tmp_path) -> None:
     calls: list[tuple[str, int]] = []
 
