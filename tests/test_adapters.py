@@ -1918,12 +1918,16 @@ def test_matrix_send_edit_prefers_niobot_edit_message_without_mentions():
     class Response:
         event_id = "$edit"
 
+    class Room:
+        room_id = "!room:example"
+
     class Client:
         def __init__(self) -> None:
             self.calls = []
+            self.rooms = {"!room:example": Room()}
 
-        async def edit_message(self, room_id, event_id, content, **kwargs):
-            self.calls.append((room_id, event_id, content, kwargs))
+        async def edit_message(self, room, event_id, content, **kwargs):
+            self.calls.append((room, event_id, content, kwargs))
             return Response()
 
         async def room_send(self, **_kwargs):
@@ -1934,7 +1938,41 @@ def test_matrix_send_edit_prefers_niobot_edit_message_without_mentions():
     sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
 
     assert sent == ["$edit"]
-    assert client.calls == [("!room:example", "$old", "korrigiert", {"message_type": "m.text", "clean_mentions": True})]
+    assert client.calls == [(client.rooms["!room:example"], "$old", "korrigiert", {"message_type": "m.text", "clean_mentions": True})]
+
+
+def test_matrix_send_edit_falls_back_when_niobot_room_is_unknown():
+    class Response:
+        event_id = "$edit"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def edit_message(self, *_args, **_kwargs):
+            raise AssertionError("edit_message needs a MatrixRoom object with nio-bot 1.0.2.post1")
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendEdit("!room:example", "$old", "korrigiert")]))
+
+    assert sent == ["$edit"]
+    assert client.calls == [
+        {
+            "room_id": "!room:example",
+            "message_type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": "* korrigiert",
+                "m.new_content": {"msgtype": "m.text", "body": "korrigiert"},
+                "m.relates_to": {"rel_type": "m.replace", "event_id": "$old"},
+            },
+        }
+    ]
 
 
 def test_matrix_send_edit_preserves_mentions_in_replacement_content():

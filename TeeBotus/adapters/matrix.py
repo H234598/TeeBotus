@@ -238,8 +238,9 @@ async def _send_matrix_edit(
         raise RuntimeError("Matrix edit requires a message_ref")
     body = str(text or "")
     edit_message = getattr(client, "edit_message", None)
-    if callable(edit_message) and not mentions and not _matrix_is_html_text_mode(text_mode):
-        response = await edit_message(room_id, target, body, message_type="m.text", clean_mentions=True)
+    room = _matrix_room_object(client, room_id)
+    if callable(edit_message) and room is not None and not mentions and not _matrix_is_html_text_mode(text_mode):
+        response = await edit_message(room, target, body, message_type="m.text", clean_mentions=True)
         _raise_matrix_response_error(response)
         return response
     new_content = _matrix_text_content("m.text", body, text_mode=text_mode)
@@ -506,6 +507,11 @@ def _matrix_is_html_text_mode(text_mode: str) -> bool:
 
 
 def _matrix_room_is_encrypted(client: Any, room_id: str) -> bool:
+    room = _matrix_room_object(client, room_id)
+    return bool(getattr(room, "encrypted", False))
+
+
+def _matrix_room_object(client: Any, room_id: str) -> Any | None:
     rooms = getattr(client, "rooms", None)
     room = rooms.get(room_id) if isinstance(rooms, dict) else None
     if room is None:
@@ -515,7 +521,7 @@ def _matrix_room_is_encrypted(client: Any, room_id: str) -> bool:
                 room = get_room(room_id)
             except Exception:
                 room = None
-    return bool(getattr(room, "encrypted", False))
+    return room
 
 
 def _matrix_plain_body_from_html(html_text: str) -> str:
