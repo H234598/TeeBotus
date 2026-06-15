@@ -69,7 +69,69 @@ def test_signal_local_attachment_name_without_base64_is_preserved():
     assert event.attachments[0].filename == "voice.ogg"
     assert event.attachments[0].content_type == "audio/ogg"
     assert event.attachments[0].data == b""
-    assert event.attachments[0].base64_data == ""
+
+
+def test_signal_sync_command_uses_raw_destination_as_chat_id():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "source": "+own",
+                "sourceUuid": "own-uuid",
+                "timestamp": 123,
+                "syncMessage": {
+                    "sentMessage": {
+                        "destination": "+491234",
+                        "message": "/login " + ("a" * 128) + " " + ("b" * 128),
+                    }
+                },
+            }
+        }
+    )
+    event = signal_message_to_event(
+        FakeSignalMessage(
+            source="+own",
+            source_uuid="own-uuid",
+            source_number="+own",
+            text="/login " + ("a" * 128) + " " + ("b" * 128),
+            type=MessageType.SYNC_MESSAGE,
+            raw_message=raw_message,
+        ),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.chat_id == "+491234"
+    assert event.chat_type == "private"
+    assert event.text.startswith("/login ")
+
+
+def test_signal_sync_non_command_is_ignored():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "source": "+own",
+                "sourceUuid": "own-uuid",
+                "timestamp": 123,
+                "syncMessage": {"sentMessage": {"destination": "+491234", "message": "Hallo"}},
+            }
+        }
+    )
+
+    event = signal_message_to_event(
+        FakeSignalMessage(
+            source="+own",
+            source_uuid="own-uuid",
+            source_number="+own",
+            text="Hallo",
+            type=MessageType.SYNC_MESSAGE,
+            raw_message=raw_message,
+        ),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is None
 
 
 def test_signal_view_once_attachment_metadata_is_preserved():

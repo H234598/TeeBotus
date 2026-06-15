@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -169,6 +171,63 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:
+    secret_provider = StaticSecretProvider(b"x" * 32)
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+own",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=secret_provider,
+    )
+    registered = command.engine.process_identity_flows(
+        SimpleNamespace(
+            identity_key="telegram:user:1",
+            sender_name="Teladi",
+            text="/register",
+            chat_type="private",
+            chat_id="1",
+            channel="telegram",
+            instance="Demo",
+        )
+    )
+    account_id, secret = re.findall(r"\b[0-9a-f]{128}\b", registered.actions[0].text)
+    context = FakeSignalContext()
+    context.message.type = MessageType.SYNC_MESSAGE
+    context.message.source = "+own"
+    context.message.source_number = "+own"
+    context.message.source_uuid = "own-uuid"
+    context.message.text = f"/login {account_id} {secret}"
+    context.message.raw_message = json.dumps(
+        {
+            "envelope": {
+                "source": "+own",
+                "sourceNumber": "+own",
+                "sourceUuid": "own-uuid",
+                "timestamp": 123456,
+                "syncMessage": {
+                    "sentMessage": {
+                        "destination": "+491234",
+                        "message": context.message.text,
+                    }
+                },
+            }
+        }
+    )
+
+    asyncio.run(command.handle(context))
+
+    assert context.bot_sent[0][0] == "+491234"
+    assert context.sent[0] == "Dieser Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden."
+    assert command.account_store.get_account_for_identity("signal:uuid:own-uuid") == account_id
 
 
 def test_signal_command_tracks_engine_result_account_id(tmp_path) -> None:

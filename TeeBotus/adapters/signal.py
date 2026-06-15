@@ -304,6 +304,9 @@ def _signal_context_recipient(context: Any) -> str:
 
 
 def _signal_message_recipient(message: Any) -> str:
+    sync_recipient = _signal_raw_sync_recipient(message)
+    if sync_recipient:
+        return sync_recipient
     recipient_method = getattr(message, "recipient", None)
     if callable(recipient_method):
         try:
@@ -644,6 +647,29 @@ def _signal_raw_data_message(envelope: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _signal_raw_sync_recipient(message: Any) -> str:
+    message_type = getattr(message, "type", None)
+    if getattr(message_type, "name", "") != "SYNC_MESSAGE":
+        return ""
+    raw_message = getattr(message, "raw_message", None)
+    if not isinstance(raw_message, str) or not raw_message.strip():
+        return ""
+    try:
+        payload = json.loads(raw_message)
+    except (TypeError, ValueError):
+        return ""
+    envelope = payload.get("envelope") if isinstance(payload, dict) else {}
+    sync_message = envelope.get("syncMessage") if isinstance(envelope, dict) else {}
+    sent_message = sync_message.get("sentMessage") if isinstance(sync_message, dict) else {}
+    if not isinstance(sent_message, dict):
+        return ""
+    for key in ("destination", "destinationUuid", "destinationNumber"):
+        value = str(sent_message.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 def _safe_b64decode(data: Any) -> bytes:
     if not isinstance(data, str):
         return b""
@@ -697,17 +723,19 @@ def _guess_content_type(filename: str) -> str:
 def _signal_message_has_user_content(message: Any) -> bool:
     message_type = getattr(message, "type", None)
     type_name = getattr(message_type, "name", "")
+    text = str(getattr(message, "text", "") or "").strip()
+    if type_name == "SYNC_MESSAGE":
+        return text.startswith("/") and bool(_signal_raw_sync_recipient(message))
     if type_name in {
         "CONTACT_SYNC_MESSAGE",
         "DELETE_MESSAGE",
         "GROUP_UPDATE_MESSAGE",
         "REACTION_MESSAGE",
         "READ_MESSAGE",
-        "SYNC_MESSAGE",
     }:
         return False
     return bool(
-        str(getattr(message, "text", "") or "")
+        text
         or (getattr(message, "base64_attachments", None) or [])
         or (getattr(message, "attachments_local_filenames", None) or [])
         or (getattr(message, "link_previews", None) or [])
