@@ -1253,6 +1253,43 @@ def test_tool_agent_runner_uses_client_tool_calls(tmp_path) -> None:
     assert "Nutze ausschliesslich die bereitgestellten Tools" in client.calls[0][0]
 
 
+def test_tool_agent_runner_accepts_valid_json_text_fallback(tmp_path) -> None:
+    class Client:
+        def create_tool_calls(self, _prompt, _instructions, _tools):
+            return {
+                "output": [
+                    {"type": "reasoning", "content": []},
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": '{"schema_version":1,"decisions":[{"action":"none"}]}',
+                            }
+                        ],
+                    },
+                ]
+            }
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    result = run_proactive_tool_agent(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert account_store.read_proactive_audit(account_id) == []
+
+
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

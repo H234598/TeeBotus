@@ -536,12 +536,18 @@ def run_proactive_tool_agent(
     response = create_tool_calls(prompt, instructions, tool_definitions)
     tool_calls = extract_proactive_agent_tool_calls(response)
     if not tool_calls:
+        plan_text = _response_output_text(response)
+        if plan_text:
+            result = apply_proactive_llm_plan_text(account_store, account_id, plan_text, now=now)
+            if not result.errors:
+                return result
         audit_id = _append_proactive_llm_audit_event(
             account_store,
             account_id,
             event_type="tool_agent_rejected",
             reason="no_tool_calls",
             payload=_safe_tool_response_payload(response),
+            plan_text=plan_text,
             now=now,
         )
         return ProactiveLLMPlanningResult(account_id, errors=("no_tool_calls",), audit_event_ids=(audit_id,))
@@ -1393,6 +1399,27 @@ def _response_output_tool_calls(response: Any) -> Any:
     if not isinstance(output, list):
         return None
     return [item for item in output if _tool_call_name(item)]
+
+
+def _response_output_text(response: Any) -> str:
+    output = getattr(response, "output", None)
+    if output is None and isinstance(response, Mapping):
+        output = response.get("output")
+    if not isinstance(output, list):
+        text = getattr(response, "text", None)
+        if text is None and isinstance(response, Mapping):
+            text = response.get("text")
+        return str(text or "").strip()
+    parts: list[str] = []
+    for item in output:
+        content = item.get("content") if isinstance(item, Mapping) else getattr(item, "content", None)
+        if not isinstance(content, list):
+            continue
+        for part in content:
+            text = part.get("text") if isinstance(part, Mapping) else getattr(part, "text", None)
+            if isinstance(text, str) and text.strip():
+                parts.append(text.strip())
+    return "\n".join(parts).strip()
 
 
 def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCall | None:
