@@ -9,6 +9,7 @@ from TeeBotus.runtime.actions import (
     NotifyLinkedIdentity,
     SendAttachment,
     SendEdit,
+    SendPoll,
     SendReaction,
     SendReceipt,
     SendText,
@@ -77,6 +78,20 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                 sent.append(edit_message_text(action.chat_id, action.message_ref, action.text))
             else:
                 sent.append(None)
+        elif isinstance(action, SendPoll):
+            send_poll = getattr(api, "send_poll", None)
+            answers = [str(answer or "").strip() for answer in action.answers if str(answer or "").strip()]
+            if callable(send_poll) and len(answers) >= 2:
+                sent.append(
+                    send_poll(
+                        action.chat_id,
+                        action.question,
+                        answers,
+                        allows_multiple_answers=action.allow_multiple_selections,
+                    )
+                )
+            else:
+                sent.append(api.send_message(action.chat_id, _poll_text_fallback(action.question, answers)))
         elif isinstance(action, SendAttachment):
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):
                 sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type))
@@ -100,3 +115,11 @@ def _normalize_telegram_chat_type(value: str) -> str:
     if normalized in {"group", "supergroup", "channel"}:
         return "group"
     return "unknown"
+
+
+def _poll_text_fallback(question: str, answers: list[str]) -> str:
+    clean_question = str(question or "").strip() or "Umfrage"
+    if not answers:
+        return clean_question
+    options = "\n".join(f"{index}. {answer}" for index, answer in enumerate(answers, start=1))
+    return f"{clean_question}\n{options}"

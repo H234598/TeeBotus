@@ -9,7 +9,7 @@ from signalbot.message import MessageType
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
-from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendReaction, SendReceipt, SendText, SendTyping
+from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendPoll, SendReaction, SendReceipt, SendText, SendTyping
 
 
 @dataclass
@@ -442,6 +442,45 @@ def test_signal_edit_rejects_non_numeric_message_ref():
         raise AssertionError("RuntimeError was not raised")
 
 
+def test_signal_poll_uses_signalbot_poll():
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def poll(self, receiver, question, answers, **kwargs):
+            self.calls.append((receiver, question, answers, kwargs))
+            return 678
+
+    class Context:
+        def __init__(self) -> None:
+            self.message = FakeSignalMessage(source="+491")
+            self.bot = Bot()
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendPoll("+491", "Tee?", ("Ja", "Nein"), allow_multiple_selections=True)]))
+
+    assert sent == [678]
+    assert context.bot.calls == [("+491", "Tee?", ["Ja", "Nein"], {"allow_multiple_selections": True})]
+
+
+def test_signal_poll_rejects_too_few_answers():
+    class Bot:
+        async def poll(self, *_args, **_kwargs):
+            raise AssertionError("poll should not be called")
+
+    class Context:
+        message = FakeSignalMessage(source="+491")
+        bot = Bot()
+
+    try:
+        asyncio.run(send_signal_actions(Context(), [SendPoll("+491", "Tee?", ("Ja",))]))
+    except RuntimeError as exc:
+        assert "at least two answers" in str(exc)
+    else:
+        raise AssertionError("RuntimeError was not raised")
+
+
 def test_signal_send_text_can_quote_current_message_with_bot_send():
     class Bot:
         def __init__(self) -> None:
@@ -737,6 +776,25 @@ def test_telegram_send_edit_uses_optional_edit_message_text():
 
     assert sent == [2]
     assert api.calls == [("@my_channel", "99", "korrigiert")]
+
+
+def test_telegram_send_poll_uses_optional_send_poll():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_poll(self, chat_id, question, answers, **kwargs):
+            self.calls.append((chat_id, question, answers, kwargs))
+            return 3
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendPoll("@my_channel", "Tee?", ("Ja", "Nein"), allow_multiple_selections=True)])
+
+    assert sent == [3]
+    assert api.calls == [
+        ("@my_channel", "Tee?", ["Ja", "Nein"], {"allows_multiple_answers": True}),
+    ]
 
 
 def test_matrix_message_maps_sender_and_room_to_event():
@@ -1227,6 +1285,38 @@ def test_matrix_send_edit_uses_replacement_event():
             },
         }
     ]
+
+
+def test_matrix_send_poll_uses_poll_start_event():
+    class Response:
+        event_id = "$poll"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs)
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendPoll("!room:example", "Tee?", ("Ja", "Nein"), True)]))
+
+    assert sent == ["$poll"]
+    content = client.calls[0]["content"]
+    assert client.calls[0]["room_id"] == "!room:example"
+    assert client.calls[0]["message_type"] == "m.room.message"
+    assert content["msgtype"] == "org.matrix.msc3381.poll.start"
+    assert content["org.matrix.msc3381.poll.start"] == {
+        "max_selections": 2,
+        "question": {"org.matrix.msc1767.text": "Tee?"},
+        "answers": [
+            {"id": "1", "org.matrix.msc1767.text": "Ja"},
+            {"id": "2", "org.matrix.msc1767.text": "Nein"},
+        ],
+    }
+    assert content["body"] == "Tee?\n(Mehrfachauswahl)\n1. Ja\n2. Nein"
 
 
 def test_matrix_export_file_uploads_file_before_room_send():

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendText
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
@@ -377,6 +377,37 @@ def test_matrix_bridge_tracks_export_files_for_cleanup(tmp_path) -> None:
     refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
     assert len(refs) == 1
     assert refs[0].message_ref == "$sent"
+
+
+def test_matrix_bridge_tracks_polls_for_cleanup(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    bridge.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [SendPoll(event.chat_id, "Tee?", ("Ja", "Nein"))]},
+    )()
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
+    assert len(refs) == 1
+    assert refs[0].message_ref == "$sent"
+    assert client.sent[0]["content"]["msgtype"] == "org.matrix.msc3381.poll.start"
 
 
 def test_matrix_bridge_downloads_inbound_media_before_engine(tmp_path) -> None:

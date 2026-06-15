@@ -12,7 +12,7 @@ from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_action
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
@@ -98,7 +98,7 @@ class MatrixRuntimeBridge:
             if isinstance(action, ExportFile):
                 should_track = True
             else:
-                should_track = isinstance(action, (SendText, SendAttachment)) and action.track
+                should_track = isinstance(action, (SendText, SendAttachment, SendPoll)) and action.track
             if not should_track:
                 continue
             self.message_tracker.record(

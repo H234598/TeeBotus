@@ -10,6 +10,7 @@ from TeeBotus.runtime.actions import (
     NotifyLinkedIdentity,
     SendAttachment,
     SendEdit,
+    SendPoll,
     SendReaction,
     SendReceipt,
     SendText,
@@ -73,6 +74,15 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             sent.append(None)
         elif isinstance(action, SendEdit):
             response = await _send_matrix_edit(client, action.chat_id, action.message_ref, action.text)
+            sent.append(_matrix_event_id(response))
+        elif isinstance(action, SendPoll):
+            response = await _send_matrix_poll(
+                client,
+                action.chat_id,
+                action.question,
+                list(action.answers),
+                action.allow_multiple_selections,
+            )
             sent.append(_matrix_event_id(response))
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
@@ -193,6 +203,48 @@ async def _send_matrix_edit(client: Any, room_id: str, event_id: str, text: str)
     )
     _raise_matrix_response_error(response)
     return response
+
+
+async def _send_matrix_poll(
+    client: Any,
+    room_id: str,
+    question: str,
+    answers: list[str],
+    allow_multiple_selections: bool,
+) -> Any:
+    clean_question = str(question or "").strip()
+    clean_answers = [str(answer or "").strip() for answer in answers if str(answer or "").strip()]
+    if not clean_question:
+        raise RuntimeError("Matrix poll requires a question")
+    if len(clean_answers) < 2:
+        raise RuntimeError("Matrix poll requires at least two answers")
+    fallback = _matrix_poll_fallback(clean_question, clean_answers, allow_multiple_selections)
+    content = {
+        "msgtype": "org.matrix.msc3381.poll.start",
+        "body": fallback,
+        "org.matrix.msc1767.text": fallback,
+        "org.matrix.msc3381.poll.start": {
+            "max_selections": len(clean_answers) if allow_multiple_selections else 1,
+            "question": {"org.matrix.msc1767.text": clean_question},
+            "answers": [
+                {"id": str(index), "org.matrix.msc1767.text": answer}
+                for index, answer in enumerate(clean_answers, start=1)
+            ],
+        },
+    }
+    response = await client.room_send(
+        room_id=room_id,
+        message_type="m.room.message",
+        content=content,
+    )
+    _raise_matrix_response_error(response)
+    return response
+
+
+def _matrix_poll_fallback(question: str, answers: list[str], allow_multiple_selections: bool) -> str:
+    mode = "Mehrfachauswahl" if allow_multiple_selections else "Einzelauswahl"
+    options = "\n".join(f"{index}. {answer}" for index, answer in enumerate(answers, start=1))
+    return f"{question}\n({mode})\n{options}"
 
 
 def _matrix_receipt_type(receipt_type: str) -> Any:

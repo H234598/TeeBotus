@@ -57,6 +57,15 @@ class SendEdit:
 
 
 @dataclass(frozen=True)
+class SendPoll:
+    chat_id: str
+    question: str
+    answers: tuple[str, ...]
+    allow_multiple_selections: bool = False
+    track: bool = True
+
+
+@dataclass(frozen=True)
 class ExportFile:
     chat_id: str
     filename: str
@@ -83,6 +92,7 @@ OutgoingAction = (
     | SendReaction
     | SendReceipt
     | SendEdit
+    | SendPoll
     | ExportFile
     | NotifyLinkedIdentity
 )

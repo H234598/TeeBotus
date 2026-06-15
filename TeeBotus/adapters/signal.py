@@ -12,6 +12,7 @@ from TeeBotus.runtime.actions import (
     NotifyLinkedIdentity,
     SendAttachment,
     SendEdit,
+    SendPoll,
     SendReaction,
     SendReceipt,
     SendText,
@@ -107,6 +108,17 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                 sent.append(None)
             elif isinstance(action, SendEdit):
                 sent.append(await _send_signal_edit(context, action.chat_id, action.message_ref, action.text))
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
+            elif isinstance(action, SendPoll):
+                sent.append(
+                    await _send_signal_poll(
+                        context,
+                        action.chat_id,
+                        action.question,
+                        list(action.answers),
+                        action.allow_multiple_selections,
+                    )
+                )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
             elif isinstance(action, SendAttachment):
                 encoded = base64.b64encode(action.data).decode("ascii")
@@ -258,6 +270,30 @@ def _signal_edit_timestamp(message_ref: str) -> int:
         return int(ref)
     except ValueError as exc:
         raise RuntimeError("Signal edit requires a numeric message_ref") from exc
+
+
+async def _send_signal_poll(
+    context: Any,
+    chat_id: str,
+    question: str,
+    answers: list[str],
+    allow_multiple_selections: bool,
+) -> int:
+    target = str(chat_id or "").strip()
+    receiver = target or _signal_context_recipient(context)
+    if not receiver:
+        raise RuntimeError("Signal poll requires a chat_id")
+    clean_question = str(question or "").strip()
+    clean_answers = [str(answer or "").strip() for answer in answers if str(answer or "").strip()]
+    if not clean_question:
+        raise RuntimeError("Signal poll requires a question")
+    if len(clean_answers) < 2:
+        raise RuntimeError("Signal poll requires at least two answers")
+    bot = getattr(context, "bot", None)
+    poll = getattr(bot, "poll", None)
+    if not callable(poll):
+        raise RuntimeError("SignalBot.poll is required to send a poll")
+    return await poll(receiver, clean_question, clean_answers, allow_multiple_selections=allow_multiple_selections)
 
 
 def _require_signal_current_message_action(context: Any, chat_id: str, message_ref: str, action_name: str) -> None:

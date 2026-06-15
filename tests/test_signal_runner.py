@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from signalbot.message import MessageType
 
 from TeeBotus.runtime.accounts import StaticSecretProvider
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendText
+from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.signal_runner import (
@@ -44,8 +44,9 @@ class FakeSignalContext:
         self.message = FakeSignalMessage()
         self.sent: list[str] = []
         self.bot_sent: list[tuple[str, str, dict[str, object]]] = []
+        self.bot_polls: list[tuple[str, str, list[str], dict[str, object]]] = []
         self.deleted: list[int] = []
-        self.bot = SimpleNamespace(send=self.send_bot)
+        self.bot = SimpleNamespace(send=self.send_bot, poll=self.poll_bot)
 
     async def send(self, text: str, **_kwargs) -> int:
         self.sent.append(text)
@@ -55,6 +56,10 @@ class FakeSignalContext:
         self.sent.append(text)
         self.bot_sent.append((receiver, text, kwargs))
         return 987654
+
+    async def poll_bot(self, receiver: str, question: str, answers: list[str], **kwargs) -> int:
+        self.bot_polls.append((receiver, question, answers, kwargs))
+        return 876543
 
     async def start_typing(self) -> None:
         return None
@@ -355,6 +360,35 @@ def test_signal_command_tracks_export_files_for_cleanup(tmp_path) -> None:
     refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
     assert len(refs) == 1
     assert refs[0].message_ref == "987654"
+
+
+def test_signal_command_tracks_polls_for_cleanup(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine = type(
+        "FakeEngine",
+        (),
+        {"process": lambda self, event: [SendPoll(event.chat_id, "Tee?", ("Ja", "Nein"))]},
+    )()
+    context = FakeSignalContext()
+
+    asyncio.run(command.handle(context))
+
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
+    assert len(refs) == 1
+    assert refs[0].message_ref == "876543"
+    assert context.bot_polls == [("+491234", "Tee?", ["Ja", "Nein"], {"allow_multiple_selections": False})]
 
 
 def test_signal_command_notifies_old_signal_identity_route(tmp_path) -> None:
