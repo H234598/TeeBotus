@@ -8,14 +8,14 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, SendTyping
 from TeeBotus.runtime.engine import TeeBotusEngine
-from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 
 
 def store(tmp_path):
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"e" * 32))
 
 
-def event(identity_key: str, text: str, *, channel: str = "telegram") -> IncomingEvent:
+def event(identity_key: str, text: str, *, channel: str = "telegram", attachments: tuple[IncomingAttachment, ...] = ()) -> IncomingEvent:
     return IncomingEvent(
         event_id=f"{channel}:1",
         instance="Depressionsbot",
@@ -29,6 +29,7 @@ def event(identity_key: str, text: str, *, channel: str = "telegram") -> Incomin
         sender_name=identity_key,
         text=text,
         message_ref="1",
+        attachments=attachments,
     )
 
 
@@ -177,6 +178,67 @@ def test_engine_reports_openai_error_for_api_failure(tmp_path):
 
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "OpenAI kaputt."
+
+
+def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+            self.transcriptions: list[tuple[bytes, str]] = []
+
+        def transcribe_audio(self, audio, filename, _instructions, model=None):
+            self.transcriptions.append((audio, filename))
+            return "Gesprochener Inhalt."
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort auf Audio.", "resp-audio", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "Antwort auf Audio."
+    assert client.transcriptions == [(b"audio", "voice.ogg")]
+    assert "- attachments: 1" in client.user_text
+    assert "Transkript: Gesprochener Inhalt." in client.user_text
+    assert "Nachricht:\n<leer>" in client.user_text
+
+
+def test_engine_includes_non_audio_attachment_metadata_for_openai_input(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort auf Datei.", "resp-file", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    attachment = IncomingAttachment(data=b"pdf", filename="report.pdf", content_type="application/pdf")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Bitte ansehen", attachments=(attachment,)))
+
+    assert actions[1].text == "Antwort auf Datei."
+    assert "filename=report.pdf content_type=application/pdf bytes=3" in client.user_text
+    assert "Nachricht:\nBitte ansehen" in client.user_text
+
+
+def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path):
+    instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Key fehlt."
 
 
 def test_account_edit_sets_pending_flow(tmp_path):
