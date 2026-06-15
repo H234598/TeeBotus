@@ -27,6 +27,12 @@ from scripts.benchmark_memory_store import (  # noqa: E402
     benchmark_postgres_backend,
     benchmark_sqlite_row_encrypted_projection,
 )
+from scripts.check_adapter_deps import (  # noqa: E402
+    LOCKFILE,
+    _check_litellm_supply_chain_guard,
+    _check_pyproject_plan2_contract,
+    _read_pins,
+)
 from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
 from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision  # noqa: E402
@@ -49,6 +55,7 @@ from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
     LocalBibliothekarBackend,
     check_bibliothekar_service,
 )
+from TeeBotus.runtime.config import build_runtime_config  # noqa: E402
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query  # noqa: E402
 from TeeBotus.runtime.proactive_agent import (  # noqa: E402
     apply_proactive_agent_tool_calls,
@@ -936,15 +943,79 @@ def _benchmark_youtube_local_job_queue(*, iterations: int) -> BenchmarkResult:
 
 
 def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
-    instructions = BotInstructions(bibliothekar_backend="local")
-    timings = [_timed_ms(lambda: check_bibliothekar_service("Bench", Path("instances"), instructions)) for _ in range(iterations)]
-    return _result(
-        name="status_doctor_bibliothekar_health",
-        category="status_doctor",
-        iterations=iterations,
-        total_ms=sum(timings),
-        details={"median_health_ms": statistics.median(timings)},
-    )
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-status-") as tmp:
+        root = Path(tmp)
+        instances_dir = root / "instances"
+        instance_dir = instances_dir / "Bench"
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text(
+            "## LLM\n- enabled: true\n- profile: local_ollama\n\n## Bibliothekar\n- enabled: true\n- backend: local\n",
+            encoding="utf-8",
+        )
+        env = {
+            "TEEBOTUS_INSTANCES_DIR": str(instances_dir),
+            "TEEBOTUS_INSTANCE": "Bench",
+            "TELEGRAM_BOT_TOKEN_BENCH": "telegram-token",
+            "SIGNAL_BOT_SERVICE_BENCH": "http://127.0.0.1:8080",
+            "SIGNAL_BOT_PHONE_NUMBER_BENCH": "+491",
+            "MATRIX_BOT_HOMESERVER_BENCH": "https://matrix.example",
+            "MATRIX_BOT_USER_ID_BENCH": "@bench:example",
+            "MATRIX_BOT_ACCESS_TOKEN_BENCH": "matrix-token",
+            "TEEBOTUS_LLM_PROFILE_BENCH": "local_ollama",
+        }
+        instructions = BotInstructions(bibliothekar_backend="local")
+        health_timings = [_timed_ms(lambda: check_bibliothekar_service("Bench", instances_dir, instructions)) for _ in range(iterations)]
+        config_results = []
+        config_timings = [
+            _timed_ms(lambda: config_results.append(build_runtime_config(env=env, cli_channels="telegram,signal,matrix")))
+            for _ in range(iterations)
+        ]
+        pins = _read_pins(LOCKFILE)
+        dependency_checks = []
+        dependency_timings = [
+            _timed_ms(
+                lambda: dependency_checks.extend(
+                    [
+                        _check_pyproject_plan2_contract(),
+                        _check_litellm_supply_chain_guard(pins["litellm"]),
+                    ]
+                )
+            )
+            for _ in range(iterations)
+        ]
+        latest_config = config_results[-1] if config_results else None
+        latest_health = check_bibliothekar_service("Bench", instances_dir, instructions)
+        latest_dependency_checks = dependency_checks[-2:] if len(dependency_checks) >= 2 else dependency_checks
+        dependency_ok = all(ok for ok, _message in latest_dependency_checks)
+        runtime_channels = list(latest_config.channels) if latest_config is not None else []
+        runtime_accounts = sum(len(instance.accounts) for instance in latest_config.instances) if latest_config is not None else 0
+        ok = (
+            latest_config is not None
+            and runtime_channels == ["telegram", "signal", "matrix"]
+            and runtime_accounts == 3
+            and latest_health.status == "ready"
+            and dependency_ok
+        )
+        return _result(
+            name="status_doctor_runtime_dependency_health",
+            category="status_doctor",
+            iterations=iterations * 3,
+            total_ms=sum(health_timings) + sum(config_timings) + sum(dependency_timings),
+            ok=ok,
+            errors=0 if ok else 1,
+            details={
+                "runtime_instances": list(latest_config.selected_instances) if latest_config is not None else [],
+                "runtime_channels": runtime_channels,
+                "runtime_accounts": runtime_accounts,
+                "bibliothekar_status": latest_health.status,
+                "bibliothekar_backend": latest_health.backend,
+                "dependency_checks": [message for _ok, message in latest_dependency_checks],
+                "dependency_ok": dependency_ok,
+                "median_runtime_config_ms": statistics.median(config_timings),
+                "median_backend_health_ms": statistics.median(health_timings),
+                "median_dependency_check_ms": statistics.median(dependency_timings),
+            },
+        )
 
 
 def _benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:

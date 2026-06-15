@@ -92,6 +92,16 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert messenger["details"]["send_contracts"] == {"telegram": True, "signal": True, "matrix": True}
     assert messenger["details"]["fake_network_sends"] == 3
     assert messenger["details"]["network_calls"] == 0
+    status_doctor = next(result for result in suite["results"] if result["name"] == "status_doctor_runtime_dependency_health")
+    assert status_doctor["ok"] is True
+    assert status_doctor["details"]["runtime_instances"] == ["Bench"]
+    assert status_doctor["details"]["runtime_channels"] == ["telegram", "signal", "matrix"]
+    assert status_doctor["details"]["runtime_accounts"] == 3
+    assert status_doctor["details"]["bibliothekar_status"] == "ready"
+    assert status_doctor["details"]["bibliothekar_backend"] == "local"
+    assert status_doctor["details"]["dependency_ok"] is True
+    assert any("pyproject plan2 contract=ok" in message for message in status_doctor["details"]["dependency_checks"])
+    assert any("litellm supply_chain_guard=ok" in message for message in status_doctor["details"]["dependency_checks"])
     database_fallback = next(result for result in suite["results"] if result["name"] == "database_fallback_policy")
     assert database_fallback["ok"] is True
     assert database_fallback["details"]["primary"] == "sqlite-primary"
@@ -121,6 +131,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown
     assert "messenger_adapter_runtime_contracts" in markdown
+    assert "status_doctor_runtime_dependency_health" in markdown
     assert "youtube_local_job_queue_no_llm" in markdown
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "keine echten Provider-Calls" in markdown
