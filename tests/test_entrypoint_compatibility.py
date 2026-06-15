@@ -25,7 +25,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.4.28\n"
+    assert captured.out == "TeeBotus 1.5.0\n"
     assert captured.err == ""
 
 
