@@ -867,6 +867,59 @@ def test_dispatch_skips_queued_analysis_when_risk_memory_becomes_active(tmp_path
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "skipped"
     assert item["status_history"][-1]["reason"] == "policy:active_risk_signal"
+    audit = account_store.read_proactive_audit(account_id)
+    assert len(audit) == 1
+    assert audit[0]["event_type"] == "proactive_safety_hold"
+    assert audit[0]["source"] == "proactive_dispatch_policy"
+    assert audit[0]["reason"] == "active_risk_signal"
+    assert audit[0]["item"]["id"] == decision.reason.removeprefix("queued:")
+    assert "No automatic proactive clinical content was sent" in audit[0]["safe_standard_hint"]
+
+
+def test_dispatch_audits_blocked_risk_gate_without_sending(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_crisis",
+                "status": "queued",
+                "category": "reminder",
+                "intent": "unsafe_followup",
+                "message_text": "Bitte melde dich sofort.",
+                "risk_gate": "crisis",
+                "reason_memory_ids": ["mem_risk"],
+                "due_at": "2026-06-15T11:00:00+00:00",
+                "route": {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": 1},
+            }
+        ],
+    )
+    sent: list[str] = []
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: sent.append("sent") or "sent-ref"},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert sent == []
+    assert results[0].status == "skipped"
+    assert results[0].reason == "risk_gate_blocked:crisis"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "skipped"
+    assert item["status_history"][-1]["reason"] == "policy:risk_gate_blocked:crisis"
+    audit = account_store.read_proactive_audit(account_id)
+    assert len(audit) == 1
+    assert audit[0]["event_type"] == "proactive_safety_hold"
+    assert audit[0]["reason"] == "risk_gate_blocked:crisis"
+    assert audit[0]["item"]["id"] == "pro_crisis"
 
 
 def test_reflection_planner_creates_reflection_and_queues_safe_reminder(tmp_path) -> None:

@@ -1004,6 +1004,13 @@ async def dispatch_due_proactive_outbox_items(
         decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason=f"policy:{decision.reason}", now=resolved_now)
+            _append_proactive_safety_audit_event(
+                account_store,
+                account_id,
+                item=item,
+                reason=decision.reason,
+                now=resolved_now,
+            )
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
             continue
         route = decision.route or _item_route(item)
@@ -1064,6 +1071,49 @@ def _proactive_item_action(chat_id: str, message_text: str, item: Mapping[str, A
             track=True,
         )
     return SendText(chat_id, message_text, track=True)
+
+
+def _append_proactive_safety_audit_event(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    item: Mapping[str, Any],
+    reason: str,
+    now: datetime,
+) -> str:
+    normalized_reason = str(reason or "").strip().casefold()
+    if not (
+        normalized_reason == "active_risk_signal"
+        or normalized_reason.startswith("risk_gate_blocked:")
+        or normalized_reason.startswith("risk_gate_needs_review:")
+    ):
+        return ""
+    event_type = "proactive_safety_hold"
+    if normalized_reason.startswith("risk_gate_needs_review:"):
+        event_type = "proactive_safety_review_hold"
+    return account_store.append_proactive_audit_event(
+        account_id,
+        {
+            "event_type": event_type,
+            "source": "proactive_dispatch_policy",
+            "reason": normalized_reason,
+            "created_at": now.isoformat(timespec="seconds"),
+            "item": _compact_audit_value(
+                {
+                    "id": str(item.get("id") or "").strip(),
+                    "status": str(item.get("status") or "").strip(),
+                    "category": str(item.get("category") or "").strip(),
+                    "intent": str(item.get("intent") or "").strip(),
+                    "risk_gate": _normalize_risk_gate(item.get("risk_gate")),
+                    "reason_memory_ids": item.get("reason_memory_ids") if isinstance(item.get("reason_memory_ids"), list) else [],
+                }
+            ),
+            "safe_standard_hint": (
+                "No automatic proactive clinical content was sent. Keep the item held, prefer human review, "
+                "and if the user re-engages with acute danger, respond with crisis-safe support and human-help guidance."
+            ),
+        },
+    )
 
 
 def _proactive_agent_state_shape_errors(state: Mapping[str, Any]) -> list[str]:
