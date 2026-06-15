@@ -53,6 +53,7 @@ def signal_message_to_event(
             content_type=_guess_content_type(_signal_attachment_name(index, attachment_names, remote_attachment_names)),
             data=_safe_b64decode(_signal_attachment_data(index, attachment_data)),
             base64_data=_signal_attachment_data(index, attachment_data),
+            view_once=bool(getattr(message, "view_once", False)),
         )
         for index in range(max(len(attachment_names), len(remote_attachment_names), len(attachment_data)))
     )

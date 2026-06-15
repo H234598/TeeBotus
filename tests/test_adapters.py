@@ -34,6 +34,7 @@ class FakeSignalMessage:
     group: str = ""
     attachments_local_filenames: list[str] | None = None
     base64_attachments: list[str] | None = None
+    view_once: bool = False
     quote: object | None = None
     type: object = MessageType.DATA_MESSAGE
     raw_message: str | None = None
@@ -67,6 +68,18 @@ def test_signal_local_attachment_name_without_base64_is_preserved():
     assert event.attachments[0].content_type == "audio/ogg"
     assert event.attachments[0].data == b""
     assert event.attachments[0].base64_data == ""
+
+
+def test_signal_view_once_attachment_metadata_is_preserved():
+    event = signal_message_to_event(
+        FakeSignalMessage(attachments_local_filenames=["voice.ogg"], base64_attachments=["aGVsbG8="], view_once=True),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.attachments[0].filename == "voice.ogg"
+    assert event.attachments[0].view_once is True
 
 
 def test_signal_attachment_names_and_base64_are_paired_by_index():

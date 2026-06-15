@@ -13,6 +13,7 @@ class IncomingAttachment:
     filename: str = ""
     content_type: str = "application/octet-stream"
     base64_data: str = ""
+    view_once: bool = False
 
 
 @dataclass(frozen=True, init=False)

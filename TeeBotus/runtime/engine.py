@@ -922,7 +922,13 @@ def _build_attachment_context(event: IncomingEvent, openai_client: object, instr
     for index, attachment in enumerate(event.attachments, start=1):
         filename = attachment.filename or f"attachment-{index}.bin"
         content_type = attachment.content_type or "application/octet-stream"
-        lines.append(f"- #{index}: filename={_metadata_value(filename)} content_type={_metadata_value(content_type)} bytes={len(attachment.data)}")
+        view_once = bool(getattr(attachment, "view_once", False))
+        view_once_text = " view_once=true" if view_once else ""
+        lines.append(f"- #{index}: filename={_metadata_value(filename)} content_type={_metadata_value(content_type)} bytes={len(attachment.data)}{view_once_text}")
+        if view_once:
+            if _is_audio_attachment(filename, content_type):
+                lines.append("  Transkript: <view-once nicht verarbeitet>")
+            continue
         if _is_audio_attachment(filename, content_type) and attachment.data:
             transcribe_audio = getattr(openai_client, "transcribe_audio", None)
             if not callable(transcribe_audio):

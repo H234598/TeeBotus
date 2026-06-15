@@ -394,6 +394,34 @@ def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
     assert "Nachricht:\n<leer>" in client.user_text
 
 
+def test_engine_does_not_transcribe_view_once_audio_attachment(tmp_path):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+            self.transcriptions: list[tuple[bytes, str]] = []
+
+        def transcribe_audio(self, audio, filename, _instructions, model=None):
+            self.transcriptions.append((audio, filename))
+            return "Soll nicht passieren."
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort ohne View-once-Transkript.", "resp-view-once", None)
+
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True)
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg", view_once=True)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
+
+    assert actions[1].text == "Antwort ohne View-once-Transkript."
+    assert client.transcriptions == []
+    assert "filename=voice.ogg content_type=audio/ogg bytes=5 view_once=true" in client.user_text
+    assert "Transkript: <view-once nicht verarbeitet>" in client.user_text
+    assert "Soll nicht passieren" not in client.user_text
+
+
 def test_engine_includes_non_audio_attachment_metadata_for_openai_input(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
