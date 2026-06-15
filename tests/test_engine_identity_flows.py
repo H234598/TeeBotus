@@ -1956,6 +1956,50 @@ def test_engine_youtube_local_transcription_can_run_as_background_job(monkeypatc
     assert background == [["eins zwei drei"], ["Lokale YouTube-Transkription abgeschlossen."]]
 
 
+def test_engine_youtube_background_off_off_dispatches_finished_transcript(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class FakeRunner:
+        def __init__(self) -> None:
+            self.callbacks = []
+
+        def submit(self, callback):
+            self.callbacks.append(callback)
+            callback()
+            return object()
+
+    background: list[list[str]] = []
+    calls = []
+
+    def fake_transcribe(url, **kwargs):
+        calls.append((url, kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        return "Local transcript.", "lokales Whisper"
+
+    def dispatch(_event, actions):
+        background.append([action.text for action in actions if hasattr(action, "text")])
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    runner = FakeRunner()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(),
+        youtube_job_runner=runner,
+        background_action_dispatcher=dispatch,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 live nein, llm nein", channel="signal"))
+
+    assert actions[0].text == "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
+    assert len(runner.callbacks) == 1
+    assert calls == [
+        ("https://youtu.be/abc123", {"local_allowed": False, "instance_name": "Depressionsbot"}),
+        ("https://youtu.be/abc123", {"local_allowed": True, "live_callback": None, "instance_name": "Depressionsbot"}),
+    ]
+    assert background == [["YouTube-Transkript (lokales Whisper):\n\nLocal transcript."]]
+
+
 def test_engine_youtube_background_live_records_start_and_completion_not_full_transcript(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
