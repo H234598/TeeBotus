@@ -216,6 +216,34 @@ def test_signal_proactive_sender_reuses_full_adapter_for_reaction_and_receipt() 
     ]
 
 
+def test_signal_proactive_context_exposes_delete_contract() -> None:
+    from TeeBotus.runtime.proactive_backends import _SignalProactiveContext
+
+    class Bot:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def remote_delete(self, receiver: str, timestamp: int) -> int:
+            self.calls.append(("remote_delete", receiver, timestamp))
+            return timestamp
+
+        async def delete_attachment(self, attachment_filename: str) -> None:
+            self.calls.append(("delete_attachment", attachment_filename))
+
+    bot = Bot()
+    context = _SignalProactiveContext(bot, "+491")
+
+    delete_ref = asyncio.run(context.remote_delete(123456))
+    attachment_ref = asyncio.run(context.delete_attachment("voice.ogg"))
+
+    assert delete_ref == 123456
+    assert attachment_ref is None
+    assert bot.calls == [
+        ("remote_delete", "+491", 123456),
+        ("delete_attachment", "voice.ogg"),
+    ]
+
+
 def test_matrix_proactive_sender_calls_nio_bot_send_message() -> None:
     class Client:
         def __init__(self) -> None:

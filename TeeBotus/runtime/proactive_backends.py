@@ -85,6 +85,18 @@ class _SignalProactiveContext:
             raise RuntimeError("SignalBot.receipt is required for proactive Signal dispatch")
         return await _maybe_await(receipt(self.message, receipt_type))
 
+    async def remote_delete(self, timestamp: int) -> Any:
+        remote_delete = getattr(self.bot, "remote_delete", None)
+        if not callable(remote_delete):
+            raise RuntimeError("SignalBot.remote_delete is required for proactive Signal dispatch")
+        return await _maybe_await(remote_delete(self.message.recipient(), timestamp))
+
+    async def delete_attachment(self, attachment_filename: str) -> Any:
+        delete_attachment = getattr(self.bot, "delete_attachment", None)
+        if not callable(delete_attachment):
+            raise RuntimeError("SignalBot.delete_attachment is required for proactive Signal dispatch")
+        return await _maybe_await(delete_attachment(attachment_filename))
+
 
 def matrix_proactive_sender(clients: Any | Mapping[int, Any]) -> ProactiveSender:
     client_by_slot = _slot_mapping(clients)
