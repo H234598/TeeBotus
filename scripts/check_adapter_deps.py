@@ -29,6 +29,8 @@ def main() -> int:
         _check_python_package("matrix-nio", pins["matrix-nio"]),
         _check_python_package("blurhash-python", pins["blurhash-python"]),
         _check_python_package("h11", pins["h11"]),
+        _check_python_package("faster-whisper", pins["faster-whisper"]),
+        _check_local_transcription_contract(),
         _check_niobot_matrix_contract(),
         _check_matrix_file_contract(),
         _check_signalbot_context_contract(),
@@ -180,6 +182,25 @@ def _check_niobot_matrix_contract() -> tuple[bool, str]:
     declared = next((value for value in requirements if value.startswith("matrix-nio ")), "matrix-nio <unknown>")
     installed = importlib.metadata.version("matrix-nio")
     return True, f"nio-bot/matrix-nio runtime_contract=ok matrix-nio={installed} nio-bot_declares='{declared}'"
+
+
+def _check_local_transcription_contract() -> tuple[bool, str]:
+    try:
+        from TeeBotus.core.local_transcription import check_local_transcription_backend
+        from TeeBotus.instructions import BotInstructions
+    except Exception as exc:
+        return False, f"local transcription import_error={type(exc).__name__}: {exc}"
+    health = check_local_transcription_backend(
+        "check",
+        BotInstructions(openai_transcription_backend="local", local_transcription_model="tiny"),
+    )
+    if health is None:
+        return False, "local transcription health missing for local backend"
+    if not health.ok:
+        return False, f"local transcription unavailable model={health.model} error={health.error or '<missing>'}"
+    if health.engine != "faster-whisper" and not health.engine.endswith("/whisper"):
+        return False, f"local transcription unexpected engine={health.engine or '<missing>'}"
+    return True, f"local transcription contract=ok backend={health.backend} model={health.model} engine={health.engine}"
 
 
 def _check_matrix_file_contract() -> tuple[bool, str]:

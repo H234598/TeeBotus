@@ -15,6 +15,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "matrix-nio==0.25.0",
                 "blurhash-python==1.2.2",
                 "h11==0.16.0",
+                "faster-whisper==1.2.1",
             ]
         )
         + "\n",
@@ -26,6 +27,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
     assert len(commands) == 2
     assert "matrix-nio==0.25.0" in commands[0]
     assert "h11==0.16.0" in commands[0]
+    assert "faster-whisper==1.2.1" in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
     assert commands[1][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
