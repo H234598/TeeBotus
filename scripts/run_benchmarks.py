@@ -25,7 +25,7 @@ from scripts.benchmark_memory_store import (  # noqa: E402
     benchmark_postgres_backend,
     benchmark_sqlite_row_encrypted_projection,
 )
-from TeeBotus.core.youtube import _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
+from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
 from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
@@ -51,6 +51,9 @@ from TeeBotus.runtime.proactive_agent import (  # noqa: E402
 )
 from TeeBotus.runtime.postgres_memory import POSTGRES_BACKEND_ENV  # noqa: E402
 from TeeBotus.runtime.sqlite_memory import SQLITE_PATH_ENV  # noqa: E402
+from TeeBotus.runtime.engine import TeeBotusEngine  # noqa: E402
+from TeeBotus.runtime.events import IncomingEvent  # noqa: E402
+import TeeBotus.runtime.engine as engine_module  # noqa: E402
 
 
 BenchmarkResult = dict[str, Any]
@@ -92,6 +95,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_proactive(iterations=iterations))
     results.append(_benchmark_adapter_contracts(iterations=iterations))
     results.append(_benchmark_youtube_parser(iterations=iterations))
+    results.append(_benchmark_youtube_local_job_queue(iterations=iterations))
     results.append(_benchmark_status_doctor(iterations=iterations))
     results.append(_benchmark_database_fallback_policy(iterations=iterations))
     results.append(_benchmark_langgraph_flow(iterations=iterations))
@@ -588,6 +592,101 @@ def _benchmark_youtube_parser(*, iterations: int) -> BenchmarkResult:
         total_ms=sum(timings),
         details={"intent_hits": hit_count, "sample_count": len(samples), "median_batch_ms": statistics.median(timings)},
     )
+
+
+def _benchmark_youtube_local_job_queue(*, iterations: int) -> BenchmarkResult:
+    original_transcribe = engine_module.transcribe_youtube_video
+    transcribe_calls: list[dict[str, Any]] = []
+    dispatched_texts: list[str] = []
+    started_jobs = 0
+
+    class FakeRunner:
+        def submit(self, callback: Callable[[], Any]) -> object:
+            nonlocal started_jobs
+            started_jobs += 1
+            callback()
+            return object()
+
+    class CountingLLMClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, *_args: Any, **_kwargs: Any) -> Any:
+            self.calls += 1
+            raise AssertionError("benchmark must not call LLM")
+
+    def fake_transcribe(_url: str, **kwargs: Any) -> tuple[str, str]:
+        transcribe_calls.append(dict(kwargs))
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        return "Lokales Benchmark-Transkript.", "lokales Whisper"
+
+    try:
+        engine_module.transcribe_youtube_video = fake_transcribe
+        with tempfile.TemporaryDirectory(prefix="teebotus-bench-youtube-engine-") as tmp:
+            store = AccountStore(Path(tmp) / "accounts", "Bench", StaticSecretProvider(b"y" * 32))
+            identity = signal_identity_key(source_uuid="bench-youtube")
+            client = CountingLLMClient()
+            engine = TeeBotusEngine(
+                account_store=store,
+                instructions=BotInstructions(openai_enabled=True, youtube_option_llm_fallback=False),
+                openai_client=client,
+                youtube_job_runner=FakeRunner(),
+                background_action_dispatcher=lambda _event, actions: dispatched_texts.extend(
+                    str(getattr(action, "text", "")) for action in actions if getattr(action, "text", "")
+                ),
+            )
+
+            def run_once(index: int) -> None:
+                event = IncomingEvent(
+                    event_id=f"signal:{index}",
+                    instance="Bench",
+                    channel="signal",
+                    adapter_slot=1,
+                    account_id="",
+                    identity_key=identity,
+                    chat_id="chat-1",
+                    chat_type="private",
+                    sender_id=identity,
+                    sender_name=identity,
+                    text="/youtube_transcript https://youtu.be/dQw4w9WgXcQ mach bitte die passende variante",
+                    message_ref=str(index),
+                )
+                engine.process(event)
+
+            timings = [_timed_ms(lambda index=index: run_once(index)) for index in range(iterations)]
+            expected_transcribe_calls = iterations * 2
+            errors = 0
+            if client.calls:
+                errors += client.calls
+            if len(transcribe_calls) != expected_transcribe_calls:
+                errors += 1
+            if started_jobs != iterations:
+                errors += 1
+            if len(dispatched_texts) != iterations:
+                errors += 1
+            if not all("Lokales Benchmark-Transkript." in text for text in dispatched_texts):
+                errors += 1
+            return _result(
+                name="youtube_local_job_queue_no_llm",
+                category="transcription_youtube",
+                iterations=iterations,
+                total_ms=sum(timings),
+                ok=errors == 0,
+                errors=errors,
+                payload_bytes=sum(len(text.encode("utf-8")) for text in dispatched_texts),
+                note="fake_local_transcription_no_provider_calls",
+                details={
+                    "started_jobs": started_jobs,
+                    "background_dispatches": len(dispatched_texts),
+                    "transcribe_calls": len(transcribe_calls),
+                    "llm_calls": client.calls,
+                    "median_engine_ms": statistics.median(timings),
+                    "network_calls": 0,
+                },
+            )
+    finally:
+        engine_module.transcribe_youtube_video = original_transcribe
 
 
 def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
