@@ -20,6 +20,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "Normale Chatantworten" in text
     assert "scripts/run_benchmarks.py --quick" in text
+    assert "scripts/check_plan2_acceptance.py" in text
+    assert "startet keine Bot-Loops" in text
     assert "tests/test_llm_config.py" in text
     assert "tests/test_litellm_provider.py" in text
     assert "tests/test_bibliothekar_*.py" in text

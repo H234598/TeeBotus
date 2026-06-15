@@ -236,6 +236,18 @@ Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backend
 Plan2-Akzeptanztests:
 
 ```bash
+python3 scripts/check_plan2_acceptance.py
+```
+
+Der Runner startet keine Bot-Loops und ruft bewusst nicht `python3 -m TeeBotus --all` auf. Er prueft Version, Runtime-Status, die Plan2-Testgruppen, Bibliothekar-Fixtures, Quick-Benchmarks und Adapter-Abhaengigkeiten. Zum reinen Anzeigen der Kommandos:
+
+```bash
+python3 scripts/check_plan2_acceptance.py --list
+```
+
+Manuelle Teilchecks:
+
+```bash
 python3 -m pytest -q tests/test_runtime_config.py tests/test_llm_config.py
 python3 -m pytest -q tests/test_litellm_provider.py
 python3 -m pytest -q tests/test_bibliothekar_*.py
