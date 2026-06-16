@@ -268,10 +268,10 @@ def test_runtime_status_text_redacts_generic_secret_assignments() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
     text = bot._sanitize_status_text(
-        "provider error api_key=plain-secret password=hunter2 access_token=abc123 bearer_token=xyz"
+        "provider error api_key=plain-secret password:hunter2 access_token: abc123 bearer_token=xyz"
     )
 
-    assert text == "provider error api_key=<redacted> password=<redacted> access_token=<redacted> bearer_token=<redacted>"
+    assert text == "provider error api_key=<redacted> password:<redacted> access_token:<redacted> bearer_token=<redacted>"
     assert "plain-secret" not in text
     assert "hunter2" not in text
     assert "abc123" not in text

@@ -1538,7 +1538,8 @@ def test_runtime_status_broken_lines_flags_generic_secret_assignments() -> None:
         [
             "llm=Demo/telegram:1 provider=litellm model=x status=configured api_key=configured",
             "llm=Demo/signal:1 provider=litellm model=x status=broken error=provider refused api_key=plain-secret",
-            "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable password=hunter2",
+            "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable password:hunter2",
+            "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=reachable access-token: plain-token",
         ]
     )
 

@@ -75,7 +75,8 @@ RUNTIME_STATUS_SECRET_PATTERNS = (
     re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
 )
 RUNTIME_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)",
+    r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)"
+    r"[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
 )
 SECRET_FIELD_ASSIGNMENT_RE = re.compile(
