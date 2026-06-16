@@ -190,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Probe local Qdrant /collections when explicitly requested; failures are non-fatal.",
     )
     parser.add_argument("--list", action="store_true", help="Print commands without executing them.")
+    parser.add_argument("--dry-run", action="store_true", help="Alias for --list; print commands without executing them.")
     args = parser.parse_args(argv)
 
     commands = build_acceptance_commands(
@@ -209,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
         include_audit=args.include_audit,
         include_qdrant_live=args.include_qdrant_live,
     )
-    if args.list:
+    if args.list or args.dry_run:
         for command in commands:
             suffix = " (nonfatal)" if command.nonfatal else ""
             print(f"{command.label}: {_format_command(command.argv)}{suffix}")

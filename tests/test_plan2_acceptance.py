@@ -280,6 +280,22 @@ def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
     assert not any(label.startswith("qdrant-live") for label in labels)
 
 
+def test_plan2_acceptance_dry_run_alias_lists_without_executing(monkeypatch, capsys) -> None:
+    def fail_if_executed(_commands):  # noqa: ANN001
+        raise AssertionError("--dry-run must not execute acceptance commands")
+
+    monkeypatch.setattr(check_plan2_acceptance, "run_acceptance_commands", fail_if_executed)
+
+    result = check_plan2_acceptance.main(["--dry-run", "--skip-runtime-status", "--skip-adapter-deps"])
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "version:" in output
+    assert "plan2-pytest:" in output
+    assert "runtime-status" not in output
+    assert "adapter-deps" not in output
+
+
 def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) -> None:
     legacy_dir = tmp_path / "instances.bak"
     commands = check_plan2_acceptance.build_acceptance_commands(

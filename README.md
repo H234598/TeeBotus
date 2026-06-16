@@ -256,6 +256,7 @@ Der Runner startet keine Bot-Loops und ruft bewusst nicht `python3 -m TeeBotus -
 
 ```bash
 python3 scripts/check_plan2_acceptance.py --list
+python3 scripts/check_plan2_acceptance.py --dry-run
 ```
 
 Optionale Live-/Security-Probes bleiben bewusst explizit und nicht blockierend:
