@@ -76,6 +76,30 @@ import TeeBotus.runtime.engine as engine_module  # noqa: E402
 
 
 BenchmarkResult = dict[str, Any]
+REQUIRED_BENCHMARK_CATEGORIES = frozenset(
+    {
+        "account_memory",
+        "bibliothekar",
+        "database_fallback",
+        "langgraph_flows",
+        "llm_router",
+        "mcp_tools",
+        "messenger_adapters",
+        "proactive_agent",
+        "pydantic_ai",
+        "status_doctor",
+        "transcription_youtube",
+    }
+)
+REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
+    {
+        "account_memory",
+        "bibliothekar",
+        "langgraph_flows",
+        "transcription_youtube",
+    }
+)
+STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -142,15 +166,17 @@ def run_benchmarks(
     results.append(_benchmark_mcp_tools(iterations=iterations))
     comparisons = _build_comparisons(results)
     regression = _build_regression_report(results, baseline_json=baseline_json)
+    quality_gate = _build_quality_gate(results, comparisons=comparisons, quick=quick, include_live=include_live)
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "quick": bool(quick),
         "include_live": bool(include_live),
-        "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results) and not regression["failed"],
+        "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results) and quality_gate["ok"] and not regression["failed"],
         "context": _context(),
         "results": results,
         "comparisons": comparisons,
+        "quality_gate": quality_gate,
         "regression": regression,
     }
 
@@ -231,8 +257,18 @@ def render_markdown(suite: dict[str, Any]) -> str:
                         note=str(candidate.get("note") or "").replace("|", "/"),
                     )
                 )
+    lines.append("")
+    lines.append("Die Rangliste dokumentiert Messwerte nur; sie schaltet keine Runtime-Backends automatisch um.")
+    quality_gate = suite.get("quality_gate") if isinstance(suite.get("quality_gate"), dict) else {}
+    lines.extend(["", "## Quality Gate", ""])
+    lines.append(f"- status: {quality_gate.get('status', 'unknown')}")
+    lines.append(f"- checked_results: {quality_gate.get('checked_results', 0)}")
+    lines.append(f"- error_count: {quality_gate.get('error_count', 0)}")
+    quality_errors = quality_gate.get("errors") if isinstance(quality_gate.get("errors"), list) else []
+    if quality_errors:
         lines.append("")
-        lines.append("Die Rangliste dokumentiert Messwerte nur; sie schaltet keine Runtime-Backends automatisch um.")
+        for error in quality_errors:
+            lines.append(f"- {str(error).replace('|', '/')}")
     regression = suite.get("regression") if isinstance(suite.get("regression"), dict) else {}
     lines.extend(["", "## Regression Check", ""])
     lines.append(f"- status: {regression.get('status', 'unknown')}")
@@ -266,6 +302,73 @@ def render_markdown(suite: dict[str, Any]) -> str:
     lines.append("")
     lines.append("Standard-Benchmarks nutzen keine echten Provider-Calls und keine Netzsendung.")
     return "\n".join(lines) + "\n"
+
+
+def _build_quality_gate(
+    results: list[BenchmarkResult],
+    *,
+    comparisons: dict[str, Any],
+    quick: bool,
+    include_live: bool,
+) -> dict[str, Any]:
+    errors: list[str] = []
+    categories = {
+        str(result.get("category") or "")
+        for result in results
+        if isinstance(result, dict) and result.get("ok") and not result.get("skipped")
+    }
+    missing_categories = sorted(REQUIRED_BENCHMARK_CATEGORIES - categories)
+    if missing_categories:
+        errors.append(f"missing required benchmark categories: {', '.join(missing_categories)}")
+
+    rankings = comparisons.get("stable_backend_rankings") if isinstance(comparisons, dict) else None
+    ranking_categories = {
+        str(ranking.get("category") or "")
+        for ranking in rankings or []
+        if isinstance(ranking, dict) and isinstance(ranking.get("candidates"), list) and ranking.get("candidates")
+    }
+    missing_rankings = sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES - ranking_categories)
+    if missing_rankings:
+        errors.append(f"missing required benchmark rankings: {', '.join(missing_rankings)}")
+
+    for index, result in enumerate(results):
+        if not isinstance(result, dict):
+            errors.append(f"results[{index}] is not an object")
+            continue
+        name = str(result.get("name") or f"results[{index}]")
+        skipped = bool(result.get("skipped"))
+        for key in ("name", "category", "mode", "total_ms", "throughput_ops_s", "errors", "payload_bytes", "index_bytes", "details"):
+            if key not in result:
+                errors.append(f"{name} missing {key}")
+        for key in ("total_ms", "throughput_ops_s", "payload_bytes", "index_bytes"):
+            if key in result and not _is_nonnegative_number(result.get(key)):
+                errors.append(f"{name} {key} must be a non-negative number")
+        if "errors" in result and not _is_nonnegative_integer(result.get("errors")):
+            errors.append(f"{name} errors must be a non-negative integer")
+        if skipped:
+            continue
+        if not result.get("ok"):
+            errors.append(f"{name} is neither ok nor skipped")
+        if not _is_positive_integer(result.get("iterations")):
+            errors.append(f"{name} iterations must be a positive integer")
+        if int(result.get("payload_bytes") or 0) <= 0 and int(result.get("index_bytes") or 0) <= 0:
+            errors.append(f"{name} must report payload_bytes or index_bytes")
+        details = result.get("details")
+        if not isinstance(details, dict) or not details:
+            errors.append(f"{name} details must be a non-empty object")
+        elif quick and not include_live:
+            for key, value in _forbidden_standard_benchmark_calls(details):
+                errors.append(f"{name} details.{key} must be 0 in standard quick benchmarks, got {value}")
+        if quick and not include_live and str(result.get("mode") or "local").casefold() == "live":
+            errors.append(f"{name} must not use live mode in standard quick benchmarks")
+
+    return {
+        "status": "ok" if not errors else "failed",
+        "ok": not errors,
+        "checked_results": len(results),
+        "error_count": len(errors),
+        "errors": errors,
+    }
 
 
 def _build_regression_report(
@@ -420,6 +523,34 @@ def _stable_backend_ranking(*, category: str, results: list[BenchmarkResult], na
         ],
         "skipped": skipped,
     }
+
+
+def _is_nonnegative_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def _is_nonnegative_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _is_positive_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _forbidden_standard_benchmark_calls(details: dict[str, Any]) -> list[tuple[str, int | float]]:
+    forbidden: list[tuple[str, int | float]] = []
+    for key, value in details.items():
+        key_text = str(key)
+        if isinstance(value, dict):
+            forbidden.extend((f"{key_text}.{nested_key}", nested_value) for nested_key, nested_value in _forbidden_standard_benchmark_calls(value))
+            continue
+        if key_text not in STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if value > 0:
+            forbidden.append((key_text, value))
+    return forbidden
 
 
 def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> list[BenchmarkResult]:

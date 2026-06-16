@@ -20,6 +20,13 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["signalbot"]["version"]
     assert suite["comparisons"]["auto_switching"] is False
+    assert suite["quality_gate"] == {
+        "status": "ok",
+        "ok": True,
+        "checked_results": len(suite["results"]),
+        "error_count": 0,
+        "errors": [],
+    }
     assert suite["regression"]["status"] == "not_configured"
     assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
@@ -180,6 +187,8 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "| litellm |" in markdown
     assert "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" in markdown
     assert "## Stable Backend Rankings" in markdown
+    assert "## Quality Gate" in markdown
+    assert "status: ok" in markdown
     assert "## Regression Check" in markdown
     assert "status: not_configured" in markdown
     assert "include_live: False" in markdown
@@ -200,6 +209,41 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "mcp_readonly_bibliothekar_and_memory_search" in markdown
     assert "keine echten Provider-Calls" in markdown
+
+
+def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
+    results = [
+        {
+            "name": "memory_jsonl",
+            "category": "account_memory",
+            "ok": True,
+            "skipped": False,
+            "iterations": 0,
+            "total_ms": 1.0,
+            "throughput_ops_s": 1.0,
+            "errors": 0,
+            "payload_bytes": 0,
+            "index_bytes": 0,
+            "mode": "live",
+            "details": {"network_calls": 1},
+        }
+    ]
+
+    quality_gate = benchmark_module._build_quality_gate(
+        results,
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert quality_gate["status"] == "failed"
+    assert any("missing required benchmark categories" in error for error in quality_gate["errors"])
+    assert any("missing required benchmark rankings" in error for error in quality_gate["errors"])
+    assert "memory_jsonl iterations must be a positive integer" in quality_gate["errors"]
+    assert "memory_jsonl must report payload_bytes or index_bytes" in quality_gate["errors"]
+    assert "memory_jsonl details.network_calls must be 0 in standard quick benchmarks, got 1" in quality_gate["errors"]
+    assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
 
 def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
