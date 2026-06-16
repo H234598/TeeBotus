@@ -72,6 +72,22 @@ def test_invalid_model_payload_falls_back_to_unknown() -> None:
     assert decision.source == "fallback"
 
 
+def test_low_confidence_model_intent_falls_back_to_unknown() -> None:
+    decision = decide_intent(
+        "vielleicht soll das irgendwas ausloesen",
+        model_runner=lambda _prompt, _schema: {
+            "intent": "reminder",
+            "confidence": 0.42,
+            "reason_short": "too uncertain",
+            "source": "model",
+        },
+    )
+
+    assert decision.intent == "unknown"
+    assert decision.confidence == 0.42
+    assert decision.source == "fallback"
+
+
 def test_bibliothekar_query_decision_classic_and_model_runner_paths() -> None:
     classic = decide_bibliothekar_query("Was sagt das Buch dazu?")
     assert classic.should_search is True

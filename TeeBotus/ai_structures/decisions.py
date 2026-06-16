@@ -41,7 +41,15 @@ def decide_intent(text: str, *, model_runner: ModelRunner | None = None) -> Inte
     if model_runner is not None:
         try:
             decision = model_runner(_intent_prompt(value), IntentDecision)
-            return _coerce_model_payload(decision, IntentDecision)
+            model_decision = _coerce_model_payload(decision, IntentDecision)
+            if model_decision.confidence < 0.7:
+                return IntentDecision(
+                    intent="unknown",
+                    confidence=model_decision.confidence,
+                    reason_short="Model intent below confidence threshold",
+                    source="fallback",
+                )
+            return model_decision
         except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
             pass
     return IntentDecision(intent="unknown", confidence=0.0, reason_short="No deterministic intent matched", source="fallback")
