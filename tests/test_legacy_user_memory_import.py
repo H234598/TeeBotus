@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from datetime import datetime, timezone
 
 import scripts.import_legacy_user_memory as legacy_import
 from scripts.import_legacy_user_memory import import_legacy_user_memory, main as import_main
@@ -329,3 +330,58 @@ def test_legacy_user_memory_import_apply_can_override_running_bot_guard(tmp_path
     store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
     account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
     assert account_id
+
+
+def test_legacy_user_memory_import_sqlite_backups_are_unique_within_same_second(tmp_path: Path, monkeypatch) -> None:
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ANN001
+            return datetime(2026, 6, 16, 12, 0, tzinfo=tz or timezone.utc)
+
+    monkeypatch.setattr(legacy_import, "datetime", FixedDatetime)
+    accounts_root = tmp_path / "accounts"
+    accounts_root.mkdir()
+    sqlite_path = accounts_root / "Account_Memory.sqlite3"
+    sqlite_path.write_text("first", encoding="utf-8")
+
+    first_count = legacy_import._backup_sqlite_files(accounts_root)
+    sqlite_path.write_text("second", encoding="utf-8")
+    second_count = legacy_import._backup_sqlite_files(accounts_root)
+
+    backup_dirs = sorted(accounts_root.glob(".pre-legacy-user-memory-import-*"))
+    assert first_count == 1
+    assert second_count == 1
+    assert len(backup_dirs) == 2
+    assert [path.name for path in backup_dirs] == [
+        ".pre-legacy-user-memory-import-20260616T120000Z",
+        ".pre-legacy-user-memory-import-20260616T120000Z-001",
+    ]
+    assert (backup_dirs[0] / "Account_Memory.sqlite3").read_text(encoding="utf-8") == "first"
+    assert (backup_dirs[1] / "Account_Memory.sqlite3").read_text(encoding="utf-8") == "second"
+
+
+def test_legacy_user_memory_import_metadata_reset_backups_are_unique_within_same_second(tmp_path: Path, monkeypatch) -> None:
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: ANN001
+            return datetime(2026, 6, 16, 12, 0, tzinfo=tz or timezone.utc)
+
+    monkeypatch.setattr(legacy_import, "datetime", FixedDatetime)
+    accounts_root = tmp_path / "accounts"
+    accounts_root.mkdir()
+    (accounts_root / "Account_Index.json").write_text('{"old": 1}', encoding="utf-8")
+
+    first_count = legacy_import._reset_unreadable_account_store(accounts_root)
+    (accounts_root / "Account_Index.json").write_text('{"new": 2}', encoding="utf-8")
+    second_count = legacy_import._reset_unreadable_account_store(accounts_root)
+
+    backup_dirs = sorted(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
+    assert first_count == 1
+    assert second_count == 1
+    assert len(backup_dirs) == 2
+    assert [path.name for path in backup_dirs] == [
+        ".pre-legacy-user-memory-account-store-reset-20260616T120000Z",
+        ".pre-legacy-user-memory-account-store-reset-20260616T120000Z-001",
+    ]
+    assert (backup_dirs[0] / "Account_Index.json").read_text(encoding="utf-8") == '{"old": 1}'
+    assert (backup_dirs[1] / "Account_Index.json").read_text(encoding="utf-8") == '{"new": 2}'

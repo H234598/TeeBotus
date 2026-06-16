@@ -527,8 +527,7 @@ def _merge_entries(
 
 
 def _backup_sqlite_files(accounts_root: Path) -> int:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = accounts_root / f".pre-legacy-user-memory-import-{timestamp}"
+    backup_dir = _unique_backup_dir(accounts_root, ".pre-legacy-user-memory-import")
     copied = 0
     for filename in (SQLITE_DEFAULT_FILENAME, SQLITE_DEFAULT_FALLBACK_FILENAME):
         for path in [accounts_root / filename, accounts_root / f"{filename}-wal", accounts_root / f"{filename}-shm"]:
@@ -541,8 +540,7 @@ def _backup_sqlite_files(accounts_root: Path) -> int:
 
 
 def _reset_unreadable_account_store(accounts_root: Path) -> int:
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = accounts_root / f".pre-legacy-user-memory-account-store-reset-{timestamp}"
+    backup_dir = _unique_backup_dir(accounts_root, ".pre-legacy-user-memory-account-store-reset")
     moved = 0
     for filename in (
         "Account_Index.json",
@@ -567,6 +565,18 @@ def _reset_unreadable_account_store(accounts_root: Path) -> int:
         accounts_dir.rename(backup_dir / accounts_dir.name)
         moved += 1
     return moved
+
+
+def _unique_backup_dir(parent: Path, prefix: str) -> Path:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    base = parent / f"{prefix}-{timestamp}"
+    if not base.exists():
+        return base
+    for index in range(1, 1000):
+        candidate = parent / f"{prefix}-{timestamp}-{index:03d}"
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError(f"could not allocate unique backup directory below {parent}")
 
 
 def _apply_backend(backend: str) -> dict[str, str | None]:
