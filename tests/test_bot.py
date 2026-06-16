@@ -2174,14 +2174,17 @@ class BotTests(unittest.TestCase):
 
     def test_youtube_local_options_parse_llm_response_json(self) -> None:
         self.assertEqual(
-            _parse_youtube_local_options_from_llm_response('{"live_output": false, "send_to_llm": true}'),
+            _parse_youtube_local_options_from_llm_response('{"live_output": false, "send_to_llm": true, "confidence": 0.91}'),
             (False, True),
         )
         self.assertEqual(
             _parse_youtube_local_options_from_llm_response(
-                'Sauber erkannt:\n```json\n{"live_output": "no", "send_to_llm": "yes"}\n```'
+                'Sauber erkannt:\n```json\n{"live_output": "no", "send_to_llm": "yes", "confidence": 0.88}\n```'
             ),
             (False, True),
+        )
+        self.assertIsNone(
+            _parse_youtube_local_options_from_llm_response('{"live_output": false, "send_to_llm": true}')
         )
         self.assertIsNone(
             _parse_youtube_local_options_from_llm_response('{"live_output": null, "send_to_llm": true}')
@@ -2195,7 +2198,7 @@ class BotTests(unittest.TestCase):
 
         api = FakeAPI()
         chat_state = ChatState()
-        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true}', "AI: transcript summary"])
+        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true, "confidence": 0.91}', "AI: transcript summary"])
         chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
 
         with tempfile.TemporaryDirectory() as directory:
@@ -2276,7 +2279,7 @@ class BotTests(unittest.TestCase):
 
         api = FakeAPI()
         chat_state = ChatState()
-        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true}', "AI: transcript summary"])
+        openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true, "confidence": 0.91}', "AI: transcript summary"])
 
         transcribe_calls = [
             YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True),

@@ -2345,7 +2345,7 @@ def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
         def create_reply(self, user_text, _instructions, previous_response_id=None):
             self.reply_inputs.append(user_text)
             if len(self.reply_inputs) == 1:
-                return OpenAIResponse('{"live_output": false, "send_to_llm": true}', "resp-options", None)
+                return OpenAIResponse('{"live_output": false, "send_to_llm": true, "confidence": 0.91}', "resp-options", None)
             return OpenAIResponse("AI summary.", "resp-youtube", None)
 
     calls = []

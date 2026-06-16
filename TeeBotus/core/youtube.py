@@ -378,7 +378,7 @@ def _parse_youtube_local_options_from_llm_response(text: str) -> tuple[bool, boo
         decision = YouTubeOptionsDecision.model_validate(payload)
     except (TypeError, ValueError):
         return None
-    if decision.confidence < 0.7 or decision.live_output is None or decision.send_to_llm is None:
+    if "confidence" not in payload or decision.confidence < 0.7 or decision.live_output is None or decision.send_to_llm is None:
         return None
     return decision.live_output, decision.send_to_llm
 
