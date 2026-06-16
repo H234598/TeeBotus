@@ -67,7 +67,7 @@ def run_bibliothekar_deep_query(
         graph = _build_langgraph_runner(service, max_prompt_chars=max_prompt_chars, max_chunks=max_chunks, max_quote_chars=max_quote_chars, answer_builder=answer_builder)
         if graph is not None:
             try:
-                return _coerce_state(graph.invoke(state))
+                return _finalize_external_state(_coerce_state(graph.invoke(state)))
             except Exception as exc:  # noqa: BLE001 - optional graph runtime must not break the bot path.
                 return _fallback(_append_error({**state, "fallback_reason": "langgraph_error"}, f"{type(exc).__name__}: {exc}"))
     return _run_linear(
@@ -196,6 +196,7 @@ def _citation_check(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryS
     if state.get("fallback_reason"):
         return state
     prompt_text = str(state.get("prompt_text") or "")
+    answer_text = str(state.get("answer_text") or "").strip()
     try:
         payload = json.loads(prompt_text)
     except json.JSONDecodeError:
@@ -206,6 +207,10 @@ def _citation_check(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryS
     citation_ok = all(_chunk_has_required_citation_fields(chunk) for chunk in chunks)
     if not citation_ok:
         return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "citation_metadata_missing"}
+    if not answer_text:
+        return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "answer_empty"}
+    if not _answer_mentions_selected_citation(answer_text, chunks):
+        return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "answer_missing_citations"}
     return {**state, "citation_ok": True}
 
 
@@ -233,6 +238,18 @@ def _chunk_has_required_citation_fields(chunk: object) -> bool:
     return all(field in chunk and chunk.get(field) not in ("", None) for field in REQUIRED_CITATION_FIELDS)
 
 
+def _answer_mentions_selected_citation(answer_text: str, chunks: list[object]) -> bool:
+    folded = answer_text.casefold()
+    for chunk in chunks:
+        if not isinstance(chunk, Mapping):
+            continue
+        for field in ("chunk_id", "source_id"):
+            value = str(chunk.get(field) or "").strip()
+            if value and value.casefold() in folded:
+                return True
+    return False
+
+
 def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in filters.items():
@@ -252,7 +269,9 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
     result: BibliothekarDeepQueryState = {}
     for key, item in value.items():
         if key in {"query", "intent", "prompt_text", "answer_text", "fallback_reason"}:
-            result[str(key)] = str(item)  # type: ignore[literal-required]
+            text = str(item or "").strip()
+            if text:
+                result[str(key)] = text  # type: ignore[literal-required]
         elif key == "confidence":
             confidence = _coerce_float(item)
             if confidence is not None:
@@ -261,9 +280,15 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
             result["citation_ok"] = _coerce_bool(item)
         elif key == "filters" and isinstance(item, Mapping):
             result["filters"] = _serializable_filters(item)
-        elif key in {"selected_ids", "errors"} and isinstance(item, list):
+        elif key in {"selected_ids", "errors"} and isinstance(item, (list, tuple, set, frozenset)):
             result[str(key)] = [str(entry) for entry in item]  # type: ignore[literal-required]
     return result
+
+
+def _finalize_external_state(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryState:
+    if state.get("fallback_reason") and not state.get("answer_text"):
+        return _fallback(state)
+    return state
 
 
 def _coerce_float(value: object) -> float | None:
