@@ -238,7 +238,22 @@ def test_mcp_registry_rejects_secret_like_tool_result_keys() -> None:
         {
             "bibliothekar.search": lambda _arguments: {
                 "prompt_text": "harmloser Text",
-                "nested": {"OPENAI_API_KEY": "configured", "access_token": "configured"},
+                "nested": {"OPENAI_API_KEY": "configured", "access_token": "configured", "token": "configured"},
+            }
+        },
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Token"})
+
+
+def test_mcp_registry_rejects_camelcase_secret_like_tool_result_keys() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "prompt_text": "harmloser Text",
+                "nested": {"apiKey": "configured", "accessToken": "configured", "bearerToken": "configured"},
             }
         },
     )

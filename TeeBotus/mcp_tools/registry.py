@@ -14,7 +14,8 @@ SECRET_LIKE_PATTERNS = (
     "MATRIX_BOT_ACCESS_TOKEN=",
 )
 SECRET_LIKE_KEY_PATTERN = re.compile(
-    r"(^|[_-])(api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|secret|password)([_-]|$)",
+    r"(^|[_-])(api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)([_-]|$)"
+    r"|(?:apiKey|accessToken|authToken|bearerToken|secretToken|password)",
     re.IGNORECASE,
 )
 SECRET_TOKEN_PATTERNS = (
