@@ -16,6 +16,11 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "Gemini" in text
     assert "LiteLLM-Security" in text
     assert "Rollback" in text
+    assert "schnellen OpenAI-Rollback" in text
+    assert "Git-Rollback" in text
+    assert "Daten-Rollback" in text
+    assert "Bibliothekar-/Haystack-/Qdrant-Indizes sind rebuildbar" in text
+    assert "memory-recovery --instances-dir instances --instances <Instanz>" in text
     assert "## Bibliothekar, Haystack und LangGraph" in text
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "Normale Chatantworten" in text

@@ -389,8 +389,12 @@ Rollback:
 
 - Setze `llm_enabled: nein` oder entferne den `## LLM`-Block, um zur bisherigen OpenAI-/Regelantwort-Logik zurueckzukehren.
 - Setze `TEEBOTUS_LLM_ENABLED_<INSTANZ>=false`, um Text-LLM-Antworten per Runtime-/systemd-Override hart abzuschalten; `--runtime-status` meldet dann `provider=none status=disabled`.
-- Setze `llm_provider: openai`, wenn Textantworten wieder ueber den OpenAI-kompatiblen Legacy-Pfad laufen sollen.
+- Setze `llm_provider: openai`, `TEEBOTUS_LLM_PROVIDER_<INSTANZ>=openai` oder entferne `TEEBOTUS_LLM_MODEL_<INSTANZ>`/`TEEBOTUS_LLM_BASE_URL_<INSTANZ>`, wenn Textantworten wieder ueber den OpenAI-kompatiblen Legacy-Pfad laufen sollen.
 - Entferne `TEEBOTUS_LLM_*`-Overrides aus der Shell oder systemd-Unit, wenn unerwartet ein falsches Profil gewaehlt wird.
+- Pruefe den schnellen OpenAI-Rollback danach mit `python3 -m TeeBotus --runtime-status --channels telegram`; der Status muss fuer die betroffene Instanz wieder `provider=openai` oder den deaktivierten Providerzustand melden.
+- Git-Rollback bleibt normaler Git-Betrieb: auf einen bekannten Commit/Tag wechseln und danach mindestens `python3 -m TeeBotus --runtime-status --channels telegram` sowie die relevanten Tests ausfuehren. Vor einem harten Reset erst `git status --short --branch` pruefen und lokale Datenbackups getrennt sichern.
+- Daten-Rollback betrifft nur nicht rebuildbare Daten: `.env`, Instanzkonfiguration und verschluesselte AccountStore-/Memory-Dateien. Bibliothekar-/Haystack-/Qdrant-Indizes sind rebuildbar und sollen aus `instances/<Instanz>/data/Bibliothek` neu erzeugt werden.
+- Fuer einen Service-Rollback: Dienst stoppen, Backup von `instances/` und `.env` zuruecklegen, dann Dienst starten und `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren. Wenn Account-Memory danach `broken` meldet, nicht automatisch loeschen, sondern zuerst mit `python3 -m TeeBotus.admin memory-recovery --instances-dir instances --instances <Instanz>` analysieren.
 
 Unterstuetzte Platzhalter in Antworten:
 
