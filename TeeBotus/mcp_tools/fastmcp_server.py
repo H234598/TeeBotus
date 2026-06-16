@@ -38,6 +38,8 @@ def build_fastmcp_server(registry: MCPToolRegistry, *, name: str = "TeeBotus Rea
             keyword: str = "",
             file: str = "",
             relative_path: str = "",
+            extension: str = "",
+            suffix: str = "",
         ) -> dict[str, Any]:
             return registry.call(
                 "bibliothekar.search",
@@ -51,6 +53,8 @@ def build_fastmcp_server(registry: MCPToolRegistry, *, name: str = "TeeBotus Rea
                     "keyword": keyword,
                     "file": file,
                     "relative_path": relative_path,
+                    "extension": extension,
+                    "suffix": suffix,
                 },
             )
 

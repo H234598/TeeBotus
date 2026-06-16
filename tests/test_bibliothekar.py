@@ -1035,6 +1035,24 @@ def test_bibliothekar_rebuild_skips_sensitive_files_copied_into_library(tmp_path
     assert "User_Habbits_and_behave.md" not in index_text
 
 
+def test_bibliothekar_rebuild_skips_symlinked_library_files(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    outside_secret = tmp_path / "outside-secret.txt"
+    outside_secret.write_text("PRIVATE HOST SECRET MUST NOT BE INDEXED", encoding="utf-8")
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    (library_dir / "linked-secret.txt").symlink_to(outside_secret)
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    chunks_text = store.chunks_path.read_text(encoding="utf-8")
+
+    assert index["chunk_count"] == 1
+    assert "therapie.txt" in chunks_text
+    assert "linked-secret.txt" not in chunks_text
+    assert "PRIVATE HOST SECRET" not in chunks_text
+
+
 def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1653,6 +1671,12 @@ def test_bibliothekar_cli_query_applies_metadata_filters(tmp_path, capsys):
                 "System Therapie",
                 "--category",
                 "technik",
+                "--keyword",
+                "python",
+                "--relative-path",
+                "technik",
+                "--extension",
+                "txt",
                 "--top-k",
                 "3",
             ]

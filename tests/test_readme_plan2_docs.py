@@ -42,6 +42,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "keine Zugangsdaten, Pfade, Query-Parameter oder Fragmente" in text
     assert "Normale Chatantworten" in text
     assert "--category" in text
+    assert "--keyword" in text
+    assert "--relative-path" in text
+    assert "--extension" in text
     assert "dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend" in text
     assert "scripts/run_benchmarks.py --quick" in text
     assert "--baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json" in text

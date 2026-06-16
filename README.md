@@ -544,11 +544,11 @@ python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depression
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot index --source /pfad/zu/buechern
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot query "Was steht zu Schlaf und Aktivierung?" --top-k 3
 python3 -m TeeBotus.bibliothekar --instance Depressionsbot query --source tests/fixtures/books "Schlafhygiene Tagesstruktur" --top-k 3
-python3 -m TeeBotus.bibliothekar --instance Depressionsbot query "System Therapie" --category psychologie --topic schlafhygiene --file therapie
+python3 -m TeeBotus.bibliothekar --instance Depressionsbot query "System Therapie" --category psychologie --topic schlafhygiene --file therapie --extension txt
 ```
 
 `query --source` baut einen temporaeren lokalen Fixture-Index und veraendert die echte Instanz-Bibliothek nicht. Das ist fuer Akzeptanztests und Benchmarkvergleiche gedacht.
-`query` kann mit `--category`, `--topic` und `--file` auf indexierte Metadaten eingeschraenkt werden; dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend.
+`query` kann mit `--category`, `--topic`/`--keyword`, `--file`/`--relative-path`, `--extension` und `--suffix` auf indexierte Metadaten eingeschraenkt werden; dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend.
 
 Haystack/Qdrant optional:
 
@@ -591,7 +591,7 @@ MCP/FastMCP ist nur als streng begrenzte Tool-Schicht vorgesehen. Der erste Pilo
 
 Nicht registriert sind freie Shell, beliebige Dateipfade, `.env`-Zugriff, Secret-Ausgabe, ungeprueftes Loeschen, Portscans oder Codex-Ausfuehrung. Bekannte spaetere Tools wie `youtube.transcribe`, `export.account` oder `codex.exec` sind als Policies sichtbar, bleiben aber standardmaessig deaktiviert und werden erst mit separater Implementierung, Policy- und Bestaetigungsstufe registriert.
 `memory.search` wird nur in einem explizit privaten Chat-Kontext registriert; Gruppen- oder unklarer Kontext bekommen auch bei vorhandenen Account-Daten keinen Memory-Toolzugriff.
-`bibliothekar.search` akzeptiert neben `query`, `top_k`, `max_prompt_chars` und `max_quote_chars` auch die oeffentlichen Bibliotheksfilter `category`, `topic`/`keyword` und `file`/`relative_path`. Private Account-, Identity- oder Instanzfilter werden nicht an die Bibliothekssuche durchgereicht.
+`bibliothekar.search` akzeptiert neben `query`, `top_k`, `max_prompt_chars` und `max_quote_chars` auch die oeffentlichen Bibliotheksfilter `category`, `topic`/`keyword`, `file`/`relative_path`, `extension` und `suffix`. Private Account-, Identity- oder Instanzfilter werden nicht an die Bibliothekssuche durchgereicht.
 
 Konfiguration in `Bot_Verhalten.md` ist flach und allowlistet:
 

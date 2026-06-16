@@ -59,6 +59,8 @@ BIBLIOTHEKAR_FILTER_ARGUMENTS = {
     "file": "relative_path",
     "path": "relative_path",
     "relative_path": "relative_path",
+    "extension": "extension",
+    "suffix": "suffix",
 }
 
 

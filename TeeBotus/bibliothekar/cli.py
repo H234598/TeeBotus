@@ -49,7 +49,11 @@ def _build_parser() -> argparse.ArgumentParser:
     query.add_argument("--max-quote-chars", type=int, default=900)
     query.add_argument("--category", action="append", default=[], help="Limit results to one or more indexed categories.")
     query.add_argument("--topic", action="append", default=[], help="Limit results to one or more indexed topics/keywords.")
+    query.add_argument("--keyword", action="append", default=[], help="Alias for --topic.")
     query.add_argument("--file", action="append", default=[], help="Limit results to source files whose relative path contains this value.")
+    query.add_argument("--relative-path", action="append", default=[], help="Alias for --file.")
+    query.add_argument("--extension", action="append", default=[], help="Limit results to one or more file types such as pdf, txt or md.")
+    query.add_argument("--suffix", action="append", default=[], help="Limit results to one or more file suffixes such as .pdf, .txt or .md.")
     query.add_argument("--deep", action="store_true", help="Run the optional Bibliothekar Deep Query graph pilot.")
     query.set_defaults(command="query")
     return parser
@@ -165,8 +169,16 @@ def _query_filters(args: argparse.Namespace) -> dict[str, list[str]]:
         filters["categories"] = [str(item) for item in args.category if str(item).strip()]
     if args.topic:
         filters["topics"] = [str(item) for item in args.topic if str(item).strip()]
+    if args.keyword:
+        filters.setdefault("topics", []).extend(str(item) for item in args.keyword if str(item).strip())
     if args.file:
         filters["relative_path"] = [str(item) for item in args.file if str(item).strip()]
+    if args.relative_path:
+        filters.setdefault("relative_path", []).extend(str(item) for item in args.relative_path if str(item).strip())
+    if args.extension:
+        filters["extension"] = [str(item) for item in args.extension if str(item).strip()]
+    if args.suffix:
+        filters["suffix"] = [str(item) for item in args.suffix if str(item).strip()]
     return filters
 
 
@@ -212,15 +224,19 @@ def _dry_run_index(store: BibliothekarStore) -> dict[str, Any]:
 
 
 def _copy_allowed_sources(source: Path, library_dir: Path) -> None:
+    if source.is_symlink():
+        return
     if source.is_dir():
         for path in sorted(source.rglob("*")):
-            if path.is_file():
+            if path.is_file() and not path.is_symlink():
                 _copy_allowed_source_file(path, library_dir / path.relative_to(source), library_dir)
         return
     _copy_allowed_source_file(source, library_dir / source.name, library_dir)
 
 
 def _copy_allowed_source_file(source: Path, destination: Path, library_dir: Path) -> None:
+    if source.is_symlink():
+        return
     if destination.suffix.casefold() not in SUPPORTED_SUFFIXES:
         return
     if not _is_allowed_library_source_path(destination, library_dir):

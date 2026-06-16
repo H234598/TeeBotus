@@ -138,3 +138,70 @@ def test_plan2_bibliothekar_source_import_does_not_copy_private_account_files(tm
     assert not (live_library_dir / "data" / "accounts").exists()
     assert not any(live_library_dir.rglob("User_Memory_Entries.jsonl"))
     assert not any(live_library_dir.rglob("User_Habbits_and_behave.md"))
+
+
+def test_plan2_bibliothekar_source_import_does_not_follow_symlinks(tmp_path, capsys) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    live_library_dir = instance_dir / "data" / "Bibliothek"
+    source_dir = tmp_path / "source"
+    outside_secret = tmp_path / "outside-secret.txt"
+    live_library_dir.mkdir(parents=True)
+    source_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+    (source_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    outside_secret.write_text("PRIVATE HOST SECRET MUST NOT BE COPIED", encoding="utf-8")
+    (source_dir / "linked-secret.txt").symlink_to(outside_secret)
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "index",
+                "--source",
+                str(source_dir),
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "1 Dokumente" in output
+    assert (live_library_dir / "therapie.txt").exists()
+    assert not (live_library_dir / "linked-secret.txt").exists()
+    assert "PRIVATE HOST SECRET" not in (live_library_dir / ".bibliothekar" / "chunks.jsonl").read_text(encoding="utf-8")
+
+
+def test_plan2_bibliothekar_source_import_rejects_symlinked_source_root(tmp_path, capsys) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    live_library_dir = instance_dir / "data" / "Bibliothek"
+    outside_source = tmp_path / "outside-source"
+    linked_source = tmp_path / "linked-source"
+    live_library_dir.mkdir(parents=True)
+    outside_source.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+    (outside_source / "external.txt").write_text("External source must not be copied.", encoding="utf-8")
+    linked_source.symlink_to(outside_source, target_is_directory=True)
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "index",
+                "--source",
+                str(linked_source),
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "0 Dokumente" in output
+    assert not (live_library_dir / "external.txt").exists()

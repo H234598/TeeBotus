@@ -155,6 +155,7 @@ def test_mcp_bibliothekar_search_applies_public_metadata_filters(tmp_path) -> No
             "category": "technik",
             "topic": "python",
             "file": "technik",
+            "extension": "txt",
             "account_id": "must-not-be-used",
         },
     )
@@ -437,6 +438,7 @@ def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monk
         category="technik",
         keyword="python",
         relative_path="technik",
+        extension="txt",
     )
     assert "technik.txt" in filtered_library["prompt_text"]
     assert "therapie.txt" not in filtered_library["prompt_text"]

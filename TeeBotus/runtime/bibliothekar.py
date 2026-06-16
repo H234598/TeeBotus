@@ -305,6 +305,7 @@ def _iter_document_paths(library_dir: Path) -> Iterable[Path]:
         path
         for path in sorted(library_dir.rglob("*"))
         if path.is_file()
+        and not path.is_symlink()
         and _is_allowed_library_source_path(path, library_dir)
         and path.suffix.casefold() in SUPPORTED_SUFFIXES
     )
