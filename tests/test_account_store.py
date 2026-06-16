@@ -10,6 +10,7 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     AccountStore,
     AccountStoreError,
+    SecretToolInstanceSecretProvider,
     StaticSecretProvider,
     matrix_identity_key,
     signal_identity_key,
@@ -23,6 +24,27 @@ HEX_128 = re.compile(r"^[0-9a-f]{128}$")
 
 def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"a" * 32)
+
+
+def test_secret_tool_provider_caches_lookup_result(monkeypatch) -> None:
+    first = b"a" * 32
+    second = b"b" * 32
+    lookups = [first, second]
+    provider_instance = SecretToolInstanceSecretProvider()
+
+    monkeypatch.setattr(provider_instance, "_lookup", lambda _instance, _purpose: lookups.pop(0))
+
+    assert provider_instance.get_secret("Demo", "account_memory") == first
+    assert provider_instance.get_secret("Demo", "account_memory") == first
+    assert lookups == [second]
+
+
+def test_secret_tool_provider_can_refuse_missing_secret(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(create_if_missing=False)
+    monkeypatch.setattr(provider_instance, "_lookup", lambda _instance, _purpose: None)
+
+    with pytest.raises(AccountStoreError, match="instance secret is missing"):
+        provider_instance.get_secret("Demo", "account_memory")
 
 
 def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):

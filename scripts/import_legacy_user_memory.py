@@ -142,7 +142,7 @@ def import_legacy_user_memory(
     backup_current: bool = True,
     provider: Any | None = None,
 ) -> ImportStats:
-    provider = provider or SecretToolInstanceSecretProvider()
+    provider = provider or SecretToolInstanceSecretProvider(create_if_missing=apply)
     stats = ImportStats()
     requested_legacy_instances_dir = Path(legacy_instances_dir)
     legacy_instances_dir = _resolve_legacy_instances_dir(requested_legacy_instances_dir, set(instances))

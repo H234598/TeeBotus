@@ -302,6 +302,32 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     assert "entries_imported" in markdown
 
 
+def test_legacy_user_memory_import_dry_run_does_not_create_missing_secret(tmp_path: Path, monkeypatch) -> None:
+    created_with: list[bool] = []
+
+    class FakeSecretProvider(StaticSecretProvider):
+        def __init__(self, *, create_if_missing: bool = True) -> None:
+            created_with.append(create_if_missing)
+            super().__init__(b"a" * 32)
+
+    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", FakeSecretProvider)
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+        ]
+    )
+
+    assert result == 0
+    assert created_with == [False]
+
+
 def test_legacy_user_memory_import_accepts_backup_root_and_selects_best_instances_dir(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     backup_root = tmp_path / "TeeBotus.bak2"
@@ -364,7 +390,7 @@ def test_legacy_user_memory_import_apply_can_override_running_bot_guard(tmp_path
         "_detect_running_teebotus_processes",
         lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
     )
-    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", lambda: provider())
+    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", lambda **_kwargs: provider())
     legacy_root = tmp_path / "legacy"
     target_root = tmp_path / "target"
     write_legacy_entries(legacy_root)

@@ -368,20 +368,30 @@ class StaticSecretProvider:
 class SecretToolInstanceSecretProvider:
     """Secret-Service provider backed by libsecret's `secret-tool` CLI."""
 
-    def __init__(self, command: str = SECRET_TOOL_COMMAND) -> None:
+    def __init__(self, command: str = SECRET_TOOL_COMMAND, *, create_if_missing: bool = True) -> None:
         self.command = command
+        self.create_if_missing = create_if_missing
+        self._cache: dict[tuple[str, str], bytes] = {}
 
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
         instance = _normalize_secret_token(instance_name, "instance")
         resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        cache_key = (instance, resolved_purpose)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
         existing = self._lookup(instance, resolved_purpose)
         if existing is not None:
+            self._cache[cache_key] = existing
             return existing
+        if not self.create_if_missing:
+            raise AccountStoreError(f"instance secret is missing for instance={instance} purpose={resolved_purpose}")
         key = secrets.token_bytes(INSTANCE_KEY_SIZE_BYTES)
         self._store(instance, resolved_purpose, key)
         confirmed = self._lookup(instance, resolved_purpose)
         if confirmed != key:
             raise AccountStoreError("secret-tool did not return the stored instance secret")
+        self._cache[cache_key] = key
         return key
 
     def _secret_tool(self) -> str:
