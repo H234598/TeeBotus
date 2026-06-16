@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_signalbot_context_contract(),
                 _check_pyproject_plan2_contract(),
                 _check_llm_profiles_plan2_contract(),
+                _check_local_secret_file_permissions(),
             ]
         )
     if not args.python_only:
@@ -229,6 +230,19 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, "llm profiles plan2 contract=ok profiles=local_ollama,hf_mistral,groq_fast,gemini_flash,openai_premium"
+
+
+def _check_local_secret_file_permissions(root: Path = REPO_ROOT) -> tuple[bool, str]:
+    env_path = root / ".env"
+    if not env_path.exists():
+        return True, "local secret file permissions=ok .env=missing"
+    try:
+        mode = env_path.stat().st_mode & 0o777
+    except OSError as exc:
+        return False, f"local secret file permissions failed: .env unreadable: {type(exc).__name__}: {exc}"
+    if mode & 0o077:
+        return False, f"local secret file permissions failed: .env mode={mode:03o} expected=600-or-stricter"
+    return True, f"local secret file permissions=ok .env mode={mode:03o}"
 
 
 def _litellm_pth_files() -> list[Path]:

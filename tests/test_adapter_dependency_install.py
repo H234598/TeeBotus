@@ -95,6 +95,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     monkeypatch.setattr(check_adapter_deps, "_check_signalbot_context_contract", ok("signalbot_context"))
     monkeypatch.setattr(check_adapter_deps, "_check_pyproject_plan2_contract", ok("pyproject_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_llm_profiles_plan2_contract", ok("llm_profiles_contract"))
+    monkeypatch.setattr(check_adapter_deps, "_check_local_secret_file_permissions", ok("secret_permissions"))
     monkeypatch.setattr(check_adapter_deps, "_check_executable_version", ok("signal_cli"))
     monkeypatch.setattr(check_adapter_deps, "_check_signal_cli_rest_api_binary", ok("signal_cli_rest_api"))
 
@@ -105,6 +106,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "package:signalbot" in called
     assert "pyproject_contract" in called
     assert "llm_profiles_contract" in called
+    assert "secret_permissions" in called
 
 
 def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
@@ -119,6 +121,34 @@ def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
 
     assert ok
     assert "profiles=local_ollama,hf_mistral,groq_fast,gemini_flash,openai_premium" in message
+
+
+def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
+    ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
+
+    assert ok
+    assert ".env=missing" in message
+
+    env_path = tmp_path / ".env"
+    env_path.write_text("OPENAI_API_KEY=test-placeholder\n", encoding="utf-8")
+    env_path.chmod(0o600)
+
+    ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
+
+    assert ok
+    assert "mode=600" in message
+
+
+def test_local_secret_file_permission_check_rejects_group_or_world_readable_env(tmp_path: Path) -> None:
+    env_path = tmp_path / ".env"
+    env_path.write_text("OPENAI_API_KEY=test-placeholder\n", encoding="utf-8")
+    env_path.chmod(0o644)
+
+    ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
+
+    assert not ok
+    assert "mode=644" in message
+    assert "expected=600-or-stricter" in message
 
 
 def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:
