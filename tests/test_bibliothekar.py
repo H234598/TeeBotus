@@ -336,6 +336,41 @@ def test_haystack_backend_rebuild_removes_stale_document_store_chunks(tmp_path):
     assert "therapie.txt" in selection.prompt_text
 
 
+def test_haystack_backend_rebuild_removes_stale_chunks_when_instance_filter_returns_empty(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    therapy = library_dir / "therapie.txt"
+    technique = library_dir / "technik.txt"
+    therapy.write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    technique.write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = EmptyFilteredDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    first_index = backend.rebuild()
+    stale_technique_id = next(
+        document.id for document in document_store.documents if document.meta["relative_path"] == "technik.txt"
+    )
+    technique.unlink()
+    document_store.filtered_calls = 0
+    document_store.unfiltered_calls = 0
+    second_index = backend.rebuild()
+    selection = backend.search(BibliothekarQuery(text="System Therapie", max_chunks=3))
+
+    assert first_index["chunk_count"] == 2
+    assert second_index["chunk_count"] == 1
+    assert stale_technique_id in document_store.deleted_document_ids
+    assert document_store.filtered_calls >= 1
+    assert document_store.unfiltered_calls >= 1
+    assert [document.meta["relative_path"] for document in document_store.documents] == ["therapie.txt"]
+    assert "technik.txt" not in selection.prompt_text
+    assert "therapie.txt" in selection.prompt_text
+
+
 def test_bibliothekar_service_applies_local_metadata_filters(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)

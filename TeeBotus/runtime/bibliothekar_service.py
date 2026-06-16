@@ -263,17 +263,10 @@ class HaystackBibliothekarBackend:
             document_store.write_documents(documents)
 
     def _delete_stale_documents(self, document_store: Any, *, current_ids: set[str]) -> None:
-        try:
-            existing = document_store.filter_documents(filters=self._instance_document_store_filter())
-        except AttributeError:
-            return
-        except TypeError:
-            existing = document_store.filter_documents()
-        except Exception:
-            existing = document_store.filter_documents()
+        existing = self._existing_documents_for_cleanup(document_store)
         stale_ids = [
             str(getattr(document, "id", "") or "")
-            for document in existing or []
+            for document in existing
             if self._document_belongs_to_instance(document)
             and str(getattr(document, "id", "") or "")
             and str(getattr(document, "id", "") or "") not in current_ids
@@ -286,6 +279,27 @@ class HaystackBibliothekarBackend:
             return
         except TypeError:
             document_store.delete_documents(stale_ids)
+
+    def _existing_documents_for_cleanup(self, document_store: Any) -> list[Any]:
+        try:
+            existing = document_store.filter_documents(filters=self._instance_document_store_filter())
+        except AttributeError:
+            return []
+        except TypeError:
+            return self._unfiltered_cleanup_documents(document_store)
+        except Exception:
+            return self._unfiltered_cleanup_documents(document_store)
+        if existing:
+            return list(existing)
+        return self._unfiltered_cleanup_documents(document_store)
+
+    def _unfiltered_cleanup_documents(self, document_store: Any) -> list[Any]:
+        try:
+            return list(document_store.filter_documents() or [])
+        except AttributeError:
+            return []
+        except Exception:
+            return []
 
     def _chunks_from_document_store(self, document_store: Any, *, filters: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
