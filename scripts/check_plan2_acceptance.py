@@ -63,6 +63,10 @@ RUNTIME_STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
     re.IGNORECASE,
 )
+ARTIFACT_SECRET_JSON_FIELD_RE = re.compile(
+    r'"([^"]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[^"]*)"\s*:\s*"([^"]*)"',
+    re.IGNORECASE,
+)
 SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset({"configured", "none", "<redacted>", "redacted", "missing"})
 
 
@@ -441,6 +445,8 @@ def _markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"benchmark markdown artifact lacks results section: {path}")
     if "## Regression Check" not in text:
         errors.append(f"benchmark markdown artifact lacks regression section: {path}")
+    if _artifact_text_contains_secret(text):
+        errors.append(f"benchmark markdown artifact contains secret-looking content: {path}")
     return errors
 
 
@@ -449,11 +455,13 @@ def _json_benchmark_artifact_errors(path: Path) -> list[str]:
         return [f"benchmark JSON artifact missing: {path}"]
     if not path.is_file():
         return [f"benchmark JSON artifact is not a file: {path}"]
+    raw = path.read_text(encoding="utf-8")
+    secret_errors = [f"benchmark JSON artifact contains secret-looking content: {path}"] if _artifact_text_contains_secret(raw) else []
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(raw)
     except json.JSONDecodeError as exc:
         return [f"benchmark JSON artifact is not valid JSON: {path}: {exc}"]
-    return _benchmark_payload_errors(payload, path=path)
+    return [*secret_errors, *_benchmark_payload_errors(payload, path=path)]
 
 
 def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list[str]:
@@ -787,6 +795,28 @@ def _runtime_status_line_contains_secret(line: str) -> bool:
         value = str(match.group(2) or "").strip().casefold()
         if value not in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
             return True
+    return False
+
+
+def _artifact_text_contains_secret(text: str) -> bool:
+    if any(pattern.search(text) for pattern in RUNTIME_STATUS_SECRET_PATTERNS):
+        return True
+    if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(text):
+        return True
+    for line in text.splitlines():
+        if _runtime_status_line_contains_secret(line):
+            return True
+    for match in ARTIFACT_SECRET_JSON_FIELD_RE.finditer(text):
+        key = str(match.group(1) or "").strip().casefold()
+        value = str(match.group(2) or "").strip()
+        if not value:
+            continue
+        normalized_value = value.casefold()
+        if normalized_value in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
+            continue
+        if key.endswith("_env") or key.endswith("-env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value):
+            continue
+        return True
     return False
 
 

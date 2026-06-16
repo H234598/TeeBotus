@@ -380,6 +380,35 @@ def test_plan2_acceptance_runner_fails_on_invalid_benchmark_artifacts(tmp_path: 
     ]
 
 
+def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "bench.md"
+    json_path = tmp_path / "bench.json"
+    markdown_path.write_text(
+        "# TeeBotus Benchmarks\n\n## Results\n\napi_key=plain-secret\n\n## Regression Check\n\nok\n",
+        encoding="utf-8",
+    )
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["details"]["api_key"] = "plain-secret"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    markdown_errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+    json_errors = check_plan2_acceptance._json_benchmark_artifact_errors(json_path)
+
+    assert any("benchmark markdown artifact contains secret-looking content" in error for error in markdown_errors)
+    assert any("benchmark JSON artifact contains secret-looking content" in error for error in json_errors)
+
+
+def test_benchmark_artifact_validation_allows_env_var_names_without_values(tmp_path: Path) -> None:
+    json_path = tmp_path / "bench.json"
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["details"]["api_key_env"] = "GROQ_API_KEY"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    errors = check_plan2_acceptance._json_benchmark_artifact_errors(json_path)
+
+    assert not any("secret-looking content" in error for error in errors)
+
+
 def test_systemd_unit_validation_flags_public_or_unchecked_units() -> None:
     qdrant_errors = check_plan2_acceptance._systemd_unit_errors(
         "qdrant-systemd-print",
