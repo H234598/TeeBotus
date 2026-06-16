@@ -753,6 +753,21 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
 
 
 def _bibliothekar_payload_details(prompt_text: str) -> dict[str, Any]:
+    required_fields = {
+        "chunk_id",
+        "source_id",
+        "file",
+        "file_path",
+        "file_sha256",
+        "file_type",
+        "language",
+        "locator",
+        "license",
+        "ingested_at",
+        "chunk_index",
+        "embedding_model",
+        "citation_format",
+    }
     try:
         payload = json.loads(prompt_text)
     except json.JSONDecodeError:
@@ -760,13 +775,28 @@ def _bibliothekar_payload_details(prompt_text: str) -> dict[str, Any]:
             "citation_payload_bytes": len(prompt_text.encode("utf-8")),
             "selected_chunks": 0,
             "has_citation_format": False,
+            "citation_required_fields": sorted(required_fields),
+            "citation_missing_fields": sorted(required_fields),
+            "provenance_fields_complete": False,
         }
     chunks = payload.get("selected_library_chunks") if isinstance(payload, dict) else None
     selected_chunks = chunks if isinstance(chunks, list) else []
+    missing_fields = sorted(
+        {
+            field
+            for chunk in selected_chunks
+            if isinstance(chunk, dict)
+            for field in required_fields
+            if field not in chunk or chunk.get(field) in ("", None)
+        }
+    )
     return {
         "citation_payload_bytes": len(prompt_text.encode("utf-8")),
         "selected_chunks": len(selected_chunks),
         "has_citation_format": all(bool(chunk.get("citation_format")) for chunk in selected_chunks if isinstance(chunk, dict)),
+        "citation_required_fields": sorted(required_fields),
+        "citation_missing_fields": missing_fields,
+        "provenance_fields_complete": bool(selected_chunks) and not missing_fields,
     }
 
 

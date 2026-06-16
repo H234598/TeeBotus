@@ -77,6 +77,25 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert haystack_library["details"]["citation_payload_bytes"] > 0
     assert local_library["details"]["has_citation_format"] is True
     assert haystack_library["details"]["has_citation_format"] is True
+    assert local_library["details"]["provenance_fields_complete"] is True
+    assert haystack_library["details"]["provenance_fields_complete"] is True
+    assert local_library["details"]["citation_missing_fields"] == []
+    assert haystack_library["details"]["citation_missing_fields"] == []
+    assert {
+        "chunk_id",
+        "source_id",
+        "file",
+        "file_path",
+        "file_sha256",
+        "file_type",
+        "language",
+        "locator",
+        "license",
+        "ingested_at",
+        "chunk_index",
+        "embedding_model",
+        "citation_format",
+    }.issubset(set(local_library["details"]["citation_required_fields"]))
     assert haystack_library["details"]["private_filter_selected_chunks"] >= 1
     assert haystack_library["details"]["private_filter_payload_leaked"] is False
     assert any(result["name"] == "langgraph_bibliothekar_linear" for result in suite["results"])
