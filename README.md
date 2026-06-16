@@ -1,6 +1,6 @@
 # TeeBotus
 
-TeeBotus ist ein kleiner Python-Bot mit Telegram-Long-Polling als stabilem Einstieg und optionalen Extras fuer Signal, Matrix, lokale Transkription, LLM-Provider, RAG/Bibliothekar und Agenten-Workflows. Er kann mehrere Instanzen mit getrennten Einstellungen starten.
+TeeBotus ist ein kleiner Python-Bot mit additiven Runtime-Slots fuer Telegram, Signal und Matrix sowie optionalen Extras fuer lokale Transkription, LLM-Provider, RAG/Bibliothekar und Agenten-Workflows. Er kann mehrere Instanzen mit getrennten Einstellungen starten.
 
 ## Funktionen
 
@@ -83,17 +83,18 @@ Der Bot loggt nach `stdout`, wenn Telegram-Nachrichten eingehen oder Bot-Nachric
 
 `ALL_BOTS_DEFAULT.md` enthaelt unter `## Laufzeitkonfiguration` echte Default-Schalter fuer den Start. Werte aus Shell, systemd, Docker oder `.env` haben Vorrang; die Default-Datei fuellt nur fehlende Environment-Werte.
 
-## Plan3 Account-Runtime
+## Account-Runtime
 
-`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_runtime.py`; konfigurierte Signal- und Matrix-Slots koennen zusaetzlich ueber die Plan3-Runtime gestartet werden.
+`TeeBotus/bot.py` bleibt der stabile Entry-Point. Telegram, Signal und Matrix werden ueber dieselbe Runtime-Konfiguration als gleichwertige Slots gestartet. Der vorhandene Telegram-Long-Poller bleibt nur der konkrete Telegram-Transport; der Bot-Kern haengt nicht mehr am Poller als Sonderfall.
 
 Die Runtime-Konfiguration kannst du separat pruefen:
 
 ```bash
 python3 -m TeeBotus --runtime-status --channels telegram
+python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix
 ```
 
-`--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
+`--channels telegram` startet nur Telegram-Slots. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten Signal und Matrix im Hintergrund und danach den Telegram-Runtime-Slot mit Long-Polling-Transport.
 
 Der Hauptbot kann ebenfalls als User-systemd-Service reproduzierbar erzeugt werden. Der Renderer startet keine Bot-Loops im Print-Modus und erzeugt eine gehaertete Unit mit `NoNewPrivileges=true`, `PrivateTmp=true`, `.env` als optionalem EnvironmentFile und `python -m TeeBotus --all --channels telegram,signal,matrix`:
 

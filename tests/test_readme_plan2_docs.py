@@ -77,6 +77,16 @@ def test_readme_documents_local_vs_remote_provider_boundary() -> None:
     assert "Keine Provider-Keys gehoeren ins Repo" in text
 
 
+def test_readme_documents_telegram_as_runtime_slot_not_entrypoint_special_case() -> None:
+    text = README.read_text(encoding="utf-8")
+
+    assert "additiven Runtime-Slots fuer Telegram, Signal und Matrix" in text
+    assert "Telegram, Signal und Matrix werden ueber dieselbe Runtime-Konfiguration" in text
+    assert "Telegram-Long-Poller bleibt nur der konkrete Telegram-Transport" in text
+    assert "Telegram laeuft weiter ueber `TeeBotus/adapters/telegram_runtime.py`" not in text
+    assert "Plan3 Account-Runtime" not in text
+
+
 def test_readme_has_privacy_docs_in_de_and_en() -> None:
     text = README.read_text(encoding="utf-8")
 
