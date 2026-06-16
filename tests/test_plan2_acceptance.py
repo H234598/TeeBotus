@@ -61,6 +61,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_youtube_parser_misses_report.py" in by_label["plan2-pytest"].argv
     assert "tests/test_memory_store_benchmark.py" in by_label["plan2-pytest"].argv
     assert "tests/test_plan2_acceptance.py" in by_label["plan2-pytest"].argv
+    assert by_label["bibliothekar-status"].argv == ("python-test", "-m", "TeeBotus.bibliothekar", "status")
     assert by_label["bibliothekar-dry-run"].argv[-4:] == ("index", "--source", "tests/fixtures/books", "--dry-run")
     assert by_label["bibliothekar-fixture-query"].argv[-4:] == ("tests/fixtures/books", "Therapie Schlaf", "--top-k", "2")
     assert by_label["plan2-quick-benchmarks"].argv[-9:] == (

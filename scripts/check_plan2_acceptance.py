@@ -140,6 +140,10 @@ def build_acceptance_commands(
     commands.extend(
         [
             AcceptanceCommand(
+                "bibliothekar-status",
+                (python, "-m", "TeeBotus.bibliothekar", "status"),
+            ),
+            AcceptanceCommand(
                 "bibliothekar-dry-run",
                 (python, "-m", "TeeBotus.bibliothekar", "index", "--source", "tests/fixtures/books", "--dry-run"),
             ),
