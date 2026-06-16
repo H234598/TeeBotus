@@ -75,6 +75,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_secret_hygiene.py",
     "tests/test_legacy_user_memory_import.py",
     "tests/test_benchmarks_runner.py",
+    "tests/test_ci_workflow.py",
     "tests/test_memory_store_benchmark.py",
     "tests/test_plan2_acceptance.py",
     "tests/test_plan2_optional_extras.py",

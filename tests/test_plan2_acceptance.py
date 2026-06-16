@@ -48,6 +48,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_proactive_cli.py" in pytest_args
     assert "tests/test_readme_plan2_docs.py" in pytest_args
     assert "tests/test_secret_hygiene.py" in pytest_args
+    assert "tests/test_ci_workflow.py" in pytest_args
     assert by_label["bibliothekar-status"].argv == ("python-test", "-m", "TeeBotus.bibliothekar", "status")
     assert by_label["bibliothekar-dry-run"].argv[-4:] == ("index", "--source", "tests/fixtures/books", "--dry-run")
     assert by_label["bibliothekar-fixture-query"].argv[-4:] == ("tests/fixtures/books", "Testfrage", "--top-k", "3")
