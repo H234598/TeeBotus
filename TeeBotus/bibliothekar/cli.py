@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from TeeBotus.instructions import BotInstructions, InstructionStore
-from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar import BibliothekarStore, SUPPORTED_SUFFIXES, _is_allowed_library_source_path
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, check_bibliothekar_service
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query
 
@@ -175,25 +175,13 @@ def _index_source(instance_name: str, instances_dir: Path, source: Path, *, dry_
     if not dry_run:
         store = BibliothekarStore(instance_name, instances_dir)
         store.ensure()
-        if source.is_dir():
-            for path in source.rglob("*"):
-                if path.is_file():
-                    destination = store.library_dir / path.relative_to(source)
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(path, destination)
-        else:
-            destination = store.library_dir / source.name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, destination)
+        _copy_allowed_sources(source, store.library_dir)
         return BibliothekarService.from_instructions(instance_name, instances_dir, instructions).rebuild()
     with tempfile.TemporaryDirectory(prefix="teebotus-bibliothekar-") as tmp:
         tmp_instances = Path(tmp) / "instances"
         tmp_library = tmp_instances / instance_name / "data" / "Bibliothek"
         tmp_library.mkdir(parents=True)
-        if source.is_dir():
-            shutil.copytree(source, tmp_library, dirs_exist_ok=True)
-        else:
-            shutil.copy2(source, tmp_library / source.name)
+        _copy_allowed_sources(source, tmp_library)
         return BibliothekarStore(instance_name, tmp_instances).rebuild()
 
 
@@ -204,10 +192,7 @@ def _service_from_source(instance_name: str, source: Path) -> BibliothekarServic
     tmp_instances = Path(tmp.name) / "instances"
     tmp_library = tmp_instances / instance_name / "data" / "Bibliothek"
     tmp_library.mkdir(parents=True)
-    if source.is_dir():
-        shutil.copytree(source, tmp_library, dirs_exist_ok=True)
-    else:
-        shutil.copy2(source, tmp_library / source.name)
+    _copy_allowed_sources(source, tmp_library)
     store = BibliothekarStore(instance_name, tmp_instances)
     store.rebuild()
     service = BibliothekarService.local(instance_name, tmp_instances)
@@ -221,8 +206,26 @@ def _dry_run_index(store: BibliothekarStore) -> dict[str, Any]:
         tmp_library = tmp_instances / store.instance_name / "data" / "Bibliothek"
         tmp_library.mkdir(parents=True)
         if store.library_dir.exists():
-            shutil.copytree(store.library_dir, tmp_library, dirs_exist_ok=True)
+            _copy_allowed_sources(store.library_dir, tmp_library)
         return BibliothekarStore(store.instance_name, tmp_instances).rebuild()
+
+
+def _copy_allowed_sources(source: Path, library_dir: Path) -> None:
+    if source.is_dir():
+        for path in sorted(source.rglob("*")):
+            if path.is_file():
+                _copy_allowed_source_file(path, library_dir / path.relative_to(source), library_dir)
+        return
+    _copy_allowed_source_file(source, library_dir / source.name, library_dir)
+
+
+def _copy_allowed_source_file(source: Path, destination: Path, library_dir: Path) -> None:
+    if destination.suffix.casefold() not in SUPPORTED_SUFFIXES:
+        return
+    if not _is_allowed_library_source_path(destination, library_dir):
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
 
 
 def _resolve_instances(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:

@@ -97,3 +97,44 @@ def test_plan2_bibliothekar_query_source_is_non_mutating_fixture_mode(tmp_path, 
     assert "therapie_basis.md" in query_output
     assert "tagesstruktur.txt" in query_output
     assert list(live_library_dir.iterdir()) == []
+
+
+def test_plan2_bibliothekar_source_import_does_not_copy_private_account_files(tmp_path, capsys) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    live_library_dir = instance_dir / "data" / "Bibliothek"
+    source_dir = tmp_path / "source"
+    private_dir = source_dir / "data" / "accounts" / ("a" * 128)
+    live_library_dir.mkdir(parents=True)
+    private_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+    (source_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    (source_dir / "cover.png").write_bytes(b"not a supported document")
+    (private_dir / "User_Memory_Entries.jsonl").write_text(
+        '{"id":"mem_private","user_text":"private memory must stay out"}\n',
+        encoding="utf-8",
+    )
+    (private_dir / "User_Habbits_and_behave.md").write_text("private habits must stay out", encoding="utf-8")
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "index",
+                "--source",
+                str(source_dir),
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "1 Dokumente" in output
+    assert (live_library_dir / "therapie.txt").exists()
+    assert not (live_library_dir / "cover.png").exists()
+    assert not (live_library_dir / "data" / "accounts").exists()
+    assert not any(live_library_dir.rglob("User_Memory_Entries.jsonl"))
+    assert not any(live_library_dir.rglob("User_Habbits_and_behave.md"))
