@@ -226,10 +226,7 @@ def _resolve_litellm_models(
 ) -> tuple[str, ...]:
     configured_model = (default_model or instructions.llm_model).strip()
     if not configured_model:
-        if provider == "litellm":
-            configured_model = instructions.openai_model.strip()
-        else:
-            raise LLMAPIError(f"LLM provider {provider} requires llm_model or TEEBOTUS_LLM_MODEL")
+        raise LLMAPIError(f"LLM provider {provider} requires llm_model or TEEBOTUS_LLM_MODEL")
     fallback_models = default_fallback_models
     if not fallback_models and use_instruction_fallback_models:
         fallback_models = tuple(instructions.llm_fallback_models)

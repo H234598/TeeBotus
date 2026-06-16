@@ -3,8 +3,10 @@ from __future__ import annotations
 import sys
 import types
 
+import pytest
+
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm_client import LiteLLMTextClient
+from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient
 
 
 def test_plan2_litellm_provider_acceptance_uses_fake_completion_without_network(monkeypatch) -> None:
@@ -44,3 +46,14 @@ def test_plan2_litellm_provider_acceptance_uses_fake_completion_without_network(
             "api_key": "runtime-key",
         }
     ]
+
+
+def test_litellm_provider_requires_explicit_model_instead_of_openai_legacy_fallback(monkeypatch) -> None:
+    def completion(**_kwargs):
+        raise AssertionError("LiteLLM must not be called without an explicit llm_model")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(provider="litellm", model="")
+
+    with pytest.raises(LLMAPIError, match="requires llm_model"):
+        client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
