@@ -92,7 +92,16 @@ def decide_bibliothekar_query(text: str, *, model_runner: ModelRunner | None = N
     if model_runner is not None:
         try:
             decision = model_runner(_bibliothekar_query_prompt(value), BibliothekarQueryDecision)
-            return _coerce_model_payload(decision, BibliothekarQueryDecision)
+            model_decision = _coerce_model_payload(decision, BibliothekarQueryDecision)
+            if model_decision.confidence < 0.7:
+                return BibliothekarQueryDecision(
+                    should_search=False,
+                    query="",
+                    confidence=model_decision.confidence,
+                    reason_short="Model bibliothekar decision below confidence threshold",
+                    source="model",
+                )
+            return model_decision
         except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
             pass
     return BibliothekarQueryDecision(should_search=True, query=value, confidence=0.35, reason_short="Fallback keeps existing Bibliothekar behavior", source="fallback")

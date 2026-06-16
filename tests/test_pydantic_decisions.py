@@ -106,6 +106,27 @@ def test_bibliothekar_query_decision_classic_and_model_runner_paths() -> None:
     assert calls and calls[0][1] is BibliothekarQueryDecision
 
 
+def test_bibliothekar_query_decision_ignores_low_confidence_model_search() -> None:
+    decision = decide_bibliothekar_query(
+        "Vielleicht gibt es irgendwo etwas dazu?",
+        model_runner=lambda _prompt, _schema: {
+            "should_search": True,
+            "query": "unsichere Quelle",
+            "confidence": 0.42,
+            "reason_short": "too uncertain",
+            "source": "model",
+        },
+    )
+
+    assert decision == BibliothekarQueryDecision(
+        should_search=False,
+        query="",
+        confidence=0.42,
+        reason_short="Model bibliothekar decision below confidence threshold",
+        source="model",
+    )
+
+
 def test_bibliothekar_query_decision_schema_accepts_json_payloads() -> None:
     decision = parse_bibliothekar_query_decision(
         '{"should_search": true, "query": "Schlafhygiene Depression", "confidence": 0.88, "reason_short": "library query", "source": "model"}'
