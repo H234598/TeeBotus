@@ -446,6 +446,10 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--runtime-status` prueft lokale Ollama-Targets ueber `127.0.0.1:11434` und meldet gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
 
+Remote-Profile und Remote-Fallbacks werden im Status als `missing_key` oder
+`degraded` gemeldet, wenn der benoetigte Primaer- oder Fallback-Key fehlt.
+Lokale Ollama- und loopback-LiteLLM-Ziele bleiben ohne Key gueltig.
+
 LiteLLM-Security:
 
 - `litellm` ist gepinnt und die bekannten kompromittierten Versionen `1.82.7` und `1.82.8` sind blockiert.

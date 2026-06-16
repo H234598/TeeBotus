@@ -692,6 +692,11 @@ llm=Depressionsbot/signal:1 provider=openai model=gpt-5.5 status=configured
 llm=Depressionsbot/matrix:1 provider=none status=disabled
 ```
 
+Remote-Profile muessen bei fehlendem Primaer-Key `status=missing_key`
+melden. Explizit aktivierte Remote-Fallbacks muessen bei fehlendem
+Fallback-Key `status=degraded fallback_api_key=missing` melden, waehrend
+lokale Ollama- und loopback-LiteLLM-Ziele ohne Key `configured` bleiben.
+
 Keine Secrets anzeigen.
 
 ---

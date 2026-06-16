@@ -199,7 +199,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
 def _runtime_status_llm_line(account: Any) -> str:
     if _parse_optional_status_bool(getattr(account, "llm_enabled", "")) is False:
         return f"llm={account.instance_name}/{account.label} provider=none model=<disabled> status=disabled"
-    provider, model, base_url, route_fallback_count, route_api_key_env, route_error = _status_llm_route(account)
+    provider, model, base_url, route_fallback_count, route_api_key_env, route_fallback_api_key_env, route_error = _status_llm_route(account)
     if provider == "openai" and model == "<legacy>":
         model = "<Bot_Verhalten/OpenAI>"
     key_configured = _llm_key_configured(account, provider, route_api_key_env=route_api_key_env)
@@ -210,10 +210,20 @@ def _runtime_status_llm_line(account: Any) -> str:
         base_url=base_url,
         route_api_key_env=route_api_key_env,
     )
+    fallback_key_configured = bool(route_fallback_api_key_env and os.environ.get(route_fallback_api_key_env, "").strip())
+    direct_fallback_key_status = _direct_remote_fallback_key_status(
+        account,
+        provider=provider,
+        base_url=base_url,
+        key_configured=key_configured,
+    )
+    fallback_key_missing = bool(route_fallback_count and route_fallback_api_key_env and not fallback_key_configured) or direct_fallback_key_status == "missing"
     if route_error:
         status = "broken"
     elif key_required and not key_configured:
         status = "missing_key"
+    elif fallback_key_missing:
+        status = "degraded"
     else:
         status = "configured"
     detail = (
@@ -237,6 +247,10 @@ def _runtime_status_llm_line(account: Any) -> str:
     )
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
+    if route_fallback_api_key_env and fallback_count:
+        detail += f" fallback_api_key={'configured' if fallback_key_configured else 'missing'}"
+    elif direct_fallback_key_status and fallback_count:
+        detail += f" fallback_api_key={direct_fallback_key_status}"
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", ""))
     if allow_remote_fallback is not None:
         detail += f" remote_fallback={'enabled' if allow_remote_fallback else 'disabled'}"
@@ -254,7 +268,7 @@ def _runtime_status_llm_line(account: Any) -> str:
     return detail
 
 
-def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str]:
+def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str, str]:
     provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
     model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
     base_url = _sanitize_status_url(getattr(account, "llm_base_url", ""))
@@ -266,15 +280,23 @@ def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str]:
             from TeeBotus.llm.profiles import load_llm_profiles
 
             profile = load_llm_profiles()[profile_name]
-            return profile.provider, profile.model, base_url or _sanitize_status_url(profile.base_url), 0, profile.api_key_env, ""
+            return profile.provider, profile.model, base_url or _sanitize_status_url(profile.base_url), 0, profile.api_key_env, "", ""
         if purpose and not (str(getattr(account, "llm_provider", "") or "").strip() or str(getattr(account, "llm_model", "") or "").strip()):
             from TeeBotus.llm.profiles import select_llm_route
 
             route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
-            return route.provider, route.model, base_url or _sanitize_status_url(route.base_url), len(route.fallback_models), route.api_key_env, ""
+            return (
+                route.provider,
+                route.model,
+                base_url or _sanitize_status_url(route.base_url),
+                len(route.fallback_models),
+                route.api_key_env,
+                route.fallback_api_key_env,
+                "",
+            )
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
-        return provider, model, base_url, 0, "", f"{type(exc).__name__}: {exc}"
-    return provider, model, base_url, 0, "", ""
+        return provider, model, base_url, 0, "", "", f"{type(exc).__name__}: {exc}"
+    return provider, model, base_url, 0, "", "", ""
 
 
 def _status_value(value: object, *, default: str) -> str:
@@ -384,6 +406,43 @@ def _status_effective_fallback_count(account: Any, *, provider: str, route_fallb
         )
     except Exception:
         return _csv_count(configured_fallbacks)
+
+
+def _direct_remote_fallback_key_status(
+    account: Any,
+    *,
+    provider: str,
+    base_url: str,
+    key_configured: bool,
+) -> str:
+    configured_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
+    if not configured_fallbacks:
+        return ""
+    allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
+    try:
+        from TeeBotus.runtime.llm_factory import filter_runtime_fallback_models
+
+        effective_fallbacks = filter_runtime_fallback_models(
+            provider=provider,
+            fallback_models=configured_fallbacks,
+            allow_remote_fallback=allow_remote_fallback,
+        )
+    except Exception:
+        effective_fallbacks = tuple(part.strip() for part in configured_fallbacks.split(",") if part.strip())
+    if not any(_status_fallback_model_requires_key(provider=provider, model=model, base_url=base_url) for model in effective_fallbacks):
+        return ""
+    return "configured" if key_configured else "missing"
+
+
+def _status_fallback_model_requires_key(*, provider: str, model: object, base_url: str) -> bool:
+    normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
+    if _status_model_uses_ollama(model):
+        return False
+    if _status_model_uses_remote_provider(model):
+        return True
+    if normalized_provider == "litellm":
+        return not _status_base_url_is_loopback(base_url)
+    return normalized_provider in {"openai", "huggingface", "hf", "groq", "gemini"}
 
 
 def _csv_count(value: object) -> int:

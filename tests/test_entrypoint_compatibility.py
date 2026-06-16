@@ -28,7 +28,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.6.10\n"
+    assert captured.out == "TeeBotus 1.6.11\n"
     assert captured.err == ""
 
 
@@ -334,6 +334,56 @@ def test_runtime_status_counts_only_effective_local_fallbacks_without_remote_all
     assert "fallback_models=3" not in captured.out
 
 
+def test_runtime_status_reports_degraded_direct_remote_fallback_without_key(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "ollama")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "llama3.1:8b")
+    monkeypatch.setenv("TEEBOTUS_LLM_FALLBACK_MODELS_DEMO", "groq/llama-3.1-8b-instant,ollama_chat/qwen2.5:7b")
+    monkeypatch.setenv("TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK_DEMO", "yes")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=ollama model=llama3.1:8b "
+        "status=degraded api_key=none fallback_models=2 fallback_api_key=missing remote_fallback=enabled"
+    ) in captured.out
+
+
+def test_runtime_status_reports_configured_direct_remote_fallback_key(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "ollama")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "llama3.1:8b")
+    monkeypatch.setenv("TEEBOTUS_LLM_FALLBACK_MODELS_DEMO", "groq/llama-3.1-8b-instant")
+    monkeypatch.setenv("TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK_DEMO", "yes")
+    monkeypatch.setenv("TEEBOTUS_LLM_API_KEY_DEMO", "fallback-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=ollama model=llama3.1:8b "
+        "status=configured api_key=configured fallback_models=1 fallback_api_key=configured remote_fallback=enabled"
+    ) in captured.out
+    assert "fallback-secret" not in captured.out
+
+
 def test_runtime_status_reports_runtime_llm_disabled(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
@@ -417,9 +467,34 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 "
-        "api_key=none fallback_models=1 remote_fallback=enabled"
+        "status=degraded purpose=structured_decision base_url=http://127.0.0.1:11434 "
+        "api_key=none fallback_models=1 fallback_api_key=missing remote_fallback=enabled"
     ) in captured.out
+
+
+def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PURPOSE_DEMO", "structured_decision")
+    monkeypatch.setenv("TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK_DEMO", "yes")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 "
+        "api_key=none fallback_models=1 fallback_api_key=configured remote_fallback=enabled"
+    ) in captured.out
+    assert "groq-secret" not in captured.out
 
 
 def test_runtime_status_resolves_purpose_route_api_key_env(monkeypatch, capsys, tmp_path) -> None:
