@@ -810,6 +810,53 @@ def test_haystack_backend_retries_unfiltered_store_when_filter_pushdown_returns_
     assert "therapie.txt" not in selection.prompt_text
 
 
+def test_haystack_backend_retries_empty_instance_filter_pushdown_without_rebuild(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    fallback_store.rebuild()
+    document_store = EmptyFilteredDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content="Depression Therapie Aktivierung Schlaf.",
+            id="own_chunk",
+            meta={
+                **_plan2_chunk_meta(chunk_id="own_chunk", relative_path="therapie.txt", locator="Seite 1"),
+                "instance_name": "Depressionsbot",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+        FakeDocument(
+            content="Fremde Instanz Therapie darf nicht auftauchen.",
+            id="foreign_chunk",
+            meta={
+                **_plan2_chunk_meta(chunk_id="foreign_chunk", relative_path="fremd.txt", locator="Seite 1"),
+                "instance_name": "AndereInstanz",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filtered_calls == 1
+    assert document_store.unfiltered_calls >= 1
+    assert document_store.write_attempts == 0
+    assert [chunk["chunk_id"] for chunk in payload["selected_library_chunks"]] == ["own_chunk"]
+    assert "Fremde Instanz" not in selection.prompt_text
+
+
 def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path):
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
