@@ -259,12 +259,12 @@ def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str]:
             from TeeBotus.llm.profiles import load_llm_profiles
 
             profile = load_llm_profiles()[profile_name]
-            return profile.provider, profile.model, _sanitize_status_url(profile.base_url), 0, profile.api_key_env, ""
+            return profile.provider, profile.model, base_url or _sanitize_status_url(profile.base_url), 0, profile.api_key_env, ""
         if purpose and not (str(getattr(account, "llm_provider", "") or "").strip() or str(getattr(account, "llm_model", "") or "").strip()):
             from TeeBotus.llm.profiles import select_llm_route
 
             route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
-            return route.provider, route.model, _sanitize_status_url(route.base_url), len(route.fallback_models), route.api_key_env, ""
+            return route.provider, route.model, base_url or _sanitize_status_url(route.base_url), len(route.fallback_models), route.api_key_env, ""
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
         return provider, model, base_url, 0, "", f"{type(exc).__name__}: {exc}"
     return provider, model, base_url, 0, "", ""

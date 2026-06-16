@@ -49,6 +49,7 @@ class LiteLLMSettings:
     provider: str = "litellm"
     fallback_models: tuple[str, ...] = ()
     fallback_api_keys: Mapping[str, str] | None = None
+    fallback_api_bases: Mapping[str, str] | None = None
     use_instruction_fallback_models: bool = True
     api_key: str = ""
     api_base: str = ""
@@ -89,6 +90,7 @@ class LiteLLMTextClient:
             model=model,
             fallback_models=fallback_models,
             fallback_api_keys=None,
+            fallback_api_bases=None,
             api_key=api_key,
             api_base=api_base,
             timeout=timeout,
@@ -103,6 +105,11 @@ class LiteLLMTextClient:
             str(model or "").strip(): str(api_key or "").strip()
             for model, api_key in dict(resolved.fallback_api_keys or {}).items()
             if str(model or "").strip() and str(api_key or "").strip()
+        }
+        self.fallback_api_bases = {
+            str(model or "").strip(): str(api_base or "").strip()
+            for model, api_base in dict(resolved.fallback_api_bases or {}).items()
+            if str(model or "").strip() and str(api_base or "").strip()
         }
         self.use_instruction_fallback_models = bool(resolved.use_instruction_fallback_models)
         self.api_key = resolved.api_key.strip()
@@ -133,7 +140,7 @@ class LiteLLMTextClient:
             raise LLMAPIError("LiteLLM model must not be empty")
 
         base_kwargs = self._completion_kwargs(user_text, instructions)
-        _validate_litellm_local_service_targets(models, base_kwargs)
+        _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
         if previous_response_id:
             LOGGER.debug("Ignoring previous_response_id for LiteLLM text provider; provider has no Responses state capability.")
 
@@ -194,6 +201,9 @@ class LiteLLMTextClient:
 
     def _completion_kwargs_for_model(self, base_kwargs: dict[str, object], model: str) -> dict[str, object]:
         kwargs = dict(base_kwargs)
+        api_base = self.fallback_api_bases.get(model)
+        if api_base:
+            kwargs["api_base"] = api_base
         api_key = self.fallback_api_keys.get(model)
         if api_key:
             kwargs["api_key"] = api_key
@@ -271,15 +281,22 @@ def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str
     return default_api_key.strip()
 
 
-def _validate_litellm_local_service_targets(models: tuple[str, ...], kwargs: Mapping[str, object]) -> None:
-    if not any(_litellm_model_uses_ollama(model) for model in models):
-        return
-    api_base = str(kwargs.get("api_base") or "").strip()
-    if not api_base:
-        return
-    reason = _unsafe_local_ollama_api_base_reason(api_base)
-    if reason:
-        raise LLMAPIError(f"Unsafe Ollama api_base: {reason}")
+def _validate_litellm_local_service_targets(
+    models: tuple[str, ...],
+    kwargs: Mapping[str, object],
+    *,
+    fallback_api_bases: Mapping[str, str] | None = None,
+) -> None:
+    fallback_bases = fallback_api_bases or {}
+    for model in models:
+        if not _litellm_model_uses_ollama(model):
+            continue
+        api_base = str(fallback_bases.get(model) or kwargs.get("api_base") or "").strip()
+        if not api_base:
+            continue
+        reason = _unsafe_local_ollama_api_base_reason(api_base)
+        if reason:
+            raise LLMAPIError(f"Unsafe Ollama api_base: {reason}")
 
 
 def _litellm_model_uses_ollama(model: object) -> bool:

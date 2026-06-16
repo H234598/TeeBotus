@@ -99,6 +99,28 @@ def test_route_selection_can_enable_explicit_remote_fallback() -> None:
     assert route.fallback_profile_name == "groq_fast"
     assert route.fallback_models == ("groq/llama-3.1-8b-instant",)
     assert route.fallback_api_key_env == "GROQ_API_KEY"
+    assert route.fallback_base_url == ""
+
+
+def test_route_selection_keeps_local_fallback_base_url() -> None:
+    profiles = {
+        "groq_fast": LLMProfile("groq_fast", "litellm", "groq/llama-3.1-8b-instant", api_key_env="GROQ_API_KEY"),
+        "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.1:8b", "http://127.0.0.1:11557"),
+    }
+    routing = {
+        "cheap_fast": LLMRoutingRule(
+            purpose="cheap_fast",
+            profile="groq_fast",
+            fallback="local_ollama",
+        )
+    }
+
+    route = select_llm_route("cheap_fast", profiles=profiles, routing=routing)
+
+    assert route.profile_name == "groq_fast"
+    assert route.fallback_profile_name == "local_ollama"
+    assert route.fallback_models == ("ollama_chat/llama3.1:8b",)
+    assert route.fallback_base_url == "http://127.0.0.1:11557"
 
 
 def test_route_selection_treats_ambiguous_litellm_fallback_profiles_as_remote() -> None:
@@ -230,6 +252,19 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_profile_uses_runtime_base_url_override() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="local_ollama",
+        api_base="http://127.0.0.1:11555/api",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11555/api"
+
+
 def test_runtime_text_client_call_uses_runtime_generation_overrides(monkeypatch) -> None:
     calls: list[dict[str, object]] = []
 
@@ -359,6 +394,19 @@ def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() 
     assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
 
 
+def test_runtime_text_client_purpose_route_uses_runtime_base_url_override() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        api_base="http://127.0.0.1:11556/api",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11556/api"
+
+
 def test_runtime_text_client_route_builder_filters_remote_fallback_defensively(monkeypatch) -> None:
     monkeypatch.setattr(
         "TeeBotus.runtime.llm_factory.select_llm_route",
@@ -416,6 +464,72 @@ def test_runtime_text_client_purpose_router_passes_fallback_profile_api_key(monk
 
     assert response.text == "Fallback Antwort"
     assert calls == [("ollama_chat/llama3.1:8b", ""), ("groq/llama-3.1-8b-instant", "groq-secret")]
+
+
+def test_runtime_text_client_route_passes_fallback_profile_base_url(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        calls.append((model, str(kwargs.get("api_base") or "")))
+        if model == "groq/primary":
+            raise RuntimeError("primary down")
+        return {"id": "fallback-ok", "choices": [{"message": {"content": "Fallback Antwort"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="cheap_fast",
+            profile_name="groq_fast",
+            provider="litellm",
+            model="groq/primary",
+            fallback_profile_name="local_ollama",
+            fallback_model="ollama_chat/llama3.1:8b",
+            fallback_base_url="http://127.0.0.1:11557/api",
+        ),
+    )
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="cheap_fast",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "Fallback Antwort"
+    assert calls == [("groq/primary", ""), ("ollama_chat/llama3.1:8b", "http://127.0.0.1:11557/api")]
+
+
+def test_runtime_text_client_route_rejects_unsafe_fallback_ollama_base_url_before_call(monkeypatch) -> None:
+    def completion(**_kwargs):
+        raise AssertionError("unsafe fallback Ollama api_base must not reach LiteLLM")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="cheap_fast",
+            profile_name="groq_fast",
+            provider="litellm",
+            model="groq/primary",
+            fallback_profile_name="local_ollama",
+            fallback_model="ollama_chat/llama3.1:8b",
+            fallback_base_url="http://user:secret@ollama.example:11434/api?token=plain",
+        ),
+    )
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="cheap_fast",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    with pytest.raises(LLMAPIError, match="Unsafe Ollama api_base: credentials are not allowed"):
+        client.create_reply("Ping", BotInstructions(), None)
 
 
 def test_runtime_text_client_direct_runtime_provider_overrides_purpose_router() -> None:

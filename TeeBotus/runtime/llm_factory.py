@@ -47,6 +47,7 @@ def build_runtime_text_llm_client(
             override_api_key=api_key,
             fallback_models=fallback_models,
             allow_remote_fallback=remote_fallback_allowed,
+            api_base=api_base,
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -66,6 +67,7 @@ def build_runtime_text_llm_client(
             override_api_key=api_key,
             fallback_models=fallback_models,
             allow_remote_fallback=remote_fallback_allowed,
+            api_base=api_base,
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -109,6 +111,7 @@ def _build_route_client(
     override_api_key: str,
     fallback_models: str | tuple[str, ...],
     allow_remote_fallback: bool,
+    api_base: str,
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
@@ -119,6 +122,7 @@ def _build_route_client(
     profile_api_key = source.get(route.api_key_env, "").strip() if route.api_key_env else ""
     fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
     resolved_api_key = str(override_api_key or "").strip() or profile_api_key
+    resolved_api_base = str(api_base or "").strip() or route.base_url
     resolved_provider = normalize_llm_provider(route.provider)
     resolved_openai_client = openai_client
     if resolved_provider == "openai" and resolved_openai_client is None:
@@ -139,8 +143,9 @@ def _build_route_client(
         model=route.model,
         fallback_models=resolved_fallback_models,
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
+        fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=resolved_api_key,
-        api_base=route.base_url,
+        api_base=resolved_api_base,
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -157,6 +162,7 @@ def _build_profile_client(
     override_api_key: str,
     fallback_models: str | tuple[str, ...],
     allow_remote_fallback: bool,
+    api_base: str,
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
@@ -168,6 +174,7 @@ def _build_profile_client(
     source = os.environ if env is None else env
     profile_api_key = source.get(profile.api_key_env, "").strip() if profile.api_key_env else ""
     resolved_api_key = str(override_api_key or "").strip() or profile_api_key
+    resolved_api_base = str(api_base or "").strip() or profile.base_url
     resolved_provider = normalize_llm_provider(profile.provider)
     resolved_openai_client = openai_client
     if resolved_provider == "openai" and resolved_openai_client is None:
@@ -187,7 +194,7 @@ def _build_profile_client(
             allow_remote_fallback=allow_remote_fallback,
         ),
         api_key=resolved_api_key,
-        api_base=profile.base_url,
+        api_base=resolved_api_base,
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,

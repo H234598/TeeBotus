@@ -56,6 +56,7 @@ class LLMRoute:
     fallback_profile_name: str = ""
     fallback_model: str = ""
     fallback_api_key_env: str = ""
+    fallback_base_url: str = ""
 
     @property
     def fallback_models(self) -> tuple[str, ...]:
@@ -121,12 +122,14 @@ def select_llm_route(
     fallback_profile_name = ""
     fallback_model = ""
     fallback_api_key_env = ""
+    fallback_base_url = ""
     if rule.fallback:
         fallback = _require_profile(resolved_profiles, rule.fallback)
         if allow_remote_fallback or not fallback.is_remote:
             fallback_profile_name = fallback.name
             fallback_model = fallback.model
             fallback_api_key_env = fallback.api_key_env
+            fallback_base_url = fallback.base_url
     return LLMRoute(
         purpose=purpose_name,
         profile_name=profile.name,
@@ -137,6 +140,7 @@ def select_llm_route(
         fallback_profile_name=fallback_profile_name,
         fallback_model=fallback_model,
         fallback_api_key_env=fallback_api_key_env,
+        fallback_base_url=fallback_base_url,
     )
 
 
@@ -168,6 +172,7 @@ def build_profiled_text_llm_client(
         model=route.model,
         fallback_models=route.fallback_models,
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
+        fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
         api_base=route.base_url,
         use_instruction_fallback_models=False,

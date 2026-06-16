@@ -100,7 +100,7 @@ def _profile_ollama_base_url(account: AccountRunConfig) -> str:
         return ""
     if not (_provider_uses_ollama(profile.provider) or _model_uses_ollama(profile.model)):
         return ""
-    return profile.base_url or DEFAULT_OLLAMA_BASE_URL
+    return str(account.llm_base_url or "").strip() or profile.base_url or DEFAULT_OLLAMA_BASE_URL
 
 
 def _route_ollama_base_url(account: AccountRunConfig) -> str:
@@ -114,7 +114,7 @@ def _route_ollama_base_url(account: AccountRunConfig) -> str:
     except Exception:
         return ""
     if _provider_uses_ollama(route.provider) or _model_uses_ollama(route.model) or any(_model_uses_ollama(model) for model in route.fallback_models):
-        return route.base_url or DEFAULT_OLLAMA_BASE_URL
+        return str(account.llm_base_url or "").strip() or route.base_url or DEFAULT_OLLAMA_BASE_URL
     return ""
 
 
