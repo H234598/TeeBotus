@@ -607,6 +607,57 @@ def test_engine_bibliothekar_context_uses_service_search(tmp_path):
     assert "service.txt" in fake_client.prompt
 
 
+def test_engine_bibliothekar_context_honors_optional_citation_requirement(tmp_path):
+    class FakeBibliothekarService:
+        def search(self, query_text, **kwargs):
+            return SimpleSelection('{"selected_library_chunks":[{"file":"service.txt","chunk_id":"chunk-1"}]}')
+
+    class SimpleSelection:
+        def __init__(self, prompt_text):
+            self.prompt_text = prompt_text
+            self.selected_ids = ("chunk_service",)
+
+    class FakeOpenAIClient:
+        prompt = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.prompt = user_text
+            return OpenAIResponse("Antwort.", "resp-service", None)
+
+    account_store = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1), display_label="Alice")
+    fake_client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, bibliothekar_enabled=True),
+        openai_client=fake_client,
+        bibliothekar_store=FakeBibliothekarService(),
+    )
+    event = IncomingEvent(
+        event_id="telegram:1",
+        instance="Depressionsbot",
+        channel="telegram",
+        adapter_slot=1,
+        account_id=account_id,
+        identity_key=telegram_identity_key(1),
+        chat_id="1",
+        chat_type="private",
+        sender_id="1",
+        sender_name="Alice",
+        text="Was sagt die Bibliothek?",
+        message_ref="1",
+    )
+
+    engine._openai_actions(
+        event,
+        account_id,
+        BotInstructions(openai_enabled=True, bibliothekar_enabled=True, bibliothekar_require_citations=False),
+    )
+
+    assert "fuer reine Hintergrundnutzung reicht Paraphrase" in fake_client.prompt
+    assert "konkrete Aussagen daraus ableitest" not in fake_client.prompt
+
+
 def test_engine_bibliothekar_context_uses_structured_query_decision(tmp_path):
     class FakeBibliothekarService:
         calls = []

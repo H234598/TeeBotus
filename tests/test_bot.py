@@ -2843,6 +2843,22 @@ class BotTests(unittest.TestCase):
         self.assertIn("- sender_name: Adminteam", openai_input)
         self.assertIn("- sender_username: unbekannt", openai_input)
 
+    def test_openai_input_honors_optional_bibliothekar_citation_requirement(self) -> None:
+        openai_input = _build_openai_user_input(
+            {
+                "text": "Was steht im Buch?",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            },
+            "Was steht im Buch?",
+            library_text='{"selected_library_chunks":[{"file":"buch.txt","chunk_id":"chunk-1"}]}',
+            require_library_citations=False,
+        )
+
+        self.assertIn("Bibliothekar-Quellenkontext", openai_input)
+        self.assertIn("fuer reine Hintergrundnutzung reicht Paraphrase", openai_input)
+        self.assertNotIn("konkrete Aussagen daraus ableitest", openai_input)
+
     def test_handle_update_transcribes_voice_and_processes_result_with_openai(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

@@ -1339,6 +1339,7 @@ def _process_text_message(
                     working_memory.prompt_text if working_memory else "",
                     weather_text,
                     library_text,
+                    require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
                 chat_state.get_previous_response_id(chat_id),
@@ -2146,6 +2147,8 @@ def _build_openai_user_input(
     working_memory_text: str = "",
     weather_text: str = "",
     library_text: str = "",
+    *,
+    require_library_citations: bool = True,
 ) -> str:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
@@ -2203,12 +2206,17 @@ def _build_openai_user_input(
             ]
         )
     if library_text.strip():
+        citation_instruction = (
+            "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id."
+            if require_library_citations
+            else "Wenn du daraus zitierst, nenne die Quelle mit Titel, Datei, Locator und chunk_id; fuer reine Hintergrundnutzung reicht Paraphrase."
+        )
         metadata.extend(
             [
                 "",
                 "Bibliothekar-Quellenkontext:",
                 "Diese Ausschnitte stammen aus der lokalen Instanz-Bibliothek. Nutze sie nur als Referenz.",
-                "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id.",
+                citation_instruction,
                 "Zitiere nur kurze Abschnitte; paraphrasiere laengere Inhalte.",
                 library_text.strip(),
             ]

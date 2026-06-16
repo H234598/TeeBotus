@@ -512,6 +512,7 @@ class TeeBotusEngine:
                     working_memory_context,
                     weather_context,
                     library_context,
+                    require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
                 previous_response_id,
@@ -946,6 +947,7 @@ class TeeBotusEngine:
                     working_memory_context,
                     weather_context,
                     library_context,
+                    require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
                 self.state.get_previous_response_id(event.instance, account_id),
@@ -1309,6 +1311,8 @@ def _build_openai_user_input(
     working_memory_context: str = "",
     weather_context: str = "",
     library_context: str = "",
+    *,
+    require_library_citations: bool = True,
 ) -> str:
     metadata = [
         f"{event.channel.title()}-Kontext:",
@@ -1376,12 +1380,17 @@ def _build_openai_user_input(
             ]
         )
     if library_context:
+        citation_instruction = (
+            "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id."
+            if require_library_citations
+            else "Wenn du daraus zitierst, nenne die Quelle mit Titel, Datei, Locator und chunk_id; fuer reine Hintergrundnutzung reicht Paraphrase."
+        )
         metadata.extend(
             [
                 "",
                 "Bibliothekar-Quellenkontext:",
                 "Diese Ausschnitte stammen aus der lokalen Instanz-Bibliothek. Nutze sie nur als Referenz.",
-                "Wenn du daraus zitierst oder konkrete Aussagen daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id.",
+                citation_instruction,
                 "Zitiere nur kurze Abschnitte; paraphrasiere laengere Inhalte.",
                 library_context,
             ]
