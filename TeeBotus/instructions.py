@@ -102,7 +102,7 @@ class BotInstructions:
         "wir können aber normal weiterschreiben."
     )
     codex_enabled: bool = True
-    codex_allowed_sender_ids: tuple[str, ...] = ("395935293",)
+    codex_allowed_account_ids: tuple[str, ...] = ()
     codex_timeout_seconds: int = 300
     codex_usage: str = "Nutzung: /codex Prompt"
     codex_unauthorized: str = "Nein."
@@ -804,8 +804,8 @@ def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) ->
     normalized = _normalize_key(key)
     if normalized == "enabled":
         instructions.codex_enabled = _parse_bool(value, default=instructions.codex_enabled)
-    elif normalized == "allowed_sender_ids":
-        instructions.codex_allowed_sender_ids = tuple(_parse_id_list(value))
+    elif normalized in {"allowed_account_ids", "account_ids", "allowed_accounts"}:
+        instructions.codex_allowed_account_ids = tuple(_parse_account_id_list(value))
     elif normalized == "timeout_seconds":
         instructions.codex_timeout_seconds = _parse_required_int(value, default=instructions.codex_timeout_seconds)
 
@@ -944,6 +944,14 @@ def _parse_id_list(value: str) -> list[str]:
         return []
     parts = [part.strip() for part in re.split(r"[,\n]", value) if part.strip()]
     return parts
+
+
+def _parse_account_id_list(value: str) -> list[str]:
+    return [
+        part.casefold()
+        for part in _parse_id_list(value)
+        if re.fullmatch(r"[0-9a-fA-F]{128}", part)
+    ]
 
 
 def _parse_optional_int(value: str, default: int | None) -> int | None:

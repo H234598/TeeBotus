@@ -8,6 +8,8 @@ from TeeBotus.instructions import InstructionStore, load_instructions, parse_ins
 
 class InstructionTests(unittest.TestCase):
     def test_parse_markdown_instructions(self) -> None:
+        account_a = "a" * 128
+        account_b = "b" * 128
         instructions = parse_instructions(
             """
             # Bot_Verhalten.md
@@ -77,7 +79,7 @@ class InstructionTests(unittest.TestCase):
 
             ## Codex
             - enabled: ja
-            - allowed_sender_ids: 395935293, 456
+            - allowed_account_ids: __ACCOUNT_A__, __ACCOUNT_B__
             - timeout_seconds: 180
 
             ## Proactive
@@ -118,6 +120,8 @@ class InstructionTests(unittest.TestCase):
             ## Hilfe
             - /status - Status anzeigen
             """
+            .replace("__ACCOUNT_A__", account_a)
+            .replace("__ACCOUNT_B__", account_b)
         )
 
         self.assertFalse(instructions.echo_enabled)
@@ -175,7 +179,10 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_transcription_empty, "Keine Sprache erkannt.")
         self.assertTrue(instructions.youtube_option_llm_fallback)
         self.assertTrue(instructions.codex_enabled)
-        self.assertEqual(instructions.codex_allowed_sender_ids, ("395935293", "456"))
+        self.assertEqual(
+            instructions.codex_allowed_account_ids,
+            (account_a, account_b),
+        )
         self.assertEqual(instructions.proactive_model_planner, "llm")
         self.assertEqual(instructions.codex_timeout_seconds, 180)
         self.assertFalse(instructions.user_memory_enabled)
@@ -201,6 +208,19 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.text_replies["hallo"], "Hey.")
         self.assertEqual(instructions.contains_replies["hilfe"], "Sende /help.")
         self.assertEqual(instructions.help_text(), "Befehle:\n/status - Status anzeigen")
+
+    def test_codex_whitelist_accepts_only_account_ids(self) -> None:
+        account_id = "c" * 128
+
+        instructions = parse_instructions(
+            """
+            ## Codex
+            - allowed_sender_ids: 456
+            - allowed_account_ids: 123, __ACCOUNT_ID__
+            """.replace("__ACCOUNT_ID__", account_id)
+        )
+
+        self.assertEqual(instructions.codex_allowed_account_ids, (account_id,))
 
     def test_render_template_uses_safe_placeholders(self) -> None:
         rendered = render_template(

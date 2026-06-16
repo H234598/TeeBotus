@@ -1304,7 +1304,18 @@ def _process_text_message(
     if text and _handle_cleanup_command(api, chat_state, chat_id, message, instructions, text):
         return
 
-    if text and _handle_codex_command(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
+    if text and _handle_codex_command(
+        api,
+        chat_state,
+        chat_id,
+        message,
+        instructions,
+        text,
+        first_contact,
+        bot_identity,
+        user_memory_store,
+        user_memory,
+    ):
         return
 
     reply = build_reply(message, instructions, include_fallback=not instructions.text_llm_enabled())
@@ -4213,14 +4224,16 @@ def _handle_codex_command(
     text: str,
     first_contact: bool,
     bot_identity: BotIdentity,
+    user_memory_store: AccountStore | None = None,
+    user_memory: UserMemoryRecord | None = None,
 ) -> bool:
     if not instructions.codex_enabled:
         return False
     if _normalize_command(text) != "/codex":
         return False
 
-    sender_id = _sender_identifier(message)
-    if not sender_id or not _is_allowed_codex_sender(sender_id, instructions):
+    account_id = _codex_account_id_for_message(user_memory_store, user_memory, message)
+    if not account_id or not _is_allowed_codex_account(account_id, instructions):
         reply = _with_first_contact_intro(instructions.codex_unauthorized, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
@@ -4281,9 +4294,29 @@ def _handle_codex_command(
     return True
 
 
-def _is_allowed_codex_sender(sender_id: str, instructions: BotInstructions) -> bool:
-    allowed_sender_ids = {value.strip() for value in instructions.codex_allowed_sender_ids if value.strip()}
-    return sender_id in allowed_sender_ids
+def _codex_account_id_for_message(
+    user_memory_store: AccountStore | None,
+    user_memory: UserMemoryRecord | None,
+    message: dict[str, Any],
+) -> str:
+    account_id = _account_id_from_user_memory(user_memory)
+    if account_id:
+        return account_id
+    if user_memory_store is None:
+        return ""
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return ""
+    try:
+        return user_memory_store.get_account_for_identity(identity_key) or ""
+    except (AccountStoreError, OSError, AttributeError):
+        LOGGER.exception("Failed to resolve Codex account_id for identity_key=%s.", identity_key)
+        return ""
+
+
+def _is_allowed_codex_account(account_id: str, instructions: BotInstructions) -> bool:
+    allowed_account_ids = {value.strip() for value in instructions.codex_allowed_account_ids if value.strip()}
+    return account_id in allowed_account_ids
 
 
 def _parse_cleanup_target(text: str) -> int | str | None:

@@ -3342,50 +3342,59 @@ class BotTests(unittest.TestCase):
         self.assertTrue(_is_telegram_getupdates_conflict(exc))
         self.assertFalse(_is_telegram_getupdates_conflict(TelegramAPIError("Telegram HTTP error 401: unauthorized")))
 
-    def test_codex_command_runs_locally_for_allowed_sender(self) -> None:
+    def test_codex_command_runs_locally_for_allowed_account(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
-        instructions = BotInstructions(codex_allowed_sender_ids=("456",), codex_timeout_seconds=30)
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+            instructions = BotInstructions(codex_allowed_account_ids=(account_id,), codex_timeout_seconds=30)
 
-        def run(command, cwd, **kwargs):
-            self.assertEqual(command, ["codex", "exec", "Bitte pruefe das."])
-            self.assertEqual(cwd, Path("/home/teladi/TeeBotus"))
-            self.assertTrue(kwargs["text"])
-            self.assertTrue(kwargs["capture_output"])
-            self.assertEqual(kwargs["timeout"], 30)
-            self.assertFalse(kwargs["check"])
-            return subprocess.CompletedProcess(command, 0, "Codex erledigt.\n", "")
+            def run(command, cwd, **kwargs):
+                self.assertEqual(command, ["codex", "exec", "Bitte pruefe das."])
+                self.assertEqual(cwd, Path("/home/teladi/TeeBotus"))
+                self.assertTrue(kwargs["text"])
+                self.assertTrue(kwargs["capture_output"])
+                self.assertEqual(kwargs["timeout"], 30)
+                self.assertFalse(kwargs["check"])
+                return subprocess.CompletedProcess(command, 0, "Codex erledigt.\n", "")
 
-        with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/codex"):
-            with patch("TeeBotus.bot.subprocess.run", side_effect=run):
+            with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/codex"):
+                with patch("TeeBotus.bot.subprocess.run", side_effect=run):
+                    handle_update(
+                        api,
+                        {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
+                        instructions,
+                        None,
+                        chat_state,
+                        user_memory_store=memory_store,
+                    )
+
+        self.assertEqual(api.chat_actions, [(123, "typing")])
+        self.assertEqual(api.sent_messages, [(123, "Codex erledigt.")])
+
+    def test_codex_command_rejects_sender_id_without_allowed_account(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        instructions = BotInstructions(codex_allowed_account_ids=("456",))
+
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
+            memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+
+            with patch("TeeBotus.bot.subprocess.run") as run:
                 handle_update(
                     api,
                     {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
                     instructions,
                     None,
                     chat_state,
+                    user_memory_store=memory_store,
                 )
-
-        self.assertEqual(api.chat_actions, [(123, "typing")])
-        self.assertEqual(api.sent_messages, [(123, "Codex erledigt.")])
-
-    def test_codex_command_rejects_unauthorized_sender(self) -> None:
-        from TeeBotus.instructions import BotInstructions
-
-        api = FakeAPI()
-        chat_state = ChatState(instance_name="Depressionsbot")
-        instructions = BotInstructions(codex_allowed_sender_ids=("456",))
-
-        with patch("TeeBotus.bot.subprocess.run") as run:
-            handle_update(
-                api,
-                {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 999}}},
-                instructions,
-                None,
-                chat_state,
-            )
 
         run.assert_not_called()
         self.assertEqual(api.sent_messages, [(123, instructions.codex_unauthorized)])
