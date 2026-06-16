@@ -1131,7 +1131,7 @@ def test_haystack_status_rejects_nonlocal_qdrant_url(tmp_path, monkeypatch):
     assert "must stay local" in health.error
 
 
-def test_haystack_status_rejects_qdrant_url_query_fragment_or_path(tmp_path, monkeypatch):
+def test_haystack_status_rejects_qdrant_url_query_fragment_path_or_missing_port(tmp_path, monkeypatch):
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
 
     cases = (
@@ -1140,6 +1140,7 @@ def test_haystack_status_rejects_qdrant_url_query_fragment_or_path(tmp_path, mon
         ("http://127.0.0.1:6333/collections", "must be a base URL without a path"),
         ("http://127.0.0.1:99999", "must include a valid port"),
         ("http://127.0.0.1:bad", "must include a valid port"),
+        ("http://127.0.0.1", "must include an explicit port"),
         ("http://[::1", "must be a valid URL"),
     )
     for url, expected_error in cases:

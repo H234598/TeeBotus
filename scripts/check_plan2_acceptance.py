@@ -1375,8 +1375,10 @@ def _runtime_status_qdrant_target_is_unsafe(line: str) -> bool:
     if parsed.path not in {"", "/"}:
         return True
     try:
-        parsed.port
+        port = parsed.port
     except ValueError:
+        return True
+    if port is None:
         return True
     host = (parsed.hostname or "").strip().casefold()
     if not host:

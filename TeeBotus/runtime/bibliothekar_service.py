@@ -573,9 +573,11 @@ def _normalize_local_qdrant_url(value: object) -> str:
     if host not in LOCAL_QDRANT_HOSTS:
         raise ValueError("Bibliothekar Qdrant URL must stay local on 127.0.0.1, localhost or ::1.")
     try:
-        parsed.port
+        port = parsed.port
     except ValueError as exc:
         raise ValueError("Bibliothekar Qdrant URL must include a valid port if one is specified.") from exc
+    if port is None:
+        raise ValueError("Bibliothekar Qdrant URL must include an explicit port.")
     if parsed.username or parsed.password:
         raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
     if parsed.query or parsed.fragment:
