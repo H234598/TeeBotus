@@ -64,6 +64,10 @@ SECRET_FIELD_ASSIGNMENT_RE = re.compile(
     r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
 )
+SECRET_FIELD_NAME_RE = re.compile(
+    r"(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)",
+    re.IGNORECASE,
+)
 RUNTIME_STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
     re.IGNORECASE,
@@ -874,6 +878,12 @@ def _artifact_text_contains_secret(text: str) -> bool:
         return True
     if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(text):
         return True
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if payload is not None and _json_payload_contains_secret(payload):
+        return True
     for line in text.splitlines():
         if _runtime_status_line_contains_secret(line):
             return True
@@ -891,6 +901,25 @@ def _artifact_text_contains_secret(text: str) -> bool:
         if key.endswith("_env") or key.endswith("-env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value):
             continue
         return True
+    return False
+
+
+def _json_payload_contains_secret(value: Any, *, key_hint: str = "") -> bool:
+    if isinstance(value, Mapping):
+        for key, nested_value in value.items():
+            nested_key = str(key or "")
+            if _json_payload_contains_secret(nested_value, key_hint=nested_key):
+                return True
+        return False
+    if isinstance(value, list):
+        return any(_json_payload_contains_secret(item, key_hint=key_hint) for item in value)
+    if isinstance(value, str):
+        if any(pattern.search(value) for pattern in RUNTIME_STATUS_SECRET_PATTERNS):
+            return True
+        if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(value):
+            return True
+        if SECRET_FIELD_NAME_RE.search(key_hint):
+            return _secret_assignment_value_is_unsafe(key_hint, value)
     return False
 
 

@@ -507,6 +507,29 @@ def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> N
     assert any("benchmark JSON artifact contains secret-looking content" in error for error in json_errors)
 
 
+def test_benchmark_artifact_validation_rejects_secret_lists_in_json(tmp_path: Path) -> None:
+    json_path = tmp_path / "bench.json"
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["details"]["tokens"] = ["plain-secret"]
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    errors = check_plan2_acceptance._json_benchmark_artifact_errors(json_path)
+
+    assert any("benchmark JSON artifact contains secret-looking content" in error for error in errors)
+
+
+def test_secret_artifact_validation_rejects_nested_secret_lists_in_json(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    json_path.write_text(
+        json.dumps({"status": "ok", "auth": {"access_tokens": ["plain-secret"]}}),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._secret_artifact_errors(("script.py", "--json-output", str(json_path)))
+
+    assert errors == [f"--json-output artifact contains secret-looking content: {json_path}"]
+
+
 def test_benchmark_artifact_validation_allows_env_var_names_without_values(tmp_path: Path) -> None:
     json_path = tmp_path / "bench.json"
     payload = _valid_benchmark_payload()
