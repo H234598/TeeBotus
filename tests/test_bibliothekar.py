@@ -464,6 +464,8 @@ def test_haystack_backend_does_not_push_private_account_filters_to_document_stor
                 "topics": ["python"],
                 "account_id": "private-account-id",
                 "identity_key": "telegram:user:1",
+                "instance": "AndereInstanz",
+                "instance_name": "AndereInstanz",
                 "memory_id": "mem_private",
             },
             max_chunks=3,
@@ -481,6 +483,7 @@ def test_haystack_backend_does_not_push_private_account_filters_to_document_stor
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "private-account-id" not in selection.prompt_text
     assert "telegram:user:1" not in selection.prompt_text
+    assert "AndereInstanz" not in selection.prompt_text
     assert "mem_private" not in selection.prompt_text
 
 

@@ -80,8 +80,6 @@ DOCUMENT_STORE_FILTER_FIELD_MAP = {
     "document_id": "meta.document_id",
     "chunk": "meta.chunk_id",
     "chunk_id": "meta.chunk_id",
-    "instance": "meta.instance_name",
-    "instance_name": "meta.instance_name",
 }
 
 
