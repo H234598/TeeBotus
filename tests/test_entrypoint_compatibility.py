@@ -173,6 +173,24 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
     ) in lines
 
 
+def test_account_memory_status_quotes_legacy_preflight_command_for_spaced_instance(tmp_path) -> None:
+    project_root = tmp_path / "TeeBotus"
+    accounts_root = project_root / "instances" / "Demo Bot" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Demo Bot", secret_provider=StaticSecretProvider(b"b" * 32))
+    account_id = bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_store.write_memory_entries(account_id, [{"id": "bad", "user_text": "unreadable"}])
+    backup_user_dir = tmp_path / "TeeBotus.bak2" / "instances.bak" / "Demo Bot" / "data" / "users" / "395935293"
+    backup_user_dir.mkdir(parents=True)
+    (backup_user_dir / "User_Memory_Entries.jsonl").write_text('{"id":"legacy_1","user_text":"A"}\n', encoding="utf-8")
+
+    lines = account_memory_index_health_lines(instance_name="Demo Bot", project_root=project_root)
+
+    legacy_line = next(line for line in lines if line.startswith("account_memory_recovery_legacy=Demo Bot "))
+    assert "--instance 'Demo Bot'" in legacy_line
+    assert "teebotus-legacy-import-preflight-Demo_Bot.json" in legacy_line
+    assert "teebotus-legacy-import-preflight-Demo_Bot.md" in legacy_line
+
+
 def test_account_memory_status_ignores_encrypted_legacy_backup(tmp_path) -> None:
     project_root = tmp_path / "TeeBotus"
     accounts_root = project_root / "instances" / "Demo" / "data" / "accounts"

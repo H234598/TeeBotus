@@ -223,6 +223,7 @@ def test_memory_recovery_report_sanitizes_legacy_preflight_artifact_name(tmp_pat
     report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=legacy_dir, provider=provider())
 
     legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert "--instance 'Demo Bot'" in legacy["dry_run_command"]
     assert "teebotus-legacy-import-preflight-Demo_Bot.json" in legacy["dry_run_command"]
     assert "teebotus-legacy-import-preflight-Demo_Bot.md" in legacy["dry_run_command"]
 
