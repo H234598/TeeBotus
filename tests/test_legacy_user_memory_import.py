@@ -351,6 +351,15 @@ def test_legacy_user_memory_import_dry_run_reports_running_bot_apply_block(tmp_p
     assert markdown.index("### Running Bot Processes") < markdown.index("## Events")
 
 
+def test_legacy_user_memory_runtime_process_detection_ignores_admin_false_positives() -> None:
+    assert legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus --all --channels telegram")
+    assert legacy_import._looks_like_running_teebotus_runtime("bash -lc cd repo && python3 -m teebotus --all")
+    assert legacy_import._looks_like_running_teebotus_runtime("/home/user/.local/bin/teebotus-proactive --once")
+    assert not legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus.admin memory-recovery")
+    assert not legacy_import._looks_like_running_teebotus_runtime("python3 scripts/import_legacy_user_memory.py --legacy-instances-dir backup")
+    assert not legacy_import._looks_like_running_teebotus_runtime("python3 -m pytest tests/test_legacy_user_memory_import.py")
+
+
 def test_legacy_user_memory_import_dry_run_does_not_create_missing_secret(tmp_path: Path, monkeypatch) -> None:
     created_with: list[bool] = []
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -28,6 +29,7 @@ from TeeBotus.runtime.sqlite_memory import SQLITE_BACKEND_ENV, SQLITE_DEFAULT_FA
 
 
 USER_MEMORY_LEGACY_ROOT = "users"
+TEEBOTUS_MODULE_RUNTIME_RE = re.compile(r"(?:^|\s)-m\s+teebotus(?:\s|$)")
 
 
 @dataclass
@@ -473,8 +475,7 @@ def _detect_running_teebotus_processes() -> list[dict[str, str]]:
 
 def _looks_like_running_teebotus_runtime(cmdline_lower: str) -> bool:
     return (
-        " -m teebotus" in cmdline_lower
-        or cmdline_lower.endswith(" -m teebotus")
+        TEEBOTUS_MODULE_RUNTIME_RE.search(cmdline_lower) is not None
         or "teebotus-proactive" in cmdline_lower
         or "/teebotus-proactive" in cmdline_lower
     )
