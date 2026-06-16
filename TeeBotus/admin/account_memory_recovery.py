@@ -4,6 +4,8 @@ import argparse
 import contextlib
 import json
 import logging
+import os
+import shutil
 import shlex
 import sqlite3
 from dataclasses import dataclass
@@ -168,28 +170,297 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 detail = f"entries={source.get('entries', 0)} index_present={source.get('index_present', False)}"
                 error = f" error={source.get('error')}" if source.get("error") else ""
                 lines.append(f"  - {source.get('name', '')}: {status} {detail}{error}")
+    quarantine = report.get("quarantine")
+    if isinstance(quarantine, Mapping):
+        lines.extend(["", "## Quarantine", ""])
+        lines.append(f"- status: `{quarantine.get('status', '')}`")
+        lines.append(f"- mode: `{quarantine.get('mode', '')}`")
+        lines.append(f"- base_dir: `{quarantine.get('base_dir', '')}`")
+        safety = quarantine.get("apply_safety")
+        if isinstance(safety, Mapping):
+            lines.append(f"- running_bot_process_count: `{safety.get('running_bot_process_count', 0)}`")
+            message = str(safety.get("message") or "").strip()
+            if message:
+                lines.append(f"- safety: {message}")
+        totals = quarantine.get("totals")
+        if isinstance(totals, Mapping):
+            for key in sorted(totals):
+                lines.append(f"- {key}: `{totals[key]}`")
     return "\n".join(lines) + "\n"
 
 
+def quarantine_unrecoverable_account_memory(
+    report: Mapping[str, Any],
+    *,
+    apply: bool = False,
+    quarantine_dir: Path | None = None,
+    allow_running_bot: bool = False,
+    running_processes: Sequence[Mapping[str, str]] | None = None,
+) -> dict[str, Any]:
+    running = [dict(process) for process in (running_processes if running_processes is not None else _running_teebotus_processes())]
+    blocked = bool(apply and running and not allow_running_bot)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "mode": "apply" if apply else "dry-run",
+        "status": "blocked" if blocked else ("applied" if apply else "dry-run"),
+        "base_dir": str(quarantine_dir or ""),
+        "apply_safety": {
+            "running_bot_processes": running,
+            "running_bot_process_count": len(running),
+            "apply_allowed_now": bool(not blocked),
+            "apply_requires_stopped_bot": bool(running and not allow_running_bot),
+            "message": _quarantine_safety_message(running, allow_running_bot=allow_running_bot),
+        },
+        "totals": {
+            "unrecoverable_accounts": 0,
+            "accounts_quarantined": 0,
+            "sqlite_sources": 0,
+            "sqlite_rows_quarantined": 0,
+            "json_files_quarantined": 0,
+            "snapshots_created": 0,
+        },
+        "instances": [],
+    }
+    if blocked:
+        return result
+    for instance in report.get("instances", []) if isinstance(report.get("instances"), list) else []:
+        if not isinstance(instance, Mapping):
+            continue
+        instance_result = _quarantine_instance_unrecoverable(
+            instance,
+            apply=apply,
+            quarantine_dir=quarantine_dir,
+            timestamp=timestamp,
+        )
+        result["instances"].append(instance_result)
+        totals = result["totals"]
+        for key in totals:
+            totals[key] += int(instance_result.get("totals", {}).get(key, 0) or 0)
+    if not result["totals"]["unrecoverable_accounts"]:
+        result["status"] = "no-op"
+    return result
+
+
+def _quarantine_instance_unrecoverable(
+    instance_report: Mapping[str, Any],
+    *,
+    apply: bool,
+    quarantine_dir: Path | None,
+    timestamp: str,
+) -> dict[str, Any]:
+    instance_name = str(instance_report.get("instance") or "instance")
+    accounts_root = Path(str(instance_report.get("accounts_root") or ""))
+    artifact_name = safe_artifact_name(instance_name, default="instance")
+    instance_quarantine_dir = (
+        quarantine_dir / artifact_name / timestamp
+        if quarantine_dir is not None
+        else accounts_root / "Account_Memory_Quarantine" / timestamp
+    )
+    unrecoverable_accounts = [
+        account
+        for account in instance_report.get("accounts", [])
+        if isinstance(account, Mapping) and str(account.get("recovery_status") or "") == "unrecoverable"
+    ]
+    account_ids = [str(account.get("account_id") or "") for account in unrecoverable_accounts if TOKEN_HEX_RE.fullmatch(str(account.get("account_id") or ""))]
+    result: dict[str, Any] = {
+        "instance": instance_name,
+        "accounts_root": str(accounts_root),
+        "quarantine_dir": str(instance_quarantine_dir),
+        "account_ids": account_ids,
+        "totals": {
+            "unrecoverable_accounts": len(account_ids),
+            "accounts_quarantined": 0,
+            "sqlite_sources": 0,
+            "sqlite_rows_quarantined": 0,
+            "json_files_quarantined": 0,
+            "snapshots_created": 0,
+        },
+        "sqlite_sources": [],
+        "json_files": [],
+    }
+    if not account_ids:
+        return result
+    sqlite_sources = _sqlite_sources_for_unrecoverable_accounts(unrecoverable_accounts)
+    json_files = _json_memory_files_for_accounts(accounts_root, account_ids)
+    result["totals"]["sqlite_sources"] = len(sqlite_sources)
+    result["totals"]["json_files_quarantined"] = len(json_files)
+    if not apply:
+        result["totals"]["accounts_quarantined"] = len(account_ids)
+        result["sqlite_sources"] = [{"path": str(path), "would_snapshot": True, "would_delete_rows": True} for path in sqlite_sources]
+        result["json_files"] = [{"path": str(path), "would_move": True} for path in json_files]
+        return result
+
+    _prepare_private_dir(instance_quarantine_dir)
+    snapshots_dir = instance_quarantine_dir / "sqlite_snapshots"
+    for sqlite_path in sqlite_sources:
+        snapshot_path = snapshots_dir / sqlite_path.name
+        _snapshot_sqlite_database(sqlite_path, snapshot_path)
+        result["totals"]["snapshots_created"] += 1
+        deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
+        result["totals"]["sqlite_rows_quarantined"] += deleted_rows
+        result["sqlite_sources"].append({"path": str(sqlite_path), "snapshot": str(snapshot_path), "rows_deleted": deleted_rows})
+    moved_files = []
+    for path in json_files:
+        target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
+        _prepare_private_dir(target.parent)
+        shutil.move(str(path), str(target))
+        moved_files.append({"path": str(path), "quarantine_path": str(target)})
+    result["json_files"] = moved_files
+    result["totals"]["json_files_quarantined"] = len(moved_files)
+    result["totals"]["accounts_quarantined"] = len(account_ids)
+    manifest_path = instance_quarantine_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Read-only TeeBotus account-memory recovery report.")
+    parser = argparse.ArgumentParser(description="TeeBotus account-memory recovery report and unrecoverable-data quarantine.")
     parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     parser.add_argument("--instances", default="", help="Comma-separated instance list. Defaults to all folders with Bot_Verhalten.md.")
     parser.add_argument("--legacy-instances-dir", default="", help="Optional plaintext legacy instances directory to inspect for importable data/users memory.")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--output", default="")
+    parser.add_argument("--quarantine-unrecoverable", action="store_true", help="Move unrecoverable encrypted memory payloads out of active stores.")
+    parser.add_argument("--apply", action="store_true", help="Apply --quarantine-unrecoverable. Without this, only report what would move.")
+    parser.add_argument("--quarantine-dir", default="", help="Optional base directory for quarantine artifacts. Defaults below each accounts root.")
+    parser.add_argument("--allow-running-bot", action="store_true", help="Allow quarantine apply while TeeBotus runtime processes are running.")
     args = parser.parse_args(list(argv) if argv is not None else None)
     report = build_account_memory_recovery_report(
         instances_dir=args.instances_dir,
         instances=parse_csv(args.instances),
         legacy_instances_dir=args.legacy_instances_dir or None,
     )
+    exit_code = 0
+    if args.quarantine_unrecoverable:
+        quarantine = quarantine_unrecoverable_account_memory(
+            report,
+            apply=args.apply,
+            quarantine_dir=Path(args.quarantine_dir).expanduser() if args.quarantine_dir else None,
+            allow_running_bot=args.allow_running_bot,
+        )
+        report["quarantine"] = quarantine
+        if quarantine.get("status") == "blocked":
+            exit_code = 3
     output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")
     else:
         print(output, end="")
-    return 0
+    return exit_code
+
+
+def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, Any]]) -> list[Path]:
+    paths: list[Path] = []
+    for account in accounts:
+        for source in account.get("sources", []) if isinstance(account.get("sources"), list) else []:
+            if not isinstance(source, Mapping) or source.get("kind") != "sqlite":
+                continue
+            if int(source.get("raw_entries", 0) or 0) <= 0 and not bool(source.get("raw_index_present")):
+                continue
+            raw_path = str(source.get("path") or "").strip()
+            if not raw_path:
+                continue
+            path = Path(raw_path)
+            if path not in paths:
+                paths.append(path)
+    return paths
+
+
+def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[str]) -> list[Path]:
+    files: list[Path] = []
+    for account_id in account_ids:
+        account_dir = accounts_root / ACCOUNTS_DIRNAME / account_id
+        for filename in (USER_MEMORY_ENTRIES_FILENAME, USER_MEMORY_INDEX_FILENAME):
+            path = account_dir / filename
+            if path.exists():
+                files.append(path)
+    return files
+
+
+def _snapshot_sqlite_database(source: Path, target: Path) -> None:
+    _prepare_private_dir(target.parent)
+    with sqlite3.connect(source) as source_connection, sqlite3.connect(target) as target_connection:
+        source_connection.backup(target_connection)
+    try:
+        os.chmod(target, 0o600)
+    except OSError:
+        pass
+
+
+def _delete_sqlite_account_rows(path: Path, instance_name: str, account_ids: Sequence[str]) -> int:
+    deleted = 0
+    with sqlite3.connect(path) as connection:
+        with connection:
+            for account_id in account_ids:
+                if _sqlite_table_exists(connection, "memory_keywords"):
+                    deleted += _delete_row_count(
+                        connection.execute(
+                            "DELETE FROM memory_keywords WHERE instance_name = ? AND account_id = ?",
+                            (instance_name, account_id),
+                        )
+                    )
+                if _sqlite_table_exists(connection, "memory_entries"):
+                    deleted += _delete_row_count(
+                        connection.execute(
+                            "DELETE FROM memory_entries WHERE instance_name = ? AND account_id = ?",
+                            (instance_name, account_id),
+                        )
+                    )
+                if _sqlite_table_exists(connection, "memory_indexes"):
+                    deleted += _delete_row_count(
+                        connection.execute(
+                            "DELETE FROM memory_indexes WHERE instance_name = ? AND account_id = ?",
+                            (instance_name, account_id),
+                        )
+                    )
+    return deleted
+
+
+def _delete_row_count(cursor: sqlite3.Cursor) -> int:
+    return max(0, int(cursor.rowcount if cursor.rowcount is not None else 0))
+
+
+def _prepare_private_dir(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path, 0o700)
+    except OSError:
+        pass
+
+
+def _quarantine_safety_message(running_processes: Sequence[Mapping[str, str]], *, allow_running_bot: bool) -> str:
+    if not running_processes:
+        return "No TeeBotus runtime process detected; quarantine apply may run after reviewing the report."
+    if allow_running_bot:
+        return "--allow-running-bot was set; quarantine apply is intentionally allowed despite detected runtime processes."
+    return "TeeBotus runtime processes are running; stop bot/proactive jobs before applying quarantine."
+
+
+def _running_teebotus_processes() -> list[dict[str, str]]:
+    current_pid = os.getpid()
+    processes: list[dict[str, str]] = []
+    proc_root = Path("/proc")
+    if not proc_root.exists():
+        return processes
+    for pid_dir in proc_root.iterdir():
+        if not pid_dir.name.isdigit() or int(pid_dir.name) == current_pid:
+            continue
+        try:
+            raw = (pid_dir / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if not raw:
+            continue
+        parts = [part.decode("utf-8", errors="replace") for part in raw.split(b"\0") if part]
+        cmdline = " ".join(parts)
+        lowered = cmdline.casefold()
+        if "teebotus.admin" in lowered or "memory-recovery" in lowered or "--runtime-status" in lowered:
+            continue
+        if "teebotus-proactive" in lowered or "-m teebotus " in f"{lowered} ":
+            processes.append({"pid": pid_dir.name, "cmdline": cmdline[:500]})
+    return processes
 
 
 def _discover_account_ids(accounts_root: Path) -> list[str]:

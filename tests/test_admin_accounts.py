@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from TeeBotus.admin.account_memory_recovery import build_account_memory_recovery_report, main as recovery_main
+from TeeBotus.admin.account_memory_recovery import (
+    build_account_memory_recovery_report,
+    main as recovery_main,
+    quarantine_unrecoverable_account_memory,
+)
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
 from TeeBotus.admin.accounts_report import build_accounts_admin_report, render_text_report
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider
@@ -152,6 +156,58 @@ def test_memory_recovery_report_marks_unrecoverable_key_drift(tmp_path: Path) ->
     assert report["totals"]["recoverable_accounts"] == 0
     assert report["totals"]["unrecoverable_accounts"] == 1
     assert report["totals"]["empty_accounts"] == 0
+
+
+def test_memory_recovery_quarantines_unrecoverable_sqlite_rows(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    primary_path = accounts_root / "Account_Memory.sqlite3"
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+    primary.write_entries(account_id, [{"id": "mem_bad", "user_text": "Primary"}])
+    primary.write_index(account_id, {"scope": "account", "index": {}})
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    quarantine_dir = tmp_path / "quarantine"
+
+    result = quarantine_unrecoverable_account_memory(report, apply=True, quarantine_dir=quarantine_dir, running_processes=[])
+
+    assert result["status"] == "applied"
+    assert result["totals"]["accounts_quarantined"] == 1
+    assert result["totals"]["snapshots_created"] == 1
+    assert result["totals"]["sqlite_rows_quarantined"] == 2
+    follow_up = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    account = follow_up["instances"][0]["accounts"][0]
+    assert account["recovery_status"] == "empty"
+    snapshot = quarantine_dir / "Depressionsbot" / next((quarantine_dir / "Depressionsbot").iterdir()).name / "sqlite_snapshots" / "Account_Memory.sqlite3"
+    assert snapshot.exists()
+    snapshot_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=snapshot, fallback_path=None),
+    )
+    assert snapshot_backend.read_entries(account_id)[0]["id"] == "mem_bad"
+
+
+def test_memory_recovery_quarantine_refuses_running_runtime(tmp_path: Path) -> None:
+    make_instance(tmp_path)
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    result = quarantine_unrecoverable_account_memory(
+        report,
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["apply_safety"]["apply_allowed_now"] is False
 
 
 def test_memory_recovery_report_counts_empty_accounts(tmp_path: Path) -> None:
