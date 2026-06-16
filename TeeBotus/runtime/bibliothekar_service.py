@@ -53,6 +53,8 @@ DOCUMENT_STORE_FILTER_FIELD_MAP = {
     "document_id": "meta.document_id",
     "chunk": "meta.chunk_id",
     "chunk_id": "meta.chunk_id",
+    "instance": "meta.instance_name",
+    "instance_name": "meta.instance_name",
 }
 
 
@@ -138,13 +140,13 @@ class HaystackBibliothekarBackend:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         try:
             document_store = self._document_store()
-            chunks = self._chunks_from_document_store(document_store, filters=_document_store_filters(query.filters))
+            chunks = self._chunks_from_document_store(document_store, filters=self._document_store_filters(query.filters))
         except Exception:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
             try:
                 self.rebuild()
-                chunks = self._chunks_from_document_store(document_store, filters=_document_store_filters(query.filters))
+                chunks = self._chunks_from_document_store(document_store, filters=self._document_store_filters(query.filters))
             except Exception:
                 return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
@@ -186,6 +188,7 @@ class HaystackBibliothekarBackend:
     def _document_from_chunk(self, chunk: Mapping[str, Any]) -> Any:
         meta = {
             "chunk_id": str(chunk.get("chunk_id", "")),
+            "instance_name": self.instance_name,
             "document_id": str(chunk.get("document_id", "")),
             "source_id": str(chunk.get("source_id", "")),
             "title": str(chunk.get("title", "")),
@@ -227,13 +230,19 @@ class HaystackBibliothekarBackend:
 
     def _delete_stale_documents(self, document_store: Any, *, current_ids: set[str]) -> None:
         try:
-            existing = document_store.filter_documents()
+            existing = document_store.filter_documents(filters=self._instance_document_store_filter())
         except AttributeError:
             return
+        except TypeError:
+            existing = document_store.filter_documents()
+        except Exception:
+            existing = document_store.filter_documents()
         stale_ids = [
             str(getattr(document, "id", "") or "")
             for document in existing or []
-            if str(getattr(document, "id", "") or "") and str(getattr(document, "id", "") or "") not in current_ids
+            if self._document_belongs_to_instance(document)
+            and str(getattr(document, "id", "") or "")
+            and str(getattr(document, "id", "") or "") not in current_ids
         ]
         if not stale_ids:
             return
@@ -262,6 +271,8 @@ class HaystackBibliothekarBackend:
             documents = document_store.filter_documents()
         chunks: list[dict[str, Any]] = []
         for document in documents or []:
+            if not self._document_belongs_to_instance(document):
+                continue
             meta = getattr(document, "meta", None)
             if not isinstance(meta, Mapping):
                 meta = {}
@@ -272,6 +283,7 @@ class HaystackBibliothekarBackend:
             chunks.append(
                 {
                     "chunk_id": chunk_id,
+                    "instance_name": str(meta.get("instance_name", "")),
                     "document_id": str(meta.get("document_id", "")),
                     "source_id": str(meta.get("source_id", "")),
                     "title": str(meta.get("title", "")),
@@ -296,6 +308,18 @@ class HaystackBibliothekarBackend:
                 }
             )
         return chunks
+
+    def _document_store_filters(self, filters: Mapping[str, object] | None) -> dict[str, Any]:
+        return _and_document_store_filters(self._instance_document_store_filter(), _document_store_filters(filters))
+
+    def _instance_document_store_filter(self) -> dict[str, Any]:
+        return {"operator": "AND", "conditions": [{"field": "meta.instance_name", "operator": "in", "value": [self.instance_name]}]}
+
+    def _document_belongs_to_instance(self, document: Any) -> bool:
+        meta = getattr(document, "meta", None)
+        if not isinstance(meta, Mapping):
+            return False
+        return str(meta.get("instance_name") or "").strip().casefold() == self.instance_name.casefold()
 
 
 class BibliothekarService:
@@ -515,6 +539,18 @@ def _document_store_filters(filters: Mapping[str, object] | None) -> dict[str, A
         conditions.append({"field": field, "operator": "in", "value": values})
     if not conditions:
         return None
+    return {"operator": "AND", "conditions": conditions}
+
+
+def _and_document_store_filters(*filters: Mapping[str, Any] | None) -> dict[str, Any]:
+    conditions: list[dict[str, Any]] = []
+    for filter_doc in filters:
+        if not isinstance(filter_doc, Mapping):
+            continue
+        if filter_doc.get("operator") == "AND" and isinstance(filter_doc.get("conditions"), list):
+            conditions.extend(condition for condition in filter_doc["conditions"] if isinstance(condition, dict))
+            continue
+        conditions.append(dict(filter_doc))
     return {"operator": "AND", "conditions": conditions}
 
 

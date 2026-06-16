@@ -349,7 +349,10 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
 
     assert document_store.filter_calls[-1]["filters"] == {
         "operator": "AND",
-        "conditions": [{"field": "meta.topics", "operator": "in", "value": ["python"]}],
+        "conditions": [
+            {"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]},
+            {"field": "meta.topics", "operator": "in", "value": ["python"]},
+        ],
     }
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "therapie.txt" not in selection.prompt_text
@@ -385,12 +388,103 @@ def test_haystack_backend_does_not_push_private_account_filters_to_document_stor
 
     assert document_store.filter_calls[-1]["filters"] == {
         "operator": "AND",
-        "conditions": [{"field": "meta.topics", "operator": "in", "value": ["python"]}],
+        "conditions": [
+            {"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]},
+            {"field": "meta.topics", "operator": "in", "value": ["python"]},
+        ],
     }
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "private-account-id" not in selection.prompt_text
     assert "telegram:user:1" not in selection.prompt_text
     assert "mem_private" not in selection.prompt_text
+
+
+def test_haystack_backend_isolates_search_results_by_instance(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    fallback_store.rebuild()
+    document_store = FakeDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content="Depression Therapie Aktivierung Schlaf.",
+            id="own_chunk",
+            meta={
+                "chunk_id": "own_chunk",
+                "instance_name": "Depressionsbot",
+                "relative_path": "therapie.txt",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+        FakeDocument(
+            content="Fremde Instanz Therapie darf nicht auftauchen.",
+            id="foreign_chunk",
+            meta={
+                "chunk_id": "foreign_chunk",
+                "instance_name": "AndereInstanz",
+                "relative_path": "fremd.txt",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filter_calls[-1]["filters"] == {
+        "operator": "AND",
+        "conditions": [{"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]}],
+    }
+    assert [chunk["chunk_id"] for chunk in payload["selected_library_chunks"]] == ["own_chunk"]
+    assert "Fremde Instanz" not in selection.prompt_text
+
+
+def test_haystack_rebuild_does_not_delete_other_instance_documents(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    document_store = FakeDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content="Alter eigener Chunk",
+            id="stale_own_chunk",
+            meta={"chunk_id": "stale_own_chunk", "instance_name": "Depressionsbot"},
+        ),
+        FakeDocument(
+            content="Andere Instanz",
+            id="foreign_chunk",
+            meta={"chunk_id": "foreign_chunk", "instance_name": "AndereInstanz"},
+        ),
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    backend.rebuild()
+
+    assert "stale_own_chunk" in document_store.deleted_document_ids
+    assert "foreign_chunk" not in document_store.deleted_document_ids
+    assert any(document.id == "foreign_chunk" for document in document_store.documents)
+    assert all(
+        document.meta.get("instance_name") == "Depressionsbot"
+        for document in document_store.documents
+        if str(document.id).startswith("lib_")
+    )
 
 
 def test_bibliothekar_ignores_private_only_filters_instead_of_emptying_results(tmp_path):
@@ -427,6 +521,8 @@ def test_haystack_backend_keeps_backend_when_filter_pushdown_is_rejected(tmp_pat
         document_class=FakeDocument,
     )
     backend.rebuild()
+    document_store.rejected_filter_calls = 0
+    document_store.unfiltered_calls = 0
 
     selection = backend.search(BibliothekarQuery(text="System Therapie", filters={"topics": ["python"]}, max_chunks=3))
     payload = json.loads(selection.prompt_text)
