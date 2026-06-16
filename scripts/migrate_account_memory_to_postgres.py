@@ -13,7 +13,7 @@ from scripts.migrate_account_memory_to_database import main as database_migratio
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    return database_migration_main(["--backend", "postgres", *args])
+    return database_migration_main([*args, "--backend", "postgres"])
 
 
 if __name__ == "__main__":

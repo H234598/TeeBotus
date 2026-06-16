@@ -14,6 +14,8 @@ def test_postgres_memory_migration_wrapper_delegates_to_verified_database_migrat
 
     result = postgres_migration.main(
         [
+            "--backend",
+            "sqlite",
             "--instances-dir",
             "instances",
             "--instance",
@@ -28,7 +30,7 @@ def test_postgres_memory_migration_wrapper_delegates_to_verified_database_migrat
     assert calls == [
         [
             "--backend",
-            "postgres",
+            "sqlite",
             "--instances-dir",
             "instances",
             "--instance",
@@ -36,5 +38,7 @@ def test_postgres_memory_migration_wrapper_delegates_to_verified_database_migrat
             "--postgres-dsn",
             "postgresql://bench",
             "--delete-json-files",
+            "--backend",
+            "postgres",
         ]
     ]
