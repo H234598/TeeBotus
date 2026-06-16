@@ -617,6 +617,18 @@ def test_runtime_status_broken_lines_flags_secret_leaks() -> None:
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()[:2]
 
 
+def test_runtime_status_broken_lines_flags_generic_secret_assignments() -> None:
+    output = "\n".join(
+        [
+            "llm=Demo/telegram:1 provider=litellm model=x status=configured api_key=configured",
+            "llm=Demo/signal:1 provider=litellm model=x status=broken error=provider refused api_key=plain-secret",
+            "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable password=hunter2",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()[1:]
+
+
 def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> None:
     output = "\n".join(
         [

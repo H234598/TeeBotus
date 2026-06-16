@@ -350,6 +350,12 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bhf_[A-Za-z0-9]{8,}\b", "hf_<redacted>", text)
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
+    text = re.sub(
+        r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)",
+        r"\1=<redacted>",
+        text,
+        flags=re.IGNORECASE,
+    )
     return text.replace("\r", " ").replace("\n", " ")
 
 
