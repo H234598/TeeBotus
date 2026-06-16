@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 README = Path(__file__).resolve().parents[1] / "README.md"
+PLAN2 = Path(__file__).resolve().parents[1] / "docs" / "Plan2.md"
 
 
 def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
@@ -101,3 +102,17 @@ def test_readme_uses_placeholder_secrets_only() -> None:
     assert "xoxb-" not in text
     assert "postgresql://USER:PASSWORD@HOST:5432/DBNAME" in text
     assert "syt_..." in text
+
+
+def test_plan2_doc_tracks_current_pyproject_and_llm_contract() -> None:
+    text = PLAN2.read_text(encoding="utf-8")
+
+    assert 'dynamic = ["version"]' in text
+    assert 'requires-python = ">=3.11"' in text
+    assert 'version = "1.4.28"' not in text
+    assert 'requires-python = ">=3.10"' not in text
+    assert "requires-python >=3.10" not in text
+    assert "ein neutraler llm_client existiert im aktuellen Stand noch nicht" not in text
+    assert "nicht llm_provider/llm_model" not in text
+    assert "llm_provider" in text
+    assert "llm_model" in text

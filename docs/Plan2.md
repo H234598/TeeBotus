@@ -300,9 +300,8 @@ Extras:
 ```toml
 [project]
 name = "teebotus"
-version = "1.4.28"
+dynamic = ["version"]
 requires-python = ">=3.11"
-dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -1922,13 +1921,13 @@ Das Repo ist weiter H234598/TeeBotus, private, Branch main; der installierte Rep
 Der Entry-Point ist aktuell gesund: TeeBotus/__main__.py delegiert bewusst an TeeBotus.bot.main, damit python3 -m TeeBotus und python3 -m TeeBotus --all stabil bleiben.
 TeeBotus.bot bleibt vorerst der stabile öffentliche Einstieg. Telegram liegt aktuell noch in TeeBotus.adapters.telegram_runtime und nutzt Long-Polling; das ist aber nur noch als Transport-Kompatibilität zu verstehen. Ziel ist, Telegram wie Signal und Matrix als additiven Runtime-Slot zu behandeln.
 
-Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Sie hängt aber weiterhin direkt an openai_client; ein neutraler llm_client existiert im aktuellen Stand noch nicht.
+Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Für Textantworten läuft der Zugriff inzwischen über `llm_client`/Runtime-LLM-Factory; `openai_client` bleibt als Legacy-Alias und Spezialclient für OpenAI-spezifische Funktionen erhalten.
 
 Der OpenAI-Client ist weiter ein Spezialclient, nicht nur ein simpler Chat-Aufruf: Responses API, Image Generation, Tool Calls, Speech und Transcription hängen dort zusammen.
 Auch BotInstructions sind noch stark openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image, Transcription, Fehlertexte und Reset-Texte laufen unter OpenAI-Namen.
-Die Runtime-Konfiguration trägt pro Account ebenfalls noch openai_api_key, nicht llm_provider/llm_model.
+Die Runtime-Konfiguration trägt pro Account weiter `openai_api_key` als Legacy-Pfad, hat aber zusätzlich die neutralen `llm_*` Felder wie `llm_provider`, `llm_model`, `llm_base_url`, `llm_profile`, `llm_purpose` und Fallback-/Timeout-Optionen.
 
-Wichtig: pyproject.toml existiert bereits, aber ist minimal. Es nutzt setuptools, requires-python >=3.10, dynamische Version und bereits Scripts für teebotus-bibliothekar, teebotus-proactive, teebotus-proactive-review und teebotus-proactive-systemd.
+Wichtig: `pyproject.toml` nutzt setuptools, dynamische Version über `TeeBotus.__version__`, erzwingt aktuell `requires-python = ">=3.11"` und enthält die Plan2-Extras `dev`, `llm`, `rag`, `agents`, `tools` plus Scripts für `teebotus-bibliothekar`, `teebotus-proactive`, `teebotus-proactive-review`, `teebotus-proactive-systemd`, `teebotus-systemd` und `teebotus-qdrant-systemd`.
 
 Vergleich der Pläne
 
@@ -1987,11 +1986,7 @@ Haystack ist nicht Phase 6 „neues Paket“, sondern Phase 6 „Backend unter b
 
 3. pyproject: Plan v2 überschreibt zu viel
 
-Plan v2 schlägt ein neues pyproject.toml mit Python >=3.11/3.12-Fokus und Extras vor. Das ist grundsätzlich gut, aber TeeBotus hat aktuell requires-python >=3.10.
-
-Ich würde nicht ohne Not auf >=3.11 erhöhen, außer eine neue Abhängigkeit erzwingt es. Besser:
-
-requires-python = ">=3.10"
+Plan v2 schlägt ein pyproject.toml mit Python >=3.11/3.12-Fokus und Extras vor. Der aktuelle Repo-Stand folgt dieser Entscheidung bewusst: `pyproject.toml`, `scripts/check_adapter_deps.py` und die Pyproject-Tests erzwingen `requires-python = ">=3.11"`.
 
 und Extras ergänzen:
 
@@ -2039,8 +2034,8 @@ Ich würde den Plan jetzt so umstellen:
 Phase 0 — Baseline
 - aktuellen main sichern
 - Tests laufen lassen
-- pyproject nur minimal um Extras erweitern
-- Python >=3.10 beibehalten
+- pyproject mit dynamischer Version und Plan2-Extras beibehalten
+- Python >=3.11 beibehalten, solange die gepinnten Plan2-Extras diese Grenze rechtfertigen
 
 Phase 1 — LLM-Interface
 - TeeBotus/llm/base.py
@@ -2091,11 +2086,7 @@ Was aus Plan v2 gestrichen oder geändert werden sollte
 
 requires-python = ">=3.11"
 
-zu:
-
-requires-python = ">=3.10"
-
-solange TeeBotus nicht bewusst angehoben wird.
+beibehalten; eine Absenkung auf Python 3.10 waere inzwischen eine eigene Kompatibilitaetsentscheidung und muesste gegen alle gepinnten Plan2-Extras, CI und Adapter-Doctor geprueft werden.
 
 Ändern:
 
