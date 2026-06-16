@@ -122,8 +122,10 @@ class HaystackBibliothekarBackend:
             return index
         chunks = _read_chunks(self.fallback_store.chunks_path)
         documents = [self._document_from_chunk(chunk) for chunk in chunks]
+        document_store = self._document_store()
+        self._delete_stale_documents(document_store, current_ids={str(getattr(document, "id", "")) for document in documents if str(getattr(document, "id", ""))})
         if documents:
-            self._write_documents(self._document_store(), documents)
+            self._write_documents(document_store, documents)
         return index
 
     @property
@@ -169,6 +171,25 @@ class HaystackBibliothekarBackend:
             document_store.write_documents(documents, policy=DuplicatePolicy.OVERWRITE)
         except Exception:
             document_store.write_documents(documents)
+
+    def _delete_stale_documents(self, document_store: Any, *, current_ids: set[str]) -> None:
+        try:
+            existing = document_store.filter_documents()
+        except AttributeError:
+            return
+        stale_ids = [
+            str(getattr(document, "id", "") or "")
+            for document in existing or []
+            if str(getattr(document, "id", "") or "") and str(getattr(document, "id", "") or "") not in current_ids
+        ]
+        if not stale_ids:
+            return
+        try:
+            document_store.delete_documents(document_ids=stale_ids)
+        except AttributeError:
+            return
+        except TypeError:
+            document_store.delete_documents(stale_ids)
 
     def _chunks_from_document_store(self, document_store: Any, *, filters: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
