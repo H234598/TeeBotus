@@ -45,6 +45,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert pytest_args[:3] == ("python-test", "-m", "pytest")
     assert pytest_args[3] == "-q"
     assert set(pytest_args[4:]) == set(expected_plan2_tests)
+    assert "tests/test_account_memory_migration.py" in pytest_args
     assert "tests/test_proactive_backends.py" in pytest_args
     assert "tests/test_proactive_cli.py" in pytest_args
     assert "tests/test_readme_plan2_docs.py" in pytest_args

@@ -67,6 +67,7 @@ class AcceptanceCommand:
 
 PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_account_store.py",
+    "tests/test_account_memory_migration.py",
     "tests/test_activity_profile.py",
     "tests/test_adapter_dependency_install.py",
     "tests/test_adapters.py",
