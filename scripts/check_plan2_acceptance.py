@@ -532,7 +532,8 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             missing_rankings = sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES - ranking_categories)
             if missing_rankings:
                 errors.append(f"{prefix}benchmark rankings missing required categories: {', '.join(missing_rankings)}")
-            errors.extend(_benchmark_ranking_errors(rankings, prefix=prefix))
+            successful_results = _successful_benchmark_results_by_name(results)
+            errors.extend(_benchmark_ranking_errors(rankings, successful_results=successful_results, prefix=prefix))
     regression = payload.get("regression")
     if not isinstance(regression, dict):
         errors.append(f"{prefix}regression must be an object")
@@ -557,7 +558,26 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
     return errors
 
 
-def _benchmark_ranking_errors(rankings: list[Any], *, prefix: str) -> list[str]:
+def _successful_benchmark_results_by_name(results: Any) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(results, list):
+        return {}
+    successful: dict[str, Mapping[str, Any]] = {}
+    for result in results:
+        if not isinstance(result, Mapping):
+            continue
+        name = str(result.get("name") or "")
+        if (
+            name
+            and result.get("ok") is True
+            and not result.get("skipped")
+            and _is_nonnegative_integer(result.get("errors"))
+            and int(result.get("errors") or 0) == 0
+        ):
+            successful[name] = result
+    return successful
+
+
+def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mapping[str, Mapping[str, Any]], prefix: str) -> list[str]:
     errors: list[str] = []
     for ranking_index, ranking in enumerate(rankings):
         if not isinstance(ranking, Mapping):
@@ -593,6 +613,16 @@ def _benchmark_ranking_errors(rankings: list[Any], *, prefix: str) -> list[str]:
             elif candidate_name in seen_names:
                 errors.append(f"{prefix}rankings[{ranking_index}] duplicate candidate name: {candidate_name}")
             seen_names.add(candidate_name)
+            result = successful_results.get(candidate_name)
+            if candidate_name and result is None:
+                errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must reference a successful result")
+            elif result is not None:
+                result_category = str(result.get("category") or "")
+                if category and result_category and result_category != category:
+                    errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] category must match result category")
+                for key in ("mode", "throughput_ops_s", "total_ms", "errors", "payload_bytes", "index_bytes"):
+                    if candidate.get(key) != result.get(key):
+                        errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] {key} must match result")
             if candidate.get("rank") != candidate_index:
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] rank must be {candidate_index}")
             for key in ("throughput_ops_s", "total_ms", "payload_bytes", "index_bytes"):

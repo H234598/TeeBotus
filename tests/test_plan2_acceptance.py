@@ -7,8 +7,16 @@ from pathlib import Path
 from scripts import check_plan2_acceptance
 
 
+RANKING_RESULT_NAMES = {
+    "account_memory": "account_memory_benchmark",
+    "bibliothekar": "bibliothekar_benchmark",
+    "langgraph_flows": "langgraph_flows_benchmark",
+    "transcription_youtube": "transcription_youtube_benchmark",
+}
+
+
 def _valid_ranking(category: str) -> dict:
-    name = f"{category}_benchmark"
+    name = RANKING_RESULT_NAMES.get(category, f"{category}_benchmark")
     return {
         "category": category,
         "fastest_stable": name,
@@ -601,6 +609,17 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> N
     assert any("rankings[0].candidates[0] must report payload_bytes or index_bytes" in error for error in errors)
     assert any("rankings[0] fastest_stable must match rank 1 candidate" in error for error in errors)
     assert any("rankings[0] fastest_stable must not be skipped" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_rejects_rankings_without_matching_results() -> None:
+    payload = _valid_benchmark_payload()
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["fastest_stable"] = "synthetic_fastest"
+    ranking["candidates"][0]["name"] = "synthetic_fastest"
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0].candidates[0] must reference a successful result" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_runtime_context() -> None:
