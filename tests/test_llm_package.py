@@ -14,6 +14,7 @@ from TeeBotus.llm import (
     normalize_llm_provider,
 )
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES, OPENAI_CAPABILITIES
+from TeeBotus.llm.config import load_llm_profiles, load_llm_routing, select_llm_route
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIImage, OpenAIResponse, OpenAIVoice
 
 
@@ -25,6 +26,31 @@ def test_plan1_llm_package_exports_existing_router_and_litellm_adapter() -> None
     assert LITELLM_TEXT_CAPABILITIES.voice is False
     assert OPENAI_CAPABILITIES.previous_response_id is True
     assert OPENAI_CAPABILITIES.transcription is True
+
+
+def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
+    profiles = load_llm_profiles()
+    default_profile, routing = load_llm_routing()
+
+    assert default_profile == "local_ollama"
+    assert {"local_ollama", "hf_mistral", "groq_fast", "gemini_flash", "openai_premium"} <= set(profiles)
+    assert {"normal_chat", "structured_decision", "bibliothekar_answer"} <= set(routing)
+
+    normal = select_llm_route("normal chat", profiles=profiles, default_profile=default_profile, routing=routing)
+    structured = select_llm_route(
+        "structured decision",
+        profiles=profiles,
+        default_profile=default_profile,
+        routing=routing,
+        allow_remote_fallback=True,
+    )
+
+    assert normal.profile_name == "local_ollama"
+    assert normal.provider == "litellm"
+    assert normal.base_url == "http://127.0.0.1:11434"
+    assert structured.profile_name == "local_ollama"
+    assert structured.fallback_profile_name == "groq_fast"
+    assert structured.fallback_models == ("groq/llama-3.1-8b-instant",)
 
 
 def test_openai_provider_maps_existing_client_payloads_to_neutral_types() -> None:
