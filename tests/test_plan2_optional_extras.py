@@ -1,0 +1,32 @@
+from __future__ import annotations
+
+import importlib.metadata
+
+from scripts.check_plan2_optional_extras import build_optional_extras_report
+
+
+def test_plan2_optional_extras_inventory_reports_declared_groups() -> None:
+    report = build_optional_extras_report()
+
+    assert report["schema_version"] == 1
+    assert report["ok"] is True
+    assert set(report["extras"]) == {"rag", "agents", "tools"}
+    assert "haystack-ai" in report["extras"]["rag"]["declared"]
+    assert "qdrant-haystack" in report["extras"]["rag"]["declared"]
+    assert "pydantic-ai" in report["extras"]["agents"]["declared"]
+    assert "langgraph" in report["extras"]["agents"]["declared"]
+    assert "fastmcp" in report["extras"]["tools"]["declared"]
+
+
+def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> None:
+    def missing(_package: str) -> str:
+        raise importlib.metadata.PackageNotFoundError
+
+    monkeypatch.setattr("scripts.check_plan2_optional_extras.importlib.metadata.version", missing)
+
+    report = build_optional_extras_report(require_installed=True)
+
+    assert report["ok"] is False
+    assert any("rag missing installed packages" in error for error in report["errors"])
+    assert any("agents missing installed packages" in error for error in report["errors"])
+    assert any("tools missing installed packages" in error for error in report["errors"])

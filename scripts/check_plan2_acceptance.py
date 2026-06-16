@@ -69,6 +69,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_benchmarks_runner.py",
     "tests/test_memory_store_benchmark.py",
     "tests/test_plan2_acceptance.py",
+    "tests/test_plan2_optional_extras.py",
     "tests/test_youtube_parser_stats.py",
     "tests/test_youtube_parser_misses_report.py",
 )
@@ -191,6 +192,10 @@ def build_acceptance_commands(
                     "--json-output",
                     str(benchmark_json_output),
                 ),
+            ),
+            AcceptanceCommand(
+                "plan2-optional-extras",
+                (python, "scripts/check_plan2_optional_extras.py"),
             ),
         ]
     )
