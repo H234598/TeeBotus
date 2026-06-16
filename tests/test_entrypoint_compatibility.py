@@ -783,6 +783,32 @@ def test_runtime_status_redacts_secret_like_health_errors(monkeypatch, capsys) -
     assert "syt_<redacted>" in captured.out
 
 
+def test_runtime_status_redacts_helper_status_lines(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    openai_key = "sk-" + "helperStatusLeak123456"
+    hf_key = "hf_" + "helperStatusLeak123456"
+
+    monkeypatch.setattr(
+        "TeeBotus.core.status.mcp_tool_runtime_status_line",
+        lambda _instance_name, _mcp_tools: f"mcp_tools=Demo status=broken error=tool leaked {openai_key}",
+    )
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_memory_index_health_lines",
+        lambda *, instance_name, project_root: [f"account_memory={instance_name}/abc status=broken error=index leaked {hf_key}"],
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+    captured = capsys.readouterr()
+
+    assert openai_key not in captured.out
+    assert hf_key not in captured.out
+    assert "mcp_tools=Demo status=broken error=tool leaked sk-<redacted>" in captured.out
+    assert "account_memory=Demo/abc status=broken error=index leaked hf_<redacted>" in captured.out
+
+
 def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

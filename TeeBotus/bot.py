@@ -181,10 +181,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
         except Exception as exc:
             print(f"mcp_tools={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
-        print(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools))
+        print(_sanitize_status_text(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools)))
     for instance_name in config.selected_instances:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
-            print(line)
+            print(_sanitize_status_text(line))
     return 0
 
 
