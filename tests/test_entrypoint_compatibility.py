@@ -486,7 +486,7 @@ def test_runtime_status_reports_haystack_bibliothekar_dependency_gap(monkeypatch
     captured = capsys.readouterr()
     assert (
         "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=unavailable "
-        "error=missing optional dependency: haystack, qdrant_haystack"
+        "error=missing optional dependency: haystack, haystack_integrations.document_stores.qdrant"
     ) in captured.out
 
 

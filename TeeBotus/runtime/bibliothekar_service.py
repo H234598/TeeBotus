@@ -19,6 +19,9 @@ from TeeBotus.runtime.bibliothekar import (
 )
 
 
+HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
+
+
 @dataclass(frozen=True)
 class BibliothekarQuery:
     text: str
@@ -130,7 +133,7 @@ class HaystackBibliothekarBackend:
 
     @property
     def available(self) -> bool:
-        return self._document_store_factory is not None or (_module_available("haystack") and _module_available("qdrant_haystack"))
+        return self._document_store_factory is not None or (_module_available("haystack") and any(_module_available(name) for name in HAYSTACK_QDRANT_MODULES))
 
     def _document_store(self) -> Any:
         if self._document_store_cache is not None:
@@ -138,7 +141,10 @@ class HaystackBibliothekarBackend:
         if self._document_store_factory is not None:
             self._document_store_cache = self._document_store_factory()
             return self._document_store_cache
-        from qdrant_haystack import QdrantDocumentStore  # type: ignore[import-not-found]
+        try:
+            from haystack_integrations.document_stores.qdrant import QdrantDocumentStore  # type: ignore[import-not-found]
+        except ModuleNotFoundError:
+            from qdrant_haystack import QdrantDocumentStore  # type: ignore[import-not-found]
 
         self._document_store_cache = QdrantDocumentStore(url="http://127.0.0.1:6333", index=self.collection)
         return self._document_store_cache
@@ -336,7 +342,11 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
     if not bool(getattr(instructions, "bibliothekar_enabled", True)):
         return BibliothekarServiceHealth(instance_name, backend, "disabled", collection=collection)
     if backend == "haystack":
-        missing = [name for name in ("haystack", "qdrant_haystack") if not _module_available(name)]
+        missing = []
+        if not _module_available("haystack"):
+            missing.append("haystack")
+        if not any(_module_available(name) for name in HAYSTACK_QDRANT_MODULES):
+            missing.append("haystack_integrations.document_stores.qdrant")
         if missing:
             return BibliothekarServiceHealth(
                 instance_name,

@@ -468,6 +468,16 @@ def test_haystack_backend_search_falls_back_to_local_store_when_optional_depende
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
+def test_haystack_backend_detects_installed_qdrant_haystack_integration(tmp_path):
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+    )
+
+    assert backend.available is True
+
+
 def test_haystack_status_reports_unreachable_qdrant_when_dependencies_exist(tmp_path, monkeypatch):
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
     monkeypatch.setattr(
