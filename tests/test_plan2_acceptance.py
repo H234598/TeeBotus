@@ -61,7 +61,7 @@ def _valid_benchmark_payload() -> dict:
             "platform": "Linux-test",
             "machine": "x86_64",
             "cpu_count": 4,
-            "dependencies": {"teebotus": {"version": "1.6.7", "status": "worktree"}},
+            "dependencies": {"teebotus": {"version": "1.6.8", "status": "worktree"}},
         },
         "results": [
             {

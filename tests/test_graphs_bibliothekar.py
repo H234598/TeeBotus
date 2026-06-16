@@ -34,7 +34,7 @@ def test_bibliothekar_deep_query_passes_metadata_filters(tmp_path) -> None:
     state = run_bibliothekar_deep_query(
         service,
         "System Therapie",
-        filters={"categories": ["technik"], "account_id": "private-must-not-echo"},
+        filters={"categories": ["", "technik", " "], "keywords": [" "], "account_id": "private-must-not-echo"},
         prefer_langgraph=False,
     )
 
@@ -253,10 +253,11 @@ def test_bibliothekar_deep_query_coerces_graph_state_conservatively(tmp_path, mo
         def invoke(self, _state):
             return {
                 "query": "Therapie",
+                "filters": {"topics": [" python ", "", "python"], "keywords": [" "], "account_id": "private"},
                 "confidence": "2.0",
                 "citation_ok": "false",
                 "fallback_reason": None,
-                "selected_ids": ("", None, "mem_1"),
+                "selected_ids": ("", None, "mem_1", "mem_1"),
                 "errors": ("x" * 700,),
             }
 
@@ -286,10 +287,12 @@ def test_bibliothekar_deep_query_coerces_graph_state_conservatively(tmp_path, mo
     state = run_bibliothekar_deep_query(_service_with_book(tmp_path), "Therapie", prefer_langgraph=True)
 
     assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "external_unverified_state"
     assert "confidence" not in state
-    assert "fallback_reason" not in state
+    assert state["filters"] == {"topics": ["python"]}
     assert state["selected_ids"] == ["mem_1"]
     assert state["errors"] == ["x" * 500]
+    assert "keine belastbare Quelle" in state["answer_text"]
     json.dumps(state, allow_nan=False)
 
 
@@ -375,6 +378,97 @@ def test_bibliothekar_deep_query_revalidates_external_citation_ok_state(tmp_path
     assert "keine belastbare Quelle" in state["answer_text"]
 
 
+def test_bibliothekar_deep_query_rejects_external_false_citation_ok_partial_answer(tmp_path, monkeypatch) -> None:
+    service = _service_with_book(tmp_path)
+    prompt_text = service.search("Therapie").prompt_text
+    payload = json.loads(prompt_text)
+    chunk_id = payload["selected_library_chunks"][0]["chunk_id"]
+
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "selected_ids": [chunk_id],
+                "prompt_text": prompt_text,
+                "answer_text": f"Therapie wird genannt. [Quelle: chunk_id={chunk_id}]",
+                "citation_ok": False,
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(service, "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "external_unverified_state"
+    assert "keine belastbare Quelle" in state["answer_text"]
+
+
+def test_bibliothekar_deep_query_rejects_external_missing_citation_ok_partial_answer(tmp_path, monkeypatch) -> None:
+    service = _service_with_book(tmp_path)
+    prompt_text = service.search("Therapie").prompt_text
+    payload = json.loads(prompt_text)
+    chunk_id = payload["selected_library_chunks"][0]["chunk_id"]
+
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "selected_ids": [chunk_id],
+                "prompt_text": prompt_text,
+                "answer_text": f"Therapie wird genannt. [Quelle: chunk_id={chunk_id}]",
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(service, "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "external_unverified_state"
+    assert "keine belastbare Quelle" in state["answer_text"]
+
+
 def test_bibliothekar_deep_query_rejects_external_selected_id_mismatch(tmp_path, monkeypatch) -> None:
     service = _service_with_book(tmp_path)
     prompt_text = service.search("Therapie").prompt_text
@@ -415,6 +509,54 @@ def test_bibliothekar_deep_query_rejects_external_selected_id_mismatch(tmp_path,
     monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
 
     state = run_bibliothekar_deep_query(service, "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "selected_ids_mismatch"
+    assert "keine belastbare Quelle" in state["answer_text"]
+
+
+def test_bibliothekar_deep_query_rejects_external_selected_id_subset(tmp_path, monkeypatch) -> None:
+    service = _service_with_books(tmp_path)
+    prompt_text = service.search("Therapie Schlaf").prompt_text
+    payload = json.loads(prompt_text)
+    chunks = payload["selected_library_chunks"]
+    assert len(chunks) >= 2
+    selected_chunk = chunks[0]["chunk_id"]
+
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie Schlaf",
+                "selected_ids": [selected_chunk],
+                "prompt_text": prompt_text,
+                "answer_text": f"Therapie wird genannt. [Quelle: chunk_id={selected_chunk}]",
+                "citation_ok": True,
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(service, "Therapie Schlaf", prefer_langgraph=True)
 
     assert state["citation_ok"] is False
     assert state["fallback_reason"] == "selected_ids_mismatch"
@@ -480,6 +622,16 @@ def _service_with_book(tmp_path) -> BibliothekarService:
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    return BibliothekarService(LocalBibliothekarBackend(store))
+
+
+def _service_with_books(tmp_path) -> BibliothekarService:
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    (library_dir / "schlaf.txt").write_text("Schlaf Hygiene Rhythmus Ruhe.", encoding="utf-8")
     store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
     store.rebuild()
     return BibliothekarService(LocalBibliothekarBackend(store))

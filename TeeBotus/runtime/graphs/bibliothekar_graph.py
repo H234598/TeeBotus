@@ -259,7 +259,7 @@ def _selected_ids_match_chunks(selected_ids: object, chunks: list[object]) -> bo
     chunk_ids.discard("")
     selected = {str(item or "").strip() for item in selected_ids}
     selected.discard("")
-    return bool(selected) and selected.issubset(chunk_ids)
+    return bool(selected) and selected == chunk_ids
 
 
 def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:
@@ -271,9 +271,18 @@ def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:
         if normalized_key not in CHUNK_FILTER_KEYS:
             continue
         if isinstance(value, (list, tuple, set, frozenset)):
-            result[normalized_key] = [str(item) for item in value if str(item).strip()]
+            values: list[str] = []
+            seen: set[str] = set()
+            for item in value:
+                text = str(item or "").strip()
+                if not text or text in seen:
+                    continue
+                seen.add(text)
+                values.append(text)
+            if values:
+                result[normalized_key] = values
         elif value is not None and str(value).strip():
-            result[normalized_key] = str(value)
+            result[normalized_key] = str(value).strip()
     return result
 
 
@@ -304,9 +313,16 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
 def _finalize_external_state(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryState:
     if state.get("fallback_reason"):
         return _fallback({**state, "answer_text": "", "citation_ok": False})
-    if state.get("citation_ok"):
-        return _fallback(_citation_check(state))
-    return state
+    if state.get("citation_ok") is not True:
+        return _fallback(
+            {
+                **state,
+                "answer_text": "",
+                "citation_ok": False,
+                "fallback_reason": "external_unverified_state",
+            }
+        )
+    return _fallback(_citation_check(state))
 
 
 def _coerce_float(value: object) -> float | None:
@@ -336,11 +352,13 @@ def _coerce_string_list(values: object, *, max_items: int = 100, max_chars: int 
     if not isinstance(values, (list, tuple, set, frozenset)):
         return []
     result: list[str] = []
+    seen: set[str] = set()
     for item in values:
-        text = str(item or "").strip()
-        if not text:
+        text = str(item or "").strip()[:max_chars]
+        if not text or text in seen:
             continue
-        result.append(text[:max_chars])
+        seen.add(text)
+        result.append(text)
         if len(result) >= max_items:
             break
     return result
