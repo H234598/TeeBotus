@@ -359,6 +359,9 @@ def _build_quality_gate(
         if not isinstance(details, dict) or not details:
             errors.append(f"{name} details must be a non-empty object")
         elif quick and not include_live:
+            missing_counters = sorted(STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS - set(details))
+            if missing_counters:
+                errors.append(f"{name} details missing standard no-live counters: {', '.join(missing_counters)}")
             for key, value in _forbidden_standard_benchmark_calls(details):
                 errors.append(f"{name} details.{key} must be 0 in standard quick benchmarks, got {value}")
         if quick and not include_live and str(result.get("mode") or "local").casefold() == "live":
@@ -1922,6 +1925,8 @@ def _result(
     mode: str = "local",
 ) -> BenchmarkResult:
     throughput = (iterations / (total_ms / 1000)) if total_ms > 0 and iterations > 0 else 0.0
+    normalized_details = {key: 0 for key in STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS}
+    normalized_details.update(details or {})
     return {
         "name": name,
         "category": category,
@@ -1937,7 +1942,7 @@ def _result(
         "reason": str(reason or ""),
         "mode": str(mode or "local"),
         "live": str(mode or "").startswith("live"),
-        "details": details or {},
+        "details": normalized_details,
     }
 
 

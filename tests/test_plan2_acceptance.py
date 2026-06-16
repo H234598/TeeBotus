@@ -62,7 +62,13 @@ def _valid_benchmark_payload() -> dict:
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
-                "details": {"network_calls": 0},
+                "details": {
+                    "network_calls": 0,
+                    "openai_calls": 0,
+                    "provider_calls": 0,
+                    "remote_calls": 0,
+                    "llm_calls": 0,
+                },
             }
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
@@ -624,6 +630,16 @@ def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> No
     assert any("results[0] details must be a non-empty object" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_requires_no_live_counters() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["details"] = {"network_calls": 0}
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("results[0] details missing standard no-live counters" in error for error in errors)
+    assert any("openai_calls" in error and "provider_calls" in error and "remote_calls" in error for error in errors)
+
+
 def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifacts() -> None:
     payload = {
         "schema_version": 1,
@@ -671,9 +687,9 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
 def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_standard_artifacts() -> None:
     payload = _valid_benchmark_payload()
     payload["results"][0]["mode"] = "live"
-    payload["results"][1]["details"] = {"network_calls": 1}
-    payload["results"][2]["details"] = {"nested": {"openai_calls": 2}}
-    payload["results"][3]["details"] = {"llm_calls": 1}
+    payload["results"][1]["details"]["network_calls"] = 1
+    payload["results"][2]["details"]["nested"] = {"openai_calls": 2}
+    payload["results"][3]["details"]["llm_calls"] = 1
 
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 

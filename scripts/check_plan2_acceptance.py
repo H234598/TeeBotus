@@ -553,6 +553,9 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 continue
             if str(result.get("mode") or "local").casefold() == "live":
                 errors.append(f"{prefix}results[{index}] must not use live mode in standard Plan2 benchmark artifacts")
+            missing_counters = sorted(STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS - set(details))
+            if missing_counters:
+                errors.append(f"{prefix}results[{index}] details missing standard no-live counters: {', '.join(missing_counters)}")
             for key, value in _forbidden_standard_benchmark_calls(details):
                 errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
     comparisons = payload.get("comparisons")

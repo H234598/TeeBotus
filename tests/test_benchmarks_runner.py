@@ -53,6 +53,9 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert all("total_ms" in result for result in suite["results"])
     assert all("throughput_ops_s" in result for result in suite["results"])
     assert all("mode" in result and "live" in result for result in suite["results"])
+    for result in suite["results"]:
+        for counter in benchmark_module.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS:
+            assert result["details"][counter] == 0
     missing_sizes = [
         result["name"]
         for result in suite["results"]
@@ -243,6 +246,7 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert "memory_jsonl iterations must be a positive integer" in quality_gate["errors"]
     assert "memory_jsonl errors must be 0 for ok standard benchmark results" in quality_gate["errors"]
     assert "memory_jsonl must report payload_bytes or index_bytes" in quality_gate["errors"]
+    assert any("memory_jsonl details missing standard no-live counters" in error for error in quality_gate["errors"])
     assert "memory_jsonl details.network_calls must be 0 in standard quick benchmarks, got 1" in quality_gate["errors"]
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
