@@ -25,6 +25,7 @@ class AcceptanceCommand:
 PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_entrypoint_compatibility.py",
     "tests/test_runtime_config.py",
+    "tests/test_runtime_state.py",
     "tests/test_llm_config.py",
     "tests/test_llm_client.py",
     "tests/test_litellm_provider.py",
@@ -40,6 +41,8 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_readme_plan2_docs.py",
     "tests/test_secret_hygiene.py",
     "tests/test_benchmarks_runner.py",
+    "tests/test_memory_store_benchmark.py",
+    "tests/test_plan2_acceptance.py",
     "tests/test_youtube_parser_stats.py",
     "tests/test_youtube_parser_misses_report.py",
 )
