@@ -173,6 +173,7 @@ class BotInstructions:
     bibliothekar_enabled: bool = True
     bibliothekar_backend: str = "local"
     bibliothekar_collection: str = "teebotus_books"
+    bibliothekar_qdrant_url: str = "http://127.0.0.1:6333"
     bibliothekar_max_prompt_chars: int = 5000
     bibliothekar_max_chunks: int = 5
     bibliothekar_max_quote_chars: int = 900
@@ -767,6 +768,8 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.bibliothekar_backend = _normalize_bibliothekar_backend(value, default=instructions.bibliothekar_backend)
     elif normalized == "bibliothekar_collection":
         instructions.bibliothekar_collection = value.strip() or instructions.bibliothekar_collection
+    elif normalized in {"bibliothekar_qdrant_url", "bibliothekar_url", "bibliothekar_base_url"}:
+        instructions.bibliothekar_qdrant_url = value.strip() or instructions.bibliothekar_qdrant_url
     elif normalized == "bibliothekar_max_prompt_chars":
         instructions.bibliothekar_max_prompt_chars = _parse_required_int(value, default=instructions.bibliothekar_max_prompt_chars)
     elif normalized == "bibliothekar_max_chunks":
@@ -785,6 +788,8 @@ def _apply_bibliothekar_setting(instructions: BotInstructions, key: str, value: 
         instructions.bibliothekar_backend = _normalize_bibliothekar_backend(value, default=instructions.bibliothekar_backend)
     elif normalized == "collection":
         instructions.bibliothekar_collection = value.strip() or instructions.bibliothekar_collection
+    elif normalized in {"qdrant_url", "url", "base_url"}:
+        instructions.bibliothekar_qdrant_url = value.strip() or instructions.bibliothekar_qdrant_url
     elif normalized == "max_prompt_chars":
         instructions.bibliothekar_max_prompt_chars = _parse_required_int(value, default=instructions.bibliothekar_max_prompt_chars)
     elif normalized == "max_chunks":

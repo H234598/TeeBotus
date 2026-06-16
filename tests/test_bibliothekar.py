@@ -221,7 +221,11 @@ def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
     qdrant = BibliothekarService.from_instructions(
         "Depressionsbot",
         tmp_path / "instances",
-        BotInstructions(bibliothekar_backend="qdrant", bibliothekar_collection="therapy_books"),
+        BotInstructions(
+            bibliothekar_backend="qdrant",
+            bibliothekar_collection="therapy_books",
+            bibliothekar_qdrant_url="http://localhost:6334",
+        ),
     )
 
     assert isinstance(local.backend, LocalBibliothekarBackend)
@@ -229,6 +233,7 @@ def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
     assert isinstance(qdrant.backend, HaystackBibliothekarBackend)
     assert haystack.collection == "therapy_books"
     assert qdrant.collection == "therapy_books"
+    assert qdrant.backend.qdrant_url == "http://localhost:6334"
 
 
 def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path):
@@ -845,6 +850,7 @@ def test_haystack_status_reports_unreachable_qdrant_when_dependencies_exist(tmp_
 
     assert health.backend == "haystack"
     assert health.store == "qdrant"
+    assert health.target == "http://127.0.0.1:6333"
     assert health.status == "unreachable"
     assert "RuntimeError: qdrant unavailable" in health.error
 
@@ -881,15 +887,39 @@ def test_haystack_status_reports_reachable_qdrant_with_local_index_counts(tmp_pa
     health = check_bibliothekar_service(
         "Depressionsbot",
         tmp_path / "instances",
-        BotInstructions(bibliothekar_backend="haystack", bibliothekar_collection="therapy_books"),
+        BotInstructions(
+            bibliothekar_backend="haystack",
+            bibliothekar_collection="therapy_books",
+            bibliothekar_qdrant_url="http://localhost:6334/",
+        ),
     )
 
     assert health.backend == "haystack"
     assert health.store == "qdrant"
     assert health.status == "reachable"
     assert health.collection == "therapy_books"
+    assert health.target == "http://localhost:6334"
     assert health.documents == 1
     assert health.chunks == 1
+
+
+def test_haystack_status_rejects_nonlocal_qdrant_url(tmp_path, monkeypatch):
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(
+            bibliothekar_backend="haystack",
+            bibliothekar_collection="therapy_books",
+            bibliothekar_qdrant_url="http://qdrant.example:6333",
+        ),
+    )
+
+    assert health.backend == "haystack"
+    assert health.store == "qdrant"
+    assert health.status == "unavailable"
+    assert "must stay local" in health.error
 
 
 def test_bibliothekar_service_rebuild_delegates_to_backend(tmp_path):
@@ -1221,6 +1251,7 @@ def test_bibliothekar_section_settings_are_parsed():
         - enabled: nein
         - backend: qdrant
         - collection: therapie_buecher
+        - qdrant_url: http://localhost:6334
         - max_prompt_chars: 2222
         - max_chunks: 2
         - max_quote_chars: 333
@@ -1231,6 +1262,7 @@ def test_bibliothekar_section_settings_are_parsed():
     assert instructions.bibliothekar_enabled is False
     assert instructions.bibliothekar_backend == "haystack"
     assert instructions.bibliothekar_collection == "therapie_buecher"
+    assert instructions.bibliothekar_qdrant_url == "http://localhost:6334"
     assert instructions.bibliothekar_max_prompt_chars == 2222
     assert instructions.bibliothekar_max_chunks == 2
     assert instructions.bibliothekar_max_quote_chars == 333

@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
+from urllib.parse import urlparse
 
 from TeeBotus.runtime.bibliothekar import (
     DEFAULT_MAX_CHUNKS,
@@ -21,6 +22,8 @@ from TeeBotus.runtime.bibliothekar import (
 
 
 HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
+DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
+LOCAL_QDRANT_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 REQUIRED_CITATION_CHUNK_FIELDS = (
     "chunk_id",
     "source_id",
@@ -107,6 +110,7 @@ class BibliothekarServiceHealth:
     backend: str
     status: str
     collection: str = ""
+    target: str = ""
     documents: int = 0
     chunks: int = 0
     store: str = ""
@@ -147,6 +151,7 @@ class HaystackBibliothekarBackend:
         instance_name: str,
         instances_dir: str | Path = "instances",
         collection: str = "teebotus_books",
+        qdrant_url: str = DEFAULT_QDRANT_URL,
         fallback_store: BibliothekarStore | None = None,
         document_store_factory: Callable[[], Any] | None = None,
         document_class: type[Any] | None = None,
@@ -154,6 +159,7 @@ class HaystackBibliothekarBackend:
         self.instance_name = str(instance_name or "default")
         self.instances_dir = Path(instances_dir)
         self.collection = str(collection or "teebotus_books").strip() or "teebotus_books"
+        self.qdrant_url = _normalize_local_qdrant_url(qdrant_url)
         self.fallback_store = fallback_store or BibliothekarStore(self.instance_name, self.instances_dir)
         self._document_store_factory = document_store_factory
         self._document_class = document_class
@@ -209,7 +215,7 @@ class HaystackBibliothekarBackend:
         except ModuleNotFoundError:
             from qdrant_haystack import QdrantDocumentStore  # type: ignore[import-not-found]
 
-        self._document_store_cache = QdrantDocumentStore(url="http://127.0.0.1:6333", index=self.collection)
+        self._document_store_cache = QdrantDocumentStore(url=self.qdrant_url, index=self.collection)
         return self._document_store_cache
 
     def _document_from_chunk(self, chunk: Mapping[str, Any]) -> Any:
@@ -373,6 +379,7 @@ class BibliothekarService:
                     instance_name=instance_name,
                     instances_dir=instances_dir,
                     collection=str(getattr(instructions, "bibliothekar_collection", "") or "teebotus_books"),
+                    qdrant_url=str(getattr(instructions, "bibliothekar_qdrant_url", "") or DEFAULT_QDRANT_URL),
                 )
             )
         return cls.local(instance_name, instances_dir)
@@ -426,9 +433,22 @@ class BibliothekarService:
 def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, instructions: object) -> BibliothekarServiceHealth:
     backend = _normalize_backend(getattr(instructions, "bibliothekar_backend", "local"))
     collection = str(getattr(instructions, "bibliothekar_collection", "") or "teebotus_books")
+    qdrant_url = str(getattr(instructions, "bibliothekar_qdrant_url", "") or DEFAULT_QDRANT_URL)
     if not bool(getattr(instructions, "bibliothekar_enabled", True)):
-        return BibliothekarServiceHealth(instance_name, backend, "disabled", collection=collection)
+        return BibliothekarServiceHealth(instance_name, backend, "disabled", collection=collection, target=qdrant_url if backend == "haystack" else "")
     if backend == "haystack":
+        try:
+            qdrant_url = _normalize_local_qdrant_url(qdrant_url)
+        except ValueError as exc:
+            return BibliothekarServiceHealth(
+                instance_name,
+                "haystack",
+                "unavailable",
+                collection=collection,
+                target=qdrant_url,
+                store="qdrant",
+                error=str(exc),
+            )
         missing = []
         if not _module_available("haystack"):
             missing.append("haystack")
@@ -440,6 +460,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 "haystack",
                 "unavailable",
                 collection=collection,
+                target=qdrant_url,
                 store="qdrant",
                 error=f"missing optional dependency: {', '.join(missing)}",
             )
@@ -447,6 +468,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
             instance_name=instance_name,
             instances_dir=instances_dir,
             collection=collection,
+            qdrant_url=qdrant_url,
         )
         try:
             document_store = haystack_backend._document_store()
@@ -460,6 +482,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 "haystack",
                 "unreachable",
                 collection=collection,
+                target=qdrant_url,
                 store="qdrant",
                 error=f"{type(exc).__name__}: {exc}",
             )
@@ -472,6 +495,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 "haystack",
                 "broken",
                 collection=collection,
+                target=qdrant_url,
                 store="qdrant",
                 error=str(exc),
             )
@@ -481,6 +505,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
             "haystack",
             "reachable",
             collection=collection,
+            target=qdrant_url,
             store="qdrant",
             documents=len(documents),
             chunks=int(index.get("chunk_count") or 0),
@@ -508,6 +533,21 @@ def _normalize_backend(value: object) -> str:
     if backend in {"haystack", "qdrant", "haystack_qdrant"}:
         return "haystack"
     return "local"
+
+
+def _normalize_local_qdrant_url(value: object) -> str:
+    raw = str(value or DEFAULT_QDRANT_URL).strip() or DEFAULT_QDRANT_URL
+    parsed = urlparse(raw)
+    if not parsed.scheme or not parsed.netloc:
+        raise ValueError("Bibliothekar Qdrant URL must include scheme and host.")
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("Bibliothekar Qdrant URL must use http or https.")
+    host = (parsed.hostname or "").strip().casefold()
+    if host not in LOCAL_QDRANT_HOSTS:
+        raise ValueError("Bibliothekar Qdrant URL must stay local on 127.0.0.1, localhost or ::1.")
+    if parsed.username or parsed.password:
+        raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
+    return raw.rstrip("/")
 
 
 def _selection_from_chunks(index: Mapping[str, Any], chunks: list[dict[str, Any]], query: BibliothekarQuery) -> BibliothekarSelection:

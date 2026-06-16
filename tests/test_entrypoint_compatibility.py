@@ -577,7 +577,7 @@ def test_runtime_status_reports_haystack_bibliothekar_dependency_gap(monkeypatch
 
     captured = capsys.readouterr()
     assert (
-        "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=unavailable "
+        "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=unavailable "
         "error=missing optional dependency: haystack, haystack_integrations.document_stores.qdrant"
     ) in captured.out
 
@@ -611,7 +611,7 @@ def test_runtime_status_reports_reachable_haystack_bibliothekar(monkeypatch, cap
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
-    assert "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=reachable documents=1 chunks=1" in captured.out
+    assert "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=reachable documents=1 chunks=1" in captured.out
 
 
 def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -> None:

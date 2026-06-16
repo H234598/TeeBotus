@@ -168,8 +168,11 @@ def _runtime_status(argv: Sequence[str]) -> int:
         health = check_bibliothekar_service(instance.instance_name, config.instances_dir, instructions)
         detail = (
             f"bibliothekar={health.instance_name} backend={health.backend} "
-            f"store={health.store or '<none>'} collection={health.collection or '<none>'} status={health.status}"
+            f"store={health.store or '<none>'} collection={health.collection or '<none>'}"
         )
+        if health.target:
+            detail += f" target={_sanitize_status_url(health.target)}"
+        detail += f" status={health.status}"
         if health.documents or health.chunks:
             detail += f" documents={health.documents} chunks={health.chunks}"
         if health.error:
