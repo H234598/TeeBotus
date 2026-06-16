@@ -2006,7 +2006,7 @@ class BotTests(unittest.TestCase):
         )
 
         self.assertEqual(api.sent_messages, [(123, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")])
-        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, "456"))
+        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, telegram_identity_key(456)))
 
         with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
             handle_update(
@@ -2022,8 +2022,49 @@ class BotTests(unittest.TestCase):
             )
 
         transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
-        self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, "456"))
+        self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, telegram_identity_key(456)))
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
+
+    def test_handle_update_youtube_transcript_pending_link_is_account_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            chat_state = ChatState()
+            memory_store = account_memory_store(directory)
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+            _, secret = memory_store.register_account(account_id)
+            memory_store.link_identity(telegram_identity_key("", username="ada_l"), account_id, secret, display_label="Ada")
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "text": "Kannst du ein YouTube-Video transkribieren?",
+                        "chat": {"id": 123},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                chat_state=chat_state,
+                user_memory_store=memory_store,
+            )
+
+            self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, account_id))
+            with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Transcript text.", "YouTube-Untertitel")) as transcribe:
+                handle_update(
+                    api,
+                    {
+                        "message": {
+                            "text": "https://youtu.be/abc123",
+                            "chat": {"id": 123},
+                            "from": {"username": "ada_l", "first_name": "Ada"},
+                        }
+                    },
+                    chat_state=chat_state,
+                    user_memory_store=memory_store,
+                )
+
+            transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False, instance_name="Depressionsbot")
+            self.assertFalse(chat_state.has_pending_youtube_transcript_link(123, account_id))
+            self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."))
 
     def test_handle_update_youtube_transcript_detects_freeform_video_text_request(self) -> None:
         api = FakeAPI()
@@ -2042,7 +2083,7 @@ class BotTests(unittest.TestCase):
         )
 
         self.assertEqual(api.sent_messages, [(123, "Schick mir bitte den YouTube-Link, den ich transkribieren soll.")])
-        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, "456"))
+        self.assertTrue(chat_state.has_pending_youtube_transcript_link(123, telegram_identity_key(456)))
 
     def test_handle_update_youtube_transcript_starts_local_by_default_when_no_subtitles(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -2086,13 +2127,13 @@ class BotTests(unittest.TestCase):
                 call("https://youtu.be/abc123", local_allowed=True, live_callback=None),
             ],
         )
-        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
         self.assertEqual(api.sent_messages[-1], (123, "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."))
 
     def test_handle_update_youtube_local_options_live_chunks_without_llm(self) -> None:
         api = FakeAPI()
         chat_state = ChatState()
-        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+        chat_state.request_youtube_local_options(123, telegram_identity_key(456), "https://youtu.be/abc123")
 
         def transcribe(url, local_allowed=False, live_callback=None):
             self.assertEqual(url, "https://youtu.be/abc123")
@@ -2119,7 +2160,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(len(api.sent_messages[0][1].split()), 26)
         self.assertEqual(api.sent_messages[1][0], 123)
         self.assertEqual(api.sent_messages[1][1], "YouTube-Transkript (lokales Whisper):\n\n" + " ".join(["wort"] * 26))
-        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
 
     def test_handle_update_youtube_local_options_can_send_final_transcript_to_llm(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -2127,7 +2168,7 @@ class BotTests(unittest.TestCase):
         api = FakeAPI()
         chat_state = ChatState()
         openai_client = FakeOpenAIClient()
-        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+        chat_state.request_youtube_local_options(123, telegram_identity_key(456), "https://youtu.be/abc123")
 
         with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
             handle_update(
@@ -2148,7 +2189,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("YouTube-Transkript:", openai_client.reply_inputs[-1])
         self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
         self.assertEqual(api.sent_messages, [(123, "AI: live nein, llm ja\n\nYouTube-Transkript:\n- Quelle: https://youtu.be/abc123\n- Transkriptquelle: lokales Whisper\nLocal transcript.")])
-        self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+        self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
 
     def test_youtube_local_options_parse_free_words_without_live_and_with_llm(self) -> None:
         self.assertEqual(
@@ -2227,7 +2268,7 @@ class BotTests(unittest.TestCase):
         api = FakeAPI()
         chat_state = ChatState()
         openai_client = SequenceOpenAIClient(['{"live_output": false, "send_to_llm": true, "confidence": 0.91}', "AI: transcript summary"])
-        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+        chat_state.request_youtube_local_options(123, telegram_identity_key(456), "https://youtu.be/abc123")
 
         with tempfile.TemporaryDirectory() as directory:
             instructions = BotInstructions(openai_enabled=True)
@@ -2249,7 +2290,7 @@ class BotTests(unittest.TestCase):
                     )
 
             transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None, instance_name="Demo")
-            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
             self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
 
             miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
@@ -2339,7 +2380,7 @@ class BotTests(unittest.TestCase):
                     call("https://youtu.be/abc123", local_allowed=True, live_callback=None, instance_name="Demo"),
                 ],
             )
-            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
             self.assertIn("Local transcript.", openai_client.reply_inputs[-1])
 
             miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
@@ -2382,7 +2423,7 @@ class BotTests(unittest.TestCase):
 
             self.assertEqual(len(runner.jobs), 1)
             self.assertEqual(api.sent_messages, [(123, "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist.")])
-            self.assertEqual(chat_state.get_pending_youtube_local_options(123, "456"), "")
+            self.assertEqual(chat_state.get_pending_youtube_local_options(123, telegram_identity_key(456)), "")
 
             runner.jobs[0]()
 
@@ -2399,7 +2440,7 @@ class BotTests(unittest.TestCase):
         api = FakeAPI()
         chat_state = ChatState()
         runner = FakeJobRunner()
-        chat_state.request_youtube_local_options(123, "456", "https://youtu.be/abc123")
+        chat_state.request_youtube_local_options(123, telegram_identity_key(456), "https://youtu.be/abc123")
 
         with patch("TeeBotus.bot.transcribe_youtube_video", return_value=("Local transcript.", "lokales Whisper")) as transcribe:
             handle_update(

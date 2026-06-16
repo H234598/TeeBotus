@@ -514,31 +514,31 @@ class ChatState:
     def clear_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
         self.pending_user_memory_resets.discard((chat_id, sender_id))
 
-    def request_youtube_transcript_link(self, chat_id: int, sender_id: str) -> None:
+    def request_youtube_transcript_link(self, chat_id: int, youtube_key: str) -> None:
         with self._lock:
-            if sender_id:
-                self.pending_youtube_transcript_requests.add((chat_id, sender_id))
+            if youtube_key:
+                self.pending_youtube_transcript_requests.add((chat_id, youtube_key))
 
-    def has_pending_youtube_transcript_link(self, chat_id: int, sender_id: str) -> bool:
+    def has_pending_youtube_transcript_link(self, chat_id: int, youtube_key: str) -> bool:
         with self._lock:
-            return (chat_id, sender_id) in self.pending_youtube_transcript_requests
+            return (chat_id, youtube_key) in self.pending_youtube_transcript_requests
 
-    def clear_pending_youtube_transcript_link(self, chat_id: int, sender_id: str) -> None:
+    def clear_pending_youtube_transcript_link(self, chat_id: int, youtube_key: str) -> None:
         with self._lock:
-            self.pending_youtube_transcript_requests.discard((chat_id, sender_id))
+            self.pending_youtube_transcript_requests.discard((chat_id, youtube_key))
 
-    def request_youtube_local_options(self, chat_id: int, sender_id: str, url: str) -> None:
+    def request_youtube_local_options(self, chat_id: int, youtube_key: str, url: str) -> None:
         with self._lock:
-            if sender_id and url:
-                self.pending_youtube_local_options[(chat_id, sender_id)] = url
+            if youtube_key and url:
+                self.pending_youtube_local_options[(chat_id, youtube_key)] = url
 
-    def get_pending_youtube_local_options(self, chat_id: int, sender_id: str) -> str:
+    def get_pending_youtube_local_options(self, chat_id: int, youtube_key: str) -> str:
         with self._lock:
-            return self.pending_youtube_local_options.get((chat_id, sender_id), "")
+            return self.pending_youtube_local_options.get((chat_id, youtube_key), "")
 
-    def clear_pending_youtube_local_options(self, chat_id: int, sender_id: str) -> None:
+    def clear_pending_youtube_local_options(self, chat_id: int, youtube_key: str) -> None:
         with self._lock:
-            self.pending_youtube_local_options.pop((chat_id, sender_id), None)
+            self.pending_youtube_local_options.pop((chat_id, youtube_key), None)
 
     def request_teladi_call(self, chat_id: int, teladi_key: str) -> None:
         if teladi_key:
@@ -1282,7 +1282,7 @@ def _process_text_message(
     ):
         return
 
-    if text and _should_handle_youtube_transcript_request(chat_state, chat_id, message, text):
+    if text and _should_handle_youtube_transcript_request(chat_state, chat_id, message, text, user_memory_store):
         _handle_youtube_transcript_request(
             api,
             chat_state,
@@ -3737,11 +3737,17 @@ def _extract_voice_text(message: dict[str, Any], command_text: str) -> str:
     return ""
 
 
-def _should_handle_youtube_transcript_request(chat_state: ChatState, chat_id: int, message: dict[str, Any], text: str) -> bool:
-    sender_id = _sender_identifier(message)
+def _should_handle_youtube_transcript_request(
+    chat_state: ChatState,
+    chat_id: int,
+    message: dict[str, Any],
+    text: str,
+    user_memory_store: AccountStore | None = None,
+) -> bool:
+    youtube_key = _telegram_account_state_key(user_memory_store, message, create=False)
     if _normalize_command(text) in YOUTUBE_TRANSCRIPT_COMMANDS:
         return True
-    if sender_id and chat_state.has_pending_youtube_transcript_link(chat_id, sender_id) and _extract_youtube_url(text):
+    if youtube_key and chat_state.has_pending_youtube_transcript_link(chat_id, youtube_key) and _extract_youtube_url(text):
         return True
     return _has_youtube_transcript_intent(text)
 
@@ -3762,18 +3768,18 @@ def _handle_youtube_transcript_request(
     instance_name: str,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
 ) -> None:
-    sender_id = _sender_identifier(message)
+    youtube_key = _telegram_account_state_key(user_memory_store, message, create=True)
     url = _extract_youtube_url(text)
     if not url:
-        if sender_id:
-            chat_state.request_youtube_transcript_link(chat_id, sender_id)
+        if youtube_key:
+            chat_state.request_youtube_transcript_link(chat_id, youtube_key)
         reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
         _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
-    if sender_id:
-        chat_state.clear_pending_youtube_transcript_link(chat_id, sender_id)
+    if youtube_key:
+        chat_state.clear_pending_youtube_transcript_link(chat_id, youtube_key)
 
     try:
         api.send_chat_action(chat_id, "typing")
@@ -3791,8 +3797,8 @@ def _handle_youtube_transcript_request(
                     live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
                     llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
             live_enabled, llm_enabled = _default_youtube_local_options(live_enabled, llm_enabled)
-            if sender_id:
-                chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+            if youtube_key:
+                chat_state.clear_pending_youtube_local_options(chat_id, youtube_key)
             _start_youtube_local_transcription(
                 api,
                 chat_state,
@@ -3868,8 +3874,8 @@ def _handle_pending_youtube_local_options(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
 ) -> bool:
-    sender_id = _sender_identifier(message)
-    url = chat_state.get_pending_youtube_local_options(chat_id, sender_id)
+    youtube_key = _telegram_account_state_key(user_memory_store, message, create=False)
+    url = chat_state.get_pending_youtube_local_options(chat_id, youtube_key)
     if not url:
         return False
 
@@ -3886,7 +3892,7 @@ def _handle_pending_youtube_local_options(
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return True
 
-    chat_state.clear_pending_youtube_local_options(chat_id, sender_id)
+    chat_state.clear_pending_youtube_local_options(chat_id, youtube_key)
     _start_youtube_local_transcription(
         api,
         chat_state,
