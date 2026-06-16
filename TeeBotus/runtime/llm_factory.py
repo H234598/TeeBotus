@@ -32,6 +32,8 @@ def build_runtime_text_llm_client(
     enabled_override = _parse_optional_bool(enabled)
     if enabled_override is False:
         return None
+    if enabled_override is None and instructions.llm_enabled is False:
+        return None
     profile_name = str(profile or instructions.llm_profile or "").strip()
     if profile_name:
         return _build_profile_client(

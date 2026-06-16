@@ -193,6 +193,26 @@ def test_runtime_text_client_returns_none_when_runtime_llm_is_disabled() -> None
     assert client is None
 
 
+def test_runtime_text_client_respects_instruction_llm_disabled_without_override() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_enabled=False, llm_profile="local_ollama"),
+        openai_client=object(),
+    )
+
+    assert client is None
+
+
+def test_runtime_text_client_runtime_enabled_overrides_instruction_llm_disabled() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_enabled=False, llm_profile="local_ollama"),
+        openai_client=None,
+        enabled="true",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.model == "ollama_chat/llama3.1:8b"
+
+
 def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored-default"),
