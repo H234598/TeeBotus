@@ -11,6 +11,7 @@ from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 OLLAMA_MODEL_PREFIXES = ("ollama/", "ollama_chat/")
+LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,10 @@ def check_ollama_services(config: RuntimeConfig, *, timeout_seconds: float = 1.0
 
 
 def check_ollama_service(base_url: str, *, timeout_seconds: float = 1.0) -> OllamaServiceHealth:
+    safety_error = _unsafe_ollama_base_url_reason(base_url)
+    if safety_error:
+        target = _safe_ollama_target(base_url)
+        return OllamaServiceHealth(False, target, error=safety_error)
     normalized = _normalize_ollama_base_url(base_url)
     target = _ollama_target(normalized)
     url = f"{normalized}/api/tags"
@@ -123,10 +128,7 @@ def _parse_bool(value: object) -> bool:
 
 
 def _normalize_ollama_base_url(base_url: str) -> str:
-    text = str(base_url or "").strip() or DEFAULT_OLLAMA_BASE_URL
-    parsed = urlsplit(text)
-    if not parsed.scheme:
-        parsed = urlsplit(f"http://{text}")
+    parsed = _parse_ollama_base_url(base_url)
     scheme = parsed.scheme or "http"
     hostname = parsed.hostname or "127.0.0.1"
     port = parsed.port or 11434
@@ -135,6 +137,43 @@ def _normalize_ollama_base_url(base_url: str) -> str:
     if path.endswith("/api"):
         path = path[: -len("/api")]
     return urlunsplit((scheme, netloc, path, "", ""))
+
+
+def _unsafe_ollama_base_url_reason(base_url: str) -> str:
+    try:
+        parsed = _parse_ollama_base_url(base_url)
+        port = parsed.port
+    except ValueError:
+        return "unsafe Ollama base_url: invalid URL"
+    if parsed.scheme and parsed.scheme not in {"http", "https"}:
+        return "unsafe Ollama base_url: scheme must be http or https"
+    if parsed.username or parsed.password:
+        return "unsafe Ollama base_url: credentials are not allowed"
+    if parsed.query or parsed.fragment:
+        return "unsafe Ollama base_url: query and fragment are not allowed"
+    host = (parsed.hostname or "127.0.0.1").strip().casefold()
+    if host not in LOCAL_OLLAMA_HOSTS:
+        return "unsafe Ollama base_url: host must be loopback"
+    if port is not None and port <= 0:
+        return "unsafe Ollama base_url: invalid port"
+    return ""
+
+
+def _parse_ollama_base_url(base_url: str):
+    text = str(base_url or "").strip() or DEFAULT_OLLAMA_BASE_URL
+    if "://" not in text and not text.startswith("//"):
+        text = f"http://{text}"
+    return urlsplit(text)
+
+
+def _safe_ollama_target(base_url: str) -> str:
+    try:
+        parsed = _parse_ollama_base_url(base_url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or 11434
+    except ValueError:
+        return "invalid"
+    return f"{host}:{port}"
 
 
 def _ollama_target(base_url: str) -> str:

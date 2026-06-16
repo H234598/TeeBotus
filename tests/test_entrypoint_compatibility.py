@@ -381,7 +381,7 @@ def test_runtime_status_reports_reachable_ollama(monkeypatch, capsys, tmp_path) 
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "litellm")
     monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "ollama_chat/llama3.1:8b")
-    monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://user:secret@127.0.0.1:11434/api?token=nope")
+    monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://127.0.0.1:11434/api")
 
     calls: list[str] = []
 
@@ -408,8 +408,58 @@ def test_runtime_status_reports_reachable_ollama(monkeypatch, capsys, tmp_path) 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b,qwen2.5:7b" in captured.out
+
+
+def test_runtime_status_refuses_unsafe_ollama_base_url_without_probe(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "litellm")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "ollama_chat/llama3.1:8b")
+    monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://user:secret@ollama.example:11434/api?token=plain-token#frag")
+
+    def fail_urlopen(*_args, **_kwargs):
+        raise AssertionError("unsafe Ollama base_url must not be probed")
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fail_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "ollama=ollama.example:11434 status=unreachable error=unsafe Ollama base_url: credentials are not allowed" in captured.out
     assert "user:secret" not in captured.out
-    assert "token=nope" not in captured.out
+    assert "plain-token" not in captured.out
+
+
+def test_runtime_status_refuses_remote_ollama_host_without_probe(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "ollama")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "llama3.1:8b")
+    monkeypatch.setenv("TEEBOTUS_LLM_BASE_URL_DEMO", "http://ollama.example:11434")
+
+    def fail_urlopen(*_args, **_kwargs):
+        raise AssertionError("remote Ollama base_url must not be probed")
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fail_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "ollama=ollama.example:11434 status=unreachable error=unsafe Ollama base_url: host must be loopback" in captured.out
 
 
 def test_runtime_status_checks_ollama_for_local_profile(monkeypatch, capsys, tmp_path) -> None:
