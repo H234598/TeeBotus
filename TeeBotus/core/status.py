@@ -356,6 +356,7 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
 def account_memory_index_health_lines(*, instance_name: str, project_root: Path) -> list[str]:
     if not instance_name:
         return []
+    project_root = project_root.resolve()
     root = project_root / "instances" / instance_name / "data" / "accounts"
     account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
     if not account_dirs:
@@ -409,6 +410,14 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         lines.append(
             f'account_memory_recovery={instance_name} status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {instances_dir} --instances {instance_name}"'
         )
+        legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
+        if legacy:
+            lines.append(
+                f'account_memory_recovery_legacy={instance_name} status=available '
+                f'sources={legacy["sources"]} entries={legacy["entries"]} path={legacy["effective_path"]} '
+                f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {legacy["requested_path"]} '
+                f'--target-instances-dir {instances_dir} --instance {instance_name} --replace-unreadable-account-metadata"'
+            )
     return lines
 
 
@@ -435,6 +444,143 @@ def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
         for path in children
         if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name) and not (path / "Account_Tombstone.json").exists()
     )
+
+
+def _find_legacy_plaintext_backup(*, project_root: Path, instance_name: str) -> dict[str, str | int] | None:
+    candidates: list[dict[str, str | int]] = []
+    env_path = os.environ.get("TEEBOTUS_LEGACY_INSTANCES_DIR", "").strip()
+    if env_path:
+        candidate = _legacy_plaintext_backup_candidate(Path(env_path).expanduser(), instance_name)
+        if candidate:
+            candidates.append(candidate)
+    try:
+        sibling_candidates = sorted(project_root.parent.glob(f"{project_root.name}.bak*"))
+    except OSError:
+        sibling_candidates = []
+    for path in sibling_candidates:
+        candidate = _legacy_plaintext_backup_candidate(path, instance_name)
+        if candidate:
+            candidates.append(candidate)
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda item: (
+            int(item["entries"]),
+            int(item["sources"]),
+            _legacy_backup_priority(str(item["effective_path"])),
+            _requested_backup_priority(str(item["requested_path"])),
+        ),
+    )
+
+
+def _legacy_plaintext_backup_candidate(path: Path, instance_name: str) -> dict[str, str | int] | None:
+    effective_path = _resolve_legacy_backup_instances_dir(path, instance_name)
+    users_dir = effective_path / instance_name / "data" / "users"
+    if not users_dir.exists():
+        return None
+    sources = 0
+    entries = 0
+    try:
+        user_dirs = sorted(user_dir for user_dir in users_dir.iterdir() if user_dir.is_dir())
+    except OSError:
+        return None
+    for user_dir in user_dirs:
+        source_entries = _count_plaintext_legacy_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
+        if source_entries <= 0:
+            continue
+        sources += 1
+        entries += source_entries
+    if sources <= 0:
+        return None
+    return {
+        "requested_path": str(path),
+        "effective_path": str(effective_path),
+        "sources": sources,
+        "entries": entries,
+    }
+
+
+def _resolve_legacy_backup_instances_dir(path: Path, instance_name: str) -> Path:
+    if (path / instance_name / "data" / "users").exists():
+        return path
+    candidates: list[tuple[int, int, str, Path]] = []
+    try:
+        children = sorted(path.iterdir()) if path.exists() and path.is_dir() else []
+    except OSError:
+        children = []
+    for child in children:
+        if not child.is_dir() or not child.name.startswith("instances"):
+            continue
+        users_dir = child / instance_name / "data" / "users"
+        if not users_dir.exists():
+            continue
+        sources = 0
+        entries = 0
+        try:
+            user_dirs = sorted(user_dir for user_dir in users_dir.iterdir() if user_dir.is_dir())
+        except OSError:
+            continue
+        for user_dir in user_dirs:
+            source_entries = _count_plaintext_legacy_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
+            if source_entries <= 0:
+                continue
+            sources += 1
+            entries += source_entries
+        if sources:
+            candidates.append((entries, sources, child.name, child))
+    if not candidates:
+        return path
+    candidates.sort(key=lambda item: (item[0], item[1], _legacy_backup_priority(item[2])), reverse=True)
+    return candidates[0][3]
+
+
+def _count_plaintext_legacy_entries(path: Path) -> int:
+    if not path.exists():
+        return 0
+    entries = 0
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return 0
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return 0
+        if not isinstance(data, dict):
+            return 0
+        if {"version", "nonce", "ciphertext"}.issubset(data):
+            return 0
+        entries += 1
+    return entries
+
+
+def _legacy_backup_priority(name: str) -> int:
+    path_name = Path(name).name
+    if path_name == "instances.bak":
+        return 3
+    if path_name.startswith("instances.bak"):
+        return 2
+    if path_name == "instances":
+        return 1
+    return 0
+
+
+def _requested_backup_priority(name: str) -> int:
+    path_name = Path(name).name
+    marker = ".bak"
+    if marker not in path_name:
+        return 0
+    suffix = path_name.rsplit(marker, 1)[1]
+    if not suffix:
+        return 1
+    try:
+        return 1 + int(suffix)
+    except ValueError:
+        return 1
 
 
 def looks_like_encrypted_payload(path: Path) -> bool:
