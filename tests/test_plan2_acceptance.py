@@ -7,6 +7,28 @@ from pathlib import Path
 from scripts import check_plan2_acceptance
 
 
+def _valid_ranking(category: str) -> dict:
+    name = f"{category}_benchmark"
+    return {
+        "category": category,
+        "fastest_stable": name,
+        "candidates": [
+            {
+                "rank": 1,
+                "name": name,
+                "mode": "local",
+                "throughput_ops_s": 100.0,
+                "total_ms": 1.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+                "note": "",
+            }
+        ],
+        "skipped": [],
+    }
+
+
 def _valid_benchmark_payload() -> dict:
     return {
         "schema_version": 1,
@@ -38,7 +60,7 @@ def _valid_benchmark_payload() -> dict:
         ],
         "comparisons": {
             "stable_backend_rankings": [
-                {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
+                _valid_ranking(category)
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
             ]
         },
@@ -402,7 +424,7 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
                 "details": {"network_calls": 0},
             }
         ],
-        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "comparisons": {"stable_backend_rankings": [_valid_ranking("account_memory")]},
         "quality_gate": {"status": "ok", "ok": True, "checked_results": 1, "error_count": 0, "errors": []},
         "regression": {"status": "not_configured", "failed": False},
     }
@@ -435,7 +457,7 @@ def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> No
             }
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
-        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "comparisons": {"stable_backend_rankings": [_valid_ranking("account_memory")]},
         "quality_gate": {
             "status": "ok",
             "ok": True,
@@ -511,7 +533,7 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
         ],
         "comparisons": {
             "stable_backend_rankings": [
-                {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
+                _valid_ranking(category)
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
             ]
         },
@@ -553,6 +575,32 @@ def test_benchmark_artifact_validation_rejects_ok_results_with_errors() -> None:
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert "results[0] errors must be 0 for ok standard benchmark results" in errors
+
+
+def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> None:
+    payload = _valid_benchmark_payload()
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["fastest_stable"] = "skipped_backend"
+    ranking["skipped"] = [{"name": "skipped_backend", "mode": "live_optional", "reason": "missing dsn"}]
+    ranking["candidates"][0] = {
+        "rank": 2,
+        "name": "candidate_with_errors",
+        "mode": "live",
+        "throughput_ops_s": 1000.0,
+        "total_ms": 0.1,
+        "errors": 1,
+        "payload_bytes": 0,
+        "index_bytes": 0,
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0].candidates[0] rank must be 1" in error for error in errors)
+    assert any("rankings[0].candidates[0] errors must be 0" in error for error in errors)
+    assert any("rankings[0].candidates[0] must not use live mode" in error for error in errors)
+    assert any("rankings[0].candidates[0] must report payload_bytes or index_bytes" in error for error in errors)
+    assert any("rankings[0] fastest_stable must match rank 1 candidate" in error for error in errors)
+    assert any("rankings[0] fastest_stable must not be skipped" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_runtime_context() -> None:
