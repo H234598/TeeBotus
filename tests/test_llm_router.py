@@ -9,6 +9,7 @@ import pytest
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.profiles import (
     LLMProfile,
+    LLMRoute,
     LLMRoutingRule,
     build_profiled_text_llm_client,
     load_llm_profiles,
@@ -350,6 +351,39 @@ def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() 
         openai_client=None,
         purpose="structured_decision",
         allow_remote_fallback="yes",
+    )
+
+    assert isinstance(blocked, LiteLLMTextClient)
+    assert blocked.fallback_models == ()
+    assert isinstance(allowed, LiteLLMTextClient)
+    assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
+
+
+def test_runtime_text_client_route_builder_filters_remote_fallback_defensively(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="structured_decision",
+            profile_name="local_ollama",
+            provider="litellm",
+            model="ollama_chat/llama3.1:8b",
+            base_url="http://127.0.0.1:11434",
+            fallback_profile_name="groq_fast",
+            fallback_model="groq/llama-3.1-8b-instant",
+            fallback_api_key_env="GROQ_API_KEY",
+        ),
+    )
+
+    blocked = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+    )
+    allowed = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        allow_remote_fallback=True,
     )
 
     assert isinstance(blocked, LiteLLMTextClient)

@@ -129,7 +129,7 @@ def _build_route_client(
     resolved_fallback_models = filter_runtime_fallback_models(
         provider=route.provider,
         fallback_models=fallback_models or route.fallback_models,
-        allow_remote_fallback=allow_remote_fallback or (bool(route.fallback_models) and not fallback_models),
+        allow_remote_fallback=allow_remote_fallback,
     )
     return build_text_llm_client(
         instructions=instructions,
