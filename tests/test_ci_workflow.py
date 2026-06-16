@@ -17,3 +17,10 @@ def test_github_actions_runs_plan2_acceptance_with_all_extras() -> None:
     assert "--skip-adapter-deps" in workflow
     assert "--benchmark-output reports/teebotus-plan2-benchmarks.md" in workflow
     assert "--benchmark-json-output reports/teebotus-plan2-benchmarks.json" in workflow
+
+
+def test_github_actions_uses_readonly_token_permissions_for_public_repo() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "\npermissions:\n  contents: read\n\njobs:" in workflow
+    assert "pull_request_target" not in workflow
