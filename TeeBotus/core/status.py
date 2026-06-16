@@ -424,10 +424,13 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             has_broken_memory = True
             continue
+        fallback_warning = _account_memory_fallback_warning(store, account_id)
         if health.ok:
-            lines.append(f"account_memory={instance_name}/{account_id} status=ok{profile_warning}")
+            lines.append(f"account_memory={instance_name}/{account_id} status=ok{profile_warning}{fallback_warning}")
         else:
-            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}")
+            lines.append(
+                f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}{fallback_warning}"
+            )
             has_broken_memory = True
     if has_broken_memory:
         instances_dir = project_root / "instances"
@@ -443,6 +446,24 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 f'--target-instances-dir {instances_dir} --instance {instance_name} --replace-unreadable-account-metadata"'
             )
     return lines
+
+
+def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> str:
+    backend = store.account_memory_backend
+    if backend is None:
+        return ""
+    stale_entries = set(getattr(backend, "stale_fallback_entry_account_ids", ()) or ())
+    stale_indexes = set(getattr(backend, "stale_fallback_index_account_ids", ()) or ())
+    stale_parts: list[str] = []
+    if account_id in stale_entries:
+        stale_parts.append("entries")
+    if account_id in stale_indexes:
+        stale_parts.append("index")
+    if not stale_parts:
+        return ""
+    error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")
+    suffix = f":{error}" if error else ""
+    return f" warning=fallback_sync_stale:{'+'.join(stale_parts)}{suffix}"
 
 
 @contextlib.contextmanager

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from TeeBotus.core.version_notifications import (
     build_version_notification_text,
@@ -261,6 +262,37 @@ def test_account_memory_index_health_suppresses_expected_database_decryption_log
     assert lines[1].startswith("account_memory_recovery=Demo status=needed")
     assert "SQLite account-memory skipped corrupt rows" not in caplog.text
     assert "SQLite account-memory index could not be decrypted" not in caplog.text
+
+
+def test_account_memory_index_health_reports_stale_fallback_sync(tmp_path: Path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class Backend:
+        stale_fallback_entry_account_ids = (account_id,)
+        stale_fallback_index_account_ids: tuple[str, ...] = ()
+        last_fallback_sync_error = "write_entries: fallback unavailable"
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def _read_account_profile(self, _account_id: str) -> dict[str, object]:
+            return {"status": "active"}
+
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+            return SimpleNamespace(ok=True, errors=())
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        f"account_memory=Demo/{account_id} status=ok warning=fallback_sync_stale:entries:write_entries: fallback unavailable"
+    ]
 
 
 def test_version_notification_text_does_not_expose_memory_files() -> None:

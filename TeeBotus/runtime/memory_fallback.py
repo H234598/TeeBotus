@@ -22,6 +22,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
+        self.last_fallback_sync_error = ""
 
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         return self._read(
@@ -119,6 +120,7 @@ class WarningFallbackAccountMemoryBackend:
             callback(self.fallback)
         except Exception as exc:  # noqa: BLE001
             stale_set.add(account_id)
+            self.last_fallback_sync_error = f"{operation}: {exc}"
             LOGGER.critical(
                 "ACCOUNT MEMORY FALLBACK DATABASE SYNC FAILED. PRIMARY DATABASE IS ACTIVE BUT FALLBACK MAY BE STALE. "
                 "label=%s operation=%s account_id=%s error=%s.",
@@ -129,6 +131,8 @@ class WarningFallbackAccountMemoryBackend:
             )
             return
         stale_set.discard(account_id)
+        if not self._stale_fallback_entries and not self._stale_fallback_indexes:
+            self.last_fallback_sync_error = ""
 
     def _fallback_stale_set(self, operation: str) -> set[str]:
         if operation in {"write_entries", "read_entries"}:
@@ -154,3 +158,11 @@ class WarningFallbackAccountMemoryBackend:
         self.last_entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "")
         self.last_entry_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0)
         self.last_index_read_error = str(getattr(backend, "last_index_read_error", "") or "")
+
+    @property
+    def stale_fallback_entry_account_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._stale_fallback_entries))
+
+    @property
+    def stale_fallback_index_account_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._stale_fallback_indexes))
