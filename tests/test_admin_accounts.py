@@ -100,6 +100,8 @@ def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted
     account = report["instances"][0]["accounts"][0]
     sources = {source["name"]: source for source in account["sources"]}
     assert account["recoverable"] is True
+    assert account["recovery_status"] == "recoverable"
+    assert account["recommendation"] == "Recover from readable source(s): sqlite_fallback."
     assert sources["sqlite_primary"]["readable"] is False
     assert sources["sqlite_primary"]["raw_entries"] == 1
     assert sources["sqlite_fallback"]["readable"] is True
@@ -121,3 +123,25 @@ def test_memory_recovery_cli_writes_json_without_secret_payloads(tmp_path: Path)
     assert "schema_version" in text
     assert "Ada" not in text
     assert "telegram:user:2" not in text
+
+
+def test_memory_recovery_report_marks_unrecoverable_key_drift(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=accounts_root / "Account_Memory.sqlite3", fallback_path=None),
+    )
+    primary.write_entries(account_id, [{"id": "mem_bad", "user_text": "Primary"}])
+    primary.write_index(account_id, {"scope": "account", "index": {}})
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["recoverable"] is False
+    assert account["recovery_status"] == "unrecoverable"
+    assert "restore the matching old secret" in account["recommendation"]

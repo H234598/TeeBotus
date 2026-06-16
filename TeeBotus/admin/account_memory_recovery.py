@@ -23,7 +23,7 @@ from TeeBotus.runtime.accounts import (
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 LOGGER = logging.getLogger("TeeBotus")
-RECOVERY_SCHEMA_VERSION = 1
+RECOVERY_SCHEMA_VERSION = 2
 SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes")
 
 
@@ -84,10 +84,13 @@ def build_instance_recovery_report(
     account_reports = []
     for account_id in account_ids:
         source_reports = [_inspect_source(source, instance_name=instance_name, account_id=account_id, provider=provider) for source in sources]
+        recovery_status, recommendation = _account_recovery_status(source_reports)
         account_reports.append(
             {
                 "account_id": account_id,
-                "recoverable": any(source.get("readable") and (source.get("entries", 0) or source.get("index_present")) for source in source_reports),
+                "recoverable": recovery_status == "recoverable",
+                "recovery_status": recovery_status,
+                "recommendation": recommendation,
                 "sources": source_reports,
             }
         )
@@ -119,7 +122,15 @@ def render_text_report(report: Mapping[str, Any]) -> str:
         for account in instance.get("accounts", []):
             if not isinstance(account, Mapping):
                 continue
-            lines.append(f"  account: {account.get('account_id', '')} recoverable={account.get('recoverable', False)}")
+            lines.append(
+                "  account: "
+                f"{account.get('account_id', '')} "
+                f"recovery_status={account.get('recovery_status', 'unknown')} "
+                f"recoverable={account.get('recoverable', False)}"
+            )
+            recommendation = str(account.get("recommendation") or "").strip()
+            if recommendation:
+                lines.append(f"    recommendation: {recommendation}")
             for source in account.get("sources", []):
                 if not isinstance(source, Mapping):
                     continue
@@ -297,6 +308,33 @@ def _count_lines(path: Path) -> int:
         return sum(1 for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
     except OSError:
         return 0
+
+
+def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
+    if not source_reports:
+        return "no_sources", "No account-memory source exists for this account."
+    readable_payload_sources = [
+        source
+        for source in source_reports
+        if source.get("readable") and (int(source.get("entries", 0) or 0) > 0 or bool(source.get("index_present")))
+    ]
+    if readable_payload_sources:
+        names = ", ".join(str(source.get("name") or "<unknown>") for source in readable_payload_sources)
+        return "recoverable", f"Recover from readable source(s): {names}."
+    raw_payload_sources = [
+        source
+        for source in source_reports
+        if int(source.get("raw_entries", 0) or 0) > 0 or bool(source.get("raw_index_present"))
+    ]
+    if raw_payload_sources:
+        return (
+            "unrecoverable",
+            "Raw encrypted payloads exist, but no source is readable with the current instance secret; keep backups and restore the matching old secret if available.",
+        )
+    readable_empty_sources = [source for source in source_reports if source.get("readable")]
+    if readable_empty_sources:
+        return "empty", "Sources are readable but contain no memory payloads for this account."
+    return "unrecoverable", "No source is readable with the current instance secret; keep backups before changing account-memory files."
 
 
 @contextlib.contextmanager
