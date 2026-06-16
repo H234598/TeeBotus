@@ -243,61 +243,14 @@ def build_acceptance_commands(
         )
     )
     if legacy_instances_dir is not None:
-        commands.extend(
-            [
-                AcceptanceCommand(
-                    "memory-recovery-legacy-json",
-                    (
-                        python,
-                        "-m",
-                        "TeeBotus.admin",
-                        "memory-recovery",
-                        "--instances-dir",
-                        "instances",
-                        "--legacy-instances-dir",
-                        str(legacy_instances_dir),
-                        "--format",
-                        "json",
-                        "--output",
-                        str(memory_recovery_json_output),
-                    ),
-                    validate_secret_artifacts=True,
-                ),
-                AcceptanceCommand(
-                    "memory-recovery-legacy-text",
-                    (
-                        python,
-                        "-m",
-                        "TeeBotus.admin",
-                        "memory-recovery",
-                        "--instances-dir",
-                        "instances",
-                        "--legacy-instances-dir",
-                        str(legacy_instances_dir),
-                        "--output",
-                        str(memory_recovery_output),
-                    ),
-                    validate_secret_artifacts=True,
-                ),
-                AcceptanceCommand(
-                    "legacy-import-preflight",
-                    (
-                        python,
-                        "scripts/import_legacy_user_memory.py",
-                        "--legacy-instances-dir",
-                        str(legacy_instances_dir),
-                        "--target-instances-dir",
-                        "instances",
-                        "--replace-unreadable-account-metadata",
-                        "--json-output",
-                        str(legacy_import_json_output),
-                        "--markdown-output",
-                        str(legacy_import_output),
-                    ),
-                    validate_secret_artifacts=True,
-                ),
-            ]
-        )
+        commands.extend(_legacy_memory_acceptance_commands(
+            python=python,
+            legacy_instances_dir=legacy_instances_dir,
+            memory_recovery_output=memory_recovery_output,
+            memory_recovery_json_output=memory_recovery_json_output,
+            legacy_import_output=legacy_import_output,
+            legacy_import_json_output=legacy_import_json_output,
+        ))
     commands.extend(
         [
             AcceptanceCommand(
@@ -384,6 +337,123 @@ def build_acceptance_commands(
         else:
             commands.append(AcceptanceCommand("pip-audit-missing", (python, "-c", "print('pip-audit not installed; skipped')"), nonfatal=True))
     return commands
+
+
+def _legacy_memory_acceptance_commands(
+    *,
+    python: str,
+    legacy_instances_dir: Path,
+    memory_recovery_output: Path,
+    memory_recovery_json_output: Path,
+    legacy_import_output: Path,
+    legacy_import_json_output: Path,
+) -> list[AcceptanceCommand]:
+    commands = [
+        AcceptanceCommand(
+            "memory-recovery-legacy-json",
+            (
+                python,
+                "-m",
+                "TeeBotus.admin",
+                "memory-recovery",
+                "--instances-dir",
+                "instances",
+                "--legacy-instances-dir",
+                str(legacy_instances_dir),
+                "--format",
+                "json",
+                "--output",
+                str(memory_recovery_json_output),
+            ),
+            validate_secret_artifacts=True,
+        ),
+        AcceptanceCommand(
+            "memory-recovery-legacy-text",
+            (
+                python,
+                "-m",
+                "TeeBotus.admin",
+                "memory-recovery",
+                "--instances-dir",
+                "instances",
+                "--legacy-instances-dir",
+                str(legacy_instances_dir),
+                "--output",
+                str(memory_recovery_output),
+            ),
+            validate_secret_artifacts=True,
+        ),
+        AcceptanceCommand(
+            "legacy-import-preflight",
+            _legacy_import_command(
+                python=python,
+                legacy_instances_dir=legacy_instances_dir,
+                json_output=legacy_import_json_output,
+                markdown_output=legacy_import_output,
+            ),
+            validate_secret_artifacts=True,
+        ),
+    ]
+    for instance_name in _discover_plan2_instances():
+        commands.append(
+            AcceptanceCommand(
+                f"legacy-import-preflight-{instance_name}",
+                _legacy_import_command(
+                    python=python,
+                    legacy_instances_dir=legacy_instances_dir,
+                    json_output=_instance_artifact_path(legacy_import_json_output, instance_name),
+                    markdown_output=_instance_artifact_path(legacy_import_output, instance_name),
+                    instance_name=instance_name,
+                ),
+                validate_secret_artifacts=True,
+            )
+        )
+    return commands
+
+
+def _legacy_import_command(
+    *,
+    python: str,
+    legacy_instances_dir: Path,
+    json_output: Path,
+    markdown_output: Path,
+    instance_name: str = "",
+) -> tuple[str, ...]:
+    argv: list[str] = [
+        python,
+        "scripts/import_legacy_user_memory.py",
+        "--legacy-instances-dir",
+        str(legacy_instances_dir),
+        "--target-instances-dir",
+        "instances",
+    ]
+    if instance_name:
+        argv.extend(["--instance", instance_name])
+    argv.extend(
+        [
+            "--replace-unreadable-account-metadata",
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+    return tuple(argv)
+
+
+def _discover_plan2_instances(instances_dir: Path = REPO_ROOT / "instances") -> tuple[str, ...]:
+    if not instances_dir.exists():
+        return ()
+    return tuple(
+        path.name
+        for path in sorted(instances_dir.iterdir())
+        if path.is_dir() and (path / "Bot_Verhalten.md").exists()
+    )
+
+
+def _instance_artifact_path(path: Path, instance_name: str) -> Path:
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", instance_name).strip("_") or "instance"
+    return path.with_name(f"{path.stem}-{safe_name}{path.suffix}")
 
 
 def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:

@@ -236,6 +236,28 @@ def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) ->
     assert by_label["memory-recovery-legacy-json"].validate_secret_artifacts is True
     assert by_label["memory-recovery-legacy-text"].validate_secret_artifacts is True
     assert by_label["legacy-import-preflight"].validate_secret_artifacts is True
+    assert by_label["legacy-import-preflight-Bote_der_Wahrheit"].argv == (
+        "python-test",
+        "scripts/import_legacy_user_memory.py",
+        "--legacy-instances-dir",
+        str(legacy_dir),
+        "--target-instances-dir",
+        "instances",
+        "--instance",
+        "Bote_der_Wahrheit",
+        "--replace-unreadable-account-metadata",
+        "--json-output",
+        str(tmp_path / "import-Bote_der_Wahrheit.json"),
+        "--markdown-output",
+        str(tmp_path / "import-Bote_der_Wahrheit.md"),
+    )
+    assert by_label["legacy-import-preflight-Depressionsbot"].validate_secret_artifacts is True
+
+
+def test_plan2_acceptance_instance_artifact_paths_are_stable(tmp_path: Path) -> None:
+    assert check_plan2_acceptance._instance_artifact_path(tmp_path / "import.json", "Bote der Wahrheit") == (
+        tmp_path / "import-Bote_der_Wahrheit.json"
+    )
 
 
 def test_plan2_acceptance_can_include_nonfatal_qdrant_live_probe(tmp_path: Path, monkeypatch) -> None:
