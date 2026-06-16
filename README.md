@@ -558,7 +558,7 @@ Pydantic-AI/LangGraph optional. Pydantic-Schemas werden nur fuer strukturierte S
 python3 -m pip install '.[agents]'
 ```
 
-Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. `qdrant_url` darf nur auf `127.0.0.1`, `localhost` oder `::1` zeigen und keine Zugangsdaten enthalten; nicht-lokale Ziele werden im Status als ungueltig gemeldet. Wenn Haystack/Qdrant konfiguriert, aber zur Laufzeit nicht verfuegbar ist, faellt die Suche auf den lokalen Bibliothekar zurueck, statt normale Botantworten zu crashen.
+Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. `qdrant_url` darf nur auf `127.0.0.1`, `localhost` oder `::1` zeigen und keine Zugangsdaten, Query-Parameter oder Fragmente enthalten; nicht-lokale Ziele werden im Status als ungueltig gemeldet. Wenn Haystack/Qdrant konfiguriert, aber zur Laufzeit nicht verfuegbar ist, faellt die Suche auf den lokalen Bibliothekar zurueck, statt normale Botantworten zu crashen.
 
 `python3 -m TeeBotus --runtime-status --channels telegram` prueft bei `backend: haystack` die optionalen Haystack/Qdrant-Abhaengigkeiten und die Qdrant-Erreichbarkeit. Bei erreichbarem Backend meldet der Status `store=qdrant target=http://127.0.0.1:6333 status=reachable` plus Dokument-/Chunk-Zahlen aus dem rebuildbaren lokalen Index; bei fehlendem oder nicht erreichbarem Backend meldet er `status=unavailable` oder `status=unreachable` mit Fehlertext.
 
