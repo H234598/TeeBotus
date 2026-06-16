@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,6 +18,7 @@ class TeeBotusSystemdUnit:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print TeeBotus user systemd service.")
+    parser.add_argument("--check-env-file", default="", help=argparse.SUPPRESS)
     parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument("--python", default="", help="Python executable. Defaults to .venv/bin/python if present, else python3.")
     parser.add_argument("--service-name", default="teebotus.service", help="User systemd service filename.")
@@ -26,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit file instead of writing it.")
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the service after writing.")
     args = parser.parse_args(argv)
+    if args.check_env_file:
+        return _check_env_file_permissions(Path(args.check_env_file))
 
     unit = render_teebotus_systemd_unit(
         repo_root=Path(args.repo_root),
@@ -81,6 +85,16 @@ def render_teebotus_systemd_unit(
             "Type=simple",
             f"WorkingDirectory={repo}",
             f"EnvironmentFile=-{env_path}",
+            "ExecStartPre="
+            + " ".join(
+                [
+                    _shell_quote(str(python_path)),
+                    "-m",
+                    "TeeBotus.systemd",
+                    "--check-env-file",
+                    _shell_quote(str(env_path)),
+                ]
+            ),
             "ExecStart=" + " ".join(command),
             "Restart=on-failure",
             "RestartSec=10",
@@ -110,6 +124,20 @@ def _env_path(repo_root: Path, value: str) -> Path:
     raw = str(value or "").strip() or ".env"
     path = Path(raw).expanduser()
     return path if path.is_absolute() else (repo_root / path).resolve()
+
+
+def _check_env_file_permissions(path: Path) -> int:
+    try:
+        if not path.exists():
+            return 0
+        mode = path.stat().st_mode & 0o777
+    except OSError as exc:
+        print(f"EnvironmentFile permission check failed for {path}: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 1
+    if mode & 0o077:
+        print(f"EnvironmentFile permission check failed for {path}: mode={mode:03o} expected=600-or-stricter", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _service_name(value: str) -> str:

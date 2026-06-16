@@ -13,6 +13,7 @@ def test_render_teebotus_systemd_unit_matches_plan2_shape(tmp_path: Path) -> Non
     assert "Description=TeeBotus multi-channel bot" in unit.service_text
     assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
     assert f"EnvironmentFile=-{tmp_path.resolve() / '.env'}" in unit.service_text
+    assert f"ExecStartPre=python3 -m TeeBotus.systemd --check-env-file {tmp_path.resolve() / '.env'}" in unit.service_text
     assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
     assert "Restart=on-failure" in unit.service_text
     assert "RestartSec=10" in unit.service_text
@@ -29,6 +30,7 @@ def test_render_teebotus_systemd_unit_uses_venv_python_when_present(tmp_path: Pa
     unit = render_teebotus_systemd_unit(repo_root=tmp_path)
 
     assert f"ExecStart={venv_python.resolve()} -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+    assert f"ExecStartPre={venv_python.resolve()} -m TeeBotus.systemd --check-env-file {tmp_path.resolve() / '.env'}" in unit.service_text
 
 
 def test_render_teebotus_systemd_unit_can_limit_channels_and_no_all(tmp_path: Path) -> None:
@@ -61,6 +63,21 @@ def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> 
     assert result == 0
     assert "# teebotus.service" in captured.out
     assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in captured.out
+
+
+def test_teebotus_systemd_env_file_permission_check(tmp_path: Path, capsys) -> None:
+    env_file = tmp_path / ".env"
+
+    assert main(["--check-env-file", str(env_file)]) == 0
+
+    env_file.write_text("OPENAI_API_KEY=test\n", encoding="utf-8")
+    env_file.chmod(0o600)
+    assert main(["--check-env-file", str(env_file)]) == 0
+
+    env_file.chmod(0o644)
+    assert main(["--check-env-file", str(env_file)]) == 1
+    captured = capsys.readouterr()
+    assert "mode=644 expected=600-or-stricter" in captured.err
 
 
 def test_teebotus_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path: Path) -> None:
