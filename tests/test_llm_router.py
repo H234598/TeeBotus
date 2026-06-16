@@ -476,6 +476,49 @@ def test_runtime_text_client_applies_openai_route_model_to_legacy_client() -> No
     assert openai_client.calls == ["gpt-5.5"]
 
 
+def test_runtime_text_client_builds_openai_client_for_direct_runtime_openai_provider() -> None:
+    captured: list[str] = []
+
+    class FakeOpenAIClient:
+        def __init__(self, api_key: str) -> None:
+            captured.append(api_key)
+
+        def create_reply(self, *_args, **_kwargs):
+            return object()
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=None,
+        provider="openai",
+        api_key="runtime-openai-key",
+        openai_client_factory=FakeOpenAIClient,
+    )
+
+    assert isinstance(client, FakeOpenAIClient)
+    assert captured == ["runtime-openai-key"]
+
+
+def test_runtime_text_client_builds_openai_client_for_legacy_default_key() -> None:
+    captured: list[str] = []
+
+    class FakeOpenAIClient:
+        def __init__(self, api_key: str) -> None:
+            captured.append(api_key)
+
+        def create_reply(self, *_args, **_kwargs):
+            return object()
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=None,
+        default_api_key="legacy-openai-key",
+        openai_client_factory=FakeOpenAIClient,
+    )
+
+    assert isinstance(client, FakeOpenAIClient)
+    assert captured == ["legacy-openai-key"]
+
+
 def test_simple_yaml_fallback_parser_handles_plan2_shape(tmp_path: Path, monkeypatch) -> None:
     profiles_path = tmp_path / "profiles.yaml"
     profiles_path.write_text(
