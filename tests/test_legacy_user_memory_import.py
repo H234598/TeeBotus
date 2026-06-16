@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import scripts.import_legacy_user_memory as legacy_import
 from scripts.import_legacy_user_memory import import_legacy_user_memory, main as import_main
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
@@ -244,3 +245,59 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     assert "Legacy user text" not in json_output.read_text(encoding="utf-8")
     assert "Legacy user text" not in markdown
     assert "entries_imported" in markdown
+
+
+def test_legacy_user_memory_import_apply_refuses_running_bot(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(
+        legacy_import,
+        "_detect_running_teebotus_processes",
+        lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
+    )
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--apply",
+        ]
+    )
+
+    assert result == 2
+    assert "Refusing legacy memory import --apply" in capsys.readouterr().err
+    store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
+    assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
+
+
+def test_legacy_user_memory_import_apply_can_override_running_bot_guard(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(
+        legacy_import,
+        "_detect_running_teebotus_processes",
+        lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
+    )
+    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", lambda: provider())
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--apply",
+            "--allow-running-bot",
+        ]
+    )
+
+    assert result == 0
+    store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
+    account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
+    assert account_id

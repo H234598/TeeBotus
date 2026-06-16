@@ -67,7 +67,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-backup-current", action="store_true", help="Do not copy current SQLite files before --apply.")
     parser.add_argument("--json-output", default="", help="Write a machine-readable import/preflight report.")
     parser.add_argument("--markdown-output", default="", help="Write a human-readable import/preflight report.")
+    parser.add_argument(
+        "--allow-running-bot",
+        action="store_true",
+        help="Allow --apply while TeeBotus/proactive processes are running. Dangerous; default is to refuse.",
+    )
     args = parser.parse_args(argv)
+
+    if args.apply and not args.allow_running_bot:
+        running = _detect_running_teebotus_processes()
+        if running:
+            print("Refusing legacy memory import --apply because TeeBotus-related processes are running:", file=sys.stderr)
+            for process in running:
+                print(f"  pid={process['pid']} cmd={process['cmdline']}", file=sys.stderr)
+            print("Stop the bot/proactive jobs first, or pass --allow-running-bot if you intentionally accept the race.", file=sys.stderr)
+            return 2
 
     previous_env = _apply_backend(args.backend)
     try:
@@ -362,6 +376,44 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
             f"action=`{event.get('action', '')}`"
         )
     return "\n".join(lines) + "\n"
+
+
+def _detect_running_teebotus_processes() -> list[dict[str, str]]:
+    proc_root = Path("/proc")
+    current_pid = os.getpid()
+    if not proc_root.exists():
+        return []
+    running: list[dict[str, str]] = []
+    for path in proc_root.iterdir():
+        if not path.name.isdigit():
+            continue
+        pid = int(path.name)
+        if pid == current_pid:
+            continue
+        try:
+            raw = (path / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if not raw:
+            continue
+        parts = [part.decode("utf-8", errors="replace") for part in raw.split(b"\0") if part]
+        cmdline = " ".join(parts).strip()
+        lower = cmdline.lower()
+        if not _looks_like_running_teebotus_runtime(lower):
+            continue
+        if "scripts/import_legacy_user_memory.py" in lower:
+            continue
+        running.append({"pid": str(pid), "cmdline": cmdline[:500]})
+    return running
+
+
+def _looks_like_running_teebotus_runtime(cmdline_lower: str) -> bool:
+    return (
+        " -m teebotus" in cmdline_lower
+        or cmdline_lower.endswith(" -m teebotus")
+        or "teebotus-proactive" in cmdline_lower
+        or "/teebotus-proactive" in cmdline_lower
+    )
 
 
 def _legacy_user_dirs(legacy_instances_dir: Path, selected_instances: set[str]) -> list[Path]:
