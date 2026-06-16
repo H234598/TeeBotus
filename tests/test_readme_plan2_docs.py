@@ -23,6 +23,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "memory-recovery --instances-dir instances --instances <Instanz>" in text
     assert "memory-recovery --instances-dir instances --legacy-instances-dir" in text
     assert "scripts/import_legacy_user_memory.py" in text
+    assert "--json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json" in text
+    assert "--markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md" in text
     assert "--replace-unreadable-account-metadata --apply" in text
     assert "Account_Memory.sqlite3" in text
     assert "## Bibliothekar, Haystack und LangGraph" in text

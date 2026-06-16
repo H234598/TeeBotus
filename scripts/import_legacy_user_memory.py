@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -44,6 +44,7 @@ class ImportStats:
     backups_created: int = 0
     metadata_backups_created: int = 0
     account_store_resets: int = 0
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,6 +65,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Move the unreadable active account store aside before importing legacy users: Account_* metadata, accounts/, SQLite DBs, WAL and SHM.",
     )
     parser.add_argument("--no-backup-current", action="store_true", help="Do not copy current SQLite files before --apply.")
+    parser.add_argument("--json-output", default="", help="Write a machine-readable import/preflight report.")
+    parser.add_argument("--markdown-output", default="", help="Write a human-readable import/preflight report.")
     args = parser.parse_args(argv)
 
     previous_env = _apply_backend(args.backend)
@@ -80,6 +83,21 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         _restore_env(previous_env)
     mode = "apply" if args.apply else "dry-run"
+    report = _build_import_report(
+        stats,
+        mode=mode,
+        legacy_instances_dir=Path(args.legacy_instances_dir),
+        target_instances_dir=Path(args.target_instances_dir),
+        instances=tuple(args.instance),
+        backend=args.backend,
+        replace_unreadable=args.replace_unreadable,
+        replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
+        backup_current=not args.no_backup_current,
+    )
+    if args.json_output:
+        Path(args.json_output).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.markdown_output:
+        Path(args.markdown_output).write_text(_render_markdown_report(report), encoding="utf-8")
     print(
         f"legacy-user-memory-import {mode}: sources={stats.sources} imported_sources={stats.imported_sources} "
         f"skipped_sources={stats.skipped_sources} entries_seen={stats.entries_seen} entries_imported={stats.entries_imported} "
@@ -118,6 +136,18 @@ def import_legacy_user_memory(
             stats.unreadable_metadata += 1
             if not replace_unreadable_account_metadata:
                 stats.skipped_sources += 1
+                stats.events.append(
+                    _event(
+                        instance_name=instance_name,
+                        legacy_user_id=user_dir.name,
+                        account_id="<metadata-unreadable>",
+                        entries=0,
+                        imported=0,
+                        action="skip-unreadable-account-metadata",
+                        metadata_unreadable=True,
+                        error=str(exc),
+                    )
+                )
                 print(
                     f"instance={instance_name} legacy_user={user_dir.name} account=<metadata-unreadable> "
                     f"entries=unknown action=skip-unreadable-account-metadata error={exc}"
@@ -147,6 +177,16 @@ def import_legacy_user_memory(
         stats.entries_seen += len(entries)
         if not entries:
             stats.skipped_sources += 1
+            stats.events.append(
+                _event(
+                    instance_name=instance_name,
+                    legacy_user_id=user_dir.name,
+                    account_id=account_id,
+                    entries=0,
+                    imported=0,
+                    action="skip-empty",
+                )
+            )
             print(f"instance={instance_name} legacy_user={user_dir.name} account={account_id} entries=0 action=skip-empty")
             continue
 
@@ -164,6 +204,17 @@ def import_legacy_user_memory(
             stats.unreadable_targets += 1
             if not replace_unreadable:
                 stats.skipped_sources += 1
+                stats.events.append(
+                    _event(
+                        instance_name=instance_name,
+                        legacy_user_id=user_dir.name,
+                        account_id=account_id,
+                        entries=len(entries),
+                        imported=0,
+                        action="skip-unreadable-target",
+                        target_unreadable=True,
+                    )
+                )
                 print(
                     f"instance={instance_name} legacy_user={user_dir.name} account={account_id} "
                     f"entries={len(entries)} action=skip-unreadable-target"
@@ -174,6 +225,19 @@ def import_legacy_user_memory(
         merged_entries = _merge_entries(target_entries, entries, instance_name=instance_name, legacy_user_id=user_dir.name)
         imported_count = max(0, len(merged_entries) - len(target_entries))
         action = "would-import" if not apply else "import"
+        stats.events.append(
+            _event(
+                instance_name=instance_name,
+                legacy_user_id=user_dir.name,
+                account_id=account_id,
+                entries=len(entries),
+                imported=imported_count,
+                action=action,
+                target_unreadable=target_unreadable,
+                metadata_unreadable=False,
+                account_created=not bool(existing_account_id),
+            )
+        )
         print(
             f"instance={instance_name} legacy_user={user_dir.name} account={account_id} "
             f"entries={len(entries)} imported={imported_count} action={action}"
@@ -192,6 +256,112 @@ def import_legacy_user_memory(
         stats.imported_sources += 1
         stats.entries_imported += imported_count
     return stats
+
+
+def _event(
+    *,
+    instance_name: str,
+    legacy_user_id: str,
+    account_id: str,
+    entries: int,
+    imported: int,
+    action: str,
+    target_unreadable: bool = False,
+    metadata_unreadable: bool = False,
+    account_created: bool = False,
+    error: str = "",
+) -> dict[str, Any]:
+    return {
+        "instance": instance_name,
+        "legacy_user_id": legacy_user_id,
+        "identity": telegram_identity_key(legacy_user_id),
+        "account_id": account_id,
+        "entries": int(entries),
+        "imported": int(imported),
+        "action": action,
+        "target_unreadable": bool(target_unreadable),
+        "metadata_unreadable": bool(metadata_unreadable),
+        "account_created": bool(account_created),
+        "error": error,
+    }
+
+
+def _build_import_report(
+    stats: ImportStats,
+    *,
+    mode: str,
+    legacy_instances_dir: Path,
+    target_instances_dir: Path,
+    instances: tuple[str, ...],
+    backend: str,
+    replace_unreadable: bool,
+    replace_unreadable_account_metadata: bool,
+    backup_current: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "mode": mode,
+        "legacy_instances_dir": str(legacy_instances_dir),
+        "target_instances_dir": str(target_instances_dir),
+        "instances": list(instances),
+        "options": {
+            "backend": backend,
+            "replace_unreadable": bool(replace_unreadable),
+            "replace_unreadable_account_metadata": bool(replace_unreadable_account_metadata),
+            "backup_current": bool(backup_current),
+        },
+        "totals": {
+            "sources": stats.sources,
+            "imported_sources": stats.imported_sources,
+            "skipped_sources": stats.skipped_sources,
+            "entries_seen": stats.entries_seen,
+            "entries_imported": stats.entries_imported,
+            "accounts_created": stats.accounts_created,
+            "accounts_existing": stats.accounts_existing,
+            "unreadable_targets": stats.unreadable_targets,
+            "unreadable_metadata": stats.unreadable_metadata,
+            "backups_created": stats.backups_created,
+            "metadata_backups_created": stats.metadata_backups_created,
+            "account_store_resets": stats.account_store_resets,
+        },
+        "events": list(stats.events),
+    }
+
+
+def _render_markdown_report(report: dict[str, Any]) -> str:
+    totals = report.get("totals") if isinstance(report.get("totals"), dict) else {}
+    options = report.get("options") if isinstance(report.get("options"), dict) else {}
+    lines = [
+        "# TeeBotus Legacy User Memory Import",
+        "",
+        f"- generated_at: `{report.get('generated_at', '')}`",
+        f"- mode: `{report.get('mode', '')}`",
+        f"- legacy_instances_dir: `{report.get('legacy_instances_dir', '')}`",
+        f"- target_instances_dir: `{report.get('target_instances_dir', '')}`",
+        f"- backend: `{options.get('backend', '')}`",
+        f"- replace_unreadable: `{options.get('replace_unreadable', False)}`",
+        f"- replace_unreadable_account_metadata: `{options.get('replace_unreadable_account_metadata', False)}`",
+        "",
+        "## Totals",
+        "",
+    ]
+    for key in sorted(totals):
+        lines.append(f"- {key}: `{totals[key]}`")
+    lines.extend(["", "## Events", ""])
+    for event in report.get("events", []) if isinstance(report.get("events"), list) else []:
+        if not isinstance(event, dict):
+            continue
+        lines.append(
+            "- "
+            f"instance=`{event.get('instance', '')}` "
+            f"legacy_user=`{event.get('legacy_user_id', '')}` "
+            f"account=`{event.get('account_id', '')}` "
+            f"entries=`{event.get('entries', 0)}` "
+            f"imported=`{event.get('imported', 0)}` "
+            f"action=`{event.get('action', '')}`"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _legacy_user_dirs(legacy_instances_dir: Path, selected_instances: set[str]) -> list[Path]:

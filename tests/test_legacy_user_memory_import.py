@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.import_legacy_user_memory import import_legacy_user_memory
+from scripts.import_legacy_user_memory import import_legacy_user_memory, main as import_main
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
@@ -49,6 +49,8 @@ def test_legacy_user_memory_import_dry_run_does_not_create_account(tmp_path: Pat
     assert stats.sources == 1
     assert stats.entries_seen == 1
     assert stats.entries_imported == 1
+    assert stats.events[0]["action"] == "would-import"
+    assert stats.events[0]["entries"] == 1
     store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
     assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
 
@@ -209,3 +211,36 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
     assert stats.entries_seen == 1
     assert stats.entries_imported == 1
     assert stats.metadata_backups_created == 0
+
+
+def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    json_output = tmp_path / "import.json"
+    markdown_output = tmp_path / "import.md"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert payload["mode"] == "dry-run"
+    assert payload["totals"]["entries_imported"] == 1
+    assert payload["events"][0]["identity"] == "telegram:user:395935293"
+    assert payload["events"][0]["action"] == "would-import"
+    assert "Legacy user text" not in json_output.read_text(encoding="utf-8")
+    assert "Legacy user text" not in markdown
+    assert "entries_imported" in markdown
