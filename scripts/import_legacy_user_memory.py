@@ -80,11 +80,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    running_processes = _detect_running_teebotus_processes()
     if args.apply and not args.allow_running_bot:
-        running = _detect_running_teebotus_processes()
-        if running:
+        if running_processes:
             print("Refusing legacy memory import --apply because TeeBotus-related processes are running:", file=sys.stderr)
-            for process in running:
+            for process in running_processes:
                 print(f"  pid={process['pid']} cmd={process['cmdline']}", file=sys.stderr)
             print("Stop the bot/proactive jobs first, or pass --allow-running-bot if you intentionally accept the race.", file=sys.stderr)
             return 2
@@ -115,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
         replace_unreadable=args.replace_unreadable,
         replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
         backup_current=not args.no_backup_current,
+        allow_running_bot=args.allow_running_bot,
+        running_processes=running_processes,
     )
     if args.json_output:
         Path(args.json_output).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -335,7 +337,11 @@ def _build_import_report(
     replace_unreadable: bool,
     replace_unreadable_account_metadata: bool,
     backup_current: bool,
+    allow_running_bot: bool = False,
+    running_processes: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
+    running_processes = list(running_processes or [])
+    mode_is_apply = mode == "apply"
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -349,6 +355,14 @@ def _build_import_report(
             "replace_unreadable": bool(replace_unreadable),
             "replace_unreadable_account_metadata": bool(replace_unreadable_account_metadata),
             "backup_current": bool(backup_current),
+            "allow_running_bot": bool(allow_running_bot),
+        },
+        "apply_safety": {
+            "running_bot_processes": running_processes,
+            "running_bot_process_count": len(running_processes),
+            "apply_allowed_now": bool(mode_is_apply or not running_processes or allow_running_bot),
+            "apply_requires_stopped_bot": bool(running_processes and not allow_running_bot),
+            "message": _apply_safety_message(running_processes, allow_running_bot=allow_running_bot),
         },
         "totals": {
             "sources": stats.sources,
@@ -368,9 +382,18 @@ def _build_import_report(
     }
 
 
+def _apply_safety_message(running_processes: list[dict[str, str]], *, allow_running_bot: bool) -> str:
+    if not running_processes:
+        return "No TeeBotus runtime process detected; --apply may run after reviewing the preflight report."
+    if allow_running_bot:
+        return "--allow-running-bot was set; apply is intentionally allowed despite detected runtime processes."
+    return "TeeBotus runtime processes are running; stop bot/proactive jobs before using --apply."
+
+
 def _render_markdown_report(report: dict[str, Any]) -> str:
     totals = report.get("totals") if isinstance(report.get("totals"), dict) else {}
     options = report.get("options") if isinstance(report.get("options"), dict) else {}
+    apply_safety = report.get("apply_safety") if isinstance(report.get("apply_safety"), dict) else {}
     lines = [
         "# TeeBotus Legacy User Memory Import",
         "",
@@ -382,10 +405,25 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
         f"- backend: `{options.get('backend', '')}`",
         f"- replace_unreadable: `{options.get('replace_unreadable', False)}`",
         f"- replace_unreadable_account_metadata: `{options.get('replace_unreadable_account_metadata', False)}`",
+        f"- allow_running_bot: `{options.get('allow_running_bot', False)}`",
+        "",
+        "## Apply Safety",
+        "",
+        f"- apply_allowed_now: `{apply_safety.get('apply_allowed_now', False)}`",
+        f"- apply_requires_stopped_bot: `{apply_safety.get('apply_requires_stopped_bot', False)}`",
+        f"- running_bot_process_count: `{apply_safety.get('running_bot_process_count', 0)}`",
+        f"- message: `{apply_safety.get('message', '')}`",
         "",
         "## Totals",
         "",
     ]
+    running_processes = apply_safety.get("running_bot_processes")
+    if isinstance(running_processes, list) and running_processes:
+        lines.extend(["", "### Running Bot Processes", ""])
+        for process in running_processes:
+            if not isinstance(process, dict):
+                continue
+            lines.append(f"- pid=`{process.get('pid', '')}` cmd=`{process.get('cmdline', '')}`")
     for key in sorted(totals):
         lines.append(f"- {key}: `{totals[key]}`")
     lines.extend(["", "## Events", ""])

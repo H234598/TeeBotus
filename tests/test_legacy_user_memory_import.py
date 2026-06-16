@@ -271,6 +271,7 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
 
 def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(legacy_import, "_detect_running_teebotus_processes", lambda: [])
     legacy_root = tmp_path / "legacy"
     target_root = tmp_path / "target"
     write_legacy_entries(legacy_root)
@@ -297,9 +298,52 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     assert payload["totals"]["entries_imported"] == 1
     assert payload["events"][0]["identity"] == "telegram:user:395935293"
     assert payload["events"][0]["action"] == "would-import"
+    assert payload["apply_safety"]["apply_allowed_now"] is True
+    assert payload["apply_safety"]["apply_requires_stopped_bot"] is False
+    assert payload["apply_safety"]["running_bot_process_count"] == 0
     assert "Legacy user text" not in json_output.read_text(encoding="utf-8")
     assert "Legacy user text" not in markdown
     assert "entries_imported" in markdown
+    assert "Apply Safety" in markdown
+
+
+def test_legacy_user_memory_import_dry_run_reports_running_bot_apply_block(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(
+        legacy_import,
+        "_detect_running_teebotus_processes",
+        lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
+    )
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    json_output = tmp_path / "import.json"
+    markdown_output = tmp_path / "import.md"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert payload["mode"] == "dry-run"
+    assert payload["apply_safety"]["apply_allowed_now"] is False
+    assert payload["apply_safety"]["apply_requires_stopped_bot"] is True
+    assert payload["apply_safety"]["running_bot_process_count"] == 1
+    assert payload["apply_safety"]["running_bot_processes"][0]["pid"] == "123"
+    assert "stop bot/proactive jobs" in payload["apply_safety"]["message"]
+    assert "Running Bot Processes" in markdown
+    assert "pid=`123`" in markdown
 
 
 def test_legacy_user_memory_import_dry_run_does_not_create_missing_secret(tmp_path: Path, monkeypatch) -> None:
