@@ -56,6 +56,7 @@ STATUS_SECRET_REDACTIONS = (
         r"\1=<redacted>",
     ),
 )
+STATUS_URL_CREDENTIAL_RE = re.compile(r"(?<!\S)(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)")
 
 
 def build_status_reply(
@@ -181,7 +182,15 @@ def redact_status_text(value: object) -> str:
         return ""
     for pattern, replacement in STATUS_SECRET_REDACTIONS:
         text = pattern.sub(replacement, text)
+    text = STATUS_URL_CREDENTIAL_RE.sub(_redacted_status_url_credentials, text)
     return text.replace("\r", " ").replace("\n", " ")
+
+
+def _redacted_status_url_credentials(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if "://" not in value:
+        return ""
+    return value.split("://", maxsplit=1)[0] + "://"
 
 
 def _mcp_tool_status_label(name: str, policy: MCPToolPolicy) -> str:

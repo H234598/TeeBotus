@@ -68,11 +68,15 @@ def test_mcp_status_separates_direct_allowlist_from_guarded_tools() -> None:
 def test_mcp_status_redacts_secret_like_unknown_tool_names() -> None:
     openai_key = "sk-" + "ignoredToolLeak123456"
     hf_key = "hf_" + "ignoredToolLeak123456"
+    credential_url = "https://user:plain-password@example.invalid:8443/path"
+    schemeless_credentials = "user:plain-password@example.invalid:8443"
 
     lines = mcp_tool_status_lines(
         {
             openai_key: {"enabled": True, "read_only": True},
             f"OPENAI_API_KEY={hf_key}": {"enabled": True, "read_only": True},
+            credential_url: {"enabled": True, "read_only": True},
+            schemeless_credentials: {"enabled": True, "read_only": True},
             "shell.exec": {"enabled": True, "read_only": True},
         }
     )
@@ -80,6 +84,10 @@ def test_mcp_status_redacts_secret_like_unknown_tool_names() -> None:
     joined = "\n".join(lines)
     assert openai_key not in joined
     assert hf_key not in joined
+    assert "plain-password" not in joined
+    assert "user:" not in joined
+    assert "https://example.invalid:8443/path" in joined
+    assert "example.invalid:8443" in joined
     assert "sk-<redacted>" in joined
     assert "openai_api_key=<redacted>" in joined
     assert "shell.exec" in joined
