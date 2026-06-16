@@ -87,6 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json-output", default="", help="JSON output path.")
     parser.add_argument("--baseline-json", default="", help="Optional previous benchmark JSON for regression comparison.")
     parser.add_argument("--postgres-dsn", default="", help="Optional PostgreSQL DSN for live PostgreSQL memory benchmark.")
+    parser.add_argument("--include-live", action="store_true", help="Allow explicitly configured live benchmarks such as PostgreSQL.")
     args = parser.parse_args(argv)
     if args.entries < 1:
         parser.error("--entries must be >= 1")
@@ -98,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         iterations=args.iterations,
         postgres_dsn=args.postgres_dsn,
         quick=bool(args.quick),
+        include_live=bool(args.include_live),
         baseline_json=Path(args.baseline_json) if args.baseline_json else None,
     )
     markdown = render_markdown(suite)
@@ -118,10 +120,11 @@ def run_benchmarks(
     iterations: int = 50,
     postgres_dsn: str = "",
     quick: bool = True,
+    include_live: bool = False,
     baseline_json: Path | None = None,
 ) -> dict[str, Any]:
     results: list[BenchmarkResult] = []
-    results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn))
+    results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn if include_live else ""))
     results.append(_benchmark_bibliothekar(iterations=iterations))
     results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
     results.append(_benchmark_llm_router(iterations=iterations))
@@ -143,6 +146,7 @@ def run_benchmarks(
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "quick": bool(quick),
+        "include_live": bool(include_live),
         "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results) and not regression["failed"],
         "context": _context(),
         "results": results,
@@ -161,6 +165,7 @@ def render_markdown(suite: dict[str, Any]) -> str:
         f"- machine: {suite['context']['machine']}",
         f"- cpu_count: {suite['context']['cpu_count']}",
         f"- quick: {suite['quick']}",
+        f"- include_live: {suite.get('include_live', False)}",
         "",
         "## Dependencies",
         "",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
+from scripts import run_benchmarks as benchmark_module
 from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
 
@@ -13,6 +14,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
 
     assert suite["schema_version"] == 1
     assert suite["ok"] is True
+    assert suite["include_live"] is False
     assert suite["context"]["cpu_count"] >= 1
     assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
@@ -179,6 +181,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "## Stable Backend Rankings" in markdown
     assert "## Regression Check" in markdown
     assert "status: not_configured" in markdown
+    assert "include_live: False" in markdown
     assert "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" in markdown
     assert "Die Rangliste dokumentiert Messwerte nur" in markdown
     assert "memory_jsonl" in markdown
@@ -221,10 +224,35 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     assert json_path.exists()
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["ok"] is True
+    assert payload["include_live"] is False
     assert payload["results"]
     assert payload["comparisons"]["stable_backend_rankings"]
     assert payload["regression"]["status"] == "not_configured"
     assert "TeeBotus Benchmarks" in markdown_path.read_text(encoding="utf-8")
+
+
+def test_run_benchmarks_requires_explicit_include_live_for_postgres(monkeypatch) -> None:
+    seen_dsns: list[str] = []
+
+    def fake_postgres_backend(*, entries: int, select_runs: int, dsn: str):  # noqa: ARG001
+        seen_dsns.append(dsn)
+        return {
+            "backend": "postgres-row-encrypted-memory",
+            "skipped": True,
+            "reason": "fake",
+            "append_total_ms": 0.0,
+            "rebuild_ms": 0.0,
+            "select_median_ms": 0.0,
+        }
+
+    monkeypatch.setattr(benchmark_module, "benchmark_postgres_backend", fake_postgres_backend)
+
+    quick_suite = run_benchmarks(entries=1, iterations=1, quick=True, postgres_dsn="postgresql://bench")
+    live_suite = run_benchmarks(entries=1, iterations=1, quick=False, include_live=True, postgres_dsn="postgresql://bench")
+
+    assert seen_dsns == ["", "postgresql://bench"]
+    assert quick_suite["include_live"] is False
+    assert live_suite["include_live"] is True
 
 
 def test_run_benchmarks_compares_optional_baseline(tmp_path) -> None:
