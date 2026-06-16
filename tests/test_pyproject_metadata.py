@@ -17,7 +17,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
     assert _pyproject()["project"]["requires-python"] == ">=3.11"
     assert set(optional) >= {"dev", "llm", "agents", "rag", "tools"}
     assert set(optional["dev"]) >= {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"}
-    assert set(optional["llm"]) >= {"litellm==1.83.7", "python-dotenv==1.0.1", "openai", "ollama"}
+    assert set(optional["llm"]) >= {"litellm==1.83.7", "python-dotenv==1.0.1", "openai==2.30.0", "ollama==0.6.2"}
     assert set(optional["agents"]) >= {"pydantic-ai-slim==1.107.0", "langgraph==1.2.5"}
     assert set(optional["rag"]) >= {
         "haystack-ai==2.30.1",
@@ -26,7 +26,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
         "pypdf==6.13.2",
         "pymupdf==1.27.2.3",
         "ebooklib==0.20",
-        "beautifulsoup4",
+        "beautifulsoup4==4.14.3",
     }
     assert set(optional["tools"]) >= {"fastmcp==2.0.0"}
 
@@ -36,6 +36,8 @@ def test_pyproject_litellm_extra_blocks_known_bad_versions() -> None:
 
     assert "litellm==1.83.7" in llm_deps
     assert "python-dotenv==1.0.1" in llm_deps
+    assert "openai==2.30.0" in llm_deps
+    assert "ollama==0.6.2" in llm_deps
     assert "litellm==1.82.7" not in llm_deps
     assert "litellm==1.82.8" not in llm_deps
 
