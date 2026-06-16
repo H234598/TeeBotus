@@ -161,7 +161,7 @@ def _mcp_status_policy(default_policy: MCPToolPolicy, config: Mapping[str, Any])
         enabled=_mcp_bool_config(config.get("enabled"), default_policy.enabled),
         read_only=_mcp_bool_config(config.get("read_only"), default_policy.read_only),
         requires_confirmation=_mcp_bool_config(config.get("requires_confirmation"), default_policy.requires_confirmation),
-        private_chat_only=_mcp_bool_config(config.get("private_chat_only"), default_policy.private_chat_only),
+        private_chat_only=True if default_policy.private_chat_only else _mcp_bool_config(config.get("private_chat_only"), default_policy.private_chat_only),
         requires_admin=_mcp_bool_config(config.get("requires_admin"), default_policy.requires_admin),
         sandbox_required=_mcp_bool_config(config.get("sandbox_required"), default_policy.sandbox_required),
     )

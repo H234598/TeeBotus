@@ -51,7 +51,11 @@ class ImportStats:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import plaintext legacy data/users/* user memories into encrypted account memory.")
-    parser.add_argument("--legacy-instances-dir", required=True, help="Legacy instances directory, e.g. /home/teladi/TeeBotus.bak2/instances.bak.")
+    parser.add_argument(
+        "--legacy-instances-dir",
+        required=True,
+        help="Legacy instances directory or backup root, e.g. /home/teladi/TeeBotus.bak2 or /home/teladi/TeeBotus.bak2/instances.bak.",
+    )
     parser.add_argument("--target-instances-dir", default="instances", help="Current TeeBotus instances directory.")
     parser.add_argument("--instance", action="append", default=[], help="Instance to import. Can be repeated.")
     parser.add_argument("--backend", choices=("sqlite", "json", "env"), default="sqlite", help="Target account-memory backend override.")
