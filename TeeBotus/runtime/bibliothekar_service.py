@@ -20,7 +20,29 @@ from TeeBotus.runtime.bibliothekar import (
 
 
 HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
-REQUIRED_CITATION_CHUNK_FIELDS = ("chunk_id", "relative_path", "locator")
+REQUIRED_CITATION_CHUNK_FIELDS = (
+    "chunk_id",
+    "source_id",
+    "title",
+    "relative_path",
+    "file_path",
+    "file_sha256",
+    "file_type",
+    "language",
+    "locator",
+    "license",
+    "ingested_at",
+    "embedding_model",
+)
+REQUIRED_CITATION_CHUNK_KEYS = (
+    *REQUIRED_CITATION_CHUNK_FIELDS,
+    "author",
+    "page_start",
+    "page_end",
+    "chapter",
+    "section",
+    "chunk_index",
+)
 CHUNK_FILTER_KEYS = frozenset(
     {
         "category",
@@ -582,7 +604,9 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
 
 
 def _chunk_has_required_citation_metadata(chunk: Mapping[str, Any]) -> bool:
-    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS)
+    return all(field in chunk for field in REQUIRED_CITATION_CHUNK_KEYS) and all(
+        str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS
+    )
 
 
 def _filter_values(value: object) -> tuple[str, ...]:

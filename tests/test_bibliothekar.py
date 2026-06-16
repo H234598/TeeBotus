@@ -416,10 +416,8 @@ def test_haystack_backend_isolates_search_results_by_instance(tmp_path):
             content="Depression Therapie Aktivierung Schlaf.",
             id="own_chunk",
             meta={
-                "chunk_id": "own_chunk",
+                **_plan2_chunk_meta(chunk_id="own_chunk", relative_path="therapie.txt", locator="Seite 1"),
                 "instance_name": "Depressionsbot",
-                "relative_path": "therapie.txt",
-                "locator": "Seite 1",
                 "topics": ["therapie"],
                 "categories": ["psychologie"],
             },
@@ -1202,6 +1200,31 @@ def _write_epub(path, body):
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("mimetype", "application/epub+zip")
         archive.writestr("OPS/chapter.xhtml", body)
+
+
+def _plan2_chunk_meta(*, chunk_id="chunk", relative_path="quelle.txt", locator="Seite 1"):
+    return {
+        "chunk_id": chunk_id,
+        "document_id": "doc_test",
+        "source_id": "sha256:" + "a" * 64,
+        "title": "Quelle",
+        "author": "",
+        "relative_path": relative_path,
+        "file_path": relative_path,
+        "file_sha256": "a" * 64,
+        "file_type": relative_path.rsplit(".", 1)[-1],
+        "language": "de",
+        "locator": locator,
+        "suffix": "." + relative_path.rsplit(".", 1)[-1],
+        "page_start": 1,
+        "page_end": 1,
+        "chapter": "",
+        "section": locator,
+        "license": "private",
+        "ingested_at": "2026-06-15T12:00:00+00:00",
+        "chunk_index": 1,
+        "embedding_model": "intfloat/multilingual-e5-small",
+    }
 
 
 class FakeDocument:
