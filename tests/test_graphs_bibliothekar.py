@@ -34,7 +34,7 @@ def test_bibliothekar_deep_query_passes_metadata_filters(tmp_path) -> None:
     state = run_bibliothekar_deep_query(
         service,
         "System Therapie",
-        filters={"categories": ["technik"]},
+        filters={"categories": ["technik"], "account_id": "private-must-not-echo"},
         prefer_langgraph=False,
     )
 
@@ -253,11 +253,11 @@ def test_bibliothekar_deep_query_coerces_graph_state_conservatively(tmp_path, mo
         def invoke(self, _state):
             return {
                 "query": "Therapie",
-                "confidence": "not-a-number",
+                "confidence": "2.0",
                 "citation_ok": "false",
                 "fallback_reason": None,
-                "selected_ids": ("mem_1",),
-                "errors": {"warn"},
+                "selected_ids": ("", None, "mem_1"),
+                "errors": ("x" * 700,),
             }
 
     class FakeStateGraph:
@@ -289,7 +289,7 @@ def test_bibliothekar_deep_query_coerces_graph_state_conservatively(tmp_path, mo
     assert "confidence" not in state
     assert "fallback_reason" not in state
     assert state["selected_ids"] == ["mem_1"]
-    assert state["errors"] == ["warn"]
+    assert state["errors"] == ["x" * 500]
     json.dumps(state, allow_nan=False)
 
 
@@ -327,6 +327,138 @@ def test_bibliothekar_deep_query_finalizes_external_fallback_state(tmp_path, mon
     assert state["citation_ok"] is False
     assert "keine belastbare Quelle" in state["answer_text"]
     json.dumps(state, allow_nan=False)
+
+
+def test_bibliothekar_deep_query_revalidates_external_citation_ok_state(tmp_path, monkeypatch) -> None:
+    service = _service_with_book(tmp_path)
+    prompt_text = service.search("Therapie").prompt_text
+    payload = json.loads(prompt_text)
+    selected_ids = [payload["selected_library_chunks"][0]["chunk_id"]]
+
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "selected_ids": selected_ids,
+                "prompt_text": prompt_text,
+                "answer_text": "Therapie kann helfen, aber ohne Quellenangabe.",
+                "citation_ok": True,
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(service, "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "answer_missing_citations"
+    assert "keine belastbare Quelle" in state["answer_text"]
+
+
+def test_bibliothekar_deep_query_rejects_external_selected_id_mismatch(tmp_path, monkeypatch) -> None:
+    service = _service_with_book(tmp_path)
+    prompt_text = service.search("Therapie").prompt_text
+    payload = json.loads(prompt_text)
+    chunk_id = payload["selected_library_chunks"][0]["chunk_id"]
+
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "selected_ids": ["missing-chunk"],
+                "prompt_text": prompt_text,
+                "answer_text": f"Therapie wird genannt. [Quelle: chunk_id={chunk_id}]",
+                "citation_ok": True,
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(service, "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "selected_ids_mismatch"
+    assert "keine belastbare Quelle" in state["answer_text"]
+
+
+def test_bibliothekar_deep_query_external_fallback_overrides_partial_answer(tmp_path, monkeypatch) -> None:
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "fallback_reason": "external_no_sources",
+                "answer_text": "Teilantwort ohne belastbare Quelle.",
+                "citation_ok": True,
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(_service_with_book(tmp_path), "Therapie", prefer_langgraph=True)
+
+    assert state["fallback_reason"] == "external_no_sources"
+    assert state["citation_ok"] is False
+    assert state["answer_text"] == "Ich habe in der Bibliothek gerade keine belastbare Quelle fuer diese Frage gefunden."
 
 
 def test_bibliothekar_cli_query_deep_uses_graph(tmp_path, capsys) -> None:

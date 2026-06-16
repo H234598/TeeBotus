@@ -4,7 +4,7 @@ import json
 from typing import Any, Callable, Mapping, TypedDict
 
 from TeeBotus.runtime.bibliothekar import DEFAULT_MAX_CHUNKS, DEFAULT_MAX_PROMPT_CHARS, DEFAULT_MAX_QUOTE_CHARS
-from TeeBotus.runtime.bibliothekar_service import BibliothekarService
+from TeeBotus.runtime.bibliothekar_service import CHUNK_FILTER_KEYS, BibliothekarService
 
 REQUIRED_CITATION_FIELDS = frozenset(
     {
@@ -204,6 +204,8 @@ def _citation_check(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryS
     chunks = payload.get("selected_library_chunks") if isinstance(payload, Mapping) else None
     if not isinstance(chunks, list) or not chunks:
         return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "no_citable_chunks"}
+    if not _selected_ids_match_chunks(state.get("selected_ids"), chunks):
+        return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "selected_ids_mismatch"}
     citation_ok = all(_chunk_has_required_citation_fields(chunk) for chunk in chunks)
     if not citation_ok:
         return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "citation_metadata_missing"}
@@ -250,11 +252,23 @@ def _answer_mentions_selected_citation(answer_text: str, chunks: list[object]) -
     return False
 
 
+def _selected_ids_match_chunks(selected_ids: object, chunks: list[object]) -> bool:
+    if not isinstance(selected_ids, list) or not selected_ids:
+        return False
+    chunk_ids = {str(chunk.get("chunk_id") or "").strip() for chunk in chunks if isinstance(chunk, Mapping)}
+    chunk_ids.discard("")
+    selected = {str(item or "").strip() for item in selected_ids}
+    selected.discard("")
+    return bool(selected) and selected.issubset(chunk_ids)
+
+
 def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in filters.items():
-        normalized_key = str(key).strip()
+        normalized_key = str(key).strip().casefold()
         if not normalized_key:
+            continue
+        if normalized_key not in CHUNK_FILTER_KEYS:
             continue
         if isinstance(value, (list, tuple, set, frozenset)):
             result[normalized_key] = [str(item) for item in value if str(item).strip()]
@@ -280,14 +294,18 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
             result["citation_ok"] = _coerce_bool(item)
         elif key == "filters" and isinstance(item, Mapping):
             result["filters"] = _serializable_filters(item)
-        elif key in {"selected_ids", "errors"} and isinstance(item, (list, tuple, set, frozenset)):
-            result[str(key)] = [str(entry) for entry in item]  # type: ignore[literal-required]
+        elif key == "selected_ids" and isinstance(item, (list, tuple, set, frozenset)):
+            result["selected_ids"] = _coerce_string_list(item)
+        elif key == "errors" and isinstance(item, (list, tuple, set, frozenset)):
+            result["errors"] = _coerce_string_list(item, max_items=20, max_chars=500)
     return result
 
 
 def _finalize_external_state(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryState:
-    if state.get("fallback_reason") and not state.get("answer_text"):
-        return _fallback(state)
+    if state.get("fallback_reason"):
+        return _fallback({**state, "answer_text": "", "citation_ok": False})
+    if state.get("citation_ok"):
+        return _fallback(_citation_check(state))
     return state
 
 
@@ -297,6 +315,8 @@ def _coerce_float(value: object) -> float | None:
     except (TypeError, ValueError):
         return None
     if parsed != parsed or parsed in {float("inf"), float("-inf")}:
+        return None
+    if parsed < 0.0 or parsed > 1.0:
         return None
     return parsed
 
@@ -310,3 +330,17 @@ def _coerce_bool(value: object) -> bool:
     if text in {"0", "false", "no", "off", "nein", "falsch", ""}:
         return False
     return False
+
+
+def _coerce_string_list(values: object, *, max_items: int = 100, max_chars: int = 200) -> list[str]:
+    if not isinstance(values, (list, tuple, set, frozenset)):
+        return []
+    result: list[str] = []
+    for item in values:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        result.append(text[:max_chars])
+        if len(result) >= max_items:
+            break
+    return result
