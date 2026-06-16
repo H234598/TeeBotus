@@ -59,6 +59,19 @@ def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
     assert "TMBMAP1" in raw_identity_file
 
 
+def test_account_id_convenience_lookup_and_optional_create(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(395935293)
+
+    assert store.account_id(identity) is None
+    created = store.account_id(identity, create=True, display_label="Teladi")
+
+    assert created is not None
+    assert HEX_128.fullmatch(created)
+    assert store.account_id(identity) == created
+    assert store.resolve_or_create_account(identity) == created
+
+
 def test_telegram_identity_key_uses_username_and_display_fallbacks() -> None:
     assert telegram_identity_key(395935293, username="Teladi") == "telegram:user:395935293"
     assert telegram_identity_key("", username="@Teladi") == "telegram:username:teladi"

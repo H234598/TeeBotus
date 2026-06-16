@@ -656,6 +656,11 @@ class AccountStore:
     def account_dir(self, account_id: str) -> Path:
         return self.accounts_dir / validate_sha512_token(account_id, field_name="account_id")
 
+    def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
+        if create:
+            return self.resolve_or_create_account(identity_key, display_label=display_label)
+        return self.get_account_for_identity(identity_key)
+
     def resolve_or_create_account(self, identity_key: str, *, display_label: str = "") -> str:
         identities = self._load_identities()
         key = self._normalize_identity_key(identity_key)

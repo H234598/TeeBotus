@@ -307,6 +307,9 @@ def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) ->
         memory_recovery_json_output=tmp_path / "recovery.json",
         legacy_import_output=tmp_path / "import.md",
         legacy_import_json_output=tmp_path / "import.json",
+        legacy_rehearsal_output=tmp_path / "rehearsal.md",
+        legacy_rehearsal_json_output=tmp_path / "rehearsal.json",
+        legacy_rehearsal_copy_dir=tmp_path / "teebotus-rehearsal-copy",
     )
 
     by_label = {command.label: command for command in commands}
@@ -350,9 +353,27 @@ def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) ->
         "--markdown-output",
         str(tmp_path / "import.md"),
     )
+    assert by_label["legacy-import-rehearsal"].argv == (
+        "python-test",
+        "scripts/import_legacy_user_memory.py",
+        "--legacy-instances-dir",
+        str(legacy_dir),
+        "--target-instances-dir",
+        "instances",
+        "--rehearsal-copy-dir",
+        str(tmp_path / "teebotus-rehearsal-copy"),
+        "--replace-unreadable",
+        "--apply",
+        "--replace-unreadable-account-metadata",
+        "--json-output",
+        str(tmp_path / "rehearsal.json"),
+        "--markdown-output",
+        str(tmp_path / "rehearsal.md"),
+    )
     assert by_label["memory-recovery-legacy-json"].validate_secret_artifacts is True
     assert by_label["memory-recovery-legacy-text"].validate_secret_artifacts is True
     assert by_label["legacy-import-preflight"].validate_secret_artifacts is True
+    assert by_label["legacy-import-rehearsal"].validate_secret_artifacts is True
     assert by_label["legacy-import-preflight-Bote_der_Wahrheit"].argv == (
         "python-test",
         "scripts/import_legacy_user_memory.py",
@@ -369,6 +390,44 @@ def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) ->
         str(tmp_path / "import-Bote_der_Wahrheit.md"),
     )
     assert by_label["legacy-import-preflight-Depressionsbot"].validate_secret_artifacts is True
+
+
+def test_plan2_acceptance_prepares_legacy_rehearsal_copy_dir(tmp_path: Path) -> None:
+    rehearsal_dir = tmp_path / "teebotus-plan2-rehearsal"
+    rehearsal_dir.mkdir()
+    (rehearsal_dir / "old.txt").write_text("old", encoding="utf-8")
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            str(rehearsal_dir),
+        ),
+    )
+
+    check_plan2_acceptance._prepare_acceptance_command(command)
+
+    assert not rehearsal_dir.exists()
+
+
+def test_plan2_acceptance_rejects_unsafe_legacy_rehearsal_copy_dir() -> None:
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            "/home/teladi/TeeBotus/instances",
+        ),
+    )
+
+    try:
+        check_plan2_acceptance._prepare_acceptance_command(command)
+    except RuntimeError as exc:
+        assert "unsafe legacy rehearsal copy dir" in str(exc)
+    else:
+        raise AssertionError("unsafe rehearsal copy dir was accepted")
 
 
 def test_plan2_acceptance_instance_artifact_paths_are_stable(tmp_path: Path) -> None:

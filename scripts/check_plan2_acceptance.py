@@ -20,6 +20,9 @@ DEFAULT_MEMORY_RECOVERY_JSON = Path.home() / "Downloads" / "teebotus-memory-reco
 DEFAULT_MEMORY_RECOVERY_TEXT = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.md"
 DEFAULT_LEGACY_IMPORT_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.json"
 DEFAULT_LEGACY_IMPORT_MD = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.md"
+DEFAULT_LEGACY_REHEARSAL_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.json"
+DEFAULT_LEGACY_REHEARSAL_MD = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.md"
+DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehearsal")
 REQUIRED_BENCHMARK_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -179,6 +182,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--memory-recovery-json-output", default=str(DEFAULT_MEMORY_RECOVERY_JSON), help="JSON memory recovery output path.")
     parser.add_argument("--legacy-import-output", default=str(DEFAULT_LEGACY_IMPORT_MD), help="Markdown legacy import dry-run output path.")
     parser.add_argument("--legacy-import-json-output", default=str(DEFAULT_LEGACY_IMPORT_JSON), help="JSON legacy import dry-run output path.")
+    parser.add_argument("--legacy-rehearsal-output", default=str(DEFAULT_LEGACY_REHEARSAL_MD), help="Markdown legacy import rehearsal output path.")
+    parser.add_argument("--legacy-rehearsal-json-output", default=str(DEFAULT_LEGACY_REHEARSAL_JSON), help="JSON legacy import rehearsal output path.")
+    parser.add_argument("--legacy-rehearsal-copy-dir", default=str(DEFAULT_LEGACY_REHEARSAL_COPY_DIR), help="Temporary copied instances directory for legacy import rehearsal.")
     parser.add_argument("--entries", type=int, default=2, help="Synthetic benchmark entries.")
     parser.add_argument("--iterations", type=int, default=1, help="Quick benchmark iterations.")
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
@@ -203,6 +209,9 @@ def main(argv: list[str] | None = None) -> int:
         memory_recovery_json_output=Path(args.memory_recovery_json_output),
         legacy_import_output=Path(args.legacy_import_output),
         legacy_import_json_output=Path(args.legacy_import_json_output),
+        legacy_rehearsal_output=Path(args.legacy_rehearsal_output),
+        legacy_rehearsal_json_output=Path(args.legacy_rehearsal_json_output),
+        legacy_rehearsal_copy_dir=Path(args.legacy_rehearsal_copy_dir),
         entries=args.entries,
         iterations=args.iterations,
         skip_runtime_status=args.skip_runtime_status,
@@ -230,6 +239,9 @@ def build_acceptance_commands(
     memory_recovery_json_output: Path = DEFAULT_MEMORY_RECOVERY_JSON,
     legacy_import_output: Path = DEFAULT_LEGACY_IMPORT_MD,
     legacy_import_json_output: Path = DEFAULT_LEGACY_IMPORT_JSON,
+    legacy_rehearsal_output: Path = DEFAULT_LEGACY_REHEARSAL_MD,
+    legacy_rehearsal_json_output: Path = DEFAULT_LEGACY_REHEARSAL_JSON,
+    legacy_rehearsal_copy_dir: Path = DEFAULT_LEGACY_REHEARSAL_COPY_DIR,
     entries: int = 2,
     iterations: int = 1,
     skip_runtime_status: bool = False,
@@ -270,6 +282,9 @@ def build_acceptance_commands(
             memory_recovery_json_output=memory_recovery_json_output,
             legacy_import_output=legacy_import_output,
             legacy_import_json_output=legacy_import_json_output,
+            legacy_rehearsal_output=legacy_rehearsal_output,
+            legacy_rehearsal_json_output=legacy_rehearsal_json_output,
+            legacy_rehearsal_copy_dir=legacy_rehearsal_copy_dir,
         ))
     commands.extend(
         [
@@ -367,6 +382,9 @@ def _legacy_memory_acceptance_commands(
     memory_recovery_json_output: Path,
     legacy_import_output: Path,
     legacy_import_json_output: Path,
+    legacy_rehearsal_output: Path,
+    legacy_rehearsal_json_output: Path,
+    legacy_rehearsal_copy_dir: Path,
 ) -> list[AcceptanceCommand]:
     commands = [
         AcceptanceCommand(
@@ -413,6 +431,18 @@ def _legacy_memory_acceptance_commands(
             ),
             validate_secret_artifacts=True,
         ),
+        AcceptanceCommand(
+            "legacy-import-rehearsal",
+            _legacy_import_command(
+                python=python,
+                legacy_instances_dir=legacy_instances_dir,
+                json_output=legacy_rehearsal_json_output,
+                markdown_output=legacy_rehearsal_output,
+                rehearsal_copy_dir=legacy_rehearsal_copy_dir,
+                apply=True,
+            ),
+            validate_secret_artifacts=True,
+        ),
     ]
     for instance_name in _discover_plan2_instances():
         commands.append(
@@ -438,6 +468,8 @@ def _legacy_import_command(
     json_output: Path,
     markdown_output: Path,
     instance_name: str = "",
+    rehearsal_copy_dir: Path | None = None,
+    apply: bool = False,
 ) -> tuple[str, ...]:
     argv: list[str] = [
         python,
@@ -449,6 +481,10 @@ def _legacy_import_command(
     ]
     if instance_name:
         argv.extend(["--instance", instance_name])
+    if rehearsal_copy_dir is not None:
+        argv.extend(["--rehearsal-copy-dir", str(rehearsal_copy_dir)])
+    if apply:
+        argv.extend(["--replace-unreadable", "--apply"])
     argv.extend(
         [
             "--replace-unreadable-account-metadata",
@@ -476,9 +512,27 @@ def _instance_artifact_path(path: Path, instance_name: str) -> Path:
     return path.with_name(f"{path.stem}-{safe_name}{path.suffix}")
 
 
+def _prepare_acceptance_command(command: AcceptanceCommand) -> None:
+    rehearsal_copy_dir = _option_path(command.argv, "--rehearsal-copy-dir")
+    if rehearsal_copy_dir is None:
+        return
+    path = rehearsal_copy_dir.expanduser()
+    if not _is_safe_rehearsal_copy_dir(path):
+        raise RuntimeError(f"unsafe legacy rehearsal copy dir: {path}")
+    if path.exists():
+        shutil.rmtree(path)
+
+
+def _is_safe_rehearsal_copy_dir(path: Path) -> bool:
+    resolved = path.resolve(strict=False)
+    tmp_root = Path("/tmp").resolve()
+    return resolved != tmp_root and tmp_root in resolved.parents and "teebotus" in resolved.name.casefold()
+
+
 def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
     for index, command in enumerate(commands, start=1):
         print(f"\n[{index}/{len(commands)}] {command.label}: {_format_command(command.argv)}", flush=True)
+        _prepare_acceptance_command(command)
         capture_output = command.validate_runtime_status or command.validate_systemd_unit
         result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=capture_output)
         if capture_output:
@@ -823,7 +877,15 @@ def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | No
         errors.append(f"{prefix}apply_safety.message must be non-empty")
     options = payload.get("options") if isinstance(payload.get("options"), Mapping) else {}
     allow_running_bot = bool(options.get("allow_running_bot"))
-    if int(running_count or 0) > 0 and not allow_running_bot:
+    rehearsal_active = bool(options.get("rehearsal_active"))
+    if rehearsal_active:
+        if apply_safety.get("apply_allowed_now") is not True:
+            errors.append(f"{prefix}apply_safety.apply_allowed_now must be true for rehearsal imports")
+        if apply_safety.get("apply_requires_stopped_bot") is not False:
+            errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be false for rehearsal imports")
+        if not str(options.get("rehearsal_copy_dir") or "").strip():
+            errors.append(f"{prefix}legacy import rehearsal_copy_dir must be non-empty when rehearsal_active is true")
+    if int(running_count or 0) > 0 and not allow_running_bot and not rehearsal_active:
         if apply_safety.get("apply_allowed_now") is not False:
             errors.append(f"{prefix}apply_safety.apply_allowed_now must be false while runtime processes are detected")
         if apply_safety.get("apply_requires_stopped_bot") is not True:

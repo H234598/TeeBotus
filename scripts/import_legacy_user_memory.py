@@ -76,14 +76,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json-output", default="", help="Write a machine-readable import/preflight report.")
     parser.add_argument("--markdown-output", default="", help="Write a human-readable import/preflight report.")
     parser.add_argument(
+        "--rehearsal-copy-dir",
+        default="",
+        help="Copy --target-instances-dir to this new directory and run --apply against the copy only.",
+    )
+    parser.add_argument(
         "--allow-running-bot",
         action="store_true",
         help="Allow --apply while TeeBotus/proactive processes are running. Dangerous; default is to refuse.",
     )
     args = parser.parse_args(argv)
 
+    requested_target_instances_dir = Path(args.target_instances_dir)
+    rehearsal_copy_dir = Path(args.rehearsal_copy_dir).expanduser() if args.rehearsal_copy_dir else None
+    target_instances_dir = requested_target_instances_dir
+    if rehearsal_copy_dir is not None:
+        if not args.apply:
+            print("--rehearsal-copy-dir requires --apply", file=sys.stderr)
+            return 2
+        target_instances_dir = _prepare_rehearsal_target_copy(requested_target_instances_dir, rehearsal_copy_dir)
+
     running_processes = _detect_running_teebotus_processes()
-    if args.apply and not args.allow_running_bot:
+    if args.apply and not args.allow_running_bot and rehearsal_copy_dir is None:
         if running_processes:
             print("Refusing legacy memory import --apply because TeeBotus-related processes are running:", file=sys.stderr)
             for process in running_processes:
@@ -96,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         requested_legacy_instances_dir = Path(args.legacy_instances_dir)
         stats = import_legacy_user_memory(
             legacy_instances_dir=requested_legacy_instances_dir,
-            target_instances_dir=Path(args.target_instances_dir),
+            target_instances_dir=target_instances_dir,
             instances=tuple(args.instance),
             apply=args.apply,
             replace_unreadable=args.replace_unreadable,
@@ -105,19 +119,21 @@ def main(argv: list[str] | None = None) -> int:
         )
     finally:
         _restore_env(previous_env)
-    mode = "apply" if args.apply else "dry-run"
+    mode = "rehearsal-apply" if rehearsal_copy_dir is not None and args.apply else ("apply" if args.apply else "dry-run")
     report = _build_import_report(
         stats,
         mode=mode,
         legacy_instances_dir=Path(stats.effective_legacy_instances_dir or args.legacy_instances_dir),
         requested_legacy_instances_dir=Path(stats.requested_legacy_instances_dir or args.legacy_instances_dir),
-        target_instances_dir=Path(args.target_instances_dir),
+        target_instances_dir=target_instances_dir,
+        requested_target_instances_dir=requested_target_instances_dir,
         instances=tuple(args.instance),
         backend=args.backend,
         replace_unreadable=args.replace_unreadable,
         replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
         backup_current=not args.no_backup_current,
         allow_running_bot=args.allow_running_bot,
+        rehearsal_copy_dir=rehearsal_copy_dir,
         running_processes=running_processes,
     )
     if args.json_output:
@@ -149,6 +165,8 @@ def import_legacy_user_memory(
     provider = provider or SecretToolInstanceSecretProvider(create_if_missing=apply)
     stats = ImportStats()
     requested_legacy_instances_dir = Path(legacy_instances_dir)
+    if not requested_legacy_instances_dir.exists():
+        raise SystemExit(f"legacy instances directory does not exist: {requested_legacy_instances_dir}")
     legacy_instances_dir = _resolve_legacy_instances_dir(requested_legacy_instances_dir, set(instances))
     stats.requested_legacy_instances_dir = str(requested_legacy_instances_dir)
     stats.effective_legacy_instances_dir = str(legacy_instances_dir)
@@ -334,21 +352,25 @@ def _build_import_report(
     legacy_instances_dir: Path,
     requested_legacy_instances_dir: Path,
     target_instances_dir: Path,
+    requested_target_instances_dir: Path | None = None,
     instances: tuple[str, ...],
     backend: str,
     replace_unreadable: bool,
     replace_unreadable_account_metadata: bool,
     backup_current: bool,
     allow_running_bot: bool = False,
+    rehearsal_copy_dir: Path | None = None,
     running_processes: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     running_processes = list(running_processes or [])
+    rehearsal_active = rehearsal_copy_dir is not None
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "mode": mode,
         "requested_legacy_instances_dir": str(requested_legacy_instances_dir),
         "legacy_instances_dir": str(legacy_instances_dir),
+        "requested_target_instances_dir": str(requested_target_instances_dir or target_instances_dir),
         "target_instances_dir": str(target_instances_dir),
         "instances": list(instances),
         "options": {
@@ -357,13 +379,15 @@ def _build_import_report(
             "replace_unreadable_account_metadata": bool(replace_unreadable_account_metadata),
             "backup_current": bool(backup_current),
             "allow_running_bot": bool(allow_running_bot),
+            "rehearsal_copy_dir": str(rehearsal_copy_dir or ""),
+            "rehearsal_active": rehearsal_active,
         },
         "apply_safety": {
             "running_bot_processes": running_processes,
             "running_bot_process_count": len(running_processes),
-            "apply_allowed_now": bool(not running_processes or allow_running_bot),
-            "apply_requires_stopped_bot": bool(running_processes and not allow_running_bot),
-            "message": _apply_safety_message(running_processes, allow_running_bot=allow_running_bot),
+            "apply_allowed_now": bool(rehearsal_active or not running_processes or allow_running_bot),
+            "apply_requires_stopped_bot": bool(running_processes and not allow_running_bot and not rehearsal_active),
+            "message": _apply_safety_message(running_processes, allow_running_bot=allow_running_bot, rehearsal_active=rehearsal_active),
         },
         "totals": {
             "sources": stats.sources,
@@ -383,7 +407,9 @@ def _build_import_report(
     }
 
 
-def _apply_safety_message(running_processes: list[dict[str, str]], *, allow_running_bot: bool) -> str:
+def _apply_safety_message(running_processes: list[dict[str, str]], *, allow_running_bot: bool, rehearsal_active: bool = False) -> str:
+    if rehearsal_active:
+        return "Rehearsal mode writes only to the copied target directory; live TeeBotus data is not modified."
     if not running_processes:
         return "No TeeBotus runtime process detected; --apply may run after reviewing the preflight report."
     if allow_running_bot:
@@ -403,10 +429,13 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
         f"- requested_legacy_instances_dir: `{report.get('requested_legacy_instances_dir', '')}`",
         f"- legacy_instances_dir: `{report.get('legacy_instances_dir', '')}`",
         f"- target_instances_dir: `{report.get('target_instances_dir', '')}`",
+        f"- requested_target_instances_dir: `{report.get('requested_target_instances_dir', '')}`",
         f"- backend: `{options.get('backend', '')}`",
         f"- replace_unreadable: `{options.get('replace_unreadable', False)}`",
         f"- replace_unreadable_account_metadata: `{options.get('replace_unreadable_account_metadata', False)}`",
         f"- allow_running_bot: `{options.get('allow_running_bot', False)}`",
+        f"- rehearsal_active: `{options.get('rehearsal_active', False)}`",
+        f"- rehearsal_copy_dir: `{options.get('rehearsal_copy_dir', '')}`",
         "",
         "## Apply Safety",
         "",
@@ -441,6 +470,20 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
             f"action=`{event.get('action', '')}`"
         )
     return "\n".join(lines) + "\n"
+
+
+def _prepare_rehearsal_target_copy(source_instances_dir: Path, rehearsal_copy_dir: Path) -> Path:
+    source = source_instances_dir.expanduser()
+    destination = rehearsal_copy_dir.expanduser()
+    if not source.exists():
+        raise SystemExit(f"rehearsal source target instances directory does not exist: {source}")
+    if not source.is_dir():
+        raise SystemExit(f"rehearsal source target instances path is not a directory: {source}")
+    if destination.exists():
+        raise SystemExit(f"rehearsal copy directory already exists: {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, destination, symlinks=True)
+    return destination
 
 
 def _detect_running_teebotus_processes() -> list[dict[str, str]]:

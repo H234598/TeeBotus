@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 
+import pytest
+
 import scripts.import_legacy_user_memory as legacy_import
 from scripts.import_legacy_user_memory import import_legacy_user_memory, main as import_main
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider, telegram_identity_key
@@ -55,6 +57,18 @@ def test_legacy_user_memory_import_dry_run_does_not_create_account(tmp_path: Pat
     assert stats.events[0]["entries"] == 1
     store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
     assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
+
+
+def test_legacy_user_memory_import_rejects_missing_legacy_dir(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+
+    with pytest.raises(SystemExit, match="legacy instances directory does not exist"):
+        import_legacy_user_memory(
+            legacy_instances_dir=tmp_path / "missing",
+            target_instances_dir=tmp_path / "target",
+            apply=False,
+            provider=provider(),
+        )
 
 
 def test_legacy_user_memory_import_apply_creates_encrypted_account_memory(tmp_path: Path, monkeypatch) -> None:
@@ -488,6 +502,85 @@ def test_legacy_user_memory_import_apply_can_override_running_bot_guard(tmp_path
     store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
     account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
     assert account_id
+
+
+def test_legacy_user_memory_import_rehearsal_apply_writes_only_copy_while_bot_runs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(
+        legacy_import,
+        "_detect_running_teebotus_processes",
+        lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
+    )
+    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", lambda **_kwargs: provider())
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    rehearsal_root = tmp_path / "rehearsal-instances"
+    write_legacy_entries(legacy_root)
+    (target_root / "Depressionsbot" / "data").mkdir(parents=True)
+    json_output = tmp_path / "rehearsal.json"
+    markdown_output = tmp_path / "rehearsal.md"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--rehearsal-copy-dir",
+            str(rehearsal_root),
+            "--replace-unreadable-account-metadata",
+            "--apply",
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert result == 0
+    live_store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
+    rehearsal_store = AccountStore(rehearsal_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
+    assert live_store.get_account_for_identity(telegram_identity_key("395935293")) is None
+    rehearsal_account_id = rehearsal_store.get_account_for_identity(telegram_identity_key("395935293"))
+    assert rehearsal_account_id
+    assert [entry["id"] for entry in rehearsal_store.read_memory_entries(rehearsal_account_id)] == ["legacy_mem_1"]
+
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert payload["mode"] == "rehearsal-apply"
+    assert payload["requested_target_instances_dir"] == str(target_root)
+    assert payload["target_instances_dir"] == str(rehearsal_root)
+    assert payload["options"]["rehearsal_active"] is True
+    assert payload["options"]["rehearsal_copy_dir"] == str(rehearsal_root)
+    assert payload["apply_safety"]["apply_allowed_now"] is True
+    assert payload["apply_safety"]["apply_requires_stopped_bot"] is False
+    assert "live TeeBotus data is not modified" in payload["apply_safety"]["message"]
+    assert "rehearsal_active: `True`" in markdown
+
+
+def test_legacy_user_memory_import_rehearsal_requires_apply(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(legacy_import, "_detect_running_teebotus_processes", lambda: [])
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    rehearsal_root = tmp_path / "rehearsal-instances"
+    write_legacy_entries(legacy_root)
+    target_root.mkdir()
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--rehearsal-copy-dir",
+            str(rehearsal_root),
+        ]
+    )
+
+    assert result == 2
+    assert "requires --apply" in capsys.readouterr().err
+    assert not rehearsal_root.exists()
 
 
 def test_legacy_user_memory_import_sqlite_backups_are_unique_within_same_second(tmp_path: Path, monkeypatch) -> None:
