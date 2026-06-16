@@ -6,6 +6,24 @@ from typing import Any, Callable, Mapping, TypedDict
 from TeeBotus.runtime.bibliothekar import DEFAULT_MAX_CHUNKS, DEFAULT_MAX_PROMPT_CHARS, DEFAULT_MAX_QUOTE_CHARS
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 
+REQUIRED_CITATION_FIELDS = frozenset(
+    {
+        "chunk_id",
+        "source_id",
+        "file",
+        "file_path",
+        "file_sha256",
+        "file_type",
+        "language",
+        "locator",
+        "license",
+        "ingested_at",
+        "chunk_index",
+        "embedding_model",
+        "citation_format",
+    }
+)
+
 
 class BibliothekarDeepQueryState(TypedDict, total=False):
     query: str
@@ -184,11 +202,10 @@ def _citation_check(state: BibliothekarDeepQueryState) -> BibliothekarDeepQueryS
         return {**state, "citation_ok": False, "fallback_reason": "invalid_source_payload"}
     chunks = payload.get("selected_library_chunks") if isinstance(payload, Mapping) else None
     if not isinstance(chunks, list) or not chunks:
-        return {**state, "citation_ok": False, "fallback_reason": "no_citable_chunks"}
-    required = {"chunk_id", "file", "locator", "citation_format"}
-    citation_ok = all(isinstance(chunk, Mapping) and required.issubset(chunk.keys()) for chunk in chunks)
+        return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "no_citable_chunks"}
+    citation_ok = all(_chunk_has_required_citation_fields(chunk) for chunk in chunks)
     if not citation_ok:
-        return {**state, "citation_ok": False, "fallback_reason": "citation_metadata_missing"}
+        return {**state, "answer_text": "", "citation_ok": False, "fallback_reason": "citation_metadata_missing"}
     return {**state, "citation_ok": True}
 
 
@@ -208,6 +225,12 @@ def _append_error(state: BibliothekarDeepQueryState, error: str) -> Bibliothekar
     errors = list(state.get("errors") or [])
     errors.append(str(error)[:500])
     return {**state, "errors": errors}
+
+
+def _chunk_has_required_citation_fields(chunk: object) -> bool:
+    if not isinstance(chunk, Mapping):
+        return False
+    return all(field in chunk and chunk.get(field) not in ("", None) for field in REQUIRED_CITATION_FIELDS)
 
 
 def _serializable_filters(filters: Mapping[str, object]) -> dict[str, object]:

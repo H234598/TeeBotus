@@ -6,6 +6,7 @@ import types
 
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar_service import BibliothekarSelection
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query
 
@@ -52,6 +53,36 @@ def test_bibliothekar_deep_query_returns_serializable_fallback_state(tmp_path) -
     assert state["citation_ok"] is False
     assert "keine belastbare Quelle" in state["answer_text"]
     json.dumps(state)
+
+
+def test_bibliothekar_deep_query_rejects_incomplete_provenance_payload() -> None:
+    class IncompleteCitationService:
+        def search(self, *_args, **_kwargs):
+            return BibliothekarSelection(
+                json.dumps(
+                    {
+                        "selected_library_chunks": [
+                            {
+                                "chunk_id": "chunk-1",
+                                "file": "therapie.txt",
+                                "locator": "Seite 1",
+                                "citation_format": "[Quelle: ...]",
+                            }
+                        ]
+                    }
+                ),
+                ("chunk-1",),
+            )
+
+    state = run_bibliothekar_deep_query(
+        IncompleteCitationService(),  # type: ignore[arg-type]
+        "Bibliothek Therapie",
+        prefer_langgraph=False,
+    )
+
+    assert state["citation_ok"] is False
+    assert state["fallback_reason"] == "citation_metadata_missing"
+    assert "keine belastbare Quelle" in state["answer_text"]
 
 
 def test_bibliothekar_deep_query_can_use_langgraph_when_available(tmp_path, monkeypatch) -> None:
