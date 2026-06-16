@@ -18,6 +18,11 @@ SECRET_LIKE_KEY_PATTERN = re.compile(
     r"|(?:apiKey|accessToken|authToken|bearerToken|secretToken|password)",
     re.IGNORECASE,
 )
+SECRET_ASSIGNMENT_PATTERN = re.compile(
+    r"\b[A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_.-]*\s*[:=]\s*[^\s,;)\]}]+",
+    re.IGNORECASE,
+)
 SECRET_TOKEN_PATTERNS = (
     r"\bsk-[A-Za-z0-9_-]{8,}\b",
     r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b",
@@ -220,6 +225,8 @@ def _contains_secret_like_content(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     if any(marker.casefold() in value.casefold() for marker in SECRET_LIKE_PATTERNS):
+        return True
+    if SECRET_ASSIGNMENT_PATTERN.search(value):
         return True
     if URL_CREDENTIAL_PATTERN.search(value):
         return True

@@ -280,6 +280,21 @@ def test_mcp_registry_rejects_case_insensitive_secret_assignment_markers() -> No
         registry.call("bibliothekar.search", {"query": "Token"})
 
 
+def test_mcp_registry_rejects_colon_secret_assignment_markers() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "prompt_text": "Index:\napi_key: plain-secret\npassword: hunter2",
+                "summary": "access-token: plain-token",
+            }
+        },
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Token"})
+
+
 def test_mcp_registry_rejects_private_account_paths_in_tool_results() -> None:
     registry = MCPToolRegistry(
         {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
