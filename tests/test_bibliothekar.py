@@ -387,6 +387,22 @@ def test_bibliothekar_service_applies_local_metadata_filters(tmp_path):
     assert "therapie.txt" not in selection.prompt_text
 
 
+def test_bibliothekar_service_normalizes_extension_suffix_and_file_type_filters(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "notizen.md").write_text("Markdown Notizen ueber Aktivierung und Planung.", encoding="utf-8")
+    service = BibliothekarService.local("Depressionsbot", tmp_path / "instances")
+    service.rebuild()
+
+    for filters in ({"extension": "md"}, {"extension": ".md"}, {"suffix": "md"}, {"suffix": ".md"}, {"file_type": "md"}):
+        selection = service.search("Aktivierung Planung", filters=filters, max_chunks=3)
+        payload = json.loads(selection.prompt_text)
+
+        assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["notizen.md"]
+        assert "therapie.txt" not in selection.prompt_text
+
+
 def test_haystack_backend_applies_same_metadata_filters_as_local_backend(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -426,7 +442,7 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
     selection = backend.search(
         BibliothekarQuery(
             text="System Therapie",
-            filters={"topics": ["python"], "relative_path": "technik.txt"},
+            filters={"topics": ["python"], "relative_path": "technik.txt", "extension": ".txt"},
             max_chunks=3,
         )
     )
@@ -438,6 +454,7 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
             {"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]},
             {"field": "meta.topics", "operator": "in", "value": ["python"]},
             {"field": "meta.relative_path", "operator": "in", "value": ["technik.txt"]},
+            {"field": "meta.file_type", "operator": "in", "value": ["txt"]},
         ],
     }
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]

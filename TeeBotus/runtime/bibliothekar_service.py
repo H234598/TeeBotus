@@ -58,6 +58,7 @@ CHUNK_FILTER_KEYS = frozenset(
         "file",
         "path",
         "relative_path",
+        "file_type",
         "suffix",
         "extension",
         "title",
@@ -77,8 +78,9 @@ DOCUMENT_STORE_FILTER_FIELD_MAP = {
     "file": "meta.relative_path",
     "path": "meta.relative_path",
     "relative_path": "meta.relative_path",
+    "file_type": "meta.file_type",
     "suffix": "meta.suffix",
-    "extension": "meta.suffix",
+    "extension": "meta.file_type",
     "document": "meta.document_id",
     "document_id": "meta.document_id",
     "chunk": "meta.chunk_id",
@@ -640,7 +642,7 @@ def _document_store_filters(filters: Mapping[str, object] | None) -> dict[str, A
     for raw_key, raw_value in filters.items():
         key = str(raw_key or "").strip().casefold()
         field = DOCUMENT_STORE_FILTER_FIELD_MAP.get(key)
-        values = list(_filter_values(raw_value))
+        values = list(_document_store_filter_values(key, _filter_values(raw_value)))
         if not field or not values:
             continue
         conditions.append({"field": field, "operator": "in", "value": values})
@@ -671,8 +673,13 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
         return _any_exact_match(chunk.get("topics"), values)
     if key in {"file", "path", "relative_path"}:
         return _any_substring_match(chunk.get("relative_path"), values)
-    if key in {"suffix", "extension"}:
-        return _any_exact_match(chunk.get("suffix"), values)
+    if key == "suffix":
+        return _any_exact_match(chunk.get("suffix"), _suffix_filter_values(values))
+    if key in {"extension", "file_type"}:
+        return _any_exact_match(chunk.get("file_type"), _extension_filter_values(values)) or _any_exact_match(
+            chunk.get("suffix"),
+            _suffix_filter_values(values),
+        )
     if key in {"title"}:
         return _any_substring_match(chunk.get("title"), values)
     if key in {"document", "document_id"}:
@@ -698,6 +705,22 @@ def _filter_values(value: object) -> tuple[str, ...]:
     else:
         items = [value]
     return tuple(_normalize_filter_text(item) for item in items if _normalize_filter_text(item))
+
+
+def _document_store_filter_values(key: str, values: tuple[str, ...]) -> tuple[str, ...]:
+    if key == "suffix":
+        return _suffix_filter_values(values)
+    if key in {"extension", "file_type"}:
+        return _extension_filter_values(values)
+    return values
+
+
+def _suffix_filter_values(values: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(f".{value.lstrip('.')}" for value in values if value.strip("."))
+
+
+def _extension_filter_values(values: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(value.lstrip(".") for value in values if value.strip("."))
 
 
 def _any_exact_match(candidate: object, values: tuple[str, ...]) -> bool:
