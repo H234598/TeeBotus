@@ -13,7 +13,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
-PLAN2_OPTIONAL_EXTRAS = ("rag", "agents", "tools")
+PLAN2_OPTIONAL_EXTRAS = ("llm", "rag", "agents", "tools")
 
 
 def main(argv: list[str] | None = None) -> int:
