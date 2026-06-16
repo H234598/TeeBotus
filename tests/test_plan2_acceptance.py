@@ -980,6 +980,32 @@ def test_secret_artifact_validation_allows_yaml_style_placeholders_and_env_names
     assert errors == []
 
 
+def test_secret_artifact_validation_rejects_uppercase_secret_values_without_env_key(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "import.md"
+    markdown_path.write_text(
+        "# Import\n\napi_key: PLAINSECRET123\npassword: HUNTER2\n",
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._secret_artifact_errors(
+        ("python-test", "script.py", "--markdown-output", str(markdown_path))
+    )
+
+    assert errors == [f"--markdown-output artifact contains secret-looking content: {markdown_path}"]
+
+
+def test_secret_artifact_validation_rejects_json_uppercase_secret_values_without_env_key(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    json_path.write_text(
+        json.dumps({"status": "ok", "api_key": "PLAINSECRET123", "api_key_env": "GROQ_API_KEY"}),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._secret_artifact_errors(("script.py", "--json-output", str(json_path)))
+
+    assert errors == [f"--json-output artifact contains secret-looking content: {json_path}"]
+
+
 def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path) -> None:
     json_path = tmp_path / "import.json"
     markdown_path = tmp_path / "import.md"

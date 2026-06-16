@@ -240,9 +240,17 @@ def _generated_file_secret_value_is_unsafe(key: object, value: object) -> bool:
     normalized_value = value_text.casefold()
     if normalized_value in SAFE_GENERATED_FILE_SECRET_VALUES:
         return False
-    if key_text.endswith("_env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
+    if _generated_file_secret_value_is_env_reference(key_text, value_text):
         return False
     return True
+
+
+def _generated_file_secret_value_is_env_reference(key: object, value: object) -> bool:
+    key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
+    value_text = str(value or "").strip()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
+        return False
+    return key_text.endswith("_env") or value_text == key_text.upper()
 
 
 def _safe_content_type(value: str, filename: str) -> str:

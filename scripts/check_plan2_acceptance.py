@@ -1419,7 +1419,7 @@ def _artifact_text_contains_secret(text: str) -> bool:
         normalized_value = value.casefold()
         if normalized_value in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
             continue
-        if key.endswith("_env") or key.endswith("-env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value):
+        if _secret_field_value_is_env_reference(key, value):
             continue
         return True
     return False
@@ -1452,9 +1452,15 @@ def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
     normalized_value = value_text.casefold()
     if normalized_value in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
         return False
-    if key_text.endswith("_env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
+    if _secret_field_value_is_env_reference(key_text, value_text):
         return False
     return True
+
+
+def _secret_field_value_is_env_reference(key: object, value: object) -> bool:
+    key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
+    value_text = str(value or "").strip()
+    return key_text.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text) is not None
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:

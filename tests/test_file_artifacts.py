@@ -25,6 +25,15 @@ def test_parse_generated_file_blocks_rejects_secret_like_content() -> None:
     assert files == ()
 
 
+def test_parse_generated_file_blocks_rejects_uppercase_secret_values() -> None:
+    visible, files = parse_generated_file_blocks(
+        'Nicht senden.\n[[TEE_FILE filename="notiz.txt"]]\nOPENAI_API_KEY=PLAINSECRET123\n[[/TEE_FILE]]'
+    )
+
+    assert visible == "Nicht senden."
+    assert files == ()
+
+
 def test_parse_generated_file_blocks_allows_secret_placeholders() -> None:
     visible, files = parse_generated_file_blocks(
         'Vorlage.\n[[TEE_FILE filename="config.md"]]\nOPENAI_API_KEY=OPENAI_API_KEY\nToken: <redacted>\n[[/TEE_FILE]]'
