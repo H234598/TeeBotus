@@ -719,6 +719,97 @@ def test_account_memory_fallback_syncs_dirty_index_back_to_primary(caplog):
     assert "primary backend recovered" in caplog.text
 
 
+def test_account_memory_fallback_mirrors_successful_primary_entry_writes() -> None:
+    class Backend:
+        def __init__(self) -> None:
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend()
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    backend.write_entries(account_id, [{"id": "mem_primary"}])
+
+    assert primary.entries[account_id] == [{"id": "mem_primary"}]
+    assert fallback.entries[account_id] == [{"id": "mem_primary"}]
+
+
+def test_account_memory_fallback_mirrors_successful_primary_index_writes() -> None:
+    class Backend:
+        def __init__(self) -> None:
+            self.indexes: dict[str, dict[str, object]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, object]) -> None:
+            self.indexes[account_id] = dict(data)
+
+    primary = Backend()
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+    index = {"index": {"entries": {"mem_primary": {}}}}
+
+    backend.write_index(account_id, index)
+
+    assert primary.indexes[account_id] == index
+    assert fallback.indexes[account_id] == index
+
+
+def test_account_memory_fallback_warns_when_secondary_mirror_write_fails(caplog):
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("fallback unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend()
+    fallback = Backend(fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend.write_entries(account_id, [{"id": "mem_primary"}])
+
+    assert primary.entries[account_id] == [{"id": "mem_primary"}]
+    assert fallback.entries.get(account_id) is None
+    assert "ACCOUNT MEMORY FALLBACK DATABASE SYNC FAILED" in caplog.text
+    assert "FALLBACK MAY BE STALE" in caplog.text
+
+
 def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

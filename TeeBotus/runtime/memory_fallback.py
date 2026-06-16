@@ -17,6 +17,8 @@ class WarningFallbackAccountMemoryBackend:
         self._last_warning_at = 0.0
         self._dirty_entries: set[str] = set()
         self._dirty_indexes: set[str] = set()
+        self._stale_fallback_entries: set[str] = set()
+        self._stale_fallback_indexes: set[str] = set()
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
@@ -73,6 +75,7 @@ class WarningFallbackAccountMemoryBackend:
             callback(self.primary)
             self._copy_diagnostics(self.primary)
             dirty_set.discard(account_id)
+            self._mirror_write(operation, account_id, callback)
             self._clear_recovered_if_clean(operation)
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
@@ -80,6 +83,7 @@ class WarningFallbackAccountMemoryBackend:
             callback(self.fallback)
             self._copy_diagnostics(self.fallback)
             dirty_set.add(account_id)
+            self._fallback_stale_set(operation).discard(account_id)
 
     def _sync_entries_from_fallback(self, account_id: str) -> None:
         if account_id not in self._dirty_entries:
@@ -108,6 +112,30 @@ class WarningFallbackAccountMemoryBackend:
         if self._fallback_active:
             LOGGER.critical("Account-Memory primary backend recovered label=%s operation=%s. Fallback warning cleared.", self.label, operation)
         self._fallback_active = False
+
+    def _mirror_write(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> None:
+        stale_set = self._fallback_stale_set(operation)
+        try:
+            callback(self.fallback)
+        except Exception as exc:  # noqa: BLE001
+            stale_set.add(account_id)
+            LOGGER.critical(
+                "ACCOUNT MEMORY FALLBACK DATABASE SYNC FAILED. PRIMARY DATABASE IS ACTIVE BUT FALLBACK MAY BE STALE. "
+                "label=%s operation=%s account_id=%s error=%s.",
+                self.label,
+                operation,
+                account_id,
+                exc,
+            )
+            return
+        stale_set.discard(account_id)
+
+    def _fallback_stale_set(self, operation: str) -> set[str]:
+        if operation in {"write_entries", "read_entries"}:
+            return self._stale_fallback_entries
+        if operation in {"write_index", "read_index"}:
+            return self._stale_fallback_indexes
+        return set()
 
     def _warn(self, operation: str, exc: Exception) -> None:
         now = time.monotonic()
