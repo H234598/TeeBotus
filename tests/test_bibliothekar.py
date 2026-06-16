@@ -642,6 +642,27 @@ def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(t
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
+def test_haystack_backend_search_falls_back_to_local_store_when_document_store_stays_empty(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    document_store = NonPersistingDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", filters={"topics": ["therapie"]}, max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.write_attempts == 1
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
+
+
 def test_haystack_backend_search_falls_back_to_local_store_when_optional_dependencies_are_missing(tmp_path, monkeypatch):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1225,3 +1246,12 @@ class FilterRejectingDocumentStore(FakeDocumentStore):
             raise ValueError("unsupported filter syntax")
         self.unfiltered_calls += 1
         return list(self.documents)
+
+
+class NonPersistingDocumentStore(FakeDocumentStore):
+    def __init__(self):
+        super().__init__()
+        self.write_attempts = 0
+
+    def write_documents(self, documents, **_kwargs):
+        self.write_attempts += 1

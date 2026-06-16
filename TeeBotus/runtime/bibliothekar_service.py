@@ -151,6 +151,9 @@ class HaystackBibliothekarBackend:
             except Exception:
                 return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
+            local_selection = LocalBibliothekarBackend(self.fallback_store).search(query)
+            if local_selection.selected_ids:
+                return local_selection
             return BibliothekarSelection("", ())
         self.fallback_store.ensure_current()
         index = _read_index(self.fallback_store.index_path)
