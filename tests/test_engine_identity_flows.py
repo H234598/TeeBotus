@@ -1653,6 +1653,37 @@ def test_engine_structured_memory_candidate_blocks_high_sensitivity_auto_write(t
     assert account_store.read_memory_entries(account_id) == []
 
 
+def test_engine_structured_memory_candidate_blocks_low_confidence_auto_write(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Ich speichere das nur bei hoher Sicherheit.", "resp-memory", None)
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-memory-low-confidence")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        structured_decision_runner=lambda _prompt, schema: (
+            {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
+            if schema.__name__ == "ReminderDecision"
+            else {
+                "should_store": True,
+                "memory_type": "preference",
+                "text": "Unsichere Praeferenz.",
+                "sensitivity": "low",
+                "confidence": 0.69,
+            }
+        ),
+    )
+
+    engine.process(event(identity, "Vielleicht mag ich kurze Antworten.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id) == []
+
+
 def test_engine_does_not_write_account_memory_when_disabled(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):
