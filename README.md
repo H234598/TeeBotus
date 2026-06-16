@@ -267,10 +267,10 @@ python3 scripts/check_plan2_acceptance.py --list --include-qdrant-live --include
 Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur lesende Recovery-Reports und einen Legacy-Import-Dry-run nach `/home/teladi/Downloads` schreiben:
 
 ```bash
-python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak
+python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2
 ```
 
-Der Legacy-Pfad darf auch direkt auf einen Backup-Root wie `/home/teladi/TeeBotus.bak2` zeigen. Der Recovery-Reporter und Importer waehlen dann automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
+Der Legacy-Pfad darf auf einen Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner wie `/home/teladi/TeeBotus.bak2/instances.bak` zeigen. Der Recovery-Reporter und Importer waehlen bei Backup-Roots automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
 
 Hinweis zur Plan2-Testhistorie: Die frueher im Plan genannten LLM-Dateien
 `tests/test_llm_base.py` und `tests/test_openai_provider.py` sind in der

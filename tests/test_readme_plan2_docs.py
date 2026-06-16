@@ -23,8 +23,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "memory-recovery --instances-dir instances --instances <Instanz>" in text
     assert "memory-recovery --instances-dir instances --legacy-instances-dir" in text
     assert "scripts/import_legacy_user_memory.py" in text
-    assert "check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak" in text
-    assert "Backup-Root wie `/home/teladi/TeeBotus.bak2`" in text
+    assert "check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2" in text
+    assert "Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner" in text
+    assert "/home/teladi/TeeBotus.bak2/instances.bak" in text
     assert "--json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json" in text
     assert "--markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md" in text
     assert "apply_safety" in text
