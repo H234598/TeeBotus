@@ -34,6 +34,7 @@ from scripts.check_adapter_deps import (  # noqa: E402
     _read_pins,
 )
 from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
+import TeeBotus.core.youtube as youtube_module  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
 from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision  # noqa: E402
 from TeeBotus.ai_structures.schemas import ProactiveToolCallDecision  # noqa: E402
@@ -113,6 +114,7 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_adapter_contracts(iterations=iterations))
     results.append(_benchmark_youtube_parser(iterations=iterations))
     results.append(_benchmark_youtube_local_job_queue(iterations=iterations))
+    results.append(_benchmark_youtube_local_pipeline_cache(iterations=iterations))
     results.append(_benchmark_status_doctor(iterations=iterations))
     results.append(_benchmark_database_fallback_policy(iterations=iterations))
     results.append(_benchmark_langgraph_flow(iterations=iterations))
@@ -957,6 +959,125 @@ def _benchmark_youtube_local_job_queue(*, iterations: int) -> BenchmarkResult:
             )
     finally:
         engine_module.transcribe_youtube_video = original_transcribe
+
+
+def _benchmark_youtube_local_pipeline_cache(*, iterations: int) -> BenchmarkResult:
+    original_which = youtube_module.shutil.which
+    original_download_subtitles = youtube_module._download_youtube_subtitles
+    original_transcribe_whisper = youtube_module._transcribe_youtube_audio_with_whisper
+    original_runtime_dir = youtube_module.runtime_dir
+    subtitle_calls = 0
+    whisper_calls = 0
+    live_chunks = 0
+    transcripts: list[str] = []
+    sources: list[str] = []
+
+    def fake_which(command: str) -> str | None:
+        if command == "yt-dlp":
+            return "/usr/bin/yt-dlp"
+        return original_which(command)
+
+    def fake_download_subtitles(_url: str, _workdir: Path, instance_name: str = "") -> str:
+        nonlocal subtitle_calls
+        subtitle_calls += 1
+        return ""
+
+    def fake_transcribe_whisper(_url: str, _workdir: Path, live_callback=None, instance_name: str = "") -> str:
+        nonlocal whisper_calls, live_chunks
+        whisper_calls += 1
+        if callable(live_callback):
+            live_callback(f"Benchmark-Chunk {whisper_calls}")
+            live_chunks += 1
+        return f"Lokales Whisper Benchmark Transkript {whisper_calls}."
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="teebotus-bench-youtube-pipeline-") as tmp:
+            root = Path(tmp)
+            youtube_module.shutil.which = fake_which
+            youtube_module._download_youtube_subtitles = fake_download_subtitles
+            youtube_module._transcribe_youtube_audio_with_whisper = fake_transcribe_whisper
+            youtube_module.runtime_dir = lambda: root / "runtime"
+            live_events: list[str] = []
+            pipeline_timings = []
+            cache_timings = []
+            for index in range(iterations):
+                url = f"https://youtube.com/watch?v=bench{index:04d}"
+                pipeline_timings.append(
+                    _timed_ms(
+                        lambda url=url: _collect_youtube_transcript(
+                            url,
+                            transcripts=transcripts,
+                            sources=sources,
+                            live_events=live_events,
+                        )
+                    )
+                )
+                cache_timings.append(
+                    _timed_ms(
+                        lambda url=url: _collect_youtube_transcript(
+                            url,
+                            transcripts=transcripts,
+                            sources=sources,
+                            live_events=live_events,
+                        )
+                    )
+                )
+            cache_dir = root / "runtime" / "youtube_transcripts"
+            cache_files = sorted(cache_dir.glob("*.txt")) if cache_dir.exists() else []
+            cache_bytes = sum(path.stat().st_size for path in cache_files)
+            whisper_sources = sources[0::2]
+            cache_sources = sources[1::2]
+            errors = 0
+            if subtitle_calls != iterations:
+                errors += 1
+            if whisper_calls != iterations:
+                errors += 1
+            if len(cache_files) != iterations:
+                errors += 1
+            if whisper_sources != ["lokales Whisper"] * iterations:
+                errors += 1
+            if cache_sources != ["Cache"] * iterations:
+                errors += 1
+            if live_chunks != iterations or len(live_events) != iterations:
+                errors += 1
+            return _result(
+                name="youtube_local_pipeline_cache_no_openai",
+                category="transcription_youtube",
+                iterations=iterations * 2,
+                total_ms=sum(pipeline_timings) + sum(cache_timings),
+                ok=errors == 0,
+                errors=errors,
+                payload_bytes=sum(len(text.encode("utf-8")) for text in transcripts),
+                index_bytes=cache_bytes,
+                note="fake_yt_dlp_and_whisper_cache_no_provider_calls",
+                details={
+                    "subtitle_attempts": subtitle_calls,
+                    "whisper_calls": whisper_calls,
+                    "cache_reads": cache_sources.count("Cache"),
+                    "cache_files": len(cache_files),
+                    "live_chunks": live_chunks,
+                    "median_pipeline_ms": statistics.median(pipeline_timings) if pipeline_timings else 0.0,
+                    "median_cache_ms": statistics.median(cache_timings) if cache_timings else 0.0,
+                    "openai_calls": 0,
+                    "network_calls": 0,
+                },
+            )
+    finally:
+        youtube_module.shutil.which = original_which
+        youtube_module._download_youtube_subtitles = original_download_subtitles
+        youtube_module._transcribe_youtube_audio_with_whisper = original_transcribe_whisper
+        youtube_module.runtime_dir = original_runtime_dir
+
+
+def _collect_youtube_transcript(url: str, *, transcripts: list[str], sources: list[str], live_events: list[str]) -> None:
+    transcript, source = youtube_module.transcribe_youtube_video(
+        url,
+        local_allowed=True,
+        live_callback=lambda chunk: live_events.append(str(chunk)),
+        instance_name="Bench",
+    )
+    transcripts.append(transcript)
+    sources.append(source)
 
 
 def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:

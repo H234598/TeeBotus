@@ -91,6 +91,15 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert youtube_job["details"]["background_dispatches"] == 1
     assert youtube_job["details"]["llm_calls"] == 0
     assert youtube_job["details"]["network_calls"] == 0
+    youtube_pipeline = next(result for result in suite["results"] if result["name"] == "youtube_local_pipeline_cache_no_openai")
+    assert youtube_pipeline["ok"] is True
+    assert youtube_pipeline["details"]["subtitle_attempts"] == 1
+    assert youtube_pipeline["details"]["whisper_calls"] == 1
+    assert youtube_pipeline["details"]["cache_reads"] == 1
+    assert youtube_pipeline["details"]["cache_files"] == 1
+    assert youtube_pipeline["details"]["live_chunks"] == 1
+    assert youtube_pipeline["details"]["openai_calls"] == 0
+    assert youtube_pipeline["details"]["network_calls"] == 0
     messenger = next(result for result in suite["results"] if result["name"] == "messenger_adapter_runtime_contracts")
     assert messenger["ok"] is True
     assert messenger["details"]["channels"] == ["telegram", "signal", "matrix"]
@@ -139,6 +148,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "messenger_adapter_runtime_contracts" in markdown
     assert "status_doctor_runtime_dependency_health" in markdown
     assert "youtube_local_job_queue_no_llm" in markdown
+    assert "youtube_local_pipeline_cache_no_openai" in markdown
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "keine echten Provider-Calls" in markdown
 
