@@ -13,7 +13,7 @@ from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
-from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
+from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig, resolve_llm_setting
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -43,6 +43,7 @@ class TelegramRuntimeBridge:
         secret_provider: InstanceSecretProvider | None = None,
         youtube_job_runner: Any | None = None,
         bot_identity: Any | None = None,
+        instruction_store: Any | None = None,
     ) -> None:
         if run_config.channel != "telegram":
             raise TelegramRuntimeError(f"unsupported Telegram account channel: {run_config.channel}")
@@ -52,7 +53,7 @@ class TelegramRuntimeBridge:
         instance_dir = self.instances_dir / run_config.instance_name
         data_dir = instance_dir / "data"
         resolved_secret_provider = secret_provider or SecretToolInstanceSecretProvider()
-        self.instruction_store = InstructionStore(instance_dir / "Bot_Verhalten.md")
+        self.instruction_store = instruction_store or InstructionStore(instance_dir / "Bot_Verhalten.md")
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
@@ -114,6 +115,49 @@ class TelegramRuntimeBridge:
             runtime_context=self.context,
             chat_state=self.chat_state,
         )
+
+
+def build_telegram_runtime_bridge(
+    *,
+    api: Any,
+    instance_name: str,
+    adapter_slot: int,
+    instances_dir: str | Path,
+    instruction_store: Any | None = None,
+    openai_api_key: str = "",
+    bot_identity: Any | None = None,
+    youtube_job_runner: Any | None = None,
+    secret_provider: InstanceSecretProvider | None = None,
+) -> TelegramRuntimeBridge:
+    run_config = AccountRunConfig(
+        instance_name=instance_name,
+        channel="telegram",
+        slot=adapter_slot,
+        label=f"telegram:{adapter_slot}",
+        telegram_token=getattr(api, "token", ""),
+        openai_api_key=openai_api_key,
+        llm_enabled=resolve_llm_setting(instance_name, "telegram", adapter_slot, "ENABLED"),
+        llm_provider=resolve_llm_setting(instance_name, "telegram", adapter_slot, "PROVIDER"),
+        llm_model=resolve_llm_setting(instance_name, "telegram", adapter_slot, "MODEL"),
+        llm_fallback_models=resolve_llm_setting(instance_name, "telegram", adapter_slot, "FALLBACK_MODELS"),
+        llm_api_key=resolve_llm_setting(instance_name, "telegram", adapter_slot, "API_KEY"),
+        llm_base_url=resolve_llm_setting(instance_name, "telegram", adapter_slot, "BASE_URL"),
+        llm_profile=resolve_llm_setting(instance_name, "telegram", adapter_slot, "PROFILE"),
+        llm_purpose=resolve_llm_setting(instance_name, "telegram", adapter_slot, "PURPOSE"),
+        llm_allow_remote_fallback=resolve_llm_setting(instance_name, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
+        llm_timeout_seconds=resolve_llm_setting(instance_name, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
+        llm_max_output_tokens=resolve_llm_setting(instance_name, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
+        llm_temperature=resolve_llm_setting(instance_name, "telegram", adapter_slot, "TEMPERATURE"),
+    )
+    return TelegramRuntimeBridge(
+        run_config=run_config,
+        api=api,
+        instances_dir=instances_dir,
+        secret_provider=secret_provider,
+        youtube_job_runner=youtube_job_runner,
+        bot_identity=bot_identity,
+        instruction_store=instruction_store,
+    )
 
 
 def check_telegram_accounts(config: RuntimeConfig) -> tuple[TelegramAccountHealth, ...]:
@@ -299,6 +343,7 @@ __all__ = [
     "TelegramAccountHealth",
     "TelegramRuntimeBridge",
     "TelegramRuntimeError",
+    "build_telegram_runtime_bridge",
     "build_telegram_instance_configs",
     "check_telegram_accounts",
     "run_telegram_accounts",

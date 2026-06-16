@@ -39,10 +39,8 @@ from TeeBotus.core.youtube import (
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
-from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
-from TeeBotus.runtime.config import resolve_llm_setting
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
@@ -2868,53 +2866,25 @@ def run_polling(
     adapter_slot = int(token_label) if str(token_label).isdigit() else 1
     if runtime_context is None:
         resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
-        openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
-        llm_client = build_runtime_text_llm_client(
-            instructions=instruction_store.get(),
-            openai_client=openai_client,
-            default_api_key=resolved_openai_api_key or "",
-            enabled=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
-            profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
-            purpose=resolve_llm_setting(instance, "telegram", adapter_slot, "PURPOSE"),
-            allow_remote_fallback=resolve_llm_setting(instance, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
-            provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
-            model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
-            fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
-            api_key=resolve_llm_setting(instance, "telegram", adapter_slot, "API_KEY"),
-            api_base=resolve_llm_setting(instance, "telegram", adapter_slot, "BASE_URL"),
-            timeout=resolve_llm_setting(instance, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
-            max_tokens=resolve_llm_setting(instance, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
-            temperature=resolve_llm_setting(instance, "telegram", adapter_slot, "TEMPERATURE"),
-        )
-        bot_identity = bot_identity or _resolve_bot_identity(api)
-        user_memory_store = AccountStore(
-            _resolve_instances_dir() / instance / "data" / "accounts",
-            instance,
-            secret_provider=SecretToolInstanceSecretProvider(),
-        )
-        instance_data_dir = _resolve_instances_dir() / instance / "data"
-        state_store = RuntimeStateStore(instance_data_dir, instance_name=instance, secret_provider=SecretToolInstanceSecretProvider())
-        message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
-        working_memory_store = WorkingMemoryStore(instance)
-        working_memory_store.ensure()
-        current_instructions = instruction_store.get()
-        bibliothekar_store = BibliothekarService.from_instructions(instance, _resolve_instances_dir(), current_instructions)
-        runtime_context = build_telegram_runtime_context(
+        from TeeBotus.runtime.telegram_runner import build_telegram_runtime_bridge
+
+        bridge = build_telegram_runtime_bridge(
             api=api,
             instance_name=instance,
             adapter_slot=adapter_slot,
+            instances_dir=_resolve_instances_dir(),
             instruction_store=instruction_store,
-            account_store=user_memory_store,
-            state_store=state_store,
-            message_tracker=message_tracker,
-            openai_client=openai_client,
-            working_memory_store=working_memory_store,
-            bibliothekar_store=bibliothekar_store,
+            openai_api_key=resolved_openai_api_key,
             youtube_job_runner=youtube_job_runner,
             bot_identity=bot_identity,
-            llm_client=llm_client,
-            llm_enabled_override=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
         )
+        runtime_context = bridge.context
+        openai_client = bridge.openai_client
+        user_memory_store = bridge.account_store
+        working_memory_store = bridge.working_memory_store
+        bibliothekar_store = bridge.bibliothekar_store
+        bot_identity = bridge.bot_identity
+        chat_state = chat_state or bridge.chat_state
     else:
         openai_client = None
         user_memory_store = runtime_context.account_store

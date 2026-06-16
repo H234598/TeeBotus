@@ -3844,7 +3844,7 @@ class BotTests(unittest.TestCase):
             ):
                 with (
                     patch("TeeBotus.adapters.telegram_runtime.handle_update", side_effect=capture_handle_update),
-                    patch("TeeBotus.adapters.telegram_runtime.build_runtime_text_llm_client", side_effect=fake_build_runtime_text_llm_client),
+                    patch("TeeBotus.runtime.telegram_runner.build_runtime_text_llm_client", side_effect=fake_build_runtime_text_llm_client),
                 ):
                     run_polling(
                         api,
