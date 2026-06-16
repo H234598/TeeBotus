@@ -280,8 +280,10 @@ OpenAI-Provider-Tests sind in der aktuellen Teststruktur zusammengefuehrt.
 LLM-Client-/Capability-Primitiven plus LiteLLM-Textadapter ab,
 `tests/test_llm_package.py` deckt die oeffentlichen LLM-Paketexports und den
 `OpenAIProvider`-Wrapper ab. Der Acceptance-Runner nimmt die aktuellen
-`tests/test_*.py`-Module als Quelle der Wahrheit und fuehrt diese komplette
-Plan2-Testflaeche aus.
+Plan2-relevanten `tests/test_*.py`-Module als Quelle der Wahrheit. Im
+Standardpfad bleiben Legacy-Import-Unit-Tests bewusst ausgeklammert; mit
+`--include-legacy-import-tests` muss der Runner die komplette Repo-Testflaeche
+aus `tests/test_*.py` abdecken.
 
 Manuelle Teilchecks:
 

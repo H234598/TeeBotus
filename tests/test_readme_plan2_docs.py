@@ -57,6 +57,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "tests/test_llm_base.py" not in text
     assert "tests/test_openai_provider.py" not in text
     assert "Der Acceptance-Runner nimmt die aktuellen" in text
+    assert "Plan2-relevanten `tests/test_*.py`-Module" in text
+    assert "Standardpfad bleiben Legacy-Import-Unit-Tests bewusst ausgeklammert" in text
+    assert "`--include-legacy-import-tests` muss der Runner die komplette Repo-Testflaeche" in text
     assert "ReminderDecision" in text
     assert "wiederkehrendes Reminder-Item" in text
     assert "MemoryCandidate" in text
