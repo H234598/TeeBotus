@@ -34,6 +34,11 @@ KNOWN_LITELLM_MODEL_PREFIXES = (
     "together_ai/",
     "openrouter/",
 )
+URL_CREDENTIAL_RE = re.compile(r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|api_base|url)=)[^\s/@:=]+:[^\s/@]+@", re.IGNORECASE)
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -269,6 +274,8 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
     api_key = str(kwargs.get("api_key") or "").strip()
     if api_key:
         text = text.replace(api_key, "<redacted>")
+    text = URL_CREDENTIAL_RE.sub(lambda match: _redact_url_credentials(match.group(0)), text)
+    text = SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=<redacted>", text)
     # Common provider-key shapes. Keep this conservative so normal diagnostics
     # remain readable while accidental secrets are removed.
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
@@ -281,6 +288,11 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
     return text
+
+
+def _redact_url_credentials(value: str) -> str:
+    text = str(value or "")
+    return re.sub(r"(?<=://)[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
 
 
 def _extract_litellm_text(response: object) -> str:

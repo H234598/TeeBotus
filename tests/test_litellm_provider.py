@@ -57,3 +57,29 @@ def test_litellm_provider_requires_explicit_model_instead_of_openai_legacy_fallb
 
     with pytest.raises(LLMAPIError, match="requires llm_model"):
         client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
+
+
+def test_litellm_provider_redacts_url_credentials_and_secret_assignments(monkeypatch) -> None:
+    runtime_key = "runtime-secret-key"
+
+    def completion(**_kwargs):
+        raise RuntimeError(
+            "failed api_key=plain-secret password=hunter2 "
+            "base_url=http://user:plain-password@127.0.0.1:11434/api "
+            f"provider key {runtime_key}"
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(provider="litellm", model="ollama_chat/llama3.1:8b", api_key=runtime_key)
+
+    with pytest.raises(LLMAPIError) as exc_info:
+        client.create_reply("Ping", BotInstructions(), None)
+
+    message = str(exc_info.value)
+    assert "plain-secret" not in message
+    assert "hunter2" not in message
+    assert "plain-password" not in message
+    assert runtime_key not in message
+    assert "api_key=<redacted>" in message
+    assert "password=<redacted>" in message
+    assert "http://<redacted>@127.0.0.1:11434/api" in message
