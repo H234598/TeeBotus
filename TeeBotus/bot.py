@@ -203,10 +203,17 @@ def _runtime_status_llm_line(account: Any) -> str:
     if provider == "openai" and model == "<legacy>":
         model = "<Bot_Verhalten/OpenAI>"
     key_configured = _llm_key_configured(account, provider, route_api_key_env=route_api_key_env)
+    key_required = _llm_key_required_for_status(
+        account,
+        provider=provider,
+        model=model,
+        base_url=base_url,
+        route_api_key_env=route_api_key_env,
+    )
     if route_error:
         status = "broken"
-    elif provider == "openai":
-        status = "configured" if key_configured else "missing_key"
+    elif key_required and not key_configured:
+        status = "missing_key"
     else:
         status = "configured"
     detail = (
@@ -293,6 +300,71 @@ def _llm_key_configured(account: Any, provider: str, *, route_api_key_env: str =
             return False
         return bool(profile.api_key_env and os.environ.get(profile.api_key_env, "").strip())
     return False
+
+
+def _llm_key_required_for_status(
+    account: Any,
+    *,
+    provider: str,
+    model: str,
+    base_url: str,
+    route_api_key_env: str = "",
+) -> bool:
+    normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
+    if normalized_provider == "openai":
+        return True
+    if normalized_provider in {"ollama", "local_ollama"}:
+        return False
+    if _status_model_uses_ollama(model):
+        return False
+    if normalized_provider in {"huggingface", "hf", "groq", "gemini"}:
+        return True
+    if normalized_provider == "litellm":
+        if route_api_key_env:
+            return True
+        if _status_model_uses_remote_provider(model):
+            return True
+        if _status_base_url_is_loopback(base_url):
+            return False
+        return bool(str(model or "").strip())
+    if str(getattr(account, "llm_api_key", "") or "").strip() or route_api_key_env:
+        return True
+    return False
+
+
+def _status_model_uses_ollama(model: object) -> bool:
+    return str(model or "").strip().casefold().startswith(("ollama/", "ollama_chat/"))
+
+
+def _status_model_uses_remote_provider(model: object) -> bool:
+    value = str(model or "").strip().casefold()
+    return value.startswith(
+        (
+            "openai/",
+            "huggingface/",
+            "groq/",
+            "gemini/",
+            "anthropic/",
+            "azure/",
+            "bedrock/",
+            "vertex_ai/",
+            "together_ai/",
+            "openrouter/",
+        )
+    )
+
+
+def _status_base_url_is_loopback(value: object) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if "://" not in text and not text.startswith("//"):
+        text = f"//{text}"
+    try:
+        parsed = urlsplit(text)
+    except ValueError:
+        return False
+    return (parsed.hostname or "").strip().casefold() in {"127.0.0.1", "localhost", "::1"}
 
 
 def _status_effective_fallback_count(account: Any, *, provider: str, route_fallback_count: int) -> int:

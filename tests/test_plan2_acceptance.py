@@ -61,7 +61,7 @@ def _valid_benchmark_payload() -> dict:
             "platform": "Linux-test",
             "machine": "x86_64",
             "cpu_count": 4,
-            "dependencies": {"teebotus": {"version": "1.6.9", "status": "worktree"}},
+            "dependencies": {"teebotus": {"version": "1.6.10", "status": "worktree"}},
         },
         "results": [
             {
@@ -1751,6 +1751,7 @@ def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> N
         [
             "ollama=127.0.0.1:11434 status=unreachable error=connection refused",
             "llm=Demo/telegram:1 provider=openai model=gpt status=missing_key",
+            "llm=Demo/signal:1 provider=litellm model=groq/llama-3.1-8b-instant status=missing_key api_key=none",
             "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=unreachable error=connection refused",
             "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=missing error=account missing",
             "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused",
