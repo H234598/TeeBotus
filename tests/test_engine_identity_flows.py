@@ -9,6 +9,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
+from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
@@ -883,6 +884,45 @@ def test_engine_restores_previous_openai_response_id_from_persistent_state(tmp_p
 
     assert first_client.previous_ids == [None]
     assert second_client.previous_ids == ["resp-1"]
+
+
+def test_engine_does_not_pass_persisted_openai_response_id_to_litellm_client(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            assert previous_response_id is None
+            return OpenAIResponse("Antwort.", "resp-openai-1", None)
+
+    class FakeLiteLLMClient:
+        capabilities = LITELLM_TEXT_CAPABILITIES
+
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return LLMResponse("Antwort.", "litellm-response-id", provider="litellm", model="ollama_chat/qwen")
+
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    identity = telegram_identity_key(1)
+    first_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=FakeOpenAIClient(),
+    )
+    first_engine.process(event(identity, "Hallo"))
+
+    litellm_client = FakeLiteLLMClient()
+    second_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=BotInstructions(openai_enabled=True, llm_provider="litellm", llm_model="ollama_chat/qwen"),
+        llm_client=litellm_client,
+    )
+    second_engine.process(event(identity, "Noch mal"))
+
+    assert litellm_client.previous_ids == [None]
 
 
 def test_engine_reset_clears_previous_openai_response_id(tmp_path):

@@ -8,6 +8,7 @@ from typing import Any, Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMResponse
+from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_provider")
 
@@ -61,6 +62,7 @@ class LiteLLMTextClient:
     """
 
     provider_name = "litellm"
+    capabilities = LITELLM_TEXT_CAPABILITIES
 
     def __init__(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMError, LLMImage, LLMResponse, LLMVoice
+from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 
 
@@ -14,6 +15,7 @@ class OpenAIProvider:
     """
 
     provider = "openai"
+    capabilities = OPENAI_CAPABILITIES
 
     def __init__(self, client: OpenAIClient) -> None:
         self.client = client

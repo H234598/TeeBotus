@@ -5,6 +5,7 @@ from dataclasses import replace
 from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
@@ -198,6 +199,8 @@ def _require_profile(profiles: Mapping[str, LLMProfile], profile_name: str) -> L
 
 
 class _OpenAITextModelOverrideClient:
+    capabilities = OPENAI_CAPABILITIES
+
     def __init__(self, client: object, model: str) -> None:
         self.client = client
         self.model = str(model or "").strip()

@@ -28,6 +28,7 @@ from TeeBotus.core.registration import RegistrationAction, parse_registration_in
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.capabilities import LLMCapabilities
 from TeeBotus.llm_client import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
@@ -502,7 +503,7 @@ class TeeBotusEngine:
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
-            previous_response_id = self.state.get_previous_response_id(event.instance, account_id)
+            previous_response_id = _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id)
             response = create_reply(
                 _build_openai_user_input(
                     event,
@@ -950,7 +951,7 @@ class TeeBotusEngine:
                     require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
-                self.state.get_previous_response_id(event.instance, account_id),
+                _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
@@ -973,7 +974,7 @@ class TeeBotusEngine:
                         weather_context=weather_context,
                     ),
                     instructions,
-                    first_response_id or self.state.get_previous_response_id(event.instance, account_id),
+                    first_response_id or _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id),
                 )
         except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
@@ -1949,6 +1950,21 @@ def _persistable_previous_response_id(response: object) -> str | None:
     if not provider:
         return response_id
     return response_id if provider in {"openai", "responses", "openai_responses"} else None
+
+
+def _previous_response_id_for_client(client: object, state: RuntimeState, instance_name: str, account_id: str) -> str | None:
+    if not _client_supports_previous_response_id(client):
+        return None
+    return state.get_previous_response_id(instance_name, account_id)
+
+
+def _client_supports_previous_response_id(client: object) -> bool:
+    capabilities = getattr(client, "capabilities", None)
+    if isinstance(capabilities, LLMCapabilities):
+        return capabilities.previous_response_id
+    if capabilities is not None:
+        return bool(getattr(capabilities, "previous_response_id", False))
+    return True
 
 
 def _parse_optional_bool(value: bool | str | None) -> bool | None:
