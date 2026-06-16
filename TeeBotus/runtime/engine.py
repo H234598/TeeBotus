@@ -1432,6 +1432,8 @@ def _build_bibliothekar_context(
         from TeeBotus.ai_structures import decide_bibliothekar_query
 
         decision = decide_bibliothekar_query(query_text, model_runner=structured_decision_runner)
+        if decision.source == "model" and decision.confidence < 0.7:
+            return ""
         if not decision.should_search and decision.confidence >= 0.7:
             return ""
         search_text = decision.query or query_text
