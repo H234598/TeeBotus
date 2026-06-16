@@ -198,6 +198,10 @@ def build_acceptance_commands(
                 "plan2-optional-extras",
                 (python, "scripts/check_plan2_optional_extras.py"),
             ),
+            AcceptanceCommand(
+                "qdrant-systemd-print",
+                (python, "-m", "TeeBotus.qdrant_systemd", "--print"),
+            ),
         ]
     )
     if include_qdrant_live:
