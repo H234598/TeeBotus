@@ -164,9 +164,9 @@ def build_acceptance_commands(
                     "query",
                     "--source",
                     "tests/fixtures/books",
-                    "Therapie Schlaf",
+                    "Testfrage",
                     "--top-k",
-                    "2",
+                    "3",
                 ),
             ),
             AcceptanceCommand(
