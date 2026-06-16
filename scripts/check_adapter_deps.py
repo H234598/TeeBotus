@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_matrix_file_contract(),
                 _check_signalbot_context_contract(),
                 _check_pyproject_plan2_contract(),
+                _check_llm_profiles_plan2_contract(),
             ]
         )
     if not args.python_only:
@@ -162,6 +163,62 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
     if errors:
         return False, "pyproject plan2 contract failed: " + "; ".join(errors)
     return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.10"
+
+
+def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
+    try:
+        from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing
+    except Exception as exc:
+        return False, f"llm profiles plan2 contract import_error={type(exc).__name__}: {exc}"
+    try:
+        profiles = load_llm_profiles()
+        default_profile, routing = load_llm_routing()
+    except Exception as exc:
+        return False, f"llm profiles plan2 contract unreadable: {type(exc).__name__}: {exc}"
+    errors: list[str] = []
+    expected_profiles = {
+        "local_ollama": ("litellm", "ollama_chat/"),
+        "hf_mistral": ("litellm", "huggingface/"),
+        "groq_fast": ("litellm", "groq/"),
+        "gemini_flash": ("litellm", "gemini/"),
+        "openai_premium": ("openai", ""),
+    }
+    if default_profile != "local_ollama":
+        errors.append("default_profile must be local_ollama")
+    if default_profile not in profiles:
+        errors.append(f"default_profile missing {default_profile or '<empty>'}")
+    for name, (provider, model_prefix) in expected_profiles.items():
+        profile = profiles.get(name)
+        if profile is None:
+            errors.append(f"profile missing {name}")
+            continue
+        if profile.provider != provider:
+            errors.append(f"profile {name} provider={profile.provider or '<empty>'} expected={provider}")
+        if model_prefix and not profile.model.startswith(model_prefix):
+            errors.append(f"profile {name} model must start with {model_prefix}")
+    for name in ("hf_mistral", "groq_fast", "gemini_flash", "openai_premium"):
+        profile = profiles.get(name)
+        if profile is not None and not profile.api_key_env:
+            errors.append(f"profile {name} missing api_key_env")
+    for purpose, rule in routing.items():
+        if rule.profile not in profiles:
+            errors.append(f"routing {purpose} unknown profile {rule.profile}")
+        if rule.fallback and rule.fallback not in profiles:
+            errors.append(f"routing {purpose} unknown fallback {rule.fallback}")
+    for purpose in ("normal_chat", "private"):
+        rule = routing.get(purpose)
+        if rule is None:
+            errors.append(f"routing missing {purpose}")
+        elif rule.fallback:
+            errors.append(f"routing {purpose} must not define fallback")
+    structured = routing.get("structured_decision")
+    if structured is None:
+        errors.append("routing missing structured_decision")
+    elif structured.profile != "local_ollama" or structured.fallback != "groq_fast":
+        errors.append("routing structured_decision must be local_ollama with groq_fast fallback")
+    if errors:
+        return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
+    return True, "llm profiles plan2 contract=ok profiles=local_ollama,hf_mistral,groq_fast,gemini_flash,openai_premium"
 
 
 def _litellm_pth_files() -> list[Path]:
