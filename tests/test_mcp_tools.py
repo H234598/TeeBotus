@@ -105,6 +105,7 @@ def test_mcp_registry_rejects_non_readonly_policy(tmp_path) -> None:
         tool_config={"bibliothekar.search": {"enabled": True, "read_only": False}},
     )
 
+    assert "bibliothekar.search" not in registry.tool_names
     with pytest.raises(MCPToolError, match="not read-only"):
         registry.call("bibliothekar.search", {"query": "Therapie"})
 
@@ -190,6 +191,40 @@ def test_fastmcp_adapter_does_not_expose_private_memory_in_group_context(tmp_pat
 
     assert sorted(server.tools) == ["bibliothekar.search"]
     assert "memory.search" not in server.tools
+
+
+def test_fastmcp_adapter_does_not_expose_non_readonly_allowlisted_tools(tmp_path, monkeypatch) -> None:
+    class FakeFastMCP:
+        def __init__(self, name):
+            self.name = name
+            self.tools = {}
+
+        def tool(self, name):
+            def decorator(func):
+                self.tools[name] = func
+                return func
+
+            return decorator
+
+    fake_module = types.ModuleType("fastmcp")
+    fake_module.FastMCP = FakeFastMCP
+    monkeypatch.setitem(sys.modules, "fastmcp", fake_module)
+    account_store, account_id = _account_store_with_memory(tmp_path)
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        bibliothekar_service=_bibliothekar_service(tmp_path),
+        tool_config={
+            "bibliothekar.search": {"enabled": True, "read_only": False},
+            "memory.search": {"enabled": True, "read_only": False, "private_chat_only": True},
+        },
+        private_chat=True,
+    )
+
+    server = build_fastmcp_server(registry)
+
+    assert registry.tool_names == ()
+    assert server.tools == {}
 
 
 def _bibliothekar_service(tmp_path) -> BibliothekarService:

@@ -39,7 +39,7 @@ class MCPToolRegistry:
 
     @property
     def tool_names(self) -> tuple[str, ...]:
-        return tuple(sorted(name for name, policy in self._policies.items() if policy.enabled and name in self._tools))
+        return tuple(sorted(name for name, policy in self._policies.items() if policy.enabled and policy.read_only and name in self._tools))
 
     def policy(self, name: str) -> MCPToolPolicy:
         key = str(name or "").strip().casefold()
