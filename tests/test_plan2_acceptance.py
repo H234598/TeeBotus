@@ -61,7 +61,7 @@ def _valid_benchmark_payload() -> dict:
             "platform": "Linux-test",
             "machine": "x86_64",
             "cpu_count": 4,
-            "dependencies": {"teebotus": {"version": "1.5.1", "status": "worktree"}},
+            "dependencies": {"teebotus": {"version": "1.6.0", "status": "worktree"}},
         },
         "results": [
             {
@@ -307,6 +307,19 @@ def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
     assert "adapter-deps" not in labels
     assert "plan2-pytest" in labels
     assert not any(label.startswith("qdrant-live") for label in labels)
+
+
+def test_plan2_acceptance_can_run_adapter_deps_python_only(tmp_path: Path) -> None:
+    commands = check_plan2_acceptance.build_acceptance_commands(
+        python="python-test",
+        benchmark_output=tmp_path / "bench.md",
+        benchmark_json_output=tmp_path / "bench.json",
+        skip_runtime_status=True,
+        adapter_deps_python_only=True,
+    )
+    by_label = {command.label: command for command in commands}
+
+    assert by_label["adapter-deps"].argv == ("python-test", "scripts/check_adapter_deps.py", "--python-only")
 
 
 def test_plan2_acceptance_dry_run_alias_lists_without_executing(monkeypatch, capsys) -> None:

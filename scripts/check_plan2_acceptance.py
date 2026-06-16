@@ -192,6 +192,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--iterations", type=int, default=1, help="Quick benchmark iterations.")
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
     parser.add_argument("--skip-adapter-deps", action="store_true", help="Skip adapter dependency checks.")
+    parser.add_argument(
+        "--adapter-deps-python-only",
+        action="store_true",
+        help="Run adapter dependency checks in non-live Python-only mode.",
+    )
     parser.add_argument("--include-audit", action="store_true", help="Run pip-audit when installed; audit failures are reported but non-fatal.")
     parser.add_argument(
         "--include-qdrant-live",
@@ -219,6 +224,7 @@ def main(argv: list[str] | None = None) -> int:
         iterations=args.iterations,
         skip_runtime_status=args.skip_runtime_status,
         skip_adapter_deps=args.skip_adapter_deps,
+        adapter_deps_python_only=args.adapter_deps_python_only,
         include_audit=args.include_audit,
         include_qdrant_live=args.include_qdrant_live,
         include_legacy_import_tests=args.include_legacy_import_tests,
@@ -250,6 +256,7 @@ def build_acceptance_commands(
     iterations: int = 1,
     skip_runtime_status: bool = False,
     skip_adapter_deps: bool = False,
+    adapter_deps_python_only: bool = False,
     include_audit: bool = False,
     include_qdrant_live: bool = False,
     include_legacy_import_tests: bool = False,
@@ -377,7 +384,10 @@ def build_acceptance_commands(
                 )
             )
     if not skip_adapter_deps:
-        commands.append(AcceptanceCommand("adapter-deps", (python, "scripts/check_adapter_deps.py")))
+        adapter_deps_argv = [python, "scripts/check_adapter_deps.py"]
+        if adapter_deps_python_only:
+            adapter_deps_argv.append("--python-only")
+        commands.append(AcceptanceCommand("adapter-deps", tuple(adapter_deps_argv)))
     if include_audit:
         audit = shutil.which("pip-audit")
         if audit:

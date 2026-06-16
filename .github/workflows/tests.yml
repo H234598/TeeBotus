@@ -69,7 +69,7 @@ jobs:
           mkdir -p reports
           python scripts/check_plan2_acceptance.py \
             --skip-runtime-status \
-            --skip-adapter-deps \
+            --adapter-deps-python-only \
             --entries 1 \
             --iterations 1 \
             --benchmark-output reports/teebotus-plan2-benchmarks.md \

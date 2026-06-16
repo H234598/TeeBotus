@@ -46,6 +46,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "--baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
+    assert "--adapter-deps-python-only" in text
+    assert "native `signal-cli` Checks" in text
+    assert "bleiben." in text
     assert "teebotus-systemd" in text
     assert "NoNewPrivileges=true" in text
     assert "PrivateTmp=true" in text

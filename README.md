@@ -260,6 +260,11 @@ python3 scripts/check_plan2_acceptance.py --list
 python3 scripts/check_plan2_acceptance.py --dry-run
 ```
 
+Fuer CI ohne native Signal-Binaries kann `--adapter-deps-python-only` genutzt
+werden. Damit laufen die Python-Paket-, LLM-/Matrix-/Signalbot-Contract-,
+Secret- und pyproject-Pruefungen, waehrend native `signal-cli` Checks lokal
+bleiben.
+
 Optionale Live-/Security-Probes bleiben bewusst explizit und nicht blockierend:
 
 ```bash

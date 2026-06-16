@@ -14,7 +14,8 @@ def test_github_actions_runs_plan2_acceptance_with_all_extras() -> None:
     assert 'python -m pip install -e ".[dev,llm,rag,agents,tools]"' in workflow
     assert "python scripts/check_plan2_acceptance.py" in workflow
     assert "--skip-runtime-status" in workflow
-    assert "--skip-adapter-deps" in workflow
+    assert "--adapter-deps-python-only" in workflow
+    assert "--skip-adapter-deps" not in workflow
     assert "--benchmark-output reports/teebotus-plan2-benchmarks.md" in workflow
     assert "--benchmark-json-output reports/teebotus-plan2-benchmarks.json" in workflow
 
