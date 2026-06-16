@@ -77,6 +77,7 @@ class AcceptanceCommand:
     nonfatal: bool = False
     validate_runtime_status: bool = False
     validate_benchmark_artifacts: bool = False
+    validate_secret_artifacts: bool = False
     validate_systemd_unit: bool = False
 
 
@@ -250,6 +251,7 @@ def build_acceptance_commands(
                         "--output",
                         str(memory_recovery_json_output),
                     ),
+                    validate_secret_artifacts=True,
                 ),
                 AcceptanceCommand(
                     "memory-recovery-legacy-text",
@@ -265,6 +267,7 @@ def build_acceptance_commands(
                         "--output",
                         str(memory_recovery_output),
                     ),
+                    validate_secret_artifacts=True,
                 ),
                 AcceptanceCommand(
                     "legacy-import-preflight",
@@ -281,6 +284,7 @@ def build_acceptance_commands(
                         "--markdown-output",
                         str(legacy_import_output),
                     ),
+                    validate_secret_artifacts=True,
                 ),
             ]
         )
@@ -401,6 +405,13 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
                 for error in artifact_errors:
                     print(f"  {error}", file=sys.stderr)
                 return 1
+        if command.validate_secret_artifacts:
+            artifact_errors = _secret_artifact_errors(command.argv)
+            if artifact_errors and not command.nonfatal:
+                print(f"\nPlan2 acceptance failed at {command.label}: output artifacts contain secret-looking content.", file=sys.stderr)
+                for error in artifact_errors:
+                    print(f"  {error}", file=sys.stderr)
+                return 1
         if command.validate_systemd_unit:
             unit_errors = _systemd_unit_errors(command.label, result.stdout or "")
             if unit_errors and not command.nonfatal:
@@ -427,6 +438,24 @@ def _benchmark_artifact_errors(argv: Sequence[str]) -> list[str]:
     else:
         errors.extend(_json_benchmark_artifact_errors(json_path))
 
+    return errors
+
+
+def _secret_artifact_errors(argv: Sequence[str]) -> list[str]:
+    errors: list[str] = []
+    paths = _option_paths(argv, ("--output", "--json-output", "--markdown-output"))
+    if not paths:
+        return ["missing output artifact path for secret validation"]
+    for option, path in paths:
+        if not path.exists():
+            errors.append(f"{option} artifact missing: {path}")
+            continue
+        if not path.is_file():
+            errors.append(f"{option} artifact is not a file: {path}")
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if _artifact_text_contains_secret(text):
+            errors.append(f"{option} artifact contains secret-looking content: {path}")
     return errors
 
 
@@ -750,6 +779,15 @@ def _option_path(argv: Sequence[str], option: str) -> Path | None:
     if value_index >= len(argv):
         return None
     return Path(argv[value_index])
+
+
+def _option_paths(argv: Sequence[str], options: Sequence[str]) -> list[tuple[str, Path]]:
+    paths: list[tuple[str, Path]] = []
+    for option in options:
+        path = _option_path(argv, option)
+        if path is not None:
+            paths.append((option, path))
+    return paths
 
 
 def _runtime_status_broken_lines(output: str) -> list[str]:

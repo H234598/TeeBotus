@@ -227,6 +227,9 @@ def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) ->
         "--markdown-output",
         str(tmp_path / "import.md"),
     )
+    assert by_label["memory-recovery-legacy-json"].validate_secret_artifacts is True
+    assert by_label["memory-recovery-legacy-text"].validate_secret_artifacts is True
+    assert by_label["legacy-import-preflight"].validate_secret_artifacts is True
 
 
 def test_plan2_acceptance_can_include_nonfatal_qdrant_live_probe(tmp_path: Path, monkeypatch) -> None:
@@ -378,6 +381,81 @@ def test_plan2_acceptance_runner_fails_on_invalid_benchmark_artifacts(tmp_path: 
             str(json_path),
         )
     ]
+
+
+def test_plan2_acceptance_runner_validates_secret_artifacts(tmp_path: Path, monkeypatch) -> None:
+    output_path = tmp_path / "recovery.md"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        output_path.write_text("# Recovery\n\nok\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "memory-recovery-legacy-text",
+                ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path)),
+                validate_secret_artifacts=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 0
+    assert calls == [
+        ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path)),
+        ("python-test", "-m", "pytest"),
+    ]
+
+
+def test_plan2_acceptance_runner_fails_on_secret_artifact_leak(tmp_path: Path, monkeypatch) -> None:
+    output_path = tmp_path / "recovery.md"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        output_path.write_text("# Recovery\n\napi_key=plain-secret\n", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "memory-recovery-legacy-text",
+                ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path)),
+                validate_secret_artifacts=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 1
+    assert calls == [("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path))]
+
+
+def test_secret_artifact_validation_checks_all_declared_outputs(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    json_path.write_text(json.dumps({"status": "ok", "api_key_env": "GROQ_API_KEY"}), encoding="utf-8")
+    markdown_path.write_text("# Import\n\npassword=plain-secret\n", encoding="utf-8")
+
+    errors = check_plan2_acceptance._secret_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert errors == [f"--markdown-output artifact contains secret-looking content: {markdown_path}"]
 
 
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:
