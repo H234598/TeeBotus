@@ -76,7 +76,7 @@ def build_runtime_text_llm_client(
         default_api_key=default_api_key,
         provider=provider,
         model=model,
-        fallback_models=_filter_runtime_fallback_models(
+        fallback_models=filter_runtime_fallback_models(
             provider=provider or instructions.llm_provider,
             fallback_models=fallback_models or instructions.llm_fallback_models,
             allow_remote_fallback=remote_fallback_allowed,
@@ -114,7 +114,7 @@ def _build_route_client(
     if resolved_provider == "openai" and resolved_openai_client is None:
         key = resolved_api_key or default_api_key
         resolved_openai_client = openai_client_factory(key) if key else None
-    resolved_fallback_models = _filter_runtime_fallback_models(
+    resolved_fallback_models = filter_runtime_fallback_models(
         provider=route.provider,
         fallback_models=fallback_models or route.fallback_models,
         allow_remote_fallback=allow_remote_fallback or (bool(route.fallback_models) and not fallback_models),
@@ -167,7 +167,7 @@ def _build_profile_client(
         default_api_key=resolved_api_key or default_api_key,
         provider=profile.provider,
         model=profile.model,
-        fallback_models=_filter_runtime_fallback_models(
+        fallback_models=filter_runtime_fallback_models(
             provider=profile.provider,
             fallback_models=fallback_models,
             allow_remote_fallback=allow_remote_fallback,
@@ -208,7 +208,7 @@ def _parse_optional_bool(value: bool | str | None) -> bool | None:
     return None
 
 
-def _filter_runtime_fallback_models(
+def filter_runtime_fallback_models(
     *,
     provider: str,
     fallback_models: str | tuple[str, ...],
@@ -219,6 +219,9 @@ def _filter_runtime_fallback_models(
         return models
     normalized_provider = normalize_llm_provider(provider)
     return tuple(model for model in models if not _is_remote_fallback_model(normalized_provider, model))
+
+
+_filter_runtime_fallback_models = filter_runtime_fallback_models
 
 
 def _is_remote_fallback_model(provider: str, model: str) -> bool:
@@ -232,4 +235,4 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
     return provider in {"openai", "huggingface", "groq", "gemini"}
 
 
-__all__ = ["build_runtime_text_llm_client"]
+__all__ = ["build_runtime_text_llm_client", "filter_runtime_fallback_models"]

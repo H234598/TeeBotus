@@ -214,7 +214,11 @@ def _runtime_status_llm_line(account: Any) -> str:
         detail += f" base_url={base_url}"
     if provider != "openai":
         detail += f" api_key={'configured' if key_configured else 'none'}"
-    fallback_count = _csv_count(getattr(account, "llm_fallback_models", "")) or route_fallback_count
+    fallback_count = _status_effective_fallback_count(
+        account,
+        provider=provider,
+        route_fallback_count=route_fallback_count,
+    )
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", ""))
@@ -280,6 +284,25 @@ def _llm_key_configured(account: Any, provider: str, *, route_api_key_env: str =
             return False
         return bool(profile.api_key_env and os.environ.get(profile.api_key_env, "").strip())
     return False
+
+
+def _status_effective_fallback_count(account: Any, *, provider: str, route_fallback_count: int) -> int:
+    configured_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
+    if not configured_fallbacks:
+        return route_fallback_count
+    allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
+    try:
+        from TeeBotus.runtime.llm_factory import filter_runtime_fallback_models
+
+        return len(
+            filter_runtime_fallback_models(
+                provider=provider,
+                fallback_models=configured_fallbacks,
+                allow_remote_fallback=allow_remote_fallback,
+            )
+        )
+    except Exception:
+        return _csv_count(configured_fallbacks)
 
 
 def _csv_count(value: object) -> int:
