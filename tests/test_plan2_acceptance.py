@@ -439,6 +439,36 @@ def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> 
     assert calls == [("python-test", "-m", "TeeBotus", "--runtime-status")]
 
 
+def test_plan2_acceptance_runner_checks_runtime_status_stderr(monkeypatch) -> None:
+    calls: list[tuple[str, ...]] = []
+    leaked_key = "sk-" + "runtimeStatusStderrLeak123456"
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout="TeeBotus runtime configuration resolves.\n",
+            stderr=f"llm=Demo/telegram:1 provider=openai model=gpt status=configured api_key={leaked_key}\n",
+        )
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "runtime-status",
+                ("python-test", "-m", "TeeBotus", "--runtime-status"),
+                validate_runtime_status=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 1
+    assert calls == [("python-test", "-m", "TeeBotus", "--runtime-status")]
+
+
 def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
     output = "\n".join(
         [

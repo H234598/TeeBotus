@@ -368,7 +368,7 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
         if result.returncode and command.nonfatal:
             print(f"\nNon-fatal Plan2 check failed at {command.label} with exit code {result.returncode}.", file=sys.stderr)
         if command.validate_runtime_status:
-            broken_lines = _runtime_status_broken_lines(result.stdout or "")
+            broken_lines = _runtime_status_broken_lines("\n".join(part for part in (result.stdout, result.stderr) if part))
             if broken_lines and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: runtime-status reports broken state.", file=sys.stderr)
                 for line in broken_lines:
