@@ -151,6 +151,14 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert database_fallback["details"]["synced_index"] is True
     assert database_fallback["details"]["fallback_warnings"] >= 1
     assert database_fallback["details"]["recovery_warnings"] >= 1
+    mcp_tools = next(result for result in suite["results"] if result["name"] == "mcp_readonly_bibliothekar_and_memory_search")
+    assert mcp_tools["ok"] is True
+    assert mcp_tools["details"]["tool_names"] == ("bibliothekar.search", "memory.search")
+    assert mcp_tools["details"]["group_tool_names"] == ("bibliothekar.search",)
+    assert mcp_tools["details"]["library_selected"] >= 1
+    assert mcp_tools["details"]["memory_selected"] == 1
+    assert mcp_tools["details"]["group_blocks_memory"] is True
+    assert mcp_tools["details"]["network_calls"] == 0
 
 
 def test_benchmark_markdown_contains_comparison_table() -> None:
@@ -179,6 +187,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "youtube_local_job_queue_no_llm" in markdown
     assert "youtube_local_pipeline_cache_no_openai" in markdown
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
+    assert "mcp_readonly_bibliothekar_and_memory_search" in markdown
     assert "keine echten Provider-Calls" in markdown
 
 
