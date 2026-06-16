@@ -244,15 +244,27 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
 def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path):
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
-    account_memory_dir = instance_dir / "data" / "accounts" / "accounts" / "telegram-1"
     library_dir.mkdir(parents=True)
-    account_memory_dir.mkdir(parents=True)
-    secret_marker = "ACCOUNT_MEMORY_ONLY_SECRET_MARKER_7B3F"
-    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
-    (account_memory_dir / "memory.md").write_text(
-        f"Diese Account-Memory-Datei darf nie in den Bibliothekar-Index: {secret_marker}",
+    account_store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1), display_label="Alice")
+    account_marker = "ACCOUNT_MEMORY_ONLY_MARKER_7B3F"
+    legacy_marker = "LEGACY_ACCOUNT_MEMORY_CANARY_91C2"
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_account_only",
+            "memory_type": "semantic",
+            "user_text": f"Diese echte Account-Memory darf nie in den Bibliothekar-Index: {account_marker}",
+            "bot_text": "Notiert.",
+            "keywords": ["account", "memory", account_marker.casefold()],
+        },
+    )
+    account_memory_dir = account_store.account_dir(account_id)
+    (account_memory_dir / "Legacy_User_Memory_Entries.jsonl").write_text(
+        json.dumps({"id": "legacy_canary", "user_text": legacy_marker}, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
     document_store = FakeDocumentStore()
 
     store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
@@ -273,9 +285,11 @@ def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path)
         for document in document_store.documents
     )
     assert index["chunk_count"] == 1
-    assert secret_marker not in local_chunks
+    assert account_marker not in local_chunks
+    assert legacy_marker not in local_chunks
     assert "data/accounts" not in local_chunks
-    assert secret_marker not in haystack_payload
+    assert account_marker not in haystack_payload
+    assert legacy_marker not in haystack_payload
     assert "data/accounts" not in haystack_payload
     assert "therapie.txt" in local_chunks
 
