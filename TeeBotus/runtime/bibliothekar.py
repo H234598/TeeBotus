@@ -283,6 +283,7 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
     file_type = path.suffix.casefold().lstrip(".")
     language = "de"
     title = _document_title(path)
+    author = _document_author(path)
     error = ""
     sections: list[tuple[str, str]] = []
     try:
@@ -297,6 +298,7 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
         "document_id": document_id,
         "source_id": source_id,
         "title": title,
+        "author": author,
         "relative_path": relative_path,
         "file_path": relative_path,
         "file_sha256": file_sha256,
@@ -327,6 +329,7 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
                     "document_id": document_id,
                     "source_id": source_id,
                     "title": title,
+                    "author": author,
                     "relative_path": relative_path,
                     "file_path": relative_path,
                     "file_sha256": file_sha256,
@@ -472,6 +475,7 @@ def _chunk_prompt_item(chunk: dict[str, Any], *, max_quote_chars: int) -> dict[s
         "chunk_id": str(chunk.get("chunk_id", "")),
         "source_id": str(chunk.get("source_id", "")),
         "title": str(chunk.get("title", "")),
+        "author": str(chunk.get("author", "")),
         "file": str(chunk.get("relative_path", "")),
         "file_sha256": str(chunk.get("file_sha256", "")),
         "file_type": str(chunk.get("file_type", "") or str(chunk.get("suffix", "")).lstrip(".")),
@@ -601,6 +605,10 @@ def _keywords(text: str, *, limit: int) -> list[str]:
 def _document_title(path: Path) -> str:
     stem = path.stem.replace("_", " ").replace("-", " ").strip()
     return re.sub(r"\s+", " ", stem).strip() or path.name
+
+
+def _document_author(_path: Path) -> str:
+    return ""
 
 
 def _stable_id(prefix: str, value: str) -> str:

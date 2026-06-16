@@ -58,17 +58,20 @@ def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path)
     assert document["file_sha256"] == document["source_id"].removeprefix("sha256:")
     assert document["file_type"] == "txt"
     assert document["file_path"] == "therapie.txt"
+    assert document["author"] == ""
     assert document["language"] == "de"
     assert document["embedding_model"] == "intfloat/multilingual-e5-small"
     assert chunk["source_id"] == document["source_id"]
     assert chunk["file_sha256"] == document["file_sha256"]
     assert chunk["file_type"] == "txt"
+    assert chunk["author"] == ""
     assert chunk["chunk_index"] == 1
     assert chunk["section"] == "Zeilen 1-1"
     assert chunk["license"] == "private"
     assert prompt_chunk["source_id"] == document["source_id"]
     assert prompt_chunk["file_sha256"] == document["file_sha256"]
     assert prompt_chunk["file_type"] == "txt"
+    assert prompt_chunk["author"] == ""
     assert prompt_chunk["language"] == "de"
     assert prompt_chunk["chunk_index"] == 1
     assert prompt_chunk["embedding_model"] == "intfloat/multilingual-e5-small"
@@ -247,12 +250,14 @@ def test_haystack_backend_preserves_plan2_metadata_roundtrip(tmp_path):
     assert meta["source_id"].startswith("sha256:")
     assert meta["file_sha256"] == meta["source_id"].removeprefix("sha256:")
     assert meta["file_type"] == "txt"
+    assert meta["author"] == ""
     assert meta["language"] == "de"
     assert meta["chunk_index"] == 1
     assert meta["embedding_model"] == "intfloat/multilingual-e5-small"
     assert prompt_chunk["source_id"] == meta["source_id"]
     assert prompt_chunk["file_sha256"] == meta["file_sha256"]
     assert prompt_chunk["file_type"] == "txt"
+    assert prompt_chunk["author"] == ""
     assert prompt_chunk["language"] == "de"
     assert prompt_chunk["chunk_index"] == 1
 
