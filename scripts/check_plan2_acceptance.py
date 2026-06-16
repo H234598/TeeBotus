@@ -9,7 +9,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +42,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
 RUNTIME_STATUS_SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{12,}\b"),
@@ -486,6 +487,12 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 errors.append(f"{prefix}results[{index}] errors must be a non-negative integer")
             if "ok" not in result and "skipped" not in result:
                 errors.append(f"{prefix}results[{index}] missing ok/skipped status")
+            if not result.get("skipped") and str(result.get("mode") or "local").casefold() == "live":
+                errors.append(f"{prefix}results[{index}] must not use live mode in standard Plan2 benchmark artifacts")
+            details = result.get("details")
+            if isinstance(details, Mapping):
+                for key, value in _forbidden_standard_benchmark_calls(details):
+                    errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
     comparisons = payload.get("comparisons")
     if not isinstance(comparisons, dict):
         errors.append(f"{prefix}comparisons must be an object")
@@ -551,6 +558,22 @@ def _is_nonnegative_number(value: Any) -> bool:
 
 def _is_nonnegative_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _forbidden_standard_benchmark_calls(details: Mapping[str, Any]) -> list[tuple[str, int | float]]:
+    forbidden: list[tuple[str, int | float]] = []
+    for key, value in details.items():
+        key_text = str(key)
+        if isinstance(value, Mapping):
+            forbidden.extend((f"{key_text}.{nested_key}", nested_value) for nested_key, nested_value in _forbidden_standard_benchmark_calls(value))
+            continue
+        if key_text not in STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS:
+            continue
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if value > 0:
+            forbidden.append((key_text, value))
+    return forbidden
 
 
 def _option_path(argv: Sequence[str], option: str) -> Path | None:

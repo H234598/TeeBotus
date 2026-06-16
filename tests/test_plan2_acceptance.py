@@ -7,6 +7,37 @@ from pathlib import Path
 from scripts import check_plan2_acceptance
 
 
+def _valid_benchmark_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "quick": True,
+        "include_live": False,
+        "ok": True,
+        "results": [
+            {
+                "name": f"{category}_benchmark",
+                "category": category,
+                "ok": True,
+                "mode": "local",
+                "total_ms": 1.0,
+                "throughput_ops_s": 100.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+                "details": {"network_calls": 0},
+            }
+            for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
+        ],
+        "comparisons": {
+            "stable_backend_rankings": [
+                {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
+                for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
+            ]
+        },
+        "regression": {"status": "not_configured", "failed": False},
+    }
+
+
 def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path) -> None:
     commands = check_plan2_acceptance.build_acceptance_commands(
         python="python-test",
@@ -480,6 +511,21 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
 
     assert "quick must be true for standard Plan2 benchmark artifacts" in errors
     assert "include_live must be false for standard Plan2 benchmark artifacts" in errors
+
+
+def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_standard_artifacts() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["mode"] = "live"
+    payload["results"][1]["details"] = {"network_calls": 1}
+    payload["results"][2]["details"] = {"nested": {"openai_calls": 2}}
+    payload["results"][3]["details"] = {"llm_calls": 1}
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "results[0] must not use live mode in standard Plan2 benchmark artifacts" in errors
+    assert "results[1] details.network_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
+    assert "results[2] details.nested.openai_calls must be 0 in standard Plan2 benchmark artifacts, got 2" in errors
+    assert "results[3] details.llm_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:
