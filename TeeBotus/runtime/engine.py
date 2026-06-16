@@ -34,7 +34,7 @@ from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactiv
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
-from TeeBotus.runtime.accounts import AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
 from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
@@ -1581,7 +1581,7 @@ def _append_account_memory_interaction(
     if candidate is not None:
         memory_user_text = _clip_text(candidate.text or user_text, instructions.user_memory_max_entry_chars)
         memory_kind = _memory_candidate_kind(candidate.memory_type)
-        memory_type = "semantic"
+        memory_type = _memory_candidate_storage_type(candidate.memory_type, memory_kind)
         sensitivity = candidate.sensitivity
     keywords = _memory_keywords(f"{memory_user_text}\n{bot_text}")
     entry = {
@@ -1649,7 +1649,8 @@ def _memory_candidate_prompt(user_text: str, bot_text: str) -> str:
     return (
         "Entscheide, ob diese Interaktion als persistentes Account-Memory gespeichert werden soll. "
         "Antworte ausschliesslich als JSON fuer MemoryCandidate. "
-        "Speichere nur stabile Nutzerpraeferenzen, Profilfakten, Gewohnheiten, Projekte oder Beziehungskontext. "
+        "Speichere nur stabile Nutzerpraeferenzen, Profilfakten, Gewohnheiten, Projekte, Beziehungskontext, Therapieziele, Coping-Strategien, Muster, klinische Signale oder Prozessnotizen. "
+        "Nutze memory_type als fachliche Kategorie, z.B. preference, biographical_fact, therapy_goal, coping_strategy, risk_signal, sleep_pattern, mse_mood, safety_plan, homework, treatment_plan oder none. "
         "Setze should_store=false oder memory_type=none fuer Smalltalk, einmalige Details oder unsichere/irrelevante Inhalte. "
         "Setze sensitivity=high fuer besonders sensible Gesundheits-, Krisen-, intime oder rechtliche Inhalte; diese werden nicht automatisch gespeichert.\n\n"
         f"Nutzer:\n{user_text.strip()}\n\nBot:\n{bot_text.strip()}"
@@ -1657,7 +1658,9 @@ def _memory_candidate_prompt(user_text: str, bot_text: str) -> str:
 
 
 def _memory_candidate_kind(memory_type: str) -> str:
-    normalized = str(memory_type or "").strip().casefold()
+    normalized = str(memory_type or "").strip().casefold().replace("-", "_")
+    if normalized in ACCOUNT_MEMORY_KINDS:
+        return normalized
     mapping = {
         "preference": "preference",
         "profile": "biographical_fact",
@@ -1666,6 +1669,15 @@ def _memory_candidate_kind(memory_type: str) -> str:
         "relationship": "relationship_pattern",
     }
     return mapping.get(normalized, "observation")
+
+
+def _memory_candidate_storage_type(memory_type: str, memory_kind: str) -> str:
+    normalized = str(memory_type or "").strip().casefold().replace("-", "_")
+    if normalized in ACCOUNT_MEMORY_TYPES:
+        return normalized
+    if memory_kind in {"procedural", "manual", "task", "homework", "skill_practice"}:
+        return "procedural"
+    return "semantic"
 
 
 def _build_attachment_context(

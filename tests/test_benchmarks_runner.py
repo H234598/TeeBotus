@@ -73,6 +73,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
     assert llm_router["details"]["runtime_provider"] == "litellm"
     assert llm_router["details"]["runtime_model"] == "ollama_chat/llama3.1:8b"
+    assert llm_router["details"]["memory_candidate_kind"] == "therapy_goal"
     assert llm_router["details"]["remote_fallback_default_enabled"] is False
     assert llm_router["details"]["default_fallback_models"] == []
     assert llm_router["details"]["explicit_remote_fallback_enabled"] is True

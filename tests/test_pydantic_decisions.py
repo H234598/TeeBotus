@@ -140,6 +140,31 @@ def test_memory_candidate_schema_supports_safe_structured_storage_decisions() ->
     )
 
 
+def test_memory_candidate_schema_accepts_plan2_clinical_memory_kinds() -> None:
+    candidate = parse_memory_candidate(
+        {
+            "should_store": True,
+            "memory_type": "therapy-goal",
+            "text": "Morgens einen kurzen Spaziergang als Therapieaufgabe testen.",
+            "sensitivity": "medium",
+            "confidence": 0.89,
+        }
+    )
+
+    assert candidate.memory_type == "therapy_goal"
+
+    with pytest.raises(ValidationError, match="unsupported memory_type"):
+        parse_memory_candidate(
+            {
+                "should_store": True,
+                "memory_type": "random_private_blob",
+                "text": "Soll nicht akzeptiert werden.",
+                "sensitivity": "low",
+                "confidence": 0.9,
+            }
+        )
+
+
 def test_reminder_decision_schema_accepts_json_payloads() -> None:
     reminder = parse_reminder_decision(
         '{"should_create": true, "text": "Termin", "datetime_iso": "2026-06-16T09:00:00+00:00", "recurrence": null, "confidence": 0.88}'

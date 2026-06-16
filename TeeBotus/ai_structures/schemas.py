@@ -4,6 +4,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES
+
 
 IntentName = Literal[
     "chat",
@@ -33,10 +35,19 @@ class IntentDecision(BaseModel):
 
 class MemoryCandidate(BaseModel):
     should_store: bool
-    memory_type: Literal["preference", "profile", "habit", "project", "relationship", "none"]
+    memory_type: str = Field(max_length=80)
     text: str = Field(default="", max_length=1200)
     sensitivity: Literal["low", "medium", "high"]
     confidence: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("memory_type")
+    @classmethod
+    def _normalize_memory_type(cls, value: str) -> str:
+        normalized = str(value or "").strip().casefold().replace("-", "_")
+        allowed = ACCOUNT_MEMORY_KINDS | ACCOUNT_MEMORY_TYPES | {"habit", "profile", "project", "relationship", "none"}
+        if normalized not in allowed:
+            raise ValueError(f"unsupported memory_type: {value}")
+        return normalized
 
     @field_validator("text")
     @classmethod

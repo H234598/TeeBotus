@@ -36,7 +36,7 @@ from scripts.check_adapter_deps import (  # noqa: E402
 from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
 import TeeBotus.core.youtube as youtube_module  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
-from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision  # noqa: E402
+from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision, parse_memory_candidate  # noqa: E402
 from TeeBotus.ai_structures.schemas import ProactiveToolCallDecision  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
@@ -639,7 +639,15 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
         "reason_short": "benchmark fake structured decision",
         "source": "model",
     }
+    memory_payload = {
+        "should_store": True,
+        "memory_type": "therapy_goal",
+        "text": "Morgens kurzen Spaziergang als Therapieaufgabe testen.",
+        "sensitivity": "medium",
+        "confidence": 0.88,
+    }
     decision_timings = [_timed_ms(lambda: parse_bibliothekar_query_decision(decision_payload)) for _ in range(iterations)]
+    memory_timings = [_timed_ms(lambda: parse_memory_candidate(memory_payload)) for _ in range(iterations)]
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
@@ -667,9 +675,9 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
     return _result(
         name="llm_router_structured_decision",
         category="llm_router",
-        iterations=iterations * 3,
-        total_ms=sum(route_timings) + sum(runtime_timings) + sum(decision_timings),
-        payload_bytes=len(json.dumps(decision_payload, ensure_ascii=False).encode("utf-8")),
+        iterations=iterations * 4,
+        total_ms=sum(route_timings) + sum(runtime_timings) + sum(decision_timings) + sum(memory_timings),
+        payload_bytes=len(json.dumps({"bibliothekar": decision_payload, "memory": memory_payload}, ensure_ascii=False).encode("utf-8")),
         index_bytes=len(
             json.dumps({"profiles": list(profiles), "routing": list(routing)}, ensure_ascii=False).encode("utf-8")
         ),
@@ -677,6 +685,8 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "median_route_ms": statistics.median(route_timings),
             "median_runtime_client_ms": statistics.median(runtime_timings),
             "median_structured_decision_ms": statistics.median(decision_timings),
+            "median_memory_candidate_ms": statistics.median(memory_timings),
+            "memory_candidate_kind": parse_memory_candidate(memory_payload).memory_type,
             "profile_count": len(profiles),
             "route_count": len(routing),
             "runtime_client": type(client).__name__,
