@@ -38,6 +38,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "teebotus-qdrant-systemd" in text
     assert "gepinnten `qdrant/qdrant`-Image-Tag statt `latest`" in text
+    assert "mit gueltigem Port" in text
     assert "keine Zugangsdaten, Pfade, Query-Parameter oder Fragmente" in text
     assert "Normale Chatantworten" in text
     assert "--category" in text

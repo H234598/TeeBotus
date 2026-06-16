@@ -1364,12 +1364,19 @@ def _runtime_status_qdrant_target_is_unsafe(line: str) -> bool:
     target = _runtime_status_field(line, "target")
     if not target:
         return True
-    parsed = urlparse(target)
+    try:
+        parsed = urlparse(target)
+    except ValueError:
+        return True
     if parsed.username or parsed.password:
         return True
     if parsed.query or parsed.fragment:
         return True
     if parsed.path not in {"", "/"}:
+        return True
+    try:
+        parsed.port
+    except ValueError:
         return True
     host = (parsed.hostname or "").strip().casefold()
     if not host:

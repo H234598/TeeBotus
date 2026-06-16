@@ -561,7 +561,10 @@ def _normalize_backend(value: object) -> str:
 
 def _normalize_local_qdrant_url(value: object) -> str:
     raw = str(value or DEFAULT_QDRANT_URL).strip() or DEFAULT_QDRANT_URL
-    parsed = urlparse(raw)
+    try:
+        parsed = urlparse(raw)
+    except ValueError as exc:
+        raise ValueError("Bibliothekar Qdrant URL must be a valid URL.") from exc
     if not parsed.scheme or not parsed.netloc:
         raise ValueError("Bibliothekar Qdrant URL must include scheme and host.")
     if parsed.scheme not in {"http", "https"}:
@@ -569,6 +572,10 @@ def _normalize_local_qdrant_url(value: object) -> str:
     host = (parsed.hostname or "").strip().casefold()
     if host not in LOCAL_QDRANT_HOSTS:
         raise ValueError("Bibliothekar Qdrant URL must stay local on 127.0.0.1, localhost or ::1.")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("Bibliothekar Qdrant URL must include a valid port if one is specified.") from exc
     if parsed.username or parsed.password:
         raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
     if parsed.query or parsed.fragment:

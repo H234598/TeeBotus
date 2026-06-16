@@ -1138,6 +1138,9 @@ def test_haystack_status_rejects_qdrant_url_query_fragment_or_path(tmp_path, mon
         ("http://127.0.0.1:6333?api_key=plain-secret", "must not contain query parameters or fragments"),
         ("http://127.0.0.1:6333#token", "must not contain query parameters or fragments"),
         ("http://127.0.0.1:6333/collections", "must be a base URL without a path"),
+        ("http://127.0.0.1:99999", "must include a valid port"),
+        ("http://127.0.0.1:bad", "must include a valid port"),
+        ("http://[::1", "must be a valid URL"),
     )
     for url, expected_error in cases:
         health = check_bibliothekar_service(
