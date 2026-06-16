@@ -12,6 +12,7 @@ from TeeBotus.ai_structures import (
     MemoryCandidate,
     ProactiveToolCallDecision,
     ReminderDecision,
+    YouTubeOptionsDecision,
     build_pydantic_ai_model_runner,
     decide_bibliothekar_query,
     decide_intent,
@@ -151,6 +152,22 @@ def test_reminder_decision_schema_accepts_json_payloads() -> None:
         recurrence=None,
         confidence=0.88,
     )
+
+
+def test_youtube_options_decision_schema_accepts_confidence() -> None:
+    decision = YouTubeOptionsDecision.model_validate(
+        {
+            "live_output": False,
+            "send_to_llm": True,
+            "confidence": 0.88,
+            "reason_short": " explicit local transcript options ",
+        }
+    )
+
+    assert decision.live_output is False
+    assert decision.send_to_llm is True
+    assert decision.confidence == 0.88
+    assert decision.reason_short == "explicit local transcript options"
 
 
 def test_proactive_tool_call_decision_validates_known_tool_arguments() -> None:

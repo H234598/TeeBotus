@@ -2186,6 +2186,9 @@ class BotTests(unittest.TestCase):
         self.assertIsNone(
             _parse_youtube_local_options_from_llm_response('{"live_output": null, "send_to_llm": true}')
         )
+        self.assertIsNone(
+            _parse_youtube_local_options_from_llm_response('{"live_output": false, "send_to_llm": true, "confidence": 0.42}')
+        )
 
     def test_handle_update_youtube_local_options_uses_llm_fallback_and_records_phrase(self) -> None:
         from TeeBotus.instructions import BotInstructions

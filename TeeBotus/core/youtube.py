@@ -18,6 +18,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from TeeBotus.ai_structures.schemas import YouTubeOptionsDecision
 from TeeBotus.runtime.maintenance import runtime_dir
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -373,11 +374,13 @@ def _parse_youtube_local_options_from_llm_response(text: str) -> tuple[bool, boo
     payload = _extract_json_object(text)
     if payload is None:
         return None
-    live_value = _coerce_optional_bool(payload.get("live_output"))
-    llm_value = _coerce_optional_bool(payload.get("send_to_llm"))
-    if live_value is None or llm_value is None:
+    try:
+        decision = YouTubeOptionsDecision.model_validate(payload)
+    except (TypeError, ValueError):
         return None
-    return live_value, llm_value
+    if decision.confidence < 0.7 or decision.live_output is None or decision.send_to_llm is None:
+        return None
+    return decision.live_output, decision.send_to_llm
 
 
 def _extract_json_object(text: str) -> dict[str, Any] | None:

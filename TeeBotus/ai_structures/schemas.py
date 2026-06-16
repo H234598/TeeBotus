@@ -59,6 +59,18 @@ class ReminderDecision(BaseModel):
         return str(value).strip()
 
 
+class YouTubeOptionsDecision(BaseModel):
+    live_output: bool | None = None
+    send_to_llm: bool | None = None
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    reason_short: str = Field(default="", max_length=240)
+
+    @field_validator("reason_short")
+    @classmethod
+    def _strip_reason(cls, value: str) -> str:
+        return str(value or "").strip()
+
+
 class BibliothekarQueryDecision(BaseModel):
     should_search: bool
     query: str = Field(default="", max_length=800)

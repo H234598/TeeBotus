@@ -1020,8 +1020,9 @@ class TeeBotusEngine:
             "Klassifiziere ausschliesslich die Optionen fuer eine lokale YouTube-Transkription.\n"
             "Setze live_output nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob waehrend der Transkription live/zwischendurch Text gesendet werden soll.\n"
             "Setze send_to_llm nur dann auf true/false, wenn die Nachricht eindeutig sagt, ob das fertige Transkript danach an ein LLM/KI/GPT/OpenAI zur Auswertung gehen soll.\n"
+            "Setze confidence zwischen 0 und 1; unter 0.70 wird keine automatische Option uebernommen.\n"
             "Antworte nur als JSON-Objekt mit exakt diesen Feldern:\n"
-            '{"live_output": true|false|null, "send_to_llm": true|false|null}\n\n'
+            '{"live_output": true|false|null, "send_to_llm": true|false|null, "confidence": 0.0-1.0}\n\n'
             f"Nachricht:\n{text.strip()}"
         )
         try:
