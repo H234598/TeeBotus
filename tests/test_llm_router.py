@@ -185,6 +185,27 @@ def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> N
     assert client.api_key == "hf-secret"
 
 
+def test_profiled_text_client_does_not_reuse_instruction_remote_fallbacks_when_route_blocks_them() -> None:
+    client = build_profiled_text_llm_client(
+        purpose="normal_chat",
+        instructions=BotInstructions(llm_fallback_models=("groq/llama-3.3-70b-versatile",)),
+        openai_client=None,
+        profiles={
+            "local_ollama": LLMProfile(
+                "local_ollama",
+                "litellm",
+                "ollama_chat/llama3.1:8b",
+                "http://127.0.0.1:11434",
+            ),
+        },
+        routing={"normal_chat": LLMRoutingRule("normal_chat", "local_ollama")},
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.fallback_models == ()
+    assert client.use_instruction_fallback_models is False
+
+
 def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),

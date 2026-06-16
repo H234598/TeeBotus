@@ -170,6 +170,7 @@ def build_profiled_text_llm_client(
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         api_key=api_key,
         api_base=route.base_url,
+        use_instruction_fallback_models=False,
     )
 
 
