@@ -7,7 +7,7 @@ import pytest
 
 from TeeBotus.instructions import parse_instructions
 from TeeBotus.mcp_tools import MCPToolError, build_readonly_mcp_registry
-from TeeBotus.mcp_tools.fastmcp_server import build_fastmcp_server, fastmcp_available
+from TeeBotus.mcp_tools.fastmcp_server import FASTMCP_READONLY_ALLOWLIST, build_fastmcp_server, fastmcp_available
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, LocalBibliothekarBackend
@@ -128,14 +128,68 @@ def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monk
     fake_module = types.ModuleType("fastmcp")
     fake_module.FastMCP = FakeFastMCP
     monkeypatch.setitem(sys.modules, "fastmcp", fake_module)
-    registry = build_readonly_mcp_registry(bibliothekar_service=_bibliothekar_service(tmp_path))
+    account_store, account_id = _account_store_with_memory(tmp_path)
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        bibliothekar_service=_bibliothekar_service(tmp_path),
+        tool_config={
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "memory.search": {"enabled": True, "read_only": True, "private_chat_only": True},
+            "youtube.transcribe": {"enabled": True, "read_only": True},
+            "export.account": {"enabled": True, "read_only": True},
+            "codex.exec": {"enabled": True, "read_only": False},
+            "shell.exec": {"enabled": True, "read_only": False},
+        },
+        private_chat=True,
+    )
 
     server = build_fastmcp_server(registry)
 
     assert fastmcp_available() is True
     assert server is created[0]
-    assert "bibliothekar.search" in server.tools
+    assert FASTMCP_READONLY_ALLOWLIST == ("bibliothekar.search", "memory.search")
+    assert sorted(server.tools) == ["bibliothekar.search", "memory.search"]
     assert "therapie.txt" in server.tools["bibliothekar.search"]("Therapie", top_k=1)["prompt_text"]
+    assert server.tools["memory.search"]("Mond")["selected_ids"] == ["mem_1"]
+    assert "youtube.transcribe" not in server.tools
+    assert "export.account" not in server.tools
+    assert "codex.exec" not in server.tools
+    assert "shell.exec" not in server.tools
+
+
+def test_fastmcp_adapter_does_not_expose_private_memory_in_group_context(tmp_path, monkeypatch) -> None:
+    class FakeFastMCP:
+        def __init__(self, name):
+            self.name = name
+            self.tools = {}
+
+        def tool(self, name):
+            def decorator(func):
+                self.tools[name] = func
+                return func
+
+            return decorator
+
+    fake_module = types.ModuleType("fastmcp")
+    fake_module.FastMCP = FakeFastMCP
+    monkeypatch.setitem(sys.modules, "fastmcp", fake_module)
+    account_store, account_id = _account_store_with_memory(tmp_path)
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        bibliothekar_service=_bibliothekar_service(tmp_path),
+        tool_config={
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "memory.search": {"enabled": True, "read_only": True, "private_chat_only": True},
+        },
+        private_chat=False,
+    )
+
+    server = build_fastmcp_server(registry)
+
+    assert sorted(server.tools) == ["bibliothekar.search"]
+    assert "memory.search" not in server.tools
 
 
 def _bibliothekar_service(tmp_path) -> BibliothekarService:
