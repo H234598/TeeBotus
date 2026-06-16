@@ -549,6 +549,8 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             errors.append(f"{prefix}quality_gate.status must be ok")
         if not _is_nonnegative_integer(quality_gate.get("checked_results")):
             errors.append(f"{prefix}quality_gate.checked_results must be a non-negative integer")
+        elif isinstance(results, list) and int(quality_gate.get("checked_results") or 0) != len(results):
+            errors.append(f"{prefix}quality_gate.checked_results must match results length")
         if not _is_nonnegative_integer(quality_gate.get("error_count")):
             errors.append(f"{prefix}quality_gate.error_count must be a non-negative integer")
         elif int(quality_gate.get("error_count") or 0) != 0:

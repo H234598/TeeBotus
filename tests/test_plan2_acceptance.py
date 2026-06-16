@@ -657,6 +657,15 @@ def test_benchmark_artifact_validation_requires_successful_quality_gate() -> Non
     assert "quality_gate.errors must be a list" in errors
 
 
+def test_benchmark_artifact_validation_requires_quality_gate_to_cover_all_results() -> None:
+    payload = _valid_benchmark_payload()
+    payload["quality_gate"]["checked_results"] = 1
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "quality_gate.checked_results must match results length" in errors
+
+
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
 
