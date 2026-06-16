@@ -14,6 +14,7 @@ def _pyproject() -> dict:
 def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
     optional = _pyproject()["project"]["optional-dependencies"]
 
+    assert _pyproject()["project"]["requires-python"] == ">=3.11"
     assert set(optional) >= {"dev", "llm", "agents", "rag", "tools"}
     assert set(optional["dev"]) >= {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"}
     assert set(optional["llm"]) >= {"litellm==1.83.7", "python-dotenv==1.0.1", "openai", "ollama"}

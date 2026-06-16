@@ -125,8 +125,8 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
     if not isinstance(project, dict):
         return False, "pyproject plan2 contract missing [project]"
     errors: list[str] = []
-    if project.get("requires-python") != ">=3.10":
-        errors.append("requires-python must stay >=3.10 unless intentionally raised")
+    if project.get("requires-python") != ">=3.11":
+        errors.append("requires-python must stay >=3.11 for Plan2 unless intentionally raised")
     optional = project.get("optional-dependencies")
     if not isinstance(optional, dict):
         errors.append("missing optional-dependencies")
@@ -172,7 +172,7 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
         errors.append(f"scripts missing {','.join(missing_scripts)}")
     if errors:
         return False, "pyproject plan2 contract failed: " + "; ".join(errors)
-    return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.10"
+    return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.11"
 
 
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
