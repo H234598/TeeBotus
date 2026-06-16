@@ -29,6 +29,14 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "scripts/run_benchmarks.py --quick" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
+    assert "--include-qdrant-live" in text
+    assert "--include-audit" in text
+    assert "tests/test_llm_base.py" in text
+    assert "tests/test_openai_provider.py" in text
+    assert "tests/test_llm_client.py" in text
+    assert "tests/test_llm_package.py" in text
+    assert "tests/test_openai_client.py" in text
+    assert "Der Acceptance-Runner nimmt die aktuellen" in text
     assert "ReminderDecision" in text
     assert "wiederkehrendes Reminder-Item" in text
     assert "MemoryCandidate" in text

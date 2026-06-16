@@ -247,10 +247,26 @@ Der Runner startet keine Bot-Loops und ruft bewusst nicht `python3 -m TeeBotus -
 python3 scripts/check_plan2_acceptance.py --list
 ```
 
+Optionale Live-/Security-Probes bleiben bewusst explizit und nicht blockierend:
+
+```bash
+python3 scripts/check_plan2_acceptance.py --list --include-qdrant-live --include-audit
+```
+
+Hinweis zur Plan2-Testhistorie: Die frueher im Plan genannten LLM-Dateien
+`tests/test_llm_base.py` und `tests/test_openai_provider.py` sind in der
+aktuellen Teststruktur aufgeteilt. `tests/test_llm_client.py` deckt die
+providerneutralen LLM-Client-/Capability-Primitiven plus LiteLLM-Textadapter ab,
+`tests/test_llm_package.py` deckt die oeffentlichen LLM-Paketexports und den
+`OpenAIProvider`-Wrapper ab. Der Acceptance-Runner nimmt die aktuellen
+`tests/test_*.py`-Module als Quelle der Wahrheit und fuehrt diese komplette
+Plan2-Testflaeche aus.
+
 Manuelle Teilchecks:
 
 ```bash
 python3 -m pytest -q tests/test_runtime_config.py tests/test_llm_config.py
+python3 -m pytest -q tests/test_llm_client.py tests/test_llm_package.py tests/test_openai_client.py
 python3 -m pytest -q tests/test_litellm_provider.py
 python3 -m pytest -q tests/test_bibliothekar_*.py
 python3 -m pytest -q tests/test_llm_router.py
