@@ -40,12 +40,19 @@ REQUIRED_CITATION_CHUNK_FIELDS = (
     "embedding_model",
 )
 FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS = {
+    "account_identities.json",
+    "account_index.json",
     "account_memory_entries.jsonl",
     "account_memory_index.json",
+    "account_profile.json",
     "account_secrets.json",
     "account_tombstone.json",
+    "agent_state.json",
     "legacy_user_memory_entries.jsonl",
     "openai_state.json",
+    "proactive_audit.jsonl",
+    "proactive_outbox.jsonl",
+    "secret_verifier.json",
     "user_habbits_and_behave.md",
     "user_memory_entries.jsonl",
     "user_memory_index.json",
@@ -298,9 +305,29 @@ def _iter_document_paths(library_dir: Path) -> Iterable[Path]:
         path
         for path in sorted(library_dir.rglob("*"))
         if path.is_file()
-        and LIBRARY_META_DIRNAME not in path.parts
+        and _is_allowed_library_source_path(path, library_dir)
         and path.suffix.casefold() in SUPPORTED_SUFFIXES
     )
+
+
+def _is_allowed_library_source_path(path: Path, library_dir: Path) -> bool:
+    try:
+        relative_path = path.relative_to(library_dir)
+    except ValueError:
+        return False
+    normalized = relative_path.as_posix().strip().casefold()
+    if not normalized or normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
+        return False
+    parts = tuple(part for part in normalized.split("/") if part and part != ".")
+    if not parts:
+        return False
+    if LIBRARY_META_DIRNAME.casefold() in parts:
+        return False
+    if any(part in FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS for part in parts):
+        return False
+    if any(_path_contains_segments(parts, forbidden) for forbidden in FORBIDDEN_LIBRARY_SOURCE_PATH_SEGMENTS):
+        return False
+    return True
 
 
 def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:

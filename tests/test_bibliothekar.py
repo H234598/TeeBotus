@@ -731,6 +731,37 @@ def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path)
     assert "therapie.txt" in local_chunks
 
 
+def test_bibliothekar_rebuild_skips_sensitive_files_copied_into_library(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    sensitive_dir = library_dir / "data" / "accounts" / ("a" * 128)
+    sensitive_dir.mkdir(parents=True)
+    safe_marker = "SAFE_LIBRARY_MARKER_E431"
+    sensitive_marker = "SENSITIVE_LIBRARY_MARKER_8B2A"
+    (library_dir / "therapie.txt").write_text(
+        f"Depression Therapie Aktivierung Schlaf {safe_marker}.",
+        encoding="utf-8",
+    )
+    (sensitive_dir / "User_Habbits_and_behave.md").write_text(
+        f"Private Account-Notiz darf nie in den Bibliothekar-Index: {sensitive_marker}",
+        encoding="utf-8",
+    )
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    chunks_text = store.chunks_path.read_text(encoding="utf-8")
+    index_text = json.dumps(index, ensure_ascii=False, sort_keys=True)
+    selection = store.select("Therapie Private", max_chunks=3)
+
+    assert index["chunk_count"] == 1
+    assert safe_marker in chunks_text
+    assert sensitive_marker not in chunks_text
+    assert sensitive_marker not in index_text
+    assert sensitive_marker not in selection.prompt_text
+    assert "data/accounts" not in chunks_text
+    assert "User_Habbits_and_behave.md" not in index_text
+
+
 def test_haystack_backend_search_falls_back_to_local_store_when_qdrant_is_down(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
