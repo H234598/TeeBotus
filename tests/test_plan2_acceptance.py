@@ -686,6 +686,18 @@ def test_runtime_status_broken_lines_flags_generic_secret_assignments() -> None:
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()[1:]
 
 
+def test_runtime_status_broken_lines_flags_url_credentials() -> None:
+    output = "\n".join(
+        [
+            "signal_service=Demo/signal:1 target=https://user:plain-password@signal.example:8080 status=reachable",
+            "llm=Demo/telegram:1 provider=litellm model=x status=configured base_url=http://127.0.0.1:11434 api_key=configured",
+            "matrix_homeserver=Demo/matrix:1 target=bot:matrix-password@matrix.example:443 status=reachable",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[0], output.splitlines()[2]]
+
+
 def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> None:
     output = "\n".join(
         [

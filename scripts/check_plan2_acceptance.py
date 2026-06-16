@@ -59,6 +59,10 @@ RUNTIME_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
     r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)",
     re.IGNORECASE,
 )
+RUNTIME_STATUS_URL_CREDENTIAL_RE = re.compile(
+    r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
+    re.IGNORECASE,
+)
 SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset({"configured", "none", "<redacted>", "redacted", "missing"})
 
 
@@ -684,6 +688,8 @@ def _runtime_status_line_is_broken(line: str) -> bool:
 
 def _runtime_status_line_contains_secret(line: str) -> bool:
     if any(pattern.search(line) for pattern in RUNTIME_STATUS_SECRET_PATTERNS):
+        return True
+    if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(line):
         return True
     for match in RUNTIME_STATUS_SECRET_ASSIGNMENT_RE.finditer(line):
         value = str(match.group(2) or "").strip().casefold()
