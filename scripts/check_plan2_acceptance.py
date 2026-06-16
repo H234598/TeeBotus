@@ -160,7 +160,6 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_mcp_tools.py",
     "tests/test_readme_plan2_docs.py",
     "tests/test_secret_hygiene.py",
-    "tests/test_legacy_user_memory_import.py",
     "tests/test_benchmarks_runner.py",
     "tests/test_ci_workflow.py",
     "tests/test_memory_store_benchmark.py",
@@ -169,6 +168,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_youtube_parser_stats.py",
     "tests/test_youtube_parser_misses_report.py",
 )
+LEGACY_IMPORT_TEST_PATTERNS: tuple[str, ...] = ("tests/test_legacy_user_memory_import.py",)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -185,6 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--legacy-rehearsal-output", default=str(DEFAULT_LEGACY_REHEARSAL_MD), help="Markdown legacy import rehearsal output path.")
     parser.add_argument("--legacy-rehearsal-json-output", default=str(DEFAULT_LEGACY_REHEARSAL_JSON), help="JSON legacy import rehearsal output path.")
     parser.add_argument("--legacy-rehearsal-copy-dir", default=str(DEFAULT_LEGACY_REHEARSAL_COPY_DIR), help="Temporary copied instances directory for legacy import rehearsal.")
+    parser.add_argument("--include-legacy-import-tests", action="store_true", help="Include legacy user-memory import unit tests in the Plan2 pytest command.")
     parser.add_argument("--entries", type=int, default=2, help="Synthetic benchmark entries.")
     parser.add_argument("--iterations", type=int, default=1, help="Quick benchmark iterations.")
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
@@ -218,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_adapter_deps=args.skip_adapter_deps,
         include_audit=args.include_audit,
         include_qdrant_live=args.include_qdrant_live,
+        include_legacy_import_tests=args.include_legacy_import_tests,
     )
     if args.list or args.dry_run:
         for command in commands:
@@ -248,6 +250,7 @@ def build_acceptance_commands(
     skip_adapter_deps: bool = False,
     include_audit: bool = False,
     include_qdrant_live: bool = False,
+    include_legacy_import_tests: bool = False,
 ) -> list[AcceptanceCommand]:
     commands = [
         AcceptanceCommand("version", (python, "-m", "TeeBotus", "--version")),
@@ -271,7 +274,15 @@ def build_acceptance_commands(
     commands.append(
         AcceptanceCommand(
             "plan2-pytest",
-            (python, "-m", "pytest", "-q", *_expand_test_patterns(PLAN2_TEST_PATTERNS)),
+            (
+                python,
+                "-m",
+                "pytest",
+                "-q",
+                *_expand_test_patterns(
+                    _plan2_test_patterns(include_legacy_import_tests=include_legacy_import_tests)
+                ),
+            ),
         )
     )
     if legacy_instances_dir is not None:
@@ -372,6 +383,12 @@ def build_acceptance_commands(
         else:
             commands.append(AcceptanceCommand("pip-audit-missing", (python, "-c", "print('pip-audit not installed; skipped')"), nonfatal=True))
     return commands
+
+
+def _plan2_test_patterns(*, include_legacy_import_tests: bool = False) -> tuple[str, ...]:
+    if not include_legacy_import_tests:
+        return PLAN2_TEST_PATTERNS
+    return (*PLAN2_TEST_PATTERNS, *LEGACY_IMPORT_TEST_PATTERNS)
 
 
 def _legacy_memory_acceptance_commands(

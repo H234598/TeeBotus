@@ -228,6 +228,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert pytest_args[:3] == ("python-test", "-m", "pytest")
     assert pytest_args[3] == "-q"
     assert set(pytest_args[4:]) == set(expected_plan2_tests)
+    assert "tests/test_legacy_user_memory_import.py" not in pytest_args
     assert "tests/test_account_memory_migration.py" in pytest_args
     assert "tests/test_proactive_backends.py" in pytest_args
     assert "tests/test_proactive_cli.py" in pytest_args
@@ -258,6 +259,18 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "memory-recovery-legacy-json" not in by_label
     assert "legacy-import-preflight" not in by_label
     assert any(command.label.startswith("pip-audit") and command.nonfatal for command in commands)
+
+
+def test_plan2_acceptance_legacy_import_tests_are_explicit_opt_in(tmp_path: Path) -> None:
+    commands = check_plan2_acceptance.build_acceptance_commands(
+        python="python-test",
+        benchmark_output=tmp_path / "bench.md",
+        benchmark_json_output=tmp_path / "bench.json",
+        include_legacy_import_tests=True,
+    )
+    by_label = {command.label: command for command in commands}
+
+    assert "tests/test_legacy_user_memory_import.py" in by_label["plan2-pytest"].argv
 
 
 def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
@@ -292,6 +305,7 @@ def test_plan2_acceptance_dry_run_alias_lists_without_executing(monkeypatch, cap
     assert result == 0
     assert "version:" in output
     assert "plan2-pytest:" in output
+    assert "tests/test_legacy_user_memory_import.py" not in output
     assert "runtime-status" not in output
     assert "adapter-deps" not in output
 

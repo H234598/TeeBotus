@@ -253,7 +253,7 @@ Plan2-Akzeptanztests:
 python3 scripts/check_plan2_acceptance.py
 ```
 
-Der Runner startet keine Bot-Loops und ruft bewusst nicht `python3 -m TeeBotus --all` auf. Er prueft Version, Runtime-Status, die Plan2-Testgruppen, Bibliothekar-Fixtures, Quick-Benchmarks und Adapter-Abhaengigkeiten. Zum reinen Anzeigen der Kommandos:
+Der Runner startet keine Bot-Loops und ruft bewusst nicht `python3 -m TeeBotus --all` auf. Er prueft Version, Runtime-Status, die Plan2-Testgruppen, Bibliothekar-Fixtures, Quick-Benchmarks und Adapter-Abhaengigkeiten. Legacy-Import-Unit-Tests laufen nicht im Standardpfad; sie sind nur mit `--include-legacy-import-tests` explizit aktiv. Zum reinen Anzeigen der Kommandos:
 
 ```bash
 python3 scripts/check_plan2_acceptance.py --list
