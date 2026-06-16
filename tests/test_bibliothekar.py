@@ -426,7 +426,7 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
     selection = backend.search(
         BibliothekarQuery(
             text="System Therapie",
-            filters={"topics": ["python"], "file": "technik.txt"},
+            filters={"topics": ["python"], "relative_path": "technik.txt"},
             max_chunks=3,
         )
     )
@@ -437,8 +437,47 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
         "conditions": [
             {"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]},
             {"field": "meta.topics", "operator": "in", "value": ["python"]},
+            {"field": "meta.relative_path", "operator": "in", "value": ["technik.txt"]},
         ],
     }
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "therapie.txt" not in selection.prompt_text
+
+
+def test_haystack_backend_keeps_partial_file_filters_via_local_fallback(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = EmptyFilteredDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+    document_store.filtered_calls = 0
+    document_store.unfiltered_calls = 0
+
+    selection = backend.search(
+        BibliothekarQuery(
+            text="System Therapie",
+            filters={"file": "technik"},
+            max_chunks=3,
+        )
+    )
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filter_calls[-2]["filters"] == {
+        "operator": "AND",
+        "conditions": [
+            {"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]},
+            {"field": "meta.relative_path", "operator": "in", "value": ["technik"]},
+        ],
+    }
+    assert document_store.filtered_calls >= 1
+    assert document_store.unfiltered_calls >= 1
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "therapie.txt" not in selection.prompt_text
 
