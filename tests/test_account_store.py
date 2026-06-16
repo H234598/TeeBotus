@@ -336,6 +336,19 @@ def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelo
         second.read_memory_index(account_id)
 
 
+def test_encrypted_vault_refuses_to_overwrite_existing_payload_with_wrong_secret(tmp_path):
+    first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = first.resolve_or_create_account(telegram_identity_key(77), display_label="Ada")
+    profile_path = first.account_dir(account_id) / "Account_Profile.json"
+
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError, match="encrypted envelope authentication failed"):
+        second.vault.write_json(profile_path, {"account_id": account_id, "status": "overwritten"})
+
+    assert first._read_account_profile(account_id)["status"] == "active"
+
+
 def test_account_tombstone_is_encrypted_after_merge(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(10))
@@ -654,6 +667,33 @@ def test_account_store_sqlite_backend_stores_memory_outside_json_files(tmp_path,
     assert not (account_dir / "User_Memory_Index.json").exists()
     raw_db = sqlite_path.read_bytes()
     assert b"Mond SQLite geheim" not in raw_db
+
+
+def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    account_id = "a" * 128
+    first = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    first.write_entries(account_id, [{"id": "mem_keep", "user_text": "nicht loeschen"}])
+    first.write_index(account_id, {"index": {"entries": {"mem_keep": {"kind": "observation"}}}})
+    second = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing destructive write"):
+        second.write_entries(account_id, [{"id": "mem_new", "user_text": "falscher schluessel"}])
+    with pytest.raises(AccountStoreError, match="refusing destructive write"):
+        second.write_index(account_id, {"index": {"entries": {"mem_new": {}}}})
+
+    assert first.read_entries(account_id) == [{"id": "mem_keep", "user_text": "nicht loeschen"}]
+    assert first.read_index(account_id)["index"]["entries"] == {"mem_keep": {"kind": "observation"}}
 
 
 def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_path, monkeypatch, caplog):

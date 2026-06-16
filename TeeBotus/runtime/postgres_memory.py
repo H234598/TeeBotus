@@ -108,6 +108,7 @@ class PostgresAccountMemoryBackend:
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
         with self._connect() as connection:
             with connection.transaction():
+                self._guard_existing_account_payloads_decryptable(connection, account_id)
                 connection.execute(
                     "DELETE FROM teebotus_memory_keywords WHERE instance_name = %s AND account_id = %s",
                     (self.instance_name, account_id),
@@ -150,6 +151,7 @@ class PostgresAccountMemoryBackend:
         nonce, ciphertext = self._encrypt_json(account_id, "index", dict(data))
         with self._connect() as connection:
             with connection.transaction():
+                self._guard_existing_account_payloads_decryptable(connection, account_id)
                 connection.execute(
                     """
                     INSERT INTO teebotus_memory_indexes
@@ -161,6 +163,23 @@ class PostgresAccountMemoryBackend:
                                   updated_at = EXCLUDED.updated_at
                     """,
                     (self.instance_name, account_id, nonce, ciphertext, utc_now()),
+                )
+
+    def clear_account_unchecked(self, account_id: str) -> None:
+        self._ensure_schema()
+        with self._connect() as connection:
+            with connection.transaction():
+                connection.execute(
+                    "DELETE FROM teebotus_memory_keywords WHERE instance_name = %s AND account_id = %s",
+                    (self.instance_name, account_id),
+                )
+                connection.execute(
+                    "DELETE FROM teebotus_memory_entries WHERE instance_name = %s AND account_id = %s",
+                    (self.instance_name, account_id),
+                )
+                connection.execute(
+                    "DELETE FROM teebotus_memory_indexes WHERE instance_name = %s AND account_id = %s",
+                    (self.instance_name, account_id),
                 )
 
     def _connect(self) -> Any:
@@ -268,6 +287,40 @@ class PostgresAccountMemoryBackend:
                     """,
                     [(self.instance_name, account_id, str(keyword), memory_id) for keyword in keywords if str(keyword or "").strip()],
                 )
+
+    def _guard_existing_account_payloads_decryptable(self, connection: Any, account_id: str) -> None:
+        entry_rows = connection.execute(
+            """
+            SELECT memory_id, payload_nonce, payload_ciphertext
+            FROM teebotus_memory_entries
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (self.instance_name, account_id),
+        ).fetchall()
+        for row in entry_rows:
+            memory_id = str(row[0])
+            try:
+                self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2]))
+            except AccountStoreError as exc:
+                raise AccountStoreError(
+                    "existing PostgreSQL account memory entries are not decryptable with the current key; refusing destructive write"
+                ) from exc
+        index_row = connection.execute(
+            """
+            SELECT payload_nonce, payload_ciphertext
+            FROM teebotus_memory_indexes
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (self.instance_name, account_id),
+        ).fetchone()
+        if index_row is None:
+            return
+        try:
+            self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+        except AccountStoreError as exc:
+            raise AccountStoreError(
+                "existing PostgreSQL account memory index is not decryptable with the current key; refusing destructive write"
+            ) from exc
 
     def _encrypt_json(self, account_id: str, memory_id: str, payload: dict[str, Any]) -> tuple[bytes, bytes]:
         import json

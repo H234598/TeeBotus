@@ -224,15 +224,21 @@ def test_legacy_user_memory_import_pre_resets_when_account_profile_is_unreadable
     good_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
     unreadable_profile_account = good_store.resolve_or_create_account(telegram_identity_key("395935293"))
     bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
-    bad_store._write_account_profile(
-        unreadable_profile_account,
-        {
-            "schema_version": 2,
-            "instance": "Depressionsbot",
-            "account_id": unreadable_profile_account,
-            "status": "active",
-            "linked_identities": [telegram_identity_key("395935293")],
-        },
+    profile_path = bad_store.account_dir(unreadable_profile_account) / "Account_Profile.json"
+    profile_path.write_bytes(
+        bad_store.vault.encrypt(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "instance": "Depressionsbot",
+                    "account_id": unreadable_profile_account,
+                    "status": "active",
+                    "linked_identities": [telegram_identity_key("395935293")],
+                },
+                sort_keys=True,
+            ).encode("utf-8"),
+            kind="Account_Profile.json",
+        )
     )
 
     stats = import_legacy_user_memory(

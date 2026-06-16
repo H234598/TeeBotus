@@ -112,6 +112,7 @@ class SQLiteAccountMemoryBackend:
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
         with self._connect() as connection:
             with connection:
+                self._guard_existing_account_payloads_decryptable(connection, account_id)
                 connection.execute(
                     "DELETE FROM memory_keywords WHERE instance_name = ? AND account_id = ?",
                     (self.instance_name, account_id),
@@ -154,6 +155,7 @@ class SQLiteAccountMemoryBackend:
         nonce, ciphertext = self._encrypt_json(account_id, "index", dict(data))
         with self._connect() as connection:
             with connection:
+                self._guard_existing_account_payloads_decryptable(connection, account_id)
                 connection.execute(
                     """
                     INSERT INTO memory_indexes(instance_name, account_id, payload_nonce, payload_ciphertext, updated_at)
@@ -164,6 +166,23 @@ class SQLiteAccountMemoryBackend:
                                   updated_at = excluded.updated_at
                     """,
                     (self.instance_name, account_id, nonce, ciphertext, utc_now()),
+                )
+
+    def clear_account_unchecked(self, account_id: str) -> None:
+        self._ensure_schema()
+        with self._connect() as connection:
+            with connection:
+                connection.execute(
+                    "DELETE FROM memory_keywords WHERE instance_name = ? AND account_id = ?",
+                    (self.instance_name, account_id),
+                )
+                connection.execute(
+                    "DELETE FROM memory_entries WHERE instance_name = ? AND account_id = ?",
+                    (self.instance_name, account_id),
+                )
+                connection.execute(
+                    "DELETE FROM memory_indexes WHERE instance_name = ? AND account_id = ?",
+                    (self.instance_name, account_id),
                 )
 
     def _connect(self) -> sqlite3.Connection:
@@ -258,6 +277,40 @@ class SQLiteAccountMemoryBackend:
                 """,
                 [(self.instance_name, account_id, str(keyword), memory_id) for keyword in keywords if str(keyword or "").strip()],
             )
+
+    def _guard_existing_account_payloads_decryptable(self, connection: sqlite3.Connection, account_id: str) -> None:
+        entry_rows = connection.execute(
+            """
+            SELECT memory_id, payload_nonce, payload_ciphertext
+            FROM memory_entries
+            WHERE instance_name = ? AND account_id = ?
+            """,
+            (self.instance_name, account_id),
+        ).fetchall()
+        for row in entry_rows:
+            memory_id = str(row[0])
+            try:
+                self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2]))
+            except AccountStoreError as exc:
+                raise AccountStoreError(
+                    "existing SQLite account memory entries are not decryptable with the current key; refusing destructive write"
+                ) from exc
+        index_row = connection.execute(
+            """
+            SELECT payload_nonce, payload_ciphertext
+            FROM memory_indexes
+            WHERE instance_name = ? AND account_id = ?
+            """,
+            (self.instance_name, account_id),
+        ).fetchone()
+        if index_row is None:
+            return
+        try:
+            self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+        except AccountStoreError as exc:
+            raise AccountStoreError(
+                "existing SQLite account memory index is not decryptable with the current key; refusing destructive write"
+            ) from exc
 
     def _encrypt_json(self, account_id: str, memory_id: str, payload: dict[str, Any]) -> tuple[bytes, bytes]:
         nonce = os.urandom(12)

@@ -307,6 +307,8 @@ def import_legacy_user_memory(
             continue
         if backup_current:
             stats.backups_created += _backup_sqlite_files(target_root)
+        if target_unreadable and replace_unreadable:
+            _clear_unreadable_account_memory(target_store, account_id)
         target_store.write_memory_entries(account_id, merged_entries)
         target_store.rebuild_structured_memory_index(account_id)
         health = target_store.check_structured_memory_index(account_id)
@@ -651,6 +653,18 @@ def _backup_sqlite_files(accounts_root: Path) -> int:
             shutil.copy2(path, backup_dir / path.name)
             copied += 1
     return copied
+
+
+def _clear_unreadable_account_memory(store: AccountStore, account_id: str) -> None:
+    backend = store.account_memory_backend
+    if backend is not None:
+        clear = getattr(backend, "clear_account_unchecked", None)
+        if not callable(clear):
+            raise AccountStoreError(f"{type(backend).__name__} cannot replace unreadable account memory")
+        clear(account_id)
+        return
+    for filename in (USER_MEMORY_ENTRIES_FILENAME, USER_MEMORY_INDEX_FILENAME):
+        (store.account_dir(account_id) / filename).unlink(missing_ok=True)
 
 
 def _reset_unreadable_account_store(accounts_root: Path) -> int:

@@ -493,6 +493,7 @@ class EncryptedJsonVault:
         return self.decrypt(raw, kind=path.name).decode("utf-8")
 
     def write_text(self, path: Path, text: str) -> None:
+        self._guard_existing_payload_decryptable(path)
         _atomic_write_bytes(path, self.encrypt(str(text or "").encode("utf-8"), kind=path.name))
 
     def read_json(self, path: Path, default: dict[str, Any]) -> dict[str, Any]:
@@ -574,6 +575,15 @@ class EncryptedJsonVault:
 
     def _aad(self, kind: str) -> bytes:
         return f"TeeBotus:{self.instance_name}:{self.purpose}:{kind}:v{MAPPING_VERSION}".encode("utf-8")
+
+    def _guard_existing_payload_decryptable(self, path: Path) -> None:
+        try:
+            raw = path.read_bytes()
+        except FileNotFoundError:
+            return
+        if not raw.strip() or not _is_any_teebotus_encrypted_payload(raw):
+            return
+        self.decrypt(raw, kind=path.name)
 
 
 @dataclass

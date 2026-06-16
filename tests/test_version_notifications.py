@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -223,9 +224,13 @@ def test_account_memory_index_health_uses_database_when_profile_envelope_is_stal
         secret_provider=StaticSecretProvider(b"y" * 32),
         create_dirs=False,
     )
-    stale_profile_store._write_account_profile(
-        account_id,
-        {"schema_version": 1, "instance": "Demo", "account_id": account_id, "status": "active"},
+    profile_path = stale_profile_store.account_dir(account_id) / "Account_Profile.json"
+    stale_profile = {"schema_version": 1, "instance": "Demo", "account_id": account_id, "status": "active"}
+    profile_path.write_bytes(
+        stale_profile_store.vault.encrypt(
+            json.dumps(stale_profile, sort_keys=True).encode("utf-8"),
+            kind="Account_Profile.json",
+        )
     )
 
     lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)

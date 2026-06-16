@@ -56,6 +56,21 @@ class WarningFallbackAccountMemoryBackend:
             self._dirty_indexes,
         )
 
+    def clear_account_unchecked(self, account_id: str) -> None:
+        for backend in (self.primary, self.fallback):
+            clear = getattr(backend, "clear_account_unchecked", None)
+            if not callable(clear):
+                raise AttributeError(f"{type(backend).__name__} has no clear_account_unchecked")
+            clear(account_id)
+        self._dirty_entries.discard(account_id)
+        self._dirty_indexes.discard(account_id)
+        self._stale_fallback_entries.discard(account_id)
+        self._stale_fallback_indexes.discard(account_id)
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
+        self.last_index_read_error = ""
+        self.last_fallback_sync_error = ""
+
     def _read(self, operation: str, account_id: str, callback: Callable[[Any], Any], sync_callback: Callable[[str], Any]) -> Any:
         try:
             if self._account_is_dirty(operation, account_id):
