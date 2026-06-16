@@ -403,6 +403,22 @@ def test_runtime_text_client_direct_provider_filters_remote_fallback_without_exp
     )
 
 
+def test_runtime_text_client_uses_instruction_provider_and_model_without_runtime_overrides() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(
+            llm_provider="litellm",
+            llm_model="ollama_chat/qwen2.5:7b",
+            llm_fallback_models=("groq/llama-3.3-70b-versatile", "ollama_chat/llama3.1:8b"),
+        ),
+        openai_client=None,
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "ollama_chat/qwen2.5:7b"
+    assert client.fallback_models == ("ollama_chat/llama3.1:8b",)
+
+
 def test_runtime_text_client_generic_litellm_blocks_ambiguous_unprefixed_fallbacks() -> None:
     blocked = build_runtime_text_llm_client(
         instructions=BotInstructions(),
