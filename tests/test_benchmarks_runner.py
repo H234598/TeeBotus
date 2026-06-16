@@ -247,6 +247,45 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
 
+def test_stable_backend_ranking_excludes_erroring_candidates() -> None:
+    ranking = benchmark_module._stable_backend_ranking(
+        category="account_memory",
+        names={"memory_jsonl", "memory_sqlite_projection"},
+        results=[
+            {
+                "name": "memory_jsonl",
+                "category": "account_memory",
+                "ok": True,
+                "skipped": False,
+                "mode": "local",
+                "throughput_ops_s": 100000.0,
+                "total_ms": 0.01,
+                "errors": 1,
+                "payload_bytes": 100,
+                "index_bytes": 100,
+                "note": "fast but invalid",
+            },
+            {
+                "name": "memory_sqlite_projection",
+                "category": "account_memory",
+                "ok": True,
+                "skipped": False,
+                "mode": "local",
+                "throughput_ops_s": 10.0,
+                "total_ms": 10.0,
+                "errors": 0,
+                "payload_bytes": 100,
+                "index_bytes": 100,
+                "note": "stable",
+            },
+        ],
+    )
+
+    assert ranking is not None
+    assert ranking["fastest_stable"] == "memory_sqlite_projection"
+    assert [candidate["name"] for candidate in ranking["candidates"]] == ["memory_sqlite_projection"]
+
+
 def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     markdown_path = tmp_path / "benchmarks.md"
     json_path = tmp_path / "benchmarks.json"

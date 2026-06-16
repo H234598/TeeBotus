@@ -484,7 +484,12 @@ def _stable_backend_ranking(*, category: str, results: list[BenchmarkResult], na
     candidates = [
         result
         for result in results
-        if result.get("name") in names and result.get("category") == category and result.get("ok") and not result.get("skipped")
+        if result.get("name") in names
+        and result.get("category") == category
+        and result.get("ok")
+        and not result.get("skipped")
+        and _is_nonnegative_integer(result.get("errors"))
+        and int(result.get("errors") or 0) == 0
     ]
     skipped = [
         {
