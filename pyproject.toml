@@ -42,6 +42,7 @@ teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
 teebotus-proactive = "TeeBotus.proactive:main"
 teebotus-proactive-review = "TeeBotus.proactive_review:main"
 teebotus-proactive-systemd = "TeeBotus.proactive_systemd:main"
+teebotus-qdrant-systemd = "TeeBotus.qdrant_systemd:main"
 
 [tool.setuptools.packages.find]
 include = ["TeeBotus*"]

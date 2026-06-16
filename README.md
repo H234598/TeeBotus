@@ -501,8 +501,14 @@ Haystack/Qdrant optional:
 ```bash
 python3 -m pip install '.[rag]'
 qdrant --host 127.0.0.1 --port 6333
+teebotus-qdrant-systemd --print
+teebotus-qdrant-systemd --enable
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
 ```
+
+`teebotus-qdrant-systemd` erzeugt eine User-systemd-Unit fuer Podman, bindet Qdrant
+nur an `127.0.0.1:6333`, nutzt das Volume `teebotus-qdrant:/qdrant/storage` und
+verwendet einen gepinnten `qdrant/qdrant`-Image-Tag statt `latest`.
 
 Pydantic-AI/LangGraph optional. Pydantic-Schemas werden nur fuer strukturierte Subtasks genutzt, darunter `IntentDecision`, `MemoryCandidate`, `ReminderDecision`, `BibliothekarQueryDecision` und `ProactiveToolCallDecision`; Slash-Commands bleiben klassische Parser.
 

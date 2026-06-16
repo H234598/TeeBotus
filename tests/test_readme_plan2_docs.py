@@ -23,6 +23,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "memory-recovery --instances-dir instances --instances <Instanz>" in text
     assert "## Bibliothekar, Haystack und LangGraph" in text
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
+    assert "teebotus-qdrant-systemd" in text
+    assert "gepinnten `qdrant/qdrant`-Image-Tag statt `latest`" in text
     assert "Normale Chatantworten" in text
     assert "--category" in text
     assert "dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend" in text

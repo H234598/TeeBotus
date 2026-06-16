@@ -61,6 +61,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar_plan2.py" in by_label["plan2-pytest"].argv
     assert "tests/test_pyproject_metadata.py" in by_label["plan2-pytest"].argv
+    assert "tests/test_qdrant_systemd.py" in by_label["plan2-pytest"].argv
     assert "tests/test_reminder_intent.py" in by_label["plan2-pytest"].argv
     assert "tests/test_graphs_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_youtube_parser_stats.py" in by_label["plan2-pytest"].argv

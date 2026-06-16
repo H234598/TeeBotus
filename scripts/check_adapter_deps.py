@@ -156,6 +156,7 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
         "teebotus-proactive",
         "teebotus-proactive-review",
         "teebotus-proactive-systemd",
+        "teebotus-qdrant-systemd",
     }
     missing_scripts = sorted(expected_scripts - set(scripts))
     if missing_scripts:
