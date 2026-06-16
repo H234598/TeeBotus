@@ -49,6 +49,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "--adapter-deps-python-only" in text
     assert "native `signal-cli` Checks" in text
     assert "bleiben." in text
+    assert "nicht mit `--skip-adapter-deps`" in text
     assert "teebotus-systemd" in text
     assert "NoNewPrivileges=true" in text
     assert "PrivateTmp=true" in text

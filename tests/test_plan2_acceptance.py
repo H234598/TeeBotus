@@ -322,6 +322,32 @@ def test_plan2_acceptance_can_run_adapter_deps_python_only(tmp_path: Path) -> No
     assert by_label["adapter-deps"].argv == ("python-test", "scripts/check_adapter_deps.py", "--python-only")
 
 
+def test_plan2_acceptance_rejects_conflicting_adapter_deps_flags(tmp_path: Path) -> None:
+    try:
+        check_plan2_acceptance.build_acceptance_commands(
+            python="python-test",
+            benchmark_output=tmp_path / "bench.md",
+            benchmark_json_output=tmp_path / "bench.json",
+            skip_adapter_deps=True,
+            adapter_deps_python_only=True,
+        )
+    except ValueError as exc:
+        assert "adapter_deps_python_only cannot be combined with skip_adapter_deps" in str(exc)
+    else:
+        raise AssertionError("conflicting adapter dependency flags were accepted")
+
+
+def test_plan2_acceptance_cli_rejects_conflicting_adapter_deps_flags(capsys) -> None:
+    try:
+        check_plan2_acceptance.main(["--skip-adapter-deps", "--adapter-deps-python-only", "--dry-run"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("conflicting adapter dependency CLI flags were accepted")
+
+    assert "cannot be combined" in capsys.readouterr().err
+
+
 def test_plan2_acceptance_dry_run_alias_lists_without_executing(monkeypatch, capsys) -> None:
     def fail_if_executed(_commands):  # noqa: ANN001
         raise AssertionError("--dry-run must not execute acceptance commands")

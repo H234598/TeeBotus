@@ -206,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--list", action="store_true", help="Print commands without executing them.")
     parser.add_argument("--dry-run", action="store_true", help="Alias for --list; print commands without executing them.")
     args = parser.parse_args(argv)
+    if args.skip_adapter_deps and args.adapter_deps_python_only:
+        parser.error("--adapter-deps-python-only cannot be combined with --skip-adapter-deps")
 
     commands = build_acceptance_commands(
         python=args.python,
@@ -261,6 +263,8 @@ def build_acceptance_commands(
     include_qdrant_live: bool = False,
     include_legacy_import_tests: bool = False,
 ) -> list[AcceptanceCommand]:
+    if skip_adapter_deps and adapter_deps_python_only:
+        raise ValueError("adapter_deps_python_only cannot be combined with skip_adapter_deps")
     commands = [
         AcceptanceCommand("version", (python, "-m", "TeeBotus", "--version")),
     ]
