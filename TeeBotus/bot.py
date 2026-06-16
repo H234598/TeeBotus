@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import sys
 import types
 from collections.abc import Sequence
@@ -123,13 +124,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "reachable" if health.ok else "unreachable"
         if health.ok:
             models = ",".join(health.models) if health.models else "<none>"
-            print(f"ollama={health.target} status={state} models={models}")
+            print(f"ollama={_sanitize_status_url(health.target)} status={state} models={_sanitize_status_text(models)}")
         else:
-            print(f"ollama={health.target} status={state} error={health.error}")
+            print(f"ollama={_sanitize_status_url(health.target)} status={state} error={_sanitize_status_text(health.error)}")
     for health in check_signal_services(config):
         state = "reachable" if health.ok else "unreachable"
-        detail = "" if health.ok else f" error={health.error}"
-        print(f"signal_service={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
+        detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
+        print(f"signal_service={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
     for health in check_signal_accounts(config):
         if health.registered:
             state = "registered"
@@ -137,32 +138,32 @@ def _runtime_status(argv: Sequence[str]) -> int:
             state = "missing"
         else:
             state = "unavailable"
-        detail = "" if health.ok else f" error={health.error}"
+        detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
         print(
             f"signal_account={health.account.instance_name}/{health.account.label} "
-            f"phone={health.account.signal_phone_number} target={health.target} status={state}{detail}"
+            f"phone={health.account.signal_phone_number} target={_sanitize_status_url(health.target)} status={state}{detail}"
         )
     for health in check_matrix_homeservers(config):
         state = "reachable" if health.ok else "unreachable"
-        detail = "" if health.ok else f" error={health.error}"
-        print(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={health.target} status={state}{detail}")
+        detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
+        print(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"local_transcription={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            print(f"local_transcription={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
         health = check_local_transcription_backend(instance.instance_name, instructions)
         if health is None:
             continue
         state = "ready" if health.ok else "unavailable"
-        detail = f" engine={health.engine}" if health.ok else f" error={health.error}"
+        detail = f" engine={_sanitize_status_text(health.engine)}" if health.ok else f" error={_sanitize_status_text(health.error)}"
         print(f"local_transcription={health.instance_name} backend={health.backend} model={health.model} status={state}{detail}")
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"bibliothekar={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            print(f"bibliothekar={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
         health = check_bibliothekar_service(instance.instance_name, config.instances_dir, instructions)
         detail = (
@@ -172,13 +173,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
         if health.documents or health.chunks:
             detail += f" documents={health.documents} chunks={health.chunks}"
         if health.error:
-            detail += f" error={health.error}"
+            detail += f" error={_sanitize_status_text(health.error)}"
         print(detail)
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"mcp_tools={instance.instance_name} status=broken error={type(exc).__name__}: {exc}")
+            print(f"mcp_tools={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
         print(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools))
     for instance_name in config.selected_instances:
@@ -234,7 +235,7 @@ def _runtime_status_llm_line(account: Any) -> str:
     if temperature:
         detail += f" temperature={temperature}"
     if route_error:
-        detail += f" error={route_error}"
+        detail += f" error={_sanitize_status_text(route_error)}"
     return detail
 
 
@@ -334,6 +335,22 @@ def _sanitize_status_url(value: object) -> str:
     if parsed.port is not None:
         netloc = f"{netloc}:{parsed.port}"
     return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
+
+
+def _sanitize_status_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
+    text = re.sub(r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b", "xox-<redacted>", text)
+    text = re.sub(r"\bsyt_[A-Za-z0-9_=-]{8,}\b", "syt_<redacted>", text)
+    text = re.sub(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b", "gh_<redacted>", text)
+    text = re.sub(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b", "github_pat_<redacted>", text)
+    text = re.sub(r"\bglpat-[A-Za-z0-9_-]{8,}\b", "glpat-<redacted>", text)
+    text = re.sub(r"\bhf_[A-Za-z0-9]{8,}\b", "hf_<redacted>", text)
+    text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
+    text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
+    return text.replace("\r", " ").replace("\n", " ")
 
 
 def _telegram_args_from_runtime_cli(args: list[str]) -> tuple[list[str] | None, int]:

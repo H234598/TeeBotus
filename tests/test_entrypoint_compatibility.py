@@ -737,6 +737,52 @@ def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) ->
     assert "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused" in captured.out
 
 
+def test_runtime_status_redacts_secret_like_health_errors(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    openai_key = "sk-" + "runtimeStatusLeak123456"
+    matrix_token = "syt_" + "runtimeStatusLeak123456"
+
+    def fake_check_signal_services(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "signal"][0]
+        return (SimpleNamespace(account=account, ok=False, target=f"https://user:{openai_key}@signal.example:8080", error=f"bearer {openai_key} rejected"),)
+
+    def fake_check_signal_accounts(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "signal"][0]
+        return (
+            SimpleNamespace(
+                account=account,
+                ok=False,
+                registered=False,
+                target="127.0.0.1:8080",
+                error=f"account missing with token {matrix_token}",
+            ),
+        )
+
+    def fake_check_matrix_homeservers(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "matrix"][0]
+        return (SimpleNamespace(account=account, ok=False, target="matrix.example:443", error=f"matrix token {matrix_token} rejected"),)
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_accounts", fake_check_signal_accounts)
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", fake_check_matrix_homeservers)
+
+    assert bot.main(["--runtime-status", "--channels", "signal,matrix"]) == 0
+    captured = capsys.readouterr()
+
+    assert openai_key not in captured.out
+    assert matrix_token not in captured.out
+    assert "target=https://signal.example:8080" in captured.out
+    assert "sk-<redacted>" in captured.out
+    assert "syt_<redacted>" in captured.out
+
+
 def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
