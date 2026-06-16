@@ -173,10 +173,19 @@ class HaystackBibliothekarBackend:
     def _chunks_from_document_store(self, document_store: Any, *, filters: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         try:
             documents = document_store.filter_documents(filters=filters) if filters else document_store.filter_documents()
-        except TypeError:
-            documents = document_store.filter_documents(filters=filters or {})
         except AttributeError:
             return []
+        except TypeError:
+            try:
+                documents = document_store.filter_documents(filters=filters or {})
+            except Exception:
+                if not filters:
+                    raise
+                documents = document_store.filter_documents()
+        except Exception:
+            if not filters:
+                raise
+            documents = document_store.filter_documents()
         chunks: list[dict[str, Any]] = []
         for document in documents or []:
             meta = getattr(document, "meta", None)
