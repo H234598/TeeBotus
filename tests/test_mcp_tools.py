@@ -6,6 +6,7 @@ import types
 import pytest
 
 from TeeBotus.instructions import parse_instructions
+from TeeBotus.core.status import mcp_tool_status_lines
 from TeeBotus.mcp_tools import MCPToolError, MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry, resolve_mcp_tool_policies
 from TeeBotus.mcp_tools.fastmcp_server import FASTMCP_READONLY_ALLOWLIST, build_fastmcp_server, fastmcp_available
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -49,6 +50,19 @@ def test_mcp_policy_resolution_is_shared_and_keeps_hard_boundaries() -> None:
     assert policies["codex.exec"].requires_confirmation is True
     assert policies["codex.exec"].sandbox_required is True
     assert "shell.exec" not in policies
+
+
+def test_mcp_status_separates_direct_allowlist_from_guarded_tools() -> None:
+    lines = mcp_tool_status_lines(
+        {
+            "bibliothekar.search": {"enabled": True, "read_only": True},
+            "export.account": {"enabled": True, "read_only": True},
+        }
+    )
+
+    assert "- Read-only allowlist: bibliothekar.search, memory.search (private)" in lines
+    assert "- Nur mit Schutz: export.account (private, confirm, admin)" in lines
+    assert "export.account" not in next(line for line in lines if line.startswith("- Read-only allowlist:"))
 
 
 def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:

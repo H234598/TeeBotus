@@ -127,11 +127,14 @@ def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
 def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
     configured = {str(name or "").strip().casefold(): config for name, config in (mcp_tools or {}).items() if str(name or "").strip()}
     allowed: list[str] = []
+    guarded: list[str] = []
     disabled: list[str] = []
     resolved = resolve_mcp_tool_policies(configured)
     for name, policy in sorted(resolved.items()):
-        if policy.enabled and policy.read_only:
+        if _mcp_policy_directly_callable(policy):
             allowed.append(_mcp_tool_status_label(name, policy))
+        elif policy.enabled and policy.read_only:
+            guarded.append(_mcp_tool_status_label(name, policy))
         elif not policy.enabled:
             disabled.append(name)
         else:
@@ -141,6 +144,8 @@ def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = No
         "MCP Tools",
         f"- Read-only allowlist: {', '.join(allowed) if allowed else 'keine'}",
     ]
+    if guarded:
+        lines.append(f"- Nur mit Schutz: {', '.join(guarded)}")
     if disabled:
         lines.append(f"- Deaktiviert: {', '.join(disabled)}")
     if ignored:
@@ -165,6 +170,10 @@ def _mcp_tool_status_label(name: str, policy: MCPToolPolicy) -> str:
     if policy.sandbox_required:
         suffixes.append("sandbox")
     return f"{name} ({', '.join(suffixes)})" if suffixes else name
+
+
+def _mcp_policy_directly_callable(policy: MCPToolPolicy) -> bool:
+    return policy.enabled and policy.read_only and not policy.requires_confirmation and not policy.requires_admin and not policy.sandbox_required
 
 
 def _status_display_name(instance_name: str) -> str:
