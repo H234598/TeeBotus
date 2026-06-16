@@ -239,6 +239,42 @@ def test_reminder_decision_schema_rejects_invalid_datetime_iso() -> None:
         )
 
 
+def test_reminder_decision_schema_requires_actionable_fields_for_creation() -> None:
+    with pytest.raises(ValidationError, match="text must be non-empty"):
+        parse_reminder_decision(
+            {
+                "should_create": True,
+                "text": "   ",
+                "datetime_iso": "2026-06-16T09:00:00+00:00",
+                "recurrence": None,
+                "confidence": 0.91,
+            }
+        )
+
+    with pytest.raises(ValidationError, match="datetime_iso or recurrence is required"):
+        parse_reminder_decision(
+            {
+                "should_create": True,
+                "text": "Termin",
+                "datetime_iso": None,
+                "recurrence": None,
+                "confidence": 0.91,
+            }
+        )
+
+    skipped = parse_reminder_decision(
+        {
+            "should_create": False,
+            "text": "",
+            "datetime_iso": None,
+            "recurrence": None,
+            "confidence": 0.42,
+        }
+    )
+
+    assert skipped.should_create is False
+
+
 def test_youtube_options_decision_schema_accepts_confidence() -> None:
     decision = YouTubeOptionsDecision.model_validate(
         {
