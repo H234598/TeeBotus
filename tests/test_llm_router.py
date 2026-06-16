@@ -393,6 +393,11 @@ def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -
     class FakeOpenAIClient:
         def __init__(self, api_key: str) -> None:
             captured.append(api_key)
+            self.calls: list[str] = []
+
+        def create_reply(self, _user_text, instructions, _previous_response_id=None):
+            self.calls.append(instructions.openai_model)
+            return object()
 
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
@@ -402,8 +407,31 @@ def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -
         openai_client_factory=FakeOpenAIClient,
     )
 
-    assert isinstance(client, FakeOpenAIClient)
     assert captured == ["profile-openai-key"]
+    client.create_reply("Ping", BotInstructions(openai_model="gpt-ignored"), None)
+    assert client.client.calls == ["gpt-5.5"]
+
+
+def test_runtime_text_client_applies_openai_route_model_to_legacy_client() -> None:
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def create_reply(self, _user_text, instructions, _previous_response_id=None):
+            self.calls.append(instructions.openai_model)
+            return object()
+
+    openai_client = FakeOpenAIClient()
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(openai_model="gpt-legacy"),
+        openai_client=openai_client,
+        purpose="hard_reasoning",
+    )
+
+    client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
+
+    assert client.client is openai_client
+    assert openai_client.calls == ["gpt-5.5"]
 
 
 def test_simple_yaml_fallback_parser_handles_plan2_shape(tmp_path: Path, monkeypatch) -> None:

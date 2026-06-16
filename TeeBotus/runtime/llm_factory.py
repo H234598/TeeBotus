@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
@@ -114,6 +115,8 @@ def _build_route_client(
     if resolved_provider == "openai" and resolved_openai_client is None:
         key = resolved_api_key or default_api_key
         resolved_openai_client = openai_client_factory(key) if key else None
+    if resolved_provider == "openai" and resolved_openai_client is not None:
+        return _OpenAITextModelOverrideClient(resolved_openai_client, route.model)
     resolved_fallback_models = filter_runtime_fallback_models(
         provider=route.provider,
         fallback_models=fallback_models or route.fallback_models,
@@ -161,6 +164,8 @@ def _build_profile_client(
     if resolved_provider == "openai" and resolved_openai_client is None:
         key = resolved_api_key or default_api_key
         resolved_openai_client = openai_client_factory(key) if key else None
+    if resolved_provider == "openai" and resolved_openai_client is not None:
+        return _OpenAITextModelOverrideClient(resolved_openai_client, profile.model)
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
@@ -185,6 +190,17 @@ def _require_profile(profiles: Mapping[str, LLMProfile], profile_name: str) -> L
     if profile_name not in profiles:
         raise KeyError(f"Unknown LLM profile: {profile_name}")
     return profiles[profile_name]
+
+
+class _OpenAITextModelOverrideClient:
+    def __init__(self, client: object, model: str) -> None:
+        self.client = client
+        self.model = str(model or "").strip()
+
+    def create_reply(self, user_text: str, instructions: BotInstructions, previous_response_id: str | None = None) -> Any:
+        create_reply = getattr(self.client, "create_reply")
+        effective_instructions = replace(instructions, openai_model=self.model) if self.model else instructions
+        return create_reply(user_text, effective_instructions, previous_response_id)
 
 
 def _parse_bool(value: bool | str) -> bool:
