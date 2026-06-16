@@ -185,6 +185,8 @@ def test_account_memory_status_quotes_legacy_preflight_command_for_spaced_instan
 
     lines = account_memory_index_health_lines(instance_name="Demo Bot", project_root=project_root)
 
+    recovery_line = next(line for line in lines if line.startswith("account_memory_recovery=Demo Bot "))
+    assert "--instances 'Demo Bot'" in recovery_line
     legacy_line = next(line for line in lines if line.startswith("account_memory_recovery_legacy=Demo Bot "))
     assert "--instance 'Demo Bot'" in legacy_line
     assert "teebotus-legacy-import-preflight-Demo_Bot.json" in legacy_line

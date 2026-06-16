@@ -436,8 +436,20 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             has_broken_memory = True
     if has_broken_memory:
         instances_dir = project_root / "instances"
+        recovery_command = shlex.join(
+            [
+                "python3",
+                "-m",
+                "TeeBotus.admin",
+                "memory-recovery",
+                "--instances-dir",
+                str(instances_dir),
+                "--instances",
+                instance_name,
+            ]
+        )
         lines.append(
-            f'account_memory_recovery={instance_name} status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {instances_dir} --instances {instance_name}"'
+            f'account_memory_recovery={instance_name} status=needed command="{recovery_command}"'
         )
         legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
         if legacy:
