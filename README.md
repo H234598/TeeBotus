@@ -329,6 +329,8 @@ Fuer eine pruefbare Preflight-Akte koennen Markdown und JSON geschrieben werden:
 python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
 ```
 
+Der Preflight-Bericht enthaelt `apply_safety`. Vor einem echten Import muss `apply_allowed_now=true`, `apply_requires_stopped_bot=false` und `running_bot_process_count=0` gelten. Wenn dort laufende Prozesse aufgefuehrt sind, zuerst Bot und Proactive-Jobs stoppen und den Preflight erneut schreiben.
+
 Ein echter Import braucht `--apply`. Wenn aktuelle Account-Metadaten nicht entschluesselbar sind, sichert `--replace-unreadable-account-metadata --apply` den aktiven Account-Store komplett weg: `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json`, `accounts/`, `Account_Memory.sqlite3`, Fallback-SQLite sowie WAL/SHM. Danach werden neue Account-Mappings aus `telegram:user:<id>` erzeugt und die Legacy-Eintraege verschluesselt in den aktuellen AccountStore geschrieben. Vor diesem Schritt muss der Bot gestoppt sein; das Script verweigert `--apply` standardmaessig, wenn `python -m TeeBotus` oder `teebotus-proactive` noch laufen. Danach `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren.
 
 ## Verhalten steuern

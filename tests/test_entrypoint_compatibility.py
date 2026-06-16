@@ -167,7 +167,9 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         "sources=1 entries=2 "
         f"path={tmp_path / 'TeeBotus.bak2' / 'instances.bak'} "
         f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
-        f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable-account-metadata"'
+        f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable-account-metadata '
+        f'--json-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.json"} '
+        f'--markdown-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.md"}"'
     ) in lines
 
 

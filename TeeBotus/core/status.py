@@ -439,11 +439,14 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         )
         legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
         if legacy:
+            legacy_preflight_json = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{instance_name}.json"
+            legacy_preflight_md = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{instance_name}.md"
             lines.append(
                 f'account_memory_recovery_legacy={instance_name} status=available '
                 f'sources={legacy["sources"]} entries={legacy["entries"]} path={legacy["effective_path"]} '
                 f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {legacy["requested_path"]} '
-                f'--target-instances-dir {instances_dir} --instance {instance_name} --replace-unreadable-account-metadata"'
+                f'--target-instances-dir {instances_dir} --instance {instance_name} --replace-unreadable-account-metadata '
+                f'--json-output {legacy_preflight_json} --markdown-output {legacy_preflight_md}"'
             )
     return lines
 
