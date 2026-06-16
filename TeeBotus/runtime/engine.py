@@ -1569,6 +1569,8 @@ def _append_account_memory_interaction(
     if not user_text and not bot_text:
         return
     candidate = _memory_candidate_decision(user_text, bot_text, structured_decision_runner=structured_decision_runner)
+    if structured_decision_runner is not None and candidate is None:
+        return
     if candidate is not None:
         if not candidate.should_store or candidate.memory_type == "none" or candidate.confidence < 0.7 or candidate.sensitivity == "high":
             return

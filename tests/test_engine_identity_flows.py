@@ -1497,6 +1497,38 @@ def test_engine_structured_memory_candidate_can_skip_memory_write(tmp_path):
     assert account_store.read_memory_entries(account_id) == []
 
 
+def test_engine_structured_memory_candidate_invalid_payload_blocks_legacy_auto_write(tmp_path):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Ich wuerde ohne strukturiertes Gate etwas speichern.", "resp-memory-invalid", None)
+
+    def structured_runner(_prompt, schema):
+        if schema.__name__ == "ReminderDecision":
+            return {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
+        return {
+            "should_store": True,
+            "memory_type": "unsupported_private_blob",
+            "text": "Soll nicht in den Legacy-Pfad fallen.",
+            "sensitivity": "low",
+            "confidence": 0.95,
+        }
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-memory-invalid")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
+        openai_client=FakeOpenAIClient(),
+        structured_decision_runner=structured_runner,
+    )
+
+    engine.process(event(identity, "Das ist eine unklare Memory-Aussage.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id) == []
+
+
 def test_engine_structured_memory_candidate_blocks_high_sensitivity_auto_write(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):
