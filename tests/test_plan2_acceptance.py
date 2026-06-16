@@ -223,6 +223,8 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
             json.dumps(
                 {
                     "schema_version": 1,
+                    "quick": True,
+                    "include_live": False,
                     "ok": True,
                     "results": [
                         {
@@ -361,6 +363,8 @@ def test_systemd_unit_validation_flags_public_or_unchecked_units() -> None:
 def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
     payload = {
         "schema_version": 1,
+        "quick": True,
+        "include_live": False,
         "ok": True,
         "results": [
             {
@@ -387,6 +391,8 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
 def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> None:
     payload = {
         "schema_version": 1,
+        "quick": True,
+        "include_live": False,
         "ok": True,
         "results": [
             {
@@ -414,6 +420,8 @@ def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> No
 def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:
     payload = {
         "schema_version": 1,
+        "quick": True,
+        "include_live": False,
         "ok": True,
         "results": [
             {
@@ -436,6 +444,40 @@ def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> No
     assert any("results[0] total_ms must be a non-negative number" in error for error in errors)
     assert any("results[0] payload_bytes must be a non-negative number" in error for error in errors)
     assert any("results[0] errors must be a non-negative integer" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifacts() -> None:
+    payload = {
+        "schema_version": 1,
+        "quick": False,
+        "include_live": True,
+        "ok": True,
+        "results": [
+            {
+                "name": f"{category}_benchmark",
+                "category": category,
+                "ok": True,
+                "total_ms": 1.0,
+                "throughput_ops_s": 100.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+            }
+            for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
+        ],
+        "comparisons": {
+            "stable_backend_rankings": [
+                {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
+                for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
+            ]
+        },
+        "regression": {"status": "not_configured", "failed": False},
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "quick must be true for standard Plan2 benchmark artifacts" in errors
+    assert "include_live must be false for standard Plan2 benchmark artifacts" in errors
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

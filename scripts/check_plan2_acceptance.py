@@ -453,6 +453,10 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}schema_version must be 1")
     if payload.get("ok") is not True:
         errors.append(f"{prefix}ok must be true")
+    if payload.get("quick") is not True:
+        errors.append(f"{prefix}quick must be true for standard Plan2 benchmark artifacts")
+    if payload.get("include_live") is not False:
+        errors.append(f"{prefix}include_live must be false for standard Plan2 benchmark artifacts")
     results = payload.get("results")
     if not isinstance(results, list) or not results:
         errors.append(f"{prefix}results must be a non-empty list")
