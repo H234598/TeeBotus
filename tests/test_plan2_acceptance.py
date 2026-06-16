@@ -224,12 +224,13 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
                     "ok": True,
                     "results": [
                         {
-                            "name": "memory_jsonl",
-                            "category": "account_memory",
+                            "name": f"{category}_benchmark",
+                            "category": category,
                             "ok": True,
                             "total_ms": 1.0,
                             "throughput_ops_s": 100.0,
                         }
+                        for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
                     ],
                     "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
                     "regression": {"status": "not_configured", "failed": False},
@@ -315,6 +316,29 @@ def test_plan2_acceptance_runner_fails_on_invalid_benchmark_artifacts(tmp_path: 
             str(json_path),
         )
     ]
+
+
+def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "results": [
+            {
+                "name": "memory_jsonl",
+                "category": "account_memory",
+                "ok": True,
+                "total_ms": 1.0,
+                "throughput_ops_s": 100.0,
+            }
+        ],
+        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+        "regression": {"status": "not_configured", "failed": False},
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("benchmark results missing required categories" in error for error in errors)
+    assert any("pydantic_ai" in error and "mcp_tools" in error and "transcription_youtube" in error for error in errors)
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

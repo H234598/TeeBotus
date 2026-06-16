@@ -18,6 +18,21 @@ DEFAULT_MEMORY_RECOVERY_JSON = Path.home() / "Downloads" / "teebotus-memory-reco
 DEFAULT_MEMORY_RECOVERY_TEXT = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.md"
 DEFAULT_LEGACY_IMPORT_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.json"
 DEFAULT_LEGACY_IMPORT_MD = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.md"
+REQUIRED_BENCHMARK_CATEGORIES = frozenset(
+    {
+        "account_memory",
+        "bibliothekar",
+        "database_fallback",
+        "langgraph_flows",
+        "llm_router",
+        "mcp_tools",
+        "messenger_adapters",
+        "proactive_agent",
+        "pydantic_ai",
+        "status_doctor",
+        "transcription_youtube",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -413,6 +428,14 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
     elif not any(isinstance(result, dict) and result.get("ok") is True for result in results):
         errors.append(f"{prefix}results must contain at least one ok result")
     else:
+        categories = {
+            str(result.get("category") or "")
+            for result in results
+            if isinstance(result, dict) and result.get("ok") is True and not result.get("skipped")
+        }
+        missing_categories = sorted(REQUIRED_BENCHMARK_CATEGORIES - categories)
+        if missing_categories:
+            errors.append(f"{prefix}benchmark results missing required categories: {', '.join(missing_categories)}")
         for index, result in enumerate(results):
             if not isinstance(result, dict):
                 errors.append(f"{prefix}results[{index}] must be an object")
