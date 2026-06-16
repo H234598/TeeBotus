@@ -274,10 +274,10 @@ python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instanc
 
 Der Legacy-Pfad darf auf einen Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner wie `/home/teladi/TeeBotus.bak2/instances.bak` zeigen. Der Recovery-Reporter und Importer waehlen bei Backup-Roots automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
 
-Hinweis zur Plan2-Testhistorie: Die frueher im Plan genannten LLM-Dateien
-`tests/test_llm_base.py` und `tests/test_openai_provider.py` sind in der
-aktuellen Teststruktur aufgeteilt. `tests/test_llm_client.py` deckt die
-providerneutralen LLM-Client-/Capability-Primitiven plus LiteLLM-Textadapter ab,
+Hinweis zur Plan2-Testhistorie: Die frueher getrennt geplanten LLM-Basis- und
+OpenAI-Provider-Tests sind in der aktuellen Teststruktur zusammengefuehrt.
+`tests/test_llm_client.py` deckt die providerneutralen
+LLM-Client-/Capability-Primitiven plus LiteLLM-Textadapter ab,
 `tests/test_llm_package.py` deckt die oeffentlichen LLM-Paketexports und den
 `OpenAIProvider`-Wrapper ab. Der Acceptance-Runner nimmt die aktuellen
 `tests/test_*.py`-Module als Quelle der Wahrheit und fuehrt diese komplette

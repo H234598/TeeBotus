@@ -50,11 +50,11 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "PrivateTmp=true" in text
     assert "--include-qdrant-live" in text
     assert "--include-audit" in text
-    assert "tests/test_llm_base.py" in text
-    assert "tests/test_openai_provider.py" in text
     assert "tests/test_llm_client.py" in text
     assert "tests/test_llm_package.py" in text
     assert "tests/test_openai_client.py" in text
+    assert "tests/test_llm_base.py" not in text
+    assert "tests/test_openai_provider.py" not in text
     assert "Der Acceptance-Runner nimmt die aktuellen" in text
     assert "ReminderDecision" in text
     assert "wiederkehrendes Reminder-Item" in text

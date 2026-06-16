@@ -575,9 +575,10 @@ später: _openai_actions -> _llm_actions mit Alias
 Neue Tests:
 
 ```text
-tests/test_llm_base.py
-tests/test_openai_provider.py
-tests/test_engine_llm_alias.py
+tests/test_llm_client.py
+tests/test_llm_package.py
+tests/test_openai_client.py
+tests/test_engine_identity_flows.py
 ```
 
 Akzeptanz:
@@ -586,7 +587,7 @@ Akzeptanz:
 python3 -m pytest -q tests/test_entrypoint_compatibility.py
 python3 -m pytest -q tests/test_openai_client.py
 python3 -m pytest -q tests/test_engine_identity_flows.py
-python3 -m pytest -q tests/test_llm_base.py tests/test_openai_provider.py
+python3 -m pytest -q tests/test_llm_client.py tests/test_llm_package.py
 ```
 
 ---
@@ -1598,7 +1599,7 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv venv --python 3.12
       - run: uv pip install -e ".[dev,llm]"
-      - run: uv run pytest -q tests/test_llm_base.py tests/test_litellm_provider.py tests/test_openai_provider.py
+      - run: uv run pytest -q tests/test_llm_client.py tests/test_litellm_provider.py tests/test_llm_package.py tests/test_openai_client.py
 
   audit:
     runs-on: ubuntu-latest
