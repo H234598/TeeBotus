@@ -417,6 +417,8 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
         "## Totals",
         "",
     ]
+    for key in sorted(totals):
+        lines.append(f"- {key}: `{totals[key]}`")
     running_processes = apply_safety.get("running_bot_processes")
     if isinstance(running_processes, list) and running_processes:
         lines.extend(["", "### Running Bot Processes", ""])
@@ -424,8 +426,6 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
             if not isinstance(process, dict):
                 continue
             lines.append(f"- pid=`{process.get('pid', '')}` cmd=`{process.get('cmdline', '')}`")
-    for key in sorted(totals):
-        lines.append(f"- {key}: `{totals[key]}`")
     lines.extend(["", "## Events", ""])
     for event in report.get("events", []) if isinstance(report.get("events"), list) else []:
         if not isinstance(event, dict):

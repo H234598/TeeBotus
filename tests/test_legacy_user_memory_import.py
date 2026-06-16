@@ -305,6 +305,8 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     assert "Legacy user text" not in markdown
     assert "entries_imported" in markdown
     assert "Apply Safety" in markdown
+    assert markdown.index("## Totals") < markdown.index("- entries_imported:")
+    assert markdown.index("- entries_imported:") < markdown.index("## Events")
 
 
 def test_legacy_user_memory_import_dry_run_reports_running_bot_apply_block(tmp_path: Path, monkeypatch) -> None:
@@ -344,6 +346,9 @@ def test_legacy_user_memory_import_dry_run_reports_running_bot_apply_block(tmp_p
     assert "stop bot/proactive jobs" in payload["apply_safety"]["message"]
     assert "Running Bot Processes" in markdown
     assert "pid=`123`" in markdown
+    assert markdown.index("## Totals") < markdown.index("- entries_imported:")
+    assert markdown.index("- entries_imported:") < markdown.index("### Running Bot Processes")
+    assert markdown.index("### Running Bot Processes") < markdown.index("## Events")
 
 
 def test_legacy_user_memory_import_dry_run_does_not_create_missing_secret(tmp_path: Path, monkeypatch) -> None:

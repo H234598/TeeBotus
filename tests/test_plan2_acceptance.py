@@ -89,6 +89,32 @@ def _valid_benchmark_payload() -> dict:
     }
 
 
+def _write_valid_legacy_import_markdown(path: Path) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "# TeeBotus Legacy User Memory Import",
+                "",
+                "## Apply Safety",
+                "",
+                "- apply_allowed_now: `True`",
+                "- apply_requires_stopped_bot: `False`",
+                "- running_bot_process_count: `0`",
+                "",
+                "## Totals",
+                "",
+                "- entries_imported: `1`",
+                "",
+                "## Events",
+                "",
+                "- instance=`Demo` legacy_user=`123` account=`<new>` entries=`1` imported=`1` action=`would-import`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path) -> None:
     commands = check_plan2_acceptance.build_acceptance_commands(
         python="python-test",
@@ -699,6 +725,8 @@ def test_secret_artifact_validation_allows_yaml_style_placeholders_and_env_names
 
 def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path) -> None:
     json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    _write_valid_legacy_import_markdown(markdown_path)
     json_path.write_text(
         json.dumps(
             {
@@ -718,7 +746,14 @@ def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path)
     )
 
     errors = check_plan2_acceptance._legacy_import_artifact_errors(
-        ("python-test", "scripts/import_legacy_user_memory.py", "--json-output", str(json_path))
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
     )
 
     assert errors == []
@@ -726,6 +761,8 @@ def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path)
 
 def test_legacy_import_artifact_validation_rejects_running_process_without_apply_block(tmp_path: Path) -> None:
     json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    _write_valid_legacy_import_markdown(markdown_path)
     json_path.write_text(
         json.dumps(
             {
@@ -745,7 +782,14 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
     )
 
     errors = check_plan2_acceptance._legacy_import_artifact_errors(
-        ("python-test", "scripts/import_legacy_user_memory.py", "--json-output", str(json_path))
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
     )
 
     assert any("apply_allowed_now must be false" in error for error in errors)
@@ -754,6 +798,8 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
 
 def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
     json_path.write_text(
         json.dumps(
             {
@@ -785,6 +831,8 @@ def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(
             "Demo",
             "--json-output",
             str(json_path),
+            "--markdown-output",
+            str(markdown_path),
         )
     )
 
@@ -793,6 +841,8 @@ def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(
 
 def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
     json_path.write_text(
         json.dumps(
             {
@@ -821,10 +871,72 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
             "Demo",
             "--json-output",
             str(json_path),
+            "--markdown-output",
+            str(markdown_path),
         )
     )
 
     assert errors == []
+
+
+def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "events": [{"instance": "Demo", "action": "would-import"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    markdown_path.write_text(
+        "\n".join(
+            [
+                "# TeeBotus Legacy User Memory Import",
+                "",
+                "## Apply Safety",
+                "",
+                "- apply_allowed_now: `True`",
+                "- apply_requires_stopped_bot: `False`",
+                "- running_bot_process_count: `0`",
+                "",
+                "### Running Bot Processes",
+                "",
+                "## Totals",
+                "",
+                "## Events",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("places running processes before totals" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:

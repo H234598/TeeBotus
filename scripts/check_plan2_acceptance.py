@@ -676,20 +676,62 @@ def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: 
 
 def _legacy_import_artifact_errors(argv: Sequence[str]) -> list[str]:
     json_path = _option_path(argv, "--json-output")
+    markdown_path = _option_path(argv, "--markdown-output")
+    errors: list[str] = []
     if json_path is None:
-        return ["legacy import artifact missing --json-output for apply_safety validation"]
-    if not json_path.exists():
-        return [f"legacy import JSON artifact missing: {json_path}"]
-    try:
-        payload = json.loads(json_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        return [f"legacy import JSON artifact is not valid JSON: {json_path}: {exc}"]
-    if not isinstance(payload, dict):
-        return [f"legacy import JSON root must be an object: {json_path}"]
-    return [
-        *_legacy_import_payload_errors(payload, path=json_path),
-        *_legacy_import_scope_errors(payload, argv, path=json_path),
-    ]
+        errors.append("legacy import artifact missing --json-output for apply_safety validation")
+    else:
+        if not json_path.exists():
+            errors.append(f"legacy import JSON artifact missing: {json_path}")
+        else:
+            try:
+                payload = json.loads(json_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                errors.append(f"legacy import JSON artifact is not valid JSON: {json_path}: {exc}")
+            else:
+                if not isinstance(payload, dict):
+                    errors.append(f"legacy import JSON root must be an object: {json_path}")
+                else:
+                    errors.extend(_legacy_import_payload_errors(payload, path=json_path))
+                    errors.extend(_legacy_import_scope_errors(payload, argv, path=json_path))
+    if markdown_path is None:
+        errors.append("legacy import artifact missing --markdown-output for report validation")
+    else:
+        errors.extend(_legacy_import_markdown_artifact_errors(markdown_path))
+    return errors
+
+
+def _legacy_import_markdown_artifact_errors(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"legacy import markdown artifact missing: {path}"]
+    if not path.is_file():
+        return [f"legacy import markdown artifact is not a file: {path}"]
+    text = path.read_text(encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    if not text.strip():
+        errors.append(f"legacy import markdown artifact is empty: {path}")
+    required_sections = {
+        "# TeeBotus Legacy User Memory Import": "heading",
+        "## Apply Safety": "apply safety section",
+        "## Totals": "totals section",
+        "## Events": "events section",
+        "- apply_allowed_now:": "apply_allowed_now field",
+        "- apply_requires_stopped_bot:": "apply_requires_stopped_bot field",
+        "- running_bot_process_count:": "running_bot_process_count field",
+    }
+    for needle, label in required_sections.items():
+        if needle not in text:
+            errors.append(f"legacy import markdown artifact lacks {label}: {path}")
+    if _artifact_text_contains_secret(text):
+        errors.append(f"legacy import markdown artifact contains secret-looking content: {path}")
+    totals_position = text.find("## Totals")
+    events_position = text.find("## Events")
+    running_position = text.find("### Running Bot Processes")
+    if totals_position != -1 and events_position != -1 and totals_position > events_position:
+        errors.append(f"legacy import markdown artifact places totals after events: {path}")
+    if totals_position != -1 and running_position != -1 and totals_position > running_position:
+        errors.append(f"legacy import markdown artifact places running processes before totals: {path}")
+    return errors
 
 
 def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:
