@@ -43,6 +43,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
 REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS = frozenset(
     {
         "chunk_id",
@@ -1057,6 +1058,11 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
         if not isinstance(candidates, list) or not candidates:
             errors.append(f"{prefix}rankings[{ranking_index}] candidates must be a non-empty list")
             continue
+        if category in REQUIRED_BENCHMARK_RANKING_CATEGORIES and len(candidates) < REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES:
+            errors.append(
+                f"{prefix}rankings[{ranking_index}] {category} must compare at least "
+                f"{REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates"
+            )
         if not fastest_stable:
             errors.append(f"{prefix}rankings[{ranking_index}] fastest_stable must be non-empty")
         if not isinstance(skipped, list):

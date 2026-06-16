@@ -270,6 +270,27 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "bibliothekar",
+                    "fastest_stable": "bibliothekar_local_query",
+                    "candidates": [{"name": "bibliothekar_local_query"}],
+                    "skipped": [],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "ranking bibliothekar must compare at least 2 successful candidates" in quality_gate["errors"]
+
+
 def test_stable_backend_ranking_excludes_erroring_candidates() -> None:
     ranking = benchmark_module._stable_backend_ranking(
         category="account_memory",

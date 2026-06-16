@@ -17,6 +17,7 @@ RANKING_RESULT_NAMES = {
 
 def _valid_ranking(category: str) -> dict:
     name = RANKING_RESULT_NAMES.get(category, f"{category}_benchmark")
+    alternate_name = f"{name}_alternate"
     return {
         "category": category,
         "fastest_stable": name,
@@ -27,6 +28,17 @@ def _valid_ranking(category: str) -> dict:
                 "mode": "local",
                 "throughput_ops_s": 100.0,
                 "total_ms": 1.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+                "note": "",
+            },
+            {
+                "rank": 2,
+                "name": alternate_name,
+                "mode": "local",
+                "throughput_ops_s": 50.0,
+                "total_ms": 2.0,
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
@@ -87,6 +99,29 @@ def _valid_benchmark_payload() -> dict:
         },
         "regression": {"status": "not_configured", "failed": False},
     }
+    for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES):
+        payload["results"].append(
+            {
+                "name": f"{RANKING_RESULT_NAMES.get(category, f'{category}_benchmark')}_alternate",
+                "category": category,
+                "ok": True,
+                "mode": "local",
+                "iterations": 1,
+                "total_ms": 2.0,
+                "throughput_ops_s": 50.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+                "details": {
+                    "network_calls": 0,
+                    "openai_calls": 0,
+                    "provider_calls": 0,
+                    "remote_calls": 0,
+                    "llm_calls": 0,
+                },
+            }
+        )
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
     required_fields = sorted(check_plan2_acceptance.REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS)
     for result in payload["results"]:
         if result["category"] != "bibliothekar":
@@ -1333,6 +1368,16 @@ def test_benchmark_artifact_validation_rejects_rankings_without_matching_results
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert any("rankings[0].candidates[0] must reference a successful result" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_ranking_comparisons_not_single_candidate_smokes() -> None:
+    payload = _valid_benchmark_payload()
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["candidates"] = ranking["candidates"][:1]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0]" in error and "must compare at least 2 successful candidates" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_runtime_context() -> None:

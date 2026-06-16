@@ -99,6 +99,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
 
 
@@ -330,6 +331,13 @@ def _build_quality_gate(
     missing_rankings = sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES - ranking_categories)
     if missing_rankings:
         errors.append(f"missing required benchmark rankings: {', '.join(missing_rankings)}")
+    for ranking in rankings or []:
+        if not isinstance(ranking, dict):
+            continue
+        category = str(ranking.get("category") or "")
+        candidates = ranking.get("candidates")
+        if category in REQUIRED_BENCHMARK_RANKING_CATEGORIES and isinstance(candidates, list) and len(candidates) < REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES:
+            errors.append(f"ranking {category} must compare at least {REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates")
 
     for index, result in enumerate(results):
         if not isinstance(result, dict):
