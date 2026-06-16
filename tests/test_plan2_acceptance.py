@@ -68,7 +68,9 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert by_label["adapter-deps"].argv == ("python-test", "scripts/check_adapter_deps.py")
     assert by_label["plan2-optional-extras"].argv == ("python-test", "scripts/check_plan2_optional_extras.py", "--require-installed")
     assert by_label["qdrant-systemd-print"].argv == ("python-test", "-m", "TeeBotus.qdrant_systemd", "--print")
+    assert by_label["qdrant-systemd-print"].validate_systemd_unit is True
     assert by_label["teebotus-systemd-print"].argv == ("python-test", "-m", "TeeBotus.systemd", "--print")
+    assert by_label["teebotus-systemd-print"].validate_systemd_unit is True
     assert "memory-recovery-legacy-json" not in by_label
     assert "legacy-import-preflight" not in by_label
     assert any(command.label.startswith("pip-audit") and command.nonfatal for command in commands)
@@ -324,6 +326,36 @@ def test_plan2_acceptance_runner_fails_on_invalid_benchmark_artifacts(tmp_path: 
             str(json_path),
         )
     ]
+
+
+def test_systemd_unit_validation_flags_public_or_unchecked_units() -> None:
+    qdrant_errors = check_plan2_acceptance._systemd_unit_errors(
+        "qdrant-systemd-print",
+        "\n".join(
+            [
+                "[Unit]",
+                "[Service]",
+                "ExecStart=podman run --rm --name teebotus-qdrant -p 0.0.0.0:6333:6333 qdrant/qdrant:latest",
+                "[Install]",
+            ]
+        ),
+    )
+    teebotus_errors = check_plan2_acceptance._systemd_unit_errors(
+        "teebotus-systemd-print",
+        "\n".join(
+            [
+                "[Unit]",
+                "[Service]",
+                "EnvironmentFile=-/tmp/.env",
+                "ExecStart=python3 -m TeeBotus --all",
+                "[Install]",
+            ]
+        ),
+    )
+
+    assert any("127.0.0.1" in error for error in qdrant_errors)
+    assert any("pinned" in error for error in qdrant_errors)
+    assert any("permission check missing" in error for error in teebotus_errors)
 
 
 def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:

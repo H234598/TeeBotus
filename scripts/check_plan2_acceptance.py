@@ -62,6 +62,7 @@ class AcceptanceCommand:
     nonfatal: bool = False
     validate_runtime_status: bool = False
     validate_benchmark_artifacts: bool = False
+    validate_systemd_unit: bool = False
 
 
 PLAN2_TEST_PATTERNS: tuple[str, ...] = (
@@ -317,10 +318,12 @@ def build_acceptance_commands(
             AcceptanceCommand(
                 "qdrant-systemd-print",
                 (python, "-m", "TeeBotus.qdrant_systemd", "--print"),
+                validate_systemd_unit=True,
             ),
             AcceptanceCommand(
                 "teebotus-systemd-print",
                 (python, "-m", "TeeBotus.systemd", "--print"),
+                validate_systemd_unit=True,
             ),
         ]
     )
@@ -356,8 +359,9 @@ def build_acceptance_commands(
 def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
     for index, command in enumerate(commands, start=1):
         print(f"\n[{index}/{len(commands)}] {command.label}: {_format_command(command.argv)}", flush=True)
-        result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=command.validate_runtime_status)
-        if command.validate_runtime_status:
+        capture_output = command.validate_runtime_status or command.validate_systemd_unit
+        result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=capture_output)
+        if capture_output:
             if result.stdout:
                 print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
             if result.stderr:
@@ -379,6 +383,13 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: benchmark artifacts are invalid.", file=sys.stderr)
                 for error in artifact_errors:
+                    print(f"  {error}", file=sys.stderr)
+                return 1
+        if command.validate_systemd_unit:
+            unit_errors = _systemd_unit_errors(command.label, result.stdout or "")
+            if unit_errors and not command.nonfatal:
+                print(f"\nPlan2 acceptance failed at {command.label}: systemd unit is unsafe.", file=sys.stderr)
+                for error in unit_errors:
                     print(f"  {error}", file=sys.stderr)
                 return 1
     print("\nPlan2 acceptance checks passed.")
@@ -491,6 +502,40 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}regression must be an object")
     elif "status" not in regression or "failed" not in regression:
         errors.append(f"{prefix}regression must contain status and failed")
+    return errors
+
+
+def _systemd_unit_errors(label: str, text: str) -> list[str]:
+    errors: list[str] = []
+    if not text.strip():
+        return ["systemd unit output is empty"]
+    if "[Unit]" not in text or "[Service]" not in text or "[Install]" not in text:
+        errors.append("systemd unit lacks required sections")
+    if label == "qdrant-systemd-print":
+        required = {
+            "ExecStartPre=podman volume create teebotus-qdrant": "Qdrant volume preflight missing",
+            "-p 127.0.0.1:6333:6333": "Qdrant must bind only to 127.0.0.1:6333",
+            "-v teebotus-qdrant:/qdrant/storage": "Qdrant storage volume missing",
+        }
+        for needle, message in required.items():
+            if needle not in text:
+                errors.append(message)
+        if "qdrant/qdrant:latest" in text or re.search(r"\bqdrant/qdrant(?:\s|$)", text):
+            errors.append("Qdrant image must be pinned and must not use latest")
+        if "-p 0.0.0.0:" in text or "-p [::]:" in text:
+            errors.append("Qdrant unit must not expose public bind hosts")
+    elif label == "teebotus-systemd-print":
+        required = {
+            "EnvironmentFile=-": "TeeBotus EnvironmentFile missing",
+            "ExecStartPre=": "TeeBotus env-file permission preflight missing",
+            "--check-env-file": "TeeBotus env-file permission check missing",
+            "NoNewPrivileges=true": "TeeBotus NoNewPrivileges hardening missing",
+            "PrivateTmp=true": "TeeBotus PrivateTmp hardening missing",
+            "ExecStart=": "TeeBotus ExecStart missing",
+        }
+        for needle, message in required.items():
+            if needle not in text:
+                errors.append(message)
     return errors
 
 
