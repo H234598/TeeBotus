@@ -116,8 +116,7 @@ def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
     return True, f"litellm supply_chain_guard=ok blocked={','.join(sorted(BAD_LITELLM_VERSIONS))}"
 
 
-def _check_pyproject_plan2_contract() -> tuple[bool, str]:
-    path = REPO_ROOT / "pyproject.toml"
+def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -> tuple[bool, str]:
     try:
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
@@ -152,6 +151,9 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
         missing = sorted(expected - found)
         if missing:
             errors.append(f"{extra} missing {','.join(missing)}")
+        unexpected = sorted(found - expected)
+        if extra in {"llm", "rag", "agents", "tools"} and unexpected:
+            errors.append(f"{extra} unexpected {','.join(unexpected)}")
     llm_deps = set(optional.get("llm", [])) if isinstance(optional.get("llm"), list) else set()
     for bad_version in BAD_LITELLM_VERSIONS:
         if f"litellm=={bad_version}" in llm_deps:

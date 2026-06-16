@@ -116,6 +116,37 @@ def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
     assert "extras=dev,llm,rag,agents,tools" in message
 
 
+def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+        [project]
+        requires-python = ">=3.11"
+
+        [project.optional-dependencies]
+        dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
+        llm = ["litellm==1.83.7", "python-dotenv==1.0.1", "openai==2.30.0", "ollama==0.6.2", "surprise-llm"]
+        rag = ["haystack-ai==2.30.1", "qdrant-haystack==10.3.0", "sentence-transformers==5.5.1", "pypdf==6.13.2", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.14.3"]
+        agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.5"]
+        tools = ["fastmcp==2.0.0"]
+
+        [project.scripts]
+        teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
+        teebotus-systemd = "TeeBotus.systemd:main"
+        teebotus-proactive = "TeeBotus.proactive:main"
+        teebotus-proactive-review = "TeeBotus.proactive_review:main"
+        teebotus-proactive-systemd = "TeeBotus.proactive_systemd:main"
+        teebotus-qdrant-systemd = "TeeBotus.qdrant_systemd:main"
+        """,
+        encoding="utf-8",
+    )
+
+    ok, message = check_adapter_deps._check_pyproject_plan2_contract(pyproject)
+
+    assert not ok
+    assert "llm unexpected surprise-llm" in message
+
+
 def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
