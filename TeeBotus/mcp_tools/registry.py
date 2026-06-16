@@ -1,10 +1,29 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
+
+SECRET_LIKE_PATTERNS = (
+    "OPENAI_API_KEY=",
+    "TEEBOTUS_LLM_API_KEY=",
+    "SIGNAL_BOT_PHONE_NUMBER=",
+    "MATRIX_BOT_ACCESS_TOKEN=",
+)
+SECRET_TOKEN_PATTERNS = (
+    r"\bsk-[A-Za-z0-9_-]{8,}\b",
+    r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b",
+    r"\bsyt_[A-Za-z0-9_=-]{8,}\b",
+    r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b",
+    r"\bgithub_pat_[A-Za-z0-9_]{12,}\b",
+    r"\bglpat-[A-Za-z0-9_-]{8,}\b",
+    r"\bhf_[A-Za-z0-9]{8,}\b",
+    r"\bgsk_[A-Za-z0-9]{8,}\b",
+    r"\bAIza[0-9A-Za-z_-]{16,}\b",
+)
 
 
 class MCPToolError(RuntimeError):
@@ -153,10 +172,18 @@ def _bool_config(value: object, default: bool) -> bool:
 
 def _safe_result(value: Mapping[str, Any]) -> dict[str, Any]:
     result = {str(key): item for key, item in value.items()}
-    text = str(result.get("prompt_text") or "")
-    # Defense-in-depth: search tools should never return common secret-looking
-    # environment assignments even if a caller accidentally indexed them.
-    forbidden_markers = ("OPENAI_API_KEY=", "TEEBOTUS_LLM_API_KEY=", "SIGNAL_BOT_PHONE_NUMBER=", "MATRIX_BOT_ACCESS_TOKEN=")
-    if any(marker in text for marker in forbidden_markers):
+    if _contains_secret_like_content(result):
         raise MCPToolError("MCP tool result contained secret-looking content")
     return result
+
+
+def _contains_secret_like_content(value: Any) -> bool:
+    if isinstance(value, Mapping):
+        return any(_contains_secret_like_content(item) for item in value.values())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return any(_contains_secret_like_content(item) for item in value)
+    if not isinstance(value, str):
+        return False
+    if any(marker in value for marker in SECRET_LIKE_PATTERNS):
+        return True
+    return any(re.search(pattern, value) for pattern in SECRET_TOKEN_PATTERNS)

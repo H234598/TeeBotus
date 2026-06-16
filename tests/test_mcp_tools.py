@@ -6,7 +6,7 @@ import types
 import pytest
 
 from TeeBotus.instructions import parse_instructions
-from TeeBotus.mcp_tools import MCPToolError, build_readonly_mcp_registry
+from TeeBotus.mcp_tools import MCPToolError, MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry
 from TeeBotus.mcp_tools.fastmcp_server import FASTMCP_READONLY_ALLOWLIST, build_fastmcp_server, fastmcp_available
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
@@ -125,6 +125,27 @@ def test_mcp_registry_rejects_non_readonly_policy(tmp_path) -> None:
     assert "bibliothekar.search" not in registry.tool_names
     with pytest.raises(MCPToolError, match="not read-only"):
         registry.call("bibliothekar.search", {"query": "Therapie"})
+
+
+def test_mcp_registry_rejects_secret_like_tool_results() -> None:
+    tokens = [
+        "hf_" + "A" * 16,
+        "gsk_" + "B" * 16,
+        "AIza" + "C" * 24,
+        "github_" + "pat_" + "D" * 24,
+        "gh" + "p_" + "E" * 16,
+        "gl" + "pat-" + "F" * 16,
+        "sy" + "t_" + "G" * 16,
+        "xox" + "b-" + "H" * 16,
+        "sk-" + "I" * 16,
+    ]
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {"bibliothekar.search": lambda _arguments: {"prompt_text": "Quelle " + tokens[0], "nested": {"tokens": tokens[1:]}}},
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Token"})
 
 
 def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monkeypatch) -> None:
