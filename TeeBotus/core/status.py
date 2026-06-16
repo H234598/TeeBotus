@@ -9,7 +9,7 @@ from typing import Any, Mapping
 
 from TeeBotus import __version__
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
-from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy
+from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     TOKEN_HEX_RE,
@@ -128,8 +128,8 @@ def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = No
     configured = {str(name or "").strip().casefold(): config for name, config in (mcp_tools or {}).items() if str(name or "").strip()}
     allowed: list[str] = []
     disabled: list[str] = []
-    for name, default_policy in sorted(DEFAULT_MCP_TOOL_POLICIES.items()):
-        policy = _mcp_status_policy(default_policy, configured.get(name, {}))
+    resolved = resolve_mcp_tool_policies(configured)
+    for name, policy in sorted(resolved.items()):
         if policy.enabled and policy.read_only:
             allowed.append(_mcp_tool_status_label(name, policy))
         elif not policy.enabled:
@@ -152,25 +152,6 @@ def mcp_tool_runtime_status_line(instance_name: str, mcp_tools: Mapping[str, Map
     lines = mcp_tool_status_lines(mcp_tools)
     details = " ".join(line.removeprefix("- ") for line in lines[1:])
     return f"mcp_tools={instance_name} {details}"
-
-
-def _mcp_status_policy(default_policy: MCPToolPolicy, config: Mapping[str, Any]) -> MCPToolPolicy:
-    if not isinstance(config, Mapping):
-        config = {}
-    return MCPToolPolicy(
-        enabled=_mcp_bool_config(config.get("enabled"), default_policy.enabled),
-        read_only=_mcp_bool_config(config.get("read_only"), default_policy.read_only),
-        requires_confirmation=_mcp_bool_config(config.get("requires_confirmation"), default_policy.requires_confirmation),
-        private_chat_only=True if default_policy.private_chat_only else _mcp_bool_config(config.get("private_chat_only"), default_policy.private_chat_only),
-        requires_admin=_mcp_bool_config(config.get("requires_admin"), default_policy.requires_admin),
-        sandbox_required=_mcp_bool_config(config.get("sandbox_required"), default_policy.sandbox_required),
-    )
-
-
-def _mcp_bool_config(value: object, default: bool) -> bool:
-    if value is None:
-        return default
-    return str(value).strip().casefold() in {"1", "true", "yes", "on", "enabled", "ja", "an"}
 
 
 def _mcp_tool_status_label(name: str, policy: MCPToolPolicy) -> str:

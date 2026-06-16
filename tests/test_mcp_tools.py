@@ -6,7 +6,7 @@ import types
 import pytest
 
 from TeeBotus.instructions import parse_instructions
-from TeeBotus.mcp_tools import MCPToolError, MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry
+from TeeBotus.mcp_tools import MCPToolError, MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry, resolve_mcp_tool_policies
 from TeeBotus.mcp_tools.fastmcp_server import FASTMCP_READONLY_ALLOWLIST, build_fastmcp_server, fastmcp_available
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
@@ -30,6 +30,25 @@ def test_mcp_tool_config_is_parsed_as_flat_allowlist() -> None:
     assert instructions.mcp_tools["memory.search"]["enabled"] is False
     assert instructions.mcp_tools["codex.exec"]["enabled"] is True
     assert instructions.mcp_tools["shell.exec"]["enabled"] is True
+
+
+def test_mcp_policy_resolution_is_shared_and_keeps_hard_boundaries() -> None:
+    policies = resolve_mcp_tool_policies(
+        {
+            "memory.search": {"enabled": True, "read_only": True, "private_chat_only": False},
+            "codex.exec": {"enabled": True, "read_only": False, "requires_admin": False},
+            "shell.exec": {"enabled": True, "read_only": True},
+        }
+    )
+
+    assert policies["memory.search"].enabled is True
+    assert policies["memory.search"].private_chat_only is True
+    assert policies["codex.exec"].enabled is True
+    assert policies["codex.exec"].read_only is False
+    assert policies["codex.exec"].requires_admin is True
+    assert policies["codex.exec"].requires_confirmation is True
+    assert policies["codex.exec"].sandbox_required is True
+    assert "shell.exec" not in policies
 
 
 def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:

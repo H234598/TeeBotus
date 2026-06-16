@@ -6,6 +6,7 @@ from TeeBotus.mcp_tools.registry import (
     MCPToolPolicy,
     MCPToolRegistry,
     build_readonly_mcp_registry,
+    resolve_mcp_tool_policies,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "MCPToolPolicy",
     "MCPToolRegistry",
     "build_readonly_mcp_registry",
+    "resolve_mcp_tool_policies",
 ]

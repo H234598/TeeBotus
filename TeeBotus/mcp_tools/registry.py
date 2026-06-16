@@ -86,7 +86,7 @@ def build_readonly_mcp_registry(
     tool_config: Mapping[str, Mapping[str, Any]] | None = None,
     private_chat: bool = False,
 ) -> MCPToolRegistry:
-    policies = _merge_tool_policies(DEFAULT_MCP_TOOL_POLICIES, tool_config or {})
+    policies = resolve_mcp_tool_policies(tool_config or {})
     tools: dict[str, ToolCallable] = {}
     if bibliothekar_service is not None:
         tools["bibliothekar.search"] = lambda arguments: _bibliothekar_search_tool(bibliothekar_service, arguments)
@@ -98,9 +98,13 @@ def build_readonly_mcp_registry(
     return MCPToolRegistry(policies, tools)
 
 
-def _merge_tool_policies(defaults: Mapping[str, MCPToolPolicy], overrides: Mapping[str, Mapping[str, Any]]) -> dict[str, MCPToolPolicy]:
+def resolve_mcp_tool_policies(
+    overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    *,
+    defaults: Mapping[str, MCPToolPolicy] = DEFAULT_MCP_TOOL_POLICIES,
+) -> dict[str, MCPToolPolicy]:
     merged = dict(defaults)
-    for raw_name, raw_config in overrides.items():
+    for raw_name, raw_config in (overrides or {}).items():
         name = str(raw_name or "").strip().casefold()
         if name not in defaults:
             continue
@@ -108,11 +112,11 @@ def _merge_tool_policies(defaults: Mapping[str, MCPToolPolicy], overrides: Mappi
         base = defaults[name]
         merged[name] = MCPToolPolicy(
             enabled=_bool_config(config.get("enabled"), base.enabled),
-            read_only=_bool_config(config.get("read_only"), base.read_only),
-            requires_confirmation=_bool_config(config.get("requires_confirmation"), base.requires_confirmation),
+            read_only=False if not base.read_only else _bool_config(config.get("read_only"), base.read_only),
+            requires_confirmation=True if base.requires_confirmation else _bool_config(config.get("requires_confirmation"), base.requires_confirmation),
             private_chat_only=True if base.private_chat_only else _bool_config(config.get("private_chat_only"), base.private_chat_only),
-            requires_admin=_bool_config(config.get("requires_admin"), base.requires_admin),
-            sandbox_required=_bool_config(config.get("sandbox_required"), base.sandbox_required),
+            requires_admin=True if base.requires_admin else _bool_config(config.get("requires_admin"), base.requires_admin),
+            sandbox_required=True if base.sandbox_required else _bool_config(config.get("sandbox_required"), base.sandbox_required),
         )
     return merged
 
