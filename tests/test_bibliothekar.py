@@ -355,6 +355,65 @@ def test_haystack_backend_pushes_supported_metadata_filters_to_document_store(tm
     assert "therapie.txt" not in selection.prompt_text
 
 
+def test_haystack_backend_does_not_push_private_account_filters_to_document_store(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+
+    selection = backend.search(
+        BibliothekarQuery(
+            text="System Therapie",
+            filters={
+                "topics": ["python"],
+                "account_id": "private-account-id",
+                "identity_key": "telegram:user:1",
+                "memory_id": "mem_private",
+            },
+            max_chunks=3,
+        )
+    )
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filter_calls[-1]["filters"] == {
+        "operator": "AND",
+        "conditions": [{"field": "meta.topics", "operator": "in", "value": ["python"]}],
+    }
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "private-account-id" not in selection.prompt_text
+    assert "telegram:user:1" not in selection.prompt_text
+    assert "mem_private" not in selection.prompt_text
+
+
+def test_bibliothekar_ignores_private_only_filters_instead_of_emptying_results(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    service = BibliothekarService(LocalBibliothekarBackend(store))
+
+    selection = service.search(
+        "Therapie",
+        filters={"account_id": "private-account-id", "memory_id": "mem_private"},
+        max_chunks=1,
+    )
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert "private-account-id" not in selection.prompt_text
+    assert "mem_private" not in selection.prompt_text
+
+
 def test_haystack_backend_keeps_backend_when_filter_pushdown_is_rejected(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)

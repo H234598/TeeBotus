@@ -64,6 +64,8 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert haystack_library["details"]["citation_payload_bytes"] > 0
     assert local_library["details"]["has_citation_format"] is True
     assert haystack_library["details"]["has_citation_format"] is True
+    assert haystack_library["details"]["private_filter_selected_chunks"] >= 1
+    assert haystack_library["details"]["private_filter_payload_leaked"] is False
     assert any(result["name"] == "langgraph_bibliothekar_linear" for result in suite["results"])
     fake_graph = next(result for result in suite["results"] if result["name"] == "langgraph_bibliothekar_fake_installed")
     assert fake_graph["details"]["mode"] == "fake_installed_langgraph"

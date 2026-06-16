@@ -566,8 +566,18 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
                 max_quote_chars=500,
             )
         )
+        private_filter_selection = backend.search(
+            BibliothekarQuery(
+                text="Therapie Schlaf",
+                filters={"account_id": "private-account-id", "memory_id": "mem_private"},
+                max_chunks=2,
+                max_prompt_chars=5000,
+                max_quote_chars=500,
+            )
+        )
         fallback_store = backend.fallback_store
         index = json.loads(fallback_store.index_path.read_text(encoding="utf-8"))
+        private_filter_prompt = private_filter_selection.prompt_text
         return _result(
             name="bibliothekar_haystack_fake_query",
             category="bibliothekar",
@@ -582,6 +592,8 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
                 "fixture": "tests/fixtures/books",
                 "document_store_documents": len(document_store.documents),
                 "median_query_ms": statistics.median(timings),
+                "private_filter_selected_chunks": len(private_filter_selection.selected_ids),
+                "private_filter_payload_leaked": any(marker in private_filter_prompt for marker in ("private-account-id", "mem_private")),
                 **_bibliothekar_payload_details(selection.prompt_text),
             },
         )

@@ -20,6 +20,40 @@ from TeeBotus.runtime.bibliothekar import (
 
 
 HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
+CHUNK_FILTER_KEYS = frozenset(
+    {
+        "category",
+        "categories",
+        "topic",
+        "topics",
+        "keyword",
+        "keywords",
+        "file",
+        "path",
+        "relative_path",
+        "suffix",
+        "extension",
+        "title",
+        "document",
+        "document_id",
+        "chunk",
+        "chunk_id",
+    }
+)
+DOCUMENT_STORE_FILTER_FIELD_MAP = {
+    "category": "meta.categories",
+    "categories": "meta.categories",
+    "topic": "meta.topics",
+    "topics": "meta.topics",
+    "keyword": "meta.topics",
+    "keywords": "meta.topics",
+    "suffix": "meta.suffix",
+    "extension": "meta.suffix",
+    "document": "meta.document_id",
+    "document_id": "meta.document_id",
+    "chunk": "meta.chunk_id",
+    "chunk_id": "meta.chunk_id",
+}
 
 
 @dataclass(frozen=True)
@@ -452,33 +486,29 @@ def _selection_from_chunks(index: Mapping[str, Any], chunks: list[dict[str, Any]
 def _apply_chunk_filters(chunks: list[dict[str, Any]], filters: Mapping[str, object] | None) -> list[dict[str, Any]]:
     if not filters:
         return chunks
-    active = {str(key).strip().casefold(): value for key, value in filters.items() if str(key).strip() and _filter_values(value)}
+    active = _active_chunk_filters(filters)
     if not active:
         return chunks
     return [chunk for chunk in chunks if all(_chunk_matches_filter(chunk, key, value) for key, value in active.items())]
 
 
+def _active_chunk_filters(filters: Mapping[str, object]) -> dict[str, object]:
+    active: dict[str, object] = {}
+    for raw_key, raw_value in filters.items():
+        key = str(raw_key or "").strip().casefold()
+        if key not in CHUNK_FILTER_KEYS or not _filter_values(raw_value):
+            continue
+        active[key] = raw_value
+    return active
+
+
 def _document_store_filters(filters: Mapping[str, object] | None) -> dict[str, Any] | None:
     if not filters:
         return None
-    field_map = {
-        "category": "meta.categories",
-        "categories": "meta.categories",
-        "topic": "meta.topics",
-        "topics": "meta.topics",
-        "keyword": "meta.topics",
-        "keywords": "meta.topics",
-        "suffix": "meta.suffix",
-        "extension": "meta.suffix",
-        "document": "meta.document_id",
-        "document_id": "meta.document_id",
-        "chunk": "meta.chunk_id",
-        "chunk_id": "meta.chunk_id",
-    }
     conditions = []
     for raw_key, raw_value in filters.items():
         key = str(raw_key or "").strip().casefold()
-        field = field_map.get(key)
+        field = DOCUMENT_STORE_FILTER_FIELD_MAP.get(key)
         values = list(_filter_values(raw_value))
         if not field or not values:
             continue
@@ -506,7 +536,7 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
         return _any_exact_match(chunk.get("document_id"), values)
     if key in {"chunk", "chunk_id"}:
         return _any_exact_match(chunk.get("chunk_id"), values)
-    return _any_exact_match(chunk.get(key), values)
+    return True
 
 
 def _filter_values(value: object) -> tuple[str, ...]:
