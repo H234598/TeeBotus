@@ -272,6 +272,23 @@ def test_mcp_registry_rejects_case_insensitive_secret_assignment_markers() -> No
         registry.call("bibliothekar.search", {"query": "Token"})
 
 
+def test_mcp_registry_rejects_private_account_paths_in_tool_results() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "prompt_text": (
+                    "Quelle verweist versehentlich auf "
+                    "/home/teladi/TeeBotus/instances/Demo/data/accounts/account/User_Memory_Entries.jsonl"
+                )
+            }
+        },
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Memory"})
+
+
 def test_mcp_registry_allows_normal_readonly_result_keys() -> None:
     registry = MCPToolRegistry(
         {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
@@ -280,6 +297,7 @@ def test_mcp_registry_allows_normal_readonly_result_keys() -> None:
                 "tool": "bibliothekar.search",
                 "read_only": True,
                 "selected_ids": ["chunk_1"],
+                "file": "therapie.txt",
                 "topics": ["therapie"],
             }
         },

@@ -29,6 +29,20 @@ SECRET_TOKEN_PATTERNS = (
     r"\bgsk_[A-Za-z0-9]{8,}\b",
     r"\bAIza[0-9A-Za-z_-]{16,}\b",
 )
+PRIVATE_DATA_PATH_PATTERN = re.compile(
+    r"(?:^|[/\\])(?:"
+    r"account_(?:identities|index|memory|profile|secrets|tombstone)\.json|"
+    r"secret_verifier\.json|"
+    r"openai_state\.json|"
+    r"agent_state\.json|"
+    r"proactive_(?:audit|outbox)\.jsonl|"
+    r"user_habbits_and_behave\.md|"
+    r"user_memory_(?:entries\.jsonl|index\.json)|"
+    r"legacy_user_memory_entries\.jsonl"
+    r")(?:$|[\s,;)\]}])",
+    re.IGNORECASE,
+)
+PRIVATE_DATA_PATH_SEGMENT_PATTERN = re.compile(r"(?:^|[/\\])data[/\\](?:accounts|users)(?:[/\\]|$)", re.IGNORECASE)
 
 
 class MCPToolError(RuntimeError):
@@ -205,6 +219,8 @@ def _contains_secret_like_content(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     if any(marker.casefold() in value.casefold() for marker in SECRET_LIKE_PATTERNS):
+        return True
+    if PRIVATE_DATA_PATH_PATTERN.search(value) or PRIVATE_DATA_PATH_SEGMENT_PATTERN.search(value):
         return True
     return any(re.search(pattern, value) for pattern in SECRET_TOKEN_PATTERNS)
 
