@@ -69,10 +69,13 @@ def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path)
     assert chunk["section"] == "Zeilen 1-1"
     assert chunk["license"] == "private"
     assert prompt_chunk["source_id"] == document["source_id"]
+    assert prompt_chunk["file_path"] == document["file_path"]
     assert prompt_chunk["file_sha256"] == document["file_sha256"]
     assert prompt_chunk["file_type"] == "txt"
     assert prompt_chunk["author"] == ""
     assert prompt_chunk["language"] == "de"
+    assert prompt_chunk["license"] == "private"
+    assert prompt_chunk["ingested_at"] == chunk["ingested_at"]
     assert prompt_chunk["chunk_index"] == 1
     assert prompt_chunk["embedding_model"] == "intfloat/multilingual-e5-small"
 
@@ -294,10 +297,13 @@ def test_haystack_backend_preserves_plan2_metadata_roundtrip(tmp_path):
     assert meta["chunk_index"] == 1
     assert meta["embedding_model"] == "intfloat/multilingual-e5-small"
     assert prompt_chunk["source_id"] == meta["source_id"]
+    assert prompt_chunk["file_path"] == meta["file_path"]
     assert prompt_chunk["file_sha256"] == meta["file_sha256"]
     assert prompt_chunk["file_type"] == "txt"
     assert prompt_chunk["author"] == ""
     assert prompt_chunk["language"] == "de"
+    assert prompt_chunk["license"] == "private"
+    assert prompt_chunk["ingested_at"] == meta["ingested_at"]
     assert prompt_chunk["chunk_index"] == 1
 
 
