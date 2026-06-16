@@ -229,6 +229,9 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
                             "ok": True,
                             "total_ms": 1.0,
                             "throughput_ops_s": 100.0,
+                            "errors": 0,
+                            "payload_bytes": 1,
+                            "index_bytes": 1,
                         }
                         for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
                     ],
@@ -329,6 +332,9 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
                 "ok": True,
                 "total_ms": 1.0,
                 "throughput_ops_s": 100.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
             }
         ],
         "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
@@ -339,6 +345,33 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
 
     assert any("benchmark results missing required categories" in error for error in errors)
     assert any("pydantic_ai" in error and "mcp_tools" in error and "transcription_youtube" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "results": [
+            {
+                "name": "memory_jsonl",
+                "category": "account_memory",
+                "ok": True,
+                "total_ms": -1.0,
+                "throughput_ops_s": 100.0,
+                "errors": False,
+                "payload_bytes": "unknown",
+            }
+        ],
+        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+        "regression": {"status": "not_configured", "failed": False},
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("results[0] missing index_bytes" in error for error in errors)
+    assert any("results[0] total_ms must be a non-negative number" in error for error in errors)
+    assert any("results[0] payload_bytes must be a non-negative number" in error for error in errors)
+    assert any("results[0] errors must be a non-negative integer" in error for error in errors)
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

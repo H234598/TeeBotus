@@ -440,9 +440,14 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             if not isinstance(result, dict):
                 errors.append(f"{prefix}results[{index}] must be an object")
                 continue
-            for key in ("name", "category", "total_ms", "throughput_ops_s"):
+            for key in ("name", "category", "total_ms", "throughput_ops_s", "errors", "payload_bytes", "index_bytes"):
                 if key not in result:
                     errors.append(f"{prefix}results[{index}] missing {key}")
+            for key in ("total_ms", "throughput_ops_s", "payload_bytes", "index_bytes"):
+                if key in result and not _is_nonnegative_number(result.get(key)):
+                    errors.append(f"{prefix}results[{index}] {key} must be a non-negative number")
+            if "errors" in result and not _is_nonnegative_integer(result.get("errors")):
+                errors.append(f"{prefix}results[{index}] errors must be a non-negative integer")
             if "ok" not in result and "skipped" not in result:
                 errors.append(f"{prefix}results[{index}] missing ok/skipped status")
     comparisons = payload.get("comparisons")
@@ -458,6 +463,14 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
     elif "status" not in regression or "failed" not in regression:
         errors.append(f"{prefix}regression must contain status and failed")
     return errors
+
+
+def _is_nonnegative_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+
+
+def _is_nonnegative_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _option_path(argv: Sequence[str], option: str) -> Path | None:
