@@ -632,7 +632,15 @@ Neu:
 - timeout_seconds: 180
 - max_output_tokens: 700
 - temperature: 0.7
+- missing_key: Das Textmodell ist aktiviert, aber der benoetigte API-Key fehlt.
+- error: Ich kann das Textmodell gerade nicht erreichen.
 ```
+
+`missing_key` und `error` im `## LLM`-Block sind die neutralen
+Text-LLM-Fehlertexte. `## OpenAI - missing_key/error` bleibt Legacy und
+setzt die neutralen Texte ebenfalls, solange `## LLM` sie nicht ueberschreibt.
+OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription
+behalten eigene Fehlertexte.
 
 Legacy bleibt:
 

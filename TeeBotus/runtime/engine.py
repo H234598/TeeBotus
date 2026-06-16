@@ -492,10 +492,10 @@ class TeeBotusEngine:
         if not self._text_llm_enabled(instructions) or (not text and not event.attachments) or text.startswith("/"):
             return []
         if self.llm_client is None:
-            return [SendText(event.chat_id, instructions.openai_missing_key)]
+            return [SendText(event.chat_id, instructions.llm_missing_key)]
         create_reply = getattr(self.llm_client, "create_reply", None)
         if not callable(create_reply):
-            return [SendText(event.chat_id, instructions.openai_error)]
+            return [SendText(event.chat_id, instructions.llm_error)]
         try:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions, self.account_store, account_id)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, text)
@@ -536,13 +536,13 @@ class TeeBotusEngine:
                     first_response_id or previous_response_id,
                 )
         except (OpenAIAPIError, LLMAPIError):
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
         visible_text, files = parse_generated_file_blocks(response_text)
@@ -931,12 +931,12 @@ class TeeBotusEngine:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, reply)
             return [SendTyping(event.chat_id), SendText(event.chat_id, reply)]
         if self.llm_client is None:
-            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_missing_key)
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_missing_key)]
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_missing_key)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_missing_key)]
         create_reply = getattr(self.llm_client, "create_reply", None)
         if not callable(create_reply):
-            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         try:
             pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, pipeline_text)
@@ -986,15 +986,15 @@ class TeeBotusEngine:
                     first_response_id or _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id),
                 )
         except (OpenAIAPIError, LLMAPIError):
-            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
-            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
-            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
         self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, response_text)

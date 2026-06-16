@@ -766,6 +766,15 @@ def _run_telegram_runtime(config: Any) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    original = dict(os.environ)
+    try:
+        return _main_impl(argv)
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
+
+
+def _main_impl(argv: list[str] | None = None) -> int:
     """Run TeeBotus through the shared multi-channel runtime entry point."""
 
     args = list(sys.argv[1:] if argv is None else argv)
@@ -779,7 +788,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args and args[0] in {"--runtime-status", "runtime-status"}:
-        return _runtime_status(args[1:])
+        return _runtime_status_preserving_environment(args[1:])
 
     config = _runtime_config_from_main_args(args)
     if config is None:
@@ -806,6 +815,15 @@ def main(argv: list[str] | None = None) -> int:
     if "telegram" in config.channels:
         return _run_telegram_runtime(config)
     return 2
+
+
+def _runtime_status_preserving_environment(argv: Sequence[str]) -> int:
+    original = dict(os.environ)
+    try:
+        return _runtime_status(argv)
+    finally:
+        os.environ.clear()
+        os.environ.update(original)
 
 
 __all__ = ["TelegramBotMissingError", "main"]

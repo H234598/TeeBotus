@@ -429,7 +429,11 @@ Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue ne
 - timeout_seconds: 120
 - max_tokens: 1200
 - temperature: 0.7
+- missing_key: Das Textmodell ist aktiviert, aber der benoetigte API-Key fehlt.
+- error: Ich kann das Textmodell gerade nicht erreichen.
 ```
+
+`missing_key` und `error` im `## LLM`-Block steuern nur Text-LLM-Antworten. OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription behalten ihre eigenen `openai_*`-/`voice_*`-/`image_*`-/`transcription_*`-Texte. Alte `## OpenAI - missing_key/error`-Eintraege bleiben kompatibel und setzen die Text-LLM-Texte mit, sofern sie nicht im `## LLM`-Block ueberschrieben werden.
 
 Environment-Fallbacks heissen `TEEBOTUS_LLM_ENABLED`, `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_PROFILE`, `TEEBOTUS_LLM_PURPOSE`, `TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_OUTPUT_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
 

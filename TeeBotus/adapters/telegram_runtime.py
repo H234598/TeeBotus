@@ -1332,7 +1332,7 @@ def _process_text_message(
 
     if should_use_openai(message, instructions):
         if openai_client is None:
-            reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
+            reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
@@ -1357,7 +1357,7 @@ def _process_text_message(
             )
         except OpenAIAPIError as exc:
             LOGGER.error("OpenAI request failed: %s", exc)
-            reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
+            reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
             _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
@@ -3862,7 +3862,7 @@ def _handle_youtube_transcript_request(
         return
 
     if instructions.text_llm_enabled() and openai_client is None:
-        reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
+        reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
 
@@ -4055,7 +4055,7 @@ def _run_youtube_local_transcription_job(
         return
 
     if llm_enabled and instructions.text_llm_enabled() and openai_client is None:
-        reply = _with_first_contact_intro(instructions.openai_missing_key, first_contact, bot_identity)
+        reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
     try:
@@ -4149,7 +4149,7 @@ def _send_youtube_transcript_to_openai_pipeline(
         )
     except OpenAIAPIError as exc:
         LOGGER.error("OpenAI request failed after YouTube transcript: %s", exc)
-        reply = _with_first_contact_intro(instructions.openai_error, first_contact, bot_identity)
+        reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
         try:
             _send_tracked_message(api, chat_state, chat_id, reply)
         except TelegramAPIError as send_exc:

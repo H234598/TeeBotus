@@ -609,14 +609,14 @@ def test_engine_export_account_data_rejects_unknown_format(tmp_path):
     assert "Nutzung:" in actions[0].text
 
 
-def test_engine_reports_missing_openai_key_for_free_text_when_openai_enabled(tmp_path):
-    instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
+def test_engine_reports_missing_llm_key_for_free_text_when_llm_enabled(tmp_path):
+    instructions = BotInstructions(openai_enabled=True, llm_missing_key="LLM-Key fehlt.")
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
 
     actions = engine.process(event(telegram_identity_key(1), "Hallo"))
 
     assert len(actions) == 1
-    assert actions[0].text == "Key fehlt."
+    assert actions[0].text == "LLM-Key fehlt."
 
 
 def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
@@ -975,18 +975,18 @@ def test_engine_reset_clears_previous_openai_response_id(tmp_path):
     assert client.previous_ids == [None, None]
 
 
-def test_engine_reports_openai_error_for_api_failure(tmp_path):
+def test_engine_reports_llm_error_for_api_failure(tmp_path):
     class FakeOpenAIClient:
         def create_reply(self, _user_text, _instructions, previous_response_id=None):
             raise OpenAIAPIError("boom")
 
-    instructions = BotInstructions(openai_enabled=True, openai_error="OpenAI kaputt.")
+    instructions = BotInstructions(openai_enabled=True, llm_error="LLM kaputt.")
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "Hallo"))
 
     assert isinstance(actions[0], SendTyping)
-    assert actions[1].text == "OpenAI kaputt."
+    assert actions[1].text == "LLM kaputt."
 
 
 def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
@@ -1807,15 +1807,15 @@ def test_engine_account_memory_reset_refuses_global_targets(tmp_path):
     assert actions[0].text == BotInstructions().user_memory_reset_only_own
 
 
-def test_engine_reports_missing_openai_key_for_attachment_only_message(tmp_path):
-    instructions = BotInstructions(openai_enabled=True, openai_missing_key="Key fehlt.")
+def test_engine_reports_missing_llm_key_for_attachment_only_message(tmp_path):
+    instructions = BotInstructions(openai_enabled=True, llm_missing_key="LLM-Key fehlt.")
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
 
     actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
 
     assert len(actions) == 1
-    assert actions[0].text == "Key fehlt."
+    assert actions[0].text == "LLM-Key fehlt."
 
 
 def test_engine_voice_command_sends_generated_attachment(tmp_path):
@@ -2098,6 +2098,20 @@ def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypa
     assert "Transcript text." in client.reply_inputs[0]
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "AI summary."
+
+
+def test_engine_youtube_transcript_llm_pipeline_reports_neutral_missing_key(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Transcript text.", "YouTube-Untertitel"),
+    )
+    instructions = BotInstructions(openai_enabled=True, llm_missing_key="LLM-Key fehlt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "Bitte transkribiere dieses YouTube Video https://youtu.be/abc123", channel="matrix"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "LLM-Key fehlt."
 
 
 def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp_path):

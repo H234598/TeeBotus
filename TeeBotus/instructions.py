@@ -119,6 +119,8 @@ class BotInstructions:
     openai_transcription_error: str = "Ich konnte die Sprachnachricht gerade nicht transkribieren. Bitte versuche es gleich nochmal."
     openai_transcription_empty: str = "Ich konnte in der Sprachnachricht keinen Text erkennen."
     youtube_option_llm_fallback: bool = False
+    llm_error: str = "Ich kann das Textmodell gerade nicht erreichen. Bitte versuche es gleich nochmal."
+    llm_missing_key: str = "Das Textmodell ist aktiviert, aber der benoetigte API-Key ist nicht gesetzt."
     openai_error: str = "Ich kann die OpenAI API gerade nicht erreichen. Bitte versuche es gleich nochmal."
     openai_missing_key: str = "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt."
     openai_reset: str = (
@@ -640,6 +642,10 @@ def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> N
         instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
     elif normalized in {"profile", "llm_profile"}:
         instructions.llm_profile = value.strip()
+    elif normalized in {"error", "llm_error", "text_error"}:
+        instructions.llm_error = value
+    elif normalized in {"missing_key", "llm_missing_key", "text_missing_key"}:
+        instructions.llm_missing_key = value
     elif normalized in {"youtube_option_llm_fallback", "youtube_options_llm_fallback", "youtube_llm_fallback"}:
         instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
 
@@ -758,8 +764,10 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
     elif normalized == "error":
         instructions.openai_error = value
+        instructions.llm_error = value
     elif normalized == "missing_key":
         instructions.openai_missing_key = value
+        instructions.llm_missing_key = value
     elif normalized == "reset":
         instructions.openai_reset = value
     elif normalized == "bibliothekar_enabled":

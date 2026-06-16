@@ -7,6 +7,20 @@ from TeeBotus.instructions import InstructionStore, load_instructions, parse_ins
 
 
 class InstructionTests(unittest.TestCase):
+    def test_openai_error_settings_remain_text_llm_compatible(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## OpenAI
+            - error: OpenAI kaputt.
+            - missing_key: OpenAI-Key fehlt.
+            """
+        )
+
+        self.assertEqual(instructions.openai_error, "OpenAI kaputt.")
+        self.assertEqual(instructions.openai_missing_key, "OpenAI-Key fehlt.")
+        self.assertEqual(instructions.llm_error, "OpenAI kaputt.")
+        self.assertEqual(instructions.llm_missing_key, "OpenAI-Key fehlt.")
+
     def test_parse_markdown_instructions(self) -> None:
         account_a = "a" * 128
         account_b = "b" * 128
@@ -64,6 +78,8 @@ class InstructionTests(unittest.TestCase):
             - transcription_error: Transkription fehlgeschlagen.
             - transcription_empty: Keine Sprache erkannt.
             - youtube_option_llm_fallback: ja
+            - error: OpenAI kaputt.
+            - missing_key: OpenAI-Key fehlt.
 
             ## LLM
             - enabled: ja
@@ -76,6 +92,8 @@ class InstructionTests(unittest.TestCase):
             - timeout_seconds: 180
             - max_output_tokens: 456
             - temperature: 0.7
+            - error: LLM kaputt.
+            - missing_key: LLM-Key fehlt.
 
             ## Codex
             - enabled: ja
@@ -138,6 +156,8 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.llm_timeout_seconds, 180)
         self.assertEqual(instructions.llm_max_output_tokens, 456)
         self.assertEqual(instructions.llm_temperature, 0.7)
+        self.assertEqual(instructions.llm_error, "LLM kaputt.")
+        self.assertEqual(instructions.llm_missing_key, "LLM-Key fehlt.")
         self.assertEqual(instructions.openai_model, "gpt-5.5")
         self.assertEqual(instructions.openai_service_tier, "flex")
         self.assertEqual(instructions.openai_rule_file, "Analyse.md")
@@ -178,6 +198,8 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.openai_transcription_error, "Transkription fehlgeschlagen.")
         self.assertEqual(instructions.openai_transcription_empty, "Keine Sprache erkannt.")
         self.assertTrue(instructions.youtube_option_llm_fallback)
+        self.assertEqual(instructions.openai_error, "OpenAI kaputt.")
+        self.assertEqual(instructions.openai_missing_key, "OpenAI-Key fehlt.")
         self.assertTrue(instructions.codex_enabled)
         self.assertEqual(
             instructions.codex_allowed_account_ids,

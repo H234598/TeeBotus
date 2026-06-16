@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -28,7 +29,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.6.12\n"
+    assert captured.out == "TeeBotus 1.6.13\n"
     assert captured.err == ""
 
 
@@ -49,6 +50,15 @@ def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     bot = importlib.import_module("TeeBotus.bot")
     result = bot.main(["--runtime-status", "--channels", "telegram"])
     assert result == 0
+
+
+def test_runtime_status_does_not_leak_loaded_default_environment(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.delenv("TEEBOTUS_INSTANCE", raising=False)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    assert "TEEBOTUS_INSTANCE" not in os.environ
 
 
 def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, capsys) -> None:
@@ -78,6 +88,21 @@ def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     assert calls
     assert calls[0].instances[0].instance_name == "Demo"
     assert calls[0].instances[0].accounts[0].label == "telegram:1"
+
+
+def test_main_start_does_not_leak_loaded_default_environment(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+
+    monkeypatch.delenv("TELEGRAM_BOT_INSTANCE", raising=False)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main([]) == 0
+
+    assert calls
+    assert "TELEGRAM_BOT_INSTANCE" not in os.environ
 
 
 def test_main_all_start_uses_runtime_instance_discovery(monkeypatch, tmp_path) -> None:

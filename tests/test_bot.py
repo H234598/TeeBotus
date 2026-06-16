@@ -3591,7 +3591,7 @@ class BotTests(unittest.TestCase):
             handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, FailingOpenAIClient(), ChatState())
 
         self.assertIn("OpenAI request failed: short failure", "\n".join(logs.output))
-        self.assertEqual(api.sent_messages, [(123, instructions.openai_error)])
+        self.assertEqual(api.sent_messages, [(123, instructions.llm_error)])
 
     def test_reset_clears_openai_chat_state(self) -> None:
         from TeeBotus.instructions import BotInstructions
