@@ -369,6 +369,7 @@ def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> N
     output = "\n".join(
         [
             "ollama=127.0.0.1:11434 status=unreachable error=connection refused",
+            "llm=Demo/telegram:1 provider=openai model=gpt status=missing_key",
             "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=unreachable error=connection refused",
             "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=missing error=account missing",
             "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused",

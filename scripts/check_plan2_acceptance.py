@@ -465,6 +465,7 @@ def _runtime_status_line_is_broken(line: str) -> bool:
     if "account_memory_recovery=" in line and " status=needed" in line:
         return True
     status_by_prefix = {
+        "llm=": {"missing_key"},
         "ollama=": {"unreachable"},
         "signal_service=": {"unreachable"},
         "signal_account=": {"missing", "unavailable"},
