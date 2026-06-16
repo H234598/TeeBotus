@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMResponse
@@ -40,6 +40,7 @@ class LiteLLMSettings:
     model: str
     provider: str = "litellm"
     fallback_models: tuple[str, ...] = ()
+    fallback_api_keys: Mapping[str, str] | None = None
     use_instruction_fallback_models: bool = True
     api_key: str = ""
     api_base: str = ""
@@ -75,6 +76,7 @@ class LiteLLMTextClient:
             provider=provider,
             model=model,
             fallback_models=fallback_models,
+            fallback_api_keys=None,
             api_key=api_key,
             api_base=api_base,
             timeout=timeout,
@@ -85,6 +87,11 @@ class LiteLLMTextClient:
         self.provider = normalize_llm_provider(resolved.provider)
         self.model = resolved.model.strip()
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
+        self.fallback_api_keys = {
+            str(model or "").strip(): str(api_key or "").strip()
+            for model, api_key in dict(resolved.fallback_api_keys or {}).items()
+            if str(model or "").strip() and str(api_key or "").strip()
+        }
         self.use_instruction_fallback_models = bool(resolved.use_instruction_fallback_models)
         self.api_key = resolved.api_key.strip()
         self.api_base = resolved.api_base.strip()
@@ -113,12 +120,13 @@ class LiteLLMTextClient:
         if not models:
             raise LLMAPIError("LiteLLM model must not be empty")
 
-        kwargs = self._completion_kwargs(user_text, instructions)
+        base_kwargs = self._completion_kwargs(user_text, instructions)
         if previous_response_id:
             LOGGER.debug("Ignoring previous_response_id for LiteLLM text provider; provider has no Responses state capability.")
 
         errors: list[str] = []
         for model in models:
+            kwargs = self._completion_kwargs_for_model(base_kwargs, model)
             try:
                 response = completion(model=model, **kwargs)
             except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
@@ -162,6 +170,13 @@ class LiteLLMTextClient:
         if api_base:
             kwargs["api_base"] = api_base
         api_key = _resolve_litellm_api_key(instructions, self.api_key)
+        if api_key:
+            kwargs["api_key"] = api_key
+        return kwargs
+
+    def _completion_kwargs_for_model(self, base_kwargs: dict[str, object], model: str) -> dict[str, object]:
+        kwargs = dict(base_kwargs)
+        api_key = self.fallback_api_keys.get(model)
         if api_key:
             kwargs["api_key"] = api_key
         return kwargs

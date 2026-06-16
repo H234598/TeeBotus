@@ -633,6 +633,7 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
         openai_client=None,
         purpose="structured_decision",
         allow_remote_fallback=True,
+        env={"GROQ_API_KEY": "benchmark-groq-key"},
     )
     direct_blocked_client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
@@ -673,6 +674,8 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "default_fallback_models": list(default_route.fallback_models),
             "explicit_remote_fallback_enabled": bool(explicit_fallback_route.fallback_models),
             "explicit_remote_fallback_models": list(explicit_fallback_route.fallback_models),
+            "explicit_remote_fallback_api_key_env": explicit_fallback_route.fallback_api_key_env,
+            "explicit_remote_fallback_api_key_mapped": bool(getattr(client, "fallback_api_keys", {})),
             "direct_remote_fallback_default_models": list(getattr(direct_blocked_client, "fallback_models", ())),
             "direct_remote_fallback_allowed_models": list(getattr(direct_allowed_client, "fallback_models", ())),
             "network_calls": 0,

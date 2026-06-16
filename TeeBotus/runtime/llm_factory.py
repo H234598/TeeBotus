@@ -107,6 +107,7 @@ def _build_route_client(
 ) -> object | None:
     source = os.environ if env is None else env
     profile_api_key = source.get(route.api_key_env, "").strip() if route.api_key_env else ""
+    fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
     resolved_api_key = str(override_api_key or "").strip() or profile_api_key
     resolved_provider = normalize_llm_provider(route.provider)
     resolved_openai_client = openai_client
@@ -125,6 +126,7 @@ def _build_route_client(
         provider=route.provider,
         model=route.model,
         fallback_models=resolved_fallback_models,
+        fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         api_key=resolved_api_key,
         api_base=route.base_url,
         timeout=timeout,

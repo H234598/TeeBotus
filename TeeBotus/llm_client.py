@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Mapping, Protocol
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMImage, LLMResponse, LLMVoice
@@ -41,6 +41,7 @@ def build_text_llm_client(
     provider: str = "",
     model: str = "",
     fallback_models: str | tuple[str, ...] = (),
+    fallback_api_keys: Mapping[str, str] | None = None,
     api_key: str = "",
     api_base: str = "",
     timeout: int | str | None = None,
@@ -57,6 +58,7 @@ def build_text_llm_client(
                 provider=resolved_provider,
                 model=model,
                 fallback_models=parse_fallback_models(fallback_models),
+                fallback_api_keys=fallback_api_keys,
                 use_instruction_fallback_models=use_instruction_fallback_models,
                 api_key=api_key or default_api_key,
                 api_base=api_base or instructions.llm_base_url,

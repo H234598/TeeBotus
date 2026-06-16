@@ -97,6 +97,7 @@ def test_route_selection_can_enable_explicit_remote_fallback() -> None:
 
     assert route.fallback_profile_name == "groq_fast"
     assert route.fallback_models == ("groq/llama-3.1-8b-instant",)
+    assert route.fallback_api_key_env == "GROQ_API_KEY"
 
 
 def test_route_selection_normalizes_purpose_names() -> None:
@@ -269,6 +270,32 @@ def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() 
     assert blocked.fallback_models == ()
     assert isinstance(allowed, LiteLLMTextClient)
     assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
+
+
+def test_runtime_text_client_purpose_router_passes_fallback_profile_api_key(monkeypatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        calls.append((model, str(kwargs.get("api_key") or "")))
+        if model == "ollama_chat/llama3.1:8b":
+            raise RuntimeError("primary down")
+        return {"id": "fallback-ok", "choices": [{"message": {"content": "Fallback Antwort"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        allow_remote_fallback=True,
+        env={"GROQ_API_KEY": "groq-secret"},
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "Fallback Antwort"
+    assert calls == [("ollama_chat/llama3.1:8b", ""), ("groq/llama-3.1-8b-instant", "groq-secret")]
 
 
 def test_runtime_text_client_direct_runtime_provider_overrides_purpose_router() -> None:
