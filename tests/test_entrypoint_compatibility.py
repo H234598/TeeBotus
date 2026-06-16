@@ -28,7 +28,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.6.11\n"
+    assert captured.out == "TeeBotus 1.6.12\n"
     assert captured.err == ""
 
 
@@ -404,6 +404,130 @@ def test_runtime_status_reports_runtime_llm_disabled(monkeypatch, capsys, tmp_pa
     assert "openai-secret" not in captured.out
 
 
+def test_runtime_status_uses_instruction_llm_disabled_without_runtime_override(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: nein\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "openai-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=none model=<disabled> status=disabled" in captured.out
+    assert "openai-secret" not in captured.out
+
+
+def test_runtime_status_runtime_enabled_overrides_instruction_llm_disabled(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: nein\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_ENABLED_DEMO", "true")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured profile=local_ollama base_url=http://127.0.0.1:11434 api_key=none"
+    ) in captured.out
+
+
+def test_runtime_status_uses_instruction_llm_profile_without_runtime_override(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: ja\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured profile=local_ollama base_url=http://127.0.0.1:11434 api_key=none"
+    ) in captured.out
+
+
+def test_runtime_status_runtime_profile_overrides_instruction_profile(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: ja\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "hf_mistral")
+    monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=huggingface/mistralai/Mistral-7B-Instruct-v0.3 "
+        "status=missing_key profile=hf_mistral api_key=none"
+    ) in captured.out
+    assert "local_ollama" not in captured.out
+
+
+def test_runtime_status_uses_instruction_llm_api_key_env_for_direct_remote_provider(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n"
+        "- enabled: ja\n"
+        "- provider: litellm\n"
+        "- model: groq/llama-3.1-8b-instant\n"
+        "- api_key_env: GROQ_API_KEY\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("GROQ_API_KEY", "groq-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=groq/llama-3.1-8b-instant "
+        "status=configured api_key=configured"
+    ) in captured.out
+    assert "groq-secret" not in captured.out
+
+
 def test_runtime_status_resolves_profile_without_direct_provider(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
@@ -711,6 +835,171 @@ def test_runtime_status_checks_ollama_for_local_profile(monkeypatch, capsys, tmp
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
     assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b status=configured profile=local_ollama" in captured.out
+    assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
+
+
+def test_runtime_status_checks_ollama_for_instruction_local_profile(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: ja\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    calls: list[str] = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"models":[{"name":"llama3.1:8b"}]}'
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        assert timeout == 1.0
+        return Response()
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fake_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert calls == ["http://127.0.0.1:11434/api/tags"]
+    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b status=configured profile=local_ollama" in captured.out
+    assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
+
+
+def test_runtime_status_skips_ollama_when_instruction_llm_disabled(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: nein\n- profile: local_ollama\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    def fail_urlopen(*_args, **_kwargs):
+        raise AssertionError("disabled instruction LLM must not probe Ollama")
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fail_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=none model=<disabled> status=disabled" in captured.out
+    assert "ollama=127.0.0.1:11434" not in captured.out
+
+
+def test_runtime_status_runtime_direct_provider_overrides_instruction_remote_profile(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: ja\n- profile: hf_mistral\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROVIDER_DEMO", "litellm")
+    monkeypatch.setenv("TEEBOTUS_LLM_MODEL_DEMO", "ollama_chat/llama3.1:8b")
+    monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
+
+    calls: list[str] = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"models":[{"name":"llama3.1:8b"}]}'
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        assert timeout == 1.0
+        return Response()
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fake_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured api_key=none"
+    ) in captured.out
+    assert "profile=hf_mistral" not in captured.out
+    assert calls == ["http://127.0.0.1:11434/api/tags"]
+    assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
+
+
+def test_runtime_status_runtime_purpose_overrides_instruction_remote_profile(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## LLM\n- enabled: ja\n- profile: hf_mistral\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PURPOSE_DEMO", "structured_decision")
+    monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
+
+    calls: list[str] = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        @staticmethod
+        def read() -> bytes:
+            return b'{"models":[{"name":"llama3.1:8b"}]}'
+
+    def fake_urlopen(request, timeout):
+        calls.append(request.full_url)
+        assert timeout == 1.0
+        return Response()
+
+    monkeypatch.setattr("TeeBotus.runtime.ollama_health.urllib.request.urlopen", fake_urlopen)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 api_key=none"
+    ) in captured.out
+    assert "profile=hf_mistral" not in captured.out
+    assert calls == ["http://127.0.0.1:11434/api/tags"]
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 

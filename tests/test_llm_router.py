@@ -265,6 +265,34 @@ def test_runtime_text_client_profile_uses_runtime_base_url_override() -> None:
     assert client.api_base == "http://127.0.0.1:11555/api"
 
 
+def test_runtime_text_client_direct_provider_overrides_instruction_profile() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_profile="hf_mistral"),
+        openai_client=None,
+        provider="litellm",
+        model="ollama_chat/llama3.1:8b",
+        api_base="http://127.0.0.1:11434",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11434"
+
+
+def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_profile="hf_mistral"),
+        openai_client=None,
+        purpose="structured_decision",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.api_base == "http://127.0.0.1:11434"
+
+
 def test_runtime_text_client_call_uses_runtime_generation_overrides(monkeypatch) -> None:
     calls: list[dict[str, object]] = []
 

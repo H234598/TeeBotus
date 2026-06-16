@@ -662,13 +662,19 @@ TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT_TELEGRAM_1=http://127.0.0.1:11434
 ### 8.4 Auflösung
 
 ```text
-1. TEEBOTUS_LLM_PROVIDER_<INSTANCE>_<CHANNEL>_<SLOT>
-2. TEEBOTUS_LLM_PROVIDER_<INSTANCE>_<CHANNEL>
-3. TEEBOTUS_LLM_PROVIDER_<INSTANCE>
-4. TEEBOTUS_LLM_PROVIDER
+1. TEEBOTUS_LLM_PROFILE_<INSTANCE>_<CHANNEL>_<SLOT> und allgemeinere PROFILE-Varianten
+2. explizite Runtime-Route: TEEBOTUS_LLM_PURPOSE / PROVIDER / MODEL in Slot-, Kanal-, Instanz- oder globaler Form
+3. profile aus Bot_Verhalten.md, aber nur wenn keine explizite Runtime-Route gesetzt ist
+4. provider/model/base_url/fallback_models/api_key_env aus Bot_Verhalten.md
 5. Legacy OpenAI, wenn OPENAI_API_KEY vorhanden
 6. none
 ```
+
+Wichtig: Runtime-Overrides muessen ein Profil aus `Bot_Verhalten.md`
+ueberschreiben koennen. Ein Runtime-Profil gewinnt immer; Runtime-Purpose,
+Runtime-Provider oder Runtime-Model unterdruecken dagegen nur das
+Instruction-Profil und laufen dann ueber Purpose-Routing oder direkte
+Provider-/Model-Aufloesung.
 
 ### 8.5 RuntimeConfig erweitern
 
@@ -696,6 +702,12 @@ Remote-Profile muessen bei fehlendem Primaer-Key `status=missing_key`
 melden. Explizit aktivierte Remote-Fallbacks muessen bei fehlendem
 Fallback-Key `status=degraded fallback_api_key=missing` melden, waehrend
 lokale Ollama- und loopback-LiteLLM-Ziele ohne Key `configured` bleiben.
+
+Runtime-Status muss dieselbe effektive LLM-Aufloesung nutzen wie der Bot-Start:
+`Bot_Verhalten.md` als Basis, Runtime-Overrides mit Vorrang, deaktivierte LLMs
+als `provider=none status=disabled`. Ollama-Health darf nur effektiv aktive
+Ollama-Ziele pruefen und muss deaktivierte LLMs sowie durch Remote-Profile
+ueberschriebene Direct-Ollama-Werte ignorieren.
 
 Keine Secrets anzeigen.
 

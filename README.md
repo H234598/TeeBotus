@@ -415,6 +415,8 @@ Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama,
 
 Zur Laufzeit kann ein konkretes Profil ueber `profile: ...` in `Bot_Verhalten.md` oder ueber `TEEBOTUS_LLM_PROFILE_<INSTANZ>` und kanalspezifische Varianten gesetzt werden. Telegram, Signal und Matrix bauen ihren Text-LLM-Client dann aus diesem Profil; ohne Profil bleibt das bisherige direkte Provider-/OpenAI-Verhalten erhalten.
 
+Die effektive Reihenfolge ist bewusst eindeutig: ein explizites Runtime-Profil (`TEEBOTUS_LLM_PROFILE...`) gewinnt immer. Wenn kein Runtime-Profil gesetzt ist, gewinnen explizite Runtime-Routen (`TEEBOTUS_LLM_PURPOSE...`, `TEEBOTUS_LLM_PROVIDER...`, `TEEBOTUS_LLM_MODEL...`) gegen ein Profil aus `Bot_Verhalten.md`. Nur wenn keine solche Runtime-Route gesetzt ist, wird `profile: ...` aus `Bot_Verhalten.md` verwendet. Danach folgen direkte `provider`-/`model`-Werte aus `Bot_Verhalten.md` und zuletzt der OpenAI-Legacy-Pfad.
+
 Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue neutrale Felder sind:
 
 ```text
@@ -444,7 +446,7 @@ TEEBOTUS_LLM_BASE_URL=http://127.0.0.1:11434 \
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
-`--runtime-status` prueft lokale Ollama-Targets ueber `127.0.0.1:11434` und meldet gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
+`--runtime-status` nutzt dieselbe effektive LLM-Aufloesung wie der Bot-Start. Er beruecksichtigt also `Bot_Verhalten.md`, Runtime-Overrides und deaktivierte LLMs gleich wie die Runtime-Fabrik. Lokale Ollama-Targets werden nur fuer effektiv aktive Ollama-Konfigurationen geprueft und melden gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
 
 Remote-Profile und Remote-Fallbacks werden im Status als `missing_key` oder
 `degraded` gemeldet, wenn der benoetigte Primaer- oder Fallback-Key fehlt.

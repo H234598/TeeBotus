@@ -118,10 +118,18 @@ def _runtime_status(argv: Sequence[str]) -> int:
     print(f"instances_dir={config.instances_dir}")
     print(f"instances={','.join(config.selected_instances) if config.selected_instances else 'auto'}")
     print(f"channels={','.join(config.channels)}")
+    instructions_by_instance: dict[str, Any] = {}
     for instance in config.instances:
+        try:
+            instructions = InstructionStore(instance.instruction_path).get()
+            instruction_error = ""
+            instructions_by_instance[instance.instance_name] = instructions
+        except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose unreadable instructions.
+            instructions = None
+            instruction_error = f"{type(exc).__name__}: {exc}"
         for account in instance.accounts:
-            print(_runtime_status_llm_line(account))
-    for health in check_ollama_services(config):
+            print(_runtime_status_llm_line(account, instructions=instructions, instruction_error=instruction_error))
+    for health in check_ollama_services(config, instructions_by_instance=instructions_by_instance):
         state = "reachable" if health.ok else "unreachable"
         if health.ok:
             models = ",".join(health.models) if health.models else "<none>"
@@ -196,13 +204,35 @@ def _runtime_status(argv: Sequence[str]) -> int:
     return 0
 
 
-def _runtime_status_llm_line(account: Any) -> str:
-    if _parse_optional_status_bool(getattr(account, "llm_enabled", "")) is False:
+def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
+    if instruction_error:
+        return (
+            f"llm={account.instance_name}/{account.label} provider=<unknown> "
+            f"model=<unknown> status=broken error={_sanitize_status_text(instruction_error)}"
+        )
+    enabled_override = _parse_optional_status_bool(getattr(account, "llm_enabled", ""))
+    if enabled_override is False:
         return f"llm={account.instance_name}/{account.label} provider=none model=<disabled> status=disabled"
-    provider, model, base_url, route_fallback_count, route_api_key_env, route_fallback_api_key_env, route_error = _status_llm_route(account)
+    if enabled_override is None and getattr(instructions, "llm_enabled", None) is False:
+        return f"llm={account.instance_name}/{account.label} provider=none model=<disabled> status=disabled"
+    (
+        provider,
+        model,
+        base_url,
+        route_fallback_count,
+        route_api_key_env,
+        route_fallback_api_key_env,
+        route_error,
+        route_mode,
+    ) = _status_llm_route(account, instructions=instructions)
     if provider == "openai" and model == "<legacy>":
         model = "<Bot_Verhalten/OpenAI>"
-    key_configured = _llm_key_configured(account, provider, route_api_key_env=route_api_key_env)
+    key_configured = _llm_key_configured(
+        account,
+        provider,
+        route_api_key_env=route_api_key_env,
+        instructions=instructions,
+    )
     key_required = _llm_key_required_for_status(
         account,
         provider=provider,
@@ -213,11 +243,16 @@ def _runtime_status_llm_line(account: Any) -> str:
     fallback_key_configured = bool(route_fallback_api_key_env and os.environ.get(route_fallback_api_key_env, "").strip())
     direct_fallback_key_status = _direct_remote_fallback_key_status(
         account,
+        instructions=instructions,
         provider=provider,
         base_url=base_url,
         key_configured=key_configured,
+        route_mode=route_mode,
     )
-    fallback_key_missing = bool(route_fallback_count and route_fallback_api_key_env and not fallback_key_configured) or direct_fallback_key_status == "missing"
+    fallback_key_missing = (
+        bool(route_fallback_count and route_fallback_api_key_env and not fallback_key_configured)
+        or direct_fallback_key_status == "missing"
+    )
     if route_error:
         status = "broken"
     elif key_required and not key_configured:
@@ -230,7 +265,7 @@ def _runtime_status_llm_line(account: Any) -> str:
         f"llm={account.instance_name}/{account.label} "
         f"provider={provider} model={model} status={status}"
     )
-    profile = str(getattr(account, "llm_profile", "") or "").strip()
+    profile = _effective_llm_profile(account, instructions)
     if profile:
         detail += f" profile={profile}"
     purpose = str(getattr(account, "llm_purpose", "") or "").strip()
@@ -242,8 +277,10 @@ def _runtime_status_llm_line(account: Any) -> str:
         detail += f" api_key={'configured' if key_configured else 'none'}"
     fallback_count = _status_effective_fallback_count(
         account,
+        instructions=instructions,
         provider=provider,
         route_fallback_count=route_fallback_count,
+        route_mode=route_mode,
     )
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
@@ -254,13 +291,13 @@ def _runtime_status_llm_line(account: Any) -> str:
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", ""))
     if allow_remote_fallback is not None:
         detail += f" remote_fallback={'enabled' if allow_remote_fallback else 'disabled'}"
-    timeout = str(getattr(account, "llm_timeout_seconds", "") or "").strip()
+    timeout = _effective_llm_text(account, instructions, "llm_timeout_seconds", "llm_timeout_seconds")
     if timeout:
         detail += f" timeout_seconds={timeout}"
-    max_tokens = str(getattr(account, "llm_max_output_tokens", "") or "").strip()
+    max_tokens = _effective_llm_text(account, instructions, "llm_max_output_tokens", "llm_max_output_tokens")
     if max_tokens:
         detail += f" max_output_tokens={max_tokens}"
-    temperature = str(getattr(account, "llm_temperature", "") or "").strip()
+    temperature = _effective_llm_text(account, instructions, "llm_temperature", "llm_temperature")
     if temperature:
         detail += f" temperature={temperature}"
     if route_error:
@@ -268,11 +305,14 @@ def _runtime_status_llm_line(account: Any) -> str:
     return detail
 
 
-def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str, str]:
-    provider = _status_value(getattr(account, "llm_provider", ""), default="openai")
-    model = _status_value(getattr(account, "llm_model", ""), default="<legacy>")
-    base_url = _sanitize_status_url(getattr(account, "llm_base_url", ""))
-    profile_name = str(getattr(account, "llm_profile", "") or "").strip()
+def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple[str, str, str, int, str, str, str, str]:
+    account_provider = str(getattr(account, "llm_provider", "") or "").strip()
+    account_model = str(getattr(account, "llm_model", "") or "").strip()
+    account_base_url = str(getattr(account, "llm_base_url", "") or "").strip()
+    provider = _status_value(account_provider or _instruction_text(instructions, "llm_provider"), default="openai")
+    model = _status_value(account_model or _instruction_text(instructions, "llm_model"), default="<legacy>")
+    base_url = _sanitize_status_url(account_base_url or _instruction_text(instructions, "llm_base_url"))
+    profile_name = _effective_llm_profile(account, instructions)
     purpose = str(getattr(account, "llm_purpose", "") or "").strip()
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
     try:
@@ -280,23 +320,34 @@ def _status_llm_route(account: Any) -> tuple[str, str, str, int, str, str, str]:
             from TeeBotus.llm.profiles import load_llm_profiles
 
             profile = load_llm_profiles()[profile_name]
-            return profile.provider, profile.model, base_url or _sanitize_status_url(profile.base_url), 0, profile.api_key_env, "", ""
-        if purpose and not (str(getattr(account, "llm_provider", "") or "").strip() or str(getattr(account, "llm_model", "") or "").strip()):
+            return (
+                profile.provider,
+                profile.model,
+                _sanitize_status_url(account_base_url) or _sanitize_status_url(profile.base_url),
+                0,
+                profile.api_key_env,
+                "",
+                "",
+                "profile",
+            )
+        if purpose and not (account_provider or account_model):
             from TeeBotus.llm.profiles import select_llm_route
 
             route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
+            account_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
             return (
                 route.provider,
                 route.model,
-                base_url or _sanitize_status_url(route.base_url),
-                len(route.fallback_models),
+                _sanitize_status_url(account_base_url) or _sanitize_status_url(route.base_url),
+                0 if account_fallbacks else len(route.fallback_models),
                 route.api_key_env,
-                route.fallback_api_key_env,
+                "" if account_fallbacks else route.fallback_api_key_env,
                 "",
+                "purpose",
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
-        return provider, model, base_url, 0, "", "", f"{type(exc).__name__}: {exc}"
-    return provider, model, base_url, 0, "", "", ""
+        return provider, model, base_url, 0, "", "", f"{type(exc).__name__}: {exc}", "broken"
+    return provider, model, base_url, 0, "", "", "", "direct"
 
 
 def _status_value(value: object, *, default: str) -> str:
@@ -304,7 +355,13 @@ def _status_value(value: object, *, default: str) -> str:
     return text if text else default
 
 
-def _llm_key_configured(account: Any, provider: str, *, route_api_key_env: str = "") -> bool:
+def _llm_key_configured(
+    account: Any,
+    provider: str,
+    *,
+    route_api_key_env: str = "",
+    instructions: Any | None = None,
+) -> bool:
     if provider == "openai":
         if str(getattr(account, "openai_api_key", "") or "").strip():
             return True
@@ -312,7 +369,10 @@ def _llm_key_configured(account: Any, provider: str, *, route_api_key_env: str =
         return True
     if route_api_key_env and os.environ.get(route_api_key_env, "").strip():
         return True
-    profile_name = str(getattr(account, "llm_profile", "") or "").strip()
+    instruction_api_key_env = _instruction_text(instructions, "llm_api_key_env")
+    if provider != "openai" and instruction_api_key_env and os.environ.get(instruction_api_key_env, "").strip():
+        return True
+    profile_name = _effective_llm_profile(account, instructions)
     if profile_name:
         try:
             from TeeBotus.llm.profiles import load_llm_profiles
@@ -389,8 +449,15 @@ def _status_base_url_is_loopback(value: object) -> bool:
     return (parsed.hostname or "").strip().casefold() in {"127.0.0.1", "localhost", "::1"}
 
 
-def _status_effective_fallback_count(account: Any, *, provider: str, route_fallback_count: int) -> int:
-    configured_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
+def _status_effective_fallback_count(
+    account: Any,
+    *,
+    instructions: Any | None = None,
+    provider: str,
+    route_fallback_count: int,
+    route_mode: str = "direct",
+) -> int:
+    configured_fallbacks = _runtime_fallback_models_text(account, instructions, route_mode=route_mode)
     if not configured_fallbacks:
         return route_fallback_count
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
@@ -411,11 +478,13 @@ def _status_effective_fallback_count(account: Any, *, provider: str, route_fallb
 def _direct_remote_fallback_key_status(
     account: Any,
     *,
+    instructions: Any | None = None,
     provider: str,
     base_url: str,
     key_configured: bool,
+    route_mode: str = "direct",
 ) -> str:
-    configured_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
+    configured_fallbacks = _runtime_fallback_models_text(account, instructions, route_mode=route_mode)
     if not configured_fallbacks:
         return ""
     allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
@@ -447,6 +516,47 @@ def _status_fallback_model_requires_key(*, provider: str, model: object, base_ur
 
 def _csv_count(value: object) -> int:
     return len([part for part in str(value or "").split(",") if part.strip()])
+
+
+def _effective_llm_text(account: Any, instructions: Any | None, account_attr: str, instruction_attr: str) -> str:
+    account_value = str(getattr(account, account_attr, "") or "").strip()
+    if account_value:
+        return account_value
+    return _instruction_text(instructions, instruction_attr)
+
+
+def _instruction_text(instructions: Any | None, attr: str) -> str:
+    if instructions is None:
+        return ""
+    value = getattr(instructions, attr, "")
+    if isinstance(value, (tuple, list)):
+        return ",".join(str(part or "").strip() for part in value if str(part or "").strip())
+    return str(value or "").strip()
+
+
+def _effective_llm_profile(account: Any, instructions: Any | None) -> str:
+    account_profile = str(getattr(account, "llm_profile", "") or "").strip()
+    if account_profile:
+        return account_profile
+    if _has_runtime_llm_route_override(account):
+        return ""
+    return _instruction_text(instructions, "llm_profile")
+
+
+def _has_runtime_llm_route_override(account: Any) -> bool:
+    return any(
+        str(getattr(account, attr, "") or "").strip()
+        for attr in ("llm_purpose", "llm_provider", "llm_model")
+    )
+
+
+def _runtime_fallback_models_text(account: Any, instructions: Any | None, *, route_mode: str) -> str:
+    configured_fallbacks = str(getattr(account, "llm_fallback_models", "") or "").strip()
+    if configured_fallbacks:
+        return configured_fallbacks
+    if route_mode == "direct":
+        return _instruction_text(instructions, "llm_fallback_models")
+    return ""
 
 
 def _parse_optional_status_bool(value: object) -> bool | None:

@@ -36,7 +36,12 @@ def build_runtime_text_llm_client(
         return None
     if enabled_override is None and instructions.llm_enabled is False:
         return None
-    profile_name = str(profile or instructions.llm_profile or "").strip()
+    runtime_profile_name = str(profile or "").strip()
+    route_purpose = str(purpose or "").strip()
+    has_direct_provider = bool(str(provider or "").strip())
+    has_direct_model = bool(str(model or "").strip())
+    has_runtime_route_override = bool(runtime_profile_name or route_purpose or has_direct_provider or has_direct_model)
+    profile_name = runtime_profile_name or ("" if has_runtime_route_override else str(instructions.llm_profile or "").strip())
     remote_fallback_allowed = _parse_bool(allow_remote_fallback)
     if profile_name:
         return _build_profile_client(
@@ -54,9 +59,6 @@ def build_runtime_text_llm_client(
             env=env,
             openai_client_factory=openai_client_factory,
         )
-    route_purpose = str(purpose or "").strip()
-    has_direct_provider = bool(str(provider or "").strip())
-    has_direct_model = bool(str(model or "").strip())
     if route_purpose and not (has_direct_provider or has_direct_model):
         route = select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed)
         return _build_route_client(
