@@ -95,6 +95,13 @@ python3 -m TeeBotus --runtime-status --channels telegram
 
 `--channels telegram` startet nur Telegram. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten die zusaetzlichen Slots im Hintergrund und danach den stabilen Telegram-Poller.
 
+Der Hauptbot kann ebenfalls als User-systemd-Service reproduzierbar erzeugt werden. Der Renderer startet keine Bot-Loops im Print-Modus und erzeugt eine gehaertete Unit mit `NoNewPrivileges=true`, `PrivateTmp=true`, `.env` als optionalem EnvironmentFile und `python -m TeeBotus --all --channels telegram,signal,matrix`:
+
+```bash
+teebotus-systemd --repo-root "$PWD" --print
+teebotus-systemd --repo-root "$PWD" --enable
+```
+
 Der Proactive-Agent-Scheduler laeuft separat vom Botstart. Ein periodischer User-systemd-Timer kann reproduzierbar erzeugt werden. Ohne `--interval` prueft der Timer alle 5 Minuten:
 
 ```bash

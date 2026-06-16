@@ -46,6 +46,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_runtime_maintenance.py",
     "tests/test_runtime_state.py",
     "tests/test_signal_runner.py",
+    "tests/test_systemd.py",
     "tests/test_tts_dialect.py",
     "tests/test_version_notifications.py",
     "tests/test_weather_context.py",
@@ -201,6 +202,10 @@ def build_acceptance_commands(
             AcceptanceCommand(
                 "qdrant-systemd-print",
                 (python, "-m", "TeeBotus.qdrant_systemd", "--print"),
+            ),
+            AcceptanceCommand(
+                "teebotus-systemd-print",
+                (python, "-m", "TeeBotus.systemd", "--print"),
             ),
         ]
     )

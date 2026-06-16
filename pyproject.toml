@@ -39,6 +39,7 @@ tools = [
 
 [project.scripts]
 teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
+teebotus-systemd = "TeeBotus.systemd:main"
 teebotus-proactive = "TeeBotus.proactive:main"
 teebotus-proactive-review = "TeeBotus.proactive_review:main"
 teebotus-proactive-systemd = "TeeBotus.proactive_systemd:main"

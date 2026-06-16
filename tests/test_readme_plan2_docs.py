@@ -31,6 +31,9 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "scripts/run_benchmarks.py --quick" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
+    assert "teebotus-systemd" in text
+    assert "NoNewPrivileges=true" in text
+    assert "PrivateTmp=true" in text
     assert "--include-qdrant-live" in text
     assert "--include-audit" in text
     assert "tests/test_llm_base.py" in text

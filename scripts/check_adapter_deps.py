@@ -153,6 +153,7 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
         scripts = {}
     expected_scripts = {
         "teebotus-bibliothekar",
+        "teebotus-systemd",
         "teebotus-proactive",
         "teebotus-proactive-review",
         "teebotus-proactive-systemd",

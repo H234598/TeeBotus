@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from TeeBotus.systemd import main, render_teebotus_systemd_unit
+
+
+def test_render_teebotus_systemd_unit_matches_plan2_shape(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path)
+
+    assert unit.service_name == "teebotus.service"
+    assert "Description=TeeBotus multi-channel bot" in unit.service_text
+    assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
+    assert f"EnvironmentFile=-{tmp_path.resolve() / '.env'}" in unit.service_text
+    assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+    assert "Restart=on-failure" in unit.service_text
+    assert "RestartSec=10" in unit.service_text
+    assert "NoNewPrivileges=true" in unit.service_text
+    assert "PrivateTmp=true" in unit.service_text
+    assert "WantedBy=default.target" in unit.service_text
+
+
+def test_render_teebotus_systemd_unit_uses_venv_python_when_present(tmp_path: Path) -> None:
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path)
+
+    assert f"ExecStart={venv_python.resolve()} -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+
+
+def test_render_teebotus_systemd_unit_can_limit_channels_and_no_all(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(
+        repo_root=tmp_path,
+        python_executable="/usr/bin/python3",
+        service_name="teebotus-demo",
+        channels="telegram, signal",
+        all_instances=False,
+    )
+
+    assert unit.service_name == "teebotus-demo.service"
+    assert "ExecStart=/usr/bin/python3 -m TeeBotus --channels telegram,signal" in unit.service_text
+    assert "--all" not in unit.service_text
+
+
+def test_render_teebotus_systemd_unit_rejects_unknown_channel(tmp_path: Path) -> None:
+    try:
+        render_teebotus_systemd_unit(repo_root=tmp_path, channels="telegram,irc")
+    except ValueError as exc:
+        assert "unsupported TeeBotus channels" in str(exc)
+    else:
+        raise AssertionError("expected unknown channel to fail")
+
+
+def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> None:
+    result = main(["--repo-root", str(tmp_path), "--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "# teebotus.service" in captured.out
+    assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in captured.out
+
+
+def test_teebotus_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, check=False, **_kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("TeeBotus.systemd.Path.home", lambda: tmp_path)
+    monkeypatch.setattr("TeeBotus.systemd.subprocess.run", fake_run)
+
+    result = main(["--repo-root", str(tmp_path), "--enable"])
+
+    assert result == 0
+    assert (tmp_path / ".config" / "systemd" / "user" / "teebotus.service").exists()
+    assert calls == [
+        ["systemctl", "--user", "daemon-reload"],
+        ["systemctl", "--user", "enable", "--now", "teebotus.service"],
+    ]
