@@ -166,6 +166,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert mcp_tools["details"]["library_selected"] >= 1
     assert mcp_tools["details"]["memory_selected"] == 1
     assert mcp_tools["details"]["group_blocks_memory"] is True
+    assert mcp_tools["details"]["unknown_tool_blocked"] is True
     assert mcp_tools["details"]["network_calls"] == 0
 
 

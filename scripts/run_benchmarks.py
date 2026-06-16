@@ -42,7 +42,7 @@ from TeeBotus.ai_structures.pydantic_ai_adapter import build_pydantic_ai_model_r
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
 from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
-from TeeBotus.mcp_tools import build_readonly_mcp_registry  # noqa: E402
+from TeeBotus.mcp_tools import MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry  # noqa: E402
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions  # noqa: E402
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event  # noqa: E402
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event  # noqa: E402
@@ -1734,7 +1734,17 @@ def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
         latest_library = calls[-1][0] if calls else {}
         latest_memory = calls[-1][1] if calls else {}
         group_blocks_memory = "memory.search" not in group_registry.tool_names
-        ok = bool(latest_library.get("selected_ids")) and latest_memory.get("selected_ids") == ["mem_mcp_bench"] and group_blocks_memory
+        unknown_registry = MCPToolRegistry(
+            {"shell.exec": MCPToolPolicy(enabled=True, read_only=True)},
+            {"shell.exec": lambda _arguments: {"stdout": "would run"}},
+        )
+        unknown_tool_blocked = "shell.exec" not in unknown_registry.tool_names and not unknown_registry.policy("shell.exec").enabled
+        ok = (
+            bool(latest_library.get("selected_ids"))
+            and latest_memory.get("selected_ids") == ["mem_mcp_bench"]
+            and group_blocks_memory
+            and unknown_tool_blocked
+        )
         return _result(
             name="mcp_readonly_bibliothekar_and_memory_search",
             category="mcp_tools",
@@ -1750,6 +1760,7 @@ def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
                 "library_selected": len(latest_library.get("selected_ids") or []),
                 "memory_selected": len(latest_memory.get("selected_ids") or []),
                 "group_blocks_memory": group_blocks_memory,
+                "unknown_tool_blocked": unknown_tool_blocked,
                 "network_calls": 0,
                 "median_tool_pair_ms": statistics.median(timings),
             },
