@@ -179,6 +179,19 @@ def test_reminder_decision_schema_accepts_json_payloads() -> None:
     )
 
 
+def test_reminder_decision_schema_rejects_invalid_datetime_iso() -> None:
+    with pytest.raises(ValidationError, match="datetime_iso must be ISO-8601 parseable"):
+        parse_reminder_decision(
+            {
+                "should_create": True,
+                "text": "Termin",
+                "datetime_iso": "morgen um acht",
+                "recurrence": None,
+                "confidence": 0.91,
+            }
+        )
+
+
 def test_youtube_options_decision_schema_accepts_confidence() -> None:
     decision = YouTubeOptionsDecision.model_validate(
         {

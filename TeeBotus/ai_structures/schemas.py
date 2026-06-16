@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -68,6 +69,17 @@ class ReminderDecision(BaseModel):
         if value is None:
             return None
         return str(value).strip()
+
+    @field_validator("datetime_iso")
+    @classmethod
+    def _validate_datetime_iso(cls, value: str | None) -> str | None:
+        if not value:
+            return value
+        try:
+            datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("datetime_iso must be ISO-8601 parseable") from exc
+        return value
 
 
 class YouTubeOptionsDecision(BaseModel):

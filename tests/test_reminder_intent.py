@@ -132,3 +132,28 @@ def test_structured_reminder_fallback_ignores_low_confidence(tmp_path, monkeypat
 
     assert reply is None
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_structured_reminder_fallback_ignores_invalid_datetime_payload(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich irgendwann daran erinnern?",
+        now=fixed_now(),
+        structured_decision_runner=lambda _prompt, _schema: {
+            "should_create": True,
+            "text": "Termin",
+            "datetime_iso": "morgen um acht",
+            "confidence": 0.91,
+        },
+    )
+
+    assert reply is None
+    assert account_store.read_proactive_outbox(account_id) == []
