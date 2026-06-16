@@ -100,6 +100,29 @@ def test_route_selection_can_enable_explicit_remote_fallback() -> None:
     assert route.fallback_api_key_env == "GROQ_API_KEY"
 
 
+def test_route_selection_treats_ambiguous_litellm_fallback_profiles_as_remote() -> None:
+    profiles = {
+        "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.1:8b", "http://127.0.0.1:11434"),
+        "unprefixed_openai": LLMProfile("unprefixed_openai", "litellm", "gpt-4.1-mini", api_key_env="OPENAI_API_KEY"),
+    }
+    routing = {
+        "hard_reasoning": LLMRoutingRule(
+            purpose="hard_reasoning",
+            profile="local_ollama",
+            fallback="unprefixed_openai",
+        )
+    }
+
+    blocked = select_llm_route("hard_reasoning", profiles=profiles, routing=routing)
+    allowed = select_llm_route("hard_reasoning", profiles=profiles, routing=routing, allow_remote_fallback=True)
+
+    assert blocked.fallback_models == ()
+    assert blocked.fallback_profile_name == ""
+    assert allowed.fallback_profile_name == "unprefixed_openai"
+    assert allowed.fallback_models == ("gpt-4.1-mini",)
+    assert allowed.fallback_api_key_env == "OPENAI_API_KEY"
+
+
 def test_route_selection_normalizes_purpose_names() -> None:
     profiles = {
         "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.1:8b", "http://127.0.0.1:11434"),

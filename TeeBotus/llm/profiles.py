@@ -29,7 +29,13 @@ class LLMProfile:
         if provider in REMOTE_PROVIDERS:
             return True
         model = self.model.casefold()
-        return model.startswith(("huggingface/", "groq/", "gemini/", "openai/"))
+        if model.startswith(("ollama/", "ollama_chat/")):
+            return False
+        if model.startswith(("huggingface/", "groq/", "gemini/", "openai/")):
+            return True
+        if provider == "litellm":
+            return True
+        return False
 
 
 @dataclass(frozen=True)
