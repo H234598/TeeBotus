@@ -240,6 +240,7 @@ def _run_telegram_polling_bridges(
     youtube_job_runner = telegram_runtime.YouTubeTranscriptionJobRunner()
     _notify_recent_users_for_current_version(config, instance_configs)
     try:
+        bridges: list[tuple[AccountRunConfig, TelegramRuntimeBridge]] = []
         for account in _telegram_accounts(config):
             bridge = TelegramRuntimeBridge(
                 run_config=account,
@@ -247,6 +248,8 @@ def _run_telegram_polling_bridges(
                 instances_dir=config.instances_dir,
                 youtube_job_runner=youtube_job_runner,
             )
+            bridges.append((account, bridge))
+        for account, bridge in bridges:
             thread = threading.Thread(
                 target=bridge.run_polling,
                 kwargs={
@@ -267,6 +270,11 @@ def _run_telegram_polling_bridges(
         stop_event.set()
         for thread in threads:
             thread.join(timeout=telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+    except Exception:
+        stop_event.set()
+        for thread in threads:
+            thread.join(timeout=telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+        raise
     finally:
         youtube_job_runner.shutdown(wait=False)
 

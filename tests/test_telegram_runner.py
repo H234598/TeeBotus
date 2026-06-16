@@ -210,6 +210,79 @@ def test_run_telegram_accounts_uses_runtime_bridges_instead_of_polling_all(monke
     assert ("shutdown", False) in events
 
 
+def test_run_telegram_accounts_does_not_start_partial_threads_when_bridge_setup_fails(monkeypatch, tmp_path: Path) -> None:
+    events: list[tuple[str, object]] = []
+
+    class FakeJobRunner:
+        def shutdown(self, *, wait: bool = False) -> None:
+            events.append(("shutdown", wait))
+
+    class FailingSecondBridge:
+        def __init__(self, *, run_config, **_kwargs):  # noqa: ANN001 - fake mirrors runtime bridge signature.
+            events.append(("bridge", run_config.label))
+            if run_config.label == "telegram:2":
+                raise RuntimeError("bridge setup failed")
+
+        def run_polling(self, **_kwargs):  # noqa: ANN001 - fake mirrors runtime bridge signature.
+            events.append(("poll", True))
+
+    class FakeThread:
+        def __init__(self, **_kwargs):  # noqa: ANN001 - fake mirrors threading.Thread signature.
+            events.append(("thread", "created"))
+
+        def start(self) -> None:
+            events.append(("thread", "started"))
+
+        def is_alive(self) -> bool:
+            return False
+
+        def join(self, timeout: float | None = None) -> None:
+            events.append(("thread", timeout))
+
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("telegram",),
+        instances=(
+            InstanceRunConfig(
+                instance_name="Demo",
+                instruction_path=tmp_path / "Demo" / "Bot_Verhalten.md",
+                accounts=(
+                    AccountRunConfig(
+                        instance_name="Demo",
+                        channel="telegram",
+                        slot=1,
+                        label="telegram:1",
+                        telegram_token="telegram-token-1",
+                        openai_api_key="",
+                    ),
+                    AccountRunConfig(
+                        instance_name="Demo",
+                        channel="telegram",
+                        slot=2,
+                        label="telegram:2",
+                        telegram_token="telegram-token-2",
+                        openai_api_key="",
+                    ),
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(telegram_runner, "TelegramRuntimeBridge", FailingSecondBridge)
+    monkeypatch.setattr(telegram_runner.threading, "Thread", FakeThread)
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "YouTubeTranscriptionJobRunner", FakeJobRunner)
+    monkeypatch.setattr(telegram_runner, "_notify_recent_users_for_current_version", lambda _config, _instance_configs: None)
+
+    with pytest.raises(RuntimeError, match="bridge setup failed"):
+        run_telegram_accounts(config)
+
+    assert ("bridge", "telegram:1") in events
+    assert ("bridge", "telegram:2") in events
+    assert not any(event[0] == "thread" for event in events)
+    assert not any(event[0] == "poll" for event in events)
+    assert ("shutdown", False) in events
+
+
 def test_runtime_version_notifications_use_runtime_instances_dir(monkeypatch, tmp_path: Path) -> None:
     events = []
     config = RuntimeConfig(
