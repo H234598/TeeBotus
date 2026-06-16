@@ -523,6 +523,77 @@ def test_haystack_backend_rejects_uncitable_document_store_chunks(tmp_path):
     assert all(chunk["locator"] for chunk in payload["selected_library_chunks"])
 
 
+def test_bibliothekar_rebuilds_contaminated_local_chunk_store_with_account_memory_paths(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    account_marker = "ACCOUNT_MEMORY_CONTAMINATED_LOCAL_CHUNK"
+    contaminated_chunk = {
+        **_plan2_chunk_meta(
+            chunk_id="contaminated_account_memory",
+            relative_path="data/accounts/account/User_Memory_Entries.jsonl",
+            locator="Zeile 1",
+        ),
+        "instance_name": "Depressionsbot",
+        "topics": ["therapie"],
+        "categories": ["psychologie"],
+        "text": f"Diese Account-Memory darf nicht in Quellenkontext: {account_marker}",
+    }
+    index["chunk_count"] = int(index["chunk_count"]) + 1
+    store.index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    with store.chunks_path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(contaminated_chunk, ensure_ascii=False, sort_keys=True) + "\n")
+
+    selection = store.select("Therapie", max_chunks=3)
+    payload = json.loads(selection.prompt_text)
+
+    assert account_marker not in selection.prompt_text
+    assert "data/accounts" not in selection.prompt_text
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+
+
+def test_haystack_backend_rejects_contaminated_document_store_chunks_with_account_memory_paths(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    fallback_store.rebuild()
+    account_marker = "ACCOUNT_MEMORY_CONTAMINATED_HAYSTACK_CHUNK"
+    document_store = FakeDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content=f"Diese Account-Memory darf nicht in Haystack-Kontext: {account_marker}",
+            id="contaminated_account_memory",
+            meta={
+                **_plan2_chunk_meta(
+                    chunk_id="contaminated_account_memory",
+                    relative_path="data/accounts/account/User_Memory_Entries.jsonl",
+                    locator="Zeile 1",
+                ),
+                "instance_name": "Depressionsbot",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        )
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert account_marker not in selection.prompt_text
+    assert "data/accounts" not in selection.prompt_text
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+
+
 def test_haystack_rebuild_does_not_delete_other_instance_documents(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)

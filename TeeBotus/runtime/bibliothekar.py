@@ -39,6 +39,21 @@ REQUIRED_CITATION_CHUNK_FIELDS = (
     "ingested_at",
     "embedding_model",
 )
+FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS = {
+    "account_memory_entries.jsonl",
+    "account_memory_index.json",
+    "account_secrets.json",
+    "account_tombstone.json",
+    "legacy_user_memory_entries.jsonl",
+    "openai_state.json",
+    "user_habbits_and_behave.md",
+    "user_memory_entries.jsonl",
+    "user_memory_index.json",
+}
+FORBIDDEN_LIBRARY_SOURCE_PATH_SEGMENTS = {
+    ("data", "accounts"),
+    ("data", "users"),
+}
 STOPWORDS = {
     "aber",
     "alle",
@@ -568,7 +583,29 @@ def _read_chunks(path: Path) -> list[dict[str, Any]]:
 
 
 def _chunk_has_required_citation_metadata(chunk: dict[str, Any]) -> bool:
-    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS)
+    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS) and _chunk_has_library_source_path(chunk)
+
+
+def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:
+    paths = [str(chunk.get("relative_path") or ""), str(chunk.get("file_path") or "")]
+    for raw_path in paths:
+        normalized = raw_path.replace("\\", "/").strip().casefold()
+        if not normalized:
+            return False
+        if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
+            return False
+        parts = tuple(part for part in normalized.split("/") if part and part != ".")
+        if any(part in FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS for part in parts):
+            return False
+        if any(_path_contains_segments(parts, forbidden) for forbidden in FORBIDDEN_LIBRARY_SOURCE_PATH_SEGMENTS):
+            return False
+    return True
+
+
+def _path_contains_segments(parts: tuple[str, ...], needle: tuple[str, ...]) -> bool:
+    if not needle or len(parts) < len(needle):
+        return False
+    return any(parts[index : index + len(needle)] == needle for index in range(len(parts) - len(needle) + 1))
 
 
 def _read_json(path: Path) -> Any:

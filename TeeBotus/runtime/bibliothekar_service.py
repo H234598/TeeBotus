@@ -12,6 +12,7 @@ from TeeBotus.runtime.bibliothekar import (
     DEFAULT_MAX_QUOTE_CHARS,
     BibliothekarSelection,
     BibliothekarStore,
+    _chunk_has_library_source_path,
     _chunk_prompt_item,
     _prompt_payload,
     _rank_chunks,
@@ -606,7 +607,7 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
 def _chunk_has_required_citation_metadata(chunk: Mapping[str, Any]) -> bool:
     return all(field in chunk for field in REQUIRED_CITATION_CHUNK_KEYS) and all(
         str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS
-    )
+    ) and _chunk_has_library_source_path(dict(chunk))
 
 
 def _filter_values(value: object) -> tuple[str, ...]:
