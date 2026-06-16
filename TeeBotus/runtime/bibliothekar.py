@@ -25,6 +25,20 @@ DEFAULT_MAX_PROMPT_CHARS = 5000
 DEFAULT_MAX_CHUNKS = 5
 DEFAULT_MAX_QUOTE_CHARS = 900
 SUPPORTED_SUFFIXES = {".pdf", ".epub", ".docx", ".txt", ".md", ".markdown"}
+REQUIRED_CITATION_CHUNK_FIELDS = (
+    "chunk_id",
+    "source_id",
+    "title",
+    "relative_path",
+    "file_path",
+    "file_sha256",
+    "file_type",
+    "language",
+    "locator",
+    "license",
+    "ingested_at",
+    "embedding_model",
+)
 STOPWORDS = {
     "aber",
     "alle",
@@ -174,7 +188,7 @@ class BibliothekarStore:
         index = _read_json(self.index_path)
         if not isinstance(index, dict) or not int(index.get("chunk_count") or 0):
             return BibliothekarSelection("", ())
-        chunks = _read_chunks(self.chunks_path)
+        chunks = [chunk for chunk in _read_chunks(self.chunks_path) if _chunk_has_required_citation_metadata(chunk)]
         selected = _rank_chunks(chunks, query_text)[:max_chunks]
         prompt_items: list[dict[str, Any]] = []
         selected_ids: list[str] = []
@@ -533,7 +547,8 @@ def _chunk_store_is_stale(index: dict[str, Any], chunks_path: Path) -> bool:
         return False
     if not chunks_path.exists():
         return True
-    return len(_read_chunks(chunks_path)) != expected_count
+    chunks = _read_chunks(chunks_path)
+    return len(chunks) != expected_count or any(not _chunk_has_required_citation_metadata(chunk) for chunk in chunks)
 
 
 def _read_chunks(path: Path) -> list[dict[str, Any]]:
@@ -550,6 +565,10 @@ def _read_chunks(path: Path) -> list[dict[str, Any]]:
     except FileNotFoundError:
         return []
     return chunks
+
+
+def _chunk_has_required_citation_metadata(chunk: dict[str, Any]) -> bool:
+    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS)
 
 
 def _read_json(path: Path) -> Any:

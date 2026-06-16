@@ -94,6 +94,40 @@ def test_bibliothekar_rebuilds_legacy_schema_without_plan2_metadata(tmp_path):
     assert payload["selected_library_chunks"][0]["source_id"].startswith("sha256:")
 
 
+def test_bibliothekar_rebuilds_local_chunk_store_without_citation_metadata(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    uncited_marker = "UNCITED_LOCAL_CHUNK_MARKER_43A1"
+    store.chunks_path.write_text(
+        json.dumps(
+            {
+                "chunk_id": "legacy_uncited_chunk",
+                "title": "Legacy",
+                "text": f"Therapie ohne belastbare Quelle {uncited_marker}",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    selection = store.select("Therapie", max_chunks=1)
+    payload = json.loads(selection.prompt_text)
+    selected = payload["selected_library_chunks"][0]
+
+    assert uncited_marker not in selection.prompt_text
+    assert selected["file"] == "therapie.txt"
+    assert selected["source_id"].startswith("sha256:")
+    assert selected["locator"]
+    assert "legacy_uncited_chunk" not in store.chunks_path.read_text(encoding="utf-8")
+
+
 def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
     instances_dir = tmp_path / "instances"
     library_dir = instances_dir / "Depressionsbot" / "data" / "Bibliothek"
