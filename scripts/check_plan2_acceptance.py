@@ -69,6 +69,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_mcp_tools.py",
     "tests/test_readme_plan2_docs.py",
     "tests/test_secret_hygiene.py",
+    "tests/test_legacy_user_memory_import.py",
     "tests/test_benchmarks_runner.py",
     "tests/test_memory_store_benchmark.py",
     "tests/test_plan2_acceptance.py",

@@ -56,6 +56,9 @@ def build_account_memory_recovery_report(
         "totals": {
             "accounts": 0,
             "recoverable_accounts": 0,
+            "unrecoverable_accounts": 0,
+            "empty_accounts": 0,
+            "no_source_accounts": 0,
             "sources": 0,
             "readable_sources": 0,
             "unreadable_sources": 0,
@@ -352,8 +355,15 @@ def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> N
         if not isinstance(account, Mapping):
             continue
         totals["accounts"] += 1
+        recovery_status = str(account.get("recovery_status") or "")
         if account.get("recoverable"):
             totals["recoverable_accounts"] += 1
+        if recovery_status == "unrecoverable":
+            totals["unrecoverable_accounts"] += 1
+        elif recovery_status == "empty":
+            totals["empty_accounts"] += 1
+        elif recovery_status == "no_sources":
+            totals["no_source_accounts"] += 1
         for source in account.get("sources", []) if isinstance(account.get("sources"), list) else []:
             if not isinstance(source, Mapping):
                 continue

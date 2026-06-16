@@ -107,6 +107,9 @@ def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted
     assert sources["sqlite_fallback"]["readable"] is True
     assert sources["sqlite_fallback"]["entries"] == 1
     assert report["totals"]["recoverable_accounts"] == 1
+    assert report["totals"]["unrecoverable_accounts"] == 0
+    assert report["totals"]["empty_accounts"] == 0
+    assert report["totals"]["no_source_accounts"] == 0
     assert "account-memory skipped corrupt rows" not in caplog.text
 
 
@@ -145,3 +148,21 @@ def test_memory_recovery_report_marks_unrecoverable_key_drift(tmp_path: Path) ->
     assert account["recoverable"] is False
     assert account["recovery_status"] == "unrecoverable"
     assert "restore the matching old secret" in account["recommendation"]
+    assert report["totals"]["recoverable_accounts"] == 0
+    assert report["totals"]["unrecoverable_accounts"] == 1
+    assert report["totals"]["empty_accounts"] == 0
+
+
+def test_memory_recovery_report_counts_empty_accounts(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["recoverable"] is False
+    assert account["recovery_status"] == "empty"
+    assert report["totals"]["recoverable_accounts"] == 0
+    assert report["totals"]["unrecoverable_accounts"] == 0
+    assert report["totals"]["empty_accounts"] == 1
