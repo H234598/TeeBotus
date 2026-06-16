@@ -1869,6 +1869,47 @@ def test_tool_agent_rejects_known_tool_with_empty_required_arguments_without_mut
     assert audit[0]["event_type"] == "tool_call_rejected"
 
 
+def test_tool_agent_rejects_secret_like_generated_file_without_mutating(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Termin vorbereiten."},
+    )
+    secret = "sk-" + "live" + "-secret1234567890"
+
+    result = apply_proactive_agent_tool_calls(
+        account_store,
+        account_id,
+        [
+            {
+                "name": "proactive_queue_message",
+                "arguments": {
+                    "category": "reminder",
+                    "intent": "secret_file",
+                    "message_text": "Hier ist die Datei.",
+                    "reason_memory_ids": [source_id],
+                    "risk_gate": "none",
+                    "file": {
+                        "filename": "zugang.txt",
+                        "content_type": "text/plain",
+                        "text": f"OPENAI_API_KEY={secret}",
+                    },
+                },
+            }
+        ],
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_policy:invalid_file",)
+    assert account_store.read_proactive_outbox(account_id) == []
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[0]["event_type"] == "llm_decision_rejected"
+
+
 def test_tool_agent_runner_uses_client_tool_calls(tmp_path) -> None:
     class Client:
         def __init__(self) -> None:

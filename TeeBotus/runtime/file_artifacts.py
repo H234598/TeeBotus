@@ -44,6 +44,37 @@ TEXT_FILE_CONTENT_TYPES = {
     ".yml": "application/yaml; charset=utf-8",
     ".tex": "application/x-tex; charset=utf-8",
 }
+GENERATED_FILE_SECRET_PATTERNS = (
+    re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bsyt_[A-Za-z0-9_=-]{12,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{12,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bhf_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bgsk_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
+)
+GENERATED_FILE_URL_CREDENTIAL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@")
+GENERATED_FILE_SECRET_ASSIGNMENT_RE = re.compile(
+    r"\b(?P<key>[A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|secret|password)[A-Za-z0-9_ -]*)"
+    r"\s*[:=]\s*['\"]?(?P<value>[^'\"\s,;)]+)",
+    re.IGNORECASE,
+)
+SAFE_GENERATED_FILE_SECRET_VALUES = frozenset(
+    {
+        "configured",
+        "example",
+        "missing",
+        "none",
+        "optional",
+        "redacted",
+        "replace",
+        "test",
+        "token",
+        "<redacted>",
+    }
+)
 FILE_BLOCK_RE = re.compile(
     r"(?P<block>\[\[TEE_FILE(?P<attrs>[^\]]*)\]\]\s*(?P<body>.*?)\s*\[\[/TEE_FILE\]\])",
     re.DOTALL,
@@ -81,6 +112,8 @@ def normalize_generated_file(raw: Mapping[str, Any]) -> GeneratedFile | None:
         return None
     data = _generated_file_data(raw)
     if data is None or len(data) > MAX_GENERATED_FILE_BYTES:
+        return None
+    if _generated_file_contains_secret(data):
         return None
     content_type = str(raw.get("content_type") or "").strip() or _guess_generated_file_content_type(filename)
     caption = str(raw.get("caption") or "").strip()[:240]
@@ -181,6 +214,31 @@ def _safe_filename(value: str) -> str:
     if not name or name in {".", ".."}:
         return ""
     return name[:120]
+
+
+def _generated_file_contains_secret(data: bytes) -> bool:
+    text = data.decode("utf-8", errors="replace")
+    if any(pattern.search(text) for pattern in GENERATED_FILE_SECRET_PATTERNS):
+        return True
+    if GENERATED_FILE_URL_CREDENTIAL_RE.search(text):
+        return True
+    for match in GENERATED_FILE_SECRET_ASSIGNMENT_RE.finditer(text):
+        if _generated_file_secret_value_is_unsafe(match.group("key"), match.group("value")):
+            return True
+    return False
+
+
+def _generated_file_secret_value_is_unsafe(key: object, value: object) -> bool:
+    key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
+    value_text = str(value or "").strip().strip("\"'`")
+    if not value_text:
+        return False
+    normalized_value = value_text.casefold()
+    if normalized_value in SAFE_GENERATED_FILE_SECRET_VALUES:
+        return False
+    if key_text.endswith("_env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
+        return False
+    return True
 
 
 def _guess_generated_file_content_type(filename: str) -> str:
