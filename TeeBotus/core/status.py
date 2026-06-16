@@ -4,6 +4,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -39,6 +40,21 @@ STATUS_COMMAND_ALIASES = frozenset(
         "/programm",
         "/program",
     }
+)
+STATUS_SECRET_REDACTIONS = (
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"), "sk-<redacted>"),
+    (re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b"), "xox-<redacted>"),
+    (re.compile(r"\bsyt_[A-Za-z0-9_=-]{8,}\b"), "syt_<redacted>"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"), "gh_<redacted>"),
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b"), "github_pat_<redacted>"),
+    (re.compile(r"\bglpat-[A-Za-z0-9_-]{8,}\b"), "glpat-<redacted>"),
+    (re.compile(r"\bhf_[A-Za-z0-9]{8,}\b"), "hf_<redacted>"),
+    (re.compile(r"\bgsk_[A-Za-z0-9]{8,}\b"), "gsk_<redacted>"),
+    (re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"), "AIza<redacted>"),
+    (
+        re.compile(r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)", re.IGNORECASE),
+        r"\1=<redacted>",
+    ),
 )
 
 
@@ -113,7 +129,7 @@ def _llm_enabled_status(value: bool | None) -> str:
 
 def _safe_status_value(value: str, *, default: str) -> str:
     text = str(value or "").strip()
-    return text if text else default
+    return redact_status_text(text) if text else default
 
 
 def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
@@ -139,7 +155,7 @@ def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = No
             disabled.append(name)
         else:
             disabled.append(f"{name} (nicht read-only)")
-    ignored = sorted(name for name in configured if name not in DEFAULT_MCP_TOOL_POLICIES)
+    ignored = sorted(redact_status_text(name) for name in configured if name not in DEFAULT_MCP_TOOL_POLICIES)
     lines = [
         "MCP Tools",
         f"- Read-only allowlist: {', '.join(allowed) if allowed else 'keine'}",
@@ -157,6 +173,15 @@ def mcp_tool_runtime_status_line(instance_name: str, mcp_tools: Mapping[str, Map
     lines = mcp_tool_status_lines(mcp_tools)
     details = " ".join(line.removeprefix("- ") for line in lines[1:])
     return f"mcp_tools={instance_name} {details}"
+
+
+def redact_status_text(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    for pattern, replacement in STATUS_SECRET_REDACTIONS:
+        text = pattern.sub(replacement, text)
+    return text.replace("\r", " ").replace("\n", " ")
 
 
 def _mcp_tool_status_label(name: str, policy: MCPToolPolicy) -> str:

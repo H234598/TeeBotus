@@ -65,6 +65,26 @@ def test_mcp_status_separates_direct_allowlist_from_guarded_tools() -> None:
     assert "export.account" not in next(line for line in lines if line.startswith("- Read-only allowlist:"))
 
 
+def test_mcp_status_redacts_secret_like_unknown_tool_names() -> None:
+    openai_key = "sk-" + "ignoredToolLeak123456"
+    hf_key = "hf_" + "ignoredToolLeak123456"
+
+    lines = mcp_tool_status_lines(
+        {
+            openai_key: {"enabled": True, "read_only": True},
+            f"OPENAI_API_KEY={hf_key}": {"enabled": True, "read_only": True},
+            "shell.exec": {"enabled": True, "read_only": True},
+        }
+    )
+
+    joined = "\n".join(lines)
+    assert openai_key not in joined
+    assert hf_key not in joined
+    assert "sk-<redacted>" in joined
+    assert "openai_api_key=<redacted>" in joined
+    assert "shell.exec" in joined
+
+
 def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:
     service = _bibliothekar_service(tmp_path)
     account_store, account_id = _account_store_with_memory(tmp_path)
