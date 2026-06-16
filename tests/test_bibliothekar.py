@@ -7,7 +7,7 @@ from TeeBotus.instructions import BotInstructions, parse_instructions
 from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
-from TeeBotus.runtime.bibliothekar import BibliothekarStore
+from TeeBotus.runtime.bibliothekar import BibliothekarStore, LIBRARY_SCHEMA_VERSION
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.runtime.bibliothekar_service import BibliothekarQuery, BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend, check_bibliothekar_service
 from TeeBotus.runtime.engine import TeeBotusEngine
@@ -36,6 +36,59 @@ def test_bibliothekar_indexes_txt_epub_docx_and_retrieves_cited_chunks(tmp_path)
     assert all("chunk_id" in chunk for chunk in payload["selected_library_chunks"])
     assert all("file" in chunk and "locator" in chunk for chunk in payload["selected_library_chunks"])
     assert "genaue Quelle" in " ".join(payload["citation_rules"])
+
+
+def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    source = library_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+
+    index = store.rebuild()
+    chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+    selection = store.select("Therapie", max_chunks=1)
+    payload = json.loads(selection.prompt_text)
+    document = next(iter(index["documents"].values()))
+    chunk = chunks[0]
+    prompt_chunk = payload["selected_library_chunks"][0]
+
+    assert index["schema_version"] == LIBRARY_SCHEMA_VERSION
+    assert document["source_id"].startswith("sha256:")
+    assert document["file_sha256"] == document["source_id"].removeprefix("sha256:")
+    assert document["file_type"] == "txt"
+    assert document["file_path"] == "therapie.txt"
+    assert document["language"] == "de"
+    assert document["embedding_model"] == "intfloat/multilingual-e5-small"
+    assert chunk["source_id"] == document["source_id"]
+    assert chunk["file_sha256"] == document["file_sha256"]
+    assert chunk["file_type"] == "txt"
+    assert chunk["chunk_index"] == 1
+    assert chunk["section"] == "Zeilen 1-1"
+    assert chunk["license"] == "private"
+    assert prompt_chunk["source_id"] == document["source_id"]
+    assert prompt_chunk["file_sha256"] == document["file_sha256"]
+    assert prompt_chunk["file_type"] == "txt"
+    assert prompt_chunk["language"] == "de"
+    assert prompt_chunk["chunk_index"] == 1
+    assert prompt_chunk["embedding_model"] == "intfloat/multilingual-e5-small"
+
+
+def test_bibliothekar_rebuilds_legacy_schema_without_plan2_metadata(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    index["schema_version"] = 1
+    store.index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+
+    selection = store.select("Therapie", max_chunks=1)
+    payload = json.loads(selection.prompt_text)
+    rebuilt = json.loads(store.index_path.read_text(encoding="utf-8"))
+
+    assert rebuilt["schema_version"] == LIBRARY_SCHEMA_VERSION
+    assert payload["selected_library_chunks"][0]["source_id"].startswith("sha256:")
 
 
 def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
@@ -170,6 +223,38 @@ def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path)
     assert selection.selected_ids == (document_store.documents[0].id,)
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
+
+
+def test_haystack_backend_preserves_plan2_metadata_roundtrip(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    backend.rebuild()
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+    meta = document_store.documents[0].meta
+    prompt_chunk = payload["selected_library_chunks"][0]
+
+    assert meta["source_id"].startswith("sha256:")
+    assert meta["file_sha256"] == meta["source_id"].removeprefix("sha256:")
+    assert meta["file_type"] == "txt"
+    assert meta["language"] == "de"
+    assert meta["chunk_index"] == 1
+    assert meta["embedding_model"] == "intfloat/multilingual-e5-small"
+    assert prompt_chunk["source_id"] == meta["source_id"]
+    assert prompt_chunk["file_sha256"] == meta["file_sha256"]
+    assert prompt_chunk["file_type"] == "txt"
+    assert prompt_chunk["language"] == "de"
+    assert prompt_chunk["chunk_index"] == 1
 
 
 def test_haystack_backend_rebuild_removes_stale_document_store_chunks(tmp_path):

@@ -19,7 +19,8 @@ LIBRARY_DIRNAME = "Bibliothek"
 LIBRARY_META_DIRNAME = ".bibliothekar"
 LIBRARY_INDEX_FILENAME = "index.json"
 LIBRARY_CHUNKS_FILENAME = "chunks.jsonl"
-LIBRARY_SCHEMA_VERSION = 1
+LIBRARY_SCHEMA_VERSION = 2
+DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 DEFAULT_MAX_PROMPT_CHARS = 5000
 DEFAULT_MAX_CHUNKS = 5
 DEFAULT_MAX_QUOTE_CHARS = 900
@@ -277,6 +278,10 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
     relative_path = path.relative_to(library_dir).as_posix()
     document_id = _stable_id("doc", relative_path)
     stat = path.stat()
+    file_sha256 = _file_sha256(path)
+    source_id = f"sha256:{file_sha256}"
+    file_type = path.suffix.casefold().lstrip(".")
+    language = "de"
     title = _document_title(path)
     error = ""
     sections: list[tuple[str, str]] = []
@@ -290,12 +295,20 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
     categories = _categories_for_keywords(topics)
     document = {
         "document_id": document_id,
+        "source_id": source_id,
         "title": title,
         "relative_path": relative_path,
+        "file_path": relative_path,
+        "file_sha256": file_sha256,
+        "file_type": file_type,
         "suffix": path.suffix.casefold(),
+        "language": language,
         "size_bytes": stat.st_size,
         "mtime_ns": stat.st_mtime_ns,
         "indexed_at": now,
+        "ingested_at": now,
+        "embedding_model": DEFAULT_EMBEDDING_MODEL,
+        "license": "private",
         "topics": topics,
         "categories": categories,
         "error": error,
@@ -307,14 +320,28 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
                 continue
             chunk_id = _stable_id("lib", f"{relative_path}:{locator}:{chunk_index}:{hashlib.sha1(chunk_text.encode('utf-8')).hexdigest()[:12]}")
             chunk_topics = _top_keywords(chunk_text, limit=16)
+            page_start, page_end = _locator_page_range(locator)
             chunks.append(
                 {
                     "chunk_id": chunk_id,
                     "document_id": document_id,
+                    "source_id": source_id,
                     "title": title,
                     "relative_path": relative_path,
+                    "file_path": relative_path,
+                    "file_sha256": file_sha256,
+                    "file_type": file_type,
+                    "language": language,
                     "locator": locator if chunk_index == 1 else f"{locator}, chunk {chunk_index}",
                     "suffix": path.suffix.casefold(),
+                    "page_start": page_start,
+                    "page_end": page_end,
+                    "chapter": "",
+                    "section": locator,
+                    "license": "private",
+                    "ingested_at": now,
+                    "chunk_index": chunk_index,
+                    "embedding_model": DEFAULT_EMBEDDING_MODEL,
                     "topics": chunk_topics,
                     "categories": _categories_for_keywords([*topics, *chunk_topics]),
                     "text": chunk_text,
@@ -443,9 +470,19 @@ def _rank_chunks(chunks: list[dict[str, Any]], query_text: str) -> list[dict[str
 def _chunk_prompt_item(chunk: dict[str, Any], *, max_quote_chars: int) -> dict[str, Any]:
     return {
         "chunk_id": str(chunk.get("chunk_id", "")),
+        "source_id": str(chunk.get("source_id", "")),
         "title": str(chunk.get("title", "")),
         "file": str(chunk.get("relative_path", "")),
+        "file_sha256": str(chunk.get("file_sha256", "")),
+        "file_type": str(chunk.get("file_type", "") or str(chunk.get("suffix", "")).lstrip(".")),
+        "language": str(chunk.get("language", "")),
         "locator": str(chunk.get("locator", "")),
+        "page_start": chunk.get("page_start"),
+        "page_end": chunk.get("page_end"),
+        "chapter": str(chunk.get("chapter", "")),
+        "section": str(chunk.get("section", "")),
+        "chunk_index": chunk.get("chunk_index"),
+        "embedding_model": str(chunk.get("embedding_model", "")),
         "categories": chunk.get("categories", []) if isinstance(chunk.get("categories"), list) else [],
         "topics": chunk.get("topics", []) if isinstance(chunk.get("topics"), list) else [],
         "quote": _clip(str(chunk.get("text", "")), max_quote_chars),
@@ -468,6 +505,8 @@ def _prompt_payload(index: dict[str, Any], chunks: list[dict[str, Any]]) -> dict
 
 
 def _index_is_stale(index: dict[str, Any], library_dir: Path) -> bool:
+    if int(index.get("schema_version") or 0) != LIBRARY_SCHEMA_VERSION:
+        return True
     documents = index.get("documents") if isinstance(index.get("documents"), dict) else {}
     current: dict[str, tuple[int, int]] = {}
     for path in _iter_document_paths(library_dir):
@@ -566,6 +605,23 @@ def _document_title(path: Path) -> str:
 
 def _stable_id(prefix: str, value: str) -> str:
     return f"{prefix}_{hashlib.sha1(value.encode('utf-8')).hexdigest()[:16]}"
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for block in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _locator_page_range(locator: str) -> tuple[int | None, int | None]:
+    match = re.search(r"\bSeite\s+(\d+)(?:\s*[-–]\s*(\d+))?", str(locator or ""), flags=re.IGNORECASE)
+    if not match:
+        return None, None
+    start = int(match.group(1))
+    end = int(match.group(2) or start)
+    return start, end
 
 
 def _normalize_text(text: str) -> str:

@@ -470,6 +470,8 @@ Der aktuelle Bestand gelernter Parser-Misses kann mit `python3 scripts/youtube_p
 
 Der Bibliothekar ist die lokale Instanz-Bibliothek unter `instances/<instance>/data/Bibliothek`. Dort koennen `.pdf`, `.epub`, `.docx`, `.txt`, `.md` und `.markdown` abgelegt werden. Der lokale Store baut daraus `.bibliothekar/index.json` und `.bibliothekar/chunks.jsonl`. Antworten duerfen kurze Abschnitte daraus zitieren und muessen dann Titel, Datei, Locator und `chunk_id` nennen.
 
+Das Bibliothekar-Indexschema speichert pro Dokument und Chunk stabile Quellenmetadaten wie `source_id`, `file_sha256`, `file_type`, `language`, `chunk_index`, `ingested_at` und `embedding_model`; aeltere Cache-Schemas werden beim Zugriff automatisch neu aufgebaut.
+
 Wichtig: Account-Memory wird nicht in Haystack/Qdrant indexiert. Account-Memory bleibt getrennt, accountbezogen und verschluesselt. Haystack/Qdrant ist nur fuer Bibliotheksdokumente gedacht, also fuer Buecher, Handbuecher, PDFs und andere explizit abgelegte Referenzen.
 
 Konfiguration in `Bot_Verhalten.md`:
