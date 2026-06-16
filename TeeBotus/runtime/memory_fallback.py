@@ -62,6 +62,8 @@ class WarningFallbackAccountMemoryBackend:
                 sync_callback(account_id)
             result = callback(self.primary)
             self._copy_diagnostics(self.primary)
+            if self._read_diagnostic_failed(operation):
+                return self._recover_read_from_fallback(operation, account_id, callback)
             self._clear_recovered_if_clean(operation)
             return result
         except Exception as exc:  # noqa: BLE001
@@ -100,12 +102,54 @@ class WarningFallbackAccountMemoryBackend:
         self.primary.write_index(account_id, data)
         self._dirty_indexes.discard(account_id)
 
+    def _recover_read_from_fallback(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> Any:
+        self._fallback_active = True
+        self._warn(operation, RuntimeError(self._diagnostic_error_text(operation)))
+        result = callback(self.fallback)
+        self._copy_diagnostics(self.fallback)
+        if not self._read_diagnostic_failed(operation):
+            try:
+                if operation == "read_entries":
+                    self.primary.write_entries(account_id, result)
+                    self._dirty_entries.discard(account_id)
+                    self._stale_fallback_entries.discard(account_id)
+                elif operation == "read_index":
+                    self.primary.write_index(account_id, result)
+                    self._dirty_indexes.discard(account_id)
+                    self._stale_fallback_indexes.discard(account_id)
+            except Exception as exc:  # noqa: BLE001
+                self._fallback_stale_set(operation).add(account_id)
+                self.last_fallback_sync_error = f"{operation}: primary repair failed: {exc}"
+                LOGGER.critical(
+                    "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. label=%s operation=%s account_id=%s error=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                    exc,
+                )
+            self._clear_recovered_if_clean(operation)
+        return result
+
     def _account_is_dirty(self, operation: str, account_id: str) -> bool:
         if operation == "read_entries":
             return account_id in self._dirty_entries
         if operation == "read_index":
             return account_id in self._dirty_indexes
         return False
+
+    def _read_diagnostic_failed(self, operation: str) -> bool:
+        if operation == "read_entries":
+            return bool(self.last_entry_read_error or self.last_entry_skipped)
+        if operation == "read_index":
+            return bool(self.last_index_read_error)
+        return False
+
+    def _diagnostic_error_text(self, operation: str) -> str:
+        if operation == "read_entries":
+            return self.last_entry_read_error or f"skipped={self.last_entry_skipped}"
+        if operation == "read_index":
+            return self.last_index_read_error
+        return "read diagnostic failed"
 
     def _clear_recovered_if_clean(self, operation: str) -> None:
         if self._dirty_entries or self._dirty_indexes:

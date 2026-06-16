@@ -98,6 +98,14 @@ def test_legacy_user_memory_import_requires_replace_for_unreadable_target(tmp_pa
     )
     bad_backend.write_entries(account_id, [{"id": "bad", "user_text": "unreadable"}])
     bad_backend.write_index(account_id, {"scope": "account", "index": {}})
+    bad_fallback_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=accounts_root / "Account_Memory.backup.sqlite3", fallback_path=None),
+    )
+    bad_fallback_backend.write_entries(account_id, [{"id": "bad", "user_text": "unreadable"}])
+    bad_fallback_backend.write_index(account_id, {"scope": "account", "index": {}})
 
     skipped = import_legacy_user_memory(
         legacy_instances_dir=legacy_root,
@@ -190,6 +198,52 @@ def test_legacy_user_memory_import_metadata_reset_moves_old_sqlite_rows_out_of_a
         active_entries.extend(entry["id"] for entry in store.read_memory_entries(account_id))
     assert active_entries == ["legacy_mem_1", "legacy_mem_1"]
     assert list(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
+
+
+def test_legacy_user_memory_import_pre_resets_when_account_profile_is_unreadable(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, user_id="395935293")
+    write_legacy_entries(legacy_root, user_id="1284666801")
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    good_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    unreadable_profile_account = good_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
+    bad_store._write_account_profile(
+        unreadable_profile_account,
+        {
+            "schema_version": 2,
+            "instance": "Depressionsbot",
+            "account_id": unreadable_profile_account,
+            "status": "active",
+            "linked_identities": [telegram_identity_key("395935293")],
+        },
+    )
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        replace_unreadable_account_metadata=True,
+        provider=provider(),
+    )
+
+    assert stats.account_store_resets == 1
+    assert stats.metadata_backups_created >= 1
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    imported_ids = [
+        store.get_account_for_identity(telegram_identity_key("1284666801")),
+        store.get_account_for_identity(telegram_identity_key("395935293")),
+    ]
+    assert all(imported_ids)
+    assert unreadable_profile_account not in imported_ids
+    for account_id in imported_ids:
+        assert store.check_structured_memory_index(account_id).ok
+    assert sorted(entry["source"]["legacy_user_id"] for account_id in imported_ids for entry in store.read_memory_entries(account_id)) == [
+        "1284666801",
+        "395935293",
+    ]
 
 
 def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp_path: Path, monkeypatch) -> None:

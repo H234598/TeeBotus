@@ -150,7 +150,18 @@ def import_legacy_user_memory(
     stats.effective_legacy_instances_dir = str(legacy_instances_dir)
     selected = set(instances)
     reset_account_stores: set[Path] = set()
-    for user_dir in _legacy_user_dirs(legacy_instances_dir, selected):
+    user_dirs = _legacy_user_dirs(legacy_instances_dir, selected)
+    if apply and replace_unreadable_account_metadata:
+        for instance_name in _instances_with_legacy_user_dirs(user_dirs):
+            target_root = target_instances_dir / instance_name / "data" / "accounts"
+            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+            if not _account_store_metadata_unreadable(target_store):
+                continue
+            moved = _reset_unreadable_account_store(target_root)
+            stats.metadata_backups_created += moved
+            stats.account_store_resets += 1
+            reset_account_stores.add(target_root)
+    for user_dir in user_dirs:
         stats.sources += 1
         instance_name = user_dir.parents[2].name
         target_root = target_instances_dir / instance_name / "data" / "accounts"
@@ -443,6 +454,28 @@ def _legacy_user_dirs(legacy_instances_dir: Path, selected_instances: set[str]) 
             if user_dir.is_dir() and (user_dir / USER_MEMORY_ENTRIES_FILENAME).exists():
                 result.append(user_dir)
     return result
+
+
+def _instances_with_legacy_user_dirs(user_dirs: Iterable[Path]) -> tuple[str, ...]:
+    names: list[str] = []
+    for user_dir in user_dirs:
+        instance_name = user_dir.parents[2].name
+        if instance_name not in names:
+            names.append(instance_name)
+    return tuple(names)
+
+
+def _account_store_metadata_unreadable(store: AccountStore) -> bool:
+    try:
+        store._load_identities()
+        store._load_index()
+        store._load_secrets()
+        if store.accounts_dir.exists():
+            for account_dir in sorted(path for path in store.accounts_dir.iterdir() if path.is_dir()):
+                store._read_account_profile(account_dir.name)
+    except AccountStoreError:
+        return True
+    return False
 
 
 def _resolve_legacy_instances_dir(path: Path, selected_instances: set[str]) -> Path:
