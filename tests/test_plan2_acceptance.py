@@ -913,6 +913,8 @@ def test_runtime_status_broken_lines_flags_unsafe_qdrant_targets() -> None:
         [
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://qdrant.example:6333 status=reachable documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://user:secret@127.0.0.1:6333 status=reachable documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333?api_key=plain-secret status=reachable documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333#token status=reachable documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=reachable documents=1 chunks=1",
         ]
     )

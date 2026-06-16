@@ -838,6 +838,8 @@ def _runtime_status_qdrant_target_is_unsafe(line: str) -> bool:
     parsed = urlparse(target)
     if parsed.username or parsed.password:
         return True
+    if parsed.query or parsed.fragment:
+        return True
     host = (parsed.hostname or "").strip().casefold()
     if not host:
         host = target.rsplit(":", 1)[0].strip("[]").casefold()

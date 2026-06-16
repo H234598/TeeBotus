@@ -922,6 +922,26 @@ def test_haystack_status_rejects_nonlocal_qdrant_url(tmp_path, monkeypatch):
     assert "must stay local" in health.error
 
 
+def test_haystack_status_rejects_qdrant_url_query_or_fragment(tmp_path, monkeypatch):
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+
+    for url in ("http://127.0.0.1:6333?api_key=plain-secret", "http://127.0.0.1:6333#token"):
+        health = check_bibliothekar_service(
+            "Depressionsbot",
+            tmp_path / "instances",
+            BotInstructions(
+                bibliothekar_backend="haystack",
+                bibliothekar_collection="therapy_books",
+                bibliothekar_qdrant_url=url,
+            ),
+        )
+
+        assert health.backend == "haystack"
+        assert health.store == "qdrant"
+        assert health.status == "unavailable"
+        assert "must not contain query parameters or fragments" in health.error
+
+
 def test_bibliothekar_service_rebuild_delegates_to_backend(tmp_path):
     class FakeBackend:
         backend_name = "fake"

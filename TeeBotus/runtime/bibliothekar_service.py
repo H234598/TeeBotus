@@ -547,6 +547,8 @@ def _normalize_local_qdrant_url(value: object) -> str:
         raise ValueError("Bibliothekar Qdrant URL must stay local on 127.0.0.1, localhost or ::1.")
     if parsed.username or parsed.password:
         raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
+    if parsed.query or parsed.fragment:
+        raise ValueError("Bibliothekar Qdrant URL must not contain query parameters or fragments.")
     return raw.rstrip("/")
 
 
