@@ -880,6 +880,12 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}regression must be an object")
     elif "status" not in regression or "failed" not in regression:
         errors.append(f"{prefix}regression must contain status and failed")
+    else:
+        status = str(regression.get("status") or "")
+        if status not in {"not_configured", "ok"}:
+            errors.append(f"{prefix}regression.status must be not_configured or ok")
+        if regression.get("failed") is not False:
+            errors.append(f"{prefix}regression.failed must be false")
     quality_gate = payload.get("quality_gate")
     if not isinstance(quality_gate, dict):
         errors.append(f"{prefix}quality_gate must be an object")

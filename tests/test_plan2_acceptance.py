@@ -1175,6 +1175,20 @@ def test_benchmark_artifact_validation_requires_quality_gate_to_cover_all_result
     assert "quality_gate.checked_results must match results length" in errors
 
 
+def test_benchmark_artifact_validation_requires_successful_regression_gate() -> None:
+    payload = _valid_benchmark_payload()
+    payload["regression"] = {
+        "status": "failed",
+        "failed": True,
+        "entries": [{"name": "account_memory_benchmark", "status": "regressed"}],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "regression.status must be not_configured or ok" in errors
+    assert "regression.failed must be false" in errors
+
+
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
 
