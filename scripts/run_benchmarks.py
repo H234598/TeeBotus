@@ -349,6 +349,8 @@ def _build_quality_gate(
             continue
         if not result.get("ok"):
             errors.append(f"{name} is neither ok nor skipped")
+        if _is_nonnegative_integer(result.get("errors")) and int(result.get("errors") or 0) != 0:
+            errors.append(f"{name} errors must be 0 for ok standard benchmark results")
         if not _is_positive_integer(result.get("iterations")):
             errors.append(f"{name} iterations must be a positive integer")
         if int(result.get("payload_bytes") or 0) <= 0 and int(result.get("index_bytes") or 0) <= 0:

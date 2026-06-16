@@ -221,7 +221,7 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
             "iterations": 0,
             "total_ms": 1.0,
             "throughput_ops_s": 1.0,
-            "errors": 0,
+            "errors": 1,
             "payload_bytes": 0,
             "index_bytes": 0,
             "mode": "live",
@@ -241,6 +241,7 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert any("missing required benchmark categories" in error for error in quality_gate["errors"])
     assert any("missing required benchmark rankings" in error for error in quality_gate["errors"])
     assert "memory_jsonl iterations must be a positive integer" in quality_gate["errors"]
+    assert "memory_jsonl errors must be 0 for ok standard benchmark results" in quality_gate["errors"]
     assert "memory_jsonl must report payload_bytes or index_bytes" in quality_gate["errors"]
     assert "memory_jsonl details.network_calls must be 0 in standard quick benchmarks, got 1" in quality_gate["errors"]
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]

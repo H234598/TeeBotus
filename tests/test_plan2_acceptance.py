@@ -546,6 +546,15 @@ def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_stan
     assert "results[3] details.llm_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
 
 
+def test_benchmark_artifact_validation_rejects_ok_results_with_errors() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"][0]["errors"] = 1
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "results[0] errors must be 0 for ok standard benchmark results" in errors
+
+
 def test_benchmark_artifact_validation_requires_runtime_context() -> None:
     payload = _valid_benchmark_payload()
     payload["context"] = {

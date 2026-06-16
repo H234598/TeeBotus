@@ -502,6 +502,8 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 continue
             if "iterations" in result and not _is_positive_integer(result.get("iterations")):
                 errors.append(f"{prefix}results[{index}] iterations must be a positive integer")
+            if _is_nonnegative_integer(result.get("errors")) and int(result.get("errors") or 0) != 0:
+                errors.append(f"{prefix}results[{index}] errors must be 0 for ok standard benchmark results")
             if not result.get("ok"):
                 errors.append(f"{prefix}results[{index}] must be ok or skipped")
             if not _is_positive_number(result.get("payload_bytes")) and not _is_positive_number(result.get("index_bytes")):
