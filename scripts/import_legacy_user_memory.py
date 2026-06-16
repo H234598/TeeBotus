@@ -43,6 +43,7 @@ class ImportStats:
     unreadable_metadata: int = 0
     backups_created: int = 0
     metadata_backups_created: int = 0
+    account_store_resets: int = 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--replace-unreadable-account-metadata",
         action="store_true",
-        help="Move unreadable Account_Index/Account_Identities/Account_Secrets aside before importing legacy users.",
+        help="Move the unreadable active account store aside before importing legacy users: Account_* metadata, accounts/, SQLite DBs, WAL and SHM.",
     )
     parser.add_argument("--no-backup-current", action="store_true", help="Do not copy current SQLite files before --apply.")
     args = parser.parse_args(argv)
@@ -84,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
         f"skipped_sources={stats.skipped_sources} entries_seen={stats.entries_seen} entries_imported={stats.entries_imported} "
         f"accounts_existing={stats.accounts_existing} accounts_created={stats.accounts_created} "
         f"unreadable_targets={stats.unreadable_targets} unreadable_metadata={stats.unreadable_metadata} "
-        f"backups_created={stats.backups_created} metadata_backups_created={stats.metadata_backups_created}"
+        f"backups_created={stats.backups_created} metadata_backups_created={stats.metadata_backups_created} "
+        f"account_store_resets={stats.account_store_resets}"
     )
     return 0
 
@@ -103,6 +105,7 @@ def import_legacy_user_memory(
     provider = provider or SecretToolInstanceSecretProvider()
     stats = ImportStats()
     selected = set(instances)
+    reset_account_stores: set[Path] = set()
     for user_dir in _legacy_user_dirs(legacy_instances_dir, selected):
         stats.sources += 1
         instance_name = user_dir.parents[2].name
@@ -121,7 +124,11 @@ def import_legacy_user_memory(
                 )
                 continue
             if apply:
-                stats.metadata_backups_created += _move_account_metadata_files(target_root)
+                if target_root not in reset_account_stores:
+                    moved = _reset_unreadable_account_store(target_root)
+                    stats.metadata_backups_created += moved
+                    stats.account_store_resets += 1
+                    reset_account_stores.add(target_root)
                 target_store = AccountStore(target_root, instance_name, secret_provider=provider)
                 existing_account_id = target_store.get_account_for_identity(identity)
             else:
@@ -260,16 +267,31 @@ def _backup_sqlite_files(accounts_root: Path) -> int:
     return copied
 
 
-def _move_account_metadata_files(accounts_root: Path) -> int:
+def _reset_unreadable_account_store(accounts_root: Path) -> int:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_dir = accounts_root / f".pre-legacy-user-memory-metadata-reset-{timestamp}"
+    backup_dir = accounts_root / f".pre-legacy-user-memory-account-store-reset-{timestamp}"
     moved = 0
-    for filename in ("Account_Index.json", "Account_Identities.json", "Account_Secrets.json"):
+    for filename in (
+        "Account_Index.json",
+        "Account_Identities.json",
+        "Account_Secrets.json",
+        "Account_Memory.sqlite3",
+        "Account_Memory.sqlite3-wal",
+        "Account_Memory.sqlite3-shm",
+        "Account_Memory.backup.sqlite3",
+        "Account_Memory.backup.sqlite3-wal",
+        "Account_Memory.backup.sqlite3-shm",
+    ):
         path = accounts_root / filename
         if not path.exists():
             continue
         backup_dir.mkdir(parents=True, exist_ok=True)
         path.rename(backup_dir / path.name)
+        moved += 1
+    accounts_dir = accounts_root / "accounts"
+    if accounts_dir.exists():
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        accounts_dir.rename(backup_dir / accounts_dir.name)
         moved += 1
     return moved
 

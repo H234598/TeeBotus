@@ -143,10 +143,49 @@ def test_legacy_user_memory_import_can_replace_unreadable_account_metadata(tmp_p
     assert skipped.skipped_sources == 1
     assert skipped.unreadable_metadata == 1
     assert replaced.metadata_backups_created >= 1
+    assert replaced.account_store_resets == 1
     store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
     account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
     assert account_id
     assert [entry["id"] for entry in store.read_memory_entries(account_id)] == ["legacy_mem_1"]
+    assert store.check_structured_memory_index(account_id).ok
+
+
+def test_legacy_user_memory_import_metadata_reset_moves_old_sqlite_rows_out_of_active_store(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, user_id="395935293")
+    write_legacy_entries(legacy_root, user_id="1284666801")
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
+    first_bad_account = bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_store.write_memory_entries(first_bad_account, [{"id": "bad", "user_text": "unreadable"}])
+    bad_store.write_memory_index(first_bad_account, {"scope": "account", "index": {"entries": {"bad": {}}}})
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        replace_unreadable_account_metadata=True,
+        provider=provider(),
+    )
+
+    assert stats.account_store_resets == 1
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    imported_ids = [
+        store.get_account_for_identity(telegram_identity_key("1284666801")),
+        store.get_account_for_identity(telegram_identity_key("395935293")),
+    ]
+    assert all(imported_ids)
+    for account_id in imported_ids:
+        assert account_id != first_bad_account
+        assert store.check_structured_memory_index(account_id).ok
+    active_entries = []
+    for account_id in imported_ids:
+        active_entries.extend(entry["id"] for entry in store.read_memory_entries(account_id))
+    assert active_entries == ["legacy_mem_1", "legacy_mem_1"]
+    assert list(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
 
 
 def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp_path: Path, monkeypatch) -> None:
