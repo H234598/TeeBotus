@@ -564,6 +564,8 @@ FastMCP ist optional. Ohne installiertes `fastmcp` bleibt TeeBotus importierbar;
 python3 -m pip install '.[tools]'
 ```
 
+Plan2-Extras sind absichtlich gepinnt. `litellm==1.83.7` verlangt `python-dotenv==1.0.1`; deshalb nutzt TeeBotus fuer strukturierte Pydantic-AI-Subtasks `pydantic-ai-slim==1.107.0` und fuer Tools `fastmcp==2.0.0`, statt die Full-Meta-Pakete zu installieren, die aktuell `python-dotenv>=1.1.0` ziehen.
+
 Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.

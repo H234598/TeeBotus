@@ -61,7 +61,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
         str(tmp_path / "bench.json"),
     )
     assert by_label["adapter-deps"].argv == ("python-test", "scripts/check_adapter_deps.py")
-    assert by_label["plan2-optional-extras"].argv == ("python-test", "scripts/check_plan2_optional_extras.py")
+    assert by_label["plan2-optional-extras"].argv == ("python-test", "scripts/check_plan2_optional_extras.py", "--require-installed")
     assert by_label["qdrant-systemd-print"].argv == ("python-test", "-m", "TeeBotus.qdrant_systemd", "--print")
     assert by_label["teebotus-systemd-print"].argv == ("python-test", "-m", "TeeBotus.systemd", "--print")
     assert any(command.label.startswith("pip-audit") and command.nonfatal for command in commands)

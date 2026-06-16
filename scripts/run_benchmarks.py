@@ -1489,7 +1489,7 @@ def _dependency_context() -> dict[str, dict[str, str]]:
         "nio-bot",
         "matrix-nio",
         "faster-whisper",
-        "pydantic-ai",
+        "pydantic-ai-slim",
         "langgraph",
         "haystack-ai",
         "qdrant-haystack",

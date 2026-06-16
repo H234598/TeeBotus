@@ -16,25 +16,26 @@ dev = [
     "pip-audit",
 ]
 llm = [
-    "litellm!=1.82.7,!=1.82.8",
+    "litellm==1.83.7",
+    "python-dotenv==1.0.1",
     "openai",
     "ollama",
 ]
 agents = [
-    "pydantic-ai",
-    "langgraph",
+    "pydantic-ai-slim==1.107.0",
+    "langgraph==1.2.5",
 ]
 rag = [
-    "haystack-ai",
-    "qdrant-haystack",
-    "sentence-transformers",
-    "pypdf",
-    "pymupdf",
-    "ebooklib",
+    "haystack-ai==2.30.1",
+    "qdrant-haystack==10.3.0",
+    "sentence-transformers==5.5.1",
+    "pypdf==6.13.2",
+    "pymupdf==1.27.2.3",
+    "ebooklib==0.20",
     "beautifulsoup4",
 ]
 tools = [
-    "fastmcp",
+    "fastmcp==2.0.0",
 ]
 
 [project.scripts]

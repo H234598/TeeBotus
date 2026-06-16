@@ -197,7 +197,7 @@ def build_acceptance_commands(
             ),
             AcceptanceCommand(
                 "plan2-optional-extras",
-                (python, "scripts/check_plan2_optional_extras.py"),
+                (python, "scripts/check_plan2_optional_extras.py", "--require-installed"),
             ),
             AcceptanceCommand(
                 "qdrant-systemd-print",

@@ -133,10 +133,18 @@ def _check_pyproject_plan2_contract() -> tuple[bool, str]:
         optional = {}
     expected_extras = {
         "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"},
-        "llm": {"litellm!=1.82.7,!=1.82.8", "openai", "ollama"},
-        "rag": {"haystack-ai", "qdrant-haystack", "sentence-transformers", "pypdf", "pymupdf", "ebooklib", "beautifulsoup4"},
-        "agents": {"pydantic-ai", "langgraph"},
-        "tools": {"fastmcp"},
+        "llm": {"litellm==1.83.7", "python-dotenv==1.0.1", "openai", "ollama"},
+        "rag": {
+            "haystack-ai==2.30.1",
+            "qdrant-haystack==10.3.0",
+            "sentence-transformers==5.5.1",
+            "pypdf==6.13.2",
+            "pymupdf==1.27.2.3",
+            "ebooklib==0.20",
+            "beautifulsoup4",
+        },
+        "agents": {"pydantic-ai-slim==1.107.0", "langgraph==1.2.5"},
+        "tools": {"fastmcp==2.0.0"},
     }
     for extra, expected in expected_extras.items():
         found = set(optional.get(extra, [])) if isinstance(optional.get(extra), list) else set()
