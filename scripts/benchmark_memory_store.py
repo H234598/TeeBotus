@@ -241,17 +241,23 @@ def benchmark_postgres_backend(*, entries: int, select_runs: int, dsn: str = "")
             for _ in range(select_runs)
         ]
         rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
+        sizes = postgres_account_memory_payload_sizes(store.account_memory_backend, account_id)
         return {
             "backend": "postgres-row-encrypted-memory",
             "entries": entries,
-            "entry_bytes": 0,
-            "index_bytes": 0,
+            "entry_bytes": sizes["entry_bytes"],
+            "index_bytes": sizes["index_bytes"],
             "append_total_ms": append_total_ms,
             "append_last_ms": append_timings[-1],
             "append_median_ms": statistics.median(append_timings),
             "select_median_ms": statistics.median(select_timings),
             "select_p95_ms": _p95(select_timings),
             "rebuild_ms": rebuild_ms,
+            "row_counts": {
+                "entries": sizes["entry_rows"],
+                "keywords": sizes["keyword_rows"],
+                "indexes": sizes["index_rows"],
+            },
             "payload_encryption": "AES-256-GCM-per-row",
             "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
         }
@@ -271,6 +277,66 @@ def benchmark_postgres_backend(*, entries: int, select_runs: int, dsn: str = "")
             os.environ.pop(POSTGRES_DSN_ENV, None)
         else:
             os.environ[POSTGRES_DSN_ENV] = previous_dsn
+
+
+def postgres_account_memory_payload_sizes(backend: object, account_id: str) -> dict[str, int]:
+    """Measure encrypted PostgreSQL memory payload and index storage bytes."""
+    connection_factory = getattr(backend, "_connect", None)
+    instance_name = str(getattr(backend, "instance_name", "") or "")
+    if not callable(connection_factory) or not instance_name:
+        raise AccountStoreError("PostgreSQL account memory backend is not available for size metrics")
+    with connection_factory() as connection:
+        entry_row = connection.execute(
+            """
+            SELECT
+              COALESCE(SUM(octet_length(payload_nonce) + octet_length(payload_ciphertext)), 0),
+              COUNT(*)
+            FROM teebotus_memory_entries
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (instance_name, account_id),
+        ).fetchone()
+        keyword_row = connection.execute(
+            """
+            SELECT
+              COALESCE(SUM(octet_length(keyword) + octet_length(memory_id)), 0),
+              COUNT(*)
+            FROM teebotus_memory_keywords
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (instance_name, account_id),
+        ).fetchone()
+        index_row = connection.execute(
+            """
+            SELECT
+              COALESCE(SUM(octet_length(payload_nonce) + octet_length(payload_ciphertext)), 0),
+              COUNT(*)
+            FROM teebotus_memory_indexes
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (instance_name, account_id),
+        ).fetchone()
+    entry_bytes = _row_int(entry_row, 0)
+    keyword_bytes = _row_int(keyword_row, 0)
+    index_payload_bytes = _row_int(index_row, 0)
+    return {
+        "entry_bytes": entry_bytes,
+        "index_bytes": keyword_bytes + index_payload_bytes,
+        "entry_rows": _row_int(entry_row, 1),
+        "keyword_rows": _row_int(keyword_row, 1),
+        "index_rows": _row_int(index_row, 1),
+    }
+
+
+def _row_int(row: object, index: int) -> int:
+    try:
+        value = row[index]  # type: ignore[index]
+    except (TypeError, IndexError, KeyError):
+        return 0
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _init_sqlite_projection(connection: sqlite3.Connection) -> None:

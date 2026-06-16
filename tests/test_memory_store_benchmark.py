@@ -4,7 +4,12 @@ import pytest
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
-from scripts.benchmark_memory_store import benchmark_postgres_backend, benchmark_sqlite_row_encrypted_projection, main
+from scripts.benchmark_memory_store import (
+    benchmark_postgres_backend,
+    benchmark_sqlite_row_encrypted_projection,
+    main,
+    postgres_account_memory_payload_sizes,
+)
 
 
 def test_sqlite_row_encrypted_projection_benchmark_reports_expected_shape() -> None:
@@ -48,6 +53,48 @@ def test_postgres_benchmark_accepts_dsn_override(monkeypatch) -> None:
     assert result["backend"] == "postgres-row-encrypted-memory"
     assert result["skipped"] is True
     assert "could not connect to PostgreSQL" in result["reason"]
+
+
+def test_postgres_payload_size_metrics_include_entries_keywords_and_index() -> None:
+    class FakeResult:
+        def __init__(self, row: tuple[int, int]) -> None:
+            self.row = row
+
+        def fetchone(self) -> tuple[int, int]:
+            return self.row
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, sql: str, params: tuple[str, str]) -> FakeResult:
+            assert params == ("Bench", "a" * 128)
+            if "teebotus_memory_entries" in sql:
+                return FakeResult((512, 4))
+            if "teebotus_memory_keywords" in sql:
+                return FakeResult((128, 12))
+            if "teebotus_memory_indexes" in sql:
+                return FakeResult((96, 1))
+            raise AssertionError(sql)
+
+    class FakeBackend:
+        instance_name = "Bench"
+
+        def _connect(self) -> FakeConnection:
+            return FakeConnection()
+
+    sizes = postgres_account_memory_payload_sizes(FakeBackend(), "a" * 128)
+
+    assert sizes == {
+        "entry_bytes": 512,
+        "index_bytes": 224,
+        "entry_rows": 4,
+        "keyword_rows": 12,
+        "index_rows": 1,
+    }
 
 
 def test_account_store_postgres_backend_requires_dsn(tmp_path, monkeypatch) -> None:
