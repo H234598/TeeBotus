@@ -73,10 +73,13 @@ def build_runtime_text_llm_client(
             openai_client_factory=openai_client_factory,
         )
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
+    resolved_model = str(model or instructions.llm_model or "").strip()
     resolved_api_key = str(api_key or "").strip() or default_api_key
     resolved_openai_client = openai_client
     if resolved_provider == "openai" and resolved_openai_client is None and resolved_api_key:
         resolved_openai_client = openai_client_factory(resolved_api_key)
+    if resolved_provider == "openai" and resolved_openai_client is not None and resolved_model:
+        return _OpenAITextModelOverrideClient(resolved_openai_client, resolved_model)
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,

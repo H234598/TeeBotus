@@ -521,6 +521,29 @@ def test_runtime_text_client_builds_openai_client_for_direct_runtime_openai_prov
     assert captured == ["runtime-openai-key"]
 
 
+def test_runtime_text_client_applies_direct_openai_runtime_model_override() -> None:
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.models: list[str] = []
+
+        def create_reply(self, _user_text, instructions, _previous_response_id=None):
+            self.models.append(instructions.openai_model)
+            return object()
+
+    openai_client = FakeOpenAIClient()
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(openai_model="gpt-legacy"),
+        openai_client=openai_client,
+        provider="openai",
+        model="gpt-runtime",
+    )
+
+    client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
+
+    assert client.client is openai_client
+    assert openai_client.models == ["gpt-runtime"]
+
+
 def test_runtime_text_client_builds_openai_client_for_legacy_default_key() -> None:
     captured: list[str] = []
 
