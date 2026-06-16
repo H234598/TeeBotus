@@ -10,6 +10,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -68,6 +69,7 @@ ARTIFACT_SECRET_JSON_FIELD_RE = re.compile(
     re.IGNORECASE,
 )
 SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset({"configured", "none", "<redacted>", "redacted", "missing"})
+LOCAL_RUNTIME_TARGET_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 @dataclass(frozen=True)
@@ -804,6 +806,8 @@ def _runtime_status_broken_lines(output: str) -> list[str]:
 def _runtime_status_line_is_broken(line: str) -> bool:
     if _runtime_status_line_contains_secret(line):
         return True
+    if line.startswith("bibliothekar=") and " store=qdrant" in line and _runtime_status_qdrant_target_is_unsafe(line):
+        return True
     if " status=broken" in line:
         return True
     if "account_memory_recovery=" in line and " status=needed" in line:
@@ -822,6 +826,27 @@ def _runtime_status_line_is_broken(line: str) -> bool:
             continue
         return any(f" status={status}" in line for status in problem_statuses)
     return False
+
+
+def _runtime_status_qdrant_target_is_unsafe(line: str) -> bool:
+    target = _runtime_status_field(line, "target")
+    if not target:
+        return True
+    parsed = urlparse(target)
+    if parsed.username or parsed.password:
+        return True
+    host = (parsed.hostname or "").strip().casefold()
+    if not host:
+        host = target.rsplit(":", 1)[0].strip("[]").casefold()
+    return host not in LOCAL_RUNTIME_TARGET_HOSTS
+
+
+def _runtime_status_field(line: str, key: str) -> str:
+    prefix = f"{key}="
+    for part in line.split():
+        if part.startswith(prefix):
+            return part[len(prefix) :].strip()
+    return ""
 
 
 def _runtime_status_line_contains_secret(line: str) -> bool:

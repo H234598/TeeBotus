@@ -846,6 +846,8 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
             "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b",
             "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper",
             "bibliothekar=Demo backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=reachable documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://localhost:6334 status=reachable documents=1 chunks=1",
         ]
     )
 
@@ -888,6 +890,18 @@ def test_runtime_status_broken_lines_flags_url_credentials() -> None:
     )
 
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[0], output.splitlines()[2]]
+
+
+def test_runtime_status_broken_lines_flags_unsafe_qdrant_targets() -> None:
+    output = "\n".join(
+        [
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://qdrant.example:6333 status=reachable documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://user:secret@127.0.0.1:6333 status=reachable documents=1 chunks=1",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=reachable documents=1 chunks=1",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()
 
 
 def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> None:
