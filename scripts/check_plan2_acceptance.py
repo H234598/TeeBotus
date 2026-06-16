@@ -417,6 +417,8 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
                 return 1
         if command.validate_secret_artifacts:
             artifact_errors = _secret_artifact_errors(command.argv)
+            if _is_legacy_import_command(command.argv):
+                artifact_errors.extend(_legacy_import_artifact_errors(command.argv))
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: output artifacts contain secret-looking content.", file=sys.stderr)
                 for error in artifact_errors:
@@ -466,6 +468,68 @@ def _secret_artifact_errors(argv: Sequence[str]) -> list[str]:
         text = path.read_text(encoding="utf-8", errors="replace")
         if _artifact_text_contains_secret(text):
             errors.append(f"{option} artifact contains secret-looking content: {path}")
+    return errors
+
+
+def _is_legacy_import_command(argv: Sequence[str]) -> bool:
+    return any(str(part).endswith("import_legacy_user_memory.py") for part in argv)
+
+
+def _legacy_import_artifact_errors(argv: Sequence[str]) -> list[str]:
+    json_path = _option_path(argv, "--json-output")
+    if json_path is None:
+        return ["legacy import artifact missing --json-output for apply_safety validation"]
+    if not json_path.exists():
+        return [f"legacy import JSON artifact missing: {json_path}"]
+    try:
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [f"legacy import JSON artifact is not valid JSON: {json_path}: {exc}"]
+    if not isinstance(payload, dict):
+        return [f"legacy import JSON root must be an object: {json_path}"]
+    return _legacy_import_payload_errors(payload, path=json_path)
+
+
+def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:
+    prefix = f"{path}: " if path is not None else ""
+    errors: list[str] = []
+    apply_safety = payload.get("apply_safety")
+    if not isinstance(apply_safety, Mapping):
+        return [f"{prefix}legacy import report missing apply_safety object"]
+    running_count = apply_safety.get("running_bot_process_count")
+    if not _is_nonnegative_integer(running_count):
+        errors.append(f"{prefix}apply_safety.running_bot_process_count must be a non-negative integer")
+        running_count = 0
+    running_processes = apply_safety.get("running_bot_processes")
+    if not isinstance(running_processes, list):
+        errors.append(f"{prefix}apply_safety.running_bot_processes must be a list")
+        running_processes = []
+    elif _is_nonnegative_integer(running_count) and len(running_processes) != int(running_count or 0):
+        errors.append(f"{prefix}apply_safety.running_bot_process_count must match running_bot_processes length")
+    for index, process in enumerate(running_processes):
+        if not isinstance(process, Mapping):
+            errors.append(f"{prefix}apply_safety.running_bot_processes[{index}] must be an object")
+            continue
+        if not str(process.get("pid") or "").strip():
+            errors.append(f"{prefix}apply_safety.running_bot_processes[{index}] missing pid")
+        if not str(process.get("cmdline") or "").strip():
+            errors.append(f"{prefix}apply_safety.running_bot_processes[{index}] missing cmdline")
+    if not isinstance(apply_safety.get("apply_allowed_now"), bool):
+        errors.append(f"{prefix}apply_safety.apply_allowed_now must be boolean")
+    if not isinstance(apply_safety.get("apply_requires_stopped_bot"), bool):
+        errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be boolean")
+    message = str(apply_safety.get("message") or "").strip()
+    if not message:
+        errors.append(f"{prefix}apply_safety.message must be non-empty")
+    options = payload.get("options") if isinstance(payload.get("options"), Mapping) else {}
+    allow_running_bot = bool(options.get("allow_running_bot"))
+    if int(running_count or 0) > 0 and not allow_running_bot:
+        if apply_safety.get("apply_allowed_now") is not False:
+            errors.append(f"{prefix}apply_safety.apply_allowed_now must be false while runtime processes are detected")
+        if apply_safety.get("apply_requires_stopped_bot") is not True:
+            errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be true while runtime processes are detected")
+    if int(running_count or 0) == 0 and apply_safety.get("apply_requires_stopped_bot") is not False:
+        errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be false when no runtime processes are detected")
     return errors
 
 
