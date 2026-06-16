@@ -105,8 +105,18 @@ class WarningFallbackAccountMemoryBackend:
     def _recover_read_from_fallback(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> Any:
         self._fallback_active = True
         self._warn(operation, RuntimeError(self._diagnostic_error_text(operation)))
+        primary_entry_read_error = self.last_entry_read_error
+        primary_entry_skipped = self.last_entry_skipped
+        primary_index_read_error = self.last_index_read_error
         result = callback(self.fallback)
         self._copy_diagnostics(self.fallback)
+        if self._fallback_result_is_empty_for_failed_read(operation, result, primary_entry_skipped, primary_index_read_error):
+            self.last_entry_read_error = primary_entry_read_error
+            self.last_entry_skipped = primary_entry_skipped
+            self.last_index_read_error = primary_index_read_error
+            self._fallback_stale_set(operation).add(account_id)
+            self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
+            return result
         if not self._read_diagnostic_failed(operation):
             try:
                 if operation == "read_entries":
@@ -129,6 +139,19 @@ class WarningFallbackAccountMemoryBackend:
                 )
             self._clear_recovered_if_clean(operation)
         return result
+
+    def _fallback_result_is_empty_for_failed_read(
+        self,
+        operation: str,
+        result: Any,
+        primary_entry_skipped: int,
+        primary_index_read_error: str,
+    ) -> bool:
+        if operation == "read_entries":
+            return bool(primary_entry_skipped) and result == []
+        if operation == "read_index":
+            return bool(primary_index_read_error) and result == {}
+        return False
 
     def _account_is_dirty(self, operation: str, account_id: str) -> bool:
         if operation == "read_entries":
