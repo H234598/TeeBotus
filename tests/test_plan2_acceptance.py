@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import json
 import subprocess
 from pathlib import Path
@@ -235,6 +236,8 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_readme_plan2_docs.py" in pytest_args
     assert "tests/test_secret_hygiene.py" in pytest_args
     assert "tests/test_ci_workflow.py" in pytest_args
+    assert "tests/test_telegram_runner.py" in pytest_args
+    assert "tests/test_sqlite_backup_sync.py" in pytest_args
     assert by_label["bibliothekar-status"].argv == ("python-test", "-m", "TeeBotus.bibliothekar", "status")
     assert by_label["bibliothekar-dry-run"].argv[-4:] == ("index", "--source", "tests/fixtures/books", "--dry-run")
     assert by_label["bibliothekar-fixture-query"].argv[-4:] == ("tests/fixtures/books", "Testfrage", "--top-k", "3")
@@ -271,6 +274,19 @@ def test_plan2_acceptance_legacy_import_tests_are_explicit_opt_in(tmp_path: Path
     by_label = {command.label: command for command in commands}
 
     assert "tests/test_legacy_user_memory_import.py" in by_label["plan2-pytest"].argv
+
+
+def test_plan2_acceptance_with_legacy_opt_in_covers_all_repo_unit_tests() -> None:
+    patterns = check_plan2_acceptance._plan2_test_patterns(include_legacy_import_tests=True)
+    test_files = sorted(str(path) for path in Path("tests").glob("test_*.py"))
+
+    missing = [
+        path
+        for path in test_files
+        if not any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+    ]
+
+    assert missing == []
 
 
 def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
