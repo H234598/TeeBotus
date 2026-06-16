@@ -520,7 +520,7 @@ class TeeBotusEngine:
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
             if page_request is not None and instructions.user_memory_enabled:
-                first_response_id = getattr(response, "response_id", None)
+                first_response_id = _persistable_previous_response_id(response)
                 page_selection = _select_account_memory(
                     self.account_store,
                     account_id,
@@ -532,12 +532,12 @@ class TeeBotusEngine:
                 response = create_reply(
                     _build_active_memory_page_input(event, text, page_request, page_selection, weather_context=weather_context),
                     instructions,
-                    first_response_id if isinstance(first_response_id, str) else previous_response_id,
+                    first_response_id or previous_response_id,
                 )
         except (OpenAIAPIError, LLMAPIError):
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
-        response_id = getattr(response, "response_id", None)
-        if isinstance(response_id, str):
+        response_id = _persistable_previous_response_id(response)
+        if response_id:
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
@@ -955,7 +955,7 @@ class TeeBotusEngine:
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
             if page_request is not None and instructions.user_memory_enabled:
-                first_response_id = getattr(response, "response_id", None)
+                first_response_id = _persistable_previous_response_id(response)
                 page_selection = _select_account_memory(
                     self.account_store,
                     account_id,
@@ -973,13 +973,13 @@ class TeeBotusEngine:
                         weather_context=weather_context,
                     ),
                     instructions,
-                    first_response_id if isinstance(first_response_id, str) else self.state.get_previous_response_id(event.instance, account_id),
+                    first_response_id or self.state.get_previous_response_id(event.instance, account_id),
                 )
         except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.openai_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_error)]
-        response_id = getattr(response, "response_id", None)
-        if isinstance(response_id, str):
+        response_id = _persistable_previous_response_id(response)
+        if response_id:
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
@@ -1941,6 +1941,16 @@ def _parse_engine_datetime(value: str) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _persistable_previous_response_id(response: object) -> str | None:
+    response_id = getattr(response, "response_id", None)
+    if not isinstance(response_id, str) or not response_id:
+        return None
+    provider = str(getattr(response, "provider", "") or "").strip().casefold()
+    if not provider:
+        return response_id
+    return response_id if provider in {"openai", "responses", "openai_responses"} else None
+
+
 def _parse_optional_bool(value: bool | str | None) -> bool | None:
     if value is None:
         return None
@@ -1962,6 +1972,7 @@ def _is_yes(text: str) -> bool:
 
 def _is_no(text: str) -> bool:
     return str(text or "").strip().casefold() in {"nein", "n", "no", "abbrechen", "cancel", "stop"}
+
 
 def _parse_cleanup_count(text: str) -> int | str | None:
     parts = str(text or "").strip().split(maxsplit=1)

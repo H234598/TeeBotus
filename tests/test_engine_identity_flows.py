@@ -8,6 +8,7 @@ from TeeBotus import __version__
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.base import LLMResponse
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
@@ -821,6 +822,30 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     engine.process(event(identity, "Noch mal"))
 
     assert client.previous_ids == [None, "resp-1"]
+
+
+def test_engine_does_not_store_litellm_response_id_as_openai_previous_response(tmp_path):
+    class FakeLiteLLMClient:
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return LLMResponse("Antwort.", "litellm-response-id", provider="litellm", model="ollama_chat/qwen")
+
+    account_store = store(tmp_path)
+    client = FakeLiteLLMClient()
+    instructions = BotInstructions(openai_enabled=True, llm_provider="litellm", llm_model="ollama_chat/qwen")
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, llm_client=client)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "Hallo"))
+    engine.process(event(identity, "Noch mal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert client.previous_ids == [None, None]
+    assert account_id is not None
+    assert engine.state.get_previous_response_id("Depressionsbot", account_id) is None
 
 
 def test_engine_restores_previous_openai_response_id_from_persistent_state(tmp_path):
