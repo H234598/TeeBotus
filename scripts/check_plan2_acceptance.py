@@ -536,6 +536,7 @@ def _systemd_unit_errors(label: str, text: str) -> list[str]:
             "NoNewPrivileges=true": "TeeBotus NoNewPrivileges hardening missing",
             "PrivateTmp=true": "TeeBotus PrivateTmp hardening missing",
             "ExecStart=": "TeeBotus ExecStart missing",
+            "python3 -m TeeBotus --all --channels telegram,signal,matrix": "TeeBotus ExecStart must run the multi-channel bot",
         }
         for needle, message in required.items():
             if needle not in text:

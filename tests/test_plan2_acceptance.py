@@ -358,6 +358,7 @@ def test_systemd_unit_validation_flags_public_or_unchecked_units() -> None:
     assert any("127.0.0.1" in error for error in qdrant_errors)
     assert any("pinned" in error for error in qdrant_errors)
     assert any("permission check missing" in error for error in teebotus_errors)
+    assert any("multi-channel" in error for error in teebotus_errors)
 
 
 def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
