@@ -338,6 +338,33 @@ def test_runtime_text_client_direct_provider_filters_remote_fallback_without_exp
     )
 
 
+def test_runtime_text_client_generic_litellm_blocks_ambiguous_unprefixed_fallbacks() -> None:
+    blocked = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="litellm",
+        model="ollama_chat/llama3.1:8b",
+        fallback_models="gpt-4.1-mini,ollama_chat/qwen2.5:7b,mistralai/Mistral-7B-Instruct-v0.3",
+    )
+    allowed = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="litellm",
+        model="ollama_chat/llama3.1:8b",
+        fallback_models="gpt-4.1-mini,ollama_chat/qwen2.5:7b,mistralai/Mistral-7B-Instruct-v0.3",
+        allow_remote_fallback=True,
+    )
+
+    assert isinstance(blocked, LiteLLMTextClient)
+    assert blocked.fallback_models == ("ollama_chat/qwen2.5:7b",)
+    assert isinstance(allowed, LiteLLMTextClient)
+    assert allowed.fallback_models == (
+        "gpt-4.1-mini",
+        "ollama_chat/qwen2.5:7b",
+        "mistralai/Mistral-7B-Instruct-v0.3",
+    )
+
+
 def test_runtime_text_client_filtered_remote_instruction_fallback_is_not_reused(monkeypatch) -> None:
     calls: list[str] = []
 

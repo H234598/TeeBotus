@@ -232,6 +232,10 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
         return False
     if value.startswith(("openai/", "huggingface/", "groq/", "gemini/")):
         return True
+    if provider == "litellm":
+        return True
+    if provider == "ollama":
+        return False
     return provider in {"openai", "huggingface", "groq", "gemini"}
 
 
