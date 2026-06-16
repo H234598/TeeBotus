@@ -13,6 +13,13 @@ def _valid_benchmark_payload() -> dict:
         "quick": True,
         "include_live": False,
         "ok": True,
+        "context": {
+            "python": "3.14.0",
+            "platform": "Linux-test",
+            "machine": "x86_64",
+            "cpu_count": 4,
+            "dependencies": {"teebotus": {"version": "1.5.0", "status": "worktree"}},
+        },
         "results": [
             {
                 "name": f"{category}_benchmark",
@@ -252,34 +259,7 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
             encoding="utf-8",
         )
         json_path.write_text(
-            json.dumps(
-                {
-                    "schema_version": 1,
-                    "quick": True,
-                    "include_live": False,
-                    "ok": True,
-                    "results": [
-                        {
-                            "name": f"{category}_benchmark",
-                            "category": category,
-                            "ok": True,
-                            "total_ms": 1.0,
-                            "throughput_ops_s": 100.0,
-                            "errors": 0,
-                            "payload_bytes": 1,
-                            "index_bytes": 1,
-                        }
-                        for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
-                    ],
-                    "comparisons": {
-                        "stable_backend_rankings": [
-                            {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
-                            for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
-                        ]
-                    },
-                    "regression": {"status": "not_configured", "failed": False},
-                }
-            ),
+            json.dumps(_valid_benchmark_payload()),
             encoding="utf-8",
         )
         return subprocess.CompletedProcess(argv, 0)
@@ -526,6 +506,22 @@ def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_stan
     assert "results[1] details.network_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
     assert "results[2] details.nested.openai_calls must be 0 in standard Plan2 benchmark artifacts, got 2" in errors
     assert "results[3] details.llm_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
+
+
+def test_benchmark_artifact_validation_requires_runtime_context() -> None:
+    payload = _valid_benchmark_payload()
+    payload["context"] = {
+        "python": "",
+        "cpu_count": "unknown",
+        "dependencies": {},
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "context missing required keys: machine, platform" in errors
+    assert "context.cpu_count must be a non-negative integer" in errors
+    assert "context.dependencies must be a non-empty object" in errors
+    assert "context.python must be non-empty" in errors
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

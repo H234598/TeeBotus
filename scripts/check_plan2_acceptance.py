@@ -43,6 +43,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
     }
 )
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
+REQUIRED_BENCHMARK_CONTEXT_KEYS = frozenset({"python", "platform", "machine", "cpu_count", "dependencies"})
 RUNTIME_STATUS_SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{12,}\b"),
@@ -459,6 +460,7 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}quick must be true for standard Plan2 benchmark artifacts")
     if payload.get("include_live") is not False:
         errors.append(f"{prefix}include_live must be false for standard Plan2 benchmark artifacts")
+    errors.extend(_benchmark_context_errors(payload.get("context"), prefix=prefix))
     results = payload.get("results")
     if not isinstance(results, list) or not results:
         errors.append(f"{prefix}results must be a non-empty list")
@@ -558,6 +560,26 @@ def _is_nonnegative_number(value: Any) -> bool:
 
 def _is_nonnegative_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _benchmark_context_errors(context: Any, *, prefix: str) -> list[str]:
+    if not isinstance(context, dict):
+        return [f"{prefix}context must be an object with python/platform/cpu/dependency metadata"]
+    errors: list[str] = []
+    missing = sorted(REQUIRED_BENCHMARK_CONTEXT_KEYS - set(context))
+    if missing:
+        errors.append(f"{prefix}context missing required keys: {', '.join(missing)}")
+    if "cpu_count" in context and not _is_nonnegative_integer(context.get("cpu_count")):
+        errors.append(f"{prefix}context.cpu_count must be a non-negative integer")
+    dependencies = context.get("dependencies")
+    if not isinstance(dependencies, dict) or not dependencies:
+        errors.append(f"{prefix}context.dependencies must be a non-empty object")
+    elif not isinstance(dependencies.get("teebotus"), dict):
+        errors.append(f"{prefix}context.dependencies.teebotus must be present")
+    for key in ("python", "platform", "machine"):
+        if key in context and not str(context.get(key) or "").strip():
+            errors.append(f"{prefix}context.{key} must be non-empty")
+    return errors
 
 
 def _forbidden_standard_benchmark_calls(details: Mapping[str, Any]) -> list[tuple[str, int | float]]:
