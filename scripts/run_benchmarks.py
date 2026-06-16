@@ -352,6 +352,11 @@ def _build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
             "langgraph_bibliothekar_linear",
             "langgraph_bibliothekar_fake_installed",
         },
+        "transcription_youtube": {
+            "youtube_parser_local",
+            "youtube_local_job_queue_no_llm",
+            "youtube_local_pipeline_cache_no_openai",
+        },
     }
     rankings = []
     for category, names in categories.items():

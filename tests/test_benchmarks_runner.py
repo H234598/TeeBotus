@@ -21,7 +21,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["regression"]["status"] == "not_configured"
     assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
-    assert {"account_memory", "bibliothekar", "langgraph_flows"}.issubset(rankings)
+    assert {"account_memory", "bibliothekar", "langgraph_flows", "transcription_youtube"}.issubset(rankings)
     assert rankings["account_memory"]["fastest_stable"]
     assert rankings["account_memory"]["candidates"]
     assert [candidate["rank"] for candidate in rankings["account_memory"]["candidates"]] == list(
@@ -126,6 +126,12 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert youtube_pipeline["details"]["live_chunks"] == 1
     assert youtube_pipeline["details"]["openai_calls"] == 0
     assert youtube_pipeline["details"]["network_calls"] == 0
+    assert rankings["transcription_youtube"]["fastest_stable"]
+    assert {candidate["name"] for candidate in rankings["transcription_youtube"]["candidates"]} == {
+        "youtube_parser_local",
+        "youtube_local_job_queue_no_llm",
+        "youtube_local_pipeline_cache_no_openai",
+    }
     messenger = next(result for result in suite["results"] if result["name"] == "messenger_adapter_runtime_contracts")
     assert messenger["ok"] is True
     assert messenger["details"]["channels"] == ["telegram", "signal", "matrix"]
@@ -181,6 +187,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "pydantic_structured_decisions" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
+    assert "youtube_parser_local" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown
     assert "messenger_adapter_runtime_contracts" in markdown
     assert "status_doctor_runtime_dependency_health" in markdown
