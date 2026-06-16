@@ -603,6 +603,7 @@ def _memory_recovery_payload_errors(payload: Mapping[str, Any], *, path: Path | 
     for key, value in derived.items():
         if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
             errors.append(f"{prefix}memory recovery totals.{key} must match instances ({value})")
+    errors.extend(_memory_recovery_legacy_command_errors(instances, prefix=prefix))
     return errors
 
 
@@ -652,6 +653,25 @@ def _derive_memory_recovery_totals(instances: Sequence[Any]) -> dict[str, int]:
             totals["legacy_plaintext_sources"] += int(legacy.get("sources", 0) or 0)
             totals["legacy_plaintext_entries"] += int(legacy.get("entries", 0) or 0)
     return totals
+
+
+def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: str) -> list[str]:
+    errors: list[str] = []
+    for instance in instances:
+        if not isinstance(instance, Mapping):
+            continue
+        legacy = instance.get("legacy_plaintext_import")
+        if not isinstance(legacy, Mapping):
+            continue
+        command = str(legacy.get("dry_run_command") or "")
+        instance_name = str(instance.get("instance") or "<unknown>")
+        if "scripts/import_legacy_user_memory.py" not in command:
+            errors.append(f"{prefix}memory recovery legacy dry_run_command missing import script for {instance_name}")
+        if "--replace-unreadable-account-metadata" not in command:
+            errors.append(f"{prefix}memory recovery legacy dry_run_command missing metadata replacement flag for {instance_name}")
+        if "--json-output" not in command or "--markdown-output" not in command:
+            errors.append(f"{prefix}memory recovery legacy dry_run_command must write JSON and Markdown artifacts for {instance_name}")
+    return errors
 
 
 def _legacy_import_artifact_errors(argv: Sequence[str]) -> list[str]:

@@ -369,7 +369,9 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         f"--legacy-instances-dir {legacy_instances_dir} "
         f"--target-instances-dir {target_instances_dir} "
         f"--instance {instance_name} "
-        "--replace-unreadable-account-metadata"
+        "--replace-unreadable-account-metadata "
+        f"--json-output {Path.home() / 'Downloads' / f'teebotus-legacy-import-preflight-{_safe_artifact_name(instance_name)}.json'} "
+        f"--markdown-output {Path.home() / 'Downloads' / f'teebotus-legacy-import-preflight-{_safe_artifact_name(instance_name)}.md'}"
     )
     return {
         "requested_legacy_instances_dir": str(legacy_instances_dir),
@@ -382,6 +384,11 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "dry_run_command": command,
         "apply_requires": "--apply plus explicit review of metadata/account-memory replacement flags",
     }
+
+
+def _safe_artifact_name(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in "._-" else "_" for char in str(value or "").strip()).strip("_")
+    return safe or "instance"
 
 
 def _resolve_legacy_instances_dir(path: Path, instance_name: str) -> Path:

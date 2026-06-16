@@ -490,7 +490,15 @@ def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: P
                                 "sources": [{"name": "json_files", "readable": True}],
                             },
                         ],
-                        "legacy_plaintext_import": {"sources": 1, "entries": 2},
+                        "legacy_plaintext_import": {
+                            "sources": 1,
+                            "entries": 2,
+                            "dry_run_command": (
+                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
+                                "--json-output /tmp/import-Demo.json --markdown-output /tmp/import-Demo.md"
+                            ),
+                        },
                     }
                 ],
                 "totals": {
@@ -544,7 +552,15 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
                                 "sources": [{"name": "sqlite_fallback", "readable": True}],
                             }
                         ],
-                        "legacy_plaintext_import": {"sources": 1, "entries": 2},
+                        "legacy_plaintext_import": {
+                            "sources": 1,
+                            "entries": 2,
+                            "dry_run_command": (
+                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
+                                "--json-output /tmp/import-Demo.json --markdown-output /tmp/import-Demo.md"
+                            ),
+                        },
                     }
                 ],
                 "totals": {
@@ -580,6 +596,60 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
     assert any("instance_count must match instances length" in error for error in errors)
     assert any("totals.accounts must match instances (1)" in error for error in errors)
     assert any("totals.legacy_plaintext_entries must match instances (2)" in error for error in errors)
+
+
+def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "accounts": [],
+                        "legacy_plaintext_import": {
+                            "sources": 1,
+                            "entries": 2,
+                            "dry_run_command": (
+                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata"
+                            ),
+                        },
+                    }
+                ],
+                "totals": {
+                    "accounts": 0,
+                    "recoverable_accounts": 0,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 0,
+                    "no_source_accounts": 0,
+                    "sources": 0,
+                    "readable_sources": 0,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 1,
+                    "legacy_plaintext_entries": 2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("must write JSON and Markdown artifacts for Demo" in error for error in errors)
 
 
 def test_secret_artifact_validation_checks_all_declared_outputs(tmp_path: Path) -> None:

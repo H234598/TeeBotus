@@ -188,6 +188,9 @@ def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path:
     assert legacy["sources"] == 1
     assert legacy["entries"] == 2
     assert "--replace-unreadable-account-metadata" in legacy["dry_run_command"]
+    assert "--json-output" in legacy["dry_run_command"]
+    assert "--markdown-output" in legacy["dry_run_command"]
+    assert "teebotus-legacy-import-preflight-Depressionsbot.json" in legacy["dry_run_command"]
 
 
 def test_memory_recovery_report_resolves_legacy_backup_root(tmp_path: Path) -> None:
@@ -207,6 +210,21 @@ def test_memory_recovery_report_resolves_legacy_backup_root(tmp_path: Path) -> N
     assert legacy["legacy_instances_dir"] == str(backup_root / "instances.bak")
     assert legacy["sources"] == 2
     assert legacy["entries"] == 2
+
+
+def test_memory_recovery_report_sanitizes_legacy_preflight_artifact_name(tmp_path: Path) -> None:
+    target_dir = tmp_path / "target"
+    legacy_dir = tmp_path / "legacy"
+    make_instance(target_dir, name="Demo Bot")
+    user_dir = legacy_dir / "Demo Bot" / "data" / "users" / "395935293"
+    user_dir.mkdir(parents=True)
+    (user_dir / "User_Memory_Entries.jsonl").write_text('{"id":"legacy_1","user_text":"A"}\n', encoding="utf-8")
+
+    report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=legacy_dir, provider=provider())
+
+    legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert "teebotus-legacy-import-preflight-Demo_Bot.json" in legacy["dry_run_command"]
+    assert "teebotus-legacy-import-preflight-Demo_Bot.md" in legacy["dry_run_command"]
 
 
 def test_memory_recovery_report_ignores_encrypted_legacy_sources(tmp_path: Path) -> None:
