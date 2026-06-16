@@ -117,6 +117,20 @@ class TelegramRuntimeBridge:
         )
 
 
+@dataclass
+class TelegramPollingTransport:
+    bridge: TelegramRuntimeBridge
+    poll_timeout: int = telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS
+    youtube_job_runner: Any | None = None
+
+    def run(self, *, stop_event: threading.Event | None = None) -> None:
+        self.bridge.run_polling(
+            stop_event=stop_event,
+            poll_timeout=self.poll_timeout,
+            youtube_job_runner=self.youtube_job_runner,
+        )
+
+
 def build_telegram_runtime_bridge(
     *,
     api: Any,
@@ -240,7 +254,7 @@ def _run_telegram_polling_bridges(
     youtube_job_runner = telegram_runtime.YouTubeTranscriptionJobRunner()
     _notify_recent_users_for_current_version(config, instance_configs)
     try:
-        bridges: list[tuple[AccountRunConfig, TelegramRuntimeBridge]] = []
+        transports: list[tuple[AccountRunConfig, TelegramPollingTransport]] = []
         for account in _telegram_accounts(config):
             bridge = TelegramRuntimeBridge(
                 run_config=account,
@@ -248,15 +262,20 @@ def _run_telegram_polling_bridges(
                 instances_dir=config.instances_dir,
                 youtube_job_runner=youtube_job_runner,
             )
-            bridges.append((account, bridge))
-        for account, bridge in bridges:
+            transports.append(
+                (
+                    account,
+                    TelegramPollingTransport(
+                        bridge=bridge,
+                        poll_timeout=telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS,
+                        youtube_job_runner=youtube_job_runner,
+                    ),
+                )
+            )
+        for account, transport in transports:
             thread = threading.Thread(
-                target=bridge.run_polling,
-                kwargs={
-                    "stop_event": stop_event,
-                    "poll_timeout": telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS,
-                    "youtube_job_runner": youtube_job_runner,
-                },
+                target=transport.run,
+                kwargs={"stop_event": stop_event},
                 name=f"telegram-bot-{account.instance_name}-{account.label}",
                 daemon=True,
             )
@@ -349,6 +368,7 @@ def _duplicate_telegram_token_error(instance_configs: tuple[telegram_runtime.Ins
 
 __all__ = [
     "TelegramAccountHealth",
+    "TelegramPollingTransport",
     "TelegramRuntimeBridge",
     "TelegramRuntimeError",
     "build_telegram_runtime_bridge",

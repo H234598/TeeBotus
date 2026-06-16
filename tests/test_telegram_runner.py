@@ -9,6 +9,7 @@ from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, Runtime
 from TeeBotus.runtime.accounts import StaticSecretProvider
 from TeeBotus.runtime import telegram_runner
 from TeeBotus.runtime.telegram_runner import (
+    TelegramPollingTransport,
     TelegramRuntimeBridge,
     TelegramRuntimeError,
     build_telegram_instance_configs,
@@ -152,6 +153,26 @@ def test_telegram_runtime_bridge_builds_modern_context(monkeypatch, tmp_path: Pa
     assert bridge.context.bot_identity.mention == "@demo_bot"
     assert bridge.account_store.instance_name == "Demo"
     assert bridge.chat_state.teladi_call_state_path == tmp_path / "Demo" / "data" / "Teladi_Emergency_State.json"
+
+
+def test_telegram_polling_transport_delegates_to_bridge() -> None:
+    calls = []
+    stop_event = object()
+    job_runner = object()
+
+    class FakeBridge:
+        def run_polling(self, **kwargs):  # noqa: ANN001 - fake mirrors bridge run signature.
+            calls.append(kwargs)
+
+    transport = TelegramPollingTransport(
+        bridge=FakeBridge(),  # type: ignore[arg-type]
+        poll_timeout=12,
+        youtube_job_runner=job_runner,
+    )
+
+    transport.run(stop_event=stop_event)  # type: ignore[arg-type]
+
+    assert calls == [{"stop_event": stop_event, "poll_timeout": 12, "youtube_job_runner": job_runner}]
 
 
 def test_run_telegram_accounts_uses_runtime_bridges_instead_of_polling_all(monkeypatch, tmp_path: Path) -> None:
