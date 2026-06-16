@@ -429,8 +429,17 @@ def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monk
     assert FASTMCP_READONLY_ALLOWLIST == ("bibliothekar.search", "memory.search")
     assert sorted(server.tools) == ["bibliothekar.search", "memory.search"]
     assert "therapie.txt" in server.tools["bibliothekar.search"]("Therapie", top_k=1)["prompt_text"]
-    filtered_library = server.tools["bibliothekar.search"]("System Therapie", top_k=3, category="technik")
+    filtered_library = server.tools["bibliothekar.search"](
+        "System Therapie",
+        top_k=3,
+        max_prompt_chars=5000,
+        max_quote_chars=400,
+        category="technik",
+        keyword="python",
+        relative_path="technik",
+    )
     assert "technik.txt" in filtered_library["prompt_text"]
+    assert "therapie.txt" not in filtered_library["prompt_text"]
     assert server.tools["memory.search"]("Mond")["selected_ids"] == ["mem_1"]
     assert "youtube.transcribe" not in server.tools
     assert "export.account" not in server.tools

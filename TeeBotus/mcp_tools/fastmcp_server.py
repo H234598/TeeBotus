@@ -31,13 +31,27 @@ def build_fastmcp_server(registry: MCPToolRegistry, *, name: str = "TeeBotus Rea
         def bibliothekar_search(
             query: str,
             top_k: int = 5,
+            max_prompt_chars: int = 5000,
+            max_quote_chars: int = 900,
             category: str = "",
             topic: str = "",
+            keyword: str = "",
             file: str = "",
+            relative_path: str = "",
         ) -> dict[str, Any]:
             return registry.call(
                 "bibliothekar.search",
-                {"query": query, "top_k": top_k, "category": category, "topic": topic, "file": file},
+                {
+                    "query": query,
+                    "top_k": top_k,
+                    "max_prompt_chars": max_prompt_chars,
+                    "max_quote_chars": max_quote_chars,
+                    "category": category,
+                    "topic": topic,
+                    "keyword": keyword,
+                    "file": file,
+                    "relative_path": relative_path,
+                },
             )
 
     if "memory.search" in exposed:
