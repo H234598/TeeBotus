@@ -207,60 +207,61 @@ def benchmark_postgres_backend(*, entries: int, select_runs: int, dsn: str = "")
     os.environ[POSTGRES_BACKEND_ENV] = "postgres"
     os.environ[POSTGRES_DSN_ENV] = resolved_dsn
     try:
-        root = Path(tempfile.mkdtemp(prefix="teebotus-memory-postgres-bench-"))
-        store = AccountStore(root / "accounts", f"Bench_{os.getpid()}_{time.time_ns()}", StaticSecretProvider(b"b" * 32))
-        account_id = store.resolve_or_create_account(signal_identity_key(source_uuid=f"bench-{time.time_ns()}"))
-        append_timings = []
-        total_start = time.perf_counter()
-        for index in range(entries):
-            append_timings.append(
-                _timed_ms(
-                    lambda index=index: store.append_structured_memory_entry(
-                        account_id,
-                        {
-                            "id": f"mem_{index:06d}",
-                            "kind": "observation",
-                            "memory_type": "episodic",
-                            "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
-                            "bot_text": "Notiert.",
-                            "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
-                        },
+        with tempfile.TemporaryDirectory(prefix="teebotus-memory-postgres-bench-") as tmp:
+            root = Path(tmp)
+            store = AccountStore(root / "accounts", f"Bench_{os.getpid()}_{time.time_ns()}", StaticSecretProvider(b"b" * 32))
+            account_id = store.resolve_or_create_account(signal_identity_key(source_uuid=f"bench-{time.time_ns()}"))
+            append_timings = []
+            total_start = time.perf_counter()
+            for index in range(entries):
+                append_timings.append(
+                    _timed_ms(
+                        lambda index=index: store.append_structured_memory_entry(
+                            account_id,
+                            {
+                                "id": f"mem_{index:06d}",
+                                "kind": "observation",
+                                "memory_type": "episodic",
+                                "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
+                                "bot_text": "Notiert.",
+                                "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
+                            },
+                        )
                     )
                 )
-            )
-        append_total_ms = (time.perf_counter() - total_start) * 1000
-        select_timings = [
-            _timed_ms(
-                lambda: store.select_structured_memory(
-                    account_id,
-                    query_text="spaziergang kaffee",
-                    max_prompt_chars=12000,
-                    max_entry_chars=2000,
+            append_total_ms = (time.perf_counter() - total_start) * 1000
+            select_timings = [
+                _timed_ms(
+                    lambda: store.select_structured_memory(
+                        account_id,
+                        query_text="spaziergang kaffee",
+                        max_prompt_chars=12000,
+                        max_entry_chars=2000,
+                    )
                 )
-            )
-            for _ in range(select_runs)
-        ]
-        rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
-        sizes = postgres_account_memory_payload_sizes(store.account_memory_backend, account_id)
-        return {
-            "backend": "postgres-row-encrypted-memory",
-            "entries": entries,
-            "entry_bytes": sizes["entry_bytes"],
-            "index_bytes": sizes["index_bytes"],
-            "append_total_ms": append_total_ms,
-            "append_last_ms": append_timings[-1],
-            "append_median_ms": statistics.median(append_timings),
-            "select_median_ms": statistics.median(select_timings),
-            "select_p95_ms": _p95(select_timings),
-            "rebuild_ms": rebuild_ms,
-            "row_counts": {
-                "entries": sizes["entry_rows"],
-                "keywords": sizes["keyword_rows"],
-                "indexes": sizes["index_rows"],
-            },
-            "payload_encryption": "AES-256-GCM-per-row",
-            "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
-        }
+                for _ in range(select_runs)
+            ]
+            rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
+            sizes = postgres_account_memory_payload_sizes(store.account_memory_backend, account_id)
+            return {
+                "backend": "postgres-row-encrypted-memory",
+                "entries": entries,
+                "entry_bytes": sizes["entry_bytes"],
+                "index_bytes": sizes["index_bytes"],
+                "append_total_ms": append_total_ms,
+                "append_last_ms": append_timings[-1],
+                "append_median_ms": statistics.median(append_timings),
+                "select_median_ms": statistics.median(select_timings),
+                "select_p95_ms": _p95(select_timings),
+                "rebuild_ms": rebuild_ms,
+                "row_counts": {
+                    "entries": sizes["entry_rows"],
+                    "keywords": sizes["keyword_rows"],
+                    "indexes": sizes["index_rows"],
+                },
+                "payload_encryption": "AES-256-GCM-per-row",
+                "queryable_metadata": ["id", "kind", "memory_type", "importance", "salience", "access_count", "keywords"],
+            }
     except AccountStoreError as exc:
         return {
             "backend": "postgres-row-encrypted-memory",

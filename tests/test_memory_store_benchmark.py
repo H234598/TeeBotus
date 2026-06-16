@@ -4,6 +4,7 @@ import pytest
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
+from scripts import benchmark_memory_store as memory_bench
 from scripts.benchmark_memory_store import (
     benchmark_postgres_backend,
     benchmark_sqlite_row_encrypted_projection,
@@ -53,6 +54,63 @@ def test_postgres_benchmark_accepts_dsn_override(monkeypatch) -> None:
     assert result["backend"] == "postgres-row-encrypted-memory"
     assert result["skipped"] is True
     assert "could not connect to PostgreSQL" in result["reason"]
+
+
+def test_postgres_benchmark_success_path_uses_cleaned_tempdir(monkeypatch, tmp_path) -> None:
+    entered: list[str] = []
+    exited: list[str] = []
+
+    class FakeTemporaryDirectory:
+        def __init__(self, prefix: str) -> None:
+            self.path = tmp_path / f"{prefix}fake"
+
+        def __enter__(self) -> str:
+            self.path.mkdir()
+            entered.append(str(self.path))
+            return str(self.path)
+
+        def __exit__(self, *_args) -> None:
+            exited.append(str(self.path))
+            self.path.rmdir()
+
+    class FakeAccountStore:
+        account_memory_backend = object()
+
+        def __init__(self, root, instance_name, provider) -> None:  # noqa: ANN001
+            assert str(root).startswith(entered[0])
+            assert instance_name.startswith("Bench_")
+            assert provider is not None
+            self.entries: list[dict[str, object]] = []
+
+        def resolve_or_create_account(self, _identity_key: str) -> str:
+            return "a" * 128
+
+        def append_structured_memory_entry(self, _account_id: str, entry: dict[str, object]) -> str:
+            self.entries.append(entry)
+            return str(entry["id"])
+
+        def select_structured_memory(self, _account_id: str, **_kwargs) -> list[dict[str, object]]:
+            return self.entries[:1]
+
+        def rebuild_structured_memory_index(self, _account_id: str) -> dict[str, object]:
+            return {"index": {"scope": "account"}}
+
+    monkeypatch.setattr(memory_bench.tempfile, "TemporaryDirectory", FakeTemporaryDirectory)
+    monkeypatch.setattr(memory_bench.tempfile, "mkdtemp", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mkdtemp must not be used")))
+    monkeypatch.setattr(memory_bench, "AccountStore", FakeAccountStore)
+    monkeypatch.setattr(
+        memory_bench,
+        "postgres_account_memory_payload_sizes",
+        lambda _backend, _account_id: {"entry_bytes": 512, "index_bytes": 128, "entry_rows": 2, "keyword_rows": 6, "index_rows": 1},
+    )
+
+    result = benchmark_postgres_backend(entries=2, select_runs=1, dsn="postgresql://bench")
+
+    assert result["backend"] == "postgres-row-encrypted-memory"
+    assert result["entry_bytes"] == 512
+    assert result["row_counts"] == {"entries": 2, "keywords": 6, "indexes": 1}
+    assert entered == exited
+    assert not (tmp_path / "teebotus-memory-postgres-bench-fake").exists()
 
 
 def test_postgres_payload_size_metrics_include_entries_keywords_and_index() -> None:
