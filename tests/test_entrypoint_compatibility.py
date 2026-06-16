@@ -76,6 +76,51 @@ def test_main_delegates_all_start_to_telegram_entrypoint(monkeypatch) -> None:
     assert calls == [["--all"]]
 
 
+def test_main_all_start_initializes_signal_and_matrix_before_telegram(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    calls: list[tuple[str, tuple[str, ...]]] = []
+
+    def labels_for(config, channel: str) -> tuple[str, ...]:  # noqa: ANN001 - runtime config is imported lazily in entrypoint tests.
+        return tuple(account.label for instance in config.instances for account in instance.accounts if account.channel == channel)
+
+    def start_matrix(config) -> int:  # noqa: ANN001 - keep the test independent from runtime dataclass imports.
+        calls.append(("matrix", labels_for(config, "matrix")))
+        return 0
+
+    def start_signal(config) -> int:  # noqa: ANN001 - keep the test independent from runtime dataclass imports.
+        calls.append(("signal", labels_for(config, "signal")))
+        return 0
+
+    def telegram_main(args) -> int:  # noqa: ANN001 - mirrors the legacy Telegram main callable.
+        calls.append(("telegram", tuple(args or ())))
+        return 0
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@demo:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_start_matrix_runtime_background", start_matrix)
+    monkeypatch.setattr(bot, "_start_signal_runtime_background", start_signal)
+    monkeypatch.setattr(bot, "_load_telegram_main", lambda: telegram_main)
+
+    assert bot.main(["--all", "--channels", "telegram,signal,matrix"]) == 0
+
+    assert calls == [
+        ("matrix", ("matrix:1",)),
+        ("signal", ("signal:1",)),
+        ("telegram", ("--all",)),
+    ]
+
+
 def test_runtime_status_prints_account_memory_index_health(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

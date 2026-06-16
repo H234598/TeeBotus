@@ -39,6 +39,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "--all" not in " ".join(" ".join(command.argv) for command in commands)
     assert "tests/test_account_store.py" in by_label["plan2-pytest"].argv
     assert "tests/test_engine_identity_flows.py" in by_label["plan2-pytest"].argv
+    assert "tests/test_instructions.py" in by_label["plan2-pytest"].argv
     assert "tests/test_matrix_runner.py" in by_label["plan2-pytest"].argv
     assert "tests/test_program_history.py" in by_label["plan2-pytest"].argv
     assert "tests/test_proactive_agent.py" in by_label["plan2-pytest"].argv
@@ -53,6 +54,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert "tests/test_openai_client.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_bibliothekar_plan2.py" in by_label["plan2-pytest"].argv
+    assert "tests/test_pyproject_metadata.py" in by_label["plan2-pytest"].argv
     assert "tests/test_reminder_intent.py" in by_label["plan2-pytest"].argv
     assert "tests/test_graphs_bibliothekar.py" in by_label["plan2-pytest"].argv
     assert "tests/test_youtube_parser_stats.py" in by_label["plan2-pytest"].argv
