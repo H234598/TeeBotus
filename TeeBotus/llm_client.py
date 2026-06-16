@@ -53,6 +53,9 @@ def build_text_llm_client(
     if resolved_provider == "openai":
         return openai_client
     if resolved_provider in LITELLM_PROVIDER_ALIASES:
+        parsed_timeout = _parse_positive_int(timeout)
+        parsed_temperature = _parse_optional_float(temperature)
+        parsed_max_tokens = _parse_positive_int(max_tokens)
         return LiteLLMTextClient(
             LiteLLMSettings(
                 provider=resolved_provider,
@@ -62,9 +65,12 @@ def build_text_llm_client(
                 use_instruction_fallback_models=use_instruction_fallback_models,
                 api_key=api_key or default_api_key,
                 api_base=api_base or instructions.llm_base_url,
-                timeout=_parse_positive_int(timeout) or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
-                temperature=_parse_optional_float(temperature),
-                max_tokens=_parse_positive_int(max_tokens),
+                timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
+                temperature=parsed_temperature,
+                max_tokens=parsed_max_tokens,
+                timeout_override=parsed_timeout is not None,
+                temperature_override=parsed_temperature is not None,
+                max_tokens_override=parsed_max_tokens is not None,
             )
         )
     raise LLMAPIError(f"Unsupported LLM provider: {provider or instructions.llm_provider}")

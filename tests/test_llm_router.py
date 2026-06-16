@@ -185,6 +185,48 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_call_uses_runtime_generation_overrides(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"id": "runtime-overrides", "choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(
+            llm_provider="openai",
+            llm_model="ignored",
+            llm_timeout_seconds=5,
+            llm_max_output_tokens=10,
+            llm_temperature=0.9,
+        ),
+        openai_client=None,
+        profile="local_ollama",
+        timeout="180",
+        max_tokens="700",
+        temperature="0.4",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    response = client.create_reply(
+        "Ping",
+        BotInstructions(
+            llm_timeout_seconds=5,
+            llm_max_output_tokens=10,
+            llm_temperature=0.9,
+            openai_timeout_seconds=6,
+            openai_max_output_tokens=11,
+        ),
+        None,
+    )
+
+    assert response.text == "ok"
+    assert calls[0]["timeout"] == 180
+    assert calls[0]["max_tokens"] == 700
+    assert calls[0]["temperature"] == 0.4
+
+
 def test_runtime_text_client_profile_filters_remote_fallback_without_explicit_allow() -> None:
     blocked = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),

@@ -47,6 +47,9 @@ class LiteLLMSettings:
     timeout: int = 90
     temperature: float | None = None
     max_tokens: int | None = None
+    timeout_override: bool = False
+    temperature_override: bool = False
+    max_tokens_override: bool = False
 
 
 class LiteLLMTextClient:
@@ -156,14 +159,20 @@ class LiteLLMTextClient:
                 {"role": "system", "content": instructions.openai_instructions_text()},
                 {"role": "user", "content": user_text},
             ],
-            "timeout": instructions.llm_timeout_seconds or instructions.openai_timeout_seconds or self.timeout,
+            "timeout": self.timeout
+            if self.settings.timeout_override
+            else (instructions.llm_timeout_seconds or instructions.openai_timeout_seconds or self.timeout),
         }
-        max_tokens = instructions.llm_max_output_tokens if instructions.llm_max_output_tokens is not None else self.max_tokens
+        max_tokens = self.max_tokens if self.settings.max_tokens_override else instructions.llm_max_output_tokens
+        if max_tokens is None:
+            max_tokens = self.max_tokens
         if max_tokens is None:
             max_tokens = instructions.openai_max_output_tokens
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
-        temperature = instructions.llm_temperature if instructions.llm_temperature is not None else self.temperature
+        temperature = self.temperature if self.settings.temperature_override else instructions.llm_temperature
+        if temperature is None:
+            temperature = self.temperature
         if temperature is not None:
             kwargs["temperature"] = temperature
         api_base = (self.api_base or instructions.llm_base_url).strip()
