@@ -2858,61 +2858,70 @@ def run_polling(
     openai_api_key: str | None = None,
     bot_identity: BotIdentity | None = None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    runtime_context: TelegramRuntimeContext | None = None,
+    chat_state: ChatState | None = None,
 ) -> None:
     owns_youtube_job_runner = youtube_job_runner is None
     youtube_job_runner = youtube_job_runner or YouTubeTranscriptionJobRunner()
     instance = instance_name or _resolve_instance_name()
     instruction_store = instruction_store or InstructionStore(_resolve_instruction_path(instance))
-    resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
-    openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
     adapter_slot = int(token_label) if str(token_label).isdigit() else 1
-    llm_client = build_runtime_text_llm_client(
-        instructions=instruction_store.get(),
-        openai_client=openai_client,
-        default_api_key=resolved_openai_api_key or "",
-        enabled=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
-        profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
-        purpose=resolve_llm_setting(instance, "telegram", adapter_slot, "PURPOSE"),
-        allow_remote_fallback=resolve_llm_setting(instance, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
-        provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
-        model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
-        fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
-        api_key=resolve_llm_setting(instance, "telegram", adapter_slot, "API_KEY"),
-        api_base=resolve_llm_setting(instance, "telegram", adapter_slot, "BASE_URL"),
-        timeout=resolve_llm_setting(instance, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
-        max_tokens=resolve_llm_setting(instance, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
-        temperature=resolve_llm_setting(instance, "telegram", adapter_slot, "TEMPERATURE"),
-    )
-    bot_identity = bot_identity or _resolve_bot_identity(api)
-    user_memory_store = AccountStore(
-        _resolve_instances_dir() / instance / "data" / "accounts",
-        instance,
-        secret_provider=SecretToolInstanceSecretProvider(),
-    )
-    instance_data_dir = _resolve_instances_dir() / instance / "data"
-    state_store = RuntimeStateStore(instance_data_dir, instance_name=instance, secret_provider=SecretToolInstanceSecretProvider())
-    message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
-    working_memory_store = WorkingMemoryStore(instance)
-    working_memory_store.ensure()
-    current_instructions = instruction_store.get()
-    bibliothekar_store = BibliothekarService.from_instructions(instance, _resolve_instances_dir(), current_instructions)
-    chat_state = ChatState(_teladi_call_state_path(instance), instance)
-    runtime_context = build_telegram_runtime_context(
-        api=api,
-        instance_name=instance,
-        adapter_slot=adapter_slot,
-        instruction_store=instruction_store,
-        account_store=user_memory_store,
-        state_store=state_store,
-        message_tracker=message_tracker,
-        openai_client=openai_client,
-        working_memory_store=working_memory_store,
-        bibliothekar_store=bibliothekar_store,
-        youtube_job_runner=youtube_job_runner,
-        bot_identity=bot_identity,
-        llm_client=llm_client,
-        llm_enabled_override=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
-    )
+    if runtime_context is None:
+        resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
+        openai_client = OpenAIClient(resolved_openai_api_key) if resolved_openai_api_key else None
+        llm_client = build_runtime_text_llm_client(
+            instructions=instruction_store.get(),
+            openai_client=openai_client,
+            default_api_key=resolved_openai_api_key or "",
+            enabled=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
+            profile=resolve_llm_setting(instance, "telegram", adapter_slot, "PROFILE"),
+            purpose=resolve_llm_setting(instance, "telegram", adapter_slot, "PURPOSE"),
+            allow_remote_fallback=resolve_llm_setting(instance, "telegram", adapter_slot, "ALLOW_REMOTE_FALLBACK"),
+            provider=resolve_llm_setting(instance, "telegram", adapter_slot, "PROVIDER"),
+            model=resolve_llm_setting(instance, "telegram", adapter_slot, "MODEL"),
+            fallback_models=resolve_llm_setting(instance, "telegram", adapter_slot, "FALLBACK_MODELS"),
+            api_key=resolve_llm_setting(instance, "telegram", adapter_slot, "API_KEY"),
+            api_base=resolve_llm_setting(instance, "telegram", adapter_slot, "BASE_URL"),
+            timeout=resolve_llm_setting(instance, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
+            max_tokens=resolve_llm_setting(instance, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
+            temperature=resolve_llm_setting(instance, "telegram", adapter_slot, "TEMPERATURE"),
+        )
+        bot_identity = bot_identity or _resolve_bot_identity(api)
+        user_memory_store = AccountStore(
+            _resolve_instances_dir() / instance / "data" / "accounts",
+            instance,
+            secret_provider=SecretToolInstanceSecretProvider(),
+        )
+        instance_data_dir = _resolve_instances_dir() / instance / "data"
+        state_store = RuntimeStateStore(instance_data_dir, instance_name=instance, secret_provider=SecretToolInstanceSecretProvider())
+        message_tracker = MessageTracker(instance_data_dir / "runtime" / "Sent_Message_Refs.json")
+        working_memory_store = WorkingMemoryStore(instance)
+        working_memory_store.ensure()
+        current_instructions = instruction_store.get()
+        bibliothekar_store = BibliothekarService.from_instructions(instance, _resolve_instances_dir(), current_instructions)
+        runtime_context = build_telegram_runtime_context(
+            api=api,
+            instance_name=instance,
+            adapter_slot=adapter_slot,
+            instruction_store=instruction_store,
+            account_store=user_memory_store,
+            state_store=state_store,
+            message_tracker=message_tracker,
+            openai_client=openai_client,
+            working_memory_store=working_memory_store,
+            bibliothekar_store=bibliothekar_store,
+            youtube_job_runner=youtube_job_runner,
+            bot_identity=bot_identity,
+            llm_client=llm_client,
+            llm_enabled_override=resolve_llm_setting(instance, "telegram", adapter_slot, "ENABLED"),
+        )
+    else:
+        openai_client = None
+        user_memory_store = runtime_context.account_store
+        working_memory_store = None
+        bibliothekar_store = None
+        bot_identity = bot_identity or runtime_context.bot_identity
+    chat_state = chat_state or ChatState(_teladi_call_state_path(instance), instance)
     process_registry = _InstanceProcessRegistry(instance)
     process_registry.cleanup_orphans()
     LOGGER.info(
