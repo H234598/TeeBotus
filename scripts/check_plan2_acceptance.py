@@ -33,6 +33,14 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
+    {
+        "account_memory",
+        "bibliothekar",
+        "langgraph_flows",
+        "transcription_youtube",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -457,6 +465,15 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         rankings = comparisons.get("stable_backend_rankings")
         if not isinstance(rankings, list) or not rankings:
             errors.append(f"{prefix}comparisons.stable_backend_rankings must be a non-empty list")
+        else:
+            ranking_categories = {
+                str(ranking.get("category") or "")
+                for ranking in rankings
+                if isinstance(ranking, dict) and isinstance(ranking.get("candidates"), list) and ranking.get("candidates")
+            }
+            missing_rankings = sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES - ranking_categories)
+            if missing_rankings:
+                errors.append(f"{prefix}benchmark rankings missing required categories: {', '.join(missing_rankings)}")
     regression = payload.get("regression")
     if not isinstance(regression, dict):
         errors.append(f"{prefix}regression must be an object")

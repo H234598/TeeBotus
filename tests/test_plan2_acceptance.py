@@ -235,7 +235,12 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
                         }
                         for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
                     ],
-                    "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+                    "comparisons": {
+                        "stable_backend_rankings": [
+                            {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
+                            for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
+                        ]
+                    },
                     "regression": {"status": "not_configured", "failed": False},
                 }
             ),
@@ -337,7 +342,7 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
                 "index_bytes": 1,
             }
         ],
-        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
         "regression": {"status": "not_configured", "failed": False},
     }
 
@@ -345,6 +350,33 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
 
     assert any("benchmark results missing required categories" in error for error in errors)
     assert any("pydantic_ai" in error and "mcp_tools" in error and "transcription_youtube" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> None:
+    payload = {
+        "schema_version": 1,
+        "ok": True,
+        "results": [
+            {
+                "name": f"{category}_benchmark",
+                "category": category,
+                "ok": True,
+                "total_ms": 1.0,
+                "throughput_ops_s": 100.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+            }
+            for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
+        ],
+        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "regression": {"status": "not_configured", "failed": False},
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("benchmark rankings missing required categories" in error for error in errors)
+    assert any("bibliothekar" in error and "langgraph_flows" in error and "transcription_youtube" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:
@@ -362,7 +394,7 @@ def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> No
                 "payload_bytes": "unknown",
             }
         ],
-        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+        "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
         "regression": {"status": "not_configured", "failed": False},
     }
 
