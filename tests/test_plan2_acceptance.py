@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -63,6 +64,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
         "--json-output",
         str(tmp_path / "bench.json"),
     )
+    assert by_label["plan2-quick-benchmarks"].validate_benchmark_artifacts is True
     assert by_label["adapter-deps"].argv == ("python-test", "scripts/check_adapter_deps.py")
     assert by_label["plan2-optional-extras"].argv == ("python-test", "scripts/check_plan2_optional_extras.py", "--require-installed")
     assert by_label["qdrant-systemd-print"].argv == ("python-test", "-m", "TeeBotus.qdrant_systemd", "--print")
@@ -202,6 +204,117 @@ def test_plan2_acceptance_runner_continues_after_nonfatal_failure(monkeypatch) -
 
     assert result == 0
     assert calls == [("pip-audit",), ("python-test", "-m", "TeeBotus")]
+
+
+def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, monkeypatch) -> None:
+    markdown_path = tmp_path / "bench.md"
+    json_path = tmp_path / "bench.json"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        markdown_path.write_text(
+            "# TeeBotus Benchmarks\n\n## Results\n\nok\n\n## Regression Check\n\n- status: not_configured\n",
+            encoding="utf-8",
+        )
+        json_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "ok": True,
+                    "results": [
+                        {
+                            "name": "memory_jsonl",
+                            "category": "account_memory",
+                            "ok": True,
+                            "total_ms": 1.0,
+                            "throughput_ops_s": 100.0,
+                        }
+                    ],
+                    "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": []}]},
+                    "regression": {"status": "not_configured", "failed": False},
+                }
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "plan2-quick-benchmarks",
+                (
+                    "python-test",
+                    "scripts/run_benchmarks.py",
+                    "--output",
+                    str(markdown_path),
+                    "--json-output",
+                    str(json_path),
+                ),
+                validate_benchmark_artifacts=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 0
+    assert calls == [
+        (
+            "python-test",
+            "scripts/run_benchmarks.py",
+            "--output",
+            str(markdown_path),
+            "--json-output",
+            str(json_path),
+        ),
+        ("python-test", "-m", "pytest"),
+    ]
+
+
+def test_plan2_acceptance_runner_fails_on_invalid_benchmark_artifacts(tmp_path: Path, monkeypatch) -> None:
+    markdown_path = tmp_path / "bench.md"
+    json_path = tmp_path / "bench.json"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        markdown_path.write_text("not a benchmark report\n", encoding="utf-8")
+        json_path.write_text(json.dumps({"schema_version": 1, "ok": True, "results": []}), encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "plan2-quick-benchmarks",
+                (
+                    "python-test",
+                    "scripts/run_benchmarks.py",
+                    "--output",
+                    str(markdown_path),
+                    "--json-output",
+                    str(json_path),
+                ),
+                validate_benchmark_artifacts=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 1
+    assert calls == [
+        (
+            "python-test",
+            "scripts/run_benchmarks.py",
+            "--output",
+            str(markdown_path),
+            "--json-output",
+            str(json_path),
+        )
+    ]
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

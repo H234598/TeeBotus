@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ class AcceptanceCommand:
     argv: tuple[str, ...]
     nonfatal: bool = False
     validate_runtime_status: bool = False
+    validate_benchmark_artifacts: bool = False
 
 
 PLAN2_TEST_PATTERNS: tuple[str, ...] = (
@@ -271,6 +273,7 @@ def build_acceptance_commands(
                     "--json-output",
                     str(benchmark_json_output),
                 ),
+                validate_benchmark_artifacts=True,
             ),
             AcceptanceCommand(
                 "plan2-optional-extras",
@@ -336,8 +339,113 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
                 for line in broken_lines:
                     print(f"  {line}", file=sys.stderr)
                 return 1
+        if command.validate_benchmark_artifacts:
+            artifact_errors = _benchmark_artifact_errors(command.argv)
+            if artifact_errors and not command.nonfatal:
+                print(f"\nPlan2 acceptance failed at {command.label}: benchmark artifacts are invalid.", file=sys.stderr)
+                for error in artifact_errors:
+                    print(f"  {error}", file=sys.stderr)
+                return 1
     print("\nPlan2 acceptance checks passed.")
     return 0
+
+
+def _benchmark_artifact_errors(argv: Sequence[str]) -> list[str]:
+    errors: list[str] = []
+    markdown_path = _option_path(argv, "--output")
+    json_path = _option_path(argv, "--json-output")
+
+    if markdown_path is None:
+        errors.append("missing --output for benchmark markdown artifact")
+    else:
+        errors.extend(_markdown_artifact_errors(markdown_path))
+
+    if json_path is None:
+        errors.append("missing --json-output for benchmark JSON artifact")
+    else:
+        errors.extend(_json_benchmark_artifact_errors(json_path))
+
+    return errors
+
+
+def _markdown_artifact_errors(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"benchmark markdown artifact missing: {path}"]
+    if not path.is_file():
+        return [f"benchmark markdown artifact is not a file: {path}"]
+    text = path.read_text(encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    if not text.strip():
+        errors.append(f"benchmark markdown artifact is empty: {path}")
+    if "# TeeBotus Benchmarks" not in text:
+        errors.append(f"benchmark markdown artifact lacks heading: {path}")
+    if "## Results" not in text:
+        errors.append(f"benchmark markdown artifact lacks results section: {path}")
+    if "## Regression Check" not in text:
+        errors.append(f"benchmark markdown artifact lacks regression section: {path}")
+    return errors
+
+
+def _json_benchmark_artifact_errors(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"benchmark JSON artifact missing: {path}"]
+    if not path.is_file():
+        return [f"benchmark JSON artifact is not a file: {path}"]
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [f"benchmark JSON artifact is not valid JSON: {path}: {exc}"]
+    return _benchmark_payload_errors(payload, path=path)
+
+
+def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list[str]:
+    prefix = f"{path}: " if path is not None else ""
+    if not isinstance(payload, dict):
+        return [f"{prefix}benchmark JSON root must be an object"]
+    errors: list[str] = []
+    if payload.get("schema_version") != 1:
+        errors.append(f"{prefix}schema_version must be 1")
+    if payload.get("ok") is not True:
+        errors.append(f"{prefix}ok must be true")
+    results = payload.get("results")
+    if not isinstance(results, list) or not results:
+        errors.append(f"{prefix}results must be a non-empty list")
+    elif not any(isinstance(result, dict) and result.get("ok") is True for result in results):
+        errors.append(f"{prefix}results must contain at least one ok result")
+    else:
+        for index, result in enumerate(results):
+            if not isinstance(result, dict):
+                errors.append(f"{prefix}results[{index}] must be an object")
+                continue
+            for key in ("name", "category", "total_ms", "throughput_ops_s"):
+                if key not in result:
+                    errors.append(f"{prefix}results[{index}] missing {key}")
+            if "ok" not in result and "skipped" not in result:
+                errors.append(f"{prefix}results[{index}] missing ok/skipped status")
+    comparisons = payload.get("comparisons")
+    if not isinstance(comparisons, dict):
+        errors.append(f"{prefix}comparisons must be an object")
+    else:
+        rankings = comparisons.get("stable_backend_rankings")
+        if not isinstance(rankings, list) or not rankings:
+            errors.append(f"{prefix}comparisons.stable_backend_rankings must be a non-empty list")
+    regression = payload.get("regression")
+    if not isinstance(regression, dict):
+        errors.append(f"{prefix}regression must be an object")
+    elif "status" not in regression or "failed" not in regression:
+        errors.append(f"{prefix}regression must contain status and failed")
+    return errors
+
+
+def _option_path(argv: Sequence[str], option: str) -> Path | None:
+    try:
+        index = argv.index(option)
+    except ValueError:
+        return None
+    value_index = index + 1
+    if value_index >= len(argv):
+        return None
+    return Path(argv[value_index])
 
 
 def _runtime_status_broken_lines(output: str) -> list[str]:
