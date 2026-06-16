@@ -73,57 +73,73 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def benchmark_jsonl_backend(*, entries: int, select_runs: int) -> dict[str, Any]:
-    with tempfile.TemporaryDirectory(prefix="teebotus-memory-bench-") as tmp:
-        root = Path(tmp)
-        store = AccountStore(root / "accounts", "Bench", StaticSecretProvider(b"b" * 32))
-        account_id = store.resolve_or_create_account(signal_identity_key(source_uuid="bench"))
-        append_timings = []
-        total_start = time.perf_counter()
-        for index in range(entries):
-            append_timings.append(
-                _timed_ms(
-                    lambda index=index: store.append_structured_memory_entry(
-                        account_id,
-                        {
-                            "id": f"mem_{index:06d}",
-                            "kind": "observation",
-                            "memory_type": "episodic",
-                            "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
-                            "bot_text": "Notiert.",
-                            "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
-                        },
+    isolated_env_keys = (
+        "TEEBOTUS_ACCOUNT_MEMORY_BACKEND",
+        "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH",
+        "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH",
+        "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN",
+    )
+    previous_env = {key: os.environ.get(key) for key in isolated_env_keys}
+    try:
+        for key in isolated_env_keys:
+            os.environ.pop(key, None)
+        with tempfile.TemporaryDirectory(prefix="teebotus-memory-bench-") as tmp:
+            root = Path(tmp)
+            store = AccountStore(root / "accounts", "Bench", StaticSecretProvider(b"b" * 32))
+            account_id = store.resolve_or_create_account(signal_identity_key(source_uuid="bench"))
+            append_timings = []
+            total_start = time.perf_counter()
+            for index in range(entries):
+                append_timings.append(
+                    _timed_ms(
+                        lambda index=index: store.append_structured_memory_entry(
+                            account_id,
+                            {
+                                "id": f"mem_{index:06d}",
+                                "kind": "observation",
+                                "memory_type": "episodic",
+                                "user_text": f"Spaziergang Kaffee Druck Mond Eintrag {index}",
+                                "bot_text": "Notiert.",
+                                "keywords": ["spaziergang", "kaffee", "druck", "mond", str(index)],
+                            },
+                        )
                     )
                 )
-            )
-        append_total_ms = (time.perf_counter() - total_start) * 1000
+            append_total_ms = (time.perf_counter() - total_start) * 1000
 
-        select_timings = [
-            _timed_ms(
-                lambda: store.select_structured_memory(
-                    account_id,
-                    query_text="spaziergang kaffee",
-                    max_prompt_chars=12000,
-                    max_entry_chars=2000,
+            select_timings = [
+                _timed_ms(
+                    lambda: store.select_structured_memory(
+                        account_id,
+                        query_text="spaziergang kaffee",
+                        max_prompt_chars=12000,
+                        max_entry_chars=2000,
+                    )
                 )
-            )
-            for _ in range(select_runs)
-        ]
-        rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
-        account_dir = store.account_dir(account_id)
-        entries_path = account_dir / "User_Memory_Entries.jsonl"
-        index_path = account_dir / "User_Memory_Index.json"
-        return {
-            "backend": "encrypted-jsonl-plus-json-index",
-            "entries": entries,
-            "entry_bytes": entries_path.stat().st_size if entries_path.exists() else 0,
-            "index_bytes": index_path.stat().st_size if index_path.exists() else 0,
-            "append_total_ms": append_total_ms,
-            "append_last_ms": append_timings[-1],
-            "append_median_ms": statistics.median(append_timings),
-            "select_median_ms": statistics.median(select_timings),
-            "select_p95_ms": _p95(select_timings),
-            "rebuild_ms": rebuild_ms,
-        }
+                for _ in range(select_runs)
+            ]
+            rebuild_ms = _timed_ms(lambda: store.rebuild_structured_memory_index(account_id))
+            account_dir = store.account_dir(account_id)
+            entries_path = account_dir / "User_Memory_Entries.jsonl"
+            index_path = account_dir / "User_Memory_Index.json"
+            return {
+                "backend": "encrypted-jsonl-plus-json-index",
+                "entries": entries,
+                "entry_bytes": entries_path.stat().st_size if entries_path.exists() else 0,
+                "index_bytes": index_path.stat().st_size if index_path.exists() else 0,
+                "append_total_ms": append_total_ms,
+                "append_last_ms": append_timings[-1],
+                "append_median_ms": statistics.median(append_timings),
+                "select_median_ms": statistics.median(select_timings),
+                "select_p95_ms": _p95(select_timings),
+                "rebuild_ms": rebuild_ms,
+            }
+    finally:
+        for key, value in previous_env.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def benchmark_sqlite_row_encrypted_projection(*, entries: int, select_runs: int) -> dict[str, Any]:

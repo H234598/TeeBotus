@@ -522,6 +522,10 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
         category="llm_router",
         iterations=iterations * 3,
         total_ms=sum(route_timings) + sum(runtime_timings) + sum(decision_timings),
+        payload_bytes=len(json.dumps(decision_payload, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(
+            json.dumps({"profiles": list(profiles), "routing": list(routing)}, ensure_ascii=False).encode("utf-8")
+        ),
         details={
             "median_route_ms": statistics.median(route_timings),
             "median_runtime_client_ms": statistics.median(runtime_timings),
@@ -687,6 +691,8 @@ def _benchmark_adapter_contracts(*, iterations: int) -> BenchmarkResult:
         total_ms=sum(timings) + sum(runtime_timings),
         ok=errors == 0 and runtime_errors == 0,
         errors=errors + runtime_errors,
+        payload_bytes=int(latest_runtime.get("payload_bytes") or 0),
+        index_bytes=len(json.dumps({"packages": packages}, ensure_ascii=False).encode("utf-8")),
         details={
             "packages": packages,
             "version_reads": len(versions),
@@ -735,11 +741,20 @@ def _messenger_adapter_runtime_contract() -> dict[str, Any]:
         "signal": signal_refs == [20001] and signal_context.sent == ["Signal OK"],
         "matrix": matrix_refs == ["$bench"] and matrix_client.sent_texts == [("!room:example", "Matrix OK")],
     }
+    payload_texts = [
+        telegram_event.text if telegram_event else "",
+        signal_event.text if signal_event else "",
+        matrix_event.text if matrix_event else "",
+        *[text for _chat_id, text in telegram_api.sent],
+        *signal_context.sent,
+        *[text for _room_id, text in matrix_client.sent_texts],
+    ]
     return {
         "ok": all(event_contracts.values()) and all(send_contracts.values()),
         "event_contracts": event_contracts,
         "send_contracts": send_contracts,
         "fake_network_sends": len(telegram_api.sent) + len(signal_context.sent) + len(matrix_client.sent_texts),
+        "payload_bytes": sum(len(text.encode("utf-8")) for text in payload_texts),
     }
 
 
@@ -843,6 +858,8 @@ def _benchmark_youtube_parser(*, iterations: int) -> BenchmarkResult:
         category="transcription_youtube",
         iterations=iterations * len(samples),
         total_ms=sum(timings),
+        payload_bytes=sum(len(sample.encode("utf-8")) for sample in samples),
+        index_bytes=len(json.dumps({"samples": len(samples)}, ensure_ascii=False).encode("utf-8")),
         details={"intent_hits": hit_count, "sample_count": len(samples), "median_batch_ms": statistics.median(timings)},
     )
 
@@ -1003,6 +1020,8 @@ def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
             total_ms=sum(health_timings) + sum(config_timings) + sum(dependency_timings),
             ok=ok,
             errors=0 if ok else 1,
+            payload_bytes=len(json.dumps(env, ensure_ascii=False).encode("utf-8")),
+            index_bytes=LOCKFILE.stat().st_size if LOCKFILE.exists() else 0,
             details={
                 "runtime_instances": list(latest_config.selected_instances) if latest_config is not None else [],
                 "runtime_channels": runtime_channels,
@@ -1130,6 +1149,8 @@ def _benchmark_langgraph_flow(*, iterations: int) -> BenchmarkResult:
             category="langgraph_flows",
             iterations=iterations,
             total_ms=sum(timings),
+            payload_bytes=_bibliothekar_selection_payload_bytes(service),
+            index_bytes=_bibliothekar_fixture_index_bytes(service),
             details={"median_graph_ms": statistics.median(timings), "mode": "langgraph_or_linear_fallback"},
         )
 
@@ -1142,6 +1163,8 @@ def _benchmark_langgraph_linear_flow(*, iterations: int) -> BenchmarkResult:
             category="langgraph_flows",
             iterations=iterations,
             total_ms=sum(timings),
+            payload_bytes=_bibliothekar_selection_payload_bytes(service),
+            index_bytes=_bibliothekar_fixture_index_bytes(service),
             details={"median_graph_ms": statistics.median(timings), "mode": "linear"},
         )
 
@@ -1206,6 +1229,8 @@ def _benchmark_langgraph_fake_installed_flow(*, iterations: int) -> BenchmarkRes
         category="langgraph_flows",
         iterations=iterations,
         total_ms=sum(timings),
+        payload_bytes=sum(len(name.encode("utf-8")) for name in calls),
+        index_bytes=len(json.dumps({"node_sequence": calls[:6]}, ensure_ascii=False).encode("utf-8")),
         details={
             "median_graph_ms": statistics.median(timings),
             "mode": "fake_installed_langgraph",
@@ -1230,6 +1255,20 @@ class _BenchmarkGraphFixture:
         self._tmp.cleanup()
 
 
+def _bibliothekar_selection_payload_bytes(service: BibliothekarService) -> int:
+    selection = service.search("Bibliothek Therapie", max_chunks=2)
+    return len(selection.prompt_text.encode("utf-8"))
+
+
+def _bibliothekar_fixture_index_bytes(service: BibliothekarService) -> int:
+    backend = getattr(service, "backend", None)
+    store = getattr(backend, "store", None)
+    index_path = getattr(store, "index_path", None)
+    if isinstance(index_path, Path) and index_path.exists():
+        return index_path.stat().st_size
+    return len(json.dumps({"backend": service.backend_name, "collection": service.collection}, ensure_ascii=False).encode("utf-8"))
+
+
 def _copy_benchmark_books(destination: Path) -> None:
     source = REPO_ROOT / "tests" / "fixtures" / "books"
     if not source.exists():
@@ -1252,12 +1291,18 @@ def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
         store.rebuild()
         service = BibliothekarService(LocalBibliothekarBackend(store))
         registry = build_readonly_mcp_registry(bibliothekar_service=service)
-        timings = [_timed_ms(lambda: registry.call("bibliothekar.search", {"query": "Therapie", "top_k": 1})) for _ in range(iterations)]
+        calls: list[Any] = []
+        timings = [
+            _timed_ms(lambda: calls.append(registry.call("bibliothekar.search", {"query": "Therapie", "top_k": 1})))
+            for _ in range(iterations)
+        ]
         return _result(
             name="mcp_readonly_bibliothekar_search",
             category="mcp_tools",
             iterations=iterations,
             total_ms=sum(timings),
+            payload_bytes=len(json.dumps(calls[-1] if calls else {}, ensure_ascii=False).encode("utf-8")),
+            index_bytes=store.index_path.stat().st_size if store.index_path.exists() else 0,
             details={"tool_names": registry.tool_names, "median_tool_ms": statistics.median(timings)},
         )
 

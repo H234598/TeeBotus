@@ -41,6 +41,12 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert all("total_ms" in result for result in suite["results"])
     assert all("throughput_ops_s" in result for result in suite["results"])
     assert all("mode" in result and "live" in result for result in suite["results"])
+    missing_sizes = [
+        result["name"]
+        for result in suite["results"]
+        if not result["skipped"] and result["payload_bytes"] <= 0 and result["index_bytes"] <= 0
+    ]
+    assert missing_sizes == []
     assert any(result["name"] == "memory_postgres" and result["skipped"] is True and result["mode"] == "live_optional" for result in suite["results"])
     migration = next(result for result in suite["results"] if result["name"] == "memory_migration_jsonl_to_sqlite")
     assert migration["ok"] is True
