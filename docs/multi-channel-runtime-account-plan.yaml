@@ -161,8 +161,10 @@ account_scoped_runtime_patch:
   teladi_cooldown:
     status: "implemented_for_telegram"
     keying: "Account-ID when AccountStore is available, Telegram identity fallback otherwise"
+    header: "Telegram emergency header reuses messenger-neutral Teladi header metadata for instance, account, identity and chat provenance."
     files:
       - "TeeBotus/adapters/telegram_runtime.py"
+      - "TeeBotus/core/call_a_teladi.py"
       - "tests/test_bot.py"
       - "README.md"
     validation:
@@ -177,5 +179,4 @@ account_scoped_runtime_patch:
     validation:
       command: "python3 -m pytest -q tests/test_bot.py -k 'youtube'"
       result: "26 passed, 127 deselected, 14 subtests passed"
-  remaining:
-    - "Replace or remove unused messenger-neutral TeladiPendingFlow scaffold if it stays superseded by Telegram copy-message semantics."
+  remaining: []

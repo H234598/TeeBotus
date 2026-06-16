@@ -3878,6 +3878,11 @@ class BotTests(unittest.TestCase):
 
             self.assertIn(account_id, chat_state.teladi_call_used_at)
             self.assertNotIn("telegram:user:456", chat_state.teladi_call_used_at)
+            target_messages = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
+            self.assertEqual(len(target_messages), 1)
+            self.assertIn(f"Account: {account_id}", target_messages[0])
+            self.assertIn("Identity: telegram:user:456", target_messages[0])
+            self.assertIn("Instanz: Depressionsbot", target_messages[0])
             self.assertIn("Du kannst /Call_a_Teladi erst in", api.sent_messages[-1][1])
             self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 2)])
 

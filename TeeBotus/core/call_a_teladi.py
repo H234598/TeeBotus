@@ -1,29 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
-
-
-@dataclass(frozen=True)
-class TeladiPendingFlow:
-    """Account-scoped pending Teladi emergency flow."""
-
-    instance_name: str
-    account_id: str
-    channel: str
-    chat_id: str
-    requested_at: str
-
-    @classmethod
-    def start(cls, *, instance_name: str, account_id: str, channel: str, chat_id: str) -> "TeladiPendingFlow":
-        return cls(
-            instance_name=instance_name,
-            account_id=account_id,
-            channel=channel,
-            chat_id=chat_id,
-            requested_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        )
-
 
 def build_teladi_header(
     *,

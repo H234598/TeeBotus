@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus import __version__
+from TeeBotus.core.call_a_teladi import build_teladi_header
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply as build_core_status_reply
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
@@ -1571,7 +1572,8 @@ def _handle_pending_teladi_call_message(
 
     chat_state.clear_pending_teladi_call(teladi_key)
     try:
-        _send_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, _build_teladi_emergency_header(message))
+        header_instance_name = chat_state.instance_name or (user_memory_store.instance_name if user_memory_store is not None else "")
+        _send_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, _build_teladi_emergency_header(message, teladi_key=teladi_key, instance_name=header_instance_name))
         _copy_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, chat_id, _message_id(message))
     except (TelegramAPIError, ValueError):
         LOGGER.exception("Failed to send Teladi emergency message.")
@@ -1639,7 +1641,7 @@ def _telegram_account_state_key(user_memory_store: AccountStore | None, message:
     return identity_key
 
 
-def _build_teladi_emergency_header(message: dict[str, Any]) -> str:
+def _build_teladi_emergency_header(message: dict[str, Any], *, teladi_key: str = "", instance_name: str = "") -> str:
     chat = message.get("chat") if isinstance(message.get("chat"), dict) else {}
     sender = message.get("from") if isinstance(message.get("from"), dict) else {}
     sender_chat = message.get("sender_chat") if isinstance(message.get("sender_chat"), dict) else {}
@@ -1651,9 +1653,19 @@ def _build_teladi_emergency_header(message: dict[str, Any]) -> str:
     chat_type = _metadata_value(chat.get("type"))
     chat_id = _metadata_value(chat.get("id"))
     sender_id = _metadata_value(sender.get("id") if sender else sender_chat.get("id"))
+    identity_key = _telegram_identity_key_from_message(message) or "unbekannt"
+    account_id = teladi_key if re.fullmatch(r"[0-9a-f]{128}", teladi_key or "") else "unbekannt"
     return "\n".join(
         [
             "Emergency message via /Call_a_Teladi",
+            build_teladi_header(
+                instance_name=instance_name or "unbekannt",
+                channel="telegram",
+                account_id=account_id,
+                identity_key=identity_key,
+                chat_id=chat_id,
+                source_label=sender_label,
+            ),
             f"From: {sender_label} (sender_id: {sender_id})",
             f"Chat: {chat_title} (type: {chat_type}, chat_id: {chat_id})",
         ]
