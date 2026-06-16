@@ -55,6 +55,12 @@ class MemoryCandidate(BaseModel):
     def _strip_text(cls, value: str) -> str:
         return str(value or "").strip()
 
+    @model_validator(mode="after")
+    def _require_text_for_auto_store(self) -> "MemoryCandidate":
+        if self.should_store and self.memory_type != "none" and not self.text:
+            raise ValueError("text must be non-empty when should_store is true")
+        return self
+
 
 class ReminderDecision(BaseModel):
     should_create: bool

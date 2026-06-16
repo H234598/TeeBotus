@@ -161,6 +161,32 @@ def test_memory_candidate_schema_supports_safe_structured_storage_decisions() ->
     )
 
 
+def test_memory_candidate_schema_requires_text_for_auto_store() -> None:
+    with pytest.raises(ValidationError, match="text must be non-empty"):
+        parse_memory_candidate(
+            {
+                "should_store": True,
+                "memory_type": "preference",
+                "text": "   ",
+                "sensitivity": "low",
+                "confidence": 0.91,
+            }
+        )
+
+    skipped = parse_memory_candidate(
+        {
+            "should_store": False,
+            "memory_type": "none",
+            "text": "",
+            "sensitivity": "low",
+            "confidence": 0.91,
+        }
+    )
+
+    assert skipped.should_store is False
+    assert skipped.memory_type == "none"
+
+
 def test_memory_candidate_schema_accepts_plan2_clinical_memory_kinds() -> None:
     candidate = parse_memory_candidate(
         {
