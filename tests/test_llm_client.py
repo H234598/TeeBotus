@@ -86,6 +86,26 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
     ]
 
 
+def test_litellm_text_client_uses_default_key_when_instruction_env_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "Hallo"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    monkeypatch.delenv("MISSING_PROFILE_KEY", raising=False)
+
+    response = LiteLLMTextClient(api_key="profile-key").create_reply(
+        "Ping",
+        BotInstructions(llm_model="huggingface/meta-llama/Llama-3.1-8B-Instruct", llm_api_key_env="MISSING_PROFILE_KEY"),
+        None,
+    )
+
+    assert response.text == "Hallo"
+    assert calls[0]["api_key"] == "profile-key"
+
+
 def test_litellm_text_client_prefixes_provider_models_from_runtime_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 

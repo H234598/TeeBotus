@@ -252,7 +252,7 @@ def _litellm_model_name(provider: str, model: str) -> str:
 def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str) -> str:
     env_name = str(instructions.llm_api_key_env or "").strip()
     if env_name:
-        return os.environ.get(env_name, "").strip()
+        return os.environ.get(env_name, "").strip() or default_api_key.strip()
     return default_api_key.strip()
 
 
