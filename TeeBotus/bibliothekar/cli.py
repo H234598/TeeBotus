@@ -67,13 +67,14 @@ def _status(args: argparse.Namespace) -> int:
                 "backend": health.backend,
                 "store": health.store,
                 "collection": health.collection,
+                "target": health.target,
                 "status": health.status,
                 "documents": health.documents,
                 "chunks": health.chunks,
                 "error": health.error,
             }
         )
-    return _emit_rows(rows, args.json, "{instance}: backend={backend} store={store} collection={collection} status={status} documents={documents} chunks={chunks}{error_suffix}")
+    return _emit_rows(rows, args.json, "{instance}: backend={backend} store={store} collection={collection}{target_suffix} status={status} documents={documents} chunks={chunks}{error_suffix}")
 
 
 def _index(args: argparse.Namespace) -> int:
@@ -255,6 +256,7 @@ def _emit_rows(rows: list[dict[str, Any]], as_json: bool, template: str) -> int:
     for row in rows:
         row = dict(row)
         row["error_suffix"] = f" error={row['error']}" if row.get("error") else ""
+        row["target_suffix"] = f" target={row['target']}" if row.get("target") else ""
         print(template.format(**row))
     return 0
 

@@ -1404,11 +1404,46 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
     status_output = capsys.readouterr().out
     assert "Depressionsbot: backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1" in status_output
+    assert "target=" not in status_output
 
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "query", "Therapie", "--top-k", "1"]) == 0
     query_output = capsys.readouterr().out
     assert "Depressionsbot: backend=local selected=1" in query_output
     assert "therapie.txt" in query_output
+
+
+def test_bibliothekar_cli_status_reports_haystack_target_in_text_and_json(tmp_path, capsys, monkeypatch):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: haystack\n- collection: therapy_books\n- qdrant_url: http://localhost:6334\n",
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class EmptyDocumentStore:
+        def filter_documents(self, **_kwargs):
+            return []
+
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.bibliothekar_service.HaystackBibliothekarBackend._document_store",
+        lambda _self: EmptyDocumentStore(),
+    )
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
+    text_output = capsys.readouterr().out
+    assert (
+        "Depressionsbot: backend=haystack store=qdrant collection=therapy_books "
+        "target=http://localhost:6334 status=reachable documents=1 chunks=1"
+    ) in text_output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "--json", "status"]) == 0
+    json_output = capsys.readouterr().out
+    payload = json.loads(json_output)
+    assert payload["results"][0]["target"] == "http://localhost:6334"
 
 
 def test_bibliothekar_cli_query_applies_metadata_filters(tmp_path, capsys):
