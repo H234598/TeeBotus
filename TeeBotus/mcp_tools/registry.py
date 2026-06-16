@@ -13,6 +13,10 @@ SECRET_LIKE_PATTERNS = (
     "SIGNAL_BOT_PHONE_NUMBER=",
     "MATRIX_BOT_ACCESS_TOKEN=",
 )
+SECRET_LIKE_KEY_PATTERN = re.compile(
+    r"(^|[_-])(api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|secret|password)([_-]|$)",
+    re.IGNORECASE,
+)
 SECRET_TOKEN_PATTERNS = (
     r"\bsk-[A-Za-z0-9_-]{8,}\b",
     r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b",
@@ -194,11 +198,15 @@ def _safe_result(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _contains_secret_like_content(value: Any) -> bool:
     if isinstance(value, Mapping):
-        return any(_contains_secret_like_content(item) for item in value.values())
+        return any(_contains_secret_like_key(key) or _contains_secret_like_content(item) for key, item in value.items())
     if isinstance(value, (list, tuple, set, frozenset)):
         return any(_contains_secret_like_content(item) for item in value)
     if not isinstance(value, str):
         return False
-    if any(marker in value for marker in SECRET_LIKE_PATTERNS):
+    if any(marker.casefold() in value.casefold() for marker in SECRET_LIKE_PATTERNS):
         return True
     return any(re.search(pattern, value) for pattern in SECRET_TOKEN_PATTERNS)
+
+
+def _contains_secret_like_key(value: Any) -> bool:
+    return bool(SECRET_LIKE_KEY_PATTERN.search(str(value or "")))

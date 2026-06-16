@@ -232,6 +232,47 @@ def test_mcp_registry_rejects_secret_like_tool_results() -> None:
         registry.call("bibliothekar.search", {"query": "Token"})
 
 
+def test_mcp_registry_rejects_secret_like_tool_result_keys() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "prompt_text": "harmloser Text",
+                "nested": {"OPENAI_API_KEY": "configured", "access_token": "configured"},
+            }
+        },
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Token"})
+
+
+def test_mcp_registry_rejects_case_insensitive_secret_assignment_markers() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {"bibliothekar.search": lambda _arguments: {"prompt_text": "openai_api_key=configured"}},
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Token"})
+
+
+def test_mcp_registry_allows_normal_readonly_result_keys() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "tool": "bibliothekar.search",
+                "read_only": True,
+                "selected_ids": ["chunk_1"],
+                "topics": ["therapie"],
+            }
+        },
+    )
+
+    assert registry.call("bibliothekar.search", {"query": "Therapie"})["selected_ids"] == ["chunk_1"]
+
+
 def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monkeypatch) -> None:
     created = []
 
