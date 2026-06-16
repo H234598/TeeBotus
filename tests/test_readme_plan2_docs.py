@@ -21,6 +21,10 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "Daten-Rollback" in text
     assert "Bibliothekar-/Haystack-/Qdrant-Indizes sind rebuildbar" in text
     assert "memory-recovery --instances-dir instances --instances <Instanz>" in text
+    assert "memory-recovery --instances-dir instances --legacy-instances-dir" in text
+    assert "scripts/import_legacy_user_memory.py" in text
+    assert "--replace-unreadable-account-metadata --apply" in text
+    assert "Account_Memory.sqlite3" in text
     assert "## Bibliothekar, Haystack und LangGraph" in text
     assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
     assert "teebotus-qdrant-systemd" in text

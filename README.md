@@ -299,6 +299,20 @@ python3 -m TeeBotus.admin memory-recovery --instances-dir instances --format jso
 
 Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JSON-Dateien pro Account. Er gibt nur Zaehler, Dateipfade und Fehlerklassen aus, keine Secrets und keine rohen Memory-Payloads. Wenn kein Source als `recoverable=True` markiert ist, darf der Bot keine automatische Datenmigration oder Loeschung versuchen; dann fehlt der passende alte Schluessel oder eine lesbare Sicherung.
 
+Wenn eine alte Plaintext-Sicherung mit `instances/<Instanz>/data/users/<telegram_id>/User_Memory_Entries.jsonl` existiert, kann der Recovery-Report diese Quelle zusaetzlich nur zaehlen:
+
+```bash
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak
+```
+
+Der eigentliche Import ist ein separater, standardmaessig nicht-destruktiver Dry-Run:
+
+```bash
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak --target-instances-dir instances --replace-unreadable-account-metadata
+```
+
+Ein echter Import braucht `--apply`. Wenn aktuelle Account-Metadaten nicht entschluesselbar sind, sichert `--replace-unreadable-account-metadata --apply` den aktiven Account-Store komplett weg: `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json`, `accounts/`, `Account_Memory.sqlite3`, Fallback-SQLite sowie WAL/SHM. Danach werden neue Account-Mappings aus `telegram:user:<id>` erzeugt und die Legacy-Eintraege verschluesselt in den aktuellen AccountStore geschrieben. Vor diesem Schritt muss der Bot gestoppt sein; danach `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren.
+
 ## Verhalten steuern
 
 Das Bot-Verhalten liegt pro Instanz in einer eigenen `Bot_Verhalten.md`:
