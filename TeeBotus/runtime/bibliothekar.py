@@ -619,6 +619,8 @@ def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:
         normalized = raw_path.replace("\\", "/").strip().casefold()
         if not normalized:
             return False
+        if _looks_like_absolute_or_uri_source_path(normalized):
+            return False
         if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
             return False
         parts = tuple(part for part in normalized.split("/") if part and part != ".")
@@ -627,6 +629,10 @@ def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:
         if any(_path_contains_segments(parts, forbidden) for forbidden in FORBIDDEN_LIBRARY_SOURCE_PATH_SEGMENTS):
             return False
     return True
+
+
+def _looks_like_absolute_or_uri_source_path(value: str) -> bool:
+    return bool(re.match(r"^[a-z][a-z0-9+.-]*:", value))
 
 
 def _path_contains_segments(parts: tuple[str, ...], needle: tuple[str, ...]) -> bool:
