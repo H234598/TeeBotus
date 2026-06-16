@@ -26,6 +26,7 @@ def _valid_benchmark_payload() -> dict:
                 "category": category,
                 "ok": True,
                 "mode": "local",
+                "iterations": 1,
                 "total_ms": 1.0,
                 "throughput_ops_s": 100.0,
                 "errors": 0,
@@ -40,6 +41,13 @@ def _valid_benchmark_payload() -> dict:
                 {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
             ]
+        },
+        "quality_gate": {
+            "status": "ok",
+            "ok": True,
+            "checked_results": len(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES),
+            "error_count": 0,
+            "errors": [],
         },
         "regression": {"status": "not_configured", "failed": False},
     }
@@ -384,14 +392,18 @@ def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
                 "name": "memory_jsonl",
                 "category": "account_memory",
                 "ok": True,
+                "mode": "local",
+                "iterations": 1,
                 "total_ms": 1.0,
                 "throughput_ops_s": 100.0,
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
+                "details": {"network_calls": 0},
             }
         ],
         "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "quality_gate": {"status": "ok", "ok": True, "checked_results": 1, "error_count": 0, "errors": []},
         "regression": {"status": "not_configured", "failed": False},
     }
 
@@ -412,15 +424,25 @@ def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> No
                 "name": f"{category}_benchmark",
                 "category": category,
                 "ok": True,
+                "mode": "local",
+                "iterations": 1,
                 "total_ms": 1.0,
                 "throughput_ops_s": 100.0,
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
+                "details": {"network_calls": 0},
             }
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
         "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "quality_gate": {
+            "status": "ok",
+            "ok": True,
+            "checked_results": len(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES),
+            "error_count": 0,
+            "errors": [],
+        },
         "regression": {"status": "not_configured", "failed": False},
     }
 
@@ -441,13 +463,17 @@ def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> No
                 "name": "memory_jsonl",
                 "category": "account_memory",
                 "ok": True,
+                "mode": "local",
+                "iterations": 0,
                 "total_ms": -1.0,
                 "throughput_ops_s": 100.0,
                 "errors": False,
                 "payload_bytes": "unknown",
+                "details": {},
             }
         ],
         "comparisons": {"stable_backend_rankings": [{"category": "account_memory", "candidates": [{"name": "memory_jsonl"}]}]},
+        "quality_gate": {"status": "ok", "ok": True, "checked_results": 1, "error_count": 0, "errors": []},
         "regression": {"status": "not_configured", "failed": False},
     }
 
@@ -457,6 +483,8 @@ def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> No
     assert any("results[0] total_ms must be a non-negative number" in error for error in errors)
     assert any("results[0] payload_bytes must be a non-negative number" in error for error in errors)
     assert any("results[0] errors must be a non-negative integer" in error for error in errors)
+    assert any("results[0] iterations must be a positive integer" in error for error in errors)
+    assert any("results[0] details must be a non-empty object" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifacts() -> None:
@@ -470,11 +498,14 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
                 "name": f"{category}_benchmark",
                 "category": category,
                 "ok": True,
+                "mode": "local",
+                "iterations": 1,
                 "total_ms": 1.0,
                 "throughput_ops_s": 100.0,
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
+                "details": {"network_calls": 0},
             }
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
@@ -483,6 +514,13 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
                 {"category": category, "candidates": [{"name": f"{category}_benchmark"}]}
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
             ]
+        },
+        "quality_gate": {
+            "status": "ok",
+            "ok": True,
+            "checked_results": len(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES),
+            "error_count": 0,
+            "errors": [],
         },
         "regression": {"status": "not_configured", "failed": False},
     }
@@ -522,6 +560,25 @@ def test_benchmark_artifact_validation_requires_runtime_context() -> None:
     assert "context.cpu_count must be a non-negative integer" in errors
     assert "context.dependencies must be a non-empty object" in errors
     assert "context.python must be non-empty" in errors
+
+
+def test_benchmark_artifact_validation_requires_successful_quality_gate() -> None:
+    payload = _valid_benchmark_payload()
+    payload["quality_gate"] = {
+        "status": "failed",
+        "ok": False,
+        "checked_results": "unknown",
+        "error_count": 2,
+        "errors": "benchmark smoke only",
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "quality_gate.ok must be true" in errors
+    assert "quality_gate.status must be ok" in errors
+    assert "quality_gate.checked_results must be a non-negative integer" in errors
+    assert "quality_gate.error_count must be 0" in errors
+    assert "quality_gate.errors must be a list" in errors
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

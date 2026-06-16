@@ -484,7 +484,7 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             if not isinstance(result, dict):
                 errors.append(f"{prefix}results[{index}] must be an object")
                 continue
-            for key in ("name", "category", "total_ms", "throughput_ops_s", "errors", "payload_bytes", "index_bytes"):
+            for key in ("name", "category", "mode", "iterations", "total_ms", "throughput_ops_s", "errors", "payload_bytes", "index_bytes", "details"):
                 if key not in result:
                     errors.append(f"{prefix}results[{index}] missing {key}")
             for key in ("total_ms", "throughput_ops_s", "payload_bytes", "index_bytes"):
@@ -494,12 +494,22 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 errors.append(f"{prefix}results[{index}] errors must be a non-negative integer")
             if "ok" not in result and "skipped" not in result:
                 errors.append(f"{prefix}results[{index}] missing ok/skipped status")
-            if not result.get("skipped") and str(result.get("mode") or "local").casefold() == "live":
-                errors.append(f"{prefix}results[{index}] must not use live mode in standard Plan2 benchmark artifacts")
+            if result.get("skipped"):
+                continue
+            if "iterations" in result and not _is_positive_integer(result.get("iterations")):
+                errors.append(f"{prefix}results[{index}] iterations must be a positive integer")
+            if not result.get("ok"):
+                errors.append(f"{prefix}results[{index}] must be ok or skipped")
+            if not _is_positive_number(result.get("payload_bytes")) and not _is_positive_number(result.get("index_bytes")):
+                errors.append(f"{prefix}results[{index}] must report payload_bytes or index_bytes")
             details = result.get("details")
-            if isinstance(details, Mapping):
-                for key, value in _forbidden_standard_benchmark_calls(details):
-                    errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
+            if not isinstance(details, Mapping) or not details:
+                errors.append(f"{prefix}results[{index}] details must be a non-empty object")
+                continue
+            if str(result.get("mode") or "local").casefold() == "live":
+                errors.append(f"{prefix}results[{index}] must not use live mode in standard Plan2 benchmark artifacts")
+            for key, value in _forbidden_standard_benchmark_calls(details):
+                errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
     comparisons = payload.get("comparisons")
     if not isinstance(comparisons, dict):
         errors.append(f"{prefix}comparisons must be an object")
@@ -521,6 +531,22 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}regression must be an object")
     elif "status" not in regression or "failed" not in regression:
         errors.append(f"{prefix}regression must contain status and failed")
+    quality_gate = payload.get("quality_gate")
+    if not isinstance(quality_gate, dict):
+        errors.append(f"{prefix}quality_gate must be an object")
+    else:
+        if quality_gate.get("ok") is not True:
+            errors.append(f"{prefix}quality_gate.ok must be true")
+        if quality_gate.get("status") != "ok":
+            errors.append(f"{prefix}quality_gate.status must be ok")
+        if not _is_nonnegative_integer(quality_gate.get("checked_results")):
+            errors.append(f"{prefix}quality_gate.checked_results must be a non-negative integer")
+        if not _is_nonnegative_integer(quality_gate.get("error_count")):
+            errors.append(f"{prefix}quality_gate.error_count must be a non-negative integer")
+        elif int(quality_gate.get("error_count") or 0) != 0:
+            errors.append(f"{prefix}quality_gate.error_count must be 0")
+        if not isinstance(quality_gate.get("errors"), list):
+            errors.append(f"{prefix}quality_gate.errors must be a list")
     return errors
 
 
@@ -563,8 +589,16 @@ def _is_nonnegative_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
 
 
+def _is_positive_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+
 def _is_nonnegative_integer(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _is_positive_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def _benchmark_context_errors(context: Any, *, prefix: str) -> list[str]:
