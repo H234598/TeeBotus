@@ -99,6 +99,23 @@ def test_mcp_memory_search_requires_explicit_private_chat_context(tmp_path) -> N
         registry.call("memory.search", {"query": "Mond"})
 
 
+def test_mcp_memory_search_private_chat_boundary_cannot_be_relaxed_by_config(tmp_path) -> None:
+    account_store, account_id = _account_store_with_memory(tmp_path)
+    registry = build_readonly_mcp_registry(
+        account_store=account_store,
+        account_id=account_id,
+        tool_config={
+            "memory.search": {"enabled": True, "read_only": True, "private_chat_only": False},
+        },
+        private_chat=False,
+    )
+
+    assert registry.policy("memory.search").private_chat_only is True
+    assert "memory.search" not in registry.tool_names
+    with pytest.raises(MCPToolError, match="not registered"):
+        registry.call("memory.search", {"query": "Mond"})
+
+
 def test_mcp_registry_rejects_non_readonly_policy(tmp_path) -> None:
     registry = build_readonly_mcp_registry(
         bibliothekar_service=_bibliothekar_service(tmp_path),

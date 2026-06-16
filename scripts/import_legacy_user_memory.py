@@ -44,6 +44,8 @@ class ImportStats:
     backups_created: int = 0
     metadata_backups_created: int = 0
     account_store_resets: int = 0
+    requested_legacy_instances_dir: str = ""
+    effective_legacy_instances_dir: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -85,8 +87,9 @@ def main(argv: list[str] | None = None) -> int:
 
     previous_env = _apply_backend(args.backend)
     try:
+        requested_legacy_instances_dir = Path(args.legacy_instances_dir)
         stats = import_legacy_user_memory(
-            legacy_instances_dir=Path(args.legacy_instances_dir),
+            legacy_instances_dir=requested_legacy_instances_dir,
             target_instances_dir=Path(args.target_instances_dir),
             instances=tuple(args.instance),
             apply=args.apply,
@@ -100,7 +103,8 @@ def main(argv: list[str] | None = None) -> int:
     report = _build_import_report(
         stats,
         mode=mode,
-        legacy_instances_dir=Path(args.legacy_instances_dir),
+        legacy_instances_dir=Path(stats.effective_legacy_instances_dir or args.legacy_instances_dir),
+        requested_legacy_instances_dir=Path(stats.requested_legacy_instances_dir or args.legacy_instances_dir),
         target_instances_dir=Path(args.target_instances_dir),
         instances=tuple(args.instance),
         backend=args.backend,
@@ -136,6 +140,10 @@ def import_legacy_user_memory(
 ) -> ImportStats:
     provider = provider or SecretToolInstanceSecretProvider()
     stats = ImportStats()
+    requested_legacy_instances_dir = Path(legacy_instances_dir)
+    legacy_instances_dir = _resolve_legacy_instances_dir(requested_legacy_instances_dir, set(instances))
+    stats.requested_legacy_instances_dir = str(requested_legacy_instances_dir)
+    stats.effective_legacy_instances_dir = str(legacy_instances_dir)
     selected = set(instances)
     reset_account_stores: set[Path] = set()
     for user_dir in _legacy_user_dirs(legacy_instances_dir, selected):
@@ -305,6 +313,7 @@ def _build_import_report(
     *,
     mode: str,
     legacy_instances_dir: Path,
+    requested_legacy_instances_dir: Path,
     target_instances_dir: Path,
     instances: tuple[str, ...],
     backend: str,
@@ -316,6 +325,7 @@ def _build_import_report(
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "mode": mode,
+        "requested_legacy_instances_dir": str(requested_legacy_instances_dir),
         "legacy_instances_dir": str(legacy_instances_dir),
         "target_instances_dir": str(target_instances_dir),
         "instances": list(instances),
@@ -351,6 +361,7 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
         "",
         f"- generated_at: `{report.get('generated_at', '')}`",
         f"- mode: `{report.get('mode', '')}`",
+        f"- requested_legacy_instances_dir: `{report.get('requested_legacy_instances_dir', '')}`",
         f"- legacy_instances_dir: `{report.get('legacy_instances_dir', '')}`",
         f"- target_instances_dir: `{report.get('target_instances_dir', '')}`",
         f"- backend: `{options.get('backend', '')}`",
@@ -428,6 +439,42 @@ def _legacy_user_dirs(legacy_instances_dir: Path, selected_instances: set[str]) 
             if user_dir.is_dir() and (user_dir / USER_MEMORY_ENTRIES_FILENAME).exists():
                 result.append(user_dir)
     return result
+
+
+def _resolve_legacy_instances_dir(path: Path, selected_instances: set[str]) -> Path:
+    if _legacy_user_dirs(path, selected_instances):
+        return path
+    candidates: list[tuple[int, int, str, Path]] = []
+    for child in sorted(path.iterdir()) if path.exists() and path.is_dir() else []:
+        if not child.is_dir() or not child.name.startswith("instances"):
+            continue
+        source_count = 0
+        entry_count = 0
+        for user_dir in _legacy_user_dirs(child, selected_instances):
+            entries_path = user_dir / USER_MEMORY_ENTRIES_FILENAME
+            try:
+                entries = _read_plaintext_entries(entries_path)
+            except SystemExit:
+                continue
+            if entries:
+                source_count += 1
+                entry_count += len(entries)
+        if source_count:
+            candidates.append((entry_count, source_count, child.name, child))
+    if not candidates:
+        return path
+    candidates.sort(key=lambda item: (item[0], item[1], _legacy_candidate_priority(item[2])), reverse=True)
+    return candidates[0][3]
+
+
+def _legacy_candidate_priority(name: str) -> int:
+    if name == "instances.bak":
+        return 3
+    if name.startswith("instances.bak"):
+        return 2
+    if name == "instances":
+        return 1
+    return 0
 
 
 def _read_plaintext_entries(path: Path) -> list[dict[str, Any]]:

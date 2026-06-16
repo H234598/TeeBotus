@@ -247,6 +247,34 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     assert "entries_imported" in markdown
 
 
+def test_legacy_user_memory_import_accepts_backup_root_and_selects_best_instances_dir(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    backup_root = tmp_path / "TeeBotus.bak2"
+    target_root = tmp_path / "target"
+    write_legacy_entries(backup_root / "instances", user_id="111")
+    write_legacy_entries(backup_root / "instances.bak", user_id="111")
+    write_legacy_entries(backup_root / "instances.bak", user_id="222")
+    json_output = tmp_path / "import.json"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(backup_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--json-output",
+            str(json_output),
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    assert payload["requested_legacy_instances_dir"] == str(backup_root)
+    assert payload["legacy_instances_dir"] == str(backup_root / "instances.bak")
+    assert payload["totals"]["sources"] == 2
+    assert payload["totals"]["entries_imported"] == 2
+
+
 def test_legacy_user_memory_import_apply_refuses_running_bot(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setattr(

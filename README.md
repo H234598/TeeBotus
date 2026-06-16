@@ -270,6 +270,8 @@ Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur
 python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak
 ```
 
+Der Legacy-Pfad darf auch direkt auf einen Backup-Root wie `/home/teladi/TeeBotus.bak2` zeigen. Der Recovery-Reporter und Importer waehlen dann automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
+
 Hinweis zur Plan2-Testhistorie: Die frueher im Plan genannten LLM-Dateien
 `tests/test_llm_base.py` und `tests/test_openai_provider.py` sind in der
 aktuellen Teststruktur aufgeteilt. `tests/test_llm_client.py` deckt die
@@ -312,19 +314,19 @@ Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JS
 Wenn eine alte Plaintext-Sicherung mit `instances/<Instanz>/data/users/<telegram_id>/User_Memory_Entries.jsonl` existiert, kann der Recovery-Report diese Quelle zusaetzlich nur zaehlen:
 
 ```bash
-python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus.bak2
 ```
 
 Der eigentliche Import ist ein separater, standardmaessig nicht-destruktiver Dry-Run:
 
 ```bash
-python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak --target-instances-dir instances --replace-unreadable-account-metadata
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata
 ```
 
 Fuer eine pruefbare Preflight-Akte koennen Markdown und JSON geschrieben werden:
 
 ```bash
-python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
 ```
 
 Ein echter Import braucht `--apply`. Wenn aktuelle Account-Metadaten nicht entschluesselbar sind, sichert `--replace-unreadable-account-metadata --apply` den aktiven Account-Store komplett weg: `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json`, `accounts/`, `Account_Memory.sqlite3`, Fallback-SQLite sowie WAL/SHM. Danach werden neue Account-Mappings aus `telegram:user:<id>` erzeugt und die Legacy-Eintraege verschluesselt in den aktuellen AccountStore geschrieben. Vor diesem Schritt muss der Bot gestoppt sein; das Script verweigert `--apply` standardmaessig, wenn `python -m TeeBotus` oder `teebotus-proactive` noch laufen. Danach `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren.

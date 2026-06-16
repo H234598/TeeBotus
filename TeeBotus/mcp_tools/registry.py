@@ -72,7 +72,9 @@ def build_readonly_mcp_registry(
     if bibliothekar_service is not None:
         tools["bibliothekar.search"] = lambda arguments: _bibliothekar_search_tool(bibliothekar_service, arguments)
     memory_policy = policies.get("memory.search", DEFAULT_MCP_TOOL_POLICIES["memory.search"])
-    if account_store is not None and str(account_id or "").strip() and (private_chat or not memory_policy.private_chat_only):
+    # Account memory is user-private data. Keep this boundary hard even if a
+    # future instruction file tries to relax memory.search.private_chat_only.
+    if account_store is not None and str(account_id or "").strip() and private_chat and memory_policy.private_chat_only:
         tools["memory.search"] = lambda arguments: _memory_search_tool(account_store, account_id, arguments)
     return MCPToolRegistry(policies, tools)
 
@@ -89,7 +91,7 @@ def _merge_tool_policies(defaults: Mapping[str, MCPToolPolicy], overrides: Mappi
             enabled=_bool_config(config.get("enabled"), base.enabled),
             read_only=_bool_config(config.get("read_only"), base.read_only),
             requires_confirmation=_bool_config(config.get("requires_confirmation"), base.requires_confirmation),
-            private_chat_only=_bool_config(config.get("private_chat_only"), base.private_chat_only),
+            private_chat_only=True if base.private_chat_only else _bool_config(config.get("private_chat_only"), base.private_chat_only),
             requires_admin=_bool_config(config.get("requires_admin"), base.requires_admin),
             sandbox_required=_bool_config(config.get("sandbox_required"), base.sandbox_required),
         )

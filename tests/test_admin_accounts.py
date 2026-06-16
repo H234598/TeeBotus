@@ -190,6 +190,25 @@ def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path:
     assert "--replace-unreadable-account-metadata" in legacy["dry_run_command"]
 
 
+def test_memory_recovery_report_resolves_legacy_backup_root(tmp_path: Path) -> None:
+    target_dir = tmp_path / "target"
+    backup_root = tmp_path / "TeeBotus.bak2"
+    make_instance(target_dir)
+    users_dir = backup_root / "instances.bak" / "Depressionsbot" / "data" / "users"
+    for user_id in ("395935293", "1682346404"):
+        user_dir = users_dir / user_id
+        user_dir.mkdir(parents=True)
+        (user_dir / "User_Memory_Entries.jsonl").write_text('{"id":"legacy_1","user_text":"A"}\n', encoding="utf-8")
+
+    report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=backup_root, provider=provider())
+
+    legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert legacy["requested_legacy_instances_dir"] == str(backup_root)
+    assert legacy["legacy_instances_dir"] == str(backup_root / "instances.bak")
+    assert legacy["sources"] == 2
+    assert legacy["entries"] == 2
+
+
 def test_memory_recovery_report_ignores_encrypted_legacy_sources(tmp_path: Path) -> None:
     target_dir = tmp_path / "target"
     legacy_dir = tmp_path / "legacy"

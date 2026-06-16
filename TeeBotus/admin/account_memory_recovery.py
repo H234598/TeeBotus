@@ -345,7 +345,8 @@ def _count_lines(path: Path) -> int:
 
 
 def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
-    instance_users_dir = legacy_instances_dir / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME
+    effective_legacy_instances_dir = _resolve_legacy_instances_dir(legacy_instances_dir, instance_name)
+    instance_users_dir = effective_legacy_instances_dir / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME
     sources = 0
     entries = 0
     encrypted_sources = 0
@@ -371,6 +372,8 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "--replace-unreadable-account-metadata"
     )
     return {
+        "requested_legacy_instances_dir": str(legacy_instances_dir),
+        "legacy_instances_dir": str(effective_legacy_instances_dir),
         "path": str(instance_users_dir),
         "sources": sources,
         "entries": entries,
@@ -379,6 +382,42 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "dry_run_command": command,
         "apply_requires": "--apply plus explicit review of metadata/account-memory replacement flags",
     }
+
+
+def _resolve_legacy_instances_dir(path: Path, instance_name: str) -> Path:
+    if (path / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME).exists():
+        return path
+    candidates: list[tuple[int, int, str, Path]] = []
+    for child in sorted(path.iterdir()) if path.exists() and path.is_dir() else []:
+        if not child.is_dir() or not child.name.startswith("instances"):
+            continue
+        users_dir = child / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME
+        if not users_dir.exists():
+            continue
+        sources = 0
+        entries = 0
+        for user_dir in sorted(user_dir for user_dir in users_dir.iterdir() if user_dir.is_dir()):
+            source_kind, source_entries = _legacy_entries_file_shape(user_dir / USER_MEMORY_ENTRIES_FILENAME)
+            if source_kind != "plaintext":
+                continue
+            sources += 1
+            entries += source_entries
+        if sources:
+            candidates.append((entries, sources, child.name, child))
+    if not candidates:
+        return path
+    candidates.sort(key=lambda item: (item[0], item[1], _legacy_candidate_priority(item[2])), reverse=True)
+    return candidates[0][3]
+
+
+def _legacy_candidate_priority(name: str) -> int:
+    if name == "instances.bak":
+        return 3
+    if name.startswith("instances.bak"):
+        return 2
+    if name == "instances":
+        return 1
+    return 0
 
 
 def _legacy_entries_file_shape(path: Path) -> tuple[str, int]:
