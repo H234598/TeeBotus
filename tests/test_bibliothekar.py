@@ -783,6 +783,33 @@ def test_haystack_backend_keeps_backend_when_filter_pushdown_is_rejected(tmp_pat
     assert "therapie.txt" not in selection.prompt_text
 
 
+def test_haystack_backend_retries_unfiltered_store_when_filter_pushdown_returns_empty(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = EmptyFilteredDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+    document_store.filtered_calls = 0
+    document_store.unfiltered_calls = 0
+    document_store.write_attempts = 0
+
+    selection = backend.search(BibliothekarQuery(text="System Therapie", filters={"topics": ["python"]}, max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filtered_calls == 1
+    assert document_store.unfiltered_calls >= 1
+    assert document_store.write_attempts == 0
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "therapie.txt" not in selection.prompt_text
+
+
 def test_bibliothekar_indexes_only_explicit_library_not_account_memory(tmp_path):
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
@@ -1595,6 +1622,26 @@ class FilterRejectingDocumentStore(FakeDocumentStore):
         if kwargs.get("filters"):
             self.rejected_filter_calls += 1
             raise ValueError("unsupported filter syntax")
+        self.unfiltered_calls += 1
+        return list(self.documents)
+
+
+class EmptyFilteredDocumentStore(FakeDocumentStore):
+    def __init__(self):
+        super().__init__()
+        self.filtered_calls = 0
+        self.unfiltered_calls = 0
+        self.write_attempts = 0
+
+    def write_documents(self, documents, **kwargs):
+        self.write_attempts += 1
+        super().write_documents(documents, **kwargs)
+
+    def filter_documents(self, **kwargs):
+        self.filter_calls.append(kwargs)
+        if kwargs.get("filters"):
+            self.filtered_calls += 1
+            return []
         self.unfiltered_calls += 1
         return list(self.documents)
 

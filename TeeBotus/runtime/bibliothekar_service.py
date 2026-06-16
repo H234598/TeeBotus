@@ -170,13 +170,13 @@ class HaystackBibliothekarBackend:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         try:
             document_store = self._document_store()
-            chunks = self._chunks_from_document_store(document_store, filters=self._document_store_filters(query.filters))
+            chunks = self._search_document_store_chunks(document_store, query.filters)
         except Exception:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
             try:
                 self.rebuild()
-                chunks = self._chunks_from_document_store(document_store, filters=self._document_store_filters(query.filters))
+                chunks = self._search_document_store_chunks(document_store, query.filters)
             except Exception:
                 return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
@@ -355,6 +355,14 @@ class HaystackBibliothekarBackend:
         if not isinstance(meta, Mapping):
             return False
         return str(meta.get("instance_name") or "").strip().casefold() == self.instance_name.casefold()
+
+    def _search_document_store_chunks(self, document_store: Any, filters: Mapping[str, object] | None) -> list[dict[str, Any]]:
+        pushed_filters = self._document_store_filters(filters)
+        chunks = self._chunks_from_document_store(document_store, filters=pushed_filters)
+        if chunks or not _active_chunk_filters(filters or {}):
+            return chunks
+        fallback_chunks = self._chunks_from_document_store(document_store)
+        return _apply_chunk_filters(fallback_chunks, filters)
 
 
 class BibliothekarService:
