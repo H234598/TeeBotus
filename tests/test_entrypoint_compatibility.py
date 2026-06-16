@@ -797,6 +797,35 @@ def test_runtime_status_redacts_secret_like_health_errors(monkeypatch, capsys) -
     assert "syt_<redacted>" in captured.out
 
 
+def test_runtime_status_redacts_schemeless_target_credentials(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+
+    def fake_check_signal_services(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "signal"][0]
+        return (
+            SimpleNamespace(
+                account=account,
+                ok=False,
+                target="user:plain-password@signal.example:8080/path?token=plain-token",
+                error="connection refused",
+            ),
+        )
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_accounts", lambda _config: ())
+
+    assert bot.main(["--runtime-status", "--channels", "signal"]) == 0
+    captured = capsys.readouterr()
+
+    assert "plain-password" not in captured.out
+    assert "plain-token" not in captured.out
+    assert "target=signal.example:8080" in captured.out
+
+
 def test_runtime_status_redacts_helper_status_lines(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

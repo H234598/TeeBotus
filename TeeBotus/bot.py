@@ -329,12 +329,32 @@ def _sanitize_status_url(value: object) -> str:
         parsed = urlsplit(text)
     except ValueError:
         return "<invalid>"
-    if not parsed.scheme or not parsed.netloc:
-        return text
+    if parsed.scheme and parsed.netloc:
+        netloc = _safe_url_netloc(parsed)
+        return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
+    try:
+        schemeless = urlsplit(f"//{text}")
+    except ValueError:
+        return redact_status_url_text(text)
+    if schemeless.hostname:
+        return _safe_url_netloc(schemeless)
+    return redact_status_url_text(text)
+
+
+def _safe_url_netloc(parsed: Any) -> str:
     netloc = parsed.hostname or ""
-    if parsed.port is not None:
-        netloc = f"{netloc}:{parsed.port}"
-    return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    if port is not None:
+        netloc = f"{netloc}:{port}"
+    return netloc
+
+
+def redact_status_url_text(value: object) -> str:
+    text = _sanitize_status_text(value)
+    return re.sub(r"(?<!\S)[^/\s:@]+:[^/\s@]+@(?=[^\s]+)", "", text)
 
 
 def _sanitize_status_text(value: object) -> str:
