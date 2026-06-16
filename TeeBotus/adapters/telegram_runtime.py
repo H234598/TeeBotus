@@ -2268,7 +2268,7 @@ def _prepare_bibliothekar_context(
 def _prepare_weather_context(user_memory_store: AccountStore | None, user_memory: UserMemoryRecord | None, text: str) -> str:
     if user_memory_store is None or user_memory is None:
         return ""
-    account_id = user_memory_store.get_account_for_identity(f"telegram:user:{user_memory.sender_id}") or ""
+    account_id = _account_id_from_user_memory(user_memory)
     if not account_id:
         return ""
     try:

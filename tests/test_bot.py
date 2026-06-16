@@ -32,6 +32,7 @@ from TeeBotus.bot import (
     _lowest_priority_command,
     _load_dotenv,
     _prepare_user_memory,
+    _prepare_weather_context,
     _parse_youtube_local_options_from_llm_response,
     _parse_youtube_local_options,
     _record_user_memory,
@@ -3186,6 +3187,22 @@ class BotTests(unittest.TestCase):
         self.assertEqual(openai_client.voice_texts, ["Hallo Welt"])
         self.assertIn("Basisstimme.", openai_client.voice_instruction_texts[0])
         self.assertIn("Nürnberg", openai_client.voice_instruction_texts[0])
+
+    def test_weather_context_uses_account_id_not_telegram_sender_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"w" * 32))
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key("", username="AdaUser"))
+            user_memory = UserMemoryRecord(
+                sender_id="",
+                path=memory_store.account_dir(account_id) / "User_Memory_Index.json",
+                prompt_text="",
+                selected_ids=(),
+                account_id=account_id,
+            )
+
+            context = _prepare_weather_context(memory_store, user_memory, "Ich wohne in Berlin.")
+
+        self.assertIn("Stadt/Wohnort: Berlin", context)
 
     def test_voice_model_command_persists_openai_voice_alias(self) -> None:
         api = FakeAPI()
