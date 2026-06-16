@@ -38,7 +38,7 @@ def _valid_ranking(category: str) -> dict:
 
 
 def _valid_benchmark_payload() -> dict:
-    return {
+    payload = {
         "schema_version": 1,
         "quick": True,
         "include_live": False,
@@ -87,6 +87,18 @@ def _valid_benchmark_payload() -> dict:
         },
         "regression": {"status": "not_configured", "failed": False},
     }
+    required_fields = sorted(check_plan2_acceptance.REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS)
+    for result in payload["results"]:
+        if result["category"] != "bibliothekar":
+            continue
+        result["details"].update(
+            {
+                "citation_required_fields": required_fields,
+                "citation_missing_fields": [],
+                "provenance_fields_complete": True,
+            }
+        )
+    return payload
 
 
 def _write_valid_legacy_import_markdown(path: Path) -> None:
@@ -1202,6 +1214,20 @@ def test_benchmark_artifact_validation_requires_no_live_counters() -> None:
 
     assert any("results[0] details missing standard no-live counters" in error for error in errors)
     assert any("openai_calls" in error and "provider_calls" in error and "remote_calls" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_bibliothekar_provenance_details() -> None:
+    payload = _valid_benchmark_payload()
+    bibliothekar = next(result for result in payload["results"] if result["category"] == "bibliothekar")
+    bibliothekar["details"]["provenance_fields_complete"] = False
+    bibliothekar["details"]["citation_missing_fields"] = ["file_sha256", "ingested_at"]
+    bibliothekar["details"]["citation_required_fields"] = ["chunk_id", "file", "locator", "citation_format"]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("bibliothekar provenance_fields_complete must be true" in error for error in errors)
+    assert any("bibliothekar citation_missing_fields must be empty" in error for error in errors)
+    assert any("bibliothekar citation_required_fields missing" in error and "file_sha256" in error and "ingested_at" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifacts() -> None:

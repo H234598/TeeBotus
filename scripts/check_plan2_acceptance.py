@@ -43,6 +43,23 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS = frozenset(
+    {
+        "chunk_id",
+        "source_id",
+        "file",
+        "file_path",
+        "file_sha256",
+        "file_type",
+        "language",
+        "locator",
+        "license",
+        "ingested_at",
+        "chunk_index",
+        "embedding_model",
+        "citation_format",
+    }
+)
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
 REQUIRED_BENCHMARK_CONTEXT_KEYS = frozenset({"python", "platform", "machine", "cpu_count", "dependencies"})
 RUNTIME_STATUS_SECRET_PATTERNS = (
@@ -935,6 +952,8 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 errors.append(f"{prefix}results[{index}] details missing standard no-live counters: {', '.join(missing_counters)}")
             for key, value in _forbidden_standard_benchmark_calls(details):
                 errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
+            if str(result.get("category") or "") == "bibliothekar":
+                errors.extend(_bibliothekar_benchmark_detail_errors(details, result_index=index, prefix=prefix))
     comparisons = payload.get("comparisons")
     if not isinstance(comparisons, dict):
         errors.append(f"{prefix}comparisons must be an object")
@@ -982,6 +1001,25 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             errors.append(f"{prefix}quality_gate.error_count must be 0")
         if not isinstance(quality_gate.get("errors"), list):
             errors.append(f"{prefix}quality_gate.errors must be a list")
+    return errors
+
+
+def _bibliothekar_benchmark_detail_errors(details: Mapping[str, Any], *, result_index: int, prefix: str = "") -> list[str]:
+    errors: list[str] = []
+    if details.get("provenance_fields_complete") is not True:
+        errors.append(f"{prefix}results[{result_index}] bibliothekar provenance_fields_complete must be true")
+    missing = details.get("citation_missing_fields")
+    if not isinstance(missing, list):
+        errors.append(f"{prefix}results[{result_index}] bibliothekar citation_missing_fields must be a list")
+    elif missing:
+        errors.append(f"{prefix}results[{result_index}] bibliothekar citation_missing_fields must be empty, got: {', '.join(str(item) for item in missing)}")
+    required = details.get("citation_required_fields")
+    if not isinstance(required, list):
+        errors.append(f"{prefix}results[{result_index}] bibliothekar citation_required_fields must be a list")
+    else:
+        missing_required = sorted(REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS - {str(item) for item in required})
+        if missing_required:
+            errors.append(f"{prefix}results[{result_index}] bibliothekar citation_required_fields missing: {', '.join(missing_required)}")
     return errors
 
 
