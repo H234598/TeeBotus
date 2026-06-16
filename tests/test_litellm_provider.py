@@ -29,7 +29,7 @@ def test_plan2_litellm_provider_acceptance_uses_fake_completion_without_network(
     response = LiteLLMTextClient(api_key="runtime-key").create_reply("Ping", instructions, "resp-old")
 
     assert response.text == "Fake LiteLLM Antwort"
-    assert response.response_id == "fake-litellm-id"
+    assert response.response_id is None
     assert response.provider == "litellm"
     assert response.model == "ollama_chat/llama3.1:8b"
     assert calls == [
@@ -46,6 +46,22 @@ def test_plan2_litellm_provider_acceptance_uses_fake_completion_without_network(
             "api_key": "runtime-key",
         }
     ]
+
+
+def test_litellm_provider_never_exposes_completion_id_as_previous_response_state(monkeypatch) -> None:
+    def completion(**_kwargs):
+        return {"id": "completion-id-not-responses-state", "choices": [{"message": {"content": "Antwort"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(provider="litellm", model="ollama_chat/llama3.1:8b").create_reply(
+        "Ping",
+        BotInstructions(),
+        previous_response_id="resp-old-must-be-ignored",
+    )
+
+    assert response.text == "Antwort"
+    assert response.response_id is None
 
 
 def test_litellm_provider_requires_explicit_model_instead_of_openai_legacy_fallback(monkeypatch) -> None:

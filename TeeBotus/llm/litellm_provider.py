@@ -152,10 +152,9 @@ class LiteLLMTextClient:
                 errors.append(f"provider={self.provider} model={model}: empty text")
                 LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
                 continue
-            response_id = _response_value(response, "id")
             return LLMResponse(
                 text=text,
-                response_id=response_id if isinstance(response_id, str) else None,
+                response_id=None,
                 provider="litellm",
                 model=model,
                 usage=_extract_usage(response),

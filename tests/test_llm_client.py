@@ -68,7 +68,7 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
     response = LiteLLMTextClient(api_key="fallback-key").create_reply("Ping", instructions, "resp-old")
 
     assert response.text == "Hallo"
-    assert response.response_id == "litellm-response"
+    assert response.response_id is None
     assert response.model == "huggingface/meta-llama/Llama-3.1-8B-Instruct"
     assert response.usage == {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3}
     assert calls == [
