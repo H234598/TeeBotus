@@ -166,3 +166,41 @@ def test_memory_recovery_report_counts_empty_accounts(tmp_path: Path) -> None:
     assert report["totals"]["recoverable_accounts"] == 0
     assert report["totals"]["unrecoverable_accounts"] == 0
     assert report["totals"]["empty_accounts"] == 1
+
+
+def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path: Path) -> None:
+    target_dir = tmp_path / "target"
+    legacy_dir = tmp_path / "legacy"
+    make_instance(target_dir)
+    user_dir = legacy_dir / "Depressionsbot" / "data" / "users" / "395935293"
+    user_dir.mkdir(parents=True)
+    (user_dir / "User_Memory_Entries.jsonl").write_text(
+        '{"id":"legacy_1","user_text":"A","bot_text":"B"}\n'
+        '{"id":"legacy_2","user_text":"C","bot_text":"D"}\n',
+        encoding="utf-8",
+    )
+
+    report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=legacy_dir, provider=provider())
+
+    assert report["totals"]["legacy_plaintext_sources"] == 1
+    assert report["totals"]["legacy_plaintext_entries"] == 2
+    legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert legacy["sources"] == 1
+    assert legacy["entries"] == 2
+    assert "--replace-unreadable-account-metadata" in legacy["dry_run_command"]
+
+
+def test_memory_recovery_report_ignores_encrypted_legacy_sources(tmp_path: Path) -> None:
+    target_dir = tmp_path / "target"
+    legacy_dir = tmp_path / "legacy"
+    make_instance(target_dir)
+    user_dir = legacy_dir / "Depressionsbot" / "data" / "users" / "395935293"
+    user_dir.mkdir(parents=True)
+    (user_dir / "User_Memory_Entries.jsonl").write_text('{"version":1,"nonce":"n","ciphertext":"c"}\n', encoding="utf-8")
+
+    report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=legacy_dir, provider=provider())
+
+    legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert legacy["sources"] == 0
+    assert legacy["entries"] == 0
+    assert legacy["encrypted_sources"] == 1

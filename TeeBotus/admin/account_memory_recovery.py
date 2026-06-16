@@ -25,6 +25,7 @@ from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMem
 LOGGER = logging.getLogger("TeeBotus")
 RECOVERY_SCHEMA_VERSION = 2
 SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes")
+LEGACY_USER_MEMORY_DIRNAME = "users"
 
 
 @dataclass(frozen=True)
@@ -42,9 +43,11 @@ def build_account_memory_recovery_report(
     *,
     instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
     instances: Sequence[str] = (),
+    legacy_instances_dir: str | Path | None = None,
     provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
     resolved_instances_dir = Path(instances_dir)
+    resolved_legacy_instances_dir = Path(legacy_instances_dir).expanduser() if legacy_instances_dir else None
     provider = provider or ReadOnlySecretToolInstanceSecretProvider()
     selected_instances = discover_instances(resolved_instances_dir, instances)
     report: dict[str, Any] = {
@@ -62,12 +65,17 @@ def build_account_memory_recovery_report(
             "sources": 0,
             "readable_sources": 0,
             "unreadable_sources": 0,
+            "legacy_plaintext_sources": 0,
+            "legacy_plaintext_entries": 0,
         },
     }
+    if resolved_legacy_instances_dir is not None:
+        report["legacy_instances_dir"] = str(resolved_legacy_instances_dir)
     for instance_name in selected_instances:
         instance_report = build_instance_recovery_report(
             instances_dir=resolved_instances_dir,
             instance_name=instance_name,
+            legacy_instances_dir=resolved_legacy_instances_dir,
             provider=provider,
         )
         report["instances"].append(instance_report)
@@ -79,6 +87,7 @@ def build_instance_recovery_report(
     *,
     instances_dir: Path,
     instance_name: str,
+    legacy_instances_dir: Path | None = None,
     provider: InstanceSecretProvider,
 ) -> dict[str, Any]:
     accounts_root = instances_dir / instance_name / "data" / "accounts"
@@ -97,13 +106,20 @@ def build_instance_recovery_report(
                 "sources": source_reports,
             }
         )
-    return {
+    result = {
         "instance": instance_name,
         "accounts_root": str(accounts_root),
         "accounts": account_reports,
         "source_count": len(sources),
         "sources": [{"name": source.name, "kind": source.kind, "path": str(source.path)} for source in sources],
     }
+    if legacy_instances_dir is not None:
+        result["legacy_plaintext_import"] = _legacy_plaintext_import_report(
+            legacy_instances_dir=legacy_instances_dir,
+            target_instances_dir=instances_dir,
+            instance_name=instance_name,
+        )
+    return result
 
 
 def render_text_report(report: Mapping[str, Any]) -> str:
@@ -122,6 +138,16 @@ def render_text_report(report: Mapping[str, Any]) -> str:
         if not isinstance(instance, Mapping):
             continue
         lines.extend(["", f"Instance: {instance.get('instance', '')}", f"  source_count: {instance.get('source_count', 0)}"])
+        legacy = instance.get("legacy_plaintext_import")
+        if isinstance(legacy, Mapping):
+            lines.append(
+                "  legacy_plaintext_import: "
+                f"sources={legacy.get('sources', 0)} entries={legacy.get('entries', 0)} "
+                f"path={legacy.get('path', '')}"
+            )
+            command = str(legacy.get("dry_run_command") or "").strip()
+            if command:
+                lines.append(f"    dry_run_command: {command}")
         for account in instance.get("accounts", []):
             if not isinstance(account, Mapping):
                 continue
@@ -148,10 +174,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Read-only TeeBotus account-memory recovery report.")
     parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     parser.add_argument("--instances", default="", help="Comma-separated instance list. Defaults to all folders with Bot_Verhalten.md.")
+    parser.add_argument("--legacy-instances-dir", default="", help="Optional plaintext legacy instances directory to inspect for importable data/users memory.")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--output", default="")
     args = parser.parse_args(list(argv) if argv is not None else None)
-    report = build_account_memory_recovery_report(instances_dir=args.instances_dir, instances=parse_csv(args.instances))
+    report = build_account_memory_recovery_report(
+        instances_dir=args.instances_dir,
+        instances=parse_csv(args.instances),
+        legacy_instances_dir=args.legacy_instances_dir or None,
+    )
     output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")
@@ -313,6 +344,64 @@ def _count_lines(path: Path) -> int:
         return 0
 
 
+def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
+    instance_users_dir = legacy_instances_dir / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME
+    sources = 0
+    entries = 0
+    encrypted_sources = 0
+    malformed_sources = 0
+    if instance_users_dir.exists():
+        for user_dir in sorted(path for path in instance_users_dir.iterdir() if path.is_dir()):
+            entries_path = user_dir / USER_MEMORY_ENTRIES_FILENAME
+            if not entries_path.exists():
+                continue
+            source_kind, source_entries = _legacy_entries_file_shape(entries_path)
+            if source_kind == "plaintext":
+                sources += 1
+                entries += source_entries
+            elif source_kind == "encrypted":
+                encrypted_sources += 1
+            else:
+                malformed_sources += 1
+    command = (
+        "python3 scripts/import_legacy_user_memory.py "
+        f"--legacy-instances-dir {legacy_instances_dir} "
+        f"--target-instances-dir {target_instances_dir} "
+        f"--instance {instance_name} "
+        "--replace-unreadable-account-metadata"
+    )
+    return {
+        "path": str(instance_users_dir),
+        "sources": sources,
+        "entries": entries,
+        "encrypted_sources": encrypted_sources,
+        "malformed_sources": malformed_sources,
+        "dry_run_command": command,
+        "apply_requires": "--apply plus explicit review of metadata/account-memory replacement flags",
+    }
+
+
+def _legacy_entries_file_shape(path: Path) -> tuple[str, int]:
+    entries = 0
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return "malformed", 0
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return "malformed", entries
+        if not isinstance(data, dict):
+            return "malformed", entries
+        if {"version", "nonce", "ciphertext"}.issubset(data):
+            return "encrypted", entries
+        entries += 1
+    return "plaintext", entries
+
+
 def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tuple[str, str]:
     if not source_reports:
         return "no_sources", "No account-memory source exists for this account."
@@ -372,6 +461,10 @@ def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> N
                 totals["readable_sources"] += 1
             else:
                 totals["unreadable_sources"] += 1
+    legacy = instance_report.get("legacy_plaintext_import")
+    if isinstance(legacy, Mapping):
+        totals["legacy_plaintext_sources"] += int(legacy.get("sources", 0) or 0)
+        totals["legacy_plaintext_entries"] += int(legacy.get("entries", 0) or 0)
 
 
 __all__ = [
