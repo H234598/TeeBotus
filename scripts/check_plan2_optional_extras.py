@@ -14,6 +14,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLAN2_OPTIONAL_EXTRAS = ("llm", "rag", "agents", "tools")
+BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,6 +55,10 @@ def build_optional_extras_report(*, require_installed: bool = False, pyproject_p
                 errors.append(f"could not parse requirement in {extra}: {requirement!r}")
                 continue
             expected_version = _exact_pinned_version(str(requirement))
+            if package == "litellm" and not expected_version:
+                errors.append("llm litellm must be exactly pinned for Plan2")
+            if package == "litellm" and expected_version in BAD_LITELLM_VERSIONS:
+                errors.append(f"llm litellm pin {expected_version} is blocked due to known compromised PyPI releases")
             try:
                 version = importlib.metadata.version(package)
             except importlib.metadata.PackageNotFoundError:
@@ -62,6 +67,8 @@ def build_optional_extras_report(*, require_installed: bool = False, pyproject_p
                 installed.append({"name": package, "version": version})
                 if expected_version and version != expected_version:
                     version_mismatches.append({"name": package, "expected": expected_version, "installed": version})
+                if package == "litellm" and version in BAD_LITELLM_VERSIONS:
+                    errors.append(f"llm litellm installed {version} is blocked due to known compromised PyPI releases")
         if require_installed and missing:
             errors.append(f"{extra} missing installed packages: {', '.join(missing)}")
         if require_installed and version_mismatches:
