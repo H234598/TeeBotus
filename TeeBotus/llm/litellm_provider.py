@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -113,13 +114,14 @@ class LiteLLMTextClient:
             try:
                 response = completion(model=model, **kwargs)
             except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
-                errors.append(f"{model}: {type(exc).__name__}: {exc}")
-                LOGGER.warning("LiteLLM completion failed for model=%s: %s", model, exc)
+                detail = _redact_litellm_error(exc, kwargs)
+                errors.append(f"provider={self.provider} model={model}: {type(exc).__name__}: {detail}")
+                LOGGER.warning("LiteLLM completion failed for provider=%s model=%s: %s", self.provider, model, detail)
                 continue
             text = _extract_litellm_text(response)
             if not text:
-                errors.append(f"{model}: empty text")
-                LOGGER.warning("LiteLLM completion returned empty text for model=%s.", model)
+                errors.append(f"provider={self.provider} model={model}: empty text")
+                LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
                 continue
             response_id = _response_value(response, "id")
             return LLMResponse(
@@ -225,6 +227,18 @@ def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str
     if env_name:
         return os.environ.get(env_name, "").strip()
     return default_api_key.strip()
+
+
+def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
+    text = str(exc)
+    api_key = str(kwargs.get("api_key") or "").strip()
+    if api_key:
+        text = text.replace(api_key, "<redacted>")
+    # Common provider-key shapes. Keep this conservative so normal diagnostics
+    # remain readable while accidental secrets are removed.
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
+    text = re.sub(r"\b(xox[baprs]-[A-Za-z0-9-]{8,})\b", "xox-<redacted>", text)
+    return text
 
 
 def _extract_litellm_text(response: object) -> str:

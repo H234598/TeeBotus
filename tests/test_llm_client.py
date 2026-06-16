@@ -152,6 +152,32 @@ def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(mon
     assert response.model == "groq/llama-3.3-70b-versatile"
 
 
+def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    def completion(**_kwargs):
+        raise RuntimeError("provider rejected api_key=hf-test-secret and bearer sk-test-secret123456")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        provider="huggingface",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        api_key="hf-test-secret",
+    )
+
+    with caplog.at_level("WARNING", logger="TeeBotus.llm.litellm_provider"):
+        with pytest.raises(LLMAPIError) as error:
+            client.create_reply("Ping", BotInstructions(), None)
+
+    error_text = str(error.value)
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+    combined = error_text + "\n" + log_text
+
+    assert "provider=huggingface" in combined
+    assert "model=huggingface/meta-llama/Llama-3.1-8B-Instruct" in combined
+    assert "hf-test-secret" not in combined
+    assert "sk-test-secret123456" not in combined
+    assert "<redacted>" in combined
+
+
 def test_litellm_provider_alias_requires_explicit_model() -> None:
     with pytest.raises(LLMAPIError, match="requires llm_model"):
         LiteLLMTextClient(provider="ollama").create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
