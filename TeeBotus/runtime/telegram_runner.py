@@ -6,10 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from TeeBotus import __version__
 from TeeBotus.adapters import telegram_runtime
+from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, SecretToolInstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
@@ -78,7 +80,7 @@ class TelegramRuntimeBridge:
         self.bibliothekar_store = BibliothekarService.from_instructions(run_config.instance_name, self.instances_dir, instructions)
         self.bot_identity = bot_identity or telegram_runtime._resolve_bot_identity(api)
         self.chat_state = telegram_runtime.ChatState(
-            telegram_runtime._teladi_call_state_path(run_config.instance_name),
+            data_dir / telegram_runtime.TELADI_CALL_STATE_FILENAME,
             run_config.instance_name,
         )
         self.context = telegram_runtime.build_telegram_runtime_context(
@@ -192,7 +194,7 @@ def _run_telegram_polling_bridges(
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
     youtube_job_runner = telegram_runtime.YouTubeTranscriptionJobRunner()
-    telegram_runtime._notify_recent_users_for_current_version(list(instance_configs))
+    _notify_recent_users_for_current_version(config, instance_configs)
     try:
         for account in _telegram_accounts(config):
             bridge = TelegramRuntimeBridge(
@@ -223,6 +225,50 @@ def _run_telegram_polling_bridges(
             thread.join(timeout=telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
     finally:
         youtube_job_runner.shutdown(wait=False)
+
+
+def _notify_recent_users_for_current_version(
+    config: RuntimeConfig,
+    instance_configs: tuple[telegram_runtime.InstanceRunConfig, ...],
+) -> None:
+    instances_dir = Path(config.instances_dir)
+    for instance_config in instance_configs:
+        if not instance_config.token_configs:
+            continue
+        api = telegram_runtime.TelegramAPI(instance_config.token_configs[0].token)
+        store = AccountStore(
+            instances_dir / instance_config.instance_name / "data" / "accounts",
+            instance_config.instance_name,
+            secret_provider=SecretToolInstanceSecretProvider(),
+            create_dirs=False,
+        )
+        try:
+            count = notify_recent_telegram_users_for_version(
+                version=__version__,
+                instances_dir=instances_dir,
+                instance_name=instance_config.instance_name,
+                account_store=store,
+                send_message=api.send_message,
+                repo_root=telegram_runtime.PROJECT_ROOT,
+                on_error=lambda recipient, exc: LOGGER.warning(
+                    "Version notification failed version=%s instance=%s identity=%s: %s",
+                    __version__,
+                    instance_config.instance_name,
+                    recipient.identity_key,
+                    exc,
+                ),
+                on_skip=lambda reason: LOGGER.info(
+                    "Version notification skipped version=%s instance=%s reason=%s.",
+                    __version__,
+                    instance_config.instance_name,
+                    reason,
+                ),
+            )
+        except (AccountStoreError, telegram_runtime.TelegramAPIError, telegram_runtime.TelegramNetworkError, OSError) as exc:
+            LOGGER.warning("Version notification skipped for instance=%s: %s", instance_config.instance_name, exc)
+            continue
+        if count:
+            LOGGER.info("Sent version notification version=%s instance=%s recipients=%s.", __version__, instance_config.instance_name, count)
 
 
 def _telegram_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
