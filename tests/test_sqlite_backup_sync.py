@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+import scripts.sync_account_memory_sqlite_backup as sqlite_backup_sync
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, StaticSecretProvider
+from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
+
+
+def provider(secret: bytes = b"a" * 32) -> StaticSecretProvider:
+    return StaticSecretProvider(secret)
+
+
+def write_sqlite_memory(path: Path, *, instance: str = "Depressionsbot", secret: bytes = b"a" * 32, memory_id: str = "mem_1") -> None:
+    backend = SQLiteAccountMemoryBackend(
+        instance_name=instance,
+        provider=provider(secret),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=path, fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_entries(account_id, [{"id": memory_id, "user_text": memory_id, "keywords": [memory_id]}])
+    backend.write_index(account_id, {"scope": "account", "index": {"entries": {memory_id: {}}}})
+
+
+def read_sqlite_entry_ids(path: Path, *, instance: str = "Depressionsbot", secret: bytes = b"a" * 32) -> list[str]:
+    backend = SQLiteAccountMemoryBackend(
+        instance_name=instance,
+        provider=provider(secret),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=path, fallback_path=None),
+    )
+    return [str(entry.get("id")) for entry in backend.read_entries("a" * 128)]
+
+
+def test_sqlite_backup_sync_validates_and_preserves_old_secondary(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    secondary = accounts_root / "Account_Memory.backup.sqlite3"
+    write_sqlite_memory(primary, memory_id="mem_primary")
+    write_sqlite_memory(secondary, memory_id="mem_old_secondary")
+
+    result = sqlite_backup_sync.sync_account_memory_sqlite_backup(
+        accounts_root=accounts_root,
+        provider=provider(),
+    )
+
+    assert result.copied is True
+    assert result.decrypt_checked is True
+    assert result.account_payloads_checked == 1
+    assert result.secondary_backups_created >= 1
+    assert read_sqlite_entry_ids(secondary) == ["mem_primary"]
+    backup_dir = Path(result.secondary_backup_dir)
+    assert (backup_dir / "Account_Memory.backup.sqlite3").exists()
+
+
+def test_sqlite_backup_sync_refuses_unreadable_primary_without_overwriting_secondary(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    secondary = accounts_root / "Account_Memory.backup.sqlite3"
+    write_sqlite_memory(primary, secret=b"b" * 32, memory_id="mem_wrong_secret")
+    write_sqlite_memory(secondary, secret=b"a" * 32, memory_id="mem_old_secondary")
+
+    with pytest.raises(RuntimeError, match="payload_not_decryptable"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=accounts_root,
+            provider=provider(b"a" * 32),
+        )
+
+    assert read_sqlite_entry_ids(secondary, secret=b"a" * 32) == ["mem_old_secondary"]
+    assert not list(accounts_root.glob(".pre-account-memory-backup-sync-*"))
