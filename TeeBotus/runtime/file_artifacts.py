@@ -61,6 +61,10 @@ GENERATED_FILE_SECRET_ASSIGNMENT_RE = re.compile(
     r"\s*[:=]\s*['\"]?(?P<value>[^'\"\s,;)]+)",
     re.IGNORECASE,
 )
+GENERATED_FILE_CONTENT_TYPE_RE = re.compile(
+    r"^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}"
+    r"(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=(?:[A-Za-z0-9!#$&^_.+-]+|\"[A-Za-z0-9 !#$&^_.+;=:-]*\"))*$"
+)
 SAFE_GENERATED_FILE_SECRET_VALUES = frozenset(
     {
         "configured",
@@ -115,7 +119,7 @@ def normalize_generated_file(raw: Mapping[str, Any]) -> GeneratedFile | None:
         return None
     if _generated_file_contains_secret(data):
         return None
-    content_type = str(raw.get("content_type") or "").strip() or _guess_generated_file_content_type(filename)
+    content_type = _safe_content_type(str(raw.get("content_type") or "").strip(), filename)
     caption = str(raw.get("caption") or "").strip()[:240]
     return GeneratedFile(filename=filename, content_type=content_type, data=data, caption=caption)
 
@@ -239,6 +243,19 @@ def _generated_file_secret_value_is_unsafe(key: object, value: object) -> bool:
     if key_text.endswith("_env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
         return False
     return True
+
+
+def _safe_content_type(value: str, filename: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized and _content_type_is_safe(normalized):
+        return normalized[:160]
+    return _guess_generated_file_content_type(filename)
+
+
+def _content_type_is_safe(value: str) -> bool:
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        return False
+    return bool(GENERATED_FILE_CONTENT_TYPE_RE.fullmatch(value))
 
 
 def _guess_generated_file_content_type(filename: str) -> str:
