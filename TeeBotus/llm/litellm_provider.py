@@ -264,7 +264,14 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
     # Common provider-key shapes. Keep this conservative so normal diagnostics
     # remain readable while accidental secrets are removed.
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
-    text = re.sub(r"\b(xox[baprs]-[A-Za-z0-9-]{8,})\b", "xox-<redacted>", text)
+    text = re.sub(r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b", "xox-<redacted>", text)
+    text = re.sub(r"\bsyt_[A-Za-z0-9_=-]{8,}\b", "syt_<redacted>", text)
+    text = re.sub(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b", "gh_<redacted>", text)
+    text = re.sub(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b", "github_pat_<redacted>", text)
+    text = re.sub(r"\bglpat-[A-Za-z0-9_-]{8,}\b", "glpat-<redacted>", text)
+    text = re.sub(r"\bhf_[A-Za-z0-9]{8,}\b", "hf_<redacted>", text)
+    text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
+    text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
     return text
 
 

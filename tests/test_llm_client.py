@@ -178,6 +178,47 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
     assert "<redacted>" in combined
 
 
+def test_litellm_text_client_redacts_common_provider_key_shapes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    tokens = [
+        "hf_" + "A" * 16,
+        "gsk_" + "B" * 16,
+        "AIza" + "C" * 24,
+        "github_" + "pat_" + "D" * 24,
+        "gh" + "p_" + "E" * 16,
+        "gl" + "pat-" + "F" * 16,
+        "sy" + "t_" + "G" * 16,
+        "xox" + "b-" + "H" * 16,
+    ]
+
+    def completion(**_kwargs):
+        raise RuntimeError("provider leaked " + " ".join(tokens))
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        provider="groq",
+        model="llama-3.1-8b-instant",
+        api_key="gsk_" + "I" * 16,
+    )
+
+    with caplog.at_level("WARNING", logger="TeeBotus.llm.litellm_provider"):
+        with pytest.raises(LLMAPIError) as error:
+            client.create_reply("Ping", BotInstructions(), None)
+
+    combined = str(error.value) + "\n" + "\n".join(record.getMessage() for record in caplog.records)
+    for token in tokens:
+        assert token not in combined
+    assert "provider=groq" in combined
+    assert "model=groq/llama-3.1-8b-instant" in combined
+    assert "hf_<redacted>" in combined
+    assert "gsk_<redacted>" in combined
+    assert "AIza<redacted>" in combined
+    assert "github_pat_<redacted>" in combined
+    assert "gh_<redacted>" in combined
+    assert "glpat-<redacted>" in combined
+    assert "syt_<redacted>" in combined
+    assert "xox-<redacted>" in combined
+
+
 def test_litellm_provider_alias_requires_explicit_model() -> None:
     with pytest.raises(LLMAPIError, match="requires llm_model"):
         LiteLLMTextClient(provider="ollama").create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
