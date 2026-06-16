@@ -117,11 +117,11 @@ def test_mcp_registry_never_directly_calls_tools_that_require_extra_guards() -> 
     registry = MCPToolRegistry(
         {
             "export.account": MCPToolPolicy(enabled=True, read_only=True, requires_confirmation=True, requires_admin=True),
-            "sandbox.read": MCPToolPolicy(enabled=True, read_only=True, sandbox_required=True),
+            "codex.exec": MCPToolPolicy(enabled=True, read_only=True, sandbox_required=True),
         },
         {
             "export.account": lambda _arguments: {"export": "would leak account data"},
-            "sandbox.read": lambda _arguments: {"path": "/tmp/example"},
+            "codex.exec": lambda _arguments: {"path": "/tmp/example"},
         },
     )
 
@@ -129,7 +129,19 @@ def test_mcp_registry_never_directly_calls_tools_that_require_extra_guards() -> 
     with pytest.raises(MCPToolError, match="requires confirmation"):
         registry.call("export.account", {"query": "export"})
     with pytest.raises(MCPToolError, match="requires sandbox"):
-        registry.call("sandbox.read", {"query": "read"})
+        registry.call("codex.exec", {"query": "read"})
+
+
+def test_mcp_registry_rejects_unknown_registered_tools() -> None:
+    registry = MCPToolRegistry(
+        {"shell.exec": MCPToolPolicy(enabled=True, read_only=True)},
+        {"shell.exec": lambda _arguments: {"stdout": "would run"}},
+    )
+
+    assert registry.tool_names == ()
+    assert registry.policy("shell.exec").enabled is False
+    with pytest.raises(MCPToolError, match="disabled"):
+        registry.call("shell.exec", {"command": "id"})
 
 
 def test_mcp_memory_search_requires_explicit_private_chat_context(tmp_path) -> None:

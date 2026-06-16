@@ -53,8 +53,9 @@ ToolCallable = Callable[[Mapping[str, Any]], dict[str, Any]]
 
 class MCPToolRegistry:
     def __init__(self, policies: Mapping[str, MCPToolPolicy], tools: Mapping[str, ToolCallable]) -> None:
-        self._policies = {str(name).casefold(): policy for name, policy in policies.items()}
-        self._tools = {str(name).casefold(): tool for name, tool in tools.items()}
+        known = {str(name).casefold() for name in DEFAULT_MCP_TOOL_POLICIES}
+        self._policies = {str(name).casefold(): policy for name, policy in policies.items() if str(name).casefold() in known}
+        self._tools = {str(name).casefold(): tool for name, tool in tools.items() if str(name).casefold() in known}
 
     @property
     def tool_names(self) -> tuple[str, ...]:
