@@ -29,6 +29,7 @@ SECRET_TOKEN_PATTERNS = (
     r"\bgsk_[A-Za-z0-9]{8,}\b",
     r"\bAIza[0-9A-Za-z_-]{16,}\b",
 )
+URL_CREDENTIAL_PATTERN = re.compile(r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@", re.IGNORECASE)
 PRIVATE_DATA_PATH_PATTERN = re.compile(
     r"(?:^|[/\\])(?:"
     r"account_(?:identities|index|memory|profile|secrets|tombstone)\.json|"
@@ -219,6 +220,8 @@ def _contains_secret_like_content(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     if any(marker.casefold() in value.casefold() for marker in SECRET_LIKE_PATTERNS):
+        return True
+    if URL_CREDENTIAL_PATTERN.search(value):
         return True
     if PRIVATE_DATA_PATH_PATTERN.search(value) or PRIVATE_DATA_PATH_SEGMENT_PATTERN.search(value):
         return True

@@ -289,6 +289,21 @@ def test_mcp_registry_rejects_private_account_paths_in_tool_results() -> None:
         registry.call("bibliothekar.search", {"query": "Memory"})
 
 
+def test_mcp_registry_rejects_url_credentials_in_tool_results() -> None:
+    registry = MCPToolRegistry(
+        {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
+        {
+            "bibliothekar.search": lambda _arguments: {
+                "prompt_text": "Quelle: https://user:plain-password@example.invalid/books/therapie.pdf",
+                "target": "base_url=http://reader:secret@127.0.0.1:6333",
+            }
+        },
+    )
+
+    with pytest.raises(MCPToolError, match="secret-looking content"):
+        registry.call("bibliothekar.search", {"query": "Quelle"})
+
+
 def test_mcp_registry_allows_normal_readonly_result_keys() -> None:
     registry = MCPToolRegistry(
         {"bibliothekar.search": MCPToolPolicy(enabled=True, read_only=True)},
@@ -298,6 +313,7 @@ def test_mcp_registry_allows_normal_readonly_result_keys() -> None:
                 "read_only": True,
                 "selected_ids": ["chunk_1"],
                 "file": "therapie.txt",
+                "source_url": "https://example.invalid/books/therapie.pdf",
                 "topics": ["therapie"],
             }
         },
