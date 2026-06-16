@@ -49,6 +49,17 @@ PRIVATE_DATA_PATH_PATTERN = re.compile(
     re.IGNORECASE,
 )
 PRIVATE_DATA_PATH_SEGMENT_PATTERN = re.compile(r"(?:^|[/\\])data[/\\](?:accounts|users)(?:[/\\]|$)", re.IGNORECASE)
+BIBLIOTHEKAR_FILTER_ARGUMENTS = {
+    "category": "categories",
+    "categories": "categories",
+    "topic": "topics",
+    "topics": "topics",
+    "keyword": "topics",
+    "keywords": "topics",
+    "file": "relative_path",
+    "path": "relative_path",
+    "relative_path": "relative_path",
+}
 
 
 class MCPToolError(RuntimeError):
@@ -157,6 +168,7 @@ def _bibliothekar_search_tool(service: BibliothekarService, arguments: Mapping[s
     query = _required_query(arguments)
     selection = service.search(
         query,
+        filters=_bibliothekar_filters(arguments),
         max_prompt_chars=_bounded_int(arguments.get("max_prompt_chars"), default=5000, lower=200, upper=12000),
         max_chunks=_bounded_int(arguments.get("max_chunks") or arguments.get("top_k"), default=5, lower=1, upper=12),
         max_quote_chars=_bounded_int(arguments.get("max_quote_chars"), default=900, lower=120, upper=2000),
@@ -190,6 +202,38 @@ def _required_query(arguments: Mapping[str, Any]) -> str:
     if not query:
         raise MCPToolError("MCP read-only search tools require a non-empty query")
     return query
+
+
+def _bibliothekar_filters(arguments: Mapping[str, Any]) -> dict[str, list[str]] | None:
+    filters: dict[str, list[str]] = {}
+    for raw_key, raw_value in arguments.items():
+        key = BIBLIOTHEKAR_FILTER_ARGUMENTS.get(str(raw_key or "").strip().casefold())
+        if key is None:
+            continue
+        values = _string_values(raw_value)
+        if values:
+            filters.setdefault(key, []).extend(values)
+    return filters or None
+
+
+def _string_values(value: object, *, limit: int = 12, max_chars: int = 120) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        items = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        items = list(value)
+    else:
+        items = [value]
+    values: list[str] = []
+    for item in items:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        values.append(text[:max_chars])
+        if len(values) >= limit:
+            break
+    return values
 
 
 def _bounded_int(value: object, *, default: int, lower: int, upper: int) -> int:

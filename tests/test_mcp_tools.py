@@ -134,6 +134,37 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
         registry.call("shell.exec", {"command": "id"})
 
 
+def test_mcp_bibliothekar_search_applies_public_metadata_filters(tmp_path) -> None:
+    service = _bibliothekar_service_with_documents(
+        tmp_path,
+        {
+            "therapie.txt": "Depression Therapie Aktivierung Schlaf.",
+            "technik.txt": "Python Software Daten System Algorithmus.",
+        },
+    )
+    registry = build_readonly_mcp_registry(
+        bibliothekar_service=service,
+        tool_config={"bibliothekar.search": {"enabled": True, "read_only": True}},
+    )
+
+    result = registry.call(
+        "bibliothekar.search",
+        {
+            "query": "System Therapie",
+            "top_k": 3,
+            "category": "technik",
+            "topic": "python",
+            "file": "technik",
+            "account_id": "must-not-be-used",
+        },
+    )
+
+    assert result["selected_ids"]
+    assert "technik.txt" in result["prompt_text"]
+    assert "therapie.txt" not in result["prompt_text"]
+    assert "must-not-be-used" not in result["prompt_text"]
+
+
 def test_mcp_known_future_tools_are_policy_visible_but_not_registered(tmp_path) -> None:
     registry = build_readonly_mcp_registry(
         bibliothekar_service=_bibliothekar_service(tmp_path),
@@ -398,6 +429,8 @@ def test_fastmcp_adapter_is_optional_and_registers_readonly_tools(tmp_path, monk
     assert FASTMCP_READONLY_ALLOWLIST == ("bibliothekar.search", "memory.search")
     assert sorted(server.tools) == ["bibliothekar.search", "memory.search"]
     assert "therapie.txt" in server.tools["bibliothekar.search"]("Therapie", top_k=1)["prompt_text"]
+    filtered_library = server.tools["bibliothekar.search"]("System Therapie", top_k=3, category="technik")
+    assert "technik.txt" in filtered_library["prompt_text"]
     assert server.tools["memory.search"]("Mond")["selected_ids"] == ["mem_1"]
     assert "youtube.transcribe" not in server.tools
     assert "export.account" not in server.tools
@@ -474,9 +507,22 @@ def test_fastmcp_adapter_does_not_expose_non_readonly_allowlisted_tools(tmp_path
 
 
 def _bibliothekar_service(tmp_path) -> BibliothekarService:
+    return _bibliothekar_service_with_documents(
+        tmp_path,
+        {
+            "therapie.txt": "Depression Therapie Aktivierung Schlaf.",
+            "technik.txt": "Python Software Daten System Algorithmus.",
+        },
+    )
+
+
+def _bibliothekar_service_with_documents(tmp_path, documents: dict[str, str]) -> BibliothekarService:
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True, exist_ok=True)
-    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    for relative_path, text in documents.items():
+        target = library_dir / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
     store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
     store.rebuild()
     return BibliothekarService(LocalBibliothekarBackend(store))

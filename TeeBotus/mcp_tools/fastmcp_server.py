@@ -28,8 +28,17 @@ def build_fastmcp_server(registry: MCPToolRegistry, *, name: str = "TeeBotus Rea
     if "bibliothekar.search" in exposed:
 
         @server.tool(name="bibliothekar.search")
-        def bibliothekar_search(query: str, top_k: int = 5) -> dict[str, Any]:
-            return registry.call("bibliothekar.search", {"query": query, "top_k": top_k})
+        def bibliothekar_search(
+            query: str,
+            top_k: int = 5,
+            category: str = "",
+            topic: str = "",
+            file: str = "",
+        ) -> dict[str, Any]:
+            return registry.call(
+                "bibliothekar.search",
+                {"query": query, "top_k": top_k, "category": category, "topic": topic, "file": file},
+            )
 
     if "memory.search" in exposed:
 
