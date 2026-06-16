@@ -104,6 +104,13 @@ def build_acceptance_commands(
                 (python, "-m", "TeeBotus", "--runtime-status", "--channels", runtime_channels),
             )
         )
+        for channel in ("telegram", "signal", "matrix"):
+            commands.append(
+                AcceptanceCommand(
+                    f"runtime-status-{channel}",
+                    (python, "-m", "TeeBotus", "--runtime-status", "--channels", channel),
+                )
+            )
     commands.append(
         AcceptanceCommand(
             "plan2-pytest",

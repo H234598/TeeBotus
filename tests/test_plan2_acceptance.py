@@ -27,6 +27,15 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
         "--channels",
         "telegram,signal,matrix",
     )
+    for channel in ("telegram", "signal", "matrix"):
+        assert by_label[f"runtime-status-{channel}"].argv == (
+            "python-test",
+            "-m",
+            "TeeBotus",
+            "--runtime-status",
+            "--channels",
+            channel,
+        )
     assert "--all" not in " ".join(" ".join(command.argv) for command in commands)
     assert "tests/test_runtime_config.py" in by_label["plan2-pytest"].argv
     assert "tests/test_runtime_state.py" in by_label["plan2-pytest"].argv
@@ -68,6 +77,9 @@ def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
     labels = {command.label for command in commands}
 
     assert "runtime-status" not in labels
+    assert "runtime-status-telegram" not in labels
+    assert "runtime-status-signal" not in labels
+    assert "runtime-status-matrix" not in labels
     assert "adapter-deps" not in labels
     assert "plan2-pytest" in labels
 
