@@ -49,6 +49,7 @@ FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS = {
     "account_tombstone.json",
     "agent_state.json",
     "legacy_user_memory_entries.jsonl",
+    "llm_state.json",
     "openai_state.json",
     "proactive_audit.jsonl",
     "proactive_outbox.jsonl",

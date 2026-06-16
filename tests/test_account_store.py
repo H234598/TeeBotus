@@ -10,6 +10,8 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     AccountStore,
     AccountStoreError,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
     SecretToolInstanceSecretProvider,
     StaticSecretProvider,
     matrix_identity_key,
@@ -298,6 +300,24 @@ def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     assert "temporary note" in merged_habits
     assert (temp_dir / "Account_Tombstone.json").exists()
     assert not (temp_dir / "User_Memory_Entries.jsonl").exists()
+
+
+def test_link_identity_merges_legacy_openai_state_into_llm_state(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    _, secret = store.register_account(target)
+    temp = store.resolve_or_create_account(signal_identity_key(source_uuid="abc"))
+
+    store.write_llm_state(target, {"previous_response_id": "resp-target", "updated_at": "2026-06-01T00:00:00+00:00"})
+    store.account_memory_vault.write_json(
+        store.account_dir(temp) / OPENAI_STATE_FILENAME,
+        {"previous_response_id": "resp-source", "updated_at": "2026-06-02T00:00:00+00:00"},
+    )
+
+    store.link_identity(signal_identity_key(source_uuid="abc"), target, secret, display_label="Signal")
+
+    assert store.read_llm_state(target)["previous_response_id"] == "resp-source"
+    assert (store.account_dir(target) / LLM_STATE_FILENAME).exists()
 
 
 def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):

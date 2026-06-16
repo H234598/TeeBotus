@@ -37,7 +37,7 @@ Verschluesselte strukturierte Memory-Dateien:
 
 - `User_Memory_Index.json`
 - `User_Memory_Entries.jsonl`
-- `OpenAI_State.json`
+- `LLM_State.json` (`OpenAI_State.json` wird als Legacy-Name migriert)
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
 - `Proactive_Audit.jsonl`

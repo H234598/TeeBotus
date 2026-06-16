@@ -3581,7 +3581,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
         self.assertEqual(openai_client.voice_texts, ["Kurz drei."])
 
-    def test_handle_update_logs_openai_error_without_traceback(self) -> None:
+    def test_handle_update_logs_text_llm_error_without_traceback(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
@@ -3590,10 +3590,10 @@ class BotTests(unittest.TestCase):
         with self.assertLogs("TeeBotus", level="ERROR") as logs:
             handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, FailingOpenAIClient(), ChatState())
 
-        self.assertIn("OpenAI request failed: short failure", "\n".join(logs.output))
+        self.assertIn("Text LLM request failed: short failure", "\n".join(logs.output))
         self.assertEqual(api.sent_messages, [(123, instructions.llm_error)])
 
-    def test_reset_clears_openai_chat_state(self) -> None:
+    def test_reset_clears_text_llm_chat_state(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
@@ -3603,7 +3603,7 @@ class BotTests(unittest.TestCase):
         handle_update(api, {"message": {"text": "/reset", "chat": {"id": 123}}}, BotInstructions(), None, chat_state)
 
         self.assertIsNone(chat_state.get_previous_response_id(123))
-        self.assertEqual(api.sent_messages, [(123, BotInstructions().openai_reset)])
+        self.assertEqual(api.sent_messages, [(123, BotInstructions().llm_reset)])
 
     def test_cleanup_removes_requested_number_of_recorded_messages(self) -> None:
         from TeeBotus.instructions import BotInstructions

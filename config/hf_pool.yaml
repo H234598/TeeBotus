@@ -1,0 +1,81 @@
+{
+  "pools": {
+    "default": {
+      "enabled": false,
+      "strategy": "purpose_weighted",
+      "max_retries": 1,
+      "timeout_seconds": 60,
+      "cooldown_seconds_on_429": 900,
+      "cooldown_seconds_on_5xx": 120,
+      "cooldown_seconds_on_timeout": 120,
+      "targets": [
+        {
+          "name": "qwen_4b_normal_chat",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 3,
+          "purposes": ["normal_chat"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_4b_structured",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 5,
+          "purposes": ["structured_decision"],
+          "enabled": false,
+          "required": {
+            "supports_structured_output": true,
+            "supports_tools": true
+          }
+        },
+        {
+          "name": "qwen_4b_psychology_explainer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 4,
+          "purposes": ["psychology_explainer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_4b_bibliothekar_answer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 4,
+          "purposes": ["bibliothekar_answer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_4b_summarizer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 3,
+          "purposes": ["summarizer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        }
+      ]
+    }
+  }
+}

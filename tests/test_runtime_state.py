@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, LLM_STATE_FILENAME, OPENAI_STATE_FILENAME, StaticSecretProvider
 from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.state import RuntimeStateStore
 
@@ -38,22 +38,36 @@ def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_back
     assert "secret backend unavailable" in state.link_notifications_persistence_error
 
 
-def test_runtime_state_store_persists_previous_openai_response_id(tmp_path):
+def test_runtime_state_store_persists_previous_llm_response_id(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
-    account_store.write_openai_state(ACCOUNT_ID, {"kept": "value"})
+    account_store.write_llm_state(ACCOUNT_ID, {"kept": "value"})
     state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
     state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
     reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-1"
-    assert account_store.read_openai_state(ACCOUNT_ID)["kept"] == "value"
-    assert account_store.read_openai_state(ACCOUNT_ID)["previous_response_id"] == "resp-1"
+    assert account_store.read_llm_state(ACCOUNT_ID)["kept"] == "value"
+    assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-1"
+    assert (account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME).exists()
 
 
-def test_runtime_state_store_reset_clears_persisted_previous_openai_response_id(tmp_path):
+def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    legacy_path = account_store.account_dir(ACCOUNT_ID) / OPENAI_STATE_FILENAME
+    account_store.account_memory_vault.write_json(legacy_path, {"previous_response_id": "resp-legacy", "updated_at": "2026-06-01T00:00:00+00:00"})
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-legacy"
+    assert (account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME).exists()
+    assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-legacy"
+
+
+def test_runtime_state_store_reset_clears_persisted_previous_llm_response_id(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
@@ -64,10 +78,10 @@ def test_runtime_state_store_reset_clears_persisted_previous_openai_response_id(
     reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) is None
-    assert "previous_response_id" not in account_store.read_openai_state(ACCOUNT_ID)
+    assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
 
 
-def test_runtime_state_store_set_none_clears_previous_openai_response_id(tmp_path):
+def test_runtime_state_store_set_none_clears_previous_llm_response_id(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
@@ -79,7 +93,7 @@ def test_runtime_state_store_set_none_clears_previous_openai_response_id(tmp_pat
 
     assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) is None
-    assert "previous_response_id" not in account_store.read_openai_state(ACCOUNT_ID)
+    assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
 
 
 def test_runtime_state_store_keeps_invalid_previous_response_account_id_in_memory(tmp_path):
@@ -88,6 +102,7 @@ def test_runtime_state_store_keeps_invalid_previous_response_account_id_in_memor
     state.set_previous_response_id("Bot", "not-a-real-account-id", "resp-1")
 
     assert state.get_previous_response_id("Bot", "not-a-real-account-id") == "resp-1"
+    assert state.llm_state_persistence_error
     assert state.openai_state_persistence_error
 
 

@@ -12,8 +12,10 @@ from TeeBotus.runtime.accounts import (
     AccountStoreError,
     EncryptedJsonVault,
     InstanceSecretProvider,
+    LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
     SecretToolInstanceSecretProvider,
+    _choose_newer_state,
     utc_now,
     validate_sha512_token,
 )
@@ -157,6 +159,7 @@ class RuntimeStateStore(RuntimeState):
         self.link_notifications_path = self.runtime_dir / LINK_NOTIFICATIONS_FILENAME
         self.accounts_root = self.runtime_dir.parent / "accounts"
         self.link_notifications_persistence_error = ""
+        self.llm_state_persistence_error = ""
         self.openai_state_persistence_error = ""
         self._load_persisted_link_notifications()
 
@@ -167,9 +170,9 @@ class RuntimeStateStore(RuntimeState):
         return EncryptedJsonVault(self.instance_name, self.secret_provider)
 
     @property
-    def _openai_state_vault(self) -> EncryptedJsonVault:
+    def _llm_state_vault(self) -> EncryptedJsonVault:
         if self.secret_provider is None:
-            raise AccountStoreError("OpenAI state persistence has no secret provider")
+            raise AccountStoreError("LLM state persistence has no secret provider")
         return EncryptedJsonVault(self.instance_name, self.secret_provider, purpose=ACCOUNT_MEMORY_KEY_PURPOSE)
 
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]
@@ -182,22 +185,22 @@ class RuntimeStateStore(RuntimeState):
     def set_previous_response_id(self, instance_name: str, account_id: str, response_id: str | None) -> None:
         super().set_previous_response_id(instance_name, account_id, response_id)
         if response_id:
-            self._write_openai_previous_response_id(account_id, response_id)
+            self._write_llm_previous_response_id(account_id, response_id)
         else:
-            self._clear_openai_previous_response_id(account_id)
+            self._clear_llm_previous_response_id(account_id)
 
     def get_previous_response_id(self, instance_name: str, account_id: str) -> str | None:
         cached = super().get_previous_response_id(instance_name, account_id)
         if cached:
             return cached
-        persisted = self._read_openai_previous_response_id(account_id)
+        persisted = self._read_llm_previous_response_id(account_id)
         if persisted:
             self.previous_response_ids[(instance_name, account_id)] = persisted
         return persisted
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
         super().reset_previous_response_id(instance_name, account_id)
-        self._clear_openai_previous_response_id(account_id)
+        self._clear_llm_previous_response_id(account_id)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
         super().record_link_notification(
@@ -241,50 +244,69 @@ class RuntimeStateStore(RuntimeState):
             handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
         maintain_runtime_directory(self.runtime_dir)
 
-    def _openai_state_path(self, account_id: str) -> Path:
+    def _state_path(self, account_id: str, filename: str) -> Path:
         account = validate_sha512_token(account_id, field_name="account_id")
-        return self.accounts_root / ACCOUNTS_DIRNAME / account / OPENAI_STATE_FILENAME
+        return self.accounts_root / ACCOUNTS_DIRNAME / account / filename
 
-    def _read_openai_state(self, account_id: str) -> dict[str, Any]:
+    def _llm_state_path(self, account_id: str) -> Path:
+        return self._state_path(account_id, LLM_STATE_FILENAME)
+
+    def _openai_state_path(self, account_id: str) -> Path:
+        return self._state_path(account_id, OPENAI_STATE_FILENAME)
+
+    def _set_llm_state_persistence_error(self, error: str) -> None:
+        self.llm_state_persistence_error = error
+        self.openai_state_persistence_error = error
+
+    def _read_state_payload(self, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        return self._llm_state_vault.read_json(path, {})
+
+    def _read_llm_state(self, account_id: str) -> dict[str, Any]:
         try:
-            path = self._openai_state_path(account_id)
-            if not path.exists():
-                return {}
-            self.openai_state_persistence_error = ""
-            return self._openai_state_vault.read_json(path, {})
+            llm_path = self._llm_state_path(account_id)
+            legacy_path = self._openai_state_path(account_id)
+            llm_payload = self._read_state_payload(llm_path)
+            legacy_payload = self._read_state_payload(legacy_path)
+            self._set_llm_state_persistence_error("")
+            selected = _choose_newer_state(legacy_payload, llm_payload)
+            if selected and selected != llm_payload:
+                self._llm_state_vault.write_json(llm_path, selected)
+            return selected
         except AccountStoreError as exc:
-            self.openai_state_persistence_error = str(exc)
+            self._set_llm_state_persistence_error(str(exc))
             return {}
 
-    def _write_openai_state(self, account_id: str, payload: dict[str, Any]) -> None:
+    def _write_llm_state(self, account_id: str, payload: dict[str, Any]) -> None:
         try:
-            path = self._openai_state_path(account_id)
-            self.openai_state_persistence_error = ""
-            self._openai_state_vault.write_json(path, payload)
+            path = self._llm_state_path(account_id)
+            self._set_llm_state_persistence_error("")
+            self._llm_state_vault.write_json(path, payload)
         except AccountStoreError as exc:
-            self.openai_state_persistence_error = str(exc)
+            self._set_llm_state_persistence_error(str(exc))
 
-    def _read_openai_previous_response_id(self, account_id: str) -> str | None:
-        payload = self._read_openai_state(account_id)
+    def _read_llm_previous_response_id(self, account_id: str) -> str | None:
+        payload = self._read_llm_state(account_id)
         value = str(payload.get("previous_response_id") or "").strip()
         return value or None
 
-    def _write_openai_previous_response_id(self, account_id: str, response_id: str) -> None:
+    def _write_llm_previous_response_id(self, account_id: str, response_id: str) -> None:
         clean_response_id = str(response_id or "").strip()
         if not clean_response_id:
             return
-        payload = self._read_openai_state(account_id)
+        payload = self._read_llm_state(account_id)
         payload["previous_response_id"] = clean_response_id
         payload["updated_at"] = utc_now()
-        self._write_openai_state(account_id, payload)
+        self._write_llm_state(account_id, payload)
 
-    def _clear_openai_previous_response_id(self, account_id: str) -> None:
-        payload = self._read_openai_state(account_id)
+    def _clear_llm_previous_response_id(self, account_id: str) -> None:
+        payload = self._read_llm_state(account_id)
         if not payload or "previous_response_id" not in payload:
             return
         payload.pop("previous_response_id", None)
         payload["updated_at"] = utc_now()
-        self._write_openai_state(account_id, payload)
+        self._write_llm_state(account_id, payload)
 
     def _load_persisted_link_notifications(self) -> None:
         if self.secret_provider is None or not self.link_notifications_path.exists():

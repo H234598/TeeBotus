@@ -22,5 +22,5 @@ purposes:
     fallback: local_ollama
 
   structured_decision:
-    profile: local_ollama
-    fallback: groq_fast
+    profile: hf_pool_structured
+    fallback: local_ollama

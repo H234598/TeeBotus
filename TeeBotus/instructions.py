@@ -35,7 +35,7 @@ DEFAULT_HELP_LINES = (
     "/mimic_voice on|off|before|after - Sprechweise aus deinen Sprachnachrichten fuer TTS leicht nachahmen",
     "/youtube_transcript URL - YouTube-Untertitel laden oder per lokalem Whisper transkribieren",
     "/chatid - aktuelle Chat-ID anzeigen",
-    "/reset - setzt nur den OpenAI-Verlauf dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",
+    "/reset - setzt nur den Text-LLM-Kontext dieses Chats zurueck. Memory und Telegram-Nachrichten bleiben erhalten.",
     "/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege.",
     "/Call_a_Teladi - Send Teladi a emergency message",
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
@@ -121,11 +121,15 @@ class BotInstructions:
     youtube_option_llm_fallback: bool = False
     llm_error: str = "Ich kann das Textmodell gerade nicht erreichen. Bitte versuche es gleich nochmal."
     llm_missing_key: str = "Das Textmodell ist aktiviert, aber der benoetigte API-Key ist nicht gesetzt."
+    llm_reset: str = (
+        "Der Text-LLM-Kontext fuer diesen Chat wurde geloescht. "
+        "Das betrifft nur den Antwortkontext in diesem Chat; Telegram-Nachrichten und User-Memory bleiben erhalten."
+    )
     openai_error: str = "Ich kann die OpenAI API gerade nicht erreichen. Bitte versuche es gleich nochmal."
     openai_missing_key: str = "OpenAI ist aktiviert, aber OPENAI_API_KEY ist nicht gesetzt."
     openai_reset: str = (
-        "Der OpenAI-Verlauf fuer diesen Chat wurde geloescht. "
-        "Das betrifft nur den Antwortkontext fuer OpenAI in diesem Chat; Telegram-Nachrichten und User-Memory bleiben erhalten."
+        "Der Text-LLM-Kontext fuer diesen Chat wurde geloescht. "
+        "Das betrifft nur den Antwortkontext in diesem Chat; Telegram-Nachrichten und User-Memory bleiben erhalten."
     )
     delete_empty: str = (
         "Ich habe fuer diesen Chat keine gespeicherte Nachricht, die ich loeschen kann. "
@@ -133,11 +137,11 @@ class BotInstructions:
     )
     delete_error: str = (
         "Ich konnte die Bot-Nachricht nicht loeschen. "
-        "In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten."
+        "In Gruppen brauche ich dafuer passende Adminrechte; Text-LLM-Kontext und User-Memory bleiben dabei erhalten."
     )
     cleanup_success: str = (
         "{count} gespeicherte Nachrichten geloescht. "
-        "Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
+        "Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; Text-LLM-Kontext und User-Memory bleiben erhalten."
     )
     cleanup_usage: str = (
         "Nutzung: /cleanup all. "
@@ -145,16 +149,16 @@ class BotInstructions:
     )
     user_memory_reset_confirm: str = (
         "Soll ich deine gespeicherten User-Memory-Eintraege wirklich loeschen? "
-        "Das betrifft nur deine eigenen Memory-Eintraege; OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten. "
+        "Das betrifft nur deine eigenen Memory-Eintraege; Text-LLM-Kontext, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten. "
         "Antworte mit Ja zum Loeschen oder Nein zum Abbrechen."
     )
     user_memory_reset_success: str = (
         "Deine gespeicherten User-Memory-Eintraege wurden geloescht. "
-        "OpenAI-Verlauf, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten."
+        "Text-LLM-Kontext, Telegram-Nachrichten und admingepflegte interne Hinweise bleiben erhalten."
     )
     user_memory_reset_cancelled: str = "Okay, ich loesche nichts. Deine User-Memory-Eintraege bleiben erhalten."
     user_memory_reset_unavailable: str = (
-        "Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein OpenAI-Verlauf geloescht."
+        "Fuer dich ist kein User-Memory aktiv. Es wurden keine Telegram-Nachrichten und kein Text-LLM-Kontext geloescht."
     )
     user_memory_reset_error: str = "Ich konnte deine User-Memory-Eintraege gerade nicht loeschen. Bitte versuche es spaeter erneut."
     user_memory_error: str = (
@@ -343,9 +347,10 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     system_prompt_lines: list[str] | None = None
     section = ""
     pending_item: str | None = None
+    explicit_llm_reply_keys: set[str] = set()
 
     def apply_pending_item() -> None:
-        nonlocal pending_item, help_lines
+        nonlocal pending_item, help_lines, explicit_llm_reply_keys
         if pending_item is None:
             return
         item = pending_item
@@ -369,8 +374,11 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
         elif section == "replies":
             _apply_reply(instructions, key, value)
         elif section == "openai":
-            _apply_openai_setting(instructions, key, value)
+            _apply_openai_setting(instructions, key, value, protected_llm_reply_keys=explicit_llm_reply_keys)
         elif section == "llm":
+            llm_reply_key = _llm_reply_key(key)
+            if llm_reply_key:
+                explicit_llm_reply_keys.add(llm_reply_key)
             _apply_llm_setting(instructions, key, value)
         elif section == "bibliothekar":
             _apply_bibliothekar_setting(instructions, key, value)
@@ -646,12 +654,21 @@ def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> N
         instructions.llm_error = value
     elif normalized in {"missing_key", "llm_missing_key", "text_missing_key"}:
         instructions.llm_missing_key = value
+    elif normalized in {"reset", "llm_reset", "text_reset"}:
+        instructions.llm_reset = value
     elif normalized in {"youtube_option_llm_fallback", "youtube_options_llm_fallback", "youtube_llm_fallback"}:
         instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
 
 
-def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -> None:
+def _apply_openai_setting(
+    instructions: BotInstructions,
+    key: str,
+    value: str,
+    *,
+    protected_llm_reply_keys: set[str] | None = None,
+) -> None:
     normalized = _normalize_key(key)
+    protected_llm_reply_keys = protected_llm_reply_keys or set()
     if normalized == "enabled":
         instructions.openai_enabled = _parse_bool(value, default=instructions.openai_enabled)
     elif normalized == "llm_enabled":
@@ -764,12 +781,16 @@ def _apply_openai_setting(instructions: BotInstructions, key: str, value: str) -
         instructions.youtube_option_llm_fallback = _parse_bool(value, default=instructions.youtube_option_llm_fallback)
     elif normalized == "error":
         instructions.openai_error = value
-        instructions.llm_error = value
+        if "error" not in protected_llm_reply_keys:
+            instructions.llm_error = value
     elif normalized == "missing_key":
         instructions.openai_missing_key = value
-        instructions.llm_missing_key = value
+        if "missing_key" not in protected_llm_reply_keys:
+            instructions.llm_missing_key = value
     elif normalized == "reset":
         instructions.openai_reset = value
+        if "reset" not in protected_llm_reply_keys:
+            instructions.llm_reset = value
     elif normalized == "bibliothekar_enabled":
         instructions.bibliothekar_enabled = _parse_bool(value, default=instructions.bibliothekar_enabled)
     elif normalized == "bibliothekar_backend":
@@ -916,6 +937,17 @@ def _image_generation_instructions_text() -> str:
 
 def _normalize_key(key: str) -> str:
     return key.strip().casefold().replace("-", "_").replace(" ", "_")
+
+
+def _llm_reply_key(key: str) -> str:
+    normalized = _normalize_key(key)
+    if normalized in {"error", "llm_error", "text_error"}:
+        return "error"
+    if normalized in {"missing_key", "llm_missing_key", "text_missing_key"}:
+        return "missing_key"
+    if normalized in {"reset", "llm_reset", "text_reset"}:
+        return "reset"
+    return ""
 
 
 def _normalize_command_name(command: str) -> str:

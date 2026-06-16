@@ -38,6 +38,7 @@ SECRET_VERIFIER_FILENAME = "Secret_Verifier.json"
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
 USER_MEMORY_ENTRIES_FILENAME = "User_Memory_Entries.jsonl"
 USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
+LLM_STATE_FILENAME = "LLM_State.json"
 OPENAI_STATE_FILENAME = "OpenAI_State.json"
 AGENT_STATE_FILENAME = "Agent_State.json"
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
@@ -921,7 +922,7 @@ class AccountStore:
         self.rebuild_structured_memory_index(target_account_id)
         self._merge_json_objects(source_dir / ACCOUNT_PROFILE_FILENAME, target_dir / ACCOUNT_PROFILE_FILENAME, preserve_target=True, vault=self.vault)
         self._merge_text(source_dir / USER_HABITS_FILENAME, target_dir / USER_HABITS_FILENAME, heading=f"Merged from {source_account_id}")
-        self._merge_openai_state(source_dir / OPENAI_STATE_FILENAME, target_dir / OPENAI_STATE_FILENAME)
+        self._merge_llm_state(source_dir, target_dir)
         identities = self._load_identities()
         for payload in identities.values():
             if isinstance(payload, dict) and payload.get("account_id") == source_account_id:
@@ -975,6 +976,27 @@ class AccountStore:
         if backend is not None:
             return backend.read_entries(account_id)
         return self._read_jsonl_with_fallback(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
+
+    def read_memory_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
+        if not requested_ids:
+            return []
+        backend = self.account_memory_backend
+        if backend is not None:
+            read_by_ids = getattr(backend, "read_entries_by_ids", None)
+            if callable(read_by_ids):
+                rows = read_by_ids(account_id, requested_ids)
+            else:
+                rows = backend.read_entries(account_id)
+        else:
+            rows = self._read_jsonl_with_fallback(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
+        entries_by_id = {
+            str(row.get("id") or "").strip(): row
+            for row in rows
+            if isinstance(row, dict) and str(row.get("id") or "").strip()
+        }
+        return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
 
     def write_memory_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -1363,6 +1385,30 @@ class AccountStore:
             errors.append(f"semantic_cache entries stale: {', '.join(sorted(set(stale_semantic_ids)))}")
         return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
+    def rank_structured_memory_ids(
+        self,
+        account_id: str,
+        *,
+        query_text: str = "",
+        limit: int = 8,
+        exclude_ids: Iterable[str] = (),
+    ) -> tuple[str, ...]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        if limit < 1:
+            return ()
+        excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
+        entries = self.read_memory_entries(account_id)
+        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        ranked_ids: list[str] = []
+        for entry in self._rank_structured_memory_entries(entries, index, query_text):
+            memory_id = str(entry.get("id") or "").strip()
+            if not memory_id or memory_id in excluded_ids:
+                continue
+            ranked_ids.append(memory_id)
+            if len(ranked_ids) >= limit:
+                break
+        return tuple(ranked_ids)
+
     def select_structured_memory(
         self,
         account_id: str,
@@ -1528,11 +1574,27 @@ class AccountStore:
         self.rebuild_structured_memory_index(account_id)
         return created
 
+    def read_llm_state(self, account_id: str) -> dict[str, Any]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        account_dir = self.account_dir(account_id)
+        llm_path = account_dir / LLM_STATE_FILENAME
+        legacy_path = account_dir / OPENAI_STATE_FILENAME
+        llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
+        legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
+        selected = _choose_newer_state(legacy_state, llm_state)
+        if selected and selected != llm_state:
+            self.account_memory_vault.write_json(llm_path, selected)
+        return selected
+
+    def write_llm_state(self, account_id: str, data: dict[str, Any]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self.account_memory_vault.write_json(self.account_dir(account_id) / LLM_STATE_FILENAME, dict(data))
+
     def read_openai_state(self, account_id: str) -> dict[str, Any]:
-        return self._read_json_with_fallback(self.account_dir(account_id) / OPENAI_STATE_FILENAME, {}, vault=self.account_memory_vault)
+        return self.read_llm_state(account_id)
 
     def write_openai_state(self, account_id: str, data: dict[str, Any]) -> None:
-        self.account_memory_vault.write_json(self.account_dir(account_id) / OPENAI_STATE_FILENAME, data)
+        self.write_llm_state(account_id, data)
 
     def read_agent_state(self, account_id: str) -> dict[str, Any]:
         return self._read_json_with_fallback(self.account_dir(account_id) / AGENT_STATE_FILENAME, {}, vault=self.account_memory_vault)
@@ -2099,13 +2161,27 @@ class AccountStore:
             merged = {**target_data, **source_data}
         self._write_json_with_vault(target, merged, vault=vault)
 
-    def _merge_openai_state(self, source: Path, target: Path) -> None:
-        if not source.exists():
-            return
-        source_data = self._read_json_with_fallback(source, {}, vault=self.account_memory_vault)
-        target_data = self._read_json_with_fallback(target, {}, vault=self.account_memory_vault) if target.exists() else {}
+    def _merge_llm_state(self, source_dir: Path, target_dir: Path) -> None:
+        source_data = self._read_newest_state_from_paths(
+            source_dir / LLM_STATE_FILENAME,
+            source_dir / OPENAI_STATE_FILENAME,
+        )
+        target_data = self._read_newest_state_from_paths(
+            target_dir / LLM_STATE_FILENAME,
+            target_dir / OPENAI_STATE_FILENAME,
+        )
         selected = _choose_newer_state(source_data, target_data)
-        self._write_json_with_vault(target, selected, vault=self.account_memory_vault)
+        if selected:
+            self._write_json_with_vault(target_dir / LLM_STATE_FILENAME, selected, vault=self.account_memory_vault)
+
+    def _read_newest_state_from_paths(self, *paths: Path) -> dict[str, Any]:
+        selected: dict[str, Any] = {}
+        for path in paths:
+            if not path.exists():
+                continue
+            payload = self._read_json_with_fallback(path, {}, vault=self.account_memory_vault)
+            selected = _choose_newer_state(payload, selected)
+        return selected
 
     def _merge_text(self, source: Path, target: Path, *, heading: str) -> None:
         if not source.exists():

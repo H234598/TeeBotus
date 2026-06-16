@@ -74,7 +74,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "sensitivity=high" in text
     assert "tests/test_llm_config.py" in text
     assert "tests/test_litellm_provider.py" in text
-    assert "`missing_key` und `error` im `## LLM`-Block steuern nur Text-LLM-Antworten" in text
+    assert "`missing_key`, `error` und `reset` im `## LLM`-Block steuern nur Text-LLM-Antworten" in text
     assert "OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription" in text
     assert "tests/test_bibliothekar_*.py" in text
     assert "tests/test_secret_hygiene.py" in text
@@ -129,5 +129,5 @@ def test_plan2_doc_tracks_current_pyproject_and_llm_contract() -> None:
     assert "nicht llm_provider/llm_model" not in text
     assert "llm_provider" in text
     assert "llm_model" in text
-    assert "`missing_key` und `error` im `## LLM`-Block sind die neutralen" in text
+    assert "`missing_key`, `error` und `reset` im `## LLM`-Block sind die neutralen" in text
     assert "OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription" in text

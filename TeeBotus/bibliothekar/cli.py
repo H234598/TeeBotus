@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from TeeBotus.instructions import BotInstructions, InstructionStore
+from TeeBotus.bibliothekar.source_harvester import SourceHarvester
 from TeeBotus.runtime.bibliothekar import BibliothekarStore, SUPPORTED_SUFFIXES, _is_allowed_library_source_path
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, check_bibliothekar_service
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query
@@ -20,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
         return _status(args)
     if args.command == "index":
         return _index(args)
+    if args.command == "harvest":
+        return _harvest(args)
     if args.command == "query":
         return _query(args)
     parser.print_help()
@@ -40,6 +43,15 @@ def _build_parser() -> argparse.ArgumentParser:
     index.add_argument("--source", default="")
     index.add_argument("--dry-run", action="store_true")
     index.set_defaults(command="index")
+
+    harvest = subparsers.add_parser("harvest", help="Gate local source files before Bibliothekar ingestion.")
+    harvest.add_argument("source")
+    harvest.add_argument("--title", default="", help="Optional source title metadata.")
+    harvest.add_argument("--license", default="", help="Optional source license metadata.")
+    harvest.add_argument("--claim", action="append", default=[], help="Claim extracted from the source for optional verifier checks.")
+    harvest.add_argument("--evidence", action="append", default=[], help="Evidence text paired with --claim.")
+    harvest.add_argument("--move", action="store_true", help="Move instead of copy after the quality gate.")
+    harvest.set_defaults(command="harvest")
 
     query = subparsers.add_parser("query", help="Query indexed Bibliothekar chunks.")
     query.add_argument("query")
@@ -106,6 +118,42 @@ def _index(args: argparse.Namespace) -> int:
             }
         )
     return _emit_rows(rows, args.json, "{instance}: {documents} Dokumente, {chunks} Chunks, dry_run={dry_run}, Ordner: {library_dir}")
+
+
+def _harvest(args: argparse.Namespace) -> int:
+    instances_dir = Path(args.instances_dir)
+    source = Path(args.source)
+    if not source.exists():
+        raise SystemExit(f"source does not exist: {source}")
+    metadata = {key: value for key, value in {"title": args.title, "license": args.license}.items() if str(value or "").strip()}
+    rows = []
+    for instance_name in _resolve_instances(instances_dir, args.instance):
+        store = BibliothekarStore(instance_name, instances_dir)
+        harvester = SourceHarvester(store.library_dir)
+        result = harvester.harvest_path(
+            source,
+            metadata=metadata,
+            claims=tuple(str(item) for item in args.claim if str(item).strip()),
+            evidence=tuple(str(item) for item in args.evidence if str(item).strip()),
+            copy=not bool(args.move),
+        )
+        rows.append(
+            {
+                "instance": instance_name,
+                "route": result.route,
+                "decision_status": result.report.decision.status,
+                "accepted_for_ingest": result.accepted_for_ingest,
+                "sha256": result.sha256,
+                "stored_path": str(result.stored_path or ""),
+                "duplicate_of": str(result.duplicate_of or ""),
+                "duplicate_suffix": f" duplicate_of={result.duplicate_of}" if result.duplicate_of else "",
+            }
+        )
+    return _emit_rows(
+        rows,
+        args.json,
+        "{instance}: route={route} decision={decision_status} accepted_for_ingest={accepted_for_ingest} stored_path={stored_path}{duplicate_suffix}",
+    )
 
 
 def _query(args: argparse.Namespace) -> int:

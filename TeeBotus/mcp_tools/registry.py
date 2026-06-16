@@ -39,6 +39,7 @@ PRIVATE_DATA_PATH_PATTERN = re.compile(
     r"(?:^|[/\\])(?:"
     r"account_(?:identities|index|memory|profile|secrets|tombstone)\.json|"
     r"secret_verifier\.json|"
+    r"llm_state\.json|"
     r"openai_state\.json|"
     r"agent_state\.json|"
     r"proactive_(?:audit|outbox)\.jsonl|"

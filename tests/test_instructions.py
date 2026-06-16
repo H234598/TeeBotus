@@ -13,13 +13,38 @@ class InstructionTests(unittest.TestCase):
             ## OpenAI
             - error: OpenAI kaputt.
             - missing_key: OpenAI-Key fehlt.
+            - reset: OpenAI-Reset.
             """
         )
 
         self.assertEqual(instructions.openai_error, "OpenAI kaputt.")
         self.assertEqual(instructions.openai_missing_key, "OpenAI-Key fehlt.")
+        self.assertEqual(instructions.openai_reset, "OpenAI-Reset.")
         self.assertEqual(instructions.llm_error, "OpenAI kaputt.")
         self.assertEqual(instructions.llm_missing_key, "OpenAI-Key fehlt.")
+        self.assertEqual(instructions.llm_reset, "OpenAI-Reset.")
+
+    def test_llm_reply_settings_win_over_later_openai_legacy_settings(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## LLM
+            - error: LLM kaputt.
+            - missing_key: LLM-Key fehlt.
+            - reset: LLM-Reset.
+
+            ## OpenAI
+            - error: OpenAI kaputt.
+            - missing_key: OpenAI-Key fehlt.
+            - reset: OpenAI-Reset.
+            """
+        )
+
+        self.assertEqual(instructions.openai_error, "OpenAI kaputt.")
+        self.assertEqual(instructions.openai_missing_key, "OpenAI-Key fehlt.")
+        self.assertEqual(instructions.openai_reset, "OpenAI-Reset.")
+        self.assertEqual(instructions.llm_error, "LLM kaputt.")
+        self.assertEqual(instructions.llm_missing_key, "LLM-Key fehlt.")
+        self.assertEqual(instructions.llm_reset, "LLM-Reset.")
 
     def test_parse_markdown_instructions(self) -> None:
         account_a = "a" * 128
@@ -94,6 +119,7 @@ class InstructionTests(unittest.TestCase):
             - temperature: 0.7
             - error: LLM kaputt.
             - missing_key: LLM-Key fehlt.
+            - reset: LLM-Reset.
 
             ## Codex
             - enabled: ja
@@ -158,6 +184,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.llm_temperature, 0.7)
         self.assertEqual(instructions.llm_error, "LLM kaputt.")
         self.assertEqual(instructions.llm_missing_key, "LLM-Key fehlt.")
+        self.assertEqual(instructions.llm_reset, "LLM-Reset.")
         self.assertEqual(instructions.openai_model, "gpt-5.5")
         self.assertEqual(instructions.openai_service_tier, "flex")
         self.assertEqual(instructions.openai_rule_file, "Analyse.md")

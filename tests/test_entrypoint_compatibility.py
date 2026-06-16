@@ -521,7 +521,8 @@ def test_runtime_status_runtime_profile_overrides_instruction_profile(monkeypatc
         "llm=Demo/telegram:1 provider=litellm model=huggingface/mistralai/Mistral-7B-Instruct-v0.3 "
         "status=missing_key profile=hf_mistral api_key=none"
     ) in captured.out
-    assert "local_ollama" not in captured.out
+    llm_line = next(line for line in captured.out.splitlines() if line.startswith("llm=Demo/telegram:1 "))
+    assert "local_ollama" not in llm_line
 
 
 def test_runtime_status_uses_instruction_llm_api_key_env_for_direct_remote_provider(monkeypatch, capsys, tmp_path) -> None:
@@ -615,9 +616,16 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=degraded purpose=structured_decision base_url=http://127.0.0.1:11434 "
-        "api_key=none fallback_models=1 fallback_api_key=missing remote_fallback=enabled"
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "status=configured purpose=structured_decision api_key=none "
+        "fallback_models=1 fallback_profile=local_ollama "
+        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
+        "remote_fallback=enabled"
+    ) in captured.out
+    assert (
+        "decision=structured_decision provider=hf_pool model=pool:default "
+        "status=configured profile=hf_pool_structured fallback_profile=local_ollama "
+        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
 
 
@@ -639,9 +647,11 @@ def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, caps
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 "
-        "api_key=none fallback_models=1 fallback_api_key=configured remote_fallback=enabled"
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "status=configured purpose=structured_decision api_key=none "
+        "fallback_models=1 fallback_profile=local_ollama "
+        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
+        "remote_fallback=enabled"
     ) in captured.out
     assert "groq-secret" not in captured.out
 
@@ -1020,8 +1030,8 @@ def test_runtime_status_runtime_purpose_overrides_instruction_remote_profile(mon
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
-        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11434 api_key=none"
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "status=configured purpose=structured_decision api_key=none fallback_models=1"
     ) in captured.out
     assert "profile=hf_mistral" not in captured.out
     assert calls == ["http://127.0.0.1:11434/api/tags"]
@@ -1109,7 +1119,7 @@ def test_runtime_status_checks_ollama_for_local_purpose_route(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
-    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b status=configured purpose=structured_decision" in captured.out
+    assert "llm=Demo/telegram:1 provider=hf_pool model=pool:default status=configured purpose=structured_decision" in captured.out
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 
@@ -1151,7 +1161,7 @@ def test_runtime_status_purpose_route_uses_runtime_base_url_override_for_llm_and
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11556/api/tags"]
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
         "status=configured purpose=structured_decision base_url=http://127.0.0.1:11556/api api_key=none"
     ) in captured.out
     assert "ollama=127.0.0.1:11556 status=reachable models=llama3.1:8b" in captured.out

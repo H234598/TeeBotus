@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.profiles import (
     LLMProfile,
     LLMRoute,
@@ -16,7 +17,7 @@ from TeeBotus.llm.profiles import (
     load_llm_routing,
     select_llm_route,
 )
-from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient
+from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient, normalize_llm_provider
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 
 
@@ -38,6 +39,15 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         model="huggingface/mistralai/Mistral-7B-Instruct-v0.3",
         api_key_env="HUGGINGFACE_API_KEY",
     )
+    assert profiles["hf_pool_default"] == LLMProfile(
+        name="hf_pool_default",
+        provider="hf_pool",
+        model="pool:default",
+        api_key_env="",
+    )
+    assert profiles["hf_pool_structured"].provider == "hf_pool"
+    assert profiles["hf_pool_quality"].provider == "hf_pool"
+    assert profiles["hf_pool_bibliothekar"].provider == "hf_pool"
     assert profiles["groq_fast"].api_key_env == "GROQ_API_KEY"
     assert profiles["groq_fast"].provider == "litellm"
     assert profiles["groq_fast"].model.startswith("groq/")
@@ -49,10 +59,16 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     )
     assert profiles["openai_premium"].provider == "openai"
     assert profiles["openai_premium"].api_key_env == "OPENAI_API_KEY"
-    assert routing["structured_decision"].profile == "local_ollama"
-    assert routing["structured_decision"].fallback == "groq_fast"
+    assert routing["structured_decision"].profile == "hf_pool_structured"
+    assert routing["structured_decision"].fallback == "local_ollama"
     assert routing["hard_reasoning"].profile == "openai_premium"
     assert routing["hard_reasoning"].fallback == "gemini_flash"
+
+
+def test_normalize_llm_provider_accepts_hf_pool_aliases() -> None:
+    assert normalize_llm_provider("hf_pool") == "hf_pool"
+    assert normalize_llm_provider("hfpool") == "hf_pool"
+    assert normalize_llm_provider("huggingface-pool") == "hf_pool"
 
 
 def test_route_selection_blocks_remote_fallback_by_default() -> None:
@@ -280,6 +296,17 @@ def test_runtime_text_client_direct_provider_overrides_instruction_profile() -> 
     assert client.api_base == "http://127.0.0.1:11434"
 
 
+def test_runtime_text_client_builds_hf_pool_provider_for_explicit_profile() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="hf_pool_default",
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert client.pool_name == "default"
+
+
 def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_profile="hf_mistral"),
@@ -287,10 +314,12 @@ def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
         purpose="structured_decision",
     )
 
-    assert isinstance(client, LiteLLMTextClient)
-    assert client.provider == "litellm"
-    assert client.model == "ollama_chat/llama3.1:8b"
-    assert client.api_base == "http://127.0.0.1:11434"
+    assert isinstance(client, HFPoolProvider)
+    assert client.pool_name == "default"
+    assert client.purpose == "structured_decision"
+    assert isinstance(client.fallback_client, LiteLLMTextClient)
+    assert client.fallback_client.provider == "litellm"
+    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
 
 
 def test_runtime_text_client_call_uses_runtime_generation_overrides(monkeypatch) -> None:
@@ -396,14 +425,17 @@ def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider
         purpose="Structured Decision",
     )
 
-    assert isinstance(client, LiteLLMTextClient)
-    assert client.provider == "litellm"
-    assert client.model == "ollama_chat/llama3.1:8b"
-    assert client.api_base == "http://127.0.0.1:11434"
-    assert client.fallback_models == ()
+    assert isinstance(client, HFPoolProvider)
+    assert client.pool_name == "default"
+    assert client.purpose == "structured_decision"
+    assert isinstance(client.fallback_client, LiteLLMTextClient)
+    assert client.fallback_client.provider == "litellm"
+    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert client.fallback_client.api_base == "http://127.0.0.1:11434"
+    assert client.fallback_client.fallback_models == ()
 
 
-def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() -> None:
+def test_runtime_text_client_purpose_router_uses_local_fallback_by_default() -> None:
     blocked = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
@@ -416,10 +448,12 @@ def test_runtime_text_client_purpose_router_requires_explicit_remote_fallback() 
         allow_remote_fallback="yes",
     )
 
-    assert isinstance(blocked, LiteLLMTextClient)
-    assert blocked.fallback_models == ()
-    assert isinstance(allowed, LiteLLMTextClient)
-    assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
+    assert isinstance(blocked, HFPoolProvider)
+    assert isinstance(blocked.fallback_client, LiteLLMTextClient)
+    assert blocked.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert isinstance(allowed, HFPoolProvider)
+    assert isinstance(allowed.fallback_client, LiteLLMTextClient)
+    assert allowed.fallback_client.model == "ollama_chat/llama3.1:8b"
 
 
 def test_runtime_text_client_purpose_route_uses_runtime_base_url_override() -> None:
@@ -430,9 +464,10 @@ def test_runtime_text_client_purpose_route_uses_runtime_base_url_override() -> N
         api_base="http://127.0.0.1:11556/api",
     )
 
-    assert isinstance(client, LiteLLMTextClient)
-    assert client.model == "ollama_chat/llama3.1:8b"
-    assert client.api_base == "http://127.0.0.1:11556/api"
+    assert isinstance(client, HFPoolProvider)
+    assert isinstance(client.fallback_client, LiteLLMTextClient)
+    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert client.fallback_client.api_base == "http://127.0.0.1:11556/api"
 
 
 def test_runtime_text_client_route_builder_filters_remote_fallback_defensively(monkeypatch) -> None:
@@ -468,14 +503,12 @@ def test_runtime_text_client_route_builder_filters_remote_fallback_defensively(m
     assert allowed.fallback_models == ("groq/llama-3.1-8b-instant",)
 
 
-def test_runtime_text_client_purpose_router_passes_fallback_profile_api_key(monkeypatch) -> None:
+def test_runtime_text_client_purpose_router_uses_local_fallback_when_hf_pool_unavailable(monkeypatch) -> None:
     calls: list[tuple[str, str]] = []
 
     def completion(**kwargs):
         model = str(kwargs["model"])
         calls.append((model, str(kwargs.get("api_key") or "")))
-        if model == "ollama_chat/llama3.1:8b":
-            raise RuntimeError("primary down")
         return {"id": "fallback-ok", "choices": [{"message": {"content": "Fallback Antwort"}}]}
 
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
@@ -483,15 +516,13 @@ def test_runtime_text_client_purpose_router_passes_fallback_profile_api_key(monk
         instructions=BotInstructions(),
         openai_client=None,
         purpose="structured_decision",
-        allow_remote_fallback=True,
-        env={"GROQ_API_KEY": "groq-secret"},
     )
 
-    assert isinstance(client, LiteLLMTextClient)
+    assert isinstance(client, HFPoolProvider)
     response = client.create_reply("Ping", BotInstructions(), None)
 
     assert response.text == "Fallback Antwort"
-    assert calls == [("ollama_chat/llama3.1:8b", ""), ("groq/llama-3.1-8b-instant", "groq-secret")]
+    assert calls == [("ollama_chat/llama3.1:8b", "")]
 
 
 def test_runtime_text_client_route_passes_fallback_profile_base_url(monkeypatch) -> None:

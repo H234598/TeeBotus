@@ -151,7 +151,7 @@ def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
     assert ok
-    assert "profiles=local_ollama,hf_mistral,groq_fast,gemini_flash,openai_premium" in message
+    assert "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,gemini_flash,openai_premium" in message
 
 
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:

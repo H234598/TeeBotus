@@ -32,6 +32,26 @@ class WarningFallbackAccountMemoryBackend:
             self._sync_entries_from_fallback,
         )
 
+    def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, Any]]:
+        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
+        if not requested_ids:
+            return []
+
+        def callback(backend: Any) -> list[dict[str, Any]]:
+            read_by_ids = getattr(backend, "read_entries_by_ids", None)
+            if callable(read_by_ids):
+                rows = read_by_ids(account_id, requested_ids)
+            else:
+                rows = backend.read_entries(account_id)
+            entries_by_id = {
+                str(row.get("id") or "").strip(): row
+                for row in rows
+                if isinstance(row, dict) and str(row.get("id") or "").strip()
+            }
+            return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
+
+        return self._read("read_entries", account_id, callback, self._sync_entries_from_fallback)
+
     def write_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         self._write(
             "write_entries",

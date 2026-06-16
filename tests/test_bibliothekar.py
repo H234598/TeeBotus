@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import zipfile
+from pathlib import Path
 
 from TeeBotus.instructions import BotInstructions, parse_instructions
 from TeeBotus.openai_client import OpenAIResponse
@@ -9,7 +10,14 @@ from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegr
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore, LIBRARY_SCHEMA_VERSION
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
-from TeeBotus.runtime.bibliothekar_service import BibliothekarQuery, BibliothekarService, HaystackBibliothekarBackend, LocalBibliothekarBackend, check_bibliothekar_service
+from TeeBotus.runtime.bibliothekar_service import (
+    BibliothekarQuery,
+    BibliothekarService,
+    HaystackBibliothekarBackend,
+    LlamaIndexBibliothekarBackend,
+    LocalBibliothekarBackend,
+    check_bibliothekar_service,
+)
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
@@ -230,10 +238,16 @@ def test_bibliothekar_service_factory_uses_instruction_backend(tmp_path):
             bibliothekar_qdrant_url="http://localhost:6334",
         ),
     )
+    llamaindex = BibliothekarService.from_instructions(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="llamaindex"),
+    )
 
     assert isinstance(local.backend, LocalBibliothekarBackend)
     assert isinstance(haystack.backend, HaystackBibliothekarBackend)
     assert isinstance(qdrant.backend, HaystackBibliothekarBackend)
+    assert isinstance(llamaindex.backend, LlamaIndexBibliothekarBackend)
     assert haystack.collection == "therapy_books"
     assert qdrant.collection == "therapy_books"
     assert qdrant.backend.qdrant_url == "http://localhost:6334"
@@ -1111,6 +1125,105 @@ def test_haystack_backend_search_falls_back_to_local_store_when_optional_depende
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
+def test_llamaindex_backend_uses_fake_query_engine_chunks(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeQueryEngine:
+        def __init__(self, store):
+            store.rebuild()
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+            self.queries = []
+
+        def search(self, query_text):
+            self.queries.append(query_text)
+            return self.chunks
+
+    created = []
+
+    def factory(store):
+        engine = FakeQueryEngine(store)
+        created.append(engine)
+        return engine
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=factory,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert created[0].queries == ["Therapie"]
+
+
+def test_llamaindex_backend_accepts_chat_engine_source_nodes(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeNode:
+        def __init__(self, chunk):
+            self.text = chunk["text"]
+            self.metadata = {key: value for key, value in chunk.items() if key != "text"}
+
+    class FakeSourceNode:
+        def __init__(self, chunk):
+            self.node = FakeNode(chunk)
+
+    class FakeChatResponse:
+        def __init__(self, chunks):
+            self.source_nodes = [FakeSourceNode(chunk) for chunk in chunks]
+
+    class FakeChatEngine:
+        def __init__(self, store):
+            store.rebuild()
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+            self.queries = []
+
+        def chat(self, query_text):
+            self.queries.append(query_text)
+            return FakeChatResponse(self.chunks)
+
+    created = []
+
+    def factory(store):
+        engine = FakeChatEngine(store)
+        created.append(engine)
+        return engine
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=factory,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert created[0].queries == ["Therapie"]
+
+
+def test_llamaindex_backend_falls_back_to_local_when_optional_dependency_missing(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: False)
+    backend = LlamaIndexBibliothekarBackend(instance_name="Depressionsbot", instances_dir=tmp_path / "instances")
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
 def test_haystack_backend_detects_installed_qdrant_haystack_integration(tmp_path):
     backend = HaystackBibliothekarBackend(
         instance_name="Depressionsbot",
@@ -1611,6 +1724,43 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     query_output = capsys.readouterr().out
     assert "Depressionsbot: backend=local selected=1" in query_output
     assert "therapie.txt" in query_output
+
+
+def test_bibliothekar_cli_harvest_gates_source_before_ingest(tmp_path, capsys):
+    source = tmp_path / "quelle.txt"
+    source.write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "--json",
+                "harvest",
+                str(source),
+                "--title",
+                "Therapiequelle",
+                "--license",
+                "private",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    row = payload["results"][0]
+    stored_path = Path(row["stored_path"])
+    assert row["route"] == "accepted"
+    assert row["accepted_for_ingest"] is True
+    assert stored_path.parent.name == "accepted"
+    assert stored_path.exists()
+    assert source.exists()
 
 
 def test_bibliothekar_cli_status_reports_haystack_target_in_text_and_json(tmp_path, capsys, monkeypatch):

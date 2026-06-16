@@ -102,7 +102,7 @@ class TeeBotusEngine:
     """Channel-neutral first stage engine for account/registration and built-in commands.
 
     Telegram, Signal, and Matrix use this engine as their channel-neutral
-    baseline so configured replies, OpenAI text/voice handling, identity-critical
+    baseline so configured replies, text LLM and OpenAI media handling, identity-critical
     commands, and YouTube transcript handling share the same behavior.
     """
 
@@ -240,7 +240,7 @@ class TeeBotusEngine:
             )
         if command == "/reset":
             self.state.reset_previous_response_id(event.instance, result.account_id)
-            return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().openai_reset)], handled=True)
+            return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().llm_reset)], handled=True)
         if command == "/voice":
             return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
         if command == "/voicemodel":

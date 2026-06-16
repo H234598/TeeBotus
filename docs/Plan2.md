@@ -634,10 +634,11 @@ Neu:
 - temperature: 0.7
 - missing_key: Das Textmodell ist aktiviert, aber der benoetigte API-Key fehlt.
 - error: Ich kann das Textmodell gerade nicht erreichen.
+- reset: Der Text-LLM-Kontext fuer diesen Chat wurde geloescht.
 ```
 
-`missing_key` und `error` im `## LLM`-Block sind die neutralen
-Text-LLM-Fehlertexte. `## OpenAI - missing_key/error` bleibt Legacy und
+`missing_key`, `error` und `reset` im `## LLM`-Block sind die neutralen
+Text-LLM-Antworttexte. `## OpenAI - missing_key/error/reset` bleibt Legacy und
 setzt die neutralen Texte ebenfalls, solange `## LLM` sie nicht ueberschreibt.
 OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription
 behalten eigene Fehlertexte.
@@ -802,6 +803,8 @@ class LiteLLMTextClient:
 ### 9.2 Wichtig: previous_response_id
 
 OpenAI Responses API kann `previous_response_id`. Providerneutrale Chat-Completions können das meist nicht.
+Persistiert wird dieser Text-LLM-Kontext accountbezogen in `LLM_State.json`;
+`OpenAI_State.json` bleibt nur Legacy-Migrationsinput.
 
 Kurzfristig:
 
@@ -1949,8 +1952,9 @@ TeeBotus.bot bleibt vorerst der stabile öffentliche Einstieg. Telegram liegt ak
 Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Für Textantworten läuft der Zugriff inzwischen über `llm_client`/Runtime-LLM-Factory; `openai_client` bleibt als Legacy-Alias und Spezialclient für OpenAI-spezifische Funktionen erhalten.
 
 Der OpenAI-Client ist weiter ein Spezialclient, nicht nur ein simpler Chat-Aufruf: Responses API, Image Generation, Tool Calls, Speech und Transcription hängen dort zusammen.
-Auch BotInstructions sind noch stark openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image, Transcription, Fehlertexte und Reset-Texte laufen unter OpenAI-Namen.
+BotInstructions sind noch teilweise openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image und Transcription laufen weiter unter OpenAI-Namen; Text-LLM-Fehler-, Missing-Key- und Reset-Texte haben inzwischen neutrale `llm_*`-Felder mit OpenAI-Legacy-Bruecke.
 Die Runtime-Konfiguration trägt pro Account weiter `openai_api_key` als Legacy-Pfad, hat aber zusätzlich die neutralen `llm_*` Felder wie `llm_provider`, `llm_model`, `llm_base_url`, `llm_profile`, `llm_purpose` und Fallback-/Timeout-Optionen.
+Persistenter Text-LLM-State wird inzwischen als `LLM_State.json` geschrieben; vorhandenes `OpenAI_State.json` wird beim Lesen/Mergen migriert.
 
 Wichtig: `pyproject.toml` nutzt setuptools, dynamische Version über `TeeBotus.__version__`, erzwingt aktuell `requires-python = ">=3.11"` und enthält die Plan2-Extras `dev`, `llm`, `rag`, `agents`, `tools` plus Scripts für `teebotus-bibliothekar`, `teebotus-proactive`, `teebotus-proactive-review`, `teebotus-proactive-systemd`, `teebotus-systemd` und `teebotus-qdrant-systemd`.
 

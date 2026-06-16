@@ -10,6 +10,26 @@ profiles:
     model: huggingface/mistralai/Mistral-7B-Instruct-v0.3
     api_key_env: HUGGINGFACE_API_KEY
 
+  hf_pool_default:
+    provider: hf_pool
+    model: pool:default
+    api_key_env: ""
+
+  hf_pool_structured:
+    provider: hf_pool
+    model: pool:default
+    api_key_env: ""
+
+  hf_pool_quality:
+    provider: hf_pool
+    model: pool:default
+    api_key_env: ""
+
+  hf_pool_bibliothekar:
+    provider: hf_pool
+    model: pool:default
+    api_key_env: ""
+
   groq_fast:
     provider: litellm
     model: groq/llama-3.1-8b-instant

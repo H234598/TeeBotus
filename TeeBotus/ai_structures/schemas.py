@@ -121,6 +121,36 @@ class BibliothekarQueryDecision(BaseModel):
         return str(value or "").strip()
 
 
+class SourceQualityDecision(BaseModel):
+    status: Literal["trusted", "usable", "weak", "reject", "needs_review"]
+    reason: str = Field(default="", max_length=500)
+    requires_human_review: bool
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    @field_validator("reason")
+    @classmethod
+    def _strip_reason(cls, value: str) -> str:
+        return str(value or "").strip()
+
+
+class ToolSafetyDecision(BaseModel):
+    allowed: bool
+    requires_confirmation: bool
+    reason: str = Field(default="", max_length=500)
+    risk_level: Literal["low", "medium", "high", "blocked"]
+
+    @field_validator("reason")
+    @classmethod
+    def _strip_reason(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @model_validator(mode="after")
+    def _keep_blocked_tools_denied(self) -> "ToolSafetyDecision":
+        if self.risk_level == "blocked" and self.allowed:
+            raise ValueError("blocked tools must not be allowed")
+        return self
+
+
 PROACTIVE_TOOL_ARGUMENTS: dict[str, dict[str, set[str]]] = {
     "proactive_create_memory": {
         "required": {"kind", "text"},

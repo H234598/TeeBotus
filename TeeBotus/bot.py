@@ -99,10 +99,12 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.core.status import account_memory_index_health_lines, mcp_tool_runtime_status_line
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
+        from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
         from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
+        from TeeBotus.runtime.qdrant import check_qdrant_health, format_qdrant_status_line
         from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
         from TeeBotus.runtime.telegram_runner import check_telegram_accounts
     except Exception as exc:  # pragma: no cover - defensive only
@@ -136,6 +138,23 @@ def _runtime_status(argv: Sequence[str]) -> int:
             print(f"ollama={_sanitize_status_url(health.target)} status={state} models={_sanitize_status_text(models)}")
         else:
             print(f"ollama={_sanitize_status_url(health.target)} status={state} error={_sanitize_status_text(health.error)}")
+    try:
+        for line in format_hf_pool_status_lines(check_hf_pool()):
+            print(_sanitize_status_text(line))
+    except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional hf_pool.
+        print(f"hf_pool=default status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+    print(_runtime_status_decision_line("structured_decision"))
+    try:
+        from TeeBotus.runtime.crew_pilots import crew_pilot_status_lines
+
+        for line in crew_pilot_status_lines():
+            print(_sanitize_status_text(line))
+    except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional CrewAI planning.
+        print(f"crew_pilot=all status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+    try:
+        print(_sanitize_status_text(format_qdrant_status_line(check_qdrant_health())))
+    except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional Qdrant.
+        print(f"qdrant=local status=invalid fallback=keyword_memory_search error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
     for health in check_signal_services(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
@@ -284,6 +303,9 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
     )
     if fallback_count:
         detail += f" fallback_models={fallback_count}"
+        fallback_identity = _status_route_fallback_identity(account, purpose=purpose, route_mode=route_mode)
+        if fallback_identity:
+            detail += f" {fallback_identity}"
     if route_fallback_api_key_env and fallback_count:
         detail += f" fallback_api_key={'configured' if fallback_key_configured else 'missing'}"
     elif direct_fallback_key_status and fallback_count:
@@ -303,6 +325,27 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
     if route_error:
         detail += f" error={_sanitize_status_text(route_error)}"
     return detail
+
+
+def _status_route_fallback_identity(account: Any, *, purpose: str, route_mode: str) -> str:
+    if route_mode != "purpose" or not purpose:
+        return ""
+    allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+
+        route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
+    except Exception:
+        return ""
+    if not route.fallback_model:
+        return ""
+    parts = [
+        f"fallback_profile={route.fallback_profile_name or '<direct>'}",
+        f"fallback_model={route.fallback_model}",
+    ]
+    if route.fallback_base_url:
+        parts.append(f"fallback_base_url={_sanitize_status_url(route.fallback_base_url)}")
+    return _sanitize_status_text(" ".join(parts))
 
 
 def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple[str, str, str, int, str, str, str, str]:
@@ -348,6 +391,35 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
         return provider, model, base_url, 0, "", "", f"{type(exc).__name__}: {exc}", "broken"
     return provider, model, base_url, 0, "", "", "", "direct"
+
+
+def _runtime_status_decision_line(purpose: str) -> str:
+    purpose_name = str(purpose or "structured_decision").strip() or "structured_decision"
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+
+        route = select_llm_route(purpose_name)
+    except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose bad optional routing config.
+        return (
+            f"decision={purpose_name} provider=<unknown> model=<unknown> "
+            f"status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}"
+        )
+    detail = (
+        f"decision={route.purpose} provider={route.provider} model={route.model} "
+        f"status=configured profile={route.profile_name}"
+    )
+    if route.base_url:
+        detail += f" base_url={_sanitize_status_url(route.base_url)}"
+    if route.api_key_env:
+        detail += f" api_key_env={_sanitize_status_text(route.api_key_env)}"
+    if route.fallback_profile_name:
+        detail += f" fallback_profile={route.fallback_profile_name} fallback_model={route.fallback_model}"
+        if route.fallback_base_url:
+            detail += f" fallback_base_url={_sanitize_status_url(route.fallback_base_url)}"
+        if route.fallback_api_key_env:
+            configured = bool(os.environ.get(route.fallback_api_key_env, "").strip())
+            detail += f" fallback_api_key={'configured' if configured else 'missing'}"
+    return _sanitize_status_text(detail)
 
 
 def _status_value(value: object, *, default: str) -> str:

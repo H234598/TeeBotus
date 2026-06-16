@@ -953,7 +953,7 @@ def test_engine_does_not_pass_persisted_openai_response_id_to_litellm_client(tmp
     assert litellm_client.previous_ids == [None]
 
 
-def test_engine_reset_clears_previous_openai_response_id(tmp_path):
+def test_engine_reset_clears_previous_text_llm_response_id(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
             self.previous_ids: list[str | None] = []
@@ -963,7 +963,7 @@ def test_engine_reset_clears_previous_openai_response_id(tmp_path):
             return OpenAIResponse("Antwort.", "resp-1", None)
 
     client = FakeOpenAIClient()
-    instructions = BotInstructions(openai_enabled=True, openai_reset="Kontext geloescht.")
+    instructions = BotInstructions(openai_enabled=True, llm_reset="Kontext geloescht.")
     engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
     identity = telegram_identity_key(1)
 

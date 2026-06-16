@@ -1250,7 +1250,7 @@ def _process_text_message(
 
     if text and _normalize_command(text) == "/reset":
         chat_state.reset(chat_id)
-        reply = _with_first_contact_intro(instructions.openai_reset, first_contact, bot_identity)
+        reply = _with_first_contact_intro(instructions.llm_reset, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
@@ -1356,7 +1356,7 @@ def _process_text_message(
                 chat_state.get_previous_response_id(chat_id),
             )
         except OpenAIAPIError as exc:
-            LOGGER.error("OpenAI request failed: %s", exc)
+            LOGGER.error("Text LLM request failed: %s", exc)
             reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
             _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
             _send_tracked_message(api, chat_state, chat_id, reply)
@@ -4148,16 +4148,16 @@ def _send_youtube_transcript_to_openai_pipeline(
             chat_state.get_previous_response_id(chat_id),
         )
     except OpenAIAPIError as exc:
-        LOGGER.error("OpenAI request failed after YouTube transcript: %s", exc)
+        LOGGER.error("Text LLM request failed after YouTube transcript: %s", exc)
         reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
         try:
             _send_tracked_message(api, chat_state, chat_id, reply)
         except TelegramAPIError as send_exc:
-            LOGGER.warning("Telegram request failed while reporting OpenAI transcript error: %s", send_exc)
+            LOGGER.warning("Telegram request failed while reporting text LLM transcript error: %s", send_exc)
         _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions, api)
         return
     except TelegramAPIError as exc:
-        LOGGER.warning("Telegram request failed during YouTube transcript OpenAI pipeline: %s", exc)
+        LOGGER.warning("Telegram request failed during YouTube transcript text LLM pipeline: %s", exc)
         return
 
     chat_state.set_previous_response_id(chat_id, openai_response.response_id)

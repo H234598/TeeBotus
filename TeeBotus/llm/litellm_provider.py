@@ -220,6 +220,8 @@ def normalize_llm_provider(value: str) -> str:
         return "ollama"
     if normalized in {"huggingface", "hugging_face", "hf"}:
         return "huggingface"
+    if normalized in {"hf_pool", "hfpool", "huggingface_pool", "hugging_face_pool"}:
+        return "hf_pool"
     if normalized in {"groq"}:
         return "groq"
     if normalized in {"gemini", "google", "google_ai"}:

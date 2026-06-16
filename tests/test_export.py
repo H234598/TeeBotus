@@ -121,6 +121,8 @@ def test_export_from_store_decrypts_structured_memory(tmp_path, monkeypatch):
     payload = json.loads(result.data.decode("utf-8"))
     assert payload["files"]["User_Memory_Index.json"]["topic"] == "encrypted tea"
     assert payload["files"]["User_Memory_Entries.jsonl"] == [{"entry": "encrypted hello"}]
+    assert payload["files"]["LLM_State.json"] == {}
+    assert "OpenAI_State.json" not in payload["files"]
     assert payload["files"]["Agent_State.json"] == {}
     assert payload["files"]["Proactive_Outbox.jsonl"] == []
     assert payload["files"]["Proactive_Audit.jsonl"] == []

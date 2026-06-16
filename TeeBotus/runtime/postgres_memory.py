@@ -103,6 +103,55 @@ class PostgresAccountMemoryBackend:
             )
         return entries
 
+    def read_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
+        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
+        if not requested_ids:
+            return []
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
+        self._ensure_schema()
+        placeholders = ",".join("%s" for _ in requested_ids)
+        with self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT memory_id, payload_nonce, payload_ciphertext
+                FROM teebotus_memory_entries
+                WHERE instance_name = %s AND account_id = %s AND memory_id IN ({placeholders})
+                ORDER BY ordinal ASC, created_at ASC, memory_id ASC
+                """,
+                (self.instance_name, account_id, *requested_ids),
+            ).fetchall()
+        entries: list[dict[str, Any]] = []
+        skipped = 0
+        first_skipped_id = ""
+        first_error = ""
+        for row in rows:
+            memory_id = str(row[0])
+            try:
+                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+            except AccountStoreError as exc:
+                skipped += 1
+                if not first_skipped_id:
+                    first_skipped_id = memory_id
+                    first_error = str(exc)
+        if skipped:
+            self.last_entry_read_error = first_error
+            self.last_entry_skipped = skipped
+            LOGGER.critical(
+                "PostgreSQL account-memory skipped corrupt rows instance=%s account=%s skipped=%s first_memory_id=%s error=%s",
+                self.instance_name,
+                account_id,
+                skipped,
+                first_skipped_id,
+                first_error,
+            )
+        entries_by_id = {
+            str(entry.get("id") or "").strip(): entry
+            for entry in entries
+            if isinstance(entry, dict) and str(entry.get("id") or "").strip()
+        }
+        return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
+
     def write_entries(self, account_id: str, rows: Iterable[dict[str, Any]]) -> None:
         self._ensure_schema()
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]

@@ -10,7 +10,7 @@ TeeBotus ist ein kleiner Python-Bot mit additiven Runtime-Slots fuer Telegram, S
 - `/status` zeigt Laufstatus, TeeBotus-Version, GitHub-Commithistorie, Memory-Groesse und Userfile-Verschluesselung des anfragenden Nutzers
 - `/history` zeigt GitHub-Repo, Commits und lokale Release-Tags. Fragen wie `Was ist neu?`, `Programmhistorie`, `Commits`, `Changelog` oder `Programmänderungen` nutzen denselben Offline-Pfad.
 - `/chatid` zeigt die aktuelle Chat-ID
-- `/reset` loescht den OpenAI-Verlauf fuer den aktuellen Chat
+- `/reset` loescht den Text-LLM-Kontext fuer den aktuellen Chat
 - `/reset_memorys` fragt nach und loescht danach nur die eigenen User-Memory-Eintraege
 - frei formulierte Bitten wie `loesch meine Erinnerungen` nutzen denselben bestaetigten User-Memory-Reset
 - `/Call_a_Teladi` fragt nach einer Emergency Message und leitet die naechste Telegram-Nachricht an Teladi weiter
@@ -241,7 +241,7 @@ Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JS
 python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
 ```
 
-Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird. Fuer Regressionen kann ein frueherer JSON-Lauf als Baseline verglichen werden:
+Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, die lokale Retrieval-Matrix fuer e5-small/e5-base/bge-m3, Reranker und Local/LlamaIndex/Haystack, SourceHarvester-Quality-Gates, LLM-Router, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird. Fuer Regressionen kann ein frueherer JSON-Lauf als Baseline verglichen werden:
 
 ```bash
 python3 scripts/run_benchmarks.py --quick --baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json --output /home/teladi/Downloads/teebotus-benchmarks-compare.md --json-output /home/teladi/Downloads/teebotus-benchmarks-compare.json
@@ -413,6 +413,16 @@ Die zentralen Profil-Dateien sind:
 
 Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama, Hugging Face, Groq, Gemini und OpenAI-kompatible LiteLLM-Modelle. Remote-Fallbacks sind standardmaessig aus. Ein Fallback auf ein Remote-Profil wird nur genutzt, wenn der jeweilige Codepfad explizit `allow_remote_fallback=True` setzt.
 
+Zusaetzlich gibt es einen optionalen `hf_pool`-Provider unter `TeeBotus/llm/hf_pool/`. Er ist lazy, non-fatal und nicht Default: fehlende oder deaktivierte `config/hf_pool.yaml`-Ziele erscheinen im Doctor/Runtime-Status, brechen aber den Botstart nicht. Fallbacks greifen nur, wenn der Router sie explizit durch `allow_remote_fallback=True` erlaubt; Standardtests nutzen nur den MockExecutor. `OpenAICompatibleHFPoolExecutor` kann OpenAI-kompatible HF-Chat-Completions ausfuehren, ist aber nur per expliziter Injektion aktiv und bringt Token-Redaction, Cooldown-State und Usage Events mit. Live-Hugging-Face-Tests muessen explizit aktiviert werden.
+Die vorbereitete, deaktivierte Modellmatrix deckt `normal_chat`,
+`structured_decision`, `psychology_explainer`, `bibliothekar_answer` und
+`summarizer` ab.
+
+```bash
+python3 -m TeeBotus.llm.hf_pool.doctor
+python3 -m TeeBotus.llm.hf_pool.doctor --live
+```
+
 Zur Laufzeit kann ein konkretes Profil ueber `profile: ...` in `Bot_Verhalten.md` oder ueber `TEEBOTUS_LLM_PROFILE_<INSTANZ>` und kanalspezifische Varianten gesetzt werden. Telegram, Signal und Matrix bauen ihren Text-LLM-Client dann aus diesem Profil; ohne Profil bleibt das bisherige direkte Provider-/OpenAI-Verhalten erhalten.
 
 Die effektive Reihenfolge ist bewusst eindeutig: ein explizites Runtime-Profil (`TEEBOTUS_LLM_PROFILE...`) gewinnt immer. Wenn kein Runtime-Profil gesetzt ist, gewinnen explizite Runtime-Routen (`TEEBOTUS_LLM_PURPOSE...`, `TEEBOTUS_LLM_PROVIDER...`, `TEEBOTUS_LLM_MODEL...`) gegen ein Profil aus `Bot_Verhalten.md`. Nur wenn keine solche Runtime-Route gesetzt ist, wird `profile: ...` aus `Bot_Verhalten.md` verwendet. Danach folgen direkte `provider`-/`model`-Werte aus `Bot_Verhalten.md` und zuletzt der OpenAI-Legacy-Pfad.
@@ -431,13 +441,19 @@ Die aktiven Instanzwerte kommen aus `Bot_Verhalten.md` oder Environment. Neue ne
 - temperature: 0.7
 - missing_key: Das Textmodell ist aktiviert, aber der benoetigte API-Key fehlt.
 - error: Ich kann das Textmodell gerade nicht erreichen.
+- reset: Der Text-LLM-Kontext fuer diesen Chat wurde geloescht.
 ```
 
-`missing_key` und `error` im `## LLM`-Block steuern nur Text-LLM-Antworten. OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription behalten ihre eigenen `openai_*`-/`voice_*`-/`image_*`-/`transcription_*`-Texte. Alte `## OpenAI - missing_key/error`-Eintraege bleiben kompatibel und setzen die Text-LLM-Texte mit, sofern sie nicht im `## LLM`-Block ueberschrieben werden.
+`missing_key`, `error` und `reset` im `## LLM`-Block steuern nur Text-LLM-Antworten und den per `/reset` geloeschten Text-LLM-Kontext. OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription behalten ihre eigenen `openai_*`-/`voice_*`-/`image_*`-/`transcription_*`-Texte. Alte `## OpenAI - missing_key/error/reset`-Eintraege bleiben kompatibel und setzen die Text-LLM-Texte mit, sofern sie nicht im `## LLM`-Block ueberschrieben werden.
 
 Environment-Fallbacks heissen `TEEBOTUS_LLM_ENABLED`, `TEEBOTUS_LLM_PROVIDER`, `TEEBOTUS_LLM_MODEL`, `TEEBOTUS_LLM_PROFILE`, `TEEBOTUS_LLM_PURPOSE`, `TEEBOTUS_LLM_ALLOW_REMOTE_FALLBACK`, `TEEBOTUS_LLM_BASE_URL`, `TEEBOTUS_LLM_API_KEY`, `TEEBOTUS_LLM_TIMEOUT_SECONDS`, `TEEBOTUS_LLM_MAX_OUTPUT_TOKENS` und `TEEBOTUS_LLM_TEMPERATURE`; instanz-, kanal- und slot-spezifische Varianten werden ebenfalls aufgeloest. Alte `openai_*`-Felder bleiben kompatibel.
 
 `TEEBOTUS_LLM_PURPOSE` wird tolerant normalisiert: Gross-/Kleinschreibung ist egal, Leerzeichen und Bindestriche werden zu Unterstrichen. `Structured Decision`, `structured-decision` und `structured_decision` routen also auf denselben Eintrag in `config/llm_routing.yaml`.
+
+`--runtime-status` gibt zusaetzlich eine `decision=structured_decision`-Zeile
+aus. Sie zeigt den typisierten Decision-Provider, das Profil und den effektiven
+Fallback, unabhaengig davon, ob ein einzelner Account gerade explizit mit
+`TEEBOTUS_LLM_PURPOSE` gestartet wird.
 
 Ollama Quickstart:
 
@@ -552,11 +568,13 @@ CLI:
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot status
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot index --source /pfad/zu/buechern --dry-run
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot index --source /pfad/zu/buechern
+python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot harvest /pfad/zu/quelle.pdf --title "Quelle" --license private
 python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depressionsbot query "Was steht zu Schlaf und Aktivierung?" --top-k 3
 python3 -m TeeBotus.bibliothekar --instance Depressionsbot query --source tests/fixtures/books "Schlafhygiene Tagesstruktur" --top-k 3
 python3 -m TeeBotus.bibliothekar --instance Depressionsbot query "System Therapie" --category psychologie --topic schlafhygiene --file therapie --extension txt
 ```
 
+`harvest` schleust lokale Quellen zuerst durch das SourceQuality-Gate, schreibt Manifest und SHA-256-Dedupe und legt die Datei je nach Entscheidung unter `accepted/`, `quarantine/` oder `rejected/` ab; akzeptierte Dateien werden als `accepted_for_ingest` markiert, aber nicht blind in die Hauptbibliothek kopiert.
 `query --source` baut einen temporaeren lokalen Fixture-Index und veraendert die echte Instanz-Bibliothek nicht. Das ist fuer Akzeptanztests und Benchmarkvergleiche gedacht.
 `query` kann mit `--category`, `--topic`/`--keyword`, `--file`/`--relative-path`, `--extension` und `--suffix` auf indexierte Metadaten eingeschraenkt werden; dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend.
 
@@ -574,7 +592,56 @@ python3 -m TeeBotus.bibliothekar --instances-dir instances --instance Depression
 nur an `127.0.0.1:6333`, nutzt das Volume `teebotus-qdrant:/qdrant/storage` und
 verwendet einen gepinnten `qdrant/qdrant`-Image-Tag statt `latest`.
 
-Pydantic-AI/LangGraph optional. Pydantic-Schemas werden nur fuer strukturierte Subtasks genutzt, darunter `IntentDecision`, `MemoryCandidate`, `ReminderDecision`, `BibliothekarQueryDecision` und `ProactiveToolCallDecision`; Slash-Commands bleiben klassische Parser.
+Der allgemeine Qdrant-Sockel ist optional und nicht startkritisch. `TEEBOTUS_QDRANT_URL`
+defaultet auf `http://127.0.0.1:6333`; `--runtime-status` meldet auch ohne
+Bibliothekar-Qdrant-Backend eine Zeile wie
+`qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search`.
+Die vorbereiteten Collection-Namen sind `teebotus_user_memory` und
+`teebotus_bibliothekar_chunks`. Usermemory nutzt die vorhandene lokale
+semantische Cache-Dimension, Bibliothekar-Chunks sind fuer
+`intfloat/multilingual-e5-small` vorbereitet.
+Die Embedding-Schicht liegt unter `TeeBotus.embedding`: `EmbeddingProvider`
+unterstuetzt `embed_text` und Batch-`embed_texts`, `FakeEmbeddingProvider`
+bleibt der lokale Teststandard, `HFEmbeddingProvider` kann per injiziertem
+HTTP-Opener/HF-Endpoint Feature-Extraction oder TEI/OpenAI-aehnliche Embedding-
+Payloads verarbeiten. `KeywordRerankerProvider` und `check_embedding_provider`
+decken den lokalen Reranker-/Health-Sockel ab.
+`TeeBotus.runtime.qdrant_memory.QdrantMemoryIndex` ist ein opt-in Cache:
+AccountStore bleibt die Wahrheit, `index_memory`, `search`, `delete_memory`,
+`delete_account` und `rebuild` schreiben nur Vektoren, Scope-Metadaten und
+Hashes nach Qdrant, keine `user_text`-/`bot_text`-/Keyword-Klartexte.
+`TeeBotus.runtime.memory_search.MemorySearchService` merged lokale
+Keyword-/Metadaten-Kandidaten aus `KeywordMemorySearch` mit optionalen
+Qdrant-Kandidaten aus `QdrantMemorySearch`. Ohne explizite Config bleibt die
+lokale Suche Standard; semantische Qdrant-Suche ist nur mit
+`memory_search.semantic_enabled: true` und `semantic_backend: qdrant` aktiv.
+`TeeBotus.runtime.qdrant_bibliothekar.QdrantBibliothekarIndex` ist der
+entsprechende opt-in Sockel fuer Bibliothekar-Chunks. Er indexiert Testchunks
+mit Fake-Embeddings in Standardtests, haelt `BAAI/bge-m3` als vorbereiteten
+Provider fest und speichert Chunk-Text nur als Hash plus Quellenmetadaten im
+Qdrant-Payload.
+`LlamaIndexBibliothekarBackend` ist ein optionaler Pilot hinter
+`BibliothekarService`: Fake-/Test-Query-Engines koennen zitierfaehige Chunks
+liefern, ohne den lokalen Store zu ersetzen. Neben `search`/`retrieve` werden
+auch typische LlamaIndex-`query`-/`chat`-Responses mit `source_nodes`
+akzeptiert. Wenn LlamaIndex nicht verfuegbar oder die Query-Engine nicht nutzbar
+ist, bleibt `LocalBibliothekarBackend` der Fallback.
+`TeeBotus.runtime.source_quality.SourceQualityPipeline` ist ein lokaler
+Vor-Index-Gate fuer Quellen: Dateityp/Groesse/Metadaten werden deterministisch
+geprueft, ein optionaler NLI-Verifier kann Claims gegen Evidenz klassifizieren,
+und das Resultat routet nach `accepted`, `quarantine` oder `rejected`. Es ist
+kein einzelnes LLM als Wahrheitsrichter und greift noch nicht automatisch in den
+Standard-Bibliothekar ein.
+`TeeBotus.bibliothekar.source_harvester.SourceHarvester` nutzt dieses Gate fuer
+lokale Dateien: Quellen landen mit SHA-256-Dedupe und Manifest zuerst unter
+`accepted/`, `quarantine/` oder `rejected/`; akzeptierte Dateien sind nur als
+`accepted_for_ingest` markiert und werden nicht blind in die Hauptbibliothek
+geschrieben.
+
+Pydantic-AI/LangGraph optional. Pydantic-Schemas werden nur fuer strukturierte Subtasks genutzt, darunter `IntentDecision`, `MemoryCandidate`, `ReminderDecision`, `BibliothekarQueryDecision`, `ToolSafetyDecision`, `SourceQualityDecision` und `ProactiveToolCallDecision`; Slash-Commands bleiben klassische Parser.
+`TeeBotus.decisions` exportiert dieselben Schemas als Plan3-Fassade und liefert
+mit `FakeDecisionModel` einen providerfreien Test-Runner fuer strukturierte
+Entscheidungen. Echte Pydantic-AI-Provider bleiben optional.
 
 ```bash
 python3 -m pip install '.[agents]'
@@ -584,7 +651,19 @@ Qdrant soll lokal auf `127.0.0.1` gebunden bleiben. `qdrant_url` darf nur auf `1
 
 `python3 -m TeeBotus --runtime-status --channels telegram` prueft bei `backend: haystack` die optionalen Haystack/Qdrant-Abhaengigkeiten und die Qdrant-Erreichbarkeit. Bei erreichbarem Backend meldet der Status `store=qdrant target=http://127.0.0.1:6333 status=reachable` plus Dokument-/Chunk-Zahlen aus dem rebuildbaren lokalen Index; bei fehlendem oder nicht erreichbarem Backend meldet er `status=unavailable` oder `status=unreachable` mit Fehlertext.
 
-LangGraph ist nicht der Botkern. Der erste Pilot liegt unter `TeeBotus/runtime/graphs/` und betrifft nur `Bibliothekar Deep Query`. Der Ablauf ist `classify -> retrieve -> rerank -> answer -> citation_check -> fallback`. Ohne installiertes `langgraph` laeuft derselbe serialisierbare State linear weiter. Normale Chatantworten, `/status`, `/help`, `/ping` und einfache Textregeln laufen nicht durch LangGraph.
+LangGraph ist nicht der Botkern. Der erste Pilot liegt unter
+`TeeBotus/runtime/graphs/` und betrifft `Bibliothekar Deep Query`; der Ablauf
+ist `classify -> retrieve -> rerank -> answer -> citation_check -> fallback`.
+Zusaetzlich gibt es einen `SourceHarvester`-Workflow fuer
+`discover -> score -> finalize`, der Quellen nur nach Quality-Gate als
+`ready_for_ingest`, `review_required`, `duplicate`, `rejected` oder `failed`
+markiert. Ohne installiertes `langgraph` laeuft derselbe serialisierbare State
+linear weiter. Normale Chatantworten, `/status`, `/help`, `/ping` und einfache
+Textregeln laufen nicht durch LangGraph.
+CrewAI ist ebenfalls nicht Standard. `TeeBotus.runtime.crew_pilots` beschreibt
+nur geplante Spezialexpeditionen fuer Bibliothekar, SourceQuality und Anki;
+`--runtime-status` zeigt diese als `crew_pilot=... status=planned` mit
+Dependency-Status, ohne normale Antworten umzurouten.
 
 Deep-Query-Pilot:
 
@@ -668,7 +747,7 @@ Jede Instanz hat zusaetzlich ein gemeinsames Arbeitsgedaechtnis im eigenen `data
 
 Dieses Arbeitsgedaechtnis gilt fuer alle User derselben Instanz und darf deshalb keine User-IDs, Namen, Usernames, Chat-IDs, Chat-Titel, Rohzitate aus Usernachrichten oder eindeutig userbezogene Fakten enthalten.
 
-Der Bot legt die Dateien beim Start automatisch an und nutzt vorhandene, ausgewaehlte Eintraege als eigene `Instanz-Arbeitsgedaechtnis`-Sektion im OpenAI-Kontext. Aktuell wird dieses globale Arbeitsgedaechtnis nicht automatisch aus Chats befuellt, weil die genaue Logik noch kuratiert werden muss. Manuell ergaenzte Eintraege werden im JSONL-Log gespeichert; der Index enthaelt Keywords, Recent-Liste und Byte-Positionen fuer gezieltes Lesen.
+Der Bot legt die Dateien beim Start automatisch an und nutzt vorhandene, ausgewaehlte Eintraege als eigene `Instanz-Arbeitsgedaechtnis`-Sektion im Text-LLM-Kontext. Aktuell wird dieses globale Arbeitsgedaechtnis nicht automatisch aus Chats befuellt, weil die genaue Logik noch kuratiert werden muss. Manuell ergaenzte Eintraege werden im JSONL-Log gespeichert; der Index enthaelt Keywords, Recent-Liste und Byte-Positionen fuer gezieltes Lesen.
 
 ## Alle Bots starten
 

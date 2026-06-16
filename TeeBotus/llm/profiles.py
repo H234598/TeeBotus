@@ -12,7 +12,7 @@ from TeeBotus.llm.router import build_text_llm_client, normalize_llm_provider
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE_PATH = PROJECT_ROOT / "config" / "llm_profiles.yaml"
 DEFAULT_ROUTING_PATH = PROJECT_ROOT / "config" / "llm_routing.yaml"
-REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini"})
+REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini", "hf_pool"})
 
 
 @dataclass(frozen=True)
@@ -175,6 +175,7 @@ def build_profiled_text_llm_client(
         fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
         api_base=route.base_url,
+        purpose=route.purpose,
         use_instruction_fallback_models=False,
     )
 

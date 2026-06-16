@@ -41,9 +41,13 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert {
         "account_memory",
         "bibliothekar",
+        "hf_pool",
         "llm_router",
         "pydantic_ai",
         "proactive_agent",
+        "qdrant",
+        "retrieval",
+        "source_harvester",
         "messenger_adapters",
         "transcription_youtube",
         "status_doctor",
@@ -104,15 +108,19 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert fake_graph["details"]["mode"] == "fake_installed_langgraph"
     assert fake_graph["details"]["node_sequence"] == ["classify", "retrieve", "rerank", "answer", "citation_check", "fallback"]
     llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
-    assert llm_router["details"]["runtime_provider"] == "litellm"
-    assert llm_router["details"]["runtime_model"] == "ollama_chat/llama3.1:8b"
+    assert llm_router["details"]["runtime_client"] == "HFPoolProvider"
+    assert llm_router["details"]["runtime_provider"] == "hf_pool"
+    assert llm_router["details"]["runtime_model"] == "pool:default"
+    assert llm_router["details"]["runtime_fallback_client"] == "LiteLLMTextClient"
+    assert llm_router["details"]["runtime_fallback_model"] == "ollama_chat/llama3.1:8b"
     assert llm_router["details"]["memory_candidate_kind"] == "therapy_goal"
-    assert llm_router["details"]["remote_fallback_default_enabled"] is False
-    assert llm_router["details"]["default_fallback_models"] == []
+    assert llm_router["details"]["remote_fallback_default_enabled"] is True
+    assert llm_router["details"]["default_fallback_models"] == ["ollama_chat/llama3.1:8b"]
+    assert llm_router["details"]["default_fallback_profile"] == "local_ollama"
     assert llm_router["details"]["explicit_remote_fallback_enabled"] is True
-    assert llm_router["details"]["explicit_remote_fallback_models"] == ["groq/llama-3.1-8b-instant"]
-    assert llm_router["details"]["explicit_remote_fallback_api_key_env"] == "GROQ_API_KEY"
-    assert llm_router["details"]["explicit_remote_fallback_api_key_mapped"] is True
+    assert llm_router["details"]["explicit_remote_fallback_models"] == ["ollama_chat/llama3.1:8b"]
+    assert llm_router["details"]["explicit_remote_fallback_api_key_env"] == ""
+    assert llm_router["details"]["explicit_remote_fallback_api_key_mapped"] is False
     assert "benchmark-groq-key" not in json.dumps(suite, ensure_ascii=False)
     assert llm_router["details"]["direct_remote_fallback_default_models"] == ["ollama_chat/qwen2.5:7b"]
     assert llm_router["details"]["direct_remote_fallback_allowed_models"] == [
@@ -120,6 +128,40 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "ollama_chat/qwen2.5:7b",
     ]
     assert llm_router["details"]["network_calls"] == 0
+    hf_pool = next(result for result in suite["results"] if result["name"] == "hf_pool_quick_health")
+    assert hf_pool["ok"] is True
+    assert hf_pool["category"] == "hf_pool"
+    assert hf_pool["details"]["network_calls"] == 0
+    assert any(line.startswith("hf_pool=") for line in hf_pool["details"]["status_lines"])
+    qdrant_health = next(result for result in suite["results"] if result["name"] == "qdrant_health_quick")
+    assert qdrant_health["ok"] is True
+    assert qdrant_health["details"]["latest_status"] == "qdrant=127.0.0.1:6333 status=reachable"
+    assert qdrant_health["details"]["network_calls"] == 0
+    qdrant_memory = next(result for result in suite["results"] if result["name"] == "qdrant_memory_index_quick")
+    assert qdrant_memory["ok"] is True
+    assert qdrant_memory["details"]["points"] >= 1
+    assert qdrant_memory["details"]["selected"] >= 1
+    assert qdrant_memory["details"]["cleartext_in_payload"] is False
+    assert qdrant_memory["details"]["network_calls"] == 0
+    retrieval = next(result for result in suite["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
+    assert retrieval["ok"] is True
+    assert retrieval["category"] == "retrieval"
+    assert retrieval["details"]["usermemory_models"] == ["intfloat/multilingual-e5-small", "intfloat/multilingual-e5-base"]
+    assert retrieval["details"]["book_models"] == ["BAAI/bge-m3", "intfloat/multilingual-e5-base"]
+    assert retrieval["details"]["backend_modes"] == ["local", "llamaindex_fake", "haystack_fake"]
+    assert all(count >= 1 for count in retrieval["details"]["backend_selected"].values())
+    assert retrieval["details"]["network_calls"] == 0
+    source_harvester = next(result for result in suite["results"] if result["name"] == "source_harvester_quality_gate")
+    assert source_harvester["ok"] is True
+    assert source_harvester["category"] == "source_harvester"
+    assert source_harvester["details"]["routes"] == {"accepted": 1}
+    assert source_harvester["details"]["accepted_for_ingest"] == 1
+    assert source_harvester["details"]["network_calls"] == 0
+    decision_fake = next(result for result in suite["results"] if result["name"] == "decision_fake_model")
+    assert decision_fake["ok"] is True
+    assert decision_fake["details"]["fake_model_calls"] == 1
+    assert decision_fake["details"]["latest_intent"] == "bibliothekar_query"
+    assert decision_fake["details"]["network_calls"] == 0
     pydantic_ai = next(result for result in suite["results"] if result["name"] == "pydantic_structured_decisions")
     assert pydantic_ai["ok"] is True
     assert pydantic_ai["category"] == "pydantic_ai"
@@ -127,11 +169,16 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "BibliothekarQueryDecision",
         "MemoryCandidate",
         "ReminderDecision",
+        "ToolSafetyDecision",
         "ProactiveToolCallDecision",
     ]
     assert pydantic_ai["details"]["fake_agent_calls"] == 1
     assert pydantic_ai["details"]["latest_runner_query"] == "Therapie Schlaf"
     assert pydantic_ai["details"]["network_calls"] == 0
+    source_harvester_flow = next(result for result in suite["results"] if result["name"] == "langgraph_source_harvester_workflow")
+    assert source_harvester_flow["ok"] is True
+    assert source_harvester_flow["details"]["ready_for_ingest"] == 1
+    assert source_harvester_flow["details"]["statuses"] == {"ready_for_ingest": 1}
     proactive = next(result for result in suite["results"] if result["name"] == "proactive_tool_plan_due_dispatch_gates")
     assert proactive["ok"] is True
     assert proactive["details"]["tool_schema_validated"] is True
@@ -178,6 +225,10 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert status_doctor["details"]["runtime_accounts"] == 3
     assert status_doctor["details"]["bibliothekar_status"] == "ready"
     assert status_doctor["details"]["bibliothekar_backend"] == "local"
+    assert status_doctor["details"]["decision_provider"] == "hf_pool"
+    assert status_doctor["details"]["decision_model"] == "pool:default"
+    assert status_doctor["details"]["decision_profile"] == "hf_pool_structured"
+    assert status_doctor["details"]["crew_pilot_lines"] >= 3
     assert status_doctor["details"]["dependency_ok"] is True
     assert any("pyproject plan2 contract=ok" in message for message in status_doctor["details"]["dependency_checks"])
     assert any("litellm supply_chain_guard=ok" in message for message in status_doctor["details"]["dependency_checks"])
@@ -223,6 +274,13 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "pydantic_structured_decisions" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
+    assert "langgraph_source_harvester_workflow" in markdown
+    assert "hf_pool_quick_health" in markdown
+    assert "qdrant_health_quick" in markdown
+    assert "qdrant_memory_index_quick" in markdown
+    assert "retrieval_embedding_reranker_matrix" in markdown
+    assert "source_harvester_quality_gate" in markdown
+    assert "decision_fake_model" in markdown
     assert "youtube_parser_local" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown
     assert "messenger_adapter_runtime_contracts" in markdown

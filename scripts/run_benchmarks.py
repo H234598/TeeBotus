@@ -17,6 +17,7 @@ import types
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -37,9 +38,13 @@ from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcrip
 import TeeBotus.core.youtube as youtube_module  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
 from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision, parse_memory_candidate, parse_reminder_decision  # noqa: E402
-from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, ProactiveToolCallDecision  # noqa: E402
+from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, ProactiveToolCallDecision, ToolSafetyDecision  # noqa: E402
 from TeeBotus.ai_structures.pydantic_ai_adapter import build_pydantic_ai_model_runner  # noqa: E402
+from TeeBotus.decisions import FakeDecisionModel, IntentDecision, decide_intent  # noqa: E402
+from TeeBotus.embedding import FakeEmbeddingProvider, KeywordRerankerProvider  # noqa: E402
+from TeeBotus.bibliothekar.source_harvester import SourceHarvester  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
+from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
 from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
 from TeeBotus.mcp_tools import MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry  # noqa: E402
@@ -54,11 +59,12 @@ from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
     BibliothekarQuery,
     BibliothekarService,
     HaystackBibliothekarBackend,
+    LlamaIndexBibliothekarBackend,
     LocalBibliothekarBackend,
     check_bibliothekar_service,
 )
 from TeeBotus.runtime.config import build_runtime_config  # noqa: E402
-from TeeBotus.runtime.graphs import run_bibliothekar_deep_query  # noqa: E402
+from TeeBotus.runtime.graphs import run_bibliothekar_deep_query, run_source_harvester_workflow  # noqa: E402
 from TeeBotus.runtime.proactive_agent import (  # noqa: E402
     apply_proactive_agent_tool_calls,
     check_proactive_agent_account,
@@ -68,7 +74,10 @@ from TeeBotus.runtime.proactive_agent import (  # noqa: E402
     proactive_policy_decision,
 )
 from TeeBotus.runtime.postgres_memory import POSTGRES_BACKEND_ENV  # noqa: E402
+from TeeBotus.runtime.qdrant import check_qdrant_health, format_qdrant_status_line  # noqa: E402
+from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex  # noqa: E402
 from TeeBotus.runtime.sqlite_memory import SQLITE_PATH_ENV  # noqa: E402
+from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityPipeline  # noqa: E402
 from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend  # noqa: E402
 from TeeBotus.runtime.engine import TeeBotusEngine  # noqa: E402
 from TeeBotus.runtime.events import IncomingEvent  # noqa: E402
@@ -81,12 +90,16 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "database_fallback",
+        "hf_pool",
         "langgraph_flows",
         "llm_router",
         "mcp_tools",
         "messenger_adapters",
         "proactive_agent",
         "pydantic_ai",
+        "qdrant",
+        "retrieval",
+        "source_harvester",
         "status_doctor",
         "transcription_youtube",
     }
@@ -98,7 +111,13 @@ REQUIRED_BENCHMARK_NAMES = frozenset(
         "memory_sqlite_projection",
         "bibliothekar_local_query",
         "bibliothekar_haystack_fake_query",
+        "hf_pool_quick_health",
+        "qdrant_health_quick",
+        "qdrant_memory_index_quick",
+        "retrieval_embedding_reranker_matrix",
+        "source_harvester_quality_gate",
         "llm_router_structured_decision",
+        "decision_fake_model",
         "pydantic_structured_decisions",
         "proactive_tool_plan_due_dispatch_gates",
         "messenger_adapter_runtime_contracts",
@@ -110,6 +129,7 @@ REQUIRED_BENCHMARK_NAMES = frozenset(
         "langgraph_bibliothekar_deep_query",
         "langgraph_bibliothekar_linear",
         "langgraph_bibliothekar_fake_installed",
+        "langgraph_source_harvester_workflow",
         "mcp_readonly_bibliothekar_and_memory_search",
     }
 )
@@ -174,7 +194,13 @@ def run_benchmarks(
     results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn if include_live else ""))
     results.append(_benchmark_bibliothekar(iterations=iterations))
     results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
+    results.append(_benchmark_retrieval_embedding_reranker_matrix(iterations=iterations))
+    results.append(_benchmark_source_harvester_quality_gate(iterations=iterations))
     results.append(_benchmark_llm_router(iterations=iterations))
+    results.append(_benchmark_hf_pool_quick(iterations=iterations))
+    results.append(_benchmark_qdrant_health_quick(iterations=iterations))
+    results.append(_benchmark_qdrant_memory_index_quick(iterations=iterations))
+    results.append(_benchmark_decision_fake_model(iterations=iterations))
     results.append(_benchmark_pydantic_structured_decisions(iterations=iterations))
     results.append(_benchmark_proactive(iterations=iterations))
     results.append(_benchmark_adapter_contracts(iterations=iterations))
@@ -186,6 +212,7 @@ def run_benchmarks(
     results.append(_benchmark_langgraph_flow(iterations=iterations))
     results.append(_benchmark_langgraph_linear_flow(iterations=iterations))
     results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
+    results.append(_benchmark_langgraph_source_harvester_workflow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
     comparisons = _build_comparisons(results)
     regression = _build_regression_report(results, baseline_json=baseline_json)
@@ -502,6 +529,7 @@ def _build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
             "langgraph_bibliothekar_deep_query",
             "langgraph_bibliothekar_linear",
             "langgraph_bibliothekar_fake_installed",
+            "langgraph_source_harvester_workflow",
         },
         "transcription_youtube": {
             "youtube_parser_local",
@@ -790,6 +818,153 @@ def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult
         )
 
 
+def _benchmark_retrieval_embedding_reranker_matrix(*, iterations: int) -> BenchmarkResult:
+    documents = [
+        "Schlafhygiene und Tagesstruktur helfen bei depressiver Erschoepfung.",
+        "Kaffee und Wetter sind Smalltalk und keine Therapiequelle.",
+        "Aktivierung und kurze Spaziergaenge koennen stabilisieren.",
+    ]
+    query = "Schlaf Therapie Tagesstruktur"
+    embedding_providers = [
+        FakeEmbeddingProvider(model_name="intfloat/multilingual-e5-small", dimensions=16),
+        FakeEmbeddingProvider(model_name="intfloat/multilingual-e5-base", dimensions=16),
+        FakeEmbeddingProvider(model_name="BAAI/bge-m3", dimensions=16),
+    ]
+    embedding_timings: list[float] = []
+    model_rankings: dict[str, list[int]] = {}
+    for provider in embedding_providers:
+        def run_provider(provider=provider) -> None:
+            query_vector = provider.embed_text(query)
+            doc_vectors = provider.embed_texts(documents, purpose="retrieval_benchmark")
+            ranked = sorted(range(len(documents)), key=lambda index: _vector_cosine(query_vector, doc_vectors[index]), reverse=True)
+            model_rankings[provider.model_name] = ranked
+
+        embedding_timings.extend(_timed_ms(run_provider) for _ in range(iterations))
+
+    reranker = KeywordRerankerProvider()
+    reranker_timings = [_timed_ms(lambda: reranker.rerank(query, documents, top_k=2)) for _ in range(iterations)]
+    reranked = reranker.rerank(query, documents, top_k=2)
+
+    backend_timings: dict[str, float] = {}
+    backend_selected: dict[str, int] = {}
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-retrieval-") as tmp:
+        root = Path(tmp)
+        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
+        _copy_benchmark_books(library_dir)
+        store = BibliothekarStore("Bench", root / "instances")
+        local_backend = LocalBibliothekarBackend(store)
+        local_backend.rebuild()
+        backend_timings["local"] = sum(_timed_ms(lambda: local_backend.search(BibliothekarQuery(text=query, max_chunks=2))) for _ in range(iterations))
+        backend_selected["local"] = len(local_backend.search(BibliothekarQuery(text=query, max_chunks=2)).selected_ids)
+
+        document_store = _BenchmarkDocumentStore()
+        haystack_backend = HaystackBibliothekarBackend(
+            instance_name="Bench",
+            instances_dir=root / "instances",
+            collection="bench_books",
+            document_store_factory=lambda: document_store,
+            document_class=_BenchmarkDocument,
+        )
+        haystack_backend.rebuild()
+        backend_timings["haystack_fake"] = sum(_timed_ms(lambda: haystack_backend.search(BibliothekarQuery(text=query, max_chunks=2))) for _ in range(iterations))
+        backend_selected["haystack_fake"] = len(haystack_backend.search(BibliothekarQuery(text=query, max_chunks=2)).selected_ids)
+
+        class FakeLlamaIndexQueryEngine:
+            def __init__(self, source_store: BibliothekarStore) -> None:
+                source_store.ensure_current()
+                self.chunks = [json.loads(line) for line in source_store.chunks_path.read_text(encoding="utf-8").splitlines()]
+
+            def search(self, _query_text: str) -> list[dict[str, Any]]:
+                return list(self.chunks)
+
+        llama_backend = LlamaIndexBibliothekarBackend(
+            instance_name="Bench",
+            instances_dir=root / "instances",
+            query_engine_factory=lambda source_store: FakeLlamaIndexQueryEngine(source_store),
+        )
+        backend_timings["llamaindex_fake"] = sum(_timed_ms(lambda: llama_backend.search(BibliothekarQuery(text=query, max_chunks=2))) for _ in range(iterations))
+        backend_selected["llamaindex_fake"] = len(llama_backend.search(BibliothekarQuery(text=query, max_chunks=2)).selected_ids)
+
+        payload_bytes = store.chunks_path.stat().st_size
+        index_bytes = store.index_path.stat().st_size
+
+    ok = (
+        {"intfloat/multilingual-e5-small", "intfloat/multilingual-e5-base", "BAAI/bge-m3"}.issubset(model_rankings)
+        and reranked
+        and all(count >= 1 for count in backend_selected.values())
+    )
+    return _result(
+        name="retrieval_embedding_reranker_matrix",
+        category="retrieval",
+        iterations=iterations * (len(embedding_providers) + 1 + len(backend_timings)),
+        total_ms=sum(embedding_timings) + sum(reranker_timings) + sum(backend_timings.values()),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=payload_bytes,
+        index_bytes=index_bytes,
+        note="local_embedding_reranker_backend_matrix",
+        details={
+            "usermemory_models": ["intfloat/multilingual-e5-small", "intfloat/multilingual-e5-base"],
+            "book_models": ["BAAI/bge-m3", "intfloat/multilingual-e5-base"],
+            "model_rankings": model_rankings,
+            "reranker": reranker.model_name,
+            "reranked_top": [item.index for item in reranked],
+            "backend_modes": ["local", "llamaindex_fake", "haystack_fake"],
+            "backend_selected": backend_selected,
+            "backend_total_ms": backend_timings,
+            "network_calls": 0,
+            "provider_calls": 0,
+        },
+    )
+
+
+def _benchmark_source_harvester_quality_gate(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-harvester-") as tmp:
+        root = Path(tmp)
+        source_dir = root / "incoming"
+        source_dir.mkdir(parents=True)
+        harvester = SourceHarvester(
+            root / "library",
+            quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.9)),
+        )
+        harvest_results = []
+
+        def harvest_once(index: int) -> None:
+            source = source_dir / f"quelle-{index}.pdf"
+            source.write_text(f"Therapie Schlaf Aktivierung {index}.", encoding="utf-8")
+            harvest_results.append(
+                harvester.harvest_path(
+                    source,
+                    metadata={"title": f"Quelle {index}", "license": "private"},
+                    claims=("Schlafhygiene ist relevant.",),
+                    evidence=("Therapie Schlaf Aktivierung.",),
+                )
+            )
+
+        timings = [_timed_ms(lambda index=index: harvest_once(index)) for index in range(iterations)]
+        route_counts: dict[str, int] = {}
+        for result in harvest_results:
+            route_counts[result.route] = route_counts.get(result.route, 0) + 1
+        accepted_dir = root / "library" / "accepted"
+        accepted_bytes = sum(path.stat().st_size for path in accepted_dir.glob("*") if path.is_file())
+        manifest_bytes = harvester.manifest_path.stat().st_size if harvester.manifest_path.exists() else 0
+        return _result(
+            name="source_harvester_quality_gate",
+            category="source_harvester",
+            iterations=iterations,
+            total_ms=sum(timings),
+            payload_bytes=accepted_bytes,
+            index_bytes=manifest_bytes,
+            details={
+                "median_harvest_ms": statistics.median(timings),
+                "routes": route_counts,
+                "accepted_for_ingest": sum(1 for result in harvest_results if result.accepted_for_ingest),
+                "manifest_rows": len(harvest_results),
+                "duplicate_count": sum(1 for result in harvest_results if result.duplicate_of is not None),
+            },
+        )
+
+
 def _bibliothekar_payload_details(prompt_text: str) -> dict[str, Any]:
     required_fields = {
         "chunk_id",
@@ -893,6 +1068,7 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
     )
     default_route = select_llm_route("structured_decision", profiles=profiles, routing=routing)
     explicit_fallback_route = select_llm_route("structured_decision", profiles=profiles, routing=routing, allow_remote_fallback=True)
+    fallback_client = getattr(client, "fallback_client", None)
     return _result(
         name="llm_router_structured_decision",
         category="llm_router",
@@ -911,17 +1087,170 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "profile_count": len(profiles),
             "route_count": len(routing),
             "runtime_client": type(client).__name__,
-            "runtime_provider": client.provider if isinstance(client, LiteLLMTextClient) else "",
-            "runtime_model": client.model if isinstance(client, LiteLLMTextClient) else "",
+            "runtime_provider": _benchmark_client_provider(client),
+            "runtime_model": _benchmark_client_model(client),
+            "runtime_fallback_client": type(fallback_client).__name__ if fallback_client is not None else "",
+            "runtime_fallback_model": getattr(fallback_client, "model", ""),
             "remote_fallback_default_enabled": bool(default_route.fallback_models),
             "default_fallback_models": list(default_route.fallback_models),
+            "default_fallback_profile": default_route.fallback_profile_name,
             "explicit_remote_fallback_enabled": bool(explicit_fallback_route.fallback_models),
             "explicit_remote_fallback_models": list(explicit_fallback_route.fallback_models),
             "explicit_remote_fallback_api_key_env": explicit_fallback_route.fallback_api_key_env,
-            "explicit_remote_fallback_api_key_mapped": bool(getattr(client, "fallback_api_keys", {})),
+            "explicit_remote_fallback_api_key_mapped": bool(getattr(fallback_client, "api_key", "") or getattr(fallback_client, "fallback_api_keys", {})),
             "direct_remote_fallback_default_models": list(getattr(direct_blocked_client, "fallback_models", ())),
             "direct_remote_fallback_allowed_models": list(getattr(direct_allowed_client, "fallback_models", ())),
             "network_calls": 0,
+        },
+    )
+
+
+def _benchmark_client_provider(client: object | None) -> str:
+    if client is None:
+        return ""
+    return str(getattr(client, "provider_name", "") or getattr(client, "provider", "") or "")
+
+
+def _benchmark_client_model(client: object | None) -> str:
+    if client is None:
+        return ""
+    model = str(getattr(client, "model", "") or "").strip()
+    if model:
+        return model
+    pool_name = str(getattr(client, "pool_name", "") or "").strip()
+    return f"pool:{pool_name}" if pool_name else ""
+
+
+def _benchmark_hf_pool_quick(*, iterations: int) -> BenchmarkResult:
+    timings: list[float] = []
+    lines: list[str] = []
+    for _ in range(iterations):
+        timings.append(_timed_ms(lambda: lines.extend(format_hf_pool_status_lines(check_hf_pool()))))
+    ok = bool(lines) and any(line.startswith("hf_pool=") for line in lines)
+    return _result(
+        name="hf_pool_quick_health",
+        category="hf_pool",
+        iterations=iterations,
+        total_ms=sum(timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len("\n".join(lines).encode("utf-8")),
+        index_bytes=len(json.dumps({"status_lines": len(lines)}, ensure_ascii=False).encode("utf-8")),
+        note="local_hf_pool_status_no_live_calls",
+        details={
+            "status_lines": lines[-3:],
+            "network_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+        },
+    )
+
+
+def _benchmark_qdrant_health_quick(*, iterations: int) -> BenchmarkResult:
+    opener = _BenchmarkQdrantOpener()
+    lines: list[str] = []
+    timings = [
+        _timed_ms(lambda: lines.append(format_qdrant_status_line(check_qdrant_health("http://127.0.0.1:6333", opener=opener))))
+        for _ in range(iterations)
+    ]
+    ok = bool(lines) and all("status=reachable" in line for line in lines)
+    return _result(
+        name="qdrant_health_quick",
+        category="qdrant",
+        iterations=iterations,
+        total_ms=sum(timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len("\n".join(lines).encode("utf-8")),
+        index_bytes=len(json.dumps({"fake_requests": opener.request_count}, ensure_ascii=False).encode("utf-8")),
+        note="fake_qdrant_health_no_server",
+        details={
+            "latest_status": lines[-1] if lines else "",
+            "fake_requests": opener.request_count,
+            "network_calls": 0,
+        },
+    )
+
+
+def _benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
+    opener = _BenchmarkQdrantOpener()
+    index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=opener,
+        embedding_provider=FakeEmbeddingProvider(dimensions=16),
+    )
+    account_id = "a" * 128
+    selected_ids: list[str] = []
+
+    def run_once(i: int) -> None:
+        memory_id = f"mem_bench_{i}"
+        index.index_memory(
+            instance_name="Bench",
+            account_id=account_id,
+            entry={
+                "id": memory_id,
+                "kind": "preference",
+                "memory_type": "semantic",
+                "user_text": "Schlaf und Tagesstruktur helfen beim Planen.",
+                "keywords": ["schlaf", "tagesstruktur"],
+            },
+        )
+        selected_ids.extend(result.memory_id for result in index.search(instance_name="Bench", account_id=account_id, query="Schlaf", limit=3))
+
+    timings = [_timed_ms(lambda i=i: run_once(i)) for i in range(iterations)]
+    stored_payloads = [point.get("payload", {}) for point in opener.points.values()]
+    serialized_points = json.dumps(opener.points, ensure_ascii=False).casefold()
+    ok = bool(selected_ids) and "schlaf und tagesstruktur" not in serialized_points and "user_text" not in serialized_points
+    return _result(
+        name="qdrant_memory_index_quick",
+        category="qdrant",
+        iterations=iterations,
+        total_ms=sum(timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len(json.dumps(stored_payloads, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(json.dumps({"points": len(opener.points), "selected": len(selected_ids)}, ensure_ascii=False).encode("utf-8")),
+        note="fake_qdrant_memory_index_no_cleartext",
+        details={
+            "points": len(opener.points),
+            "selected": len(selected_ids),
+            "cleartext_in_payload": "schlaf und tagesstruktur" in serialized_points or "user_text" in serialized_points,
+            "fake_requests": opener.request_count,
+            "network_calls": 0,
+        },
+    )
+
+
+def _benchmark_decision_fake_model(*, iterations: int) -> BenchmarkResult:
+    fake_model = FakeDecisionModel(
+        {
+            "IntentDecision": {
+                "intent": "bibliothekar_query",
+                "confidence": 0.84,
+                "reason_short": "benchmark fake model",
+                "source": "model",
+            }
+        }
+    )
+    outputs: list[IntentDecision] = []
+    timings = [_timed_ms(lambda: outputs.append(decide_intent("Bitte einordnen", model_runner=fake_model.runner()))) for _ in range(iterations)]
+    ok = bool(outputs) and all(output.intent == "bibliothekar_query" for output in outputs) and len(fake_model.calls) == iterations
+    payload = [output.model_dump() for output in outputs]
+    return _result(
+        name="decision_fake_model",
+        category="pydantic_ai",
+        iterations=iterations,
+        total_ms=sum(timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(json.dumps({"fake_model_calls": len(fake_model.calls)}, ensure_ascii=False).encode("utf-8")),
+        note="provider_free_decision_runner",
+        details={
+            "fake_model_calls": len(fake_model.calls),
+            "latest_intent": outputs[-1].intent if outputs else "",
+            "network_calls": 0,
+            "provider_calls": 0,
         },
     )
 
@@ -958,6 +1287,12 @@ def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkRes
             "reason_memory_ids": ["mem_goal"],
         },
     }
+    tool_safety_payload = {
+        "allowed": False,
+        "requires_confirmation": False,
+        "reason": "benchmark blocks risky tool",
+        "risk_level": "blocked",
+    }
     parse_timings = [
         _timed_ms(
             lambda: (
@@ -965,6 +1300,7 @@ def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkRes
                 parse_memory_candidate(memory_payload),
                 parse_reminder_decision(reminder_payload),
                 ProactiveToolCallDecision.model_validate(proactive_tool_payload),
+                ToolSafetyDecision.model_validate(tool_safety_payload),
             )
         )
         for _ in range(iterations)
@@ -1001,6 +1337,7 @@ def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkRes
         and parse_memory_candidate(memory_payload).memory_type == "therapy_goal"
         and parse_reminder_decision(reminder_payload).should_create
         and ProactiveToolCallDecision.model_validate(proactive_tool_payload).name == "proactive_queue_message"
+        and ToolSafetyDecision.model_validate(tool_safety_payload).risk_level == "blocked"
         and getattr(latest_output, "query", "") == "Therapie Schlaf"
         and len(fake_calls) == iterations
     )
@@ -1009,19 +1346,26 @@ def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkRes
         "memory": memory_payload,
         "reminder": reminder_payload,
         "proactive_tool": proactive_tool_payload,
+        "tool_safety": tool_safety_payload,
     }
     return _result(
         name="pydantic_structured_decisions",
         category="pydantic_ai",
-        iterations=iterations * 5,
+        iterations=iterations * 6,
         total_ms=sum(parse_timings) + sum(runner_timings),
         ok=ok,
         errors=0 if ok else 1,
         payload_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
-        index_bytes=len(json.dumps({"schemas": 4, "fake_agent_calls": len(fake_calls)}, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(json.dumps({"schemas": 5, "fake_agent_calls": len(fake_calls)}, ensure_ascii=False).encode("utf-8")),
         note="schema_validation_and_fake_agent",
         details={
-            "schemas": ["BibliothekarQueryDecision", "MemoryCandidate", "ReminderDecision", "ProactiveToolCallDecision"],
+            "schemas": [
+                "BibliothekarQueryDecision",
+                "MemoryCandidate",
+                "ReminderDecision",
+                "ToolSafetyDecision",
+                "ProactiveToolCallDecision",
+            ],
             "fake_agent_calls": len(fake_calls),
             "fake_agent_model": "benchmark:structured-fake",
             "network_calls": 0,
@@ -1030,6 +1374,99 @@ def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkRes
             "latest_runner_query": getattr(latest_output, "query", ""),
         },
     )
+
+
+class _BenchmarkQdrantResponse:
+    def __init__(self, payload: dict[str, Any] | None = None, status: int = 200) -> None:
+        self.payload = {} if payload is None else payload
+        self.status = status
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+    def close(self) -> None:
+        return None
+
+
+class _BenchmarkQdrantOpener:
+    def __init__(self) -> None:
+        self.points: dict[str, dict[str, Any]] = {}
+        self.request_count = 0
+
+    def __call__(self, request: Any, *, timeout: float) -> _BenchmarkQdrantResponse:
+        if timeout <= 0:
+            raise RuntimeError("timeout must be positive")
+        self.request_count += 1
+        parsed = urlparse(request.full_url)
+        body = json.loads(request.data.decode("utf-8")) if getattr(request, "data", None) else {}
+        method = request.get_method()
+        if parsed.path == "/collections":
+            return _BenchmarkQdrantResponse({"result": {"collections": []}})
+        if parsed.path.endswith("/points/search") and method == "POST":
+            return _BenchmarkQdrantResponse({"result": self._search(body)})
+        if parsed.path.endswith("/points/delete") and method == "POST":
+            self._delete(body)
+            return _BenchmarkQdrantResponse({"result": {"status": "completed"}})
+        if parsed.path.endswith("/points") and method == "PUT":
+            for point in body.get("points", []):
+                if isinstance(point, dict) and point.get("id"):
+                    self.points[str(point["id"])] = dict(point)
+            return _BenchmarkQdrantResponse({"result": {"status": "completed"}})
+        raise RuntimeError(f"unexpected fake qdrant request: {method} {request.full_url}")
+
+    def _search(self, body: dict[str, Any]) -> list[dict[str, Any]]:
+        query = body.get("vector", [])
+        limit = int(body.get("limit", 5) or 5)
+        must = body.get("filter", {}).get("must", []) if isinstance(body.get("filter"), dict) else []
+        results: list[dict[str, Any]] = []
+        for point_id, point in self.points.items():
+            payload = point.get("payload")
+            if not isinstance(payload, dict) or not _benchmark_payload_matches(payload, must):
+                continue
+            results.append({"id": point_id, "score": _benchmark_dot(query, point.get("vector", [])), "payload": payload})
+        results.sort(key=lambda item: item["score"], reverse=True)
+        return results[:limit]
+
+    def _delete(self, body: dict[str, Any]) -> None:
+        points = body.get("points")
+        if isinstance(points, list):
+            for point_id in points:
+                self.points.pop(str(point_id), None)
+            return
+        must = body.get("filter", {}).get("must", []) if isinstance(body.get("filter"), dict) else []
+        for point_id, point in list(self.points.items()):
+            payload = point.get("payload")
+            if isinstance(payload, dict) and _benchmark_payload_matches(payload, must):
+                self.points.pop(point_id, None)
+
+
+def _benchmark_payload_matches(payload: dict[str, Any], must: list[Any]) -> bool:
+    for condition in must:
+        if not isinstance(condition, dict):
+            continue
+        key = condition.get("key")
+        match = condition.get("match")
+        expected = match.get("value") if isinstance(match, dict) else None
+        if payload.get(key) != expected:
+            return False
+    return True
+
+
+def _benchmark_dot(left: Any, right: Any) -> float:
+    if not isinstance(left, list) or not isinstance(right, list):
+        return 0.0
+    return float(sum(float(a) * float(b) for a, b in zip(left, right)))
+
+
+def _vector_cosine(left: list[float], right: list[float]) -> float:
+    if not left or not right:
+        return 0.0
+    numerator = sum(float(a) * float(b) for a, b in zip(left, right))
+    left_norm = sum(float(value) * float(value) for value in left) ** 0.5
+    right_norm = sum(float(value) * float(value) for value in right) ** 0.5
+    if left_norm <= 0 or right_norm <= 0:
+        return 0.0
+    return numerator / (left_norm * right_norm)
 
 
 def _benchmark_proactive(*, iterations: int) -> BenchmarkResult:
@@ -1613,11 +2050,17 @@ def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
         dependency_ok = all(ok for ok, _message in latest_dependency_checks)
         runtime_channels = list(latest_config.channels) if latest_config is not None else []
         runtime_accounts = sum(len(instance.accounts) for instance in latest_config.instances) if latest_config is not None else 0
+        decision_route = select_llm_route("structured_decision")
+        from TeeBotus.runtime.crew_pilots import crew_pilot_status_lines
+
+        crew_lines = crew_pilot_status_lines(dependency_available=False)
         ok = (
             latest_config is not None
             and runtime_channels == ["telegram", "signal", "matrix"]
             and runtime_accounts == 3
             and latest_health.status == "ready"
+            and decision_route.provider == "hf_pool"
+            and bool(crew_lines)
             and dependency_ok
         )
         return _result(
@@ -1635,6 +2078,10 @@ def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
                 "runtime_accounts": runtime_accounts,
                 "bibliothekar_status": latest_health.status,
                 "bibliothekar_backend": latest_health.backend,
+                "decision_provider": decision_route.provider,
+                "decision_model": decision_route.model,
+                "decision_profile": decision_route.profile_name,
+                "crew_pilot_lines": len(crew_lines),
                 "dependency_checks": [message for _ok, message in latest_dependency_checks],
                 "dependency_ok": dependency_ok,
                 "median_runtime_config_ms": statistics.median(config_timings),
@@ -1845,6 +2292,55 @@ def _benchmark_langgraph_fake_installed_flow(*, iterations: int) -> BenchmarkRes
             "node_sequence": calls[:6],
         },
     )
+
+
+def _benchmark_langgraph_source_harvester_workflow(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-harvester-graph-") as tmp:
+        root = Path(tmp)
+        incoming = root / "incoming"
+        incoming.mkdir(parents=True)
+        harvester = SourceHarvester(
+            root / "library",
+            quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.9)),
+        )
+        states = []
+
+        def run_once(index: int) -> None:
+            source = incoming / f"workflow-{index}.pdf"
+            source.write_text(f"Therapie Schlaf Workflow {index}.", encoding="utf-8")
+            states.append(
+                run_source_harvester_workflow(
+                    harvester,
+                    source,
+                    metadata={"title": f"Workflow {index}", "license": "private"},
+                    claims=("Schlafhygiene ist relevant.",),
+                    evidence=("Therapie Schlaf Workflow.",),
+                    prefer_langgraph=True,
+                )
+            )
+
+        timings = [_timed_ms(lambda index=index: run_once(index)) for index in range(iterations)]
+        status_counts: dict[str, int] = {}
+        for state in states:
+            status = str(state.get("status") or "")
+            status_counts[status] = status_counts.get(status, 0) + 1
+        accepted_dir = root / "library" / "accepted"
+        accepted_bytes = sum(path.stat().st_size for path in accepted_dir.glob("*") if path.is_file())
+        manifest_path = root / "library" / "harvest_manifest.jsonl"
+        return _result(
+            name="langgraph_source_harvester_workflow",
+            category="langgraph_flows",
+            iterations=iterations,
+            total_ms=sum(timings),
+            payload_bytes=accepted_bytes,
+            index_bytes=manifest_path.stat().st_size if manifest_path.exists() else 0,
+            details={
+                "median_graph_ms": statistics.median(timings),
+                "mode": "langgraph_or_linear_fallback",
+                "statuses": status_counts,
+                "ready_for_ingest": status_counts.get("ready_for_ingest", 0),
+            },
+        )
 
 
 class _BenchmarkGraphFixture:

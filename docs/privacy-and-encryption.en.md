@@ -37,7 +37,7 @@ Encrypted structured memory files:
 
 - `User_Memory_Index.json`
 - `User_Memory_Entries.jsonl`
-- `OpenAI_State.json`
+- `LLM_State.json` (`OpenAI_State.json` is migrated as a legacy name)
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
 - `Proactive_Audit.jsonl`

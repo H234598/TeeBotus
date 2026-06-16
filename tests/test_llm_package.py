@@ -48,9 +48,12 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
     assert normal.profile_name == "local_ollama"
     assert normal.provider == "litellm"
     assert normal.base_url == "http://127.0.0.1:11434"
-    assert structured.profile_name == "local_ollama"
-    assert structured.fallback_profile_name == "groq_fast"
-    assert structured.fallback_models == ("groq/llama-3.1-8b-instant",)
+    assert structured.profile_name == "hf_pool_structured"
+    assert structured.provider == "hf_pool"
+    assert structured.model == "pool:default"
+    assert structured.fallback_profile_name == "local_ollama"
+    assert structured.fallback_models == ("ollama_chat/llama3.1:8b",)
+    assert structured.fallback_base_url == "http://127.0.0.1:11434"
 
 
 def test_openai_provider_maps_existing_client_payloads_to_neutral_types() -> None:

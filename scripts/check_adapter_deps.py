@@ -192,6 +192,10 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     expected_profiles = {
         "local_ollama": ("litellm", "ollama_chat/"),
         "hf_mistral": ("litellm", "huggingface/"),
+        "hf_pool_default": ("hf_pool", "pool:"),
+        "hf_pool_structured": ("hf_pool", "pool:"),
+        "hf_pool_quality": ("hf_pool", "pool:"),
+        "hf_pool_bibliothekar": ("hf_pool", "pool:"),
         "groq_fast": ("litellm", "groq/"),
         "gemini_flash": ("litellm", "gemini/"),
         "openai_premium": ("openai", ""),
@@ -227,11 +231,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     structured = routing.get("structured_decision")
     if structured is None:
         errors.append("routing missing structured_decision")
-    elif structured.profile != "local_ollama" or structured.fallback != "groq_fast":
-        errors.append("routing structured_decision must be local_ollama with groq_fast fallback")
+    elif structured.profile != "hf_pool_structured" or structured.fallback != "local_ollama":
+        errors.append("routing structured_decision must be hf_pool_structured with local_ollama fallback")
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
-    return True, "llm profiles plan2 contract=ok profiles=local_ollama,hf_mistral,groq_fast,gemini_flash,openai_premium"
+    return True, "llm profiles plan2 contract=ok profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,gemini_flash,openai_premium"
 
 
 def _check_local_secret_file_permissions(root: Path = REPO_ROOT) -> tuple[bool, str]:

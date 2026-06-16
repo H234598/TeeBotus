@@ -97,6 +97,7 @@ def build_runtime_text_llm_client(
         ),
         api_key=resolved_api_key,
         api_base=api_base,
+        purpose=route_purpose or "normal_chat",
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -137,6 +138,9 @@ def _build_route_client(
         fallback_models=fallback_models or route.fallback_models,
         allow_remote_fallback=allow_remote_fallback,
     )
+    fallback_api_base = route.fallback_base_url
+    if resolved_provider == "hf_pool" and str(api_base or "").strip() and route.fallback_model:
+        fallback_api_base = str(api_base).strip()
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
@@ -145,9 +149,10 @@ def _build_route_client(
         model=route.model,
         fallback_models=resolved_fallback_models,
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
-        fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
+        fallback_api_bases={route.fallback_model: fallback_api_base} if route.fallback_model and fallback_api_base else None,
         api_key=resolved_api_key,
         api_base=resolved_api_base,
+        purpose=route.purpose,
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -197,6 +202,7 @@ def _build_profile_client(
         ),
         api_key=resolved_api_key,
         api_base=resolved_api_base,
+        purpose="normal_chat",
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -266,13 +272,13 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
         return False
     if value.startswith(("ollama/", "ollama_chat/")):
         return False
-    if value.startswith(("openai/", "huggingface/", "groq/", "gemini/")):
+    if value.startswith(("openai/", "huggingface/", "groq/", "gemini/", "hf_pool/")):
         return True
     if provider == "litellm":
         return True
     if provider == "ollama":
         return False
-    return provider in {"openai", "huggingface", "groq", "gemini"}
+    return provider in {"openai", "huggingface", "groq", "gemini", "hf_pool"}
 
 
 __all__ = ["build_runtime_text_llm_client", "filter_runtime_fallback_models"]

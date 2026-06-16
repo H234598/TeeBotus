@@ -42,7 +42,8 @@ core_decisions:
       - "User_Memory_Entries.jsonl"
       - "Account_Profile.json"
       - "Secret_Verifier.json"
-      - "OpenAI_State.json"
+      - "LLM_State.json"
+      - "OpenAI_State.json" # legacy migration input
     plaintext_files:
       - "User_Habbits_and_behave.md"
 commands:
@@ -75,7 +76,7 @@ features:
     rotate_secret_after_wtf_unlink: true
   shared_account_state:
     user_memory: true
-    openai_previous_response_id: true
+    llm_previous_response_id: true
     teladi_cooldown: true
   cleanup:
     scope: "current_chat_only"

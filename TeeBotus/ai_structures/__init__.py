@@ -6,6 +6,8 @@ from TeeBotus.ai_structures.schemas import (
     MemoryCandidate,
     ProactiveToolCallDecision,
     ReminderDecision,
+    SourceQualityDecision,
+    ToolSafetyDecision,
     YouTubeOptionsDecision,
 )
 
@@ -15,6 +17,8 @@ __all__ = [
     "MemoryCandidate",
     "ProactiveToolCallDecision",
     "ReminderDecision",
+    "SourceQualityDecision",
+    "ToolSafetyDecision",
     "YouTubeOptionsDecision",
     "decide_bibliothekar_query",
     "decide_intent",
