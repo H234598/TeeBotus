@@ -1,7 +1,7 @@
 """Stable entry point for TeeBotus.
 
 ``TeeBotus.bot`` stays as the public import and command module, while the
-Telegram polling implementation lives in ``TeeBotus.adapters.telegram_runtime``.
+Telegram transport is started through the shared runtime configuration.
 """
 
 from __future__ import annotations
@@ -383,29 +383,6 @@ def _sanitize_status_text(value: object) -> str:
     return text.replace("\r", " ").replace("\n", " ")
 
 
-def _telegram_args_from_runtime_cli(args: list[str]) -> tuple[list[str] | None, int]:
-    return _strip_runtime_channels_arg(args)
-
-
-def _strip_runtime_channels_arg(args: list[str]) -> tuple[list[str] | None, int]:
-    telegram_args: list[str] = []
-    index = 0
-    while index < len(args):
-        arg = args[index]
-        if arg == "--channels":
-            if index + 1 >= len(args):
-                print("Missing value for --channels.", file=sys.stderr)
-                return None, 2
-            index += 2
-            continue
-        if arg.startswith("--channels="):
-            index += 1
-            continue
-        telegram_args.append(arg)
-        index += 1
-    return telegram_args, 0
-
-
 def _runtime_config_from_main_args(args: list[str]) -> Any | None:
     _load_runtime_environment()
     try:
@@ -414,9 +391,20 @@ def _runtime_config_from_main_args(args: list[str]) -> Any | None:
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
         return None
     runtime_args = []
+    runtime_env = None
+    unknown_args: list[str] = []
     index = 0
     while index < len(args):
         arg = args[index]
+        if arg == "--all":
+            if runtime_env is None:
+                runtime_env = dict(os.environ)
+            runtime_env.pop("TEEBOTUS_INSTANCES", None)
+            runtime_env.pop("TELEGRAM_BOT_INSTANCES", None)
+            runtime_env["TEEBOTUS_INSTANCE"] = "all"
+            runtime_env["TELEGRAM_BOT_INSTANCE"] = "all"
+            index += 1
+            continue
         if arg == "--channels":
             if index + 1 >= len(args):
                 print("Missing value for --channels.", file=sys.stderr)
@@ -426,9 +414,15 @@ def _runtime_config_from_main_args(args: list[str]) -> Any | None:
             continue
         if arg.startswith("--channels="):
             runtime_args.append(arg)
+            index += 1
+            continue
+        unknown_args.append(arg)
         index += 1
+    if unknown_args:
+        print(f"Unsupported startup option(s): {', '.join(unknown_args)}", file=sys.stderr)
+        return None
     try:
-        return resolve_runtime_config(runtime_args)
+        return resolve_runtime_config(runtime_args, env=runtime_env)
     except RuntimeConfigError as exc:
         print(f"TeeBotus runtime configuration error: {exc}", file=sys.stderr)
         return None
@@ -512,8 +506,21 @@ def _start_matrix_runtime_background(config: Any) -> int:
     return 0
 
 
+def _run_telegram_runtime(config: Any) -> int:
+    try:
+        from TeeBotus.runtime.telegram_runner import TelegramRuntimeError, run_telegram_accounts
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus compatibility error: could not import Telegram runtime: {exc}", file=sys.stderr)
+        return 2
+    try:
+        return int(run_telegram_accounts(config))
+    except TelegramRuntimeError as exc:
+        print(f"TeeBotus Telegram runtime error: {exc}", file=sys.stderr)
+        return 2
+
+
 def main(argv: list[str] | None = None) -> int:
-    """Run TeeBotus through the productive Telegram entry point."""
+    """Run TeeBotus through the shared multi-channel runtime entry point."""
 
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -550,17 +557,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
         return 2
 
-    telegram_args, cli_status = _telegram_args_from_runtime_cli(args)
-    if telegram_args is None:
-        return cli_status
-
-    telegram_main = _load_telegram_main()
-    if telegram_main is not None:
-        return int(telegram_main(telegram_args))
-
-    print("TeeBotus Telegram bot implementation is missing.", file=sys.stderr)
-    print("Expected invariant: python3 -m TeeBotus and python3 -m TeeBotus --all must delegate to TeeBotus.adapters.telegram_runtime.", file=sys.stderr)
-    return 1
+    if "telegram" in config.channels:
+        return _run_telegram_runtime(config)
+    return 2
 
 
 __all__ = ["TelegramBotMissingError", "main"]
@@ -575,7 +574,7 @@ def _main_help_text() -> str:
             "  --version                 Print package version and exit.",
             "  --runtime-status          Print resolved runtime health without starting bot loops.",
             "  --channels CHANNELS       Select channels for runtime-status or startup.",
-            "  --all                     Start all configured instances through the Telegram-compatible entry point.",
+            "  --all                     Start all configured instances through the runtime entry point.",
             "  --help                    Show this help text and exit.",
         ]
     )

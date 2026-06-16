@@ -51,32 +51,42 @@ def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     assert result == 0
 
 
-def test_main_delegates_default_start_to_telegram_entrypoint(monkeypatch) -> None:
+def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
-    calls: list[list[str]] = []
+    calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
-    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(list(args)) or 0)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
     assert bot.main([]) == 0
 
-    assert calls == [[]]
+    assert calls
+    assert calls[0].instances[0].instance_name == "Demo"
+    assert calls[0].instances[0].accounts[0].label == "telegram:1"
 
 
-def test_main_delegates_all_start_to_telegram_entrypoint(monkeypatch) -> None:
+def test_main_all_start_uses_runtime_instance_discovery(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
-    calls: list[list[str]] = []
+    instances_dir = tmp_path / "instances"
+    for name in ("DemoA", "DemoB"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
-    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(list(args)) or 0)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "IgnoredByAll")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMOA", "telegram-token-a")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMOB", "telegram-token-b")
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
     assert bot.main(["--all"]) == 0
 
-    assert calls == [["--all"]]
+    assert calls
+    assert calls[0].selected_instances == ("DemoA", "DemoB")
 
 
 def test_main_all_start_initializes_signal_and_matrix_before_telegram(monkeypatch, tmp_path) -> None:
@@ -98,8 +108,8 @@ def test_main_all_start_initializes_signal_and_matrix_before_telegram(monkeypatc
         calls.append(("signal", labels_for(config, "signal")))
         return 0
 
-    def telegram_main(args) -> int:  # noqa: ANN001 - mirrors the legacy Telegram main callable.
-        calls.append(("telegram", tuple(args or ())))
+    def run_telegram(config) -> int:  # noqa: ANN001 - keep the test independent from runtime dataclass imports.
+        calls.append(("telegram", labels_for(config, "telegram")))
         return 0
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
@@ -113,14 +123,14 @@ def test_main_all_start_initializes_signal_and_matrix_before_telegram(monkeypatc
     monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
     monkeypatch.setattr(bot, "_start_matrix_runtime_background", start_matrix)
     monkeypatch.setattr(bot, "_start_signal_runtime_background", start_signal)
-    monkeypatch.setattr(bot, "_load_telegram_main", lambda: telegram_main)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", run_telegram)
 
     assert bot.main(["--all", "--channels", "telegram,signal,matrix"]) == 0
 
     assert calls == [
         ("matrix", ("matrix:1",)),
         ("signal", ("signal:1",)),
-        ("telegram", ("--all",)),
+        ("telegram", ("telegram:1",)),
     ]
 
 
@@ -963,7 +973,7 @@ def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(mo
     ) in captured.out
 
 
-def test_bot_main_delegates_unknown_normal_args_to_telegram_bot(monkeypatch) -> None:
+def test_bot_main_rejects_unknown_startup_args_before_runtime_start(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
@@ -1009,7 +1019,7 @@ def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> 
     monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
     monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
     monkeypatch.setattr(bot, "_start_signal_runtime_background", lambda config: calls.append(("signal", config)) or 0)
-    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(("telegram", args)) or 0)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
 
     assert bot.main(["--channels", "telegram,signal"]) == 0
     assert [call[0] for call in calls] == ["signal", "telegram"]
@@ -1048,7 +1058,7 @@ def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> 
     monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
     monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
     monkeypatch.setattr(bot, "_start_matrix_runtime_background", lambda config: calls.append(("matrix", config)) or 0)
-    monkeypatch.setattr(bot, "_load_telegram_main", lambda: lambda args: calls.append(("telegram", args)) or 0)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
 
     assert bot.main(["--channels", "telegram,matrix"]) == 0
     assert [call[0] for call in calls] == ["matrix", "telegram"]
