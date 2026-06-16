@@ -6,6 +6,7 @@ import urllib.request
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
+from TeeBotus.llm.profiles import load_llm_profiles, select_llm_route
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
@@ -41,11 +42,9 @@ def check_ollama_service(base_url: str, *, timeout_seconds: float = 1.0) -> Olla
 def _ollama_base_urls(config: RuntimeConfig) -> tuple[str, ...]:
     result: list[str] = []
     for account in _accounts(config):
-        if not _account_uses_ollama(account):
-            continue
-        base_url = _account_ollama_base_url(account)
-        if base_url not in result:
-            result.append(base_url)
+        for base_url in _account_ollama_base_urls(account):
+            if base_url not in result:
+                result.append(base_url)
     return tuple(result)
 
 
@@ -53,7 +52,20 @@ def _accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts)
 
 
-def _account_uses_ollama(account: AccountRunConfig) -> bool:
+def _account_ollama_base_urls(account: AccountRunConfig) -> tuple[str, ...]:
+    result: list[str] = []
+    if _account_direct_uses_ollama(account):
+        result.append(_account_direct_ollama_base_url(account))
+    profile_url = _profile_ollama_base_url(account)
+    if profile_url and profile_url not in result:
+        result.append(profile_url)
+    route_url = _route_ollama_base_url(account)
+    if route_url and route_url not in result:
+        result.append(route_url)
+    return tuple(result)
+
+
+def _account_direct_uses_ollama(account: AccountRunConfig) -> bool:
     provider = str(account.llm_provider or "").strip().casefold().replace("-", "_")
     if provider in {"ollama", "local_ollama"}:
         return True
@@ -66,11 +78,48 @@ def _model_uses_ollama(model: object) -> bool:
     return value.startswith(OLLAMA_MODEL_PREFIXES)
 
 
-def _account_ollama_base_url(account: AccountRunConfig) -> str:
+def _account_direct_ollama_base_url(account: AccountRunConfig) -> str:
     base_url = str(account.llm_base_url or "").strip()
     if base_url:
         return base_url
     return DEFAULT_OLLAMA_BASE_URL
+
+
+def _profile_ollama_base_url(account: AccountRunConfig) -> str:
+    profile_name = str(account.llm_profile or "").strip()
+    if not profile_name:
+        return ""
+    try:
+        profile = load_llm_profiles()[profile_name]
+    except Exception:
+        return ""
+    if not (_provider_uses_ollama(profile.provider) or _model_uses_ollama(profile.model)):
+        return ""
+    return profile.base_url or DEFAULT_OLLAMA_BASE_URL
+
+
+def _route_ollama_base_url(account: AccountRunConfig) -> str:
+    purpose = str(account.llm_purpose or "").strip()
+    if not purpose:
+        return ""
+    if str(account.llm_provider or "").strip() or str(account.llm_model or "").strip():
+        return ""
+    try:
+        route = select_llm_route(purpose, allow_remote_fallback=_parse_bool(account.llm_allow_remote_fallback))
+    except Exception:
+        return ""
+    if _provider_uses_ollama(route.provider) or _model_uses_ollama(route.model) or any(_model_uses_ollama(model) for model in route.fallback_models):
+        return route.base_url or DEFAULT_OLLAMA_BASE_URL
+    return ""
+
+
+def _provider_uses_ollama(provider: object) -> bool:
+    value = str(provider or "").strip().casefold().replace("-", "_")
+    return value in {"ollama", "local_ollama"}
+
+
+def _parse_bool(value: object) -> bool:
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "ja", "on", "enabled", "an"}
 
 
 def _normalize_ollama_base_url(base_url: str) -> str:

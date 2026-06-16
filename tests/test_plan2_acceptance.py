@@ -37,39 +37,15 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
             channel,
         )
     assert "--all" not in " ".join(" ".join(command.argv) for command in commands)
-    assert "tests/test_account_store.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_adapter_dependency_install.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_admin_accounts.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_async_bridge.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_bot.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_engine_identity_flows.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_export.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_instructions.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_matrix_runner.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_program_history.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_proactive_agent.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_proactive_systemd.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_runtime_config.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_runtime_maintenance.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_runtime_state.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_signal_runner.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_systemd.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_tts_dialect.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_weather_context.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_working_memory.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_logic_audit_round5.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_openai_client.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_bibliothekar.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_bibliothekar_plan2.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_pyproject_metadata.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_qdrant_systemd.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_reminder_intent.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_graphs_bibliothekar.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_youtube_parser_stats.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_youtube_parser_misses_report.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_memory_store_benchmark.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_plan2_acceptance.py" in by_label["plan2-pytest"].argv
-    assert "tests/test_plan2_optional_extras.py" in by_label["plan2-pytest"].argv
+    pytest_args = by_label["plan2-pytest"].argv
+    expected_plan2_tests = check_plan2_acceptance._expand_test_patterns(check_plan2_acceptance.PLAN2_TEST_PATTERNS)
+    assert pytest_args[:3] == ("python-test", "-m", "pytest")
+    assert pytest_args[3] == "-q"
+    assert set(pytest_args[4:]) == set(expected_plan2_tests)
+    assert "tests/test_proactive_backends.py" in pytest_args
+    assert "tests/test_proactive_cli.py" in pytest_args
+    assert "tests/test_readme_plan2_docs.py" in pytest_args
+    assert "tests/test_secret_hygiene.py" in pytest_args
     assert by_label["bibliothekar-status"].argv == ("python-test", "-m", "TeeBotus.bibliothekar", "status")
     assert by_label["bibliothekar-dry-run"].argv[-4:] == ("index", "--source", "tests/fixtures/books", "--dry-run")
     assert by_label["bibliothekar-fixture-query"].argv[-4:] == ("tests/fixtures/books", "Testfrage", "--top-k", "3")
