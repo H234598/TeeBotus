@@ -85,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
     parser.add_argument("--skip-adapter-deps", action="store_true", help="Skip adapter dependency checks.")
     parser.add_argument("--include-audit", action="store_true", help="Run pip-audit when installed; audit failures are reported but non-fatal.")
+    parser.add_argument(
+        "--include-qdrant-live",
+        action="store_true",
+        help="Probe local Qdrant /collections when explicitly requested; failures are non-fatal.",
+    )
     parser.add_argument("--list", action="store_true", help="Print commands without executing them.")
     args = parser.parse_args(argv)
 
@@ -98,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         skip_runtime_status=args.skip_runtime_status,
         skip_adapter_deps=args.skip_adapter_deps,
         include_audit=args.include_audit,
+        include_qdrant_live=args.include_qdrant_live,
     )
     if args.list:
         for command in commands:
@@ -119,6 +125,7 @@ def build_acceptance_commands(
     skip_runtime_status: bool = False,
     skip_adapter_deps: bool = False,
     include_audit: bool = False,
+    include_qdrant_live: bool = False,
 ) -> list[AcceptanceCommand]:
     commands = [
         AcceptanceCommand("version", (python, "-m", "TeeBotus", "--version")),
@@ -187,6 +194,24 @@ def build_acceptance_commands(
             ),
         ]
     )
+    if include_qdrant_live:
+        curl = shutil.which("curl")
+        if curl:
+            commands.append(
+                AcceptanceCommand(
+                    "qdrant-live-collections",
+                    (curl, "-fsS", "http://127.0.0.1:6333/collections"),
+                    nonfatal=True,
+                )
+            )
+        else:
+            commands.append(
+                AcceptanceCommand(
+                    "qdrant-live-curl-missing",
+                    (python, "-c", "print('curl not installed; qdrant live check skipped')"),
+                    nonfatal=True,
+                )
+            )
     if not skip_adapter_deps:
         commands.append(AcceptanceCommand("adapter-deps", (python, "scripts/check_adapter_deps.py")))
     if include_audit:

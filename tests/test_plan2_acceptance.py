@@ -102,6 +102,22 @@ def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
     assert "runtime-status-matrix" not in labels
     assert "adapter-deps" not in labels
     assert "plan2-pytest" in labels
+    assert not any(label.startswith("qdrant-live") for label in labels)
+
+
+def test_plan2_acceptance_can_include_nonfatal_qdrant_live_probe(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(check_plan2_acceptance.shutil, "which", lambda name: "/usr/bin/curl" if name == "curl" else None)
+
+    commands = check_plan2_acceptance.build_acceptance_commands(
+        python="python-test",
+        benchmark_output=tmp_path / "bench.md",
+        benchmark_json_output=tmp_path / "bench.json",
+        include_qdrant_live=True,
+    )
+    by_label = {command.label: command for command in commands}
+
+    assert by_label["qdrant-live-collections"].argv == ("/usr/bin/curl", "-fsS", "http://127.0.0.1:6333/collections")
+    assert by_label["qdrant-live-collections"].nonfatal is True
 
 
 def test_plan2_acceptance_runner_stops_on_fatal_failure(monkeypatch) -> None:
