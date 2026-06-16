@@ -454,9 +454,29 @@ def _runtime_status_broken_lines(output: str) -> list[str]:
         stripped = line.strip()
         if not stripped:
             continue
-        if " status=broken" in stripped or "account_memory_recovery=" in stripped and " status=needed" in stripped:
+        if _runtime_status_line_is_broken(stripped):
             broken.append(stripped)
     return broken
+
+
+def _runtime_status_line_is_broken(line: str) -> bool:
+    if " status=broken" in line:
+        return True
+    if "account_memory_recovery=" in line and " status=needed" in line:
+        return True
+    status_by_prefix = {
+        "ollama=": {"unreachable"},
+        "signal_service=": {"unreachable"},
+        "signal_account=": {"missing", "unavailable"},
+        "matrix_homeserver=": {"unreachable"},
+        "local_transcription=": {"unavailable"},
+        "bibliothekar=": {"unavailable", "unreachable"},
+    }
+    for prefix, problem_statuses in status_by_prefix.items():
+        if not line.startswith(prefix):
+            continue
+        return any(f" status={status}" in line for status in problem_statuses)
+    return False
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:

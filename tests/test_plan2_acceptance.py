@@ -356,7 +356,26 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
             "llm=Demo/telegram:1 provider=openai model=gpt status=configured",
             "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable",
             "account_memory=Demo/abc status=ok",
+            "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b",
+            "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper",
+            "bibliothekar=Demo backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1",
         ]
     )
 
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == []
+
+
+def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> None:
+    output = "\n".join(
+        [
+            "ollama=127.0.0.1:11434 status=unreachable error=connection refused",
+            "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=unreachable error=connection refused",
+            "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=missing error=account missing",
+            "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused",
+            "local_transcription=Demo backend=local model=tiny status=unavailable error=missing backend",
+            "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=unavailable error=missing dependency",
+            "account_memory_recovery=Demo status=needed command=\"python3 -m TeeBotus.admin memory-recovery\"",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()
