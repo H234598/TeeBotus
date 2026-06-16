@@ -343,7 +343,6 @@ def _build_import_report(
     running_processes: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     running_processes = list(running_processes or [])
-    mode_is_apply = mode == "apply"
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -362,7 +361,7 @@ def _build_import_report(
         "apply_safety": {
             "running_bot_processes": running_processes,
             "running_bot_process_count": len(running_processes),
-            "apply_allowed_now": bool(mode_is_apply or not running_processes or allow_running_bot),
+            "apply_allowed_now": bool(not running_processes or allow_running_bot),
             "apply_requires_stopped_bot": bool(running_processes and not allow_running_bot),
             "message": _apply_safety_message(running_processes, allow_running_bot=allow_running_bot),
         },

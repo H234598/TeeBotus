@@ -351,6 +351,26 @@ def test_legacy_user_memory_import_dry_run_reports_running_bot_apply_block(tmp_p
     assert markdown.index("### Running Bot Processes") < markdown.index("## Events")
 
 
+def test_legacy_user_memory_import_apply_report_still_blocks_running_bot_without_override(tmp_path: Path) -> None:
+    report = legacy_import._build_import_report(
+        legacy_import.ImportStats(),
+        mode="apply",
+        legacy_instances_dir=tmp_path / "legacy",
+        requested_legacy_instances_dir=tmp_path / "legacy",
+        target_instances_dir=tmp_path / "target",
+        instances=(),
+        backend="sqlite",
+        replace_unreadable=True,
+        replace_unreadable_account_metadata=True,
+        backup_current=True,
+        allow_running_bot=False,
+        running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+    )
+
+    assert report["apply_safety"]["apply_allowed_now"] is False
+    assert report["apply_safety"]["apply_requires_stopped_bot"] is True
+
+
 def test_legacy_user_memory_runtime_process_detection_ignores_admin_false_positives() -> None:
     assert legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus --all --channels telegram")
     assert legacy_import._looks_like_running_teebotus_runtime("bash -lc cd repo && python3 -m teebotus --all")
