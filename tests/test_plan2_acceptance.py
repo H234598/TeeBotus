@@ -566,6 +566,81 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
     assert any("apply_requires_stopped_bot must be true" in error for error in errors)
 
 
+def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "events": [
+                    {"instance": "Demo", "action": "would-import"},
+                    {"instance": "Other", "action": "would-import"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+        )
+    )
+
+    assert any("out-of-scope instances: Other" in error for error in errors)
+
+
+def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "events": [{"instance": "Demo", "action": "would-import"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+        )
+    )
+
+    assert errors == []
+
+
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:
     markdown_path = tmp_path / "bench.md"
     json_path = tmp_path / "bench.json"

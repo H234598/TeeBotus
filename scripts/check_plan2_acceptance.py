@@ -557,7 +557,10 @@ def _legacy_import_artifact_errors(argv: Sequence[str]) -> list[str]:
         return [f"legacy import JSON artifact is not valid JSON: {json_path}: {exc}"]
     if not isinstance(payload, dict):
         return [f"legacy import JSON root must be an object: {json_path}"]
-    return _legacy_import_payload_errors(payload, path=json_path)
+    return [
+        *_legacy_import_payload_errors(payload, path=json_path),
+        *_legacy_import_scope_errors(payload, argv, path=json_path),
+    ]
 
 
 def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:
@@ -600,6 +603,31 @@ def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | No
             errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be true while runtime processes are detected")
     if int(running_count or 0) == 0 and apply_safety.get("apply_requires_stopped_bot") is not False:
         errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be false when no runtime processes are detected")
+    return errors
+
+
+def _legacy_import_scope_errors(payload: Mapping[str, Any], argv: Sequence[str], *, path: Path | None = None) -> list[str]:
+    expected_instance = _option_value(argv, "--instance")
+    if not expected_instance:
+        return []
+    prefix = f"{path}: " if path is not None else ""
+    errors: list[str] = []
+    instances = payload.get("instances")
+    if instances != [expected_instance]:
+        errors.append(f"{prefix}legacy import report instances must equal [{expected_instance}]")
+    events = payload.get("events")
+    if not isinstance(events, list):
+        errors.append(f"{prefix}legacy import report events must be a list")
+        return errors
+    out_of_scope = sorted(
+        {
+            str(event.get("instance") or "")
+            for event in events
+            if isinstance(event, Mapping) and str(event.get("instance") or "") != expected_instance
+        }
+    )
+    if out_of_scope:
+        errors.append(f"{prefix}legacy import report contains out-of-scope instances: {', '.join(out_of_scope)}")
     return errors
 
 
@@ -918,6 +946,11 @@ def _forbidden_standard_benchmark_calls(details: Mapping[str, Any]) -> list[tupl
 
 
 def _option_path(argv: Sequence[str], option: str) -> Path | None:
+    value = _option_value(argv, option)
+    return Path(value) if value is not None else None
+
+
+def _option_value(argv: Sequence[str], option: str) -> str | None:
     try:
         index = argv.index(option)
     except ValueError:
@@ -925,7 +958,7 @@ def _option_path(argv: Sequence[str], option: str) -> Path | None:
     value_index = index + 1
     if value_index >= len(argv):
         return None
-    return Path(argv[value_index])
+    return str(argv[value_index])
 
 
 def _option_paths(argv: Sequence[str], options: Sequence[str]) -> list[tuple[str, Path]]:
