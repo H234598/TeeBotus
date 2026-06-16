@@ -443,6 +443,7 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
     output = "\n".join(
         [
             "llm=Demo/telegram:1 provider=openai model=gpt status=configured",
+            "llm=Demo/signal:1 provider=litellm model=ollama_chat/qwen status=configured api_key=configured",
             "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable",
             "account_memory=Demo/abc status=ok",
             "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b",
@@ -452,6 +453,20 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
     )
 
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == []
+
+
+def test_runtime_status_broken_lines_flags_secret_leaks() -> None:
+    openai_key = "sk-" + "liveSecretLeak123456"
+    matrix_token = "syt_" + "liveSecretLeak123456"
+    output = "\n".join(
+        [
+            f"llm=Demo/telegram:1 provider=openai model=gpt status=configured api_key={openai_key}",
+            f"matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=reachable token={matrix_token}",
+            "account_memory=Demo/abcdef status=ok",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()[:2]
 
 
 def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> None:

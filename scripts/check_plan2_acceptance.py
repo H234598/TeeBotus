@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -40,6 +41,17 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "langgraph_flows",
         "transcription_youtube",
     }
+)
+RUNTIME_STATUS_SECRET_PATTERNS = (
+    re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bsyt_[A-Za-z0-9_=-]{12,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{12,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bhf_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bgsk_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
 )
 
 
@@ -513,6 +525,8 @@ def _runtime_status_broken_lines(output: str) -> list[str]:
 
 
 def _runtime_status_line_is_broken(line: str) -> bool:
+    if _runtime_status_line_contains_secret(line):
+        return True
     if " status=broken" in line:
         return True
     if "account_memory_recovery=" in line and " status=needed" in line:
@@ -531,6 +545,10 @@ def _runtime_status_line_is_broken(line: str) -> bool:
             continue
         return any(f" status={status}" in line for status in problem_statuses)
     return False
+
+
+def _runtime_status_line_contains_secret(line: str) -> bool:
+    return any(pattern.search(line) for pattern in RUNTIME_STATUS_SECRET_PATTERNS)
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:
