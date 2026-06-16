@@ -466,6 +466,122 @@ def test_plan2_acceptance_runner_fails_on_secret_artifact_leak(tmp_path: Path, m
     assert calls == [("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path))]
 
 
+def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "accounts": [
+                            {
+                                "account_id": "a" * 128,
+                                "recoverable": False,
+                                "recovery_status": "unrecoverable",
+                                "sources": [{"name": "sqlite_primary", "readable": False}],
+                            },
+                            {
+                                "account_id": "b" * 128,
+                                "recoverable": False,
+                                "recovery_status": "empty",
+                                "sources": [{"name": "json_files", "readable": True}],
+                            },
+                        ],
+                        "legacy_plaintext_import": {"sources": 1, "entries": 2},
+                    }
+                ],
+                "totals": {
+                    "accounts": 2,
+                    "recoverable_accounts": 0,
+                    "unrecoverable_accounts": 1,
+                    "empty_accounts": 1,
+                    "no_source_accounts": 0,
+                    "sources": 2,
+                    "readable_sources": 1,
+                    "unreadable_sources": 1,
+                    "legacy_plaintext_sources": 1,
+                    "legacy_plaintext_entries": 2,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert errors == []
+
+
+def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 2,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "accounts": [
+                            {
+                                "account_id": "a" * 128,
+                                "recoverable": True,
+                                "recovery_status": "recoverable",
+                                "sources": [{"name": "sqlite_fallback", "readable": True}],
+                            }
+                        ],
+                        "legacy_plaintext_import": {"sources": 1, "entries": 2},
+                    }
+                ],
+                "totals": {
+                    "accounts": 9,
+                    "recoverable_accounts": 0,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 0,
+                    "no_source_accounts": 0,
+                    "sources": 0,
+                    "readable_sources": 0,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 0,
+                    "legacy_plaintext_entries": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("instance_count must match instances length" in error for error in errors)
+    assert any("totals.accounts must match instances (1)" in error for error in errors)
+    assert any("totals.legacy_plaintext_entries must match instances (2)" in error for error in errors)
+
+
 def test_secret_artifact_validation_checks_all_declared_outputs(tmp_path: Path) -> None:
     json_path = tmp_path / "import.json"
     markdown_path = tmp_path / "import.md"

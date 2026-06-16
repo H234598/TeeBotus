@@ -489,6 +489,8 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
             artifact_errors = _secret_artifact_errors(command.argv)
             if _is_legacy_import_command(command.argv):
                 artifact_errors.extend(_legacy_import_artifact_errors(command.argv))
+            if _is_memory_recovery_json_command(command.argv):
+                artifact_errors.extend(_memory_recovery_artifact_errors(command.argv))
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: output artifacts contain secret-looking content.", file=sys.stderr)
                 for error in artifact_errors:
@@ -543,6 +545,113 @@ def _secret_artifact_errors(argv: Sequence[str]) -> list[str]:
 
 def _is_legacy_import_command(argv: Sequence[str]) -> bool:
     return any(str(part).endswith("import_legacy_user_memory.py") for part in argv)
+
+
+def _is_memory_recovery_json_command(argv: Sequence[str]) -> bool:
+    return "memory-recovery" in argv and "--format" in argv and _option_value(argv, "--format") == "json"
+
+
+def _memory_recovery_artifact_errors(argv: Sequence[str]) -> list[str]:
+    output_path = _option_path(argv, "--output")
+    if output_path is None:
+        return ["memory recovery JSON artifact missing --output"]
+    if not output_path.exists():
+        return [f"memory recovery JSON artifact missing: {output_path}"]
+    try:
+        payload = json.loads(output_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [f"memory recovery JSON artifact is not valid JSON: {output_path}: {exc}"]
+    if not isinstance(payload, dict):
+        return [f"memory recovery JSON root must be an object: {output_path}"]
+    return _memory_recovery_payload_errors(payload, path=output_path)
+
+
+def _memory_recovery_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:
+    prefix = f"{path}: " if path is not None else ""
+    errors: list[str] = []
+    if payload.get("schema_version") != 2:
+        errors.append(f"{prefix}memory recovery schema_version must be 2")
+    instances = payload.get("instances")
+    if not isinstance(instances, list):
+        errors.append(f"{prefix}memory recovery instances must be a list")
+        instances = []
+    instance_count = payload.get("instance_count")
+    if not _is_nonnegative_integer(instance_count):
+        errors.append(f"{prefix}memory recovery instance_count must be a non-negative integer")
+    elif int(instance_count or 0) != len(instances):
+        errors.append(f"{prefix}memory recovery instance_count must match instances length")
+    totals = payload.get("totals")
+    if not isinstance(totals, Mapping):
+        errors.append(f"{prefix}memory recovery totals must be an object")
+        totals = {}
+    required_total_keys = (
+        "accounts",
+        "recoverable_accounts",
+        "unrecoverable_accounts",
+        "empty_accounts",
+        "no_source_accounts",
+        "sources",
+        "readable_sources",
+        "unreadable_sources",
+        "legacy_plaintext_sources",
+        "legacy_plaintext_entries",
+    )
+    for key in required_total_keys:
+        if not _is_nonnegative_integer(totals.get(key)):
+            errors.append(f"{prefix}memory recovery totals.{key} must be a non-negative integer")
+    derived = _derive_memory_recovery_totals(instances)
+    for key, value in derived.items():
+        if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
+            errors.append(f"{prefix}memory recovery totals.{key} must match instances ({value})")
+    return errors
+
+
+def _derive_memory_recovery_totals(instances: Sequence[Any]) -> dict[str, int]:
+    totals = {
+        "accounts": 0,
+        "recoverable_accounts": 0,
+        "unrecoverable_accounts": 0,
+        "empty_accounts": 0,
+        "no_source_accounts": 0,
+        "sources": 0,
+        "readable_sources": 0,
+        "unreadable_sources": 0,
+        "legacy_plaintext_sources": 0,
+        "legacy_plaintext_entries": 0,
+    }
+    for instance in instances:
+        if not isinstance(instance, Mapping):
+            continue
+        accounts = instance.get("accounts")
+        if isinstance(accounts, list):
+            for account in accounts:
+                if not isinstance(account, Mapping):
+                    continue
+                totals["accounts"] += 1
+                status = str(account.get("recovery_status") or "")
+                if account.get("recoverable"):
+                    totals["recoverable_accounts"] += 1
+                if status == "unrecoverable":
+                    totals["unrecoverable_accounts"] += 1
+                elif status == "empty":
+                    totals["empty_accounts"] += 1
+                elif status == "no_sources":
+                    totals["no_source_accounts"] += 1
+                sources = account.get("sources")
+                if isinstance(sources, list):
+                    for source in sources:
+                        if not isinstance(source, Mapping):
+                            continue
+                        totals["sources"] += 1
+                        if source.get("readable"):
+                            totals["readable_sources"] += 1
+                        else:
+                            totals["unreadable_sources"] += 1
+        legacy = instance.get("legacy_plaintext_import")
+        if isinstance(legacy, Mapping):
+            totals["legacy_plaintext_sources"] += int(legacy.get("sources", 0) or 0)
+            totals["legacy_plaintext_entries"] += int(legacy.get("entries", 0) or 0)
+    return totals
 
 
 def _legacy_import_artifact_errors(argv: Sequence[str]) -> list[str]:
