@@ -5,7 +5,7 @@ from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
-from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider
+from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
 
 
@@ -35,6 +35,7 @@ def build_runtime_text_llm_client(
     if enabled_override is None and instructions.llm_enabled is False:
         return None
     profile_name = str(profile or instructions.llm_profile or "").strip()
+    remote_fallback_allowed = _parse_bool(allow_remote_fallback)
     if profile_name:
         return _build_profile_client(
             profile_name,
@@ -43,6 +44,7 @@ def build_runtime_text_llm_client(
             default_api_key=default_api_key,
             override_api_key=api_key,
             fallback_models=fallback_models,
+            allow_remote_fallback=remote_fallback_allowed,
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -53,7 +55,7 @@ def build_runtime_text_llm_client(
     has_direct_provider = bool(str(provider or "").strip())
     has_direct_model = bool(str(model or "").strip())
     if route_purpose and not (has_direct_provider or has_direct_model):
-        route = select_llm_route(route_purpose, allow_remote_fallback=_parse_bool(allow_remote_fallback))
+        route = select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed)
         return _build_route_client(
             route,
             instructions=instructions,
@@ -61,6 +63,7 @@ def build_runtime_text_llm_client(
             default_api_key=default_api_key,
             override_api_key=api_key,
             fallback_models=fallback_models,
+            allow_remote_fallback=remote_fallback_allowed,
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -73,12 +76,17 @@ def build_runtime_text_llm_client(
         default_api_key=default_api_key,
         provider=provider,
         model=model,
-        fallback_models=fallback_models,
+        fallback_models=_filter_runtime_fallback_models(
+            provider=provider or instructions.llm_provider,
+            fallback_models=fallback_models or instructions.llm_fallback_models,
+            allow_remote_fallback=remote_fallback_allowed,
+        ),
         api_key=api_key,
         api_base=api_base,
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        use_instruction_fallback_models=False,
     )
 
 
@@ -90,6 +98,7 @@ def _build_route_client(
     default_api_key: str,
     override_api_key: str,
     fallback_models: str | tuple[str, ...],
+    allow_remote_fallback: bool,
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
@@ -104,7 +113,11 @@ def _build_route_client(
     if resolved_provider == "openai" and resolved_openai_client is None:
         key = resolved_api_key or default_api_key
         resolved_openai_client = openai_client_factory(key) if key else None
-    resolved_fallback_models = fallback_models or route.fallback_models
+    resolved_fallback_models = _filter_runtime_fallback_models(
+        provider=route.provider,
+        fallback_models=fallback_models or route.fallback_models,
+        allow_remote_fallback=allow_remote_fallback or (bool(route.fallback_models) and not fallback_models),
+    )
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
@@ -117,6 +130,7 @@ def _build_route_client(
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        use_instruction_fallback_models=False,
     )
 
 
@@ -128,6 +142,7 @@ def _build_profile_client(
     default_api_key: str,
     override_api_key: str,
     fallback_models: str | tuple[str, ...],
+    allow_remote_fallback: bool,
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
@@ -150,12 +165,17 @@ def _build_profile_client(
         default_api_key=resolved_api_key or default_api_key,
         provider=profile.provider,
         model=profile.model,
-        fallback_models=fallback_models,
+        fallback_models=_filter_runtime_fallback_models(
+            provider=profile.provider,
+            fallback_models=fallback_models,
+            allow_remote_fallback=allow_remote_fallback,
+        ),
         api_key=resolved_api_key,
         api_base=profile.base_url,
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        use_instruction_fallback_models=False,
     )
 
 
@@ -184,6 +204,30 @@ def _parse_optional_bool(value: bool | str | None) -> bool | None:
     if text in {"0", "false", "no", "nein", "off", "disabled", "aus"}:
         return False
     return None
+
+
+def _filter_runtime_fallback_models(
+    *,
+    provider: str,
+    fallback_models: str | tuple[str, ...],
+    allow_remote_fallback: bool,
+) -> tuple[str, ...]:
+    models = parse_fallback_models(fallback_models)
+    if allow_remote_fallback:
+        return models
+    normalized_provider = normalize_llm_provider(provider)
+    return tuple(model for model in models if not _is_remote_fallback_model(normalized_provider, model))
+
+
+def _is_remote_fallback_model(provider: str, model: str) -> bool:
+    value = str(model or "").strip().casefold()
+    if not value:
+        return False
+    if value.startswith(("ollama/", "ollama_chat/")):
+        return False
+    if value.startswith(("openai/", "huggingface/", "groq/", "gemini/")):
+        return True
+    return provider in {"openai", "huggingface", "groq", "gemini"}
 
 
 __all__ = ["build_runtime_text_llm_client"]

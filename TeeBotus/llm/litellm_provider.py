@@ -40,6 +40,7 @@ class LiteLLMSettings:
     model: str
     provider: str = "litellm"
     fallback_models: tuple[str, ...] = ()
+    use_instruction_fallback_models: bool = True
     api_key: str = ""
     api_base: str = ""
     timeout: int = 90
@@ -84,6 +85,7 @@ class LiteLLMTextClient:
         self.provider = normalize_llm_provider(resolved.provider)
         self.model = resolved.model.strip()
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
+        self.use_instruction_fallback_models = bool(resolved.use_instruction_fallback_models)
         self.api_key = resolved.api_key.strip()
         self.api_base = resolved.api_base.strip()
         self.timeout = resolved.timeout
@@ -101,7 +103,13 @@ class LiteLLMTextClient:
         except ImportError as exc:
             raise LLMAPIError("LiteLLM is not installed") from exc
 
-        models = _resolve_litellm_models(self.provider, instructions, self.model, self.fallback_models)
+        models = _resolve_litellm_models(
+            self.provider,
+            instructions,
+            self.model,
+            self.fallback_models,
+            use_instruction_fallback_models=self.use_instruction_fallback_models,
+        )
         if not models:
             raise LLMAPIError("LiteLLM model must not be empty")
 
@@ -187,6 +195,8 @@ def _resolve_litellm_models(
     instructions: BotInstructions,
     default_model: str,
     default_fallback_models: tuple[str, ...],
+    *,
+    use_instruction_fallback_models: bool = True,
 ) -> tuple[str, ...]:
     configured_model = (default_model or instructions.llm_model).strip()
     if not configured_model:
@@ -194,7 +204,9 @@ def _resolve_litellm_models(
             configured_model = instructions.openai_model.strip()
         else:
             raise LLMAPIError(f"LLM provider {provider} requires llm_model or TEEBOTUS_LLM_MODEL")
-    fallback_models = default_fallback_models or tuple(instructions.llm_fallback_models)
+    fallback_models = default_fallback_models
+    if not fallback_models and use_instruction_fallback_models:
+        fallback_models = tuple(instructions.llm_fallback_models)
     ordered = [configured_model, *fallback_models]
     result: list[str] = []
     for model in ordered:

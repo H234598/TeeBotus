@@ -517,6 +517,21 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
         purpose="structured_decision",
         allow_remote_fallback=True,
     )
+    direct_blocked_client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="ollama",
+        model="broken",
+        fallback_models="groq/llama-3.1-8b-instant,ollama_chat/qwen2.5:7b",
+    )
+    direct_allowed_client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="ollama",
+        model="broken",
+        fallback_models="groq/llama-3.1-8b-instant,ollama_chat/qwen2.5:7b",
+        allow_remote_fallback=True,
+    )
     default_route = select_llm_route("structured_decision", profiles=profiles, routing=routing)
     explicit_fallback_route = select_llm_route("structured_decision", profiles=profiles, routing=routing, allow_remote_fallback=True)
     return _result(
@@ -541,6 +556,8 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "default_fallback_models": list(default_route.fallback_models),
             "explicit_remote_fallback_enabled": bool(explicit_fallback_route.fallback_models),
             "explicit_remote_fallback_models": list(explicit_fallback_route.fallback_models),
+            "direct_remote_fallback_default_models": list(getattr(direct_blocked_client, "fallback_models", ())),
+            "direct_remote_fallback_allowed_models": list(getattr(direct_allowed_client, "fallback_models", ())),
             "network_calls": 0,
         },
     )

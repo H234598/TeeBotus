@@ -46,6 +46,7 @@ def build_text_llm_client(
     timeout: int | str | None = None,
     temperature: float | str | None = None,
     max_tokens: int | str | None = None,
+    use_instruction_fallback_models: bool = True,
 ) -> object | None:
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
@@ -56,6 +57,7 @@ def build_text_llm_client(
                 provider=resolved_provider,
                 model=model,
                 fallback_models=parse_fallback_models(fallback_models),
+                use_instruction_fallback_models=use_instruction_fallback_models,
                 api_key=api_key or default_api_key,
                 api_base=api_base or instructions.llm_base_url,
                 timeout=_parse_positive_int(timeout) or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,

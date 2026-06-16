@@ -73,6 +73,11 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert llm_router["details"]["default_fallback_models"] == []
     assert llm_router["details"]["explicit_remote_fallback_enabled"] is True
     assert llm_router["details"]["explicit_remote_fallback_models"] == ["groq/llama-3.1-8b-instant"]
+    assert llm_router["details"]["direct_remote_fallback_default_models"] == ["ollama_chat/qwen2.5:7b"]
+    assert llm_router["details"]["direct_remote_fallback_allowed_models"] == [
+        "groq/llama-3.1-8b-instant",
+        "ollama_chat/qwen2.5:7b",
+    ]
     assert llm_router["details"]["network_calls"] == 0
     proactive = next(result for result in suite["results"] if result["name"] == "proactive_tool_plan_due_dispatch_gates")
     assert proactive["ok"] is True

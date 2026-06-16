@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sys
+import types
 from pathlib import Path
+
+import pytest
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.profiles import (
@@ -11,7 +15,7 @@ from TeeBotus.llm.profiles import (
     load_llm_routing,
     select_llm_route,
 )
-from TeeBotus.llm_client import LiteLLMTextClient
+from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 
 
@@ -180,6 +184,27 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_profile_filters_remote_fallback_without_explicit_allow() -> None:
+    blocked = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        profile="local_ollama",
+        fallback_models="groq/llama-3.3-70b-versatile, ollama_chat/qwen2.5:7b",
+    )
+    allowed = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        profile="local_ollama",
+        fallback_models="groq/llama-3.3-70b-versatile, ollama_chat/qwen2.5:7b",
+        allow_remote_fallback="yes",
+    )
+
+    assert isinstance(blocked, LiteLLMTextClient)
+    assert blocked.fallback_models == ("ollama_chat/qwen2.5:7b",)
+    assert isinstance(allowed, LiteLLMTextClient)
+    assert allowed.fallback_models == ("groq/llama-3.3-70b-versatile", "ollama_chat/qwen2.5:7b")
+
+
 def test_runtime_text_client_returns_none_when_runtime_llm_is_disabled() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
@@ -257,6 +282,55 @@ def test_runtime_text_client_direct_runtime_provider_overrides_purpose_router() 
 
     assert isinstance(client, LiteLLMTextClient)
     assert client.model == "ollama_chat/qwen2.5:7b"
+
+
+def test_runtime_text_client_direct_provider_filters_remote_fallback_without_explicit_allow() -> None:
+    blocked = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="ollama",
+        model="broken",
+        fallback_models="groq/llama-3.3-70b-versatile,ollama_chat/qwen2.5:7b,openai/gpt-4.1-mini",
+    )
+    allowed = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="ollama",
+        model="broken",
+        fallback_models="groq/llama-3.3-70b-versatile,ollama_chat/qwen2.5:7b,openai/gpt-4.1-mini",
+        allow_remote_fallback=True,
+    )
+
+    assert isinstance(blocked, LiteLLMTextClient)
+    assert blocked.fallback_models == ("ollama_chat/qwen2.5:7b",)
+    assert isinstance(allowed, LiteLLMTextClient)
+    assert allowed.fallback_models == (
+        "groq/llama-3.3-70b-versatile",
+        "ollama_chat/qwen2.5:7b",
+        "openai/gpt-4.1-mini",
+    )
+
+
+def test_runtime_text_client_filtered_remote_instruction_fallback_is_not_reused(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        calls.append(str(kwargs["model"]))
+        raise RuntimeError("primary down")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_fallback_models=("groq/llama-3.3-70b-versatile",)),
+        openai_client=None,
+        provider="ollama",
+        model="broken",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    with pytest.raises(LLMAPIError):
+        client.create_reply("Ping", BotInstructions(llm_fallback_models=("groq/llama-3.3-70b-versatile",)), None)
+
+    assert calls == ["ollama/broken"]
 
 
 def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -> None:
