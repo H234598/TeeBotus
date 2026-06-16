@@ -17,6 +17,8 @@ from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecret
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
+    ACCOUNT_PROFILE_FILENAME,
+    AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
     TOKEN_HEX_RE,
@@ -186,6 +188,22 @@ def render_text_report(report: Mapping[str, Any]) -> str:
         if isinstance(totals, Mapping):
             for key in sorted(totals):
                 lines.append(f"- {key}: `{totals[key]}`")
+    metadata_quarantine = report.get("metadata_quarantine")
+    if isinstance(metadata_quarantine, Mapping):
+        lines.extend(["", "## Metadata Quarantine", ""])
+        lines.append(f"- status: `{metadata_quarantine.get('status', '')}`")
+        lines.append(f"- mode: `{metadata_quarantine.get('mode', '')}`")
+        lines.append(f"- base_dir: `{metadata_quarantine.get('base_dir', '')}`")
+        safety = metadata_quarantine.get("apply_safety")
+        if isinstance(safety, Mapping):
+            lines.append(f"- running_bot_process_count: `{safety.get('running_bot_process_count', 0)}`")
+            message = str(safety.get("message") or "").strip()
+            if message:
+                lines.append(f"- safety: {message}")
+        totals = metadata_quarantine.get("totals")
+        if isinstance(totals, Mapping):
+            for key in sorted(totals):
+                lines.append(f"- {key}: `{totals[key]}`")
     return "\n".join(lines) + "\n"
 
 
@@ -241,6 +259,152 @@ def quarantine_unrecoverable_account_memory(
     if not result["totals"]["unrecoverable_accounts"]:
         result["status"] = "no-op"
     return result
+
+
+def quarantine_unreadable_account_metadata(
+    *,
+    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
+    instances: Sequence[str] = (),
+    provider: InstanceSecretProvider | None = None,
+    apply: bool = False,
+    quarantine_dir: Path | None = None,
+    allow_running_bot: bool = False,
+    running_processes: Sequence[Mapping[str, str]] | None = None,
+) -> dict[str, Any]:
+    resolved_instances_dir = Path(instances_dir)
+    provider = provider or ReadOnlySecretToolInstanceSecretProvider()
+    running = [dict(process) for process in (running_processes if running_processes is not None else _running_teebotus_processes())]
+    blocked = bool(apply and running and not allow_running_bot)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    result: dict[str, Any] = {
+        "schema_version": 1,
+        "generated_at": utc_now(),
+        "mode": "apply" if apply else "dry-run",
+        "status": "blocked" if blocked else ("applied" if apply else "dry-run"),
+        "base_dir": str(quarantine_dir or ""),
+        "apply_safety": {
+            "running_bot_processes": running,
+            "running_bot_process_count": len(running),
+            "apply_allowed_now": bool(not blocked),
+            "apply_requires_stopped_bot": bool(running and not allow_running_bot),
+            "message": _quarantine_safety_message(running, allow_running_bot=allow_running_bot),
+        },
+        "totals": {
+            "instances_with_unreadable_metadata": 0,
+            "items_quarantined": 0,
+            "account_dirs_quarantined": 0,
+        },
+        "instances": [],
+    }
+    if blocked:
+        return result
+    for instance_name in discover_instances(resolved_instances_dir, instances):
+        instance_result = _quarantine_instance_unreadable_metadata(
+            instances_dir=resolved_instances_dir,
+            instance_name=instance_name,
+            provider=provider,
+            apply=apply,
+            quarantine_dir=quarantine_dir,
+            timestamp=timestamp,
+        )
+        if instance_result["totals"]["items_quarantined"]:
+            result["instances"].append(instance_result)
+            result["totals"]["instances_with_unreadable_metadata"] += 1
+            result["totals"]["items_quarantined"] += int(instance_result["totals"]["items_quarantined"])
+            result["totals"]["account_dirs_quarantined"] += int(instance_result["totals"]["account_dirs_quarantined"])
+    if not result["totals"]["items_quarantined"]:
+        result["status"] = "no-op"
+    return result
+
+
+def _quarantine_instance_unreadable_metadata(
+    *,
+    instances_dir: Path,
+    instance_name: str,
+    provider: InstanceSecretProvider,
+    apply: bool,
+    quarantine_dir: Path | None,
+    timestamp: str,
+) -> dict[str, Any]:
+    accounts_root = instances_dir / instance_name / "data" / "accounts"
+    artifact_name = safe_artifact_name(instance_name, default="instance")
+    instance_quarantine_dir = (
+        quarantine_dir / artifact_name / "metadata" / timestamp
+        if quarantine_dir is not None
+        else accounts_root / "Account_Metadata_Quarantine" / timestamp
+    )
+    items = _unreadable_metadata_items(accounts_root, instance_name, provider)
+    result: dict[str, Any] = {
+        "instance": instance_name,
+        "accounts_root": str(accounts_root),
+        "quarantine_dir": str(instance_quarantine_dir),
+        "items": [
+            {
+                "kind": item["kind"],
+                "path": str(item["path"]),
+                "error": item["error"],
+                "would_move": not apply,
+            }
+            for item in items
+        ],
+        "totals": {
+            "items_quarantined": len(items),
+            "account_dirs_quarantined": sum(1 for item in items if item["kind"] == "accounts_dir"),
+        },
+    }
+    if not items or not apply:
+        return result
+    _prepare_private_dir(instance_quarantine_dir)
+    moved_items = []
+    for item in items:
+        path = item["path"]
+        target = instance_quarantine_dir / path.name
+        if target.exists():
+            target = instance_quarantine_dir / f"{path.name}.{safe_artifact_name(item['kind'], default='item')}"
+        _prepare_private_dir(target.parent)
+        shutil.move(str(path), str(target))
+        moved_items.append(
+            {
+                "kind": item["kind"],
+                "path": str(path),
+                "quarantine_path": str(target),
+                "error": item["error"],
+            }
+        )
+    result["items"] = moved_items
+    manifest_path = instance_quarantine_dir / "manifest.json"
+    manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return result
+
+
+def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> list[dict[str, Any]]:
+    store = AccountStore(accounts_root, instance_name, secret_provider=provider, create_dirs=False)
+    items: list[dict[str, Any]] = []
+    for kind, path, default in (
+        ("account_index", store.account_index_path, {"schema_version": 1, "accounts": {}}),
+        ("identity_mapping", store.identities_path, {}),
+        ("account_secrets", store.secrets_path, {}),
+    ):
+        if not path.exists():
+            continue
+        try:
+            store.vault.read_json(path, default)
+        except AccountStoreError as exc:
+            items.append({"kind": kind, "path": path, "error": str(exc)})
+    accounts_dir = store.accounts_dir
+    if accounts_dir.exists():
+        unreadable_profiles: list[str] = []
+        for account_dir in sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name)):
+            profile_path = account_dir / ACCOUNT_PROFILE_FILENAME
+            if not profile_path.exists():
+                continue
+            try:
+                store.vault.read_json(profile_path, {})
+            except AccountStoreError as exc:
+                unreadable_profiles.append(f"{account_dir.name}:{exc}")
+        if unreadable_profiles:
+            items.append({"kind": "accounts_dir", "path": accounts_dir, "error": "; ".join(unreadable_profiles[:5])})
+    return items
 
 
 def _quarantine_instance_unrecoverable(
@@ -323,6 +487,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--output", default="")
     parser.add_argument("--quarantine-unrecoverable", action="store_true", help="Move unrecoverable encrypted memory payloads out of active stores.")
+    parser.add_argument("--quarantine-unreadable-metadata", action="store_true", help="Move unreadable encrypted account metadata out of active stores.")
     parser.add_argument("--apply", action="store_true", help="Apply --quarantine-unrecoverable. Without this, only report what would move.")
     parser.add_argument("--quarantine-dir", default="", help="Optional base directory for quarantine artifacts. Defaults below each accounts root.")
     parser.add_argument("--allow-running-bot", action="store_true", help="Allow quarantine apply while TeeBotus runtime processes are running.")
@@ -342,6 +507,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         report["quarantine"] = quarantine
         if quarantine.get("status") == "blocked":
+            exit_code = 3
+    if args.quarantine_unreadable_metadata:
+        metadata_quarantine = quarantine_unreadable_account_metadata(
+            instances_dir=args.instances_dir,
+            instances=parse_csv(args.instances),
+            apply=args.apply,
+            quarantine_dir=Path(args.quarantine_dir).expanduser() if args.quarantine_dir else None,
+            allow_running_bot=args.allow_running_bot,
+        )
+        report["metadata_quarantine"] = metadata_quarantine
+        if metadata_quarantine.get("status") == "blocked":
             exit_code = 3
     output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
     if args.output:

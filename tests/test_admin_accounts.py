@@ -5,6 +5,7 @@ from pathlib import Path
 from TeeBotus.admin.account_memory_recovery import (
     build_account_memory_recovery_report,
     main as recovery_main,
+    quarantine_unreadable_account_metadata,
     quarantine_unrecoverable_account_memory,
 )
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
@@ -201,6 +202,51 @@ def test_memory_recovery_quarantine_refuses_running_runtime(tmp_path: Path) -> N
 
     result = quarantine_unrecoverable_account_memory(
         report,
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["apply_safety"]["apply_allowed_now"] is False
+
+
+def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    bad_store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    assert build_accounts_admin_report(instances_dir=tmp_path, provider=provider())["totals"]["store_errors"] == 1
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "applied"
+    assert result["totals"]["instances_with_unreadable_metadata"] == 1
+    assert result["totals"]["items_quarantined"] == 3
+    assert result["totals"]["account_dirs_quarantined"] == 1
+    follow_up = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+    assert follow_up["totals"]["store_errors"] == 0
+    assert follow_up["totals"]["account_dirs"] == 0
+    instance_quarantine = tmp_path / "quarantine" / "Depressionsbot" / "metadata"
+    timestamp_dir = next(instance_quarantine.iterdir())
+    assert (timestamp_dir / "Account_Index.json").exists()
+    assert (timestamp_dir / "Account_Identities.json").exists()
+    assert (timestamp_dir / "accounts").exists()
+    assert (timestamp_dir / "manifest.json").exists()
+
+
+def test_memory_recovery_metadata_quarantine_refuses_running_runtime(tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
         apply=True,
         quarantine_dir=tmp_path / "quarantine",
         running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
