@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from TeeBotus.admin.account_memory_recovery import build_account_memory_recovery_report, main as recovery_main
+from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
 from TeeBotus.admin.accounts_report import build_accounts_admin_report, render_text_report
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
@@ -166,6 +167,21 @@ def test_memory_recovery_report_counts_empty_accounts(tmp_path: Path) -> None:
     assert report["totals"]["recoverable_accounts"] == 0
     assert report["totals"]["unrecoverable_accounts"] == 0
     assert report["totals"]["empty_accounts"] == 1
+
+
+def test_memory_recovery_text_report_is_markdown_structured(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    text = render_memory_recovery_text_report(report)
+
+    assert "# TeeBotus Account-Memory Recovery Report" in text
+    assert "## Totals" in text
+    assert "## Instance: Depressionsbot" in text
+    assert "- recovery_status: `empty`" in text
+    assert text.index("## Totals") < text.index("## Instance: Depressionsbot")
 
 
 def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path: Path) -> None:

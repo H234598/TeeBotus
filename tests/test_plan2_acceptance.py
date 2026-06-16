@@ -115,6 +115,34 @@ def _write_valid_legacy_import_markdown(path: Path) -> None:
     )
 
 
+def _write_valid_memory_recovery_markdown(path: Path) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "# TeeBotus Account-Memory Recovery Report",
+                "",
+                "- generated_at: `2026-06-16T00:00:00+00:00`",
+                "- instances_dir: `instances`",
+                "",
+                "## Totals",
+                "",
+                "- accounts: `1`",
+                "- recoverable_accounts: `0`",
+                "",
+                "## Instance: Demo",
+                "",
+                "- source_count: `1`",
+                "",
+                "### Account: " + ("a" * 128),
+                "- recovery_status: `empty`",
+                "- recoverable: `False`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path) -> None:
     commands = check_plan2_acceptance.build_acceptance_commands(
         python="python-test",
@@ -443,7 +471,7 @@ def test_plan2_acceptance_runner_validates_secret_artifacts(tmp_path: Path, monk
 
     def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
         calls.append(tuple(argv))
-        output_path.write_text("# Recovery\n\nok\n", encoding="utf-8")
+        _write_valid_memory_recovery_markdown(output_path)
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
@@ -464,6 +492,44 @@ def test_plan2_acceptance_runner_validates_secret_artifacts(tmp_path: Path, monk
         ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path)),
         ("python-test", "-m", "pytest"),
     ]
+
+
+def test_plan2_acceptance_runner_fails_on_malformed_memory_recovery_markdown(tmp_path: Path, monkeypatch) -> None:
+    output_path = tmp_path / "recovery.md"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        output_path.write_text(
+            "\n".join(
+                [
+                    "# TeeBotus Account-Memory Recovery Report",
+                    "",
+                    "## Instance: Demo",
+                    "",
+                    "## Totals",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "memory-recovery-legacy-text",
+                ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path)),
+                validate_secret_artifacts=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 1
+    assert calls == [("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path))]
 
 
 def test_plan2_acceptance_runner_fails_on_secret_artifact_leak(tmp_path: Path, monkeypatch) -> None:

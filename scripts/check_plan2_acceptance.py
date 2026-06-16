@@ -491,6 +491,8 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
                 artifact_errors.extend(_legacy_import_artifact_errors(command.argv))
             if _is_memory_recovery_json_command(command.argv):
                 artifact_errors.extend(_memory_recovery_artifact_errors(command.argv))
+            if _is_memory_recovery_text_command(command.argv):
+                artifact_errors.extend(_memory_recovery_markdown_artifact_errors(command.argv))
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: output artifacts contain secret-looking content.", file=sys.stderr)
                 for error in artifact_errors:
@@ -551,6 +553,10 @@ def _is_memory_recovery_json_command(argv: Sequence[str]) -> bool:
     return "memory-recovery" in argv and "--format" in argv and _option_value(argv, "--format") == "json"
 
 
+def _is_memory_recovery_text_command(argv: Sequence[str]) -> bool:
+    return "memory-recovery" in argv and _option_value(argv, "--format") != "json"
+
+
 def _memory_recovery_artifact_errors(argv: Sequence[str]) -> list[str]:
     output_path = _option_path(argv, "--output")
     if output_path is None:
@@ -564,6 +570,36 @@ def _memory_recovery_artifact_errors(argv: Sequence[str]) -> list[str]:
     if not isinstance(payload, dict):
         return [f"memory recovery JSON root must be an object: {output_path}"]
     return _memory_recovery_payload_errors(payload, path=output_path)
+
+
+def _memory_recovery_markdown_artifact_errors(argv: Sequence[str]) -> list[str]:
+    output_path = _option_path(argv, "--output")
+    if output_path is None:
+        return ["memory recovery markdown artifact missing --output"]
+    if not output_path.exists():
+        return [f"memory recovery markdown artifact missing: {output_path}"]
+    if not output_path.is_file():
+        return [f"memory recovery markdown artifact is not a file: {output_path}"]
+    text = output_path.read_text(encoding="utf-8", errors="replace")
+    errors: list[str] = []
+    if not text.strip():
+        errors.append(f"memory recovery markdown artifact is empty: {output_path}")
+    required_sections = {
+        "# TeeBotus Account-Memory Recovery Report": "heading",
+        "## Totals": "totals section",
+        "## Instance:": "instance section",
+        "recovery_status": "account recovery status",
+    }
+    for needle, label in required_sections.items():
+        if needle not in text:
+            errors.append(f"memory recovery markdown artifact lacks {label}: {output_path}")
+    if _artifact_text_contains_secret(text):
+        errors.append(f"memory recovery markdown artifact contains secret-looking content: {output_path}")
+    totals_position = text.find("## Totals")
+    instance_position = text.find("## Instance:")
+    if totals_position != -1 and instance_position != -1 and totals_position > instance_position:
+        errors.append(f"memory recovery markdown artifact places totals after instances: {output_path}")
+    return errors
 
 
 def _memory_recovery_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:

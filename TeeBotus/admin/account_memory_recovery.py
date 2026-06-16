@@ -126,49 +126,45 @@ def build_instance_recovery_report(
 
 def render_text_report(report: Mapping[str, Any]) -> str:
     lines = [
-        "TeeBotus Account-Memory Recovery Report",
-        f"Generated: {report.get('generated_at', '')}",
-        f"Instances dir: {report.get('instances_dir', '')}",
+        "# TeeBotus Account-Memory Recovery Report",
         "",
-        "Totals:",
+        f"- generated_at: `{report.get('generated_at', '')}`",
+        f"- instances_dir: `{report.get('instances_dir', '')}`",
+        "",
+        "## Totals",
+        "",
     ]
     totals = report.get("totals", {})
     if isinstance(totals, Mapping):
         for key in sorted(totals):
-            lines.append(f"  {key}: {totals[key]}")
+            lines.append(f"- {key}: `{totals[key]}`")
     for instance in report.get("instances", []):
         if not isinstance(instance, Mapping):
             continue
-        lines.extend(["", f"Instance: {instance.get('instance', '')}", f"  source_count: {instance.get('source_count', 0)}"])
+        lines.extend(["", f"## Instance: {instance.get('instance', '')}", "", f"- source_count: `{instance.get('source_count', 0)}`"])
         legacy = instance.get("legacy_plaintext_import")
         if isinstance(legacy, Mapping):
-            lines.append(
-                "  legacy_plaintext_import: "
-                f"sources={legacy.get('sources', 0)} entries={legacy.get('entries', 0)} "
-                f"path={legacy.get('path', '')}"
-            )
+            lines.append(f"- legacy_plaintext_import: sources=`{legacy.get('sources', 0)}` entries=`{legacy.get('entries', 0)}` path=`{legacy.get('path', '')}`")
             command = str(legacy.get("dry_run_command") or "").strip()
             if command:
-                lines.append(f"    dry_run_command: {command}")
+                lines.append(f"  - dry_run_command: `{command}`")
         for account in instance.get("accounts", []):
             if not isinstance(account, Mapping):
                 continue
-            lines.append(
-                "  account: "
-                f"{account.get('account_id', '')} "
-                f"recovery_status={account.get('recovery_status', 'unknown')} "
-                f"recoverable={account.get('recoverable', False)}"
-            )
+            lines.append("")
+            lines.append(f"### Account: {account.get('account_id', '')}")
+            lines.append(f"- recovery_status: `{account.get('recovery_status', 'unknown')}`")
+            lines.append(f"- recoverable: `{account.get('recoverable', False)}`")
             recommendation = str(account.get("recommendation") or "").strip()
             if recommendation:
-                lines.append(f"    recommendation: {recommendation}")
+                lines.append(f"- recommendation: {recommendation}")
             for source in account.get("sources", []):
                 if not isinstance(source, Mapping):
                     continue
                 status = "readable" if source.get("readable") else "unreadable"
                 detail = f"entries={source.get('entries', 0)} index_present={source.get('index_present', False)}"
                 error = f" error={source.get('error')}" if source.get("error") else ""
-                lines.append(f"    {source.get('name', '')}: {status} {detail}{error}")
+                lines.append(f"  - {source.get('name', '')}: {status} {detail}{error}")
     return "\n".join(lines) + "\n"
 
 
