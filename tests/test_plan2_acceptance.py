@@ -464,6 +464,31 @@ def test_secret_artifact_validation_checks_all_declared_outputs(tmp_path: Path) 
     assert errors == [f"--markdown-output artifact contains secret-looking content: {markdown_path}"]
 
 
+def test_secret_artifact_validation_rejects_yaml_style_secret_fields(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "import.md"
+    markdown_path.write_text("# Import\n\napi_key: plain-secret\npassword: hunter2\n", encoding="utf-8")
+
+    errors = check_plan2_acceptance._secret_artifact_errors(
+        ("python-test", "script.py", "--markdown-output", str(markdown_path))
+    )
+
+    assert errors == [f"--markdown-output artifact contains secret-looking content: {markdown_path}"]
+
+
+def test_secret_artifact_validation_allows_yaml_style_placeholders_and_env_names(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "import.md"
+    markdown_path.write_text(
+        "# Import\n\napi_key: configured\napi_key_env: GROQ_API_KEY\npassword: <redacted>\n",
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._secret_artifact_errors(
+        ("python-test", "script.py", "--markdown-output", str(markdown_path))
+    )
+
+    assert errors == []
+
+
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:
     markdown_path = tmp_path / "bench.md"
     json_path = tmp_path / "bench.json"

@@ -60,6 +60,10 @@ RUNTIME_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
     r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)",
     re.IGNORECASE,
 )
+SECRET_FIELD_ASSIGNMENT_RE = re.compile(
+    r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
 RUNTIME_STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
     re.IGNORECASE,
@@ -860,8 +864,7 @@ def _runtime_status_line_contains_secret(line: str) -> bool:
     if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(line):
         return True
     for match in RUNTIME_STATUS_SECRET_ASSIGNMENT_RE.finditer(line):
-        value = str(match.group(2) or "").strip().casefold()
-        if value not in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
+        if _secret_assignment_value_is_unsafe(match.group(1), match.group(2)):
             return True
     return False
 
@@ -874,6 +877,9 @@ def _artifact_text_contains_secret(text: str) -> bool:
     for line in text.splitlines():
         if _runtime_status_line_contains_secret(line):
             return True
+        for match in SECRET_FIELD_ASSIGNMENT_RE.finditer(line):
+            if _secret_assignment_value_is_unsafe(match.group(1), match.group(2)):
+                return True
     for match in ARTIFACT_SECRET_JSON_FIELD_RE.finditer(text):
         key = str(match.group(1) or "").strip().casefold()
         value = str(match.group(2) or "").strip()
@@ -886,6 +892,19 @@ def _artifact_text_contains_secret(text: str) -> bool:
             continue
         return True
     return False
+
+
+def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
+    key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
+    value_text = str(value or "").strip().strip("\"'`")
+    if not value_text:
+        return False
+    normalized_value = value_text.casefold()
+    if normalized_value in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
+        return False
+    if key_text.endswith("_env") or re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text):
+        return False
+    return True
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:
