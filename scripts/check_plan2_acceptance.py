@@ -13,6 +13,10 @@ from typing import Sequence
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BENCHMARK_MD = Path.home() / "Downloads" / "teebotus-benchmarks-latest.md"
 DEFAULT_BENCHMARK_JSON = Path.home() / "Downloads" / "teebotus-benchmarks-latest.json"
+DEFAULT_MEMORY_RECOVERY_JSON = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.json"
+DEFAULT_MEMORY_RECOVERY_TEXT = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.md"
+DEFAULT_LEGACY_IMPORT_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.json"
+DEFAULT_LEGACY_IMPORT_MD = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.md"
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-channels", default="telegram,signal,matrix", help="Channels for --runtime-status.")
     parser.add_argument("--benchmark-output", default=str(DEFAULT_BENCHMARK_MD), help="Markdown benchmark output path.")
     parser.add_argument("--benchmark-json-output", default=str(DEFAULT_BENCHMARK_JSON), help="JSON benchmark output path.")
+    parser.add_argument("--legacy-instances-dir", default="", help="Optional plaintext legacy instances directory for read-only memory recovery/preflight checks.")
+    parser.add_argument("--memory-recovery-output", default=str(DEFAULT_MEMORY_RECOVERY_TEXT), help="Text/Markdown memory recovery output path.")
+    parser.add_argument("--memory-recovery-json-output", default=str(DEFAULT_MEMORY_RECOVERY_JSON), help="JSON memory recovery output path.")
+    parser.add_argument("--legacy-import-output", default=str(DEFAULT_LEGACY_IMPORT_MD), help="Markdown legacy import dry-run output path.")
+    parser.add_argument("--legacy-import-json-output", default=str(DEFAULT_LEGACY_IMPORT_JSON), help="JSON legacy import dry-run output path.")
     parser.add_argument("--entries", type=int, default=2, help="Synthetic benchmark entries.")
     parser.add_argument("--iterations", type=int, default=1, help="Quick benchmark iterations.")
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
@@ -103,6 +112,11 @@ def main(argv: list[str] | None = None) -> int:
         runtime_channels=args.runtime_channels,
         benchmark_output=Path(args.benchmark_output),
         benchmark_json_output=Path(args.benchmark_json_output),
+        legacy_instances_dir=Path(args.legacy_instances_dir) if args.legacy_instances_dir else None,
+        memory_recovery_output=Path(args.memory_recovery_output),
+        memory_recovery_json_output=Path(args.memory_recovery_json_output),
+        legacy_import_output=Path(args.legacy_import_output),
+        legacy_import_json_output=Path(args.legacy_import_json_output),
         entries=args.entries,
         iterations=args.iterations,
         skip_runtime_status=args.skip_runtime_status,
@@ -125,6 +139,11 @@ def build_acceptance_commands(
     runtime_channels: str = "telegram,signal,matrix",
     benchmark_output: Path = DEFAULT_BENCHMARK_MD,
     benchmark_json_output: Path = DEFAULT_BENCHMARK_JSON,
+    legacy_instances_dir: Path | None = None,
+    memory_recovery_output: Path = DEFAULT_MEMORY_RECOVERY_TEXT,
+    memory_recovery_json_output: Path = DEFAULT_MEMORY_RECOVERY_JSON,
+    legacy_import_output: Path = DEFAULT_LEGACY_IMPORT_MD,
+    legacy_import_json_output: Path = DEFAULT_LEGACY_IMPORT_JSON,
     entries: int = 2,
     iterations: int = 1,
     skip_runtime_status: bool = False,
@@ -157,6 +176,59 @@ def build_acceptance_commands(
             (python, "-m", "pytest", "-q", *_expand_test_patterns(PLAN2_TEST_PATTERNS)),
         )
     )
+    if legacy_instances_dir is not None:
+        commands.extend(
+            [
+                AcceptanceCommand(
+                    "memory-recovery-legacy-json",
+                    (
+                        python,
+                        "-m",
+                        "TeeBotus.admin",
+                        "memory-recovery",
+                        "--instances-dir",
+                        "instances",
+                        "--legacy-instances-dir",
+                        str(legacy_instances_dir),
+                        "--format",
+                        "json",
+                        "--output",
+                        str(memory_recovery_json_output),
+                    ),
+                ),
+                AcceptanceCommand(
+                    "memory-recovery-legacy-text",
+                    (
+                        python,
+                        "-m",
+                        "TeeBotus.admin",
+                        "memory-recovery",
+                        "--instances-dir",
+                        "instances",
+                        "--legacy-instances-dir",
+                        str(legacy_instances_dir),
+                        "--output",
+                        str(memory_recovery_output),
+                    ),
+                ),
+                AcceptanceCommand(
+                    "legacy-import-preflight",
+                    (
+                        python,
+                        "scripts/import_legacy_user_memory.py",
+                        "--legacy-instances-dir",
+                        str(legacy_instances_dir),
+                        "--target-instances-dir",
+                        "instances",
+                        "--replace-unreadable-account-metadata",
+                        "--json-output",
+                        str(legacy_import_json_output),
+                        "--markdown-output",
+                        str(legacy_import_output),
+                    ),
+                ),
+            ]
+        )
     commands.extend(
         [
             AcceptanceCommand(

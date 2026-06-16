@@ -66,6 +66,8 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert by_label["plan2-optional-extras"].argv == ("python-test", "scripts/check_plan2_optional_extras.py", "--require-installed")
     assert by_label["qdrant-systemd-print"].argv == ("python-test", "-m", "TeeBotus.qdrant_systemd", "--print")
     assert by_label["teebotus-systemd-print"].argv == ("python-test", "-m", "TeeBotus.systemd", "--print")
+    assert "memory-recovery-legacy-json" not in by_label
+    assert "legacy-import-preflight" not in by_label
     assert any(command.label.startswith("pip-audit") and command.nonfatal for command in commands)
 
 
@@ -87,6 +89,62 @@ def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
     assert "adapter-deps" not in labels
     assert "plan2-pytest" in labels
     assert not any(label.startswith("qdrant-live") for label in labels)
+
+
+def test_plan2_acceptance_can_include_legacy_memory_preflight(tmp_path: Path) -> None:
+    legacy_dir = tmp_path / "instances.bak"
+    commands = check_plan2_acceptance.build_acceptance_commands(
+        python="python-test",
+        benchmark_output=tmp_path / "bench.md",
+        benchmark_json_output=tmp_path / "bench.json",
+        legacy_instances_dir=legacy_dir,
+        memory_recovery_output=tmp_path / "recovery.md",
+        memory_recovery_json_output=tmp_path / "recovery.json",
+        legacy_import_output=tmp_path / "import.md",
+        legacy_import_json_output=tmp_path / "import.json",
+    )
+
+    by_label = {command.label: command for command in commands}
+
+    assert by_label["memory-recovery-legacy-json"].argv == (
+        "python-test",
+        "-m",
+        "TeeBotus.admin",
+        "memory-recovery",
+        "--instances-dir",
+        "instances",
+        "--legacy-instances-dir",
+        str(legacy_dir),
+        "--format",
+        "json",
+        "--output",
+        str(tmp_path / "recovery.json"),
+    )
+    assert by_label["memory-recovery-legacy-text"].argv == (
+        "python-test",
+        "-m",
+        "TeeBotus.admin",
+        "memory-recovery",
+        "--instances-dir",
+        "instances",
+        "--legacy-instances-dir",
+        str(legacy_dir),
+        "--output",
+        str(tmp_path / "recovery.md"),
+    )
+    assert by_label["legacy-import-preflight"].argv == (
+        "python-test",
+        "scripts/import_legacy_user_memory.py",
+        "--legacy-instances-dir",
+        str(legacy_dir),
+        "--target-instances-dir",
+        "instances",
+        "--replace-unreadable-account-metadata",
+        "--json-output",
+        str(tmp_path / "import.json"),
+        "--markdown-output",
+        str(tmp_path / "import.md"),
+    )
 
 
 def test_plan2_acceptance_can_include_nonfatal_qdrant_live_probe(tmp_path: Path, monkeypatch) -> None:

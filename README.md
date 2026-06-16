@@ -260,6 +260,12 @@ Optionale Live-/Security-Probes bleiben bewusst explizit und nicht blockierend:
 python3 scripts/check_plan2_acceptance.py --list --include-qdrant-live --include-audit
 ```
 
+Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur lesende Recovery-Reports und einen Legacy-Import-Dry-run nach `/home/teladi/Downloads` schreiben:
+
+```bash
+python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2/instances.bak
+```
+
 Hinweis zur Plan2-Testhistorie: Die frueher im Plan genannten LLM-Dateien
 `tests/test_llm_base.py` und `tests/test_openai_provider.py` sind in der
 aktuellen Teststruktur aufgeteilt. `tests/test_llm_client.py` deckt die
