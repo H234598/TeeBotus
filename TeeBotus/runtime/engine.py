@@ -255,9 +255,9 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
         reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not self._text_llm_enabled(instructions))
         if reply is None:
-            openai_actions = self._openai_actions(event, result.account_id, instructions)
-            if openai_actions:
-                return EngineResult(result.account_id, openai_actions, handled=True)
+            llm_actions = self._llm_actions(event, result.account_id, instructions)
+            if llm_actions:
+                return EngineResult(result.account_id, llm_actions, handled=True)
             return EngineResult(result.account_id, [], handled=False)
         return EngineResult(result.account_id, [SendText(event.chat_id, reply)], handled=True)
 
@@ -487,7 +487,7 @@ class TeeBotusEngine:
             return self.llm_enabled_override
         return instructions.text_llm_enabled()
 
-    def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+    def _llm_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         text = str(event.text or "").strip()
         if not self._text_llm_enabled(instructions) or (not text and not event.attachments) or text.startswith("/"):
             return []
@@ -604,6 +604,15 @@ class TeeBotusEngine:
         if len(actions) == 1:
             actions.append(SendText(event.chat_id, response_text))
         return actions
+
+    def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+        """Compatibility alias for tests and older callers.
+
+        Text generation is provider-neutral now and routes through ``llm_client``;
+        OpenAI-specific media capabilities still use ``openai_client`` inside the
+        implementation when needed.
+        """
+        return self._llm_actions(event, account_id, instructions)
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
         pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")

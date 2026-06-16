@@ -674,6 +674,34 @@ def test_engine_prefers_llm_client_for_free_text_when_configured(tmp_path):
     assert openai_client.calls == 0
 
 
+def test_engine_llm_actions_are_provider_neutral_and_openai_alias_remains(tmp_path):
+    class FakeLLMClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.calls += 1
+            assert "Nachricht:\nHallo" in user_text
+            assert previous_response_id is None
+            return OpenAIResponse("Neutral.", None, None)
+
+    llm_client = FakeLLMClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=llm_client,
+    )
+    account_id = engine.account_store.resolve_or_create_account(telegram_identity_key(1))
+    incoming = event(telegram_identity_key(1), "Hallo").with_account(account_id)
+
+    llm_actions = engine._llm_actions(incoming, account_id, BotInstructions(openai_enabled=True))
+    alias_actions = engine._openai_actions(incoming, account_id, BotInstructions(openai_enabled=False))
+
+    assert llm_actions[1].text == "Neutral."
+    assert alias_actions == []
+    assert llm_client.calls == 1
+
+
 def test_engine_runtime_llm_disabled_override_skips_missing_key_and_model_call(tmp_path):
     class FakeLLMClient:
         def create_reply(self, *_args, **_kwargs):
