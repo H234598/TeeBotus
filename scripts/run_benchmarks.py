@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--iterations", type=int, default=50, help="Iterations for light CPU-only benchmark loops.")
     parser.add_argument("--output", default="", help="Markdown output path.")
     parser.add_argument("--json-output", default="", help="JSON output path.")
+    parser.add_argument("--baseline-json", default="", help="Optional previous benchmark JSON for regression comparison.")
     parser.add_argument("--postgres-dsn", default="", help="Optional PostgreSQL DSN for live PostgreSQL memory benchmark.")
     args = parser.parse_args(argv)
     if args.entries < 1:
@@ -91,7 +92,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.iterations < 1:
         parser.error("--iterations must be >= 1")
 
-    suite = run_benchmarks(entries=args.entries, iterations=args.iterations, postgres_dsn=args.postgres_dsn, quick=bool(args.quick))
+    suite = run_benchmarks(
+        entries=args.entries,
+        iterations=args.iterations,
+        postgres_dsn=args.postgres_dsn,
+        quick=bool(args.quick),
+        baseline_json=Path(args.baseline_json) if args.baseline_json else None,
+    )
     markdown = render_markdown(suite)
     if args.output:
         Path(args.output).parent.mkdir(parents=True, exist_ok=True)
@@ -104,7 +111,14 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if suite["ok"] else 1
 
 
-def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str = "", quick: bool = True) -> dict[str, Any]:
+def run_benchmarks(
+    *,
+    entries: int = 50,
+    iterations: int = 50,
+    postgres_dsn: str = "",
+    quick: bool = True,
+    baseline_json: Path | None = None,
+) -> dict[str, Any]:
     results: list[BenchmarkResult] = []
     results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn))
     results.append(_benchmark_bibliothekar(iterations=iterations))
@@ -122,14 +136,16 @@ def run_benchmarks(*, entries: int = 50, iterations: int = 50, postgres_dsn: str
     results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
     comparisons = _build_comparisons(results)
+    regression = _build_regression_report(results, baseline_json=baseline_json)
     return {
         "schema_version": 1,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "quick": bool(quick),
-        "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results),
+        "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results) and not regression["failed"],
         "context": _context(),
         "results": results,
         "comparisons": comparisons,
+        "regression": regression,
     }
 
 
@@ -210,9 +226,110 @@ def render_markdown(suite: dict[str, Any]) -> str:
                 )
         lines.append("")
         lines.append("Die Rangliste dokumentiert Messwerte nur; sie schaltet keine Runtime-Backends automatisch um.")
+    regression = suite.get("regression") if isinstance(suite.get("regression"), dict) else {}
+    lines.extend(["", "## Regression Check", ""])
+    lines.append(f"- status: {regression.get('status', 'unknown')}")
+    lines.append(f"- baseline_json: {regression.get('baseline_json', '')}")
+    lines.append(f"- max_total_ms_factor: {regression.get('max_total_ms_factor', '')}")
+    lines.append(f"- min_throughput_factor: {regression.get('min_throughput_factor', '')}")
+    entries = regression.get("entries") if isinstance(regression.get("entries"), list) else []
+    if entries:
+        lines.extend(
+            [
+                "",
+                "| name | status | previous_total_ms | current_total_ms | total_ms_factor | previous_throughput | current_throughput | throughput_factor |",
+                "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            lines.append(
+                "| {name} | {status} | {previous_total_ms:.3f} | {current_total_ms:.3f} | {total_ms_factor:.3f} | {previous_throughput:.2f} | {current_throughput:.2f} | {throughput_factor:.3f} |".format(
+                    name=entry.get("name", ""),
+                    status=entry.get("status", ""),
+                    previous_total_ms=float(entry.get("previous_total_ms") or 0.0),
+                    current_total_ms=float(entry.get("current_total_ms") or 0.0),
+                    total_ms_factor=float(entry.get("total_ms_factor") or 0.0),
+                    previous_throughput=float(entry.get("previous_throughput_ops_s") or 0.0),
+                    current_throughput=float(entry.get("current_throughput_ops_s") or 0.0),
+                    throughput_factor=float(entry.get("throughput_factor") or 0.0),
+                )
+            )
     lines.append("")
     lines.append("Standard-Benchmarks nutzen keine echten Provider-Calls und keine Netzsendung.")
     return "\n".join(lines) + "\n"
+
+
+def _build_regression_report(
+    results: list[BenchmarkResult],
+    *,
+    baseline_json: Path | None,
+    max_total_ms_factor: float = 2.0,
+    min_throughput_factor: float = 0.5,
+) -> dict[str, Any]:
+    base = {
+        "status": "not_configured",
+        "baseline_json": str(baseline_json or ""),
+        "max_total_ms_factor": max_total_ms_factor,
+        "min_throughput_factor": min_throughput_factor,
+        "failed": False,
+        "entries": [],
+    }
+    if baseline_json is None:
+        return base
+    if not baseline_json.exists():
+        return {**base, "status": "baseline_missing", "failed": True, "error": "baseline file does not exist"}
+    try:
+        baseline = json.loads(baseline_json.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {**base, "status": "baseline_unreadable", "failed": True, "error": str(exc)}
+    previous_by_name = {
+        str(result.get("name") or ""): result
+        for result in baseline.get("results", [])
+        if isinstance(result, dict) and result.get("ok") and not result.get("skipped") and str(result.get("name") or "")
+    }
+    entries = []
+    failed = False
+    for current in results:
+        name = str(current.get("name") or "")
+        if not name or current.get("skipped") or not current.get("ok"):
+            continue
+        previous = previous_by_name.get(name)
+        if not previous:
+            continue
+        previous_total = float(previous.get("total_ms") or 0.0)
+        current_total = float(current.get("total_ms") or 0.0)
+        previous_throughput = float(previous.get("throughput_ops_s") or 0.0)
+        current_throughput = float(current.get("throughput_ops_s") or 0.0)
+        total_factor = current_total / previous_total if previous_total > 0 else 0.0
+        throughput_factor = current_throughput / previous_throughput if previous_throughput > 0 else 0.0
+        status = "ok"
+        if previous_total > 0 and total_factor > max_total_ms_factor:
+            status = "regressed"
+        if previous_throughput > 0 and throughput_factor < min_throughput_factor:
+            status = "regressed"
+        if status == "regressed":
+            failed = True
+        entries.append(
+            {
+                "name": name,
+                "status": status,
+                "previous_total_ms": previous_total,
+                "current_total_ms": current_total,
+                "total_ms_factor": total_factor,
+                "previous_throughput_ops_s": previous_throughput,
+                "current_throughput_ops_s": current_throughput,
+                "throughput_factor": throughput_factor,
+            }
+        )
+    return {
+        **base,
+        "status": "failed" if failed else "ok",
+        "failed": failed,
+        "matched_results": len(entries),
+        "entries": entries,
+    }
 
 
 def _markdown_details(details: dict[str, Any]) -> str:

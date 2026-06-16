@@ -18,6 +18,8 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["signalbot"]["version"]
     assert suite["comparisons"]["auto_switching"] is False
+    assert suite["regression"]["status"] == "not_configured"
+    assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
     assert {"account_memory", "bibliothekar", "langgraph_flows"}.issubset(rankings)
     assert rankings["account_memory"]["fastest_stable"]
@@ -142,6 +144,8 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "| litellm |" in markdown
     assert "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" in markdown
     assert "## Stable Backend Rankings" in markdown
+    assert "## Regression Check" in markdown
+    assert "status: not_configured" in markdown
     assert "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" in markdown
     assert "Die Rangliste dokumentiert Messwerte nur" in markdown
     assert "memory_jsonl" in markdown
@@ -183,4 +187,27 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     assert payload["ok"] is True
     assert payload["results"]
     assert payload["comparisons"]["stable_backend_rankings"]
+    assert payload["regression"]["status"] == "not_configured"
     assert "TeeBotus Benchmarks" in markdown_path.read_text(encoding="utf-8")
+
+
+def test_run_benchmarks_compares_optional_baseline(tmp_path) -> None:
+    baseline_path = tmp_path / "baseline.json"
+    current = run_benchmarks(entries=1, iterations=1, quick=True)
+    baseline = json.loads(json.dumps(current))
+    for result in baseline["results"]:
+        if result["name"] == "memory_jsonl":
+            result["total_ms"] = max(float(result["total_ms"]) / 10.0, 0.001)
+            result["throughput_ops_s"] = float(result["throughput_ops_s"]) * 10.0
+    baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+
+    suite = run_benchmarks(entries=1, iterations=1, quick=True, baseline_json=baseline_path)
+    markdown = render_markdown(suite)
+
+    assert suite["ok"] is False
+    assert suite["regression"]["status"] == "failed"
+    assert suite["regression"]["failed"] is True
+    memory_jsonl = next(entry for entry in suite["regression"]["entries"] if entry["name"] == "memory_jsonl")
+    assert memory_jsonl["status"] == "regressed"
+    assert "memory_jsonl" in markdown
+    assert "## Regression Check" in markdown

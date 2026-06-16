@@ -36,6 +36,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "--category" in text
     assert "dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend" in text
     assert "scripts/run_benchmarks.py --quick" in text
+    assert "--baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
     assert "teebotus-systemd" in text
