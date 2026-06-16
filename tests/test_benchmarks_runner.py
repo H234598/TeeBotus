@@ -32,6 +32,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "account_memory",
         "bibliothekar",
         "llm_router",
+        "pydantic_ai",
         "proactive_agent",
         "messenger_adapters",
         "transcription_youtube",
@@ -87,6 +88,18 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "ollama_chat/qwen2.5:7b",
     ]
     assert llm_router["details"]["network_calls"] == 0
+    pydantic_ai = next(result for result in suite["results"] if result["name"] == "pydantic_structured_decisions")
+    assert pydantic_ai["ok"] is True
+    assert pydantic_ai["category"] == "pydantic_ai"
+    assert pydantic_ai["details"]["schemas"] == [
+        "BibliothekarQueryDecision",
+        "MemoryCandidate",
+        "ReminderDecision",
+        "ProactiveToolCallDecision",
+    ]
+    assert pydantic_ai["details"]["fake_agent_calls"] == 1
+    assert pydantic_ai["details"]["latest_runner_query"] == "Therapie Schlaf"
+    assert pydantic_ai["details"]["network_calls"] == 0
     proactive = next(result for result in suite["results"] if result["name"] == "proactive_tool_plan_due_dispatch_gates")
     assert proactive["ok"] is True
     assert proactive["details"]["tool_schema_validated"] is True
@@ -157,6 +170,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "memory_jsonl" in markdown
     assert "memory_migration_jsonl_to_sqlite" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
+    assert "pydantic_structured_decisions" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown

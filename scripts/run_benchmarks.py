@@ -36,8 +36,9 @@ from scripts.check_adapter_deps import (  # noqa: E402
 from TeeBotus.core.youtube import YouTubeTranscriptError, _has_youtube_transcript_intent, _parse_youtube_local_options  # noqa: E402
 import TeeBotus.core.youtube as youtube_module  # noqa: E402
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
-from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision, parse_memory_candidate  # noqa: E402
-from TeeBotus.ai_structures.schemas import ProactiveToolCallDecision  # noqa: E402
+from TeeBotus.ai_structures.decisions import parse_bibliothekar_query_decision, parse_memory_candidate, parse_reminder_decision  # noqa: E402
+from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, ProactiveToolCallDecision  # noqa: E402
+from TeeBotus.ai_structures.pydantic_ai_adapter import build_pydantic_ai_model_runner  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
 from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
@@ -124,6 +125,7 @@ def run_benchmarks(
     results.append(_benchmark_bibliothekar(iterations=iterations))
     results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
     results.append(_benchmark_llm_router(iterations=iterations))
+    results.append(_benchmark_pydantic_structured_decisions(iterations=iterations))
     results.append(_benchmark_proactive(iterations=iterations))
     results.append(_benchmark_adapter_contracts(iterations=iterations))
     results.append(_benchmark_youtube_parser(iterations=iterations))
@@ -701,6 +703,112 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "direct_remote_fallback_default_models": list(getattr(direct_blocked_client, "fallback_models", ())),
             "direct_remote_fallback_allowed_models": list(getattr(direct_allowed_client, "fallback_models", ())),
             "network_calls": 0,
+        },
+    )
+
+
+def _benchmark_pydantic_structured_decisions(*, iterations: int) -> BenchmarkResult:
+    bibliothekar_payload = {
+        "should_search": True,
+        "query": "Therapie Schlaf Tagesstruktur",
+        "confidence": 0.91,
+        "reason_short": "benchmark fake structured decision",
+        "source": "model",
+    }
+    memory_payload = {
+        "should_store": True,
+        "memory_type": "therapy_goal",
+        "text": "Morgens kurzen Spaziergang als Therapieaufgabe testen.",
+        "sensitivity": "medium",
+        "confidence": 0.88,
+    }
+    reminder_payload = {
+        "should_create": True,
+        "text": "Zahnarzttermin",
+        "datetime_iso": "2026-06-16T09:00:00+00:00",
+        "recurrence": None,
+        "confidence": 0.89,
+    }
+    proactive_tool_payload = {
+        "name": "proactive_queue_message",
+        "call_id": "bench_call_1",
+        "arguments": {
+            "category": "reminder",
+            "intent": "follow_up",
+            "message_text": "Magst du kurz berichten?",
+            "reason_memory_ids": ["mem_goal"],
+        },
+    }
+    parse_timings = [
+        _timed_ms(
+            lambda: (
+                parse_bibliothekar_query_decision(bibliothekar_payload),
+                parse_memory_candidate(memory_payload),
+                parse_reminder_decision(reminder_payload),
+                ProactiveToolCallDecision.model_validate(proactive_tool_payload),
+            )
+        )
+        for _ in range(iterations)
+    ]
+    fake_calls: list[dict[str, Any]] = []
+
+    class FakeRunResult:
+        def __init__(self, output: Any) -> None:
+            self.output = output
+
+    class FakeAgent:
+        def __init__(self, model: str, **kwargs: Any) -> None:
+            fake_calls.append({"model": model, **kwargs})
+            self.schema = kwargs.get("output_type") or kwargs.get("result_type")
+
+        def run_sync(self, prompt: str) -> FakeRunResult:
+            if self.schema is None:
+                raise RuntimeError("missing schema")
+            return FakeRunResult(self.schema.model_validate({**bibliothekar_payload, "query": str(prompt or "").strip()}))
+
+    runner = build_pydantic_ai_model_runner(
+        "benchmark:structured-fake",
+        system_prompt="Return only the requested structured output.",
+        agent_factory=FakeAgent,
+    )
+    runner_outputs: list[Any] = []
+    runner_timings = [
+        _timed_ms(lambda: runner_outputs.append(runner("Therapie Schlaf", BibliothekarQueryDecision)))
+        for _ in range(iterations)
+    ]
+    latest_output = runner_outputs[-1] if runner_outputs else None
+    ok = (
+        parse_bibliothekar_query_decision(bibliothekar_payload).should_search
+        and parse_memory_candidate(memory_payload).memory_type == "therapy_goal"
+        and parse_reminder_decision(reminder_payload).should_create
+        and ProactiveToolCallDecision.model_validate(proactive_tool_payload).name == "proactive_queue_message"
+        and getattr(latest_output, "query", "") == "Therapie Schlaf"
+        and len(fake_calls) == iterations
+    )
+    payload = {
+        "bibliothekar": bibliothekar_payload,
+        "memory": memory_payload,
+        "reminder": reminder_payload,
+        "proactive_tool": proactive_tool_payload,
+    }
+    return _result(
+        name="pydantic_structured_decisions",
+        category="pydantic_ai",
+        iterations=iterations * 5,
+        total_ms=sum(parse_timings) + sum(runner_timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(json.dumps({"schemas": 4, "fake_agent_calls": len(fake_calls)}, ensure_ascii=False).encode("utf-8")),
+        note="schema_validation_and_fake_agent",
+        details={
+            "schemas": ["BibliothekarQueryDecision", "MemoryCandidate", "ReminderDecision", "ProactiveToolCallDecision"],
+            "fake_agent_calls": len(fake_calls),
+            "fake_agent_model": "benchmark:structured-fake",
+            "network_calls": 0,
+            "median_parse_batch_ms": statistics.median(parse_timings),
+            "median_fake_agent_ms": statistics.median(runner_timings),
+            "latest_runner_query": getattr(latest_output, "query", ""),
         },
     )
 
