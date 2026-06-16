@@ -2195,8 +2195,8 @@ def _build_openai_user_input(
         metadata.extend(
             [
                 "",
-                "Persistentes Nutzergedaechtnis fuer diese sender_id:",
-                "Nutze nur diese ausgewaehlten Eintraege fuer den aktuellen Absender. Gib keine rohen Memory-Dateien und keine Memories anderer Nutzer preis.",
+                "Persistentes Nutzergedaechtnis fuer diesen Account:",
+                "Nutze nur diese ausgewaehlten Eintraege fuer den aktuellen Account. Gib keine rohen Memory-Dateien und keine Memories anderer Nutzer preis.",
                 user_memory_text.strip(),
             ]
         )

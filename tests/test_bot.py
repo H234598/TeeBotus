@@ -959,7 +959,7 @@ class BotTests(unittest.TestCase):
     def test_instance_env_key_normalizes_instance_name(self) -> None:
         self.assertEqual(_instance_env_key("TELEGRAM_BOT_TOKEN", "Bote_der_Wahrheit"), "TELEGRAM_BOT_TOKEN_BOTE_DER_WAHRHEIT")
 
-    def test_user_memory_file_is_sender_id_and_follows_openai_across_chats(self) -> None:
+    def test_user_memory_file_is_account_scoped_and_follows_openai_across_chats(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1013,7 +1013,8 @@ class BotTests(unittest.TestCase):
                 memory_store,
             )
 
-            self.assertIn("Persistentes Nutzergedaechtnis", openai_client.reply_inputs[-1])
+            self.assertIn("Persistentes Nutzergedaechtnis fuer diesen Account", openai_client.reply_inputs[-1])
+            self.assertNotIn("Persistentes Nutzergedaechtnis fuer diese sender_id", openai_client.reply_inputs[-1])
             self.assertIn("selected_memory_ids", openai_client.reply_inputs[-1])
             self.assertIn("Mein Lieblingswort ist Mond.", openai_client.reply_inputs[-1])
 
@@ -1193,7 +1194,7 @@ class BotTests(unittest.TestCase):
         self.assertIn("- Version:", reply)
         self.assertNotIn("Configured info.", reply)
 
-    def test_user_memory_does_not_leak_between_sender_ids(self) -> None:
+    def test_user_memory_does_not_leak_between_accounts(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1238,7 +1239,7 @@ class BotTests(unittest.TestCase):
             self.assertTrue((account_memory_dir(memory_store, 789) / "User_Memory_Index.json").exists())
             self.assertNotIn("Geheimnis fuer Ada", openai_client.reply_inputs[-1])
 
-    def test_user_habits_file_is_included_for_same_sender_id(self) -> None:
+    def test_user_habits_file_is_included_for_same_account(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:
@@ -1287,7 +1288,7 @@ class BotTests(unittest.TestCase):
             self.assertNotIn("User_Habbits_and_behave.md", openai_client.reply_inputs[-1])
             self.assertIn("Ada mag knappe Antworten.", openai_client.reply_inputs[-1])
 
-    def test_user_memory_reset_requires_confirmation_and_resets_only_current_sender(self) -> None:
+    def test_user_memory_reset_requires_confirmation_and_resets_only_current_account(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         with tempfile.TemporaryDirectory() as directory:

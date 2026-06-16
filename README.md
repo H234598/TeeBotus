@@ -478,7 +478,7 @@ Jeder Telegram-Token hat eine eigene Telegram-Identitaet. Der Bot ruft beim Star
 
 In Gruppen muss ein neuer User den Bot beim ersten Kontakt mit diesem offiziellen Namen, dem leserlichen Namen oder dem `@username` ansprechen. Eine Reply auf eine Bot-Nachricht zaehlt ebenfalls. Beim ersten echten Kontakt meldet sich der Bot mit diesem Namen, zum Beispiel `Ich bin Bote der Wahrheit.`
 
-Sobald dieser User mit diesem Bot bekannt ist, darf der User ihn beliebig nennen. Die Zuordnung laeuft dann ueber die Telegram-Sender-ID und den User-Memory.
+Sobald dieser User mit diesem Bot bekannt ist, darf der User ihn beliebig nennen. Die Zuordnung laeuft dann ueber die erkannte Telegram-Identity, die Account-ID und das Account-Memory.
 
 Feste Slash-Befehle werden nicht an OpenAI gesendet.
 
@@ -637,7 +637,7 @@ Wenn du die Standardantwort brauchst, steht sie in [docs/privacy-and-encryption.
 
 Bei einem produktiven Versionswechsel benachrichtigt der Telegram-Start alle Telegram-Identities, die in den letzten sieben Tagen in der jeweiligen Instanz aktiv waren. Pro Version und Identity wird nur einmal gesendet; die Nachricht nennt nur die neue Version, einen kurzen neutralen Hinweis und einen kleinen lokal aus Memory-Signalen abgeleiteten Witz.
 
-Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory der aktuellen Telegram-Sender-ID auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
+Wenn ein User `/reset_memorys` sendet oder den Bot frei formuliert auffordert, seine Erinnerungen zu loeschen, fragt der Bot zuerst nach Bestaetigung. Erst nach einer klaren Antwort wie `ja` wird ausschliesslich das User-Memory des aktuellen Accounts auf den initialen Skeletonzustand zurueckgesetzt: Index leer, JSONL leer. Admingepflegte interne Zusatzhinweise bleiben dabei unveraendert. Fremde User-Memorys und das Instanz-Arbeitsgedaechtnis werden nie durch User geloescht. Falls ein User danach fragt, weist der Bot darauf hin, dass das Instanz-/Arbeitsgedaechtnis keine userbezogenen Daten enthaelt.
 
 ## Instanz-Arbeitsgedaechtnis
 
