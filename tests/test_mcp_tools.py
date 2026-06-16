@@ -99,6 +99,25 @@ def test_mcp_known_future_tools_are_policy_visible_but_not_registered(tmp_path) 
         registry.call("youtube.transcribe", {"query": "https://youtu.be/example"})
 
 
+def test_mcp_registry_never_directly_calls_tools_that_require_extra_guards() -> None:
+    registry = MCPToolRegistry(
+        {
+            "export.account": MCPToolPolicy(enabled=True, read_only=True, requires_confirmation=True, requires_admin=True),
+            "sandbox.read": MCPToolPolicy(enabled=True, read_only=True, sandbox_required=True),
+        },
+        {
+            "export.account": lambda _arguments: {"export": "would leak account data"},
+            "sandbox.read": lambda _arguments: {"path": "/tmp/example"},
+        },
+    )
+
+    assert registry.tool_names == ()
+    with pytest.raises(MCPToolError, match="requires confirmation"):
+        registry.call("export.account", {"query": "export"})
+    with pytest.raises(MCPToolError, match="requires sandbox"):
+        registry.call("sandbox.read", {"query": "read"})
+
+
 def test_mcp_memory_search_requires_explicit_private_chat_context(tmp_path) -> None:
     service = _bibliothekar_service(tmp_path)
     account_store, account_id = _account_store_with_memory(tmp_path)

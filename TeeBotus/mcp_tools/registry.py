@@ -58,7 +58,7 @@ class MCPToolRegistry:
 
     @property
     def tool_names(self) -> tuple[str, ...]:
-        return tuple(sorted(name for name, policy in self._policies.items() if policy.enabled and policy.read_only and name in self._tools))
+        return tuple(sorted(name for name, policy in self._policies.items() if _policy_is_directly_callable(policy) and name in self._tools))
 
     def policy(self, name: str) -> MCPToolPolicy:
         key = str(name or "").strip().casefold()
@@ -71,6 +71,12 @@ class MCPToolRegistry:
             raise MCPToolError(f"MCP tool is disabled: {key or '<empty>'}")
         if not policy.read_only:
             raise MCPToolError(f"MCP tool is not read-only: {key}")
+        if policy.requires_confirmation:
+            raise MCPToolError(f"MCP tool requires confirmation: {key}")
+        if policy.requires_admin:
+            raise MCPToolError(f"MCP tool requires admin context: {key}")
+        if policy.sandbox_required:
+            raise MCPToolError(f"MCP tool requires sandbox: {key}")
         tool = self._tools.get(key)
         if tool is None:
             raise MCPToolError(f"MCP tool is not registered: {key}")
@@ -172,6 +178,10 @@ def _bool_config(value: object, default: bool) -> bool:
     if value is None:
         return default
     return str(value).strip().casefold() in {"1", "true", "yes", "on", "enabled", "ja", "an"}
+
+
+def _policy_is_directly_callable(policy: MCPToolPolicy) -> bool:
+    return policy.enabled and policy.read_only and not policy.requires_confirmation and not policy.requires_admin and not policy.sandbox_required
 
 
 def _safe_result(value: Mapping[str, Any]) -> dict[str, Any]:
