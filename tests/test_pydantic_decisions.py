@@ -232,6 +232,37 @@ def test_proactive_tool_call_decision_rejects_missing_or_extra_known_tool_argume
         )
 
 
+def test_proactive_tool_call_decision_rejects_empty_required_arguments() -> None:
+    with pytest.raises(ValidationError, match="empty required arguments"):
+        ProactiveToolCallDecision.model_validate(
+            {
+                "name": "proactive_create_memory",
+                "arguments": {"kind": "reflection", "text": "   "},
+            }
+        )
+
+    with pytest.raises(ValidationError, match="empty required arguments"):
+        ProactiveToolCallDecision.model_validate(
+            {
+                "name": "proactive_queue_message",
+                "arguments": {
+                    "category": "reminder",
+                    "intent": "follow_up",
+                    "message_text": "Hallo",
+                    "reason_memory_ids": [],
+                },
+            }
+        )
+
+    with pytest.raises(ValidationError, match="empty required arguments"):
+        ProactiveToolCallDecision.model_validate(
+            {
+                "name": "proactive_snooze_item",
+                "arguments": {"item_id": "pro_1", "due_at": ""},
+            }
+        )
+
+
 def test_pydantic_ai_adapter_reports_missing_optional_extra(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "pydantic_ai", None)
 

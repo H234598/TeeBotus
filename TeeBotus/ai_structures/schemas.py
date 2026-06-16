@@ -159,7 +159,22 @@ class ProactiveToolCallDecision(BaseModel):
         missing = sorted(rule["required"] - keys)
         if missing:
             raise ValueError(f"missing required arguments for {self.name}: {', '.join(missing)}")
+        empty = sorted(key for key in rule["required"] if _empty_required_argument(self.arguments.get(key)))
+        if empty:
+            raise ValueError(f"empty required arguments for {self.name}: {', '.join(empty)}")
         unknown = sorted(keys - rule["allowed"])
         if unknown:
             raise ValueError(f"unsupported arguments for {self.name}: {', '.join(unknown)}")
         return self
+
+
+def _empty_required_argument(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return not any(not _empty_required_argument(item) for item in value)
+    if isinstance(value, dict):
+        return not any(not _empty_required_argument(item) for item in value.values())
+    return False
