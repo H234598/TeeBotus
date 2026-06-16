@@ -6,7 +6,7 @@ import types
 import pytest
 
 from TeeBotus.instructions import parse_instructions
-from TeeBotus.core.status import mcp_tool_status_lines
+from TeeBotus.core.status import mcp_tool_status_lines, redact_status_text
 from TeeBotus.mcp_tools import MCPToolError, MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry, resolve_mcp_tool_policies
 from TeeBotus.mcp_tools.fastmcp_server import FASTMCP_READONLY_ALLOWLIST, build_fastmcp_server, fastmcp_available
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -91,6 +91,17 @@ def test_mcp_status_redacts_secret_like_unknown_tool_names() -> None:
     assert "sk-<redacted>" in joined
     assert "openai_api_key=<redacted>" in joined
     assert "shell.exec" in joined
+
+
+def test_status_redacts_colon_secret_assignments() -> None:
+    text = redact_status_text("provider failed api_key: plain-secret access-token: plain-token password: hunter2")
+
+    assert "plain-secret" not in text
+    assert "plain-token" not in text
+    assert "hunter2" not in text
+    assert "api_key:<redacted>" in text
+    assert "access-token:<redacted>" in text
+    assert "password:<redacted>" in text
 
 
 def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -> None:

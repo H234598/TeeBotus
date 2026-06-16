@@ -54,8 +54,12 @@ STATUS_SECRET_REDACTIONS = (
     (re.compile(r"\bgsk_[A-Za-z0-9]{8,}\b"), "gsk_<redacted>"),
     (re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"), "AIza<redacted>"),
     (
-        re.compile(r"\b([A-Za-z0-9_]*(?:api[_-]?key|access[_-]?token|token|secret|password)[A-Za-z0-9_]*)=([^,\s)]+)", re.IGNORECASE),
-        r"\1=<redacted>",
+        re.compile(
+            r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)"
+            r"[A-Za-z0-9_ -]*)\s*([:=])\s*([^,\s)]+)",
+            re.IGNORECASE,
+        ),
+        r"\1\2<redacted>",
     ),
 )
 STATUS_URL_CREDENTIAL_RE = re.compile(r"(?<!\S)(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)")
