@@ -612,6 +612,7 @@ class UserMemoryRecord:
     path: Path
     prompt_text: str
     selected_ids: tuple[str, ...]
+    account_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -2031,6 +2032,7 @@ def _prepare_user_memory(
             path=user_memory_store.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME,
             prompt_text=selection.prompt_text,
             selected_ids=selection.selected_ids,
+            account_id=account_id,
         )
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to prepare user memory.")
@@ -2122,7 +2124,9 @@ def _record_user_memory(
             "user_text": user_text,
             "bot_text": bot_text,
         }
-        account_id = user_memory.path.parent.name
+        account_id = _account_id_from_user_memory(user_memory)
+        if not account_id:
+            return
         user_memory_store.append_structured_memory_entry(
             account_id,
             entry,
@@ -2327,6 +2331,8 @@ def _record_tts_voice_style_from_message(
 def _account_id_from_user_memory(user_memory: UserMemoryRecord | None) -> str:
     if user_memory is None:
         return ""
+    if user_memory.account_id:
+        return user_memory.account_id
     return user_memory.path.parent.name
 
 

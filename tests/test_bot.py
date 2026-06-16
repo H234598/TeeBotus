@@ -334,6 +334,32 @@ class BotTests(unittest.TestCase):
             )
         self.assertEqual(api.sent_messages, [(123, instructions.user_memory_error)])
 
+    def test_record_user_memory_uses_explicit_account_id_not_legacy_path_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = account_memory_store(directory)
+            account_id = store.resolve_or_create_account("telegram:user:456", display_label="Ada")
+            misleading_path_account_id = "b" * 128
+            record = UserMemoryRecord(
+                sender_id="456",
+                path=Path("instances/Demo/data/accounts/accounts") / misleading_path_account_id / "User_Memory_Index.json",
+                prompt_text="",
+                selected_ids=(),
+                account_id=account_id,
+            )
+            instructions = BotInstructions(user_memory_enabled=True)
+
+            _record_user_memory(
+                store,
+                record,
+                {"message_id": 9, "chat": {"id": 123, "type": "private"}, "from": {"id": 456, "first_name": "Ada"}},
+                "Hallo",
+                "Antwort",
+                instructions,
+            )
+
+            self.assertEqual(len(store.read_memory_entries(account_id)), 1)
+            self.assertEqual(store.read_memory_entries(misleading_path_account_id), [])
+
     def test_telegram_request_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
