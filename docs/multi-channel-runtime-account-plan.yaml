@@ -103,13 +103,13 @@ implementation_phases:
       - "TeeBotus/core/export.py"
   - id: "phase_2"
     title: "Wire Telegram adapter through AccountStore"
-    status: "not_started"
+    status: "partially_implemented"
   - id: "phase_3"
     title: "Add signalbot-org/signalbot adapter"
     status: "not_started"
   - id: "phase_4"
     title: "Move memory/openai/teladi/youtube/codex to account-scoped runtime"
-    status: "not_started"
+    status: "partially_implemented"
   - id: "phase_5"
     title: "Docs, migration admin tools, CI coverage"
     status: "partially_specified"
@@ -155,3 +155,19 @@ admin_report_patch:
     - "Reports include metadata only, not memory content or secrets."
   temporary: false
   remove_after_full_migration: false
+
+account_scoped_runtime_patch:
+  status: "partially_implemented"
+  teladi_cooldown:
+    status: "implemented_for_telegram"
+    keying: "Account-ID when AccountStore is available, Telegram identity fallback otherwise"
+    files:
+      - "TeeBotus/adapters/telegram_runtime.py"
+      - "tests/test_bot.py"
+      - "README.md"
+    validation:
+      command: "python3 -m pytest -q tests/test_bot.py tests/test_telegram_runner.py tests/test_adapters.py"
+      result: "292 passed, 14 subtests passed"
+  remaining:
+    - "Move YouTube pending transcript/options state from Telegram sender key to account-aware runtime state."
+    - "Replace or remove unused messenger-neutral TeladiPendingFlow scaffold if it stays superseded by Telegram copy-message semantics."

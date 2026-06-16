@@ -3797,6 +3797,49 @@ class BotTests(unittest.TestCase):
         self.assertIn("23h", api.sent_messages[3][1])
         self.assertEqual(api.sent_messages[-1], (123, instructions.teladi_call_prompt))
 
+    def test_call_a_teladi_cooldown_is_account_scoped_across_linked_identities(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            chat_state = ChatState()
+            instructions = BotInstructions()
+            memory_store = account_memory_store(directory)
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+            _, secret = memory_store.register_account(account_id)
+            memory_store.link_identity(telegram_identity_key("", username="ada_l"), account_id, secret, display_label="Ada")
+
+            with patch("TeeBotus.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0]):
+                handle_update(
+                    api,
+                    {"message": {"text": "/Call_a_Teladi", "message_id": 1, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                    instructions,
+                    None,
+                    chat_state,
+                    memory_store,
+                )
+                handle_update(
+                    api,
+                    {"message": {"text": "Hilfe", "message_id": 2, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
+                    instructions,
+                    None,
+                    chat_state,
+                    memory_store,
+                )
+                handle_update(
+                    api,
+                    {"message": {"text": "/Call_a_Teladi", "message_id": 3, "chat": {"id": 123}, "from": {"username": "ada_l", "first_name": "Ada"}}},
+                    instructions,
+                    None,
+                    chat_state,
+                    memory_store,
+                )
+
+            self.assertIn(account_id, chat_state.teladi_call_used_at)
+            self.assertNotIn("telegram:user:456", chat_state.teladi_call_used_at)
+            self.assertIn("Du kannst /Call_a_Teladi erst in", api.sent_messages[-1][1])
+            self.assertEqual(api.copied_messages, [(TELADI_EMERGENCY_CHAT_ID, 123, 2)])
+
     def test_call_a_teladi_cooldown_persists_in_state_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             state_path = Path(directory) / "teladi_state.json"

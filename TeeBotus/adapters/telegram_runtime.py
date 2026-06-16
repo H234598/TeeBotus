@@ -540,33 +540,33 @@ class ChatState:
         with self._lock:
             self.pending_youtube_local_options.pop((chat_id, sender_id), None)
 
-    def request_teladi_call(self, chat_id: int, sender_id: str) -> None:
-        if sender_id:
-            self.pending_teladi_calls[sender_id] = chat_id
+    def request_teladi_call(self, chat_id: int, teladi_key: str) -> None:
+        if teladi_key:
+            self.pending_teladi_calls[teladi_key] = chat_id
 
-    def has_pending_teladi_call(self, chat_id: int, sender_id: str) -> bool:
-        return self.pending_teladi_calls.get(sender_id) == chat_id
+    def has_pending_teladi_call(self, chat_id: int, teladi_key: str) -> bool:
+        return self.pending_teladi_calls.get(teladi_key) == chat_id
 
-    def clear_pending_teladi_call(self, sender_id: str) -> None:
-        self.pending_teladi_calls.pop(sender_id, None)
+    def clear_pending_teladi_call(self, teladi_key: str) -> None:
+        self.pending_teladi_calls.pop(teladi_key, None)
 
-    def teladi_call_remaining_seconds(self, sender_id: str, now: float) -> int:
+    def teladi_call_remaining_seconds(self, teladi_key: str, now: float) -> int:
         self._refresh_teladi_call_used_at()
-        used_at = self.teladi_call_used_at.get(sender_id)
+        used_at = self.teladi_call_used_at.get(teladi_key)
         if used_at is None:
             return 0
         remaining = int(used_at + TELADI_EMERGENCY_COOLDOWN_SECONDS - now)
         return max(0, remaining)
 
-    def mark_teladi_call_used(self, sender_id: str, now: float) -> None:
-        if sender_id:
+    def mark_teladi_call_used(self, teladi_key: str, now: float) -> None:
+        if teladi_key:
             self._refresh_teladi_call_used_at()
-            self.teladi_call_used_at[sender_id] = now
+            self.teladi_call_used_at[teladi_key] = now
             self._persist_teladi_call_used_at()
 
-    def clear_teladi_call_used(self, sender_id: str) -> None:
+    def clear_teladi_call_used(self, teladi_key: str) -> None:
         self._refresh_teladi_call_used_at()
-        self.teladi_call_used_at.pop(sender_id, None)
+        self.teladi_call_used_at.pop(teladi_key, None)
         self._persist_teladi_call_used_at()
 
     def _refresh_teladi_call_used_at(self) -> None:
@@ -585,9 +585,9 @@ class ChatState:
         if not isinstance(used_at, dict):
             return {}
         parsed: dict[str, float] = {}
-        for sender_id, timestamp in used_at.items():
+        for teladi_key, timestamp in used_at.items():
             try:
-                parsed[str(sender_id)] = float(timestamp)
+                parsed[str(teladi_key)] = float(timestamp)
             except (TypeError, ValueError):
                 continue
         return parsed
@@ -1150,7 +1150,7 @@ def handle_update(
 
     text = str(message.get("text") or "").strip()
     first_contact = _is_first_contact(chat_state, user_memory_store, message, instructions)
-    if _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity):
+    if _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity, user_memory_store):
         return
 
     if "voice" in message:
@@ -1223,7 +1223,7 @@ def _process_text_message(
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, instance_name, "incoming")
     if text and _handle_privacy_confirmation_flow(api, chat_state, chat_id, message, user_memory_store, text):
         return
-    if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity):
+    if text and _handle_teladi_call_flow(api, chat_state, chat_id, message, instructions, text, first_contact, bot_identity, user_memory_store):
         return
 
     if text and _handle_user_memory_reset_flow(
@@ -1534,19 +1534,20 @@ def _handle_teladi_call_flow(
     text: str,
     first_contact: bool,
     bot_identity: BotIdentity,
+    user_memory_store: AccountStore | None = None,
 ) -> bool:
-    sender_id = _sender_identifier(message)
-    if not sender_id:
+    teladi_key = _telegram_account_state_key(user_memory_store, message, create=True)
+    if not teladi_key:
         return False
 
     command = _normalize_command(text)
     now = time.time()
-    if chat_state.has_pending_teladi_call(chat_id, sender_id):
-        return _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity)
+    if chat_state.has_pending_teladi_call(chat_id, teladi_key):
+        return _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity, user_memory_store)
 
     if command != "/call_a_teladi":
         return False
-    return _start_teladi_call(api, chat_state, chat_id, message, instructions, sender_id, now, first_contact, bot_identity)
+    return _start_teladi_call(api, chat_state, chat_id, message, instructions, teladi_key, now, first_contact, bot_identity)
 
 
 def _handle_pending_teladi_call_message(
@@ -1557,23 +1558,24 @@ def _handle_pending_teladi_call_message(
     instructions: BotInstructions,
     first_contact: bool,
     bot_identity: BotIdentity,
+    user_memory_store: AccountStore | None = None,
 ) -> bool:
-    sender_id = _sender_identifier(message)
-    if not sender_id or not chat_state.has_pending_teladi_call(chat_id, sender_id):
+    teladi_key = _telegram_account_state_key(user_memory_store, message, create=False)
+    if not teladi_key or not chat_state.has_pending_teladi_call(chat_id, teladi_key):
         return False
 
     raw_text = str(message.get("text") or "")
     now = time.time()
     if _normalize_command(raw_text) == "/call_a_teladi":
-        return _start_teladi_call(api, chat_state, chat_id, message, instructions, sender_id, now, first_contact, bot_identity)
+        return _start_teladi_call(api, chat_state, chat_id, message, instructions, teladi_key, now, first_contact, bot_identity)
 
-    chat_state.clear_pending_teladi_call(sender_id)
+    chat_state.clear_pending_teladi_call(teladi_key)
     try:
         _send_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, _build_teladi_emergency_header(message))
         _copy_untracked_message(api, TELADI_EMERGENCY_CHAT_ID, chat_id, _message_id(message))
     except (TelegramAPIError, ValueError):
         LOGGER.exception("Failed to send Teladi emergency message.")
-        chat_state.clear_teladi_call_used(sender_id)
+        chat_state.clear_teladi_call_used(teladi_key)
         reply = _with_first_contact_intro(instructions.teladi_call_error, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
@@ -1589,12 +1591,12 @@ def _start_teladi_call(
     chat_id: int,
     message: dict[str, Any],
     instructions: BotInstructions,
-    sender_id: str,
+    teladi_key: str,
     now: float,
     first_contact: bool,
     bot_identity: BotIdentity,
 ) -> bool:
-    remaining_seconds = chat_state.teladi_call_remaining_seconds(sender_id, now)
+    remaining_seconds = chat_state.teladi_call_remaining_seconds(teladi_key, now)
     if remaining_seconds > 0:
         reply = render_template(
             instructions.teladi_call_cooldown,
@@ -1606,11 +1608,35 @@ def _start_teladi_call(
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    chat_state.request_teladi_call(chat_id, sender_id)
-    chat_state.mark_teladi_call_used(sender_id, now)
+    chat_state.request_teladi_call(chat_id, teladi_key)
+    chat_state.mark_teladi_call_used(teladi_key, now)
     reply = _with_first_contact_intro(instructions.teladi_call_prompt, first_contact, bot_identity)
     _send_tracked_message(api, chat_state, chat_id, reply)
     return True
+
+
+def _telegram_account_state_key(user_memory_store: AccountStore | None, message: dict[str, Any], *, create: bool) -> str:
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return ""
+    if user_memory_store is None:
+        return identity_key
+    try:
+        if create:
+            account_id = user_memory_store.resolve_or_create_account(identity_key, display_label=_telegram_sender_display_label(message))
+            user_memory_store.update_identity_route(
+                identity_key,
+                channel="telegram",
+                chat_id=str(_message_chat_id(message) or ""),
+                chat_type=_telegram_chat_type(message),
+            )
+        else:
+            account_id = user_memory_store.get_account_for_identity(identity_key)
+        if account_id:
+            return account_id
+    except (AccountStoreError, OSError, AttributeError):
+        LOGGER.exception("Failed to resolve Telegram account state key for identity_key=%s.", identity_key)
+    return identity_key
 
 
 def _build_teladi_emergency_header(message: dict[str, Any]) -> str:
