@@ -1369,6 +1369,8 @@ def _runtime_status_qdrant_target_is_unsafe(line: str) -> bool:
         return True
     if parsed.query or parsed.fragment:
         return True
+    if parsed.path not in {"", "/"}:
+        return True
     host = (parsed.hostname or "").strip().casefold()
     if not host:
         host = target.rsplit(":", 1)[0].strip("[]").casefold()

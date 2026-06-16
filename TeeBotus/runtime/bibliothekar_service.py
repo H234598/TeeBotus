@@ -573,6 +573,8 @@ def _normalize_local_qdrant_url(value: object) -> str:
         raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
     if parsed.query or parsed.fragment:
         raise ValueError("Bibliothekar Qdrant URL must not contain query parameters or fragments.")
+    if parsed.path not in {"", "/"}:
+        raise ValueError("Bibliothekar Qdrant URL must be a base URL without a path.")
     return raw.rstrip("/")
 
 

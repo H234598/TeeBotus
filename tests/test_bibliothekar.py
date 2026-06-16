@@ -1131,10 +1131,15 @@ def test_haystack_status_rejects_nonlocal_qdrant_url(tmp_path, monkeypatch):
     assert "must stay local" in health.error
 
 
-def test_haystack_status_rejects_qdrant_url_query_or_fragment(tmp_path, monkeypatch):
+def test_haystack_status_rejects_qdrant_url_query_fragment_or_path(tmp_path, monkeypatch):
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: True)
 
-    for url in ("http://127.0.0.1:6333?api_key=plain-secret", "http://127.0.0.1:6333#token"):
+    cases = (
+        ("http://127.0.0.1:6333?api_key=plain-secret", "must not contain query parameters or fragments"),
+        ("http://127.0.0.1:6333#token", "must not contain query parameters or fragments"),
+        ("http://127.0.0.1:6333/collections", "must be a base URL without a path"),
+    )
+    for url, expected_error in cases:
         health = check_bibliothekar_service(
             "Depressionsbot",
             tmp_path / "instances",
@@ -1148,7 +1153,7 @@ def test_haystack_status_rejects_qdrant_url_query_or_fragment(tmp_path, monkeypa
         assert health.backend == "haystack"
         assert health.store == "qdrant"
         assert health.status == "unavailable"
-        assert "must not contain query parameters or fragments" in health.error
+        assert expected_error in health.error
 
 
 def test_bibliothekar_service_rebuild_delegates_to_backend(tmp_path):
