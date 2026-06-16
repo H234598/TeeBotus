@@ -51,6 +51,19 @@ def test_runtime_status_does_not_require_telegram_bot_start() -> None:
     assert result == 0
 
 
+def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-secret-token")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "telegram_slot=Demo/telegram:1 status=configured token=configured" in captured.out
+    assert "telegram-secret-token" not in captured.out
+
+
 def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

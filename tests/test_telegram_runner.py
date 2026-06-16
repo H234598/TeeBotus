@@ -8,6 +8,7 @@ from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, Runtime
 from TeeBotus.runtime.telegram_runner import (
     TelegramRuntimeError,
     build_telegram_instance_configs,
+    check_telegram_accounts,
     run_telegram_accounts,
 )
 
@@ -70,6 +71,51 @@ def test_run_telegram_accounts_rejects_missing_slots(tmp_path: Path) -> None:
 
     with pytest.raises(TelegramRuntimeError, match="kein TELEGRAM_BOT_TOKEN"):
         run_telegram_accounts(config)
+
+
+def test_check_telegram_accounts_reports_duplicate_tokens_without_leaking_secret(tmp_path: Path) -> None:
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("telegram",),
+        instances=(
+            InstanceRunConfig(
+                instance_name="DemoA",
+                instruction_path=tmp_path / "DemoA" / "Bot_Verhalten.md",
+                accounts=(
+                    AccountRunConfig(
+                        instance_name="DemoA",
+                        channel="telegram",
+                        slot=1,
+                        label="telegram:1",
+                        telegram_token="same-token-secret",
+                        openai_api_key="",
+                    ),
+                ),
+            ),
+            InstanceRunConfig(
+                instance_name="DemoB",
+                instruction_path=tmp_path / "DemoB" / "Bot_Verhalten.md",
+                accounts=(
+                    AccountRunConfig(
+                        instance_name="DemoB",
+                        channel="telegram",
+                        slot=1,
+                        label="telegram:1",
+                        telegram_token="same-token-secret",
+                        openai_api_key="",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    health = check_telegram_accounts(config)
+
+    assert health[0].ok is True
+    assert health[1].ok is False
+    assert health[1].error == "duplicate token with DemoA/telegram:1"
+    assert "same-token-secret" not in health[1].error
 
 
 def test_run_telegram_accounts_rejects_duplicate_tokens_across_instances(tmp_path: Path) -> None:

@@ -104,6 +104,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
         from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
+        from TeeBotus.runtime.telegram_runner import check_telegram_accounts
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import runtime config: {exc}", file=sys.stderr)
         return 2
@@ -143,6 +144,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
             f"signal_account={health.account.instance_name}/{health.account.label} "
             f"phone={health.account.signal_phone_number} target={_sanitize_status_url(health.target)} status={state}{detail}"
         )
+    for health in check_telegram_accounts(config):
+        state = "configured" if health.ok else "broken"
+        detail = " token=configured" if health.ok else f" error={_sanitize_status_text(health.error)}"
+        print(f"telegram_slot={health.account.instance_name}/{health.account.label} status={state}{detail}")
     for health in check_matrix_homeservers(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
@@ -508,12 +513,12 @@ def _start_matrix_runtime_background(config: Any) -> int:
 
 def _run_telegram_runtime(config: Any) -> int:
     try:
-        from TeeBotus.runtime.telegram_runner import TelegramRuntimeError, run_telegram_accounts
+        from TeeBotus.runtime.telegram_runner import TelegramRuntimeError, start_telegram_accounts
     except Exception as exc:  # pragma: no cover - defensive only
         print(f"TeeBotus compatibility error: could not import Telegram runtime: {exc}", file=sys.stderr)
         return 2
     try:
-        return int(run_telegram_accounts(config))
+        return int(start_telegram_accounts(config))
     except TelegramRuntimeError as exc:
         print(f"TeeBotus Telegram runtime error: {exc}", file=sys.stderr)
         return 2

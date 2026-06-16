@@ -1,16 +1,42 @@
 from __future__ import annotations
 
 import logging
+import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 from TeeBotus.adapters import telegram_runtime
-from TeeBotus.runtime.config import RuntimeConfig
+from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
 
 LOGGER = logging.getLogger("TeeBotus.telegram")
 
 
 class TelegramRuntimeError(RuntimeError):
     """Raised when the Telegram runtime cannot be started."""
+
+
+@dataclass(frozen=True)
+class TelegramAccountHealth:
+    account: AccountRunConfig
+    ok: bool
+    error: str = ""
+
+
+def check_telegram_accounts(config: RuntimeConfig) -> tuple[TelegramAccountHealth, ...]:
+    seen_tokens: dict[str, str] = {}
+    health: list[TelegramAccountHealth] = []
+    for account in _telegram_accounts(config):
+        if not account.telegram_token:
+            health.append(TelegramAccountHealth(account=account, ok=False, error="missing Telegram bot token"))
+            continue
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen_tokens.get(account.telegram_token)
+        if previous_label is not None:
+            health.append(TelegramAccountHealth(account=account, ok=False, error=f"duplicate token with {previous_label}"))
+            continue
+        seen_tokens[account.telegram_token] = label
+        health.append(TelegramAccountHealth(account=account, ok=True))
+    return tuple(health)
 
 
 def build_telegram_instance_configs(config: RuntimeConfig) -> tuple[telegram_runtime.InstanceRunConfig, ...]:
@@ -37,6 +63,21 @@ def build_telegram_instance_configs(config: RuntimeConfig) -> tuple[telegram_run
     return tuple(instance_configs)
 
 
+def start_telegram_accounts(config: RuntimeConfig) -> int:
+    return run_telegram_accounts(config)
+
+
+def start_telegram_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
+    thread = threading.Thread(
+        target=run_telegram_accounts,
+        args=(config,),
+        name="teebotus-telegram-runtime",
+        daemon=True,
+    )
+    thread.start()
+    return [thread]
+
+
 def run_telegram_accounts(config: RuntimeConfig) -> int:
     instance_configs = build_telegram_instance_configs(config)
     if not instance_configs:
@@ -50,6 +91,10 @@ def run_telegram_accounts(config: RuntimeConfig) -> int:
     )
     telegram_runtime.run_polling_all(list(instance_configs))
     return 0
+
+
+def _telegram_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
+    return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "telegram")
 
 
 def _duplicate_telegram_token_error(instance_configs: tuple[telegram_runtime.InstanceRunConfig, ...]) -> str:
@@ -72,4 +117,12 @@ def _duplicate_telegram_token_error(instance_configs: tuple[telegram_runtime.Ins
     )
 
 
-__all__ = ["TelegramRuntimeError", "build_telegram_instance_configs", "run_telegram_accounts"]
+__all__ = [
+    "TelegramAccountHealth",
+    "TelegramRuntimeError",
+    "build_telegram_instance_configs",
+    "check_telegram_accounts",
+    "run_telegram_accounts",
+    "start_telegram_accounts",
+    "start_telegram_accounts_in_background",
+]
