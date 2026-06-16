@@ -47,24 +47,32 @@ def build_optional_extras_report(*, require_installed: bool = False, pyproject_p
             continue
         installed: list[dict[str, str]] = []
         missing: list[str] = []
+        version_mismatches: list[dict[str, str]] = []
         for requirement in raw_deps:
             package = _distribution_name(str(requirement))
             if not package:
                 errors.append(f"could not parse requirement in {extra}: {requirement!r}")
                 continue
+            expected_version = _exact_pinned_version(str(requirement))
             try:
                 version = importlib.metadata.version(package)
             except importlib.metadata.PackageNotFoundError:
                 missing.append(package)
             else:
                 installed.append({"name": package, "version": version})
+                if expected_version and version != expected_version:
+                    version_mismatches.append({"name": package, "expected": expected_version, "installed": version})
         if require_installed and missing:
             errors.append(f"{extra} missing installed packages: {', '.join(missing)}")
+        if require_installed and version_mismatches:
+            detail = ", ".join(f"{item['name']} expected {item['expected']} found {item['installed']}" for item in version_mismatches)
+            errors.append(f"{extra} version mismatches: {detail}")
         extras[extra] = {
             "declared": list(raw_deps),
             "installed": installed,
             "missing": missing,
-            "complete": not missing,
+            "version_mismatches": version_mismatches,
+            "complete": not missing and not version_mismatches,
         }
     return {
         "schema_version": 1,
@@ -86,6 +94,12 @@ def _distribution_name(requirement: str) -> str:
     return match.group(1).replace("_", "-") if match else ""
 
 
+def _exact_pinned_version(requirement: str) -> str:
+    head = requirement.split(";", 1)[0].strip()
+    match = re.match(r"^[A-Za-z0-9_.-]+\s*==\s*([A-Za-z0-9_.!+-]+)\s*$", head)
+    return match.group(1) if match else ""
+
+
 def _print_text_report(report: dict[str, Any]) -> None:
     print("Plan2 optional extras inventory")
     print(f"pyproject={report['pyproject']}")
@@ -94,8 +108,9 @@ def _print_text_report(report: dict[str, Any]) -> None:
         declared = ", ".join(info["declared"]) or "-"
         installed = ", ".join(f"{item['name']}=={item['version']}" for item in info["installed"]) or "-"
         missing = ", ".join(info["missing"]) or "-"
+        mismatches = ", ".join(f"{item['name']} expected {item['expected']} found {item['installed']}" for item in info.get("version_mismatches", [])) or "-"
         status = "complete" if info["complete"] else "partial"
-        print(f"{extra}: status={status} declared=[{declared}] installed=[{installed}] missing=[{missing}]")
+        print(f"{extra}: status={status} declared=[{declared}] installed=[{installed}] missing=[{missing}] mismatches=[{mismatches}]")
     for error in report["errors"]:
         print(f"ERROR {error}", file=sys.stderr)
 
