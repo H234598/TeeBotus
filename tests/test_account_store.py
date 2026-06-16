@@ -1257,6 +1257,17 @@ def test_structured_account_memory_index_health_reports_ok(tmp_path):
     assert health.errors == ()
 
 
+def test_structured_account_memory_index_health_accepts_empty_account(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert health.ok
+    assert health.errors == ()
+
+
 def test_structured_account_memory_index_health_reports_database_decryption_errors(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))

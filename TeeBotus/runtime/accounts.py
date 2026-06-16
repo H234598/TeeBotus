@@ -1198,6 +1198,8 @@ class AccountStore:
         if not isinstance(index_doc, dict):
             errors.append("index document is not an object")
             return AccountMemoryIndexHealth(account_id, False, tuple(errors))
+        if not entries and not index_doc:
+            return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
         if index_doc.get("scope") != "account":
             errors.append("index scope is not account")
         nested_index = index_doc.get("index")
