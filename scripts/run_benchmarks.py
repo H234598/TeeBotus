@@ -91,6 +91,28 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
+REQUIRED_BENCHMARK_NAMES = frozenset(
+    {
+        "memory_migration_jsonl_to_sqlite",
+        "memory_jsonl",
+        "memory_sqlite_projection",
+        "bibliothekar_local_query",
+        "bibliothekar_haystack_fake_query",
+        "llm_router_structured_decision",
+        "pydantic_structured_decisions",
+        "proactive_tool_plan_due_dispatch_gates",
+        "messenger_adapter_runtime_contracts",
+        "youtube_parser_local",
+        "youtube_local_job_queue_no_llm",
+        "youtube_local_pipeline_cache_no_openai",
+        "status_doctor_runtime_dependency_health",
+        "database_fallback_policy",
+        "langgraph_bibliothekar_deep_query",
+        "langgraph_bibliothekar_linear",
+        "langgraph_bibliothekar_fake_installed",
+        "mcp_readonly_bibliothekar_and_memory_search",
+    }
+)
 REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -321,6 +343,14 @@ def _build_quality_gate(
     missing_categories = sorted(REQUIRED_BENCHMARK_CATEGORIES - categories)
     if missing_categories:
         errors.append(f"missing required benchmark categories: {', '.join(missing_categories)}")
+    successful_names = {
+        str(result.get("name") or "")
+        for result in results
+        if isinstance(result, dict) and result.get("ok") and not result.get("skipped")
+    }
+    missing_names = sorted(REQUIRED_BENCHMARK_NAMES - successful_names)
+    if missing_names:
+        errors.append(f"missing required benchmark results: {', '.join(missing_names)}")
 
     rankings = comparisons.get("stable_backend_rankings") if isinstance(comparisons, dict) else None
     ranking_categories = {

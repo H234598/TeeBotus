@@ -27,6 +27,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "error_count": 0,
         "errors": [],
     }
+    assert benchmark_module.REQUIRED_BENCHMARK_NAMES.issubset({result["name"] for result in suite["results"] if result["ok"] and not result["skipped"]})
     assert suite["regression"]["status"] == "not_configured"
     assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
@@ -261,6 +262,7 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert quality_gate["ok"] is False
     assert quality_gate["status"] == "failed"
     assert any("missing required benchmark categories" in error for error in quality_gate["errors"])
+    assert any("missing required benchmark results" in error for error in quality_gate["errors"])
     assert any("missing required benchmark rankings" in error for error in quality_gate["errors"])
     assert "memory_jsonl iterations must be a positive integer" in quality_gate["errors"]
     assert "memory_jsonl errors must be 0 for ok standard benchmark results" in quality_gate["errors"]
@@ -289,6 +291,46 @@ def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> 
 
     assert quality_gate["ok"] is False
     assert "ranking bibliothekar must compare at least 2 successful candidates" in quality_gate["errors"]
+
+
+def test_benchmark_quality_gate_requires_specific_plan2_benchmark_names() -> None:
+    base_result = {
+        "category": "account_memory",
+        "ok": True,
+        "skipped": False,
+        "iterations": 1,
+        "total_ms": 1.0,
+        "throughput_ops_s": 1.0,
+        "errors": 0,
+        "payload_bytes": 1,
+        "index_bytes": 0,
+        "mode": "local",
+        "details": {
+            "network_calls": 0,
+            "openai_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+            "llm_calls": 0,
+        },
+    }
+    results = [
+        {
+            **base_result,
+            "name": required_name,
+            "category": "account_memory" if required_name == "memory_jsonl" else "custom",
+        }
+        for required_name in sorted(benchmark_module.REQUIRED_BENCHMARK_NAMES - {"youtube_local_pipeline_cache_no_openai"})
+    ]
+
+    quality_gate = benchmark_module._build_quality_gate(
+        results,
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert any("missing required benchmark results: youtube_local_pipeline_cache_no_openai" == error for error in quality_gate["errors"])
 
 
 def test_stable_backend_ranking_excludes_erroring_candidates() -> None:
