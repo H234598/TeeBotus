@@ -169,7 +169,10 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
         f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable-account-metadata '
         f'--json-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.json"} '
-        f'--markdown-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.md"}"'
+        f'--markdown-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.md"}" '
+        f'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
+        f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable '
+        '--replace-unreadable-account-metadata --apply"'
     ) in lines
 
 
@@ -191,6 +194,8 @@ def test_account_memory_status_quotes_legacy_preflight_command_for_spaced_instan
     assert "--instance 'Demo Bot'" in legacy_line
     assert "teebotus-legacy-import-preflight-Demo_Bot.json" in legacy_line
     assert "teebotus-legacy-import-preflight-Demo_Bot.md" in legacy_line
+    assert "apply_command=" in legacy_line
+    assert "--replace-unreadable --replace-unreadable-account-metadata --apply" in legacy_line
 
 
 def test_account_memory_status_ignores_encrypted_legacy_backup(tmp_path) -> None:

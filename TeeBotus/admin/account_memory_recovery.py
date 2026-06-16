@@ -148,6 +148,9 @@ def render_text_report(report: Mapping[str, Any]) -> str:
             command = str(legacy.get("dry_run_command") or "").strip()
             if command:
                 lines.append(f"  - dry_run_command: `{command}`")
+            apply_command = str(legacy.get("apply_command") or "").strip()
+            if apply_command:
+                lines.append(f"  - apply_command: `{apply_command}`")
         for account in instance.get("accounts", []):
             if not isinstance(account, Mapping):
                 continue
@@ -380,6 +383,21 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
             str(Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{artifact_name}.md"),
         ]
     )
+    apply_command = shlex.join(
+        [
+            "python3",
+            "scripts/import_legacy_user_memory.py",
+            "--legacy-instances-dir",
+            str(legacy_instances_dir),
+            "--target-instances-dir",
+            str(target_instances_dir),
+            "--instance",
+            instance_name,
+            "--replace-unreadable",
+            "--replace-unreadable-account-metadata",
+            "--apply",
+        ]
+    )
     return {
         "requested_legacy_instances_dir": str(legacy_instances_dir),
         "legacy_instances_dir": str(effective_legacy_instances_dir),
@@ -389,6 +407,7 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "encrypted_sources": encrypted_sources,
         "malformed_sources": malformed_sources,
         "dry_run_command": command,
+        "apply_command": apply_command,
         "apply_requires": "--apply plus explicit review of metadata/account-memory replacement flags",
     }
 

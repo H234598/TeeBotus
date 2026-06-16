@@ -477,10 +477,25 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                     str(legacy_preflight_md),
                 ]
             )
+            legacy_apply_command = shlex.join(
+                [
+                    "python3",
+                    "scripts/import_legacy_user_memory.py",
+                    "--legacy-instances-dir",
+                    str(legacy["requested_path"]),
+                    "--target-instances-dir",
+                    str(instances_dir),
+                    "--instance",
+                    instance_name,
+                    "--replace-unreadable",
+                    "--replace-unreadable-account-metadata",
+                    "--apply",
+                ]
+            )
             lines.append(
                 f'account_memory_recovery_legacy={instance_name} status=available '
                 f'sources={legacy["sources"]} entries={legacy["entries"]} path={legacy["effective_path"]} '
-                f'command="{legacy_command}"'
+                f'command="{legacy_command}" apply_command="{legacy_apply_command}"'
             )
     return lines
 
