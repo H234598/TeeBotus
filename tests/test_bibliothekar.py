@@ -414,6 +414,7 @@ def test_haystack_backend_isolates_search_results_by_instance(tmp_path):
                 "chunk_id": "own_chunk",
                 "instance_name": "Depressionsbot",
                 "relative_path": "therapie.txt",
+                "locator": "Seite 1",
                 "topics": ["therapie"],
                 "categories": ["psychologie"],
             },
@@ -447,6 +448,42 @@ def test_haystack_backend_isolates_search_results_by_instance(tmp_path):
     }
     assert [chunk["chunk_id"] for chunk in payload["selected_library_chunks"]] == ["own_chunk"]
     assert "Fremde Instanz" not in selection.prompt_text
+
+
+def test_haystack_backend_rejects_uncitable_document_store_chunks(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    fallback_store.rebuild()
+    document_store = FakeDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content="Depression Therapie ohne zitierbaren Locator.",
+            id="uncitable_chunk",
+            meta={
+                "chunk_id": "uncitable_chunk",
+                "instance_name": "Depressionsbot",
+                "relative_path": "therapie.txt",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        )
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert "uncitable_chunk" not in selection.selected_ids
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+    assert all(chunk["locator"] for chunk in payload["selected_library_chunks"])
 
 
 def test_haystack_rebuild_does_not_delete_other_instance_documents(tmp_path):

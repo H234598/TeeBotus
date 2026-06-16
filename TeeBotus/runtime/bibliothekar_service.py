@@ -20,6 +20,7 @@ from TeeBotus.runtime.bibliothekar import (
 
 
 HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
+REQUIRED_CITATION_CHUNK_FIELDS = ("chunk_id", "relative_path", "locator")
 CHUNK_FILTER_KEYS = frozenset(
     {
         "category",
@@ -278,35 +279,35 @@ class HaystackBibliothekarBackend:
                 meta = {}
             text = str(getattr(document, "content", "") or "")
             chunk_id = str(meta.get("chunk_id") or getattr(document, "id", "") or "")
-            if not chunk_id or not text:
+            relative_path = str(meta.get("relative_path", "") or meta.get("file_path", ""))
+            chunk = {
+                "chunk_id": chunk_id,
+                "instance_name": str(meta.get("instance_name", "")),
+                "document_id": str(meta.get("document_id", "")),
+                "source_id": str(meta.get("source_id", "")),
+                "title": str(meta.get("title", "")),
+                "relative_path": relative_path,
+                "file_path": str(meta.get("file_path", "") or relative_path),
+                "file_sha256": str(meta.get("file_sha256", "")),
+                "file_type": str(meta.get("file_type", "")),
+                "language": str(meta.get("language", "")),
+                "locator": str(meta.get("locator", "")),
+                "suffix": str(meta.get("suffix", "")),
+                "page_start": meta.get("page_start"),
+                "page_end": meta.get("page_end"),
+                "chapter": str(meta.get("chapter", "")),
+                "section": str(meta.get("section", "")),
+                "license": str(meta.get("license", "")),
+                "ingested_at": str(meta.get("ingested_at", "")),
+                "chunk_index": meta.get("chunk_index"),
+                "embedding_model": str(meta.get("embedding_model", "")),
+                "topics": list(meta.get("topics", [])) if isinstance(meta.get("topics"), list) else [],
+                "categories": list(meta.get("categories", [])) if isinstance(meta.get("categories"), list) else [],
+                "text": text,
+            }
+            if not text or not _chunk_has_required_citation_metadata(chunk):
                 continue
-            chunks.append(
-                {
-                    "chunk_id": chunk_id,
-                    "instance_name": str(meta.get("instance_name", "")),
-                    "document_id": str(meta.get("document_id", "")),
-                    "source_id": str(meta.get("source_id", "")),
-                    "title": str(meta.get("title", "")),
-                    "relative_path": str(meta.get("relative_path", "")),
-                    "file_path": str(meta.get("file_path", "") or meta.get("relative_path", "")),
-                    "file_sha256": str(meta.get("file_sha256", "")),
-                    "file_type": str(meta.get("file_type", "")),
-                    "language": str(meta.get("language", "")),
-                    "locator": str(meta.get("locator", "")),
-                    "suffix": str(meta.get("suffix", "")),
-                    "page_start": meta.get("page_start"),
-                    "page_end": meta.get("page_end"),
-                    "chapter": str(meta.get("chapter", "")),
-                    "section": str(meta.get("section", "")),
-                    "license": str(meta.get("license", "")),
-                    "ingested_at": str(meta.get("ingested_at", "")),
-                    "chunk_index": meta.get("chunk_index"),
-                    "embedding_model": str(meta.get("embedding_model", "")),
-                    "topics": list(meta.get("topics", [])) if isinstance(meta.get("topics"), list) else [],
-                    "categories": list(meta.get("categories", [])) if isinstance(meta.get("categories"), list) else [],
-                    "text": text,
-                }
-            )
+            chunks.append(chunk)
         return chunks
 
     def _document_store_filters(self, filters: Mapping[str, object] | None) -> dict[str, Any]:
@@ -573,6 +574,10 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
     if key in {"chunk", "chunk_id"}:
         return _any_exact_match(chunk.get("chunk_id"), values)
     return True
+
+
+def _chunk_has_required_citation_metadata(chunk: Mapping[str, Any]) -> bool:
+    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS)
 
 
 def _filter_values(value: object) -> tuple[str, ...]:
