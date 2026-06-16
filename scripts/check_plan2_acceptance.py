@@ -20,6 +20,7 @@ class AcceptanceCommand:
     label: str
     argv: tuple[str, ...]
     nonfatal: bool = False
+    validate_runtime_status: bool = False
 
 
 PLAN2_TEST_PATTERNS: tuple[str, ...] = (
@@ -138,6 +139,7 @@ def build_acceptance_commands(
             AcceptanceCommand(
                 "runtime-status",
                 (python, "-m", "TeeBotus", "--runtime-status", "--channels", runtime_channels),
+                validate_runtime_status=True,
             )
         )
         for channel in ("telegram", "signal", "matrix"):
@@ -145,6 +147,7 @@ def build_acceptance_commands(
                 AcceptanceCommand(
                     f"runtime-status-{channel}",
                     (python, "-m", "TeeBotus", "--runtime-status", "--channels", channel),
+                    validate_runtime_status=True,
                 )
             )
     commands.append(
@@ -241,14 +244,37 @@ def build_acceptance_commands(
 def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
     for index, command in enumerate(commands, start=1):
         print(f"\n[{index}/{len(commands)}] {command.label}: {_format_command(command.argv)}", flush=True)
-        result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False)
+        result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=command.validate_runtime_status)
+        if command.validate_runtime_status:
+            if result.stdout:
+                print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+            if result.stderr:
+                print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
         if result.returncode and not command.nonfatal:
             print(f"\nPlan2 acceptance failed at {command.label} with exit code {result.returncode}.", file=sys.stderr)
             return result.returncode
         if result.returncode and command.nonfatal:
             print(f"\nNon-fatal Plan2 check failed at {command.label} with exit code {result.returncode}.", file=sys.stderr)
+        if command.validate_runtime_status:
+            broken_lines = _runtime_status_broken_lines(result.stdout or "")
+            if broken_lines and not command.nonfatal:
+                print(f"\nPlan2 acceptance failed at {command.label}: runtime-status reports broken state.", file=sys.stderr)
+                for line in broken_lines:
+                    print(f"  {line}", file=sys.stderr)
+                return 1
     print("\nPlan2 acceptance checks passed.")
     return 0
+
+
+def _runtime_status_broken_lines(output: str) -> list[str]:
+    broken: list[str] = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if " status=broken" in stripped or "account_memory_recovery=" in stripped and " status=needed" in stripped:
+            broken.append(stripped)
+    return broken
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:

@@ -27,6 +27,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
         "--channels",
         "telegram,signal,matrix",
     )
+    assert by_label["runtime-status"].validate_runtime_status is True
     for channel in ("telegram", "signal", "matrix"):
         assert by_label[f"runtime-status-{channel}"].argv == (
             "python-test",
@@ -36,6 +37,7 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
             "--channels",
             channel,
         )
+        assert by_label[f"runtime-status-{channel}"].validate_runtime_status is True
     assert "--all" not in " ".join(" ".join(command.argv) for command in commands)
     pytest_args = by_label["plan2-pytest"].argv
     expected_plan2_tests = check_plan2_acceptance._expand_test_patterns(check_plan2_acceptance.PLAN2_TEST_PATTERNS)
@@ -105,7 +107,7 @@ def test_plan2_acceptance_can_include_nonfatal_qdrant_live_probe(tmp_path: Path,
 def test_plan2_acceptance_runner_stops_on_fatal_failure(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
 
-    def fake_run(argv, cwd, check):  # noqa: ANN001
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
         calls.append(tuple(argv))
         return subprocess.CompletedProcess(argv, 7)
 
@@ -125,7 +127,7 @@ def test_plan2_acceptance_runner_stops_on_fatal_failure(monkeypatch) -> None:
 def test_plan2_acceptance_runner_continues_after_nonfatal_failure(monkeypatch) -> None:
     calls: list[tuple[str, ...]] = []
 
-    def fake_run(argv, cwd, check):  # noqa: ANN001
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
         calls.append(tuple(argv))
         code = 3 if tuple(argv) == ("pip-audit",) else 0
         return subprocess.CompletedProcess(argv, code)
@@ -141,3 +143,48 @@ def test_plan2_acceptance_runner_continues_after_nonfatal_failure(monkeypatch) -
 
     assert result == 0
     assert calls == [("pip-audit",), ("python-test", "-m", "TeeBotus")]
+
+
+def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
+        calls.append(tuple(argv))
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=(
+                "TeeBotus runtime configuration resolves.\n"
+                "account_memory=Demo/abc status=broken error=recent_ids missing entries: mem_missing\n"
+                "account_memory_recovery=Demo status=needed command=\"python3 -m TeeBotus.admin memory-recovery\"\n"
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan2_acceptance.run_acceptance_commands(
+        [
+            check_plan2_acceptance.AcceptanceCommand(
+                "runtime-status",
+                ("python-test", "-m", "TeeBotus", "--runtime-status"),
+                validate_runtime_status=True,
+            ),
+            check_plan2_acceptance.AcceptanceCommand("later", ("python-test", "-m", "pytest")),
+        ]
+    )
+
+    assert result == 1
+    assert calls == [("python-test", "-m", "TeeBotus", "--runtime-status")]
+
+
+def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
+    output = "\n".join(
+        [
+            "llm=Demo/telegram:1 provider=openai model=gpt status=configured",
+            "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable",
+            "account_memory=Demo/abc status=ok",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == []
