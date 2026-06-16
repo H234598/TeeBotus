@@ -173,6 +173,48 @@ def test_bibliothekar_deep_query_returns_serializable_state_when_langgraph_invok
     json.dumps(state)
 
 
+def test_bibliothekar_deep_query_coerces_graph_state_conservatively(tmp_path, monkeypatch) -> None:
+    class FakeCompiledGraph:
+        def invoke(self, _state):
+            return {
+                "query": "Therapie",
+                "confidence": "not-a-number",
+                "citation_ok": "false",
+                "selected_ids": ["mem_1"],
+                "errors": ["warn"],
+            }
+
+    class FakeStateGraph:
+        def __init__(self, _state_type):
+            pass
+
+        def add_node(self, *_args, **_kwargs):
+            return None
+
+        def set_entry_point(self, *_args, **_kwargs):
+            return None
+
+        def add_edge(self, *_args, **_kwargs):
+            return None
+
+        def compile(self):
+            return FakeCompiledGraph()
+
+    fake_package = types.ModuleType("langgraph")
+    fake_graph = types.ModuleType("langgraph.graph")
+    fake_graph.END = "__end__"
+    fake_graph.StateGraph = FakeStateGraph
+    monkeypatch.setitem(sys.modules, "langgraph", fake_package)
+    monkeypatch.setitem(sys.modules, "langgraph.graph", fake_graph)
+
+    state = run_bibliothekar_deep_query(_service_with_book(tmp_path), "Therapie", prefer_langgraph=True)
+
+    assert state["citation_ok"] is False
+    assert "confidence" not in state
+    assert state["selected_ids"] == ["mem_1"]
+    json.dumps(state, allow_nan=False)
+
+
 def test_bibliothekar_cli_query_deep_uses_graph(tmp_path, capsys) -> None:
     instances_dir = tmp_path / "instances"
     library_dir = instances_dir / "Depressionsbot" / "data" / "Bibliothek"

@@ -231,11 +231,34 @@ def _coerce_state(value: object) -> BibliothekarDeepQueryState:
         if key in {"query", "intent", "prompt_text", "answer_text", "fallback_reason"}:
             result[str(key)] = str(item)  # type: ignore[literal-required]
         elif key == "confidence":
-            result["confidence"] = float(item)
+            confidence = _coerce_float(item)
+            if confidence is not None:
+                result["confidence"] = confidence
         elif key == "citation_ok":
-            result["citation_ok"] = bool(item)
+            result["citation_ok"] = _coerce_bool(item)
         elif key == "filters" and isinstance(item, Mapping):
             result["filters"] = _serializable_filters(item)
         elif key in {"selected_ids", "errors"} and isinstance(item, list):
             result[str(key)] = [str(entry) for entry in item]  # type: ignore[literal-required]
     return result
+
+
+def _coerce_float(value: object) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed != parsed or parsed in {float("inf"), float("-inf")}:
+        return None
+    return parsed
+
+
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().casefold()
+    if text in {"1", "true", "yes", "on", "ja", "wahr"}:
+        return True
+    if text in {"0", "false", "no", "off", "nein", "falsch", ""}:
+        return False
+    return False
