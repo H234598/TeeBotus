@@ -83,3 +83,46 @@ def test_litellm_provider_redacts_url_credentials_and_secret_assignments(monkeyp
     assert "api_key=<redacted>" in message
     assert "password=<redacted>" in message
     assert "http://<redacted>@127.0.0.1:11434/api" in message
+
+
+def test_litellm_provider_blocks_unsafe_ollama_api_base_before_provider_call(monkeypatch) -> None:
+    def completion(**_kwargs):
+        raise AssertionError("Unsafe Ollama api_base must not be passed to LiteLLM")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(provider="ollama", model="llama3.1:8b", api_base="http://ollama.example:11434")
+
+    with pytest.raises(LLMAPIError, match="Unsafe Ollama api_base: host must be loopback"):
+        client.create_reply("Ping", BotInstructions(), None)
+
+
+def test_litellm_provider_blocks_credentialed_ollama_api_base_from_instructions(monkeypatch) -> None:
+    def completion(**_kwargs):
+        raise AssertionError("Credentialed Ollama api_base must not be passed to LiteLLM")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(provider="litellm", model="ollama_chat/llama3.1:8b")
+
+    with pytest.raises(LLMAPIError, match="Unsafe Ollama api_base: credentials are not allowed"):
+        client.create_reply(
+            "Ping",
+            BotInstructions(llm_base_url="http://user:secret@127.0.0.1:11434/api"),
+            None,
+        )
+
+
+def test_litellm_provider_allows_local_ollama_api_base(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "lokal ok"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(provider="ollama", model="llama3.1:8b", api_base="localhost:11434/api")
+
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "lokal ok"
+    assert calls[0]["model"] == "ollama/llama3.1:8b"
+    assert calls[0]["api_base"] == "localhost:11434/api"

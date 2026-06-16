@@ -5,12 +5,14 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMResponse
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_provider")
+LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 LITELLM_PROVIDER_ALIASES = {
     "litellm",
@@ -131,6 +133,7 @@ class LiteLLMTextClient:
             raise LLMAPIError("LiteLLM model must not be empty")
 
         base_kwargs = self._completion_kwargs(user_text, instructions)
+        _validate_litellm_local_service_targets(models, base_kwargs)
         if previous_response_id:
             LOGGER.debug("Ignoring previous_response_id for LiteLLM text provider; provider has no Responses state capability.")
 
@@ -267,6 +270,46 @@ def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str
     if env_name:
         return os.environ.get(env_name, "").strip() or default_api_key.strip()
     return default_api_key.strip()
+
+
+def _validate_litellm_local_service_targets(models: tuple[str, ...], kwargs: Mapping[str, object]) -> None:
+    if not any(_litellm_model_uses_ollama(model) for model in models):
+        return
+    api_base = str(kwargs.get("api_base") or "").strip()
+    if not api_base:
+        return
+    reason = _unsafe_local_ollama_api_base_reason(api_base)
+    if reason:
+        raise LLMAPIError(f"Unsafe Ollama api_base: {reason}")
+
+
+def _litellm_model_uses_ollama(model: object) -> bool:
+    return str(model or "").strip().casefold().startswith(("ollama/", "ollama_chat/"))
+
+
+def _unsafe_local_ollama_api_base_reason(api_base: str) -> str:
+    text = str(api_base or "").strip()
+    if not text:
+        return ""
+    if "://" not in text and not text.startswith("//"):
+        text = f"http://{text}"
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except ValueError:
+        return "invalid URL"
+    if parsed.scheme and parsed.scheme not in {"http", "https"}:
+        return "scheme must be http or https"
+    if parsed.username or parsed.password:
+        return "credentials are not allowed"
+    if parsed.query or parsed.fragment:
+        return "query and fragment are not allowed"
+    host = (parsed.hostname or "127.0.0.1").strip().casefold()
+    if host not in LOCAL_OLLAMA_HOSTS:
+        return "host must be loopback"
+    if port is not None and port <= 0:
+        return "invalid port"
+    return ""
 
 
 def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
