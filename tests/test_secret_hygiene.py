@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -9,6 +10,12 @@ SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{12,}\b"),
     re.compile(r"\bsyt_[A-Za-z0-9_=-]{12,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{12,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{12,}\b"),
+    re.compile(r"\bhf_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bgsk_[A-Za-z0-9]{12,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
 )
 ALLOWED_PLACEHOLDER_PARTS = (
     "replace",
@@ -29,6 +36,15 @@ SKIP_DIRS = {
     "__pycache__",
     "reports",
 }
+FORBIDDEN_TRACKED_PATH_PATTERNS = (
+    re.compile(r"(^|/)\.env($|\.)"),
+    re.compile(r"(^|/)instances/"),
+    re.compile(r"(^|/)data/"),
+    re.compile(r"(^|/)Account_(Index|Identities|Secrets|Memory)\.(json|sqlite3?)$"),
+    re.compile(r"(^|/)User_Memory_(Entries|Index)\.jsonl?$"),
+    re.compile(r"\.(sqlite3?|db)$"),
+    re.compile(r"\.(pem|key)$"),
+)
 TEXT_SUFFIXES = {
     ".cfg",
     ".env",
@@ -55,6 +71,18 @@ def test_repository_contains_no_real_looking_secrets() -> None:
                 if _allowed_placeholder(token):
                     continue
                 findings.append(f"{path.relative_to(PROJECT_ROOT)}:{_line_number(text, match.start())}:{token[:10]}...")
+
+    assert findings == []
+
+
+def test_git_index_does_not_track_runtime_secret_or_memory_paths() -> None:
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=PROJECT_ROOT, text=True).splitlines()
+    findings = []
+    for path in tracked:
+        if path == ".env.example":
+            continue
+        if any(pattern.search(path) for pattern in FORBIDDEN_TRACKED_PATH_PATTERNS):
+            findings.append(path)
 
     assert findings == []
 
