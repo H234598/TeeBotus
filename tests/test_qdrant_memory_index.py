@@ -189,6 +189,37 @@ def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change
     assert {"key": "embedding_dimensions", "match": {"value": 16}} in search_body["filter"]["must"]
 
 
+def test_qdrant_memory_search_rejects_stale_results_even_if_backend_filter_leaks() -> None:
+    class _LeakyQdrant(_FakeQdrant):
+        def _search(self, body: dict[str, object]) -> list[dict[str, object]]:
+            query = body["vector"]
+            matches = [
+                {"id": point_id, "score": _dot(query, point["vector"]), "payload": point["payload"]}
+                for point_id, point in self.points.items()
+                if isinstance(point.get("payload"), dict)
+            ]
+            matches.sort(key=lambda item: item["score"], reverse=True)
+            return matches[: int(body.get("limit", 5))]
+
+    fake_qdrant = _LeakyQdrant()
+    old_index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=FakeEmbeddingProvider(model_name="old-memory-model", dimensions=16),
+    )
+    new_index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=FakeEmbeddingProvider(model_name="new-memory-model", dimensions=16),
+    )
+    old_index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_old", "user_text": "Schlaf"})
+    new_index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_new", "user_text": "Schlaf"})
+
+    results = new_index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=10)
+
+    assert [result.memory_id for result in results] == ["mem_new"]
+
+
 def test_qdrant_memory_search_filters_stale_vectors_after_payload_schema_change() -> None:
     fake_qdrant = _FakeQdrant()
     index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)

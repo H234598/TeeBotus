@@ -121,6 +121,9 @@ class QdrantMemoryIndex:
             if (
                 payload.get("account_scope") != _account_scope(instance_name=instance, account_id=account)
                 or payload.get("instance_name") != instance
+                or payload.get("schema_version") != QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
+                or payload.get("embedding_model") != self.embedding_provider.model_name
+                or payload.get("embedding_dimensions") != int(self.embedding_provider.dimensions)
             ):
                 continue
             try:
