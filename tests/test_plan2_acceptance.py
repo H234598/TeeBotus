@@ -2347,6 +2347,21 @@ def test_runtime_status_missing_required_lines_rejects_malformed_account_memory_
     assert any("apply_command missing --replace-unreadable" in error for error in errors)
 
 
+def test_runtime_status_missing_required_lines_rejects_inconsistent_account_memory_legacy_recovery_paths() -> None:
+    broken_line = (
+        'account_memory_recovery_legacy=Demo status=available sources=1 entries=2 path=/tmp/Other_Backup/instances.bak '
+        'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Other --replace-unreadable-account-metadata --json-output /tmp/import.json --markdown-output /tmp/import.md" '
+        'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak3 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable --replace-unreadable-account-metadata --apply"'
+    )
+
+    errors = check_plan2_acceptance._runtime_status_account_memory_recovery_legacy_errors([broken_line])
+
+    assert any("command instance does not match status line" in error for error in errors)
+    assert any("command and apply_command legacy paths differ" in error for error in errors)
+    assert any("path is not below command --legacy-instances-dir" in error for error in errors)
+    assert any("path is not below apply_command --legacy-instances-dir" in error for error in errors)
+
+
 def test_runtime_status_broken_lines_flags_secret_leaks() -> None:
     openai_key = "sk-" + "liveSecretLeak123456"
     matrix_token = "syt_" + "liveSecretLeak123456"

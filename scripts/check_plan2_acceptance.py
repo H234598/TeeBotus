@@ -1841,6 +1841,7 @@ def _runtime_status_account_memory_recovery_legacy_errors(lines: Sequence[str]) 
             errors.append(f"runtime-status account-memory legacy recovery must include path for {instance_name}")
         command = fields.get("command", "")
         apply_command = fields.get("apply_command", "")
+        legacy_path = fields.get("path", "")
         errors.extend(
             _runtime_status_legacy_recovery_command_errors(
                 command,
@@ -1855,6 +1856,14 @@ def _runtime_status_account_memory_recovery_legacy_errors(lines: Sequence[str]) 
                 instance_name=instance_name,
                 command_label="apply_command",
                 require_apply=True,
+            )
+        )
+        errors.extend(
+            _runtime_status_legacy_recovery_path_errors(
+                legacy_path,
+                command,
+                apply_command,
+                instance_name=instance_name,
             )
         )
     return errors
@@ -1876,6 +1885,8 @@ def _runtime_status_legacy_recovery_command_errors(command: str, *, instance_nam
         errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --target-instances-dir for {instance_name}")
     if "--instance" not in argv:
         errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --instance for {instance_name}")
+    elif _option_value(argv, "--instance") != instance_name:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} instance does not match status line for {instance_name}")
     if "--replace-unreadable-account-metadata" not in argv:
         errors.append(f"runtime-status account-memory legacy recovery {command_label} missing metadata replacement flag for {instance_name}")
     if require_apply:
@@ -1889,6 +1900,38 @@ def _runtime_status_legacy_recovery_command_errors(command: str, *, instance_nam
         if "--json-output" not in argv or "--markdown-output" not in argv:
             errors.append(f"runtime-status account-memory legacy recovery preflight command must write JSON and Markdown artifacts for {instance_name}")
     return errors
+
+
+def _runtime_status_legacy_recovery_path_errors(legacy_path: str, command: str, apply_command: str, *, instance_name: str) -> list[str]:
+    if not legacy_path:
+        return []
+    errors: list[str] = []
+    preflight_legacy_dir = _runtime_status_command_option(command, "--legacy-instances-dir")
+    apply_legacy_dir = _runtime_status_command_option(apply_command, "--legacy-instances-dir")
+    if preflight_legacy_dir and apply_legacy_dir and preflight_legacy_dir != apply_legacy_dir:
+        errors.append(f"runtime-status account-memory legacy recovery command and apply_command legacy paths differ for {instance_name}")
+    for command_label, command_legacy_dir in (("command", preflight_legacy_dir), ("apply_command", apply_legacy_dir)):
+        if not command_legacy_dir:
+            continue
+        if not _runtime_status_path_is_equal_or_below(legacy_path, command_legacy_dir):
+            errors.append(
+                f"runtime-status account-memory legacy recovery path is not below {command_label} --legacy-instances-dir for {instance_name}"
+            )
+    return errors
+
+
+def _runtime_status_command_option(command: str, option: str) -> str:
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return ""
+    return _option_value(argv, option) or ""
+
+
+def _runtime_status_path_is_equal_or_below(path_value: str, root_value: str) -> bool:
+    path = Path(path_value).expanduser().resolve(strict=False)
+    root = Path(root_value).expanduser().resolve(strict=False)
+    return path == root or root in path.parents
 
 
 def _runtime_status_positive_integer_value(value: str | None) -> int | None:
