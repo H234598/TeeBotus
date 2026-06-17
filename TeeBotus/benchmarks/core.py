@@ -5,6 +5,21 @@ from typing import Any
 
 BenchmarkResult = dict[str, Any]
 
+BENCHMARK_CONTEXT_DEPENDENCIES = (
+    "teebotus",
+    "litellm",
+    "signalbot",
+    "nio-bot",
+    "matrix-nio",
+    "faster-whisper",
+    "pydantic-ai-slim",
+    "langgraph",
+    "haystack-ai",
+    "llama-index-core",
+    "qdrant-haystack",
+    "fastmcp",
+)
+
 REQUIRED_BENCHMARK_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -94,6 +109,7 @@ BENCHMARK_RANKING_NAME_SETS = {
 }
 REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(BENCHMARK_RANKING_NAME_SETS)
 REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
+BENCHMARK_SELECTION_POLICY = "document_fastest_stable_backend_only"
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset(
     {"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"}
 )
@@ -140,6 +156,10 @@ def build_quality_gate(
     if not isinstance(comparisons, dict):
         errors.append("comparisons must be an object")
     else:
+        if comparisons.get("auto_switching") is not False:
+            errors.append("comparisons.auto_switching must be false")
+        if comparisons.get("selection_policy") != BENCHMARK_SELECTION_POLICY:
+            errors.append(f"comparisons.selection_policy must be {BENCHMARK_SELECTION_POLICY}")
         raw_rankings = comparisons.get("stable_backend_rankings")
         if not isinstance(raw_rankings, list) or not raw_rankings:
             errors.append("comparisons.stable_backend_rankings must be a non-empty list")
@@ -166,6 +186,8 @@ def build_quality_gate(
         ranking_label = f"ranking {category}" if category else f"rankings[{ranking_index}]"
         if not category:
             errors.append(f"rankings[{ranking_index}] category must be non-empty")
+        elif category not in REQUIRED_BENCHMARK_RANKING_CATEGORIES:
+            errors.append(f"unexpected benchmark ranking category: {category}")
         elif category in seen_ranking_categories:
             errors.append(f"duplicate ranking category: {category}")
         seen_ranking_categories.add(category)
@@ -243,15 +265,47 @@ def build_quality_gate(
             continue
         name = str(item.get("name") or f"results[{index}]")
         skipped = bool(item.get("skipped"))
-        for key in ("name", "category", "mode", "total_ms", "throughput_ops_s", "errors", "payload_bytes", "index_bytes", "details"):
+        for key in (
+            "name",
+            "category",
+            "mode",
+            "iterations",
+            "total_ms",
+            "throughput_ops_s",
+            "errors",
+            "payload_bytes",
+            "index_bytes",
+            "details",
+        ):
             if key not in item:
                 errors.append(f"{name} missing {key}")
+        if "iterations" in item and not _is_nonnegative_integer(item.get("iterations")):
+            errors.append(f"{name} iterations must be a non-negative integer")
         for key in ("total_ms", "throughput_ops_s", "payload_bytes", "index_bytes"):
             if key in item and not _is_nonnegative_number(item.get(key)):
                 errors.append(f"{name} {key} must be a non-negative number")
         if "errors" in item and not _is_nonnegative_integer(item.get("errors")):
             errors.append(f"{name} errors must be a non-negative integer")
         if skipped:
+            if item.get("ok") is True:
+                errors.append(f"{name} skipped result must not be ok")
+            if _is_nonnegative_integer(item.get("iterations")) and int(item.get("iterations") or 0) != 0:
+                errors.append(f"{name} skipped result iterations must be 0")
+            if _is_nonnegative_integer(item.get("errors")) and int(item.get("errors") or 0) != 0:
+                errors.append(f"{name} skipped result errors must be 0")
+            if not str(item.get("reason") or "").strip():
+                errors.append(f"{name} skipped result reason must be non-empty")
+            if not str(item.get("mode") or "").strip():
+                errors.append(f"{name} skipped result mode must be non-empty")
+            details = item.get("details")
+            if not isinstance(details, dict) or not details:
+                errors.append(f"{name} details must be a non-empty object")
+            elif quick and not include_live:
+                missing_counters = sorted(STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS - set(details))
+                if missing_counters:
+                    errors.append(f"{name} details missing standard no-live counters: {', '.join(missing_counters)}")
+                for key, value in _forbidden_standard_benchmark_calls(details):
+                    errors.append(f"{name} details.{key} must be 0 in standard quick benchmarks, got {value}")
             continue
         if not item.get("ok"):
             errors.append(f"{name} is neither ok nor skipped")
@@ -292,7 +346,7 @@ def build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
             rankings.append(ranking)
     return {
         "auto_switching": False,
-        "selection_policy": "document_fastest_stable_backend_only",
+        "selection_policy": BENCHMARK_SELECTION_POLICY,
         "stable_backend_rankings": rankings,
     }
 

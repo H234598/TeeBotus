@@ -15,8 +15,22 @@ from scripts.check_adapter_deps import (
     _read_pins,
 )
 from TeeBotus.benchmarks.core import BenchmarkResult, result
+from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.profiles import select_llm_route
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_KEYRING_FILENAME,
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
+    AccountStore,
+    StaticSecretProvider,
+    _instance_secret_fingerprint,
+    matrix_identity_key,
+    signal_identity_key,
+    telegram_identity_key,
+    utc_now,
+)
 from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
 from TeeBotus.runtime.config import build_runtime_config
 from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
@@ -32,6 +46,25 @@ def benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
             "## LLM\n- enabled: true\n- profile: local_ollama\n\n## Bibliothekar\n- enabled: true\n- backend: local\n",
             encoding="utf-8",
         )
+        secret_provider = StaticSecretProvider(b"x" * 32)
+        account_store = AccountStore(instance_dir / "data" / "accounts", "Bench", secret_provider=secret_provider)
+        account_id = account_store.resolve_or_create_account(telegram_identity_key(42), display_label="Bench")
+        _registered_account_id, account_secret = account_store.register_account(account_id)
+        account_store.link_identity(signal_identity_key(source_uuid="bench-signal-uuid"), account_id, account_secret, display_label="Bench Signal")
+        account_store.link_identity(matrix_identity_key("@bench:example"), account_id, account_secret, display_label="Bench Matrix")
+        memory_id = account_store.append_structured_memory_entry(
+            account_id,
+            {
+                "kind": "observation",
+                "memory_type": "episodic",
+                "user_text": "Benchmark Memory",
+                "bot_text": "Benchmark Antwort",
+                "importance": 0.5,
+                "salience": 0.5,
+            },
+        )
+        memory_id = str(memory_id or "")
+        _write_static_secret_manifest(instance_dir / "data" / "accounts", instance_name="Bench", secret=b"x" * 32)
         env = {
             "TEEBOTUS_INSTANCES_DIR": str(instances_dir),
             "TEEBOTUS_INSTANCE": "Bench",
@@ -63,9 +96,40 @@ def benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
             )
             for _ in range(iterations)
         ]
+        account_crypto_lines: list[str] = []
+        account_memory_lines: list[str] = []
+        account_identity_lines: list[str] = []
+        account_health_timings = [
+            _timed_ms(
+                lambda: (
+                    account_crypto_lines.extend(
+                        account_secret_health_lines(instance_name="Bench", project_root=root, secret_provider=secret_provider)
+                    ),
+                    account_memory_lines.extend(
+                        account_memory_index_health_lines(instance_name="Bench", project_root=root, secret_provider=secret_provider)
+                    ),
+                    account_identity_lines.extend(
+                        account_identity_health_lines(
+                            instance_name="Bench",
+                            project_root=root,
+                            env=env,
+                            runtime_channels=("telegram", "signal", "matrix"),
+                            secret_provider=secret_provider,
+                        )
+                    ),
+                )
+            )
+            for _ in range(iterations)
+        ]
         latest_config = config_results[-1] if config_results else None
         latest_health = check_bibliothekar_service("Bench", instances_dir, instructions)
         latest_dependency_checks = dependency_checks[-2:] if len(dependency_checks) >= 2 else dependency_checks
+        latest_account_crypto_lines = account_crypto_lines[-1:] if account_crypto_lines else []
+        latest_account_memory_lines = account_memory_lines[-1:] if account_memory_lines else []
+        latest_account_identity_lines = account_identity_lines[-1:] if account_identity_lines else []
+        account_crypto_ok = any(line.startswith("account_crypto=Bench status=ok") for line in latest_account_crypto_lines)
+        account_memory_ok = any(line.startswith(f"account_memory=Bench/{account_id} status=ok") for line in latest_account_memory_lines)
+        account_identity_ok = any(line.startswith("account_identity=Bench status=ok") for line in latest_account_identity_lines)
         dependency_ok = all(ok for ok, _message in latest_dependency_checks)
         runtime_channels = list(latest_config.channels) if latest_config is not None else []
         runtime_accounts = sum(len(instance.accounts) for instance in latest_config.instances) if latest_config is not None else 0
@@ -81,12 +145,15 @@ def benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
             and decision_route.provider == "hf_pool"
             and bool(crew_lines)
             and dependency_ok
+            and account_crypto_ok
+            and account_memory_ok
+            and account_identity_ok
         )
         return result(
             name="status_doctor_runtime_dependency_health",
             category="status_doctor",
-            iterations=iterations * 3,
-            total_ms=sum(health_timings) + sum(config_timings) + sum(dependency_timings),
+            iterations=iterations * 4,
+            total_ms=sum(health_timings) + sum(config_timings) + sum(dependency_timings) + sum(account_health_timings),
             ok=ok,
             errors=0 if ok else 1,
             payload_bytes=len(json.dumps(env, ensure_ascii=False).encode("utf-8")),
@@ -103,11 +170,49 @@ def benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
                 "crew_pilot_lines": len(crew_lines),
                 "dependency_checks": [message for _ok, message in latest_dependency_checks],
                 "dependency_ok": dependency_ok,
+                "account_crypto_status": latest_account_crypto_lines[0] if latest_account_crypto_lines else "",
+                "account_memory_status": next(
+                    (line for line in latest_account_memory_lines if line.startswith("account_memory=Bench/")),
+                    latest_account_memory_lines[0] if latest_account_memory_lines else "",
+                ),
+                "account_crypto_ok": account_crypto_ok,
+                "account_memory_ok": account_memory_ok,
+                "account_identity_status": latest_account_identity_lines[0] if latest_account_identity_lines else "",
+                "account_identity_ok": account_identity_ok,
+                "account_memory_id_present": bool(memory_id),
                 "median_runtime_config_ms": statistics.median(config_timings),
                 "median_backend_health_ms": statistics.median(health_timings),
                 "median_dependency_check_ms": statistics.median(dependency_timings),
+                "median_account_health_ms": statistics.median(account_health_timings),
             },
         )
+
+
+def _write_static_secret_manifest(accounts_root: Path, *, instance_name: str, secret: bytes) -> None:
+    purposes = {}
+    now = utc_now()
+    for purpose in (INSTANCE_MAPPING_KEY_PURPOSE, ACCOUNT_MEMORY_KEY_PURPOSE, INSTANCE_PEPPER_PURPOSE):
+        purposes[purpose] = {
+            "algorithm": "HMAC-SHA256",
+            "created_at": now,
+            "fingerprint": _instance_secret_fingerprint(instance_name, purpose, secret),
+            "purpose": purpose,
+        }
+    (accounts_root / ACCOUNT_KEYRING_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "instance": instance_name,
+                "purposes": purposes,
+                "updated_at": now,
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:

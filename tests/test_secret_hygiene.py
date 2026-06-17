@@ -40,7 +40,7 @@ FORBIDDEN_TRACKED_PATH_PATTERNS = (
     re.compile(r"(^|/)\.env($|\.)"),
     re.compile(r"(^|/)instances/"),
     re.compile(r"(^|/)data/"),
-    re.compile(r"(^|/)Account_(Index|Identities|Secrets|Memory)\.(json|sqlite3?)$"),
+    re.compile(r"(^|/)Account_(Index|Identities|Keyring|Secrets|Memory)\.(json|sqlite3?)$"),
     re.compile(r"(^|/)User_Memory_(Entries|Index)\.jsonl?$"),
     re.compile(r"\.(sqlite3?|db)$"),
     re.compile(r"\.(pem|key)$"),
@@ -83,6 +83,50 @@ def test_git_index_does_not_track_runtime_secret_or_memory_paths() -> None:
             continue
         if any(pattern.search(path) for pattern in FORBIDDEN_TRACKED_PATH_PATTERNS):
             findings.append(path)
+
+    assert findings == []
+
+
+def test_runtime_code_does_not_autocreate_account_store_secrets() -> None:
+    runtime_paths = (
+        PROJECT_ROOT / "TeeBotus" / "runtime" / "telegram_runner.py",
+        PROJECT_ROOT / "TeeBotus" / "runtime" / "signal_runner.py",
+        PROJECT_ROOT / "TeeBotus" / "runtime" / "matrix_runner.py",
+        PROJECT_ROOT / "TeeBotus" / "adapters" / "telegram_runtime.py",
+    )
+    findings: list[str] = []
+    direct_provider_call = re.compile(r"\bSecretToolInstanceSecretProvider\s*\(")
+    for path in runtime_paths:
+        text = path.read_text(encoding="utf-8")
+        for match in direct_provider_call.finditer(text):
+            findings.append(f"{path.relative_to(PROJECT_ROOT)}:{_line_number(text, match.start())}")
+
+    assert findings == []
+
+
+def test_operator_scripts_do_not_autocreate_account_store_secrets() -> None:
+    script_paths = (
+        PROJECT_ROOT / "scripts" / "import_legacy_user_memory.py",
+        PROJECT_ROOT / "scripts" / "migrate_account_memory_to_database.py",
+        PROJECT_ROOT / "scripts" / "check_proactive_agent.py",
+    )
+    findings: list[str] = []
+    direct_provider_call = re.compile(r"\bSecretToolInstanceSecretProvider\s*\((?!create_if_missing=False\))")
+    for path in script_paths:
+        text = path.read_text(encoding="utf-8")
+        for match in direct_provider_call.finditer(text):
+            findings.append(f"{path.relative_to(PROJECT_ROOT)}:{_line_number(text, match.start())}")
+
+    assert findings == []
+
+
+def test_product_code_never_requests_account_secret_autocreate() -> None:
+    findings: list[str] = []
+    pattern = re.compile(r"\bcreate_if_missing\s*=\s*True\b")
+    for path in (PROJECT_ROOT / "TeeBotus").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        for match in pattern.finditer(text):
+            findings.append(f"{path.relative_to(PROJECT_ROOT)}:{_line_number(text, match.start())}")
 
     assert findings == []
 

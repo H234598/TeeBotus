@@ -50,6 +50,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
+    assert benchmark_module.BENCHMARK_CONTEXT_DEPENDENCIES is core.BENCHMARK_CONTEXT_DEPENDENCIES
     assert benchmark_module.BENCHMARK_RANKING_NAME_SETS is core.BENCHMARK_RANKING_NAME_SETS
     assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
     assert benchmark_module.REQUIRED_BENCHMARK_NAME_CATEGORIES is core.REQUIRED_BENCHMARK_NAME_CATEGORIES
@@ -100,6 +101,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["include_live"] is False
     assert suite["context"]["cpu_count"] >= 1
     assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
+    assert set(benchmark_module.BENCHMARK_CONTEXT_DEPENDENCIES).issubset(suite["context"]["dependencies"])
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["llama-index-core"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["signalbot"]["version"]
@@ -411,6 +413,19 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert status_doctor["details"]["decision_profile"] == "hf_pool_structured"
     assert status_doctor["details"]["crew_pilot_lines"] >= 3
     assert status_doctor["details"]["dependency_ok"] is True
+    assert status_doctor["details"]["account_crypto_ok"] is True
+    assert status_doctor["details"]["account_memory_ok"] is True
+    assert status_doctor["details"]["account_identity_ok"] is True
+    assert status_doctor["details"]["account_crypto_status"].startswith("account_crypto=Bench status=ok")
+    assert "mapping=present" in status_doctor["details"]["account_crypto_status"]
+    assert "memory=present" in status_doctor["details"]["account_crypto_status"]
+    assert status_doctor["details"]["account_memory_status"].startswith("account_memory=Bench/")
+    assert "status=ok" in status_doctor["details"]["account_memory_status"]
+    assert status_doctor["details"]["account_identity_status"] == (
+        "account_identity=Bench status=ok identity_warnings=0 "
+        "runtime_slots=matrix:1,signal:1,telegram:1 identities=matrix:1,signal:1,telegram:1"
+    )
+    assert "telegram-token" not in json.dumps(status_doctor, ensure_ascii=False)
     assert any("pyproject plan2 contract=ok" in message for message in status_doctor["details"]["dependency_checks"])
     assert any("litellm supply_chain_guard=ok" in message for message in status_doctor["details"]["dependency_checks"])
     database_fallback = next(result for result in suite["results"] if result["name"] == "database_fallback_policy")
@@ -548,6 +563,40 @@ def test_benchmark_quality_gate_rejects_non_skipped_live_optional_mode() -> None
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_malformed_skipped_results() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [
+            {
+                "name": "memory_postgres",
+                "category": "account_memory",
+                "ok": True,
+                "skipped": True,
+                "iterations": 1,
+                "total_ms": 1.0,
+                "throughput_ops_s": 1.0,
+                "errors": 1,
+                "payload_bytes": 0,
+                "index_bytes": 0,
+                "mode": "",
+                "reason": "",
+                "details": {"network_calls": 1},
+            }
+        ],
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "memory_postgres skipped result must not be ok" in quality_gate["errors"]
+    assert "memory_postgres skipped result iterations must be 0" in quality_gate["errors"]
+    assert "memory_postgres skipped result errors must be 0" in quality_gate["errors"]
+    assert "memory_postgres skipped result reason must be non-empty" in quality_gate["errors"]
+    assert "memory_postgres skipped result mode must be non-empty" in quality_gate["errors"]
+    assert any("memory_postgres details missing standard no-live counters" in error for error in quality_gate["errors"])
+    assert "memory_postgres details.network_calls must be 0 in standard quick benchmarks, got 1" in quality_gate["errors"]
+
+
 def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> None:
     quality_gate = benchmark_module._build_quality_gate(
         [],
@@ -604,6 +653,55 @@ def test_benchmark_quality_gate_rejects_malformed_ranking_structure() -> None:
     assert "ranking account_memory candidates must be a non-empty list" in malformed_rankings["errors"]
     assert "ranking account_memory skipped must be a list" in malformed_rankings["errors"]
     assert "duplicate ranking category: account_memory" in malformed_rankings["errors"]
+
+
+def test_benchmark_quality_gate_rejects_automatic_backend_switching() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [],
+        comparisons={
+            "auto_switching": True,
+            "selection_policy": "switch_to_fastest",
+            "stable_backend_rankings": [],
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "comparisons.auto_switching must be false" in quality_gate["errors"]
+    assert "comparisons.selection_policy must be document_fastest_stable_backend_only" in quality_gate["errors"]
+
+
+def test_benchmark_quality_gate_rejects_unknown_ranking_categories() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "custom_backend",
+                    "fastest_stable": "custom_b",
+                    "candidates": [
+                        {
+                            "rank": 1,
+                            "name": "custom_b",
+                            "mode": "local",
+                            "throughput_ops_s": 100.0,
+                            "total_ms": 1.0,
+                            "errors": 0,
+                            "payload_bytes": 1,
+                            "index_bytes": 1,
+                        }
+                    ],
+                    "skipped": [],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "unexpected benchmark ranking category: custom_backend" in quality_gate["errors"]
 
 
 def test_benchmark_quality_gate_rejects_duplicate_or_empty_ranking_names() -> None:

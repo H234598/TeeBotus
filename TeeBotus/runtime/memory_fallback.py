@@ -4,6 +4,8 @@ import logging
 import time
 from typing import Any, Callable
 
+from TeeBotus.runtime.accounts import AccountStoreError
+
 LOGGER = logging.getLogger("TeeBotus")
 FALLBACK_WARNING_INTERVAL_SECONDS = 300
 
@@ -109,6 +111,19 @@ class WarningFallbackAccountMemoryBackend:
             return result
 
     def _write(self, operation: str, account_id: str, callback: Callable[[Any], Any], dirty_set: set[str]) -> None:
+        if self._account_has_unrecoverable_fallback(account_id):
+            self._fallback_active = True
+            self.last_fallback_sync_error = (
+                f"{operation}: write blocked because primary is unreadable and fallback has no recoverable data"
+            )
+            LOGGER.critical(
+                "ACCOUNT MEMORY WRITE BLOCKED. PRIMARY DATABASE IS UNREADABLE AND FALLBACK HAS NO RECOVERABLE DATA. "
+                "label=%s operation=%s account_id=%s.",
+                self.label,
+                operation,
+                account_id,
+            )
+            raise AccountStoreError(self.last_fallback_sync_error)
         try:
             callback(self.primary)
             self._copy_diagnostics(self.primary)
@@ -194,6 +209,9 @@ class WarningFallbackAccountMemoryBackend:
         if operation == "read_index":
             return account_id in self._dirty_indexes
         return False
+
+    def _account_has_unrecoverable_fallback(self, account_id: str) -> bool:
+        return account_id in self._stale_fallback_entries or account_id in self._stale_fallback_indexes
 
     def _read_diagnostic_failed(self, operation: str) -> bool:
         if operation == "read_entries":

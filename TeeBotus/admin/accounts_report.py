@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -14,8 +15,10 @@ from typing import Any, Mapping, Sequence
 from TeeBotus.runtime.accounts import (
     ACCOUNT_IDENTITIES_FILENAME,
     ACCOUNT_INDEX_FILENAME,
+    ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_PROFILE_FILENAME,
     ACCOUNT_SECRETS_FILENAME,
+    INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_KEY_SIZE_BYTES,
     INSTANCE_SECRET_SERVICE,
     SECRET_TOOL_COMMAND,
@@ -24,9 +27,11 @@ from TeeBotus.runtime.accounts import (
     InstanceSecretProvider,
     TOKEN_HEX_RE,
 )
+from TeeBotus.runtime.config import RuntimeConfigError, build_account_run_configs
 
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 DEFAULT_INSTANCES_DIR = "instances"
+DEFAULT_RUNTIME_CHANNELS = ("telegram", "signal", "matrix")
 REPORT_SCHEMA_VERSION = 2
 
 
@@ -95,9 +100,12 @@ def build_accounts_admin_report(
     instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
     instances: Sequence[str] = (),
     provider: InstanceSecretProvider | None = None,
+    env: Mapping[str, str] | None = None,
+    runtime_channels: Sequence[str] = DEFAULT_RUNTIME_CHANNELS,
 ) -> dict[str, Any]:
     resolved_instances_dir = Path(instances_dir)
     provider = provider or ReadOnlySecretToolInstanceSecretProvider()
+    env = {} if env is None else env
     selected_instances = discover_instances(resolved_instances_dir, instances)
     report: dict[str, Any] = {
         "schema_version": REPORT_SCHEMA_VERSION,
@@ -107,6 +115,7 @@ def build_accounts_admin_report(
         "instances": [],
         "totals": {
             "account_dirs": 0,
+            "identity_warnings": 0,
             "indexed_accounts": 0,
             "linked_identities": 0,
             "store_errors": 0,
@@ -117,6 +126,8 @@ def build_accounts_admin_report(
             instances_dir=resolved_instances_dir,
             instance_name=instance_name,
             provider=provider,
+            env=env,
+            runtime_channels=runtime_channels,
         )
         report["instances"].append(instance_report)
         _add_instance_totals(report["totals"], instance_report)
@@ -128,11 +139,21 @@ def build_instance_admin_report(
     instances_dir: Path,
     instance_name: str,
     provider: InstanceSecretProvider,
+    env: Mapping[str, str],
+    runtime_channels: Sequence[str],
 ) -> dict[str, Any]:
     instance_dir = instances_dir / instance_name
     data_dir = instance_dir / "data"
     accounts_root = data_dir / "accounts"
-    store = AccountStore(accounts_root, instance_name, secret_provider=provider, create_dirs=False)
+    store = AccountStore(
+        accounts_root,
+        instance_name,
+        secret_provider=provider,
+        create_dirs=False,
+        secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
+    )
+    runtime_slots = _build_runtime_slot_report(instance_name, env=env, runtime_channels=runtime_channels)
+    account_store = _build_store_report(store)
     return {
         "instance": instance_name,
         "instance_dir": str(instance_dir),
@@ -140,7 +161,9 @@ def build_instance_admin_report(
         "data_dir": str(data_dir),
         "data_dir_exists": data_dir.exists(),
         "accounts_root": str(accounts_root),
-        "account_store": _build_store_report(store),
+        "runtime_slots": runtime_slots,
+        "account_store": account_store,
+        "identity_health": _build_identity_health(account_store, runtime_slots),
     }
 
 
@@ -223,6 +246,146 @@ def _add_instance_totals(totals: dict[str, int], instance_report: Mapping[str, A
         totals["linked_identities"] += int(store.get("linked_identities", 0) or 0)
         if store.get("errors"):
             totals["store_errors"] += 1
+    identity_health = instance_report.get("identity_health", {}) if isinstance(instance_report, Mapping) else {}
+    if isinstance(identity_health, Mapping):
+        totals["identity_warnings"] = totals.get("identity_warnings", 0) + int(identity_health.get("warning_count", 0) or 0)
+
+
+def _build_runtime_slot_report(
+    instance_name: str,
+    *,
+    env: Mapping[str, str],
+    runtime_channels: Sequence[str],
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "configured_channels": {},
+        "configured_slot_labels_by_channel": {},
+        "configured_slots": 0,
+        "errors": [],
+    }
+    try:
+        accounts = build_account_run_configs(instance_name, runtime_channels, env)
+    except RuntimeConfigError as exc:
+        report["errors"].append(str(exc))
+        return report
+    counts: dict[str, int] = {}
+    labels_by_channel: dict[str, list[str]] = {}
+    for account in accounts:
+        channel = str(getattr(account, "channel", "") or "unknown")
+        counts[channel] = counts.get(channel, 0) + 1
+        label = str(getattr(account, "label", "") or "").strip()
+        if label:
+            labels_by_channel.setdefault(channel, []).append(label)
+    report["configured_channels"] = dict(sorted(counts.items()))
+    report["configured_slot_labels_by_channel"] = {
+        channel: sorted(labels)
+        for channel, labels in sorted(labels_by_channel.items())
+    }
+    report["configured_slots"] = sum(counts.values())
+    return report
+
+
+def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapping[str, Any]) -> dict[str, Any]:
+    warnings: list[dict[str, Any]] = []
+    identity_counts = _string_int_mapping(account_store.get("identities_by_channel", {}))
+    runtime_counts = _string_int_mapping(runtime_slots.get("configured_channels", {}))
+    runtime_labels = _string_list_mapping(runtime_slots.get("configured_slot_labels_by_channel", {}))
+    linked_identities = int(account_store.get("linked_identities", 0) or 0)
+    runtime_errors = tuple(str(error or "").strip() for error in runtime_slots.get("errors", []) if str(error or "").strip())
+    if runtime_errors:
+        warnings.append(
+            {
+                "code": "runtime_channel_config_error",
+                "message": "Runtime channel configuration could not be fully evaluated; identity fragmentation checks may be incomplete.",
+                "errors": list(runtime_errors),
+            }
+        )
+    if linked_identities > 0 and runtime_counts:
+        for channel, slot_count in sorted(runtime_counts.items()):
+            identity_count = identity_counts.get(channel, 0)
+            other_identity_count = _other_identity_count(identity_counts, channel)
+            if slot_count > 0 and identity_count == 0 and other_identity_count > 0:
+                warnings.append(
+                    {
+                        "code": "runtime_channel_without_identity",
+                        "channel": channel,
+                        "configured_runtime_slots": slot_count,
+                        "configured_runtime_labels": runtime_labels.get(channel, []),
+                        "linked_identities": 0,
+                        "other_linked_identities": other_identity_count,
+                        "identity_channels": dict(sorted(identity_counts.items())),
+                        "message": (
+                            f"{channel} runtime is configured, but no {channel} identities are linked. "
+                            "Incoming chats on this channel will use a separate account until the user links it."
+                        ),
+                        "recommended_action": (
+                            "First run /register or /rotate_secret in an already linked private chat, then open a private "
+                            f"{channel} chat and link the existing account with /login <account_id> <secret>; "
+                            "use /register there only for a deliberately separate account."
+                        ),
+                    }
+                )
+    if runtime_counts:
+        for channel, identity_count in sorted(identity_counts.items()):
+            if identity_count > 0 and runtime_counts.get(channel, 0) == 0:
+                warnings.append(
+                    {
+                        "code": "identity_channel_without_runtime_slot",
+                        "channel": channel,
+                        "configured_runtime_slots": 0,
+                        "configured_runtime_labels": [],
+                        "linked_identities": identity_count,
+                        "identity_channels": dict(sorted(identity_counts.items())),
+                        "runtime_channels": dict(sorted(runtime_counts.items())),
+                        "message": f"{channel} identities exist, but no {channel} runtime slot is configured.",
+                        "recommended_action": (
+                            f"Enable a {channel} runtime slot again or unlink/merge the stale {channel} identities after review."
+                        ),
+                    }
+                )
+    return {
+        "status": "warning" if warnings else "ok",
+        "warning_count": len(warnings),
+        "warnings": warnings,
+    }
+
+
+def _string_int_mapping(value: Any) -> dict[str, int]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, int] = {}
+    for key, item in value.items():
+        channel = str(key or "").strip()
+        if not channel:
+            continue
+        try:
+            count = int(item or 0)
+        except (TypeError, ValueError):
+            count = 0
+        result[channel] = count
+    return result
+
+
+def _string_list_mapping(value: Any) -> dict[str, list[str]]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, list[str]] = {}
+    for key, item in value.items():
+        channel = str(key or "").strip()
+        if not channel:
+            continue
+        if isinstance(item, str):
+            labels = [part.strip() for part in item.split(",") if part.strip()]
+        elif isinstance(item, (list, tuple, set)):
+            labels = [str(part or "").strip() for part in item if str(part or "").strip()]
+        else:
+            labels = []
+        result[channel] = sorted(dict.fromkeys(labels))
+    return result
+
+
+def _other_identity_count(identity_counts: Mapping[str, int], channel: str) -> int:
+    return sum(count for name, count in identity_counts.items() if name != channel)
 
 
 def _account_dirs(accounts_dir: Path) -> list[Path]:
@@ -233,6 +396,7 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
 
 def _encrypted_store_files_present(store: AccountStore) -> dict[str, bool]:
     return {
+        ACCOUNT_KEYRING_FILENAME: (store.root / ACCOUNT_KEYRING_FILENAME).exists(),
         ACCOUNT_INDEX_FILENAME: store.account_index_path.exists(),
         ACCOUNT_IDENTITIES_FILENAME: store.identities_path.exists(),
         ACCOUNT_SECRETS_FILENAME: store.secrets_path.exists(),
@@ -278,11 +442,86 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 f"  account_directories: {store.get('account_directories', 0)}",
                 f"  indexed_accounts: {store.get('indexed_accounts', 0)}",
                 f"  linked_identities: {store.get('linked_identities', 0)}",
+                f"  identities_by_channel: {_format_counts(store.get('identities_by_channel', {}))}",
                 f"  active_secrets: {store.get('active_secrets', 0)}",
             ])
             for error in store.get("errors", []) if isinstance(store.get("errors"), list) else []:
                 lines.append(f"  error: {error}")
+        runtime_slots = instance.get("runtime_slots", {})
+        if isinstance(runtime_slots, Mapping):
+            lines.append(f"  runtime_slots_by_channel: {_format_counts(runtime_slots.get('configured_channels', {}))}")
+            for error in runtime_slots.get("errors", []) if isinstance(runtime_slots.get("errors"), list) else []:
+                lines.append(f"  runtime_slot_error: {error}")
+        identity_health = instance.get("identity_health", {})
+        if isinstance(identity_health, Mapping):
+            lines.append(f"  identity_health: {identity_health.get('status', 'unknown')}")
+            for warning in identity_health.get("warnings", []) if isinstance(identity_health.get("warnings"), list) else []:
+                if isinstance(warning, Mapping):
+                    lines.append(
+                        "  identity_warning: "
+                        f"{warning.get('code', 'unknown')}"
+                        f" channel={warning.get('channel', '<none>')}"
+                        f" slots={warning.get('configured_runtime_slots', '<none>')}"
+                        f" labels={_format_sequence(warning.get('configured_runtime_labels', []))}"
+                        f" identities={_format_counts(warning.get('identity_channels', {}))}"
+                        f" message={warning.get('message', '')}"
+                        f" action={warning.get('recommended_action', '')}"
+                    )
     return "\n".join(lines) + "\n"
+
+
+def runtime_report_env(instances_dir: str | Path, *, base_env: Mapping[str, str] | None = None) -> dict[str, str]:
+    env = dict(os.environ if base_env is None else base_env)
+    for key, value in _read_dotenv_values(_project_root_for_instances_dir(instances_dir) / ".env").items():
+        env.setdefault(key, value)
+    return env
+
+
+def _project_root_for_instances_dir(instances_dir: str | Path) -> Path:
+    path = Path(instances_dir).expanduser()
+    if path.name == DEFAULT_INSTANCES_DIR:
+        return path.parent if str(path.parent) else Path(".")
+    return path.parent
+
+
+def _read_dotenv_values(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", maxsplit=1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = _clean_dotenv_value(value)
+    return values
+
+
+def _clean_dotenv_value(value: str) -> str:
+    cleaned = str(value or "").strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
+        return cleaned[1:-1]
+    return cleaned
+
+
+def _format_counts(value: Any) -> str:
+    counts = _string_int_mapping(value)
+    if not counts:
+        return "<none>"
+    return ", ".join(f"{key}={counts[key]}" for key in sorted(counts))
+
+
+def _format_sequence(value: Any) -> str:
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+    elif isinstance(value, (list, tuple, set)):
+        parts = [str(part or "").strip() for part in value if str(part or "").strip()]
+    else:
+        parts = []
+    return ",".join(parts) if parts else "<none>"
 
 
 def _json_dump(data: Mapping[str, Any]) -> str:
@@ -300,7 +539,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     instances = parse_csv(getattr(args, "instances", None))
-    report = build_accounts_admin_report(instances_dir=args.instances_dir, instances=instances)
+    report = build_accounts_admin_report(
+        instances_dir=args.instances_dir,
+        instances=instances,
+        env=runtime_report_env(args.instances_dir),
+    )
     output = _json_dump(report) if args.format == "json" else render_text_report(report)
     if args.output:
         Path(args.output).write_text(output, encoding="utf-8")
@@ -323,4 +566,5 @@ __all__ = [
     "discover_instances",
     "main",
     "render_text_report",
+    "runtime_report_env",
 ]

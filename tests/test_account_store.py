@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import re
+import subprocess
 
 import pytest
 
 from TeeBotus.runtime.accounts import (
+    ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
     EncryptedJsonVault,
     AccountStore,
     AccountStoreError,
@@ -16,6 +21,7 @@ from TeeBotus.runtime.accounts import (
     SecretToolInstanceSecretProvider,
     StaticSecretProvider,
     matrix_identity_key,
+    runtime_secret_provider,
     signal_identity_key,
     telegram_identity_key,
 )
@@ -50,11 +56,123 @@ def test_secret_tool_provider_can_refuse_missing_secret(monkeypatch) -> None:
         provider_instance.get_secret("Demo", "account_memory")
 
 
+def test_secret_tool_provider_defaults_to_refuse_missing_secret(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider()
+    monkeypatch.setattr(provider_instance, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        provider_instance,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("missing secrets must not be auto-created by default"),
+    )
+
+    with pytest.raises(AccountStoreError, match="instance secret is missing"):
+        provider_instance.get_secret("Demo", "account_memory")
+
+
+def test_runtime_secret_provider_never_autocreates_missing_secret(monkeypatch) -> None:
+    provider_instance = runtime_secret_provider()
+    monkeypatch.setattr(provider_instance, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        provider_instance,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("runtime provider must not create missing secrets"),
+    )
+
+    with pytest.raises(AccountStoreError, match="instance secret is missing"):
+        provider_instance.get_secret("Demo", "account-structured-memory-key")
+
+
+def test_secret_tool_provider_only_treats_empty_rc1_lookup_as_missing(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(create_if_missing=False)
+
+    monkeypatch.setattr(
+        provider_instance,
+        "_run",
+        lambda _args: subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr=""),
+    )
+
+    assert provider_instance._lookup("Demo", "account_memory") is None
+
+
+def test_secret_tool_provider_refuses_to_autocreate_when_lookup_fails(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider()
+    store_called = False
+
+    monkeypatch.setattr(
+        provider_instance,
+        "_run",
+        lambda _args: subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="Cannot autolaunch D-Bus"),
+    )
+
+    def fake_store(_instance: str, _purpose: str, _secret: bytes) -> None:
+        nonlocal store_called
+        store_called = True
+
+    monkeypatch.setattr(provider_instance, "_store", fake_store)
+
+    with pytest.raises(AccountStoreError, match="secret-tool lookup failed"):
+        provider_instance.get_secret("Demo", "account_memory")
+
+    assert store_called is False
+
+
+def test_secret_tool_provider_refuses_empty_successful_lookup(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(create_if_missing=False)
+
+    monkeypatch.setattr(
+        provider_instance,
+        "_run",
+        lambda _args: subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+    )
+
+    with pytest.raises(AccountStoreError, match="lookup returned an empty secret"):
+        provider_instance._lookup("Demo", "account_memory")
+
+
+def test_secret_tool_provider_refuses_ambiguous_lookup_matches(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(create_if_missing=False)
+    encoded = base64.urlsafe_b64encode(b"a" * 32).decode("ascii") + "\n"
+
+    def fake_run(args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "lookup":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout=encoded, stderr="")
+        if args and args[0] == "search":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[/31]\n[/32]\n", stderr="")
+        return subprocess.CompletedProcess(args=args, returncode=2, stdout="", stderr="unexpected")
+
+    monkeypatch.setattr(provider_instance, "_run", fake_run)
+
+    with pytest.raises(AccountStoreError, match="multiple matching instance secret items"):
+        provider_instance.get_secret("Demo", "account_memory")
+
+
+def test_secret_tool_provider_refuses_to_overwrite_existing_search_item(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(create_if_missing=True)
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(args))
+        if args and args[0] == "lookup":
+            return subprocess.CompletedProcess(args=args, returncode=1, stdout="", stderr="")
+        if args and args[0] == "search":
+            return subprocess.CompletedProcess(args=args, returncode=0, stdout="[/31]\nsecret = <redacted>\n", stderr="")
+        if args and args[0] == "store":
+            pytest.fail("store must not be called when search finds an existing item")
+        return subprocess.CompletedProcess(args=args, returncode=2, stdout="", stderr="unexpected")
+
+    monkeypatch.setattr(provider_instance, "_run", fake_run)
+
+    with pytest.raises(AccountStoreError, match="refused to overwrite an existing instance secret item"):
+        provider_instance.get_secret("Demo", "account_memory")
+
+    assert any(call[0] == "search" for call in calls)
+
+
 def test_account_store_refuses_to_autocreate_mapping_secret_for_existing_encrypted_metadata(tmp_path, monkeypatch) -> None:
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
 
-    secret_provider = SecretToolInstanceSecretProvider()
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
     monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
     monkeypatch.setattr(
         secret_provider,
@@ -76,7 +194,7 @@ def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypte
         purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
     ).write_json(account_dir / LLM_STATE_FILENAME, {"previous_response_id": "resp_1"})
 
-    secret_provider = SecretToolInstanceSecretProvider()
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
     monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
     monkeypatch.setattr(
         secret_provider,
@@ -86,6 +204,244 @@ def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypte
 
     with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account memory/state"):
         AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_records_key_manifest_and_refuses_missing_manifest_secret(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    stored: dict[tuple[str, str], bytes] = {}
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    monkeypatch.setattr(secret_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(secret_provider, "_store", lambda instance, purpose, secret: stored.__setitem__((instance, purpose), secret))
+
+    first = AccountStore(root, "Depressionsbot", secret_provider, create_dirs=True)
+    memory_key = first.account_memory_vault.key
+    assert stored[("Depressionsbot", ACCOUNT_MEMORY_KEY_PURPOSE)] == memory_key
+    assert (root / "Account_Keyring.json").exists()
+
+    stored.pop(("Depressionsbot", ACCOUNT_MEMORY_KEY_PURPOSE))
+    second_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(second_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(second_provider, "_store", lambda instance, purpose, secret: pytest.fail("missing manifest secret must not be recreated"))
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account key manifest"):
+        AccountStore(root, "Depressionsbot", second_provider, create_dirs=False)
+
+
+def test_account_store_refuses_changed_manifest_secret_before_memory_decryption(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    stored: dict[tuple[str, str], bytes] = {}
+    first_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    monkeypatch.setattr(first_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(first_provider, "_store", lambda instance, purpose, secret: stored.__setitem__((instance, purpose), secret))
+
+    first = AccountStore(root, "Depressionsbot", first_provider, create_dirs=True)
+    _memory_key = first.account_memory_vault.key
+    stored[("Depressionsbot", ACCOUNT_MEMORY_KEY_PURPOSE)] = b"b" * 32
+    second_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(second_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(second_provider, "_store", lambda instance, purpose, secret: pytest.fail("changed manifest secret must not be recreated"))
+
+    with pytest.raises(AccountStoreError, match="instance secret verifier mismatch"):
+        AccountStore(root, "Depressionsbot", second_provider, create_dirs=False)
+
+
+def test_account_store_refuses_to_record_manifest_for_wrong_mapping_key(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: b"b" * 32)
+    monkeypatch.setattr(secret_provider, "_store", lambda _instance, _purpose, _secret: pytest.fail("wrong key must not be stored"))
+
+    with pytest.raises(AccountStoreError, match="account metadata is not decryptable with the current Secret Service key"):
+        AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+    assert not (root / ACCOUNT_KEYRING_FILENAME).exists()
+
+
+def test_account_store_refuses_to_record_manifest_for_wrong_sqlite_memory_key(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    first = AccountStore(root, "Depressionsbot", provider())
+    account_id = first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    first.write_memory_entries(account_id, [{"id": "mem_keep", "user_text": "nicht ueberschreiben"}])
+    first.write_memory_index(account_id, {"index": {"entries": {"mem_keep": {"kind": "observation"}}}})
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    def lookup(_instance: str, purpose: str) -> bytes | None:
+        if purpose == INSTANCE_MAPPING_KEY_PURPOSE:
+            return b"a" * 32
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            return b"b" * 32
+        return None
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(secret_provider, "_store", lambda _instance, _purpose, _secret: pytest.fail("wrong key must not be stored"))
+
+    with pytest.raises(AccountStoreError, match="SQLite account memory entries are not decryptable with the current Secret Service key"):
+        AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+    manifest = json.loads((root / ACCOUNT_KEYRING_FILENAME).read_text(encoding="utf-8"))
+    assert INSTANCE_MAPPING_KEY_PURPOSE in manifest["purposes"]
+    assert ACCOUNT_MEMORY_KEY_PURPOSE not in manifest["purposes"]
+
+
+def test_account_store_refuses_to_autocreate_memory_secret_for_existing_sqlite_rows_without_env(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    store = AccountStore(root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    store.write_memory_entries(account_id, [{"id": "mem_keep", "user_text": "nicht ueberschreiben"}])
+    store.write_memory_index(account_id, {"index": {"entries": {"mem_keep": {"kind": "observation"}}}})
+
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(
+        secret_provider,
+        "_lookup",
+        lambda _instance, purpose: b"a" * 32 if purpose == INSTANCE_MAPPING_KEY_PURPOSE else None,
+    )
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing SQLite memory"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted sqlite account memory"):
+        AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_refuses_to_autocreate_pepper_for_existing_secret_verifiers(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    account_id = first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    _account_id, _account_secret = first.register_account(account_id)
+
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(
+        secret_provider,
+        "_lookup",
+        lambda _instance, purpose: b"a" * 32 if purpose == INSTANCE_MAPPING_KEY_PURPOSE else None,
+    )
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for an existing verifier pepper"),
+    )
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account secret verifiers"):
+        AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_can_create_pepper_when_encrypted_account_secrets_are_empty(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    account_id = first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    first.vault.write_json(first.secrets_path, {})
+    stored: dict[tuple[str, str], bytes] = {("Depressionsbot", INSTANCE_MAPPING_KEY_PURPOSE): b"a" * 32}
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    def lookup(instance: str, purpose: str) -> bytes | None:
+        return stored.get((instance, purpose))
+
+    def store_secret(instance: str, purpose: str, secret: bytes) -> None:
+        stored[(instance, purpose)] = secret
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(secret_provider, "_store", store_secret)
+    second = AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+    returned_account_id, account_secret = second.register_account(account_id)
+
+    assert returned_account_id == account_id
+    assert ("Depressionsbot", INSTANCE_PEPPER_PURPOSE) in stored
+    assert second.verify_secret(account_id, account_secret)
+
+
+def test_account_store_records_required_pepper_manifest_for_existing_verifier(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    account_id = first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    first.register_account(account_id)
+    stored: dict[tuple[str, str], bytes] = {
+        ("Depressionsbot", INSTANCE_MAPPING_KEY_PURPOSE): b"a" * 32,
+        ("Depressionsbot", INSTANCE_PEPPER_PURPOSE): b"a" * 32,
+    }
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    monkeypatch.setattr(secret_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(secret_provider, "_store", lambda _instance, _purpose, _secret: pytest.fail("existing verifier keys must not be recreated"))
+
+    AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+    manifest = json.loads((root / ACCOUNT_KEYRING_FILENAME).read_text(encoding="utf-8"))
+    assert INSTANCE_PEPPER_PURPOSE in manifest["purposes"]
+
+
+def test_account_store_refuses_to_autocreate_memory_secret_for_existing_postgres_rows(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "postgres")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN", "postgresql://localhost/teebotus_test")
+    monkeypatch.setattr("TeeBotus.runtime.accounts._postgres_memory_has_instance_payload_rows", lambda _dsn, _instance, _timeout: True)
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing PostgreSQL memory"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted postgres account memory"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_refuses_to_record_manifest_for_wrong_postgres_memory_key(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "postgres")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN", "postgresql://localhost/teebotus_test")
+    monkeypatch.setattr("TeeBotus.runtime.accounts._postgres_memory_has_instance_payload_rows", lambda _dsn, _instance, _timeout: True)
+    monkeypatch.setattr("TeeBotus.runtime.accounts._postgres_memory_account_ids", lambda _dsn, _instance, _timeout: ("a" * 128,), raising=False)
+
+    import TeeBotus.runtime.postgres_memory as postgres_memory
+
+    class FakePostgresBackend:
+        def __init__(self, *, instance_name, provider, purpose, config) -> None:
+            self.instance_name = instance_name
+            self.provider = provider
+            self.purpose = purpose
+            self.config = config
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            if self.provider.get_secret(self.instance_name, self.purpose) != b"a" * 32:
+                self.last_entry_read_error = "PostgreSQL account memory payload could not be decrypted"
+                self.last_entry_skipped = 1
+                return []
+            return [{"id": "mem_keep"}]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            if self.provider.get_secret(self.instance_name, self.purpose) != b"a" * 32:
+                self.last_index_read_error = "PostgreSQL account memory payload could not be decrypted"
+                return {}
+            return {"index": {"entries": {"mem_keep": {}}}}
+
+    monkeypatch.setattr(postgres_memory, "PostgresAccountMemoryBackend", FakePostgresBackend)
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    def lookup(_instance: str, purpose: str) -> bytes | None:
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            return b"b" * 32
+        return None
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(secret_provider, "_store", lambda _instance, _purpose, _secret: pytest.fail("wrong PostgreSQL key must not be stored"))
+
+    with pytest.raises(AccountStoreError, match="PostgreSQL account memory entries are not decryptable with the current Secret Service key"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+    assert not (tmp_path / "accounts" / ACCOUNT_KEYRING_FILENAME).exists()
 
 
 def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
@@ -345,6 +701,26 @@ def test_rotate_secret_invalidates_old_secret(tmp_path):
     assert first_secret != second_secret
     assert not store.verify_secret(account_id, first_secret)
     assert store.verify_secret(account_id, second_secret)
+
+
+def test_secret_tool_rotate_secret_preserves_instance_keys_and_memory(tmp_path, monkeypatch):
+    stored: dict[tuple[str, str], bytes] = {}
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(secret_provider, "_lookup", lambda instance, purpose: stored.get((instance, purpose)))
+    monkeypatch.setattr(secret_provider, "_store", lambda instance, purpose, secret: stored.__setitem__((instance, purpose), secret))
+    store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", secret_provider)
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_1", "user_text": "Bitte merken."})
+    _, first_secret = store.register_account(account_id)
+    before_keys = dict(stored)
+
+    _, second_secret = store.rotate_secret(account_id)
+
+    assert first_secret != second_secret
+    assert store.verify_secret(account_id, second_secret)
+    assert stored == before_keys
+    entries = store.read_memory_entries(account_id)
+    assert [entry.get("id") for entry in entries] == ["mem_1"]
 
 
 def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
@@ -1053,6 +1429,44 @@ def test_account_memory_fallback_does_not_repair_corrupt_primary_from_empty_entr
     assert account_id in backend.stale_fallback_entry_account_ids
     assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+
+
+def test_account_memory_fallback_blocks_writes_after_unrecoverable_empty_entries(caplog):
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, skipped: int = 0, error: str = "") -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]} if rows else {}
+            self.last_entry_skipped = skipped
+            self.last_entry_read_error = error
+            self.last_index_read_error = ""
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+            self.last_entry_skipped = 0
+            self.last_entry_read_error = ""
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id = "a" * 128
+    primary = Backend([{"id": "mem_primary"}], skipped=1, error="payload could not be decrypted")
+    fallback = Backend([])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.read_entries(account_id)
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(AccountStoreError, match="write blocked because primary is unreadable and fallback has no recoverable data"):
+            backend.write_entries(account_id, [{"id": "mem_new"}])
+
+    assert primary.entries[account_id] == [{"id": "mem_primary"}]
+    assert account_id not in fallback.entries
+    assert account_id in backend.stale_fallback_entry_account_ids
+    assert "ACCOUNT MEMORY WRITE BLOCKED" in caplog.text
 
 
 def test_account_memory_fallback_does_not_repair_corrupt_primary_from_empty_index(caplog):

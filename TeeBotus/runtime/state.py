@@ -9,6 +9,7 @@ from typing import Any, Literal
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNTS_DIRNAME,
+    AccountStore,
     AccountStoreError,
     EncryptedJsonVault,
     InstanceSecretProvider,
@@ -161,19 +162,35 @@ class RuntimeStateStore(RuntimeState):
         self.link_notifications_persistence_error = ""
         self.llm_state_persistence_error = ""
         self.openai_state_persistence_error = ""
+        self._account_store_secret_guard_checked = False
         self._load_persisted_link_notifications()
 
     @property
     def _link_vault(self) -> EncryptedJsonVault:
         if self.secret_provider is None:
             raise AccountStoreError("link-notification persistence has no secret provider")
+        self._guard_account_store_secrets()
         return EncryptedJsonVault(self.instance_name, self.secret_provider)
 
     @property
     def _llm_state_vault(self) -> EncryptedJsonVault:
         if self.secret_provider is None:
             raise AccountStoreError("LLM state persistence has no secret provider")
+        self._guard_account_store_secrets()
         return EncryptedJsonVault(self.instance_name, self.secret_provider, purpose=ACCOUNT_MEMORY_KEY_PURPOSE)
+
+    def _guard_account_store_secrets(self) -> None:
+        if self._account_store_secret_guard_checked:
+            return
+        if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
+            AccountStore(
+                self.accounts_root,
+                self.instance_name,
+                self.secret_provider,
+                create_dirs=False,
+                memory_backend_enabled=False,
+            )
+        self._account_store_secret_guard_checked = True
 
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]
         if len(args) == 1 and isinstance(args[0], PendingFlow):

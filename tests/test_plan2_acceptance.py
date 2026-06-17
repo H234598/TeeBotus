@@ -48,6 +48,13 @@ def _valid_ranking(category: str) -> dict:
     }
 
 
+def _valid_dependency_context() -> dict:
+    return {
+        dependency: {"version": "1.0.0", "status": "installed"}
+        for dependency in check_plan2_acceptance.BENCHMARK_CONTEXT_DEPENDENCIES
+    } | {"teebotus": {"version": "1.6.13", "status": "worktree"}}
+
+
 def _valid_benchmark_payload() -> dict:
     payload = {
         "schema_version": 1,
@@ -59,7 +66,7 @@ def _valid_benchmark_payload() -> dict:
             "platform": "Linux-test",
             "machine": "x86_64",
             "cpu_count": 4,
-            "dependencies": {"teebotus": {"version": "1.6.13", "status": "worktree"}},
+            "dependencies": _valid_dependency_context(),
         },
         "results": [
             {
@@ -84,6 +91,8 @@ def _valid_benchmark_payload() -> dict:
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
         "comparisons": {
+            "auto_switching": False,
+            "selection_policy": "document_fastest_stable_backend_only",
             "stable_backend_rankings": [
                 _valid_ranking(category)
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
@@ -96,7 +105,7 @@ def _valid_benchmark_payload() -> dict:
             "error_count": 0,
             "errors": [],
         },
-        "regression": {"status": "not_configured", "failed": False},
+        "regression": {"status": "not_configured", "failed": False, "entries": []},
     }
     for candidate in _valid_ranking("bibliothekar")["candidates"]:
         payload["results"].append(
@@ -398,6 +407,40 @@ def _valid_legacy_plaintext_import_payload() -> dict[str, object]:
             "--target-instances-dir instances --instance Demo --replace-unreadable --replace-unreadable-account-metadata --apply"
         ),
     }
+
+
+def _valid_memory_recovery_source(
+    name: str,
+    *,
+    kind: str = "sqlite",
+    readable: bool = True,
+    active: bool = True,
+    entries: int = 0,
+    raw_entries: int = 0,
+    index_present: bool = False,
+    raw_index_present: bool = False,
+    error: str = "",
+    partial: bool | None = None,
+    fully_readable: bool | None = None,
+) -> dict[str, object]:
+    source: dict[str, object] = {
+        "name": name,
+        "kind": kind,
+        "payload_kind": "encrypted_account_memory",
+        "path": f"instances/Demo/data/accounts/{name}",
+        "active": active,
+        "readable": readable,
+        "entries": entries,
+        "raw_entries": raw_entries,
+        "index_present": index_present,
+        "raw_index_present": raw_index_present,
+        "error": error,
+    }
+    if partial is not None:
+        source["partial"] = partial
+    if fully_readable is not None:
+        source["fully_readable"] = fully_readable
+    return source
 
 
 def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path) -> None:
@@ -1012,19 +1055,38 @@ def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: P
                 "instances": [
                     {
                         "instance": "Demo",
+                        "source_count": 2,
+                        "sources": [
+                            _valid_memory_recovery_source(
+                                "sqlite_primary",
+                                readable=False,
+                                raw_entries=1,
+                                raw_index_present=True,
+                                error="encrypted envelope authentication failed",
+                            ),
+                            _valid_memory_recovery_source("json_files", kind="json", readable=True),
+                        ],
                         "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [
                             {
                                 "account_id": "a" * 128,
                                 "recoverable": False,
                                 "recovery_status": "unrecoverable",
-                                "sources": [{"name": "sqlite_primary", "readable": False}],
+                                "sources": [
+                                    _valid_memory_recovery_source(
+                                        "sqlite_primary",
+                                        readable=False,
+                                        raw_entries=1,
+                                        raw_index_present=True,
+                                        error="encrypted envelope authentication failed",
+                                    )
+                                ],
                             },
                             {
                                 "account_id": "b" * 128,
                                 "recoverable": False,
                                 "recovery_status": "empty",
-                                "sources": [{"name": "json_files", "readable": True}],
+                                "sources": [_valid_memory_recovery_source("json_files", kind="json", readable=True)],
                             },
                         ],
                         "legacy_plaintext_import": _valid_legacy_plaintext_import_payload(),
@@ -1073,13 +1135,15 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
                 "instances": [
                     {
                         "instance": "Demo",
+                        "source_count": 1,
+                        "sources": [_valid_memory_recovery_source("sqlite_fallback", entries=1, index_present=True)],
                         "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [
                             {
                                 "account_id": "a" * 128,
                                 "recoverable": True,
                                 "recovery_status": "recoverable",
-                                "sources": [{"name": "sqlite_fallback", "readable": True}],
+                                "sources": [_valid_memory_recovery_source("sqlite_fallback", entries=1, index_present=True)],
                             }
                         ],
                         "legacy_plaintext_import": _valid_legacy_plaintext_import_payload(),
@@ -1118,6 +1182,191 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
     assert any("instance_count must match instances length" in error for error in errors)
     assert any("totals.accounts must match instances (1)" in error for error in errors)
     assert any("totals.legacy_plaintext_entries must match instances (2)" in error for error in errors)
+
+
+def test_memory_recovery_artifact_validation_rejects_invalid_source_structure(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "source_count": 1,
+                        "sources": [
+                            {"name": "sqlite_primary", "kind": "sqlite", "path": "instances/Demo/data/accounts/Account_Memory.sqlite3", "active": "yes"},
+                            {"name": "sqlite_primary", "kind": "sqlite", "path": "instances/Demo/data/accounts/Account_Memory.backup.sqlite3", "active": True},
+                        ],
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
+                        "accounts": [
+                            {
+                                "account_id": "not-an-account-id",
+                                "recoverable": True,
+                                "recovery_status": "empty",
+                                "sources": [
+                                    {
+                                        "name": "unknown_source",
+                                        "kind": "",
+                                        "path": "",
+                                        "active": "no",
+                                        "payload_kind": "plaintext",
+                                        "readable": "yes",
+                                        "entries": -1,
+                                        "raw_entries": "one",
+                                        "index_present": "false",
+                                        "raw_index_present": None,
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+                "totals": {
+                    "accounts": 1,
+                    "recoverable_accounts": 1,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 1,
+                    "no_source_accounts": 0,
+                    "sources": 1,
+                    "readable_sources": 1,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 0,
+                    "legacy_plaintext_entries": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("source_count must match sources length for Demo" in error for error in errors)
+    assert any("Demo.sources[0].active must be boolean" in error for error in errors)
+    assert any("Demo.sources[1].name is duplicated" in error for error in errors)
+    assert any("Demo.accounts[0].account_id must be a 128-char hex account id" in error for error in errors)
+    assert any("Demo.accounts[0].recoverable must match recovery_status" in error for error in errors)
+    assert any("Demo.accounts[0].sources[0].name must reference instance sources" in error for error in errors)
+    assert any("Demo.accounts[0].sources[0].payload_kind must be encrypted_account_memory" in error for error in errors)
+    assert any("Demo.accounts[0].sources[0].entries must be a non-negative integer" in error for error in errors)
+    assert any("Demo.accounts[0].sources[0].error must be present" in error for error in errors)
+
+
+def test_memory_recovery_source_validation_accepts_partial_recoverable_source() -> None:
+    source = _valid_memory_recovery_source(
+        "sqlite_primary",
+        readable=True,
+        entries=1,
+        raw_entries=2,
+        error="SQLite account memory payload could not be decrypted",
+        partial=True,
+        fully_readable=False,
+    )
+
+    assert check_plan2_acceptance._memory_recovery_source_errors(
+        source,
+        "Demo.accounts[0].sources[0]",
+        prefix="",
+        require_payload_fields=True,
+    ) == []
+
+
+def test_memory_recovery_source_validation_rejects_inconsistent_partial_flags() -> None:
+    source = _valid_memory_recovery_source(
+        "sqlite_primary",
+        readable=False,
+        entries=0,
+        raw_entries=2,
+        error="",
+        partial=True,
+        fully_readable=True,
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_source_errors(
+        source,
+        "Demo.accounts[0].sources[0]",
+        prefix="",
+        require_payload_fields=True,
+    )
+
+    assert any("partial true requires readable=true" in error for error in errors)
+    assert any("partial true requires non-empty error" in error for error in errors)
+    assert any("partial true requires recoverable payload" in error for error in errors)
+    assert any("fully_readable true requires readable=true" in error for error in errors)
+    assert any("partial and fully_readable cannot both be true" in error for error in errors)
+
+
+def test_memory_recovery_artifact_validation_rejects_nonnumeric_readable_entries_without_crashing(tmp_path: Path) -> None:
+    source = _valid_memory_recovery_source("sqlite_primary", readable=True)
+    source["entries"] = "one"
+    source["raw_entries"] = "one"
+    source["index_present"] = False
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "source_count": 1,
+                        "sources": [_valid_memory_recovery_source("sqlite_primary")],
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
+                        "accounts": [
+                            {
+                                "account_id": "a" * 128,
+                                "recoverable": True,
+                                "recovery_status": "recoverable",
+                                "sources": [source],
+                            }
+                        ],
+                    }
+                ],
+                "totals": {
+                    "accounts": 1,
+                    "recoverable_accounts": 1,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 0,
+                    "no_source_accounts": 0,
+                    "sources": 1,
+                    "readable_sources": 1,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 0,
+                    "legacy_plaintext_entries": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("Demo.accounts[0].sources[0].entries must be a non-negative integer" in error for error in errors)
+    assert any("Demo.accounts[0].recoverable requires at least one readable payload source" in error for error in errors)
 
 
 def test_memory_recovery_artifact_validation_rejects_inconsistent_metadata_health(tmp_path: Path) -> None:
@@ -2155,6 +2404,133 @@ def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_e
     assert any("totals.unreadable_metadata must match events (1)" in error for error in errors)
 
 
+def test_legacy_import_artifact_validation_accepts_metadata_reset_existing_accounts(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 2,
+                    "entries_imported": 2,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 1,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        action="would-import-after-metadata-reset",
+                        entries=2,
+                        imported=2,
+                        account_created=True,
+                        metadata_unreadable=True,
+                        metadata_reset_existing_accounts=["a" * 128, "b" * 128],
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert errors == []
+
+
+def test_legacy_import_artifact_validation_rejects_invalid_metadata_reset_existing_accounts(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        account_created=True,
+                        metadata_reset_existing_accounts=["not-an-account"],
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("metadata_reset_existing_accounts contains invalid account ids" in error for error in errors)
+    assert any("metadata_reset_existing_accounts requires metadata_unreadable or metadata-reset action" in error for error in errors)
+
+
 def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
     markdown_path = tmp_path / "import-demo.md"
@@ -2246,6 +2622,24 @@ def test_legacy_import_markdown_validation_requires_metadata_reset_flag(tmp_path
     errors = check_plan2_acceptance._legacy_import_markdown_artifact_errors(markdown_path)
 
     assert errors == [f"legacy import markdown artifact metadata-reset event lacks metadata_unreadable flag: {markdown_path}"]
+
+
+def test_legacy_import_markdown_validation_rejects_bad_metadata_reset_accounts(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    text = markdown_path.read_text(encoding="utf-8")
+    markdown_path.write_text(
+        text.replace(
+            "action=`would-import`",
+            "action=`would-import` metadata_reset_accounts=`not-valid`",
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_markdown_artifact_errors(markdown_path)
+
+    assert any("metadata_reset_accounts lacks metadata reset context" in error for error in errors)
+    assert any("metadata_reset_accounts contains invalid short account id" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:
@@ -2638,6 +3032,33 @@ def test_benchmark_artifact_validation_requires_bibliothekar_ranking_backends() 
     assert any("bibliothekar_llamaindex_fake_query" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_rejects_unknown_ranking_categories() -> None:
+    payload = _valid_benchmark_payload()
+    payload["comparisons"]["stable_backend_rankings"].append(
+        {
+            "category": "custom_backend",
+            "fastest_stable": "custom_b",
+            "candidates": [
+                {
+                    "rank": 1,
+                    "name": "custom_b",
+                    "mode": "local",
+                    "throughput_ops_s": 100.0,
+                    "total_ms": 1.0,
+                    "errors": 0,
+                    "payload_bytes": 1,
+                    "index_bytes": 1,
+                }
+            ],
+            "skipped": [],
+        }
+    )
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[5] category must be one of required benchmark ranking categories" in error for error in errors)
+
+
 def test_benchmark_artifact_validation_requires_pydantic_decision_details() -> None:
     payload = _valid_benchmark_payload()
     decision_result = next(result for result in payload["results"] if result["name"] == "pydantic_structured_decisions")
@@ -2770,6 +3191,8 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
             for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES)
         ],
         "comparisons": {
+            "auto_switching": False,
+            "selection_policy": "document_fastest_stable_backend_only",
             "stable_backend_rankings": [
                 _valid_ranking(category)
                 for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES)
@@ -2791,6 +3214,17 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
     assert "include_live must be false for standard Plan2 benchmark artifacts" in errors
     assert "live_hf must be false for standard Plan2 benchmark artifacts" in errors
     assert "live_qdrant must be false for standard Plan2 benchmark artifacts" in errors
+
+
+def test_benchmark_artifact_validation_rejects_automatic_backend_switching() -> None:
+    payload = _valid_benchmark_payload()
+    payload["comparisons"]["auto_switching"] = True
+    payload["comparisons"]["selection_policy"] = "switch_to_fastest"
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "comparisons.auto_switching must be false" in errors
+    assert "comparisons.selection_policy must be document_fastest_stable_backend_only" in errors
 
 
 def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_standard_artifacts() -> None:
@@ -2815,6 +3249,39 @@ def test_benchmark_artifact_validation_rejects_ok_results_with_errors() -> None:
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert "results[0] errors must be 0 for ok standard benchmark results" in errors
+
+
+def test_benchmark_artifact_validation_rejects_malformed_skipped_results() -> None:
+    payload = _valid_benchmark_payload()
+    result_index = len(payload["results"])
+    payload["results"].append(
+        {
+            "name": "memory_postgres",
+            "category": "account_memory",
+            "ok": True,
+            "skipped": True,
+            "iterations": 1,
+            "total_ms": 1.0,
+            "throughput_ops_s": 1.0,
+            "errors": 1,
+            "payload_bytes": 0,
+            "index_bytes": 0,
+            "mode": "",
+            "reason": "",
+            "details": {"network_calls": 1},
+        }
+    )
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert f"results[{result_index}] skipped result must not be ok" in errors
+    assert f"results[{result_index}] skipped result iterations must be 0" in errors
+    assert f"results[{result_index}] skipped result errors must be 0" in errors
+    assert f"results[{result_index}] skipped result reason must be non-empty" in errors
+    assert f"results[{result_index}] skipped result mode must be non-empty" in errors
+    assert any(f"results[{result_index}] details missing standard no-live counters" in error for error in errors)
+    assert f"results[{result_index}] details.network_calls must be 0 in standard Plan2 benchmark artifacts, got 1" in errors
 
 
 def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> None:
@@ -2946,6 +3413,20 @@ def test_benchmark_artifact_validation_requires_runtime_context() -> None:
     assert "context.python must be non-empty" in errors
 
 
+def test_benchmark_artifact_validation_requires_core_dependency_context() -> None:
+    payload = _valid_benchmark_payload()
+    dependencies = payload["context"]["dependencies"]
+    dependencies.pop("faster-whisper")
+    dependencies["langgraph"] = {"version": "1.0.0", "status": ""}
+    dependencies["qdrant-haystack"] = {"status": "installed"}
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("context.dependencies missing required packages" in error and "faster-whisper" in error for error in errors)
+    assert "context.dependencies.langgraph.status must be non-empty" in errors
+    assert "context.dependencies.qdrant-haystack.version must be present" in errors
+
+
 def test_benchmark_artifact_validation_requires_successful_quality_gate() -> None:
     payload = _valid_benchmark_payload()
     payload["quality_gate"] = {
@@ -2986,6 +3467,120 @@ def test_benchmark_artifact_validation_requires_successful_regression_gate() -> 
 
     assert "regression.status must be not_configured or ok" in errors
     assert "regression.failed must be false" in errors
+
+
+def test_benchmark_artifact_validation_accepts_structured_ok_regression_gate() -> None:
+    payload = _valid_benchmark_payload()
+    current = next(result for result in payload["results"] if result["name"] == "memory_jsonl")
+    payload["regression"] = {
+        "status": "ok",
+        "failed": False,
+        "baseline_json": "/tmp/teebotus-benchmark-baseline.json",
+        "max_total_ms_factor": 2.0,
+        "min_throughput_factor": 0.5,
+        "matched_results": 1,
+        "entries": [
+            {
+                "name": "memory_jsonl",
+                "status": "ok",
+                "previous_total_ms": 2.0,
+                "current_total_ms": current["total_ms"],
+                "total_ms_factor": 0.5,
+                "previous_throughput_ops_s": 50.0,
+                "current_throughput_ops_s": current["throughput_ops_s"],
+                "throughput_factor": 2.0,
+            }
+        ],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert not [error for error in errors if error.startswith("regression")]
+
+
+def test_benchmark_artifact_validation_rejects_weak_regression_entries() -> None:
+    payload = _valid_benchmark_payload()
+    payload["regression"] = {
+        "status": "ok",
+        "failed": False,
+        "baseline_json": "",
+        "max_total_ms_factor": 0.0,
+        "min_throughput_factor": "slow",
+        "matched_results": 1,
+        "entries": [
+            {
+                "name": "memory_jsonl",
+                "status": "regressed",
+                "previous_total_ms": "old",
+                "current_total_ms": 999.0,
+                "total_ms_factor": -1.0,
+                "previous_throughput_ops_s": 50.0,
+                "current_throughput_ops_s": 100.0,
+                "throughput_factor": 2.0,
+            },
+            {
+                "name": "synthetic_benchmark",
+                "status": "ok",
+                "previous_total_ms": 1.0,
+                "current_total_ms": 1.0,
+                "total_ms_factor": 1.0,
+                "previous_throughput_ops_s": 100.0,
+                "current_throughput_ops_s": 100.0,
+                "throughput_factor": 1.0,
+            },
+        ],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "regression.max_total_ms_factor must be a positive number" in errors
+    assert "regression.min_throughput_factor must be a positive number" in errors
+    assert "regression.baseline_json must be non-empty when status is ok" in errors
+    assert "regression.matched_results must match regression entries length" in errors
+    assert "regression.entries[0].status must be ok" in errors
+    assert "regression.entries[0].previous_total_ms must be a non-negative number" in errors
+    assert "regression.entries[0].total_ms_factor must be a non-negative number" in errors
+    assert "regression.entries[0].current_total_ms must match current result total_ms" in errors
+    assert "regression.entries[1] must reference a successful benchmark result" in errors
+
+
+def test_benchmark_artifact_validation_rejects_configured_regression_without_matches() -> None:
+    payload = _valid_benchmark_payload()
+    payload["regression"] = {
+        "status": "ok",
+        "failed": False,
+        "baseline_json": "/tmp/teebotus-benchmark-baseline.json",
+        "matched_results": 0,
+        "entries": [],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "regression.entries must be non-empty when status is ok" in errors
+
+
+def test_benchmark_artifact_validation_rejects_not_configured_regression_with_entries() -> None:
+    payload = _valid_benchmark_payload()
+    payload["regression"] = {
+        "status": "not_configured",
+        "failed": False,
+        "entries": [
+            {
+                "name": "memory_jsonl",
+                "status": "ok",
+                "previous_total_ms": 1.0,
+                "current_total_ms": 1.0,
+                "total_ms_factor": 1.0,
+                "previous_throughput_ops_s": 100.0,
+                "current_throughput_ops_s": 100.0,
+                "throughput_factor": 1.0,
+            }
+        ],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "regression.entries must be empty when status is not_configured" in errors
 
 
 def test_plan2_acceptance_runner_fails_on_broken_runtime_status(monkeypatch) -> None:

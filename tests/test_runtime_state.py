@@ -1,7 +1,18 @@
 from __future__ import annotations
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, LLM_STATE_FILENAME, OPENAI_STATE_FILENAME, StaticSecretProvider
+import pytest
+
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    AccountStore,
+    AccountStoreError,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    SecretToolInstanceSecretProvider,
+    StaticSecretProvider,
+)
 from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
+from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 from TeeBotus.runtime.state import RuntimeStateStore
 
 
@@ -36,6 +47,30 @@ def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_back
 
     assert state.list_link_notifications(instance_name="Bot", account_id="a" * 128)
     assert "secret backend unavailable" in state.link_notifications_persistence_error
+
+
+def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):
+    data_dir = tmp_path / "Bot" / "data"
+    accounts_root = data_dir / "accounts"
+    SQLiteAccountMemoryBackend(
+        instance_name="Bot",
+        provider=StaticSecretProvider(b"s" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=accounts_root / "Account_Memory.sqlite3", fallback_path=None),
+    ).write_entries(ACCOUNT_ID, [{"id": "mem_keep", "user_text": "nicht ueberschreiben"}])
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("runtime state must not create a new memory secret over SQLite rows"),
+    )
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=secret_provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
+
+    assert "refusing to create missing instance secret for existing encrypted sqlite account memory" in state.llm_state_persistence_error
+    assert not (accounts_root / "accounts" / ACCOUNT_ID / LLM_STATE_FILENAME).exists()
 
 
 def test_runtime_state_store_persists_previous_llm_response_id(tmp_path):

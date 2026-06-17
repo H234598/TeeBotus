@@ -36,6 +36,8 @@ DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehe
 ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{128}")
 LEGACY_IMPORT_REPORT_MODES = frozenset({"dry-run", "apply", "rehearsal-apply", "apply-blocked"})
 BENCHMARK_RANKING_NAME_SETS = _BENCHMARK_CORE.BENCHMARK_RANKING_NAME_SETS
+BENCHMARK_CONTEXT_DEPENDENCIES = _BENCHMARK_CORE.BENCHMARK_CONTEXT_DEPENDENCIES
+BENCHMARK_SELECTION_POLICY = _BENCHMARK_CORE.BENCHMARK_SELECTION_POLICY
 REQUIRED_BENCHMARK_CATEGORIES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_CATEGORIES
 REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES
 REQUIRED_BENCHMARK_NAME_CATEGORIES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_NAME_CATEGORIES
@@ -208,6 +210,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_cinnamon_applet.py",
     "tests/test_memory_store_benchmark.py",
     "tests/test_plan2_acceptance.py",
+    "tests/test_plan3_acceptance.py",
     "tests/test_plan2_optional_extras.py",
     "tests/test_youtube_parser_stats.py",
     "tests/test_youtube_parser_misses_report.py",
@@ -797,6 +800,7 @@ def _memory_recovery_payload_errors(payload: Mapping[str, Any], *, path: Path | 
     for key, value in derived.items():
         if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
             errors.append(f"{prefix}memory recovery totals.{key} must match instances ({value})")
+    errors.extend(_memory_recovery_source_structure_errors(instances, prefix=prefix))
     errors.extend(_memory_recovery_metadata_health_errors(instances, prefix=prefix))
     errors.extend(_memory_recovery_legacy_command_errors(instances, prefix=prefix))
     return errors
@@ -866,6 +870,134 @@ def _derive_memory_recovery_totals(instances: Sequence[Any]) -> dict[str, int]:
             if _is_nonnegative_integer(legacy.get("entries")):
                 totals["legacy_plaintext_entries"] += int(legacy.get("entries") or 0)
     return totals
+
+
+def _memory_recovery_source_structure_errors(instances: Sequence[Any], *, prefix: str) -> list[str]:
+    errors: list[str] = []
+    valid_statuses = {"recoverable", "unrecoverable", "empty", "no_sources"}
+    for instance_index, instance in enumerate(instances):
+        if not isinstance(instance, Mapping):
+            errors.append(f"{prefix}memory recovery instances[{instance_index}] must be an object")
+            continue
+        instance_name = str(instance.get("instance") or f"instances[{instance_index}]")
+        source_count = instance.get("source_count")
+        instance_sources = instance.get("sources")
+        if not _is_nonnegative_integer(source_count):
+            errors.append(f"{prefix}memory recovery source_count must be a non-negative integer for {instance_name}")
+        if not isinstance(instance_sources, list):
+            errors.append(f"{prefix}memory recovery sources must be a list for {instance_name}")
+            instance_sources = []
+        elif _is_nonnegative_integer(source_count) and int(source_count or 0) != len(instance_sources):
+            errors.append(f"{prefix}memory recovery source_count must match sources length for {instance_name}")
+        instance_source_names: set[str] = set()
+        for source_index, source in enumerate(instance_sources):
+            source_label = f"{instance_name}.sources[{source_index}]"
+            errors.extend(_memory_recovery_source_errors(source, source_label, prefix=prefix, require_payload_fields=False))
+            if isinstance(source, Mapping):
+                name = str(source.get("name") or "").strip()
+                if name:
+                    if name in instance_source_names:
+                        errors.append(f"{prefix}memory recovery {source_label}.name is duplicated")
+                    instance_source_names.add(name)
+        accounts = instance.get("accounts")
+        if not isinstance(accounts, list):
+            errors.append(f"{prefix}memory recovery accounts must be a list for {instance_name}")
+            continue
+        seen_account_ids: set[str] = set()
+        for account_index, account in enumerate(accounts):
+            account_label = f"{instance_name}.accounts[{account_index}]"
+            if not isinstance(account, Mapping):
+                errors.append(f"{prefix}memory recovery {account_label} must be an object")
+                continue
+            account_id = str(account.get("account_id") or "")
+            if not ACCOUNT_ID_RE.fullmatch(account_id):
+                errors.append(f"{prefix}memory recovery {account_label}.account_id must be a 128-char hex account id")
+            elif account_id in seen_account_ids:
+                errors.append(f"{prefix}memory recovery {account_label}.account_id is duplicated")
+            seen_account_ids.add(account_id)
+            status = str(account.get("recovery_status") or "")
+            if status not in valid_statuses:
+                errors.append(f"{prefix}memory recovery {account_label}.recovery_status must be one of {', '.join(sorted(valid_statuses))}")
+            if not isinstance(account.get("recoverable"), bool):
+                errors.append(f"{prefix}memory recovery {account_label}.recoverable must be boolean")
+            elif bool(account.get("recoverable")) != (status == "recoverable"):
+                errors.append(f"{prefix}memory recovery {account_label}.recoverable must match recovery_status")
+            sources = account.get("sources")
+            if not isinstance(sources, list):
+                errors.append(f"{prefix}memory recovery {account_label}.sources must be a list")
+                continue
+            has_recoverable_payload = False
+            for source_index, source in enumerate(sources):
+                source_label = f"{account_label}.sources[{source_index}]"
+                errors.extend(_memory_recovery_source_errors(source, source_label, prefix=prefix, require_payload_fields=True))
+                if not isinstance(source, Mapping):
+                    continue
+                source_name = str(source.get("name") or "").strip()
+                if instance_source_names and source_name and source_name not in instance_source_names:
+                    errors.append(f"{prefix}memory recovery {source_label}.name must reference instance sources")
+                if _memory_recovery_source_has_recoverable_payload(source):
+                    has_recoverable_payload = True
+            if status == "recoverable" and not has_recoverable_payload:
+                errors.append(f"{prefix}memory recovery {account_label}.recoverable requires at least one readable payload source")
+    return errors
+
+
+def _memory_recovery_source_errors(source: Any, label: str, *, prefix: str, require_payload_fields: bool) -> list[str]:
+    if not isinstance(source, Mapping):
+        return [f"{prefix}memory recovery {label} must be an object"]
+    errors: list[str] = []
+    for key in ("name", "kind", "path"):
+        if not str(source.get(key) or "").strip():
+            errors.append(f"{prefix}memory recovery {label}.{key} must be non-empty")
+    if not isinstance(source.get("active"), bool):
+        errors.append(f"{prefix}memory recovery {label}.active must be boolean")
+    if not require_payload_fields:
+        return errors
+    if source.get("payload_kind") not in {"encrypted_account_memory", "legacy_plaintext_user_memory"}:
+        errors.append(
+            f"{prefix}memory recovery {label}.payload_kind must be encrypted_account_memory or legacy_plaintext_user_memory"
+        )
+    if not isinstance(source.get("readable"), bool):
+        errors.append(f"{prefix}memory recovery {label}.readable must be boolean")
+    for key in ("entries", "raw_entries"):
+        if not _is_nonnegative_integer(source.get(key)):
+            errors.append(f"{prefix}memory recovery {label}.{key} must be a non-negative integer")
+    for key in ("index_present", "raw_index_present"):
+        if not isinstance(source.get(key), bool):
+            errors.append(f"{prefix}memory recovery {label}.{key} must be boolean")
+    if "error" not in source:
+        errors.append(f"{prefix}memory recovery {label}.error must be present")
+    elif not isinstance(source.get("error"), str):
+        errors.append(f"{prefix}memory recovery {label}.error must be a string")
+    partial = source.get("partial")
+    fully_readable = source.get("fully_readable")
+    if "partial" in source and not isinstance(partial, bool):
+        errors.append(f"{prefix}memory recovery {label}.partial must be boolean")
+    if "fully_readable" in source and not isinstance(fully_readable, bool):
+        errors.append(f"{prefix}memory recovery {label}.fully_readable must be boolean")
+    if partial is True:
+        if source.get("readable") is not True:
+            errors.append(f"{prefix}memory recovery {label}.partial true requires readable=true")
+        if not str(source.get("error") or "").strip():
+            errors.append(f"{prefix}memory recovery {label}.partial true requires non-empty error")
+        if not _memory_recovery_source_has_recoverable_payload(source):
+            errors.append(f"{prefix}memory recovery {label}.partial true requires recoverable payload")
+    if fully_readable is True:
+        if source.get("readable") is not True:
+            errors.append(f"{prefix}memory recovery {label}.fully_readable true requires readable=true")
+        if str(source.get("error") or "").strip():
+            errors.append(f"{prefix}memory recovery {label}.fully_readable true requires empty error")
+    if partial is True and fully_readable is True:
+        errors.append(f"{prefix}memory recovery {label}.partial and fully_readable cannot both be true")
+    return errors
+
+
+def _memory_recovery_source_has_recoverable_payload(source: Mapping[str, Any]) -> bool:
+    if source.get("readable") is not True:
+        return False
+    if _is_nonnegative_integer(source.get("entries")) and int(source.get("entries") or 0) > 0:
+        return True
+    return source.get("index_present") is True
 
 
 def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: str) -> list[str]:
@@ -1051,9 +1183,36 @@ def _legacy_import_markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"legacy import markdown artifact places running processes before totals: {path}")
     for line in text.splitlines():
         if "action=`" not in line or "metadata-reset" not in line:
+            if "metadata_reset_accounts=`" in line:
+                errors.extend(_legacy_import_markdown_reset_accounts_errors(line, path))
             continue
         if "metadata_unreadable" not in line:
             errors.append(f"legacy import markdown artifact metadata-reset event lacks metadata_unreadable flag: {path}")
+        errors.extend(_legacy_import_markdown_reset_accounts_errors(line, path))
+    return errors
+
+
+def _legacy_import_markdown_reset_accounts_errors(line: str, path: Path) -> list[str]:
+    if "metadata_reset_accounts=`" not in line:
+        return []
+    errors: list[str] = []
+    if "metadata_unreadable" not in line and "metadata-reset" not in line:
+        errors.append(f"legacy import markdown artifact metadata_reset_accounts lacks metadata reset context: {path}")
+    match = re.search(r"metadata_reset_accounts=`([^`]*)`", line)
+    if match is None:
+        errors.append(f"legacy import markdown artifact metadata_reset_accounts is malformed: {path}")
+        return errors
+    tokens = [token.strip() for token in match.group(1).split(",") if token.strip()]
+    if not tokens:
+        errors.append(f"legacy import markdown artifact metadata_reset_accounts is empty: {path}")
+        return errors
+    for token in tokens:
+        if re.fullmatch(r"[0-9a-f]{12}", token):
+            continue
+        if re.fullmatch(r"\+[1-9][0-9]*", token):
+            continue
+        errors.append(f"legacy import markdown artifact metadata_reset_accounts contains invalid short account id: {path}")
+        break
     return errors
 
 
@@ -1264,6 +1423,16 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
             derived["unreadable_metadata"] += 1
         if "metadata-reset" in action and not metadata_unreadable:
             errors.append(f"{prefix}{label}.metadata_unreadable must be true for metadata-reset actions")
+        reset_accounts = event.get("metadata_reset_existing_accounts")
+        if reset_accounts is not None:
+            if not isinstance(reset_accounts, list):
+                errors.append(f"{prefix}{label}.metadata_reset_existing_accounts must be a list")
+            else:
+                invalid_reset_accounts = [str(account_id) for account_id in reset_accounts if not ACCOUNT_ID_RE.fullmatch(str(account_id))]
+                if invalid_reset_accounts:
+                    errors.append(f"{prefix}{label}.metadata_reset_existing_accounts contains invalid account ids")
+                if not metadata_unreadable and "metadata-reset" not in action:
+                    errors.append(f"{prefix}{label}.metadata_reset_existing_accounts requires metadata_unreadable or metadata-reset action")
     if _is_nonnegative_integer(totals.get("sources")) and _is_nonnegative_integer(totals.get("imported_sources")) and _is_nonnegative_integer(totals.get("skipped_sources")):
         imported_sources = int(totals.get("imported_sources") or 0)
         total_sources = int(totals.get("sources") or 0)
@@ -1331,8 +1500,9 @@ def _markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"benchmark markdown artifact lacks dependencies section: {path}")
     if "| package | version | status |" not in text:
         errors.append(f"benchmark markdown artifact lacks dependencies table: {path}")
-    if not re.search(r"^\| teebotus \|", text, flags=re.MULTILINE):
-        errors.append(f"benchmark markdown artifact lacks teebotus dependency row: {path}")
+    for dependency in BENCHMARK_CONTEXT_DEPENDENCIES:
+        if not re.search(rf"^\| {re.escape(dependency)} \|", text, flags=re.MULTILINE):
+            errors.append(f"benchmark markdown artifact lacks {dependency} dependency row: {path}")
     if "## Results" not in text:
         errors.append(f"benchmark markdown artifact lacks results section: {path}")
     if "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" not in text:
@@ -1437,11 +1607,32 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             for key in ("total_ms", "throughput_ops_s", "payload_bytes", "index_bytes"):
                 if key in result and not _is_nonnegative_number(result.get(key)):
                     errors.append(f"{prefix}results[{index}] {key} must be a non-negative number")
+            if "iterations" in result and not _is_nonnegative_integer(result.get("iterations")):
+                errors.append(f"{prefix}results[{index}] iterations must be a non-negative integer")
             if "errors" in result and not _is_nonnegative_integer(result.get("errors")):
                 errors.append(f"{prefix}results[{index}] errors must be a non-negative integer")
             if "ok" not in result and "skipped" not in result:
                 errors.append(f"{prefix}results[{index}] missing ok/skipped status")
             if result.get("skipped"):
+                if result.get("ok") is True:
+                    errors.append(f"{prefix}results[{index}] skipped result must not be ok")
+                if _is_nonnegative_integer(result.get("iterations")) and int(result.get("iterations") or 0) != 0:
+                    errors.append(f"{prefix}results[{index}] skipped result iterations must be 0")
+                if _is_nonnegative_integer(result.get("errors")) and int(result.get("errors") or 0) != 0:
+                    errors.append(f"{prefix}results[{index}] skipped result errors must be 0")
+                if not str(result.get("reason") or "").strip():
+                    errors.append(f"{prefix}results[{index}] skipped result reason must be non-empty")
+                if not str(result.get("mode") or "").strip():
+                    errors.append(f"{prefix}results[{index}] skipped result mode must be non-empty")
+                details = result.get("details")
+                if not isinstance(details, Mapping) or not details:
+                    errors.append(f"{prefix}results[{index}] details must be a non-empty object")
+                    continue
+                missing_counters = sorted(STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS - set(details))
+                if missing_counters:
+                    errors.append(f"{prefix}results[{index}] details missing standard no-live counters: {', '.join(missing_counters)}")
+                for key, value in _forbidden_standard_benchmark_calls(details):
+                    errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
                 continue
             if "iterations" in result and not _is_positive_integer(result.get("iterations")):
                 errors.append(f"{prefix}results[{index}] iterations must be a positive integer")
@@ -1477,6 +1668,10 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
     if not isinstance(comparisons, dict):
         errors.append(f"{prefix}comparisons must be an object")
     else:
+        if comparisons.get("auto_switching") is not False:
+            errors.append(f"{prefix}comparisons.auto_switching must be false")
+        if comparisons.get("selection_policy") != BENCHMARK_SELECTION_POLICY:
+            errors.append(f"{prefix}comparisons.selection_policy must be {BENCHMARK_SELECTION_POLICY}")
         rankings = comparisons.get("stable_backend_rankings")
         if not isinstance(rankings, list) or not rankings:
             errors.append(f"{prefix}comparisons.stable_backend_rankings must be a non-empty list")
@@ -1504,17 +1699,14 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         if computed_quality_gate.get("ok") is not True:
             for error in computed_quality_gate.get("errors", []):
                 errors.append(f"{prefix}computed quality_gate: {error}")
-    regression = payload.get("regression")
-    if not isinstance(regression, dict):
-        errors.append(f"{prefix}regression must be an object")
-    elif "status" not in regression or "failed" not in regression:
-        errors.append(f"{prefix}regression must contain status and failed")
-    else:
-        status = str(regression.get("status") or "")
-        if status not in {"not_configured", "ok"}:
-            errors.append(f"{prefix}regression.status must be not_configured or ok")
-        if regression.get("failed") is not False:
-            errors.append(f"{prefix}regression.failed must be false")
+    successful_results_for_regression = _successful_benchmark_results_by_name(results) if isinstance(results, list) else {}
+    errors.extend(
+        _benchmark_regression_errors(
+            payload.get("regression"),
+            successful_results=successful_results_for_regression,
+            prefix=prefix,
+        )
+    )
     quality_gate = payload.get("quality_gate")
     if not isinstance(quality_gate, dict):
         errors.append(f"{prefix}quality_gate must be an object")
@@ -1533,6 +1725,82 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             errors.append(f"{prefix}quality_gate.error_count must be 0")
         if not isinstance(quality_gate.get("errors"), list):
             errors.append(f"{prefix}quality_gate.errors must be a list")
+    return errors
+
+
+def _benchmark_regression_errors(
+    regression: Any,
+    *,
+    successful_results: Mapping[str, Mapping[str, Any]],
+    prefix: str = "",
+) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(regression, dict):
+        return [f"{prefix}regression must be an object"]
+    if "status" not in regression or "failed" not in regression:
+        return [f"{prefix}regression must contain status and failed"]
+    status = str(regression.get("status") or "")
+    if status not in {"not_configured", "ok"}:
+        errors.append(f"{prefix}regression.status must be not_configured or ok")
+    if regression.get("failed") is not False:
+        errors.append(f"{prefix}regression.failed must be false")
+    for key in ("max_total_ms_factor", "min_throughput_factor"):
+        if key in regression and not _is_positive_number(regression.get(key)):
+            errors.append(f"{prefix}regression.{key} must be a positive number")
+    entries = regression.get("entries")
+    if not isinstance(entries, list):
+        errors.append(f"{prefix}regression.entries must be a list")
+        entries = []
+    if status == "not_configured" and entries:
+        errors.append(f"{prefix}regression.entries must be empty when status is not_configured")
+    if status == "ok":
+        if not str(regression.get("baseline_json") or "").strip():
+            errors.append(f"{prefix}regression.baseline_json must be non-empty when status is ok")
+        if not entries:
+            errors.append(f"{prefix}regression.entries must be non-empty when status is ok")
+        matched_results = regression.get("matched_results")
+        if not _is_nonnegative_integer(matched_results):
+            errors.append(f"{prefix}regression.matched_results must be a non-negative integer when status is ok")
+        elif int(matched_results or 0) != len(entries):
+            errors.append(f"{prefix}regression.matched_results must match regression entries length")
+    seen_names: set[str] = set()
+    for index, entry in enumerate(entries):
+        entry_prefix = f"{prefix}regression.entries[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_prefix} must be an object")
+            continue
+        name = str(entry.get("name") or "")
+        if not name:
+            errors.append(f"{entry_prefix}.name must be non-empty")
+        elif name in seen_names:
+            errors.append(f"{prefix}regression duplicate entry name: {name}")
+        seen_names.add(name)
+        if name and name not in successful_results:
+            errors.append(f"{entry_prefix} must reference a successful benchmark result")
+        entry_status = str(entry.get("status") or "")
+        if entry_status != "ok":
+            errors.append(f"{entry_prefix}.status must be ok")
+        for key in (
+            "previous_total_ms",
+            "current_total_ms",
+            "total_ms_factor",
+            "previous_throughput_ops_s",
+            "current_throughput_ops_s",
+            "throughput_factor",
+        ):
+            if key not in entry:
+                errors.append(f"{entry_prefix}.{key} missing")
+            elif not _is_nonnegative_number(entry.get(key)):
+                errors.append(f"{entry_prefix}.{key} must be a non-negative number")
+        result = successful_results.get(name)
+        if result:
+            for entry_key, result_key in (
+                ("current_total_ms", "total_ms"),
+                ("current_throughput_ops_s", "throughput_ops_s"),
+            ):
+                if entry_key in entry and _is_nonnegative_number(entry.get(entry_key)) and _is_nonnegative_number(result.get(result_key)):
+                    if float(entry.get(entry_key) or 0.0) != float(result.get(result_key) or 0.0):
+                        errors.append(f"{entry_prefix}.{entry_key} must match current result {result_key}")
     return errors
 
 
@@ -1829,6 +2097,8 @@ def _benchmark_ranking_errors(
         skipped = ranking.get("skipped", [])
         if not category:
             errors.append(f"{prefix}rankings[{ranking_index}] category must be non-empty")
+        elif category not in REQUIRED_BENCHMARK_RANKING_CATEGORIES:
+            errors.append(f"{prefix}rankings[{ranking_index}] category must be one of required benchmark ranking categories")
         if not isinstance(candidates, list) or not candidates:
             errors.append(f"{prefix}rankings[{ranking_index}] candidates must be a non-empty list")
             continue
@@ -2000,8 +2270,18 @@ def _benchmark_context_errors(context: Any, *, prefix: str) -> list[str]:
     dependencies = context.get("dependencies")
     if not isinstance(dependencies, dict) or not dependencies:
         errors.append(f"{prefix}context.dependencies must be a non-empty object")
-    elif not isinstance(dependencies.get("teebotus"), dict):
-        errors.append(f"{prefix}context.dependencies.teebotus must be present")
+    else:
+        missing_dependencies = sorted(set(BENCHMARK_CONTEXT_DEPENDENCIES) - set(dependencies))
+        if missing_dependencies:
+            errors.append(f"{prefix}context.dependencies missing required packages: {', '.join(missing_dependencies)}")
+        for package in BENCHMARK_CONTEXT_DEPENDENCIES:
+            info = dependencies.get(package)
+            if not isinstance(info, dict):
+                continue
+            if not str(info.get("status") or "").strip():
+                errors.append(f"{prefix}context.dependencies.{package}.status must be non-empty")
+            if "version" not in info:
+                errors.append(f"{prefix}context.dependencies.{package}.version must be present")
     for key in ("python", "platform", "machine"):
         if key in context and not str(context.get(key) or "").strip():
             errors.append(f"{prefix}context.{key} must be non-empty")

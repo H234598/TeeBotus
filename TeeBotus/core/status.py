@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import hmac
 import json
 import logging
 import os
@@ -17,12 +18,25 @@ from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_IDENTITIES_FILENAME,
     ACCOUNT_INDEX_FILENAME,
+    ACCOUNT_KEYRING_FILENAME,
+    ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNT_PROFILE_FILENAME,
     ACCOUNT_SECRETS_FILENAME,
+    INSTANCE_KEY_SIZE_BYTES,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
+    SECRET_VERIFIER_FILENAME,
     TOKEN_HEX_RE,
     AccountStore,
     AccountStoreError,
+    EncryptedJsonVault,
     SecretToolInstanceSecretProvider,
+    _account_secret_payload_has_verifier,
+    _instance_secret_fingerprint,
+    _looks_like_teebotus_encrypted_payload,
+    _postgres_memory_has_instance_payload_rows,
+    _secret_verifier_file_has_payload,
+    _sqlite_memory_has_instance_payload_rows,
     telegram_identity_key,
 )
 from TeeBotus.runtime.artifacts import safe_artifact_name
@@ -321,6 +335,360 @@ def mcp_tool_runtime_status_line(instance_name: str, mcp_tools: Mapping[str, Map
     return f"mcp_tools={instance_name} {details}"
 
 
+def account_identity_health_lines(
+    *,
+    instance_name: str,
+    project_root: Path,
+    env: Mapping[str, str] | None = None,
+    runtime_channels: tuple[str, ...] = ("telegram", "signal", "matrix"),
+    secret_provider: object | None = None,
+) -> list[str]:
+    if not instance_name:
+        return []
+    try:
+        from TeeBotus.admin.accounts_report import build_accounts_admin_report
+
+        report = build_accounts_admin_report(
+            instances_dir=project_root.resolve() / "instances",
+            instances=(instance_name,),
+            provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
+            env=os.environ if env is None else env,
+            runtime_channels=runtime_channels,
+        )
+    except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose identity health failures.
+        return [f"account_identity={instance_name} status=unknown error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+    instances = report.get("instances", []) if isinstance(report, Mapping) else []
+    instance_report = next(
+        (
+            item
+            for item in instances
+            if isinstance(item, Mapping) and str(item.get("instance") or "") == instance_name
+        ),
+        None,
+    )
+    if not isinstance(instance_report, Mapping):
+        return [f"account_identity={instance_name} status=none"]
+    store_report = instance_report.get("account_store", {})
+    runtime_slots = instance_report.get("runtime_slots", {})
+    identity_health = instance_report.get("identity_health", {})
+    if isinstance(store_report, Mapping) and store_report.get("errors"):
+        errors = "; ".join(str(error or "").strip() for error in store_report.get("errors", []) if str(error or "").strip())
+        return [f"account_identity={instance_name} status=broken error={redact_status_text(errors)}"]
+    status = str(identity_health.get("status") or "unknown") if isinstance(identity_health, Mapping) else "unknown"
+    warning_count = int(identity_health.get("warning_count", 0) or 0) if isinstance(identity_health, Mapping) else 0
+    lines = [
+        (
+            f"account_identity={instance_name} status={status} "
+            f"identity_warnings={warning_count} "
+            f"runtime_slots={_runtime_status_count_label(runtime_slots.get('configured_channels', {}) if isinstance(runtime_slots, Mapping) else {})} "
+            f"identities={_runtime_status_count_label(store_report.get('identities_by_channel', {}) if isinstance(store_report, Mapping) else {})}"
+        )
+    ]
+    if isinstance(identity_health, Mapping):
+        for warning in identity_health.get("warnings", []) if isinstance(identity_health.get("warnings"), list) else []:
+            if not isinstance(warning, Mapping):
+                continue
+            lines.append(
+                (
+                    f"account_identity_warning={instance_name} "
+                    f"code={redact_status_text(warning.get('code', 'unknown'))} "
+                    f"channel={redact_status_text(warning.get('channel', '<none>'))} "
+                    f"configured_runtime_slots={redact_status_text(warning.get('configured_runtime_slots', '<none>'))} "
+                    f"runtime_labels={_runtime_status_sequence_label(warning.get('configured_runtime_labels', []))} "
+                    f"identity_channels={_runtime_status_count_label(warning.get('identity_channels', {}))} "
+                    f"message={redact_status_text(warning.get('message', ''))} "
+                    f"action={redact_status_text(warning.get('recommended_action', ''))}"
+                )
+            )
+    return lines
+
+
+def account_secret_health_lines(*, instance_name: str, project_root: Path, secret_provider: object | None = None) -> list[str]:
+    if not instance_name:
+        return []
+    root = project_root.resolve() / "instances" / instance_name / "data" / "accounts"
+    if not root.exists():
+        return [f"account_crypto={instance_name} status=none"]
+    provider = secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False)
+    presence: dict[str, bool | None] = {}
+    presence_errors: dict[str, str] = {}
+    purposes = (
+        ("mapping", INSTANCE_MAPPING_KEY_PURPOSE),
+        ("memory", ACCOUNT_MEMORY_KEY_PURPOSE),
+        ("pepper", INSTANCE_PEPPER_PURPOSE),
+    )
+    for label, purpose in purposes:
+        try:
+            presence[label] = _account_secret_provider_has_secret(provider, instance_name, purpose)
+        except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose secret-service failures.
+            presence[label] = None
+            presence_errors[label] = redact_status_text(f"{type(exc).__name__}: {exc}")
+    try:
+        required = {
+            "mapping": _account_secret_mapping_required(root),
+            "memory": _account_secret_memory_required(root, instance_name),
+            "pepper": _account_secret_pepper_required(root, instance_name, provider, mapping_present=presence.get("mapping") is True),
+        }
+    except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose secret-health failures.
+        return [f"account_crypto={instance_name} status=broken error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+    _confirm_required_secret_presence(provider, instance_name, purposes, presence, required)
+    keyring_label, keyring_errors = _account_secret_keyring_health(root, instance_name, provider, required=required)
+    labels: dict[str, str] = {}
+    errors: list[str] = list(keyring_errors)
+    for label, _purpose in purposes:
+        current = presence.get(label)
+        if current is True:
+            labels[label] = "present"
+        elif current is None:
+            labels[label] = "error"
+            errors.append(f"{label}:{presence_errors.get(label, 'lookup failed')}")
+        elif required[label]:
+            labels[label] = "missing_required"
+            errors.append(f"{label}:missing")
+        else:
+            labels[label] = "not_required"
+    status = "broken" if errors else "ok"
+    line = (
+        f"account_crypto={instance_name} status={status} "
+        f"mapping={labels['mapping']} memory={labels['memory']} pepper={labels['pepper']} keyring={keyring_label}"
+    )
+    if errors:
+        line += f" error={redact_status_text('; '.join(errors))}"
+    return [line]
+
+
+def _confirm_required_secret_presence(
+    provider: object,
+    instance_name: str,
+    purposes: tuple[tuple[str, str], ...],
+    presence: dict[str, bool | None],
+    required: Mapping[str, bool],
+) -> None:
+    for label, purpose in purposes:
+        if presence.get(label) is not False or not required.get(label):
+            continue
+        try:
+            _account_secret_provider_get_secret(provider, instance_name, purpose)
+        except Exception:  # noqa: BLE001 - keep the original missing status below.
+            continue
+        presence[label] = True
+
+
+def _account_secret_provider_has_secret(provider: object, instance_name: str, purpose: str) -> bool:
+    has_secret = getattr(provider, "has_secret", None)
+    if callable(has_secret):
+        return bool(has_secret(instance_name, purpose))
+    get_secret = getattr(provider, "get_secret", None)
+    if not callable(get_secret):
+        raise AccountStoreError("secret provider has no has_secret or get_secret method")
+    try:
+        secret = get_secret(instance_name, purpose)
+    except AccountStoreError as exc:
+        if "missing" in str(exc).casefold():
+            return False
+        raise
+    return bool(secret)
+
+
+def _account_secret_provider_get_secret(provider: object, instance_name: str, purpose: str) -> bytes:
+    get_secret = getattr(provider, "get_secret", None)
+    if not callable(get_secret):
+        raise AccountStoreError("secret provider has no get_secret method")
+    secret = get_secret(instance_name, purpose)
+    if not isinstance(secret, (bytes, bytearray)):
+        raise AccountStoreError("secret provider returned non-byte secret")
+    resolved = bytes(secret)
+    if len(resolved) != INSTANCE_KEY_SIZE_BYTES:
+        raise AccountStoreError("instance secret has invalid length")
+    return resolved
+
+
+def _account_secret_keyring_health(
+    root: Path,
+    instance_name: str,
+    provider: object,
+    *,
+    required: Mapping[str, bool],
+) -> tuple[str, list[str]]:
+    manifest_path = root / ACCOUNT_KEYRING_FILENAME
+    required_purposes = {
+        "mapping": INSTANCE_MAPPING_KEY_PURPOSE,
+        "memory": ACCOUNT_MEMORY_KEY_PURPOSE,
+        "pepper": INSTANCE_PEPPER_PURPOSE,
+    }
+    any_required = any(bool(required.get(label)) for label in required_purposes)
+    if not manifest_path.exists():
+        if any_required:
+            return ("broken", ["keyring:missing_manifest"])
+        return ("not_required", [])
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return ("broken", [f"keyring:{type(exc).__name__}:invalid_manifest"])
+    if not isinstance(manifest, Mapping):
+        return ("broken", ["keyring:invalid_manifest"])
+    if manifest.get("schema_version") != 1:
+        return ("broken", ["keyring:unsupported_schema"])
+    manifest_instance = str(manifest.get("instance") or "").strip()
+    if manifest_instance and manifest_instance != instance_name:
+        return ("broken", ["keyring:wrong_instance"])
+    purposes = manifest.get("purposes")
+    if not isinstance(purposes, Mapping):
+        return ("broken", ["keyring:invalid_purposes"])
+    errors: list[str] = []
+    recorded_purposes: set[str] = set()
+    for purpose, payload in purposes.items():
+        purpose_token = str(purpose or "").strip()
+        if not purpose_token:
+            errors.append("keyring:empty_purpose")
+            continue
+        recorded_purposes.add(purpose_token)
+        if not isinstance(payload, Mapping):
+            errors.append(f"keyring:{purpose_token}:invalid_payload")
+            continue
+        expected_fingerprint = str(payload.get("fingerprint") or "").strip()
+        if not expected_fingerprint:
+            errors.append(f"keyring:{purpose_token}:missing_fingerprint")
+            continue
+        try:
+            secret = _account_secret_provider_get_secret(provider, instance_name, purpose_token)
+            actual_fingerprint = _instance_secret_fingerprint(instance_name, purpose_token, secret)
+        except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose keyring failures.
+            errors.append(f"keyring:{purpose_token}:{type(exc).__name__}: {exc}")
+            continue
+        if not hmac.compare_digest(expected_fingerprint, actual_fingerprint):
+            errors.append(f"keyring:{purpose_token}:mismatch")
+    if errors:
+        return ("broken", [redact_status_text(error) for error in errors])
+    missing_recorded = [
+        purpose
+        for label, purpose in required_purposes.items()
+        if required.get(label) and purpose not in recorded_purposes
+    ]
+    if missing_recorded:
+        missing = ",".join(sorted(missing_recorded))
+        return ("partial", [f"keyring:missing_required_purpose:{missing}"])
+    if recorded_purposes:
+        return ("ok", [])
+    return ("not_recorded" if any_required else "not_required", [])
+
+
+def _account_secret_mapping_required(root: Path) -> bool:
+    paths = [
+        root / ACCOUNT_INDEX_FILENAME,
+        root / ACCOUNT_IDENTITIES_FILENAME,
+        root / ACCOUNT_SECRETS_FILENAME,
+    ]
+    accounts_dir = root / ACCOUNTS_DIRNAME
+    if accounts_dir.exists():
+        try:
+            account_dirs = [path for path in accounts_dir.iterdir() if path.is_dir()]
+        except OSError:
+            account_dirs = []
+        for account_dir in account_dirs:
+            paths.extend(
+                [
+                    account_dir / ACCOUNT_PROFILE_FILENAME,
+                    account_dir / SECRET_VERIFIER_FILENAME,
+                    account_dir / "Account_Tombstone.json",
+                ]
+            )
+    return any(_looks_like_teebotus_encrypted_payload(path) for path in paths)
+
+
+def _account_secret_memory_required(root: Path, instance_name: str) -> bool:
+    accounts_dir = root / ACCOUNTS_DIRNAME
+    if accounts_dir.exists():
+        for account_dir in _account_memory_account_dirs(accounts_dir):
+            for filename in ACCOUNT_MEMORY_FILENAMES | {"LLM_State.json", "OpenAI_State.json", "Agent_State.json", "Proactive_Outbox.jsonl", "Proactive_Audit.jsonl"}:
+                if _looks_like_teebotus_encrypted_payload(account_dir / filename):
+                    return True
+    try:
+        from TeeBotus.runtime.sqlite_memory import SQLITE_DEFAULT_FALLBACK_FILENAME, SQLITE_DEFAULT_FILENAME, SQLiteMemoryConfig
+
+        sqlite_paths: list[Path] = []
+        sqlite_config = SQLiteMemoryConfig.from_env(root)
+        if sqlite_config is not None:
+            sqlite_paths.append(sqlite_config.path)
+            if sqlite_config.fallback_path is not None:
+                sqlite_paths.append(sqlite_config.fallback_path)
+        sqlite_paths.append(root / SQLITE_DEFAULT_FILENAME)
+        sqlite_paths.append(root / SQLITE_DEFAULT_FALLBACK_FILENAME)
+        seen: set[str] = set()
+        for path in sqlite_paths:
+            marker = str(path)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            if _sqlite_memory_has_instance_payload_rows(path, instance_name):
+                return True
+    except Exception as exc:  # noqa: BLE001 - status should report bad backend inspection.
+        raise AccountStoreError(f"could not inspect SQLite account-memory secrets: {exc}") from exc
+    try:
+        from TeeBotus.runtime.postgres_memory import PostgresMemoryConfig
+
+        postgres_config = PostgresMemoryConfig.from_env()
+        if postgres_config is not None and _postgres_memory_has_instance_payload_rows(
+            postgres_config.dsn,
+            instance_name,
+            postgres_config.connect_timeout,
+        ):
+            return True
+    except ModuleNotFoundError:
+        return False
+    except Exception as exc:  # noqa: BLE001 - status should report bad backend inspection.
+        raise AccountStoreError(f"could not inspect PostgreSQL account-memory secrets: {exc}") from exc
+    return False
+
+
+def _account_secret_pepper_required(
+    root: Path,
+    instance_name: str,
+    provider: object,
+    *,
+    mapping_present: bool,
+) -> bool:
+    accounts_dir = root / ACCOUNTS_DIRNAME
+    if accounts_dir.exists():
+        for account_dir in _account_memory_account_dirs(accounts_dir):
+            if _secret_verifier_file_has_payload(account_dir / SECRET_VERIFIER_FILENAME):
+                return True
+    secrets_path = root / ACCOUNT_SECRETS_FILENAME
+    if not secrets_path.exists() or not mapping_present:
+        return False
+    try:
+        secrets_doc = EncryptedJsonVault(instance_name, provider).read_json(secrets_path, {})
+    except AccountStoreError:
+        return _looks_like_teebotus_encrypted_payload(secrets_path)
+    return any(_account_secret_payload_has_verifier(payload) for payload in secrets_doc.values())
+
+
+def _runtime_status_count_label(value: Any) -> str:
+    if not isinstance(value, Mapping):
+        return "<none>"
+    parts = []
+    for key, item in sorted(value.items(), key=lambda pair: str(pair[0])):
+        name = str(key or "").strip()
+        if not name:
+            continue
+        try:
+            count = int(item or 0)
+        except (TypeError, ValueError):
+            count = 0
+        parts.append(f"{name}:{count}")
+    return ",".join(parts) if parts else "<none>"
+
+
+def _runtime_status_sequence_label(value: Any) -> str:
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.split(",") if part.strip()]
+    elif isinstance(value, (list, tuple, set)):
+        parts = [str(part or "").strip() for part in value if str(part or "").strip()]
+    else:
+        parts = []
+    return ",".join(redact_status_text(part) for part in parts) if parts else "<none>"
+
+
 def redact_status_text(value: object) -> str:
     text = str(value or "").strip()
     if not text:
@@ -471,7 +839,7 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
         store = AccountStore(
             project_root / "instances" / instance_name / "data" / "accounts",
             instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(),
+            secret_provider=SecretToolInstanceSecretProvider(create_if_missing=False),
             create_dirs=False,
         )
         account_id = store.get_account_for_identity(telegram_identity_key(sender_id))
@@ -529,7 +897,7 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
     return "Userfiles nicht vollstaendig verschluesselt"
 
 
-def account_memory_index_health_lines(*, instance_name: str, project_root: Path) -> list[str]:
+def account_memory_index_health_lines(*, instance_name: str, project_root: Path, secret_provider: object | None = None) -> list[str]:
     if not instance_name:
         return []
     project_root = project_root.resolve()
@@ -541,11 +909,15 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         store = AccountStore(
             root,
             instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(),
+            secret_provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
             create_dirs=False,
+            memory_backend_enabled=_status_memory_backend_enabled(root),
         )
     except Exception as exc:
-        lines = [f"account_memory={instance_name} status=broken error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+        error = redact_status_text(f"{type(exc).__name__}: {exc}")
+        lines = [f"account_memory={instance_name} status=broken error={error}"]
+        for account_dir in account_dirs:
+            lines.append(f"account_memory={instance_name}/{account_dir.name} status=broken error=account_store_unavailable:{error}")
         lines.extend(_account_memory_recovery_lines(instance_name=instance_name, project_root=project_root))
         return lines
     lines: list[str] = []
@@ -561,17 +933,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
-            if store.account_memory_backend is None:
-                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
-                has_broken_memory = True
-                continue
             profile_error = f"profile_unreadable:{exc}"
             has_broken_metadata = True
         except OSError as exc:
-            if store.account_memory_backend is None:
-                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
-                has_broken_memory = True
-                continue
             profile_error = f"profile_unreadable:{exc}"
             has_broken_metadata = True
         try:
@@ -605,6 +969,21 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
     return lines
 
 
+def _status_memory_backend_enabled(root: Path) -> bool:
+    try:
+        from TeeBotus.runtime.sqlite_memory import SQLiteMemoryConfig
+
+        sqlite_config = SQLiteMemoryConfig.from_env(root)
+    except Exception:  # noqa: BLE001 - status must stay diagnostic.
+        return True
+    if sqlite_config is None:
+        return True
+    sqlite_paths = [sqlite_config.path]
+    if sqlite_config.fallback_path is not None:
+        sqlite_paths.append(sqlite_config.fallback_path)
+    return any(path.exists() for path in sqlite_paths)
+
+
 def _account_memory_recovery_lines(*, instance_name: str, project_root: Path) -> list[str]:
     instances_dir = project_root / "instances"
     recovery_command = shlex.join(
@@ -635,6 +1014,7 @@ def _account_memory_recovery_lines(*, instance_name: str, project_root: Path) ->
                 str(instances_dir),
                 "--instance",
                 instance_name,
+                "--replace-unreadable",
                 "--replace-unreadable-account-metadata",
                 "--json-output",
                 str(legacy_preflight_json),

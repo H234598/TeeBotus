@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _migrate(*, instances_dir: Path, selected: tuple[str, ...], dry_run: bool, delete_json_files: bool) -> dict[str, int]:
-    provider = SecretToolInstanceSecretProvider()
+    provider = SecretToolInstanceSecretProvider(create_if_missing=False)
     migrated = 0
     skipped = 0
     deleted = 0

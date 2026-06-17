@@ -410,6 +410,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_llm_setting(instructions, key, value)
         elif section == "bibliothekar":
             _apply_bibliothekar_setting(instructions, key, value)
+        elif section == "user_memory":
+            _apply_user_memory_setting(instructions, key, value)
         elif section == "memory_search":
             _apply_memory_search_setting(instructions, key, value)
         elif section == "codex":
@@ -527,6 +529,13 @@ def _section_name(line: str) -> str:
         "bibliothekar": "bibliothekar",
         "bibliothek": "bibliothekar",
         "library": "bibliothekar",
+        "user memory": "user_memory",
+        "user_memory": "user_memory",
+        "usermemory": "user_memory",
+        "nutzermemory": "user_memory",
+        "nutzer memory": "user_memory",
+        "account memory": "user_memory",
+        "account_memory": "user_memory",
         "memory search": "memory_search",
         "memory_search": "memory_search",
         "memorysuche": "memory_search",
@@ -604,6 +613,17 @@ def _apply_setting(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.echo_enabled = _parse_bool(value, default=instructions.echo_enabled)
     elif normalized == "echo_prefix":
         instructions.echo_prefix = value
+    elif normalized in {
+        "user_memory",
+        "user_memory_enabled",
+        "account_memory",
+        "account_memory_enabled",
+        "memory_enabled",
+        "nutzermemory",
+    }:
+        _apply_user_memory_setting(instructions, normalized, value)
+    elif normalized.startswith("user_memory_") or normalized.startswith("account_memory_"):
+        _apply_user_memory_setting(instructions, normalized, value)
     elif normalized.startswith("memory_search_"):
         _apply_memory_search_setting(instructions, normalized.removeprefix("memory_search_"), value)
     elif normalized in {"structured_decision_enabled", "structured_decisions_enabled", "pydantic_decision_enabled", "pydantic_decisions_enabled"}:
@@ -875,10 +895,36 @@ def _apply_bibliothekar_setting(instructions: BotInstructions, key: str, value: 
         instructions.bibliothekar_require_citations = _parse_bool(value, default=instructions.bibliothekar_require_citations)
 
 
+def _apply_user_memory_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized.startswith("user_memory_"):
+        normalized = normalized.removeprefix("user_memory_")
+    elif normalized.startswith("account_memory_"):
+        normalized = normalized.removeprefix("account_memory_")
+
+    if normalized in {"enabled", "memory", "user_memory", "account_memory", "memory_enabled", "nutzermemory"}:
+        instructions.user_memory_enabled = _parse_bool(value, default=instructions.user_memory_enabled)
+    elif normalized in {"max_prompt_chars", "prompt_max_chars", "prompt_chars"}:
+        instructions.user_memory_max_prompt_chars = _parse_required_int(
+            value,
+            default=instructions.user_memory_max_prompt_chars,
+        )
+    elif normalized in {"max_entry_chars", "entry_max_chars", "entry_chars"}:
+        instructions.user_memory_max_entry_chars = _parse_required_int(
+            value,
+            default=instructions.user_memory_max_entry_chars,
+        )
+    elif normalized.startswith("memory_search_"):
+        _apply_memory_search_setting(instructions, normalized.removeprefix("memory_search_"), value)
+
+
 def _apply_memory_search_setting(instructions: BotInstructions, key: str, value: str) -> None:
     normalized = _normalize_key(key)
     if normalized in {"semantic_enabled", "enabled"}:
-        instructions.memory_search_semantic_enabled = _parse_bool(value, default=instructions.memory_search_semantic_enabled)
+        enabled = _parse_bool(value, default=instructions.memory_search_semantic_enabled)
+        instructions.memory_search_semantic_enabled = enabled
+        if enabled:
+            instructions.user_memory_enabled = True
     elif normalized in {"semantic_backend", "backend"}:
         instructions.memory_search_semantic_backend = _normalize_memory_search_backend(
             value,

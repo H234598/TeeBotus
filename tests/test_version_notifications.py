@@ -11,8 +11,18 @@ from TeeBotus.core.version_notifications import (
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
 )
-from TeeBotus.core.status import account_memory_index_health_lines, github_commit_history_url
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, AccountStoreError, StaticSecretProvider
+from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines, github_commit_history_url
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_KEYRING_FILENAME,
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
+    AccountStore,
+    AccountStoreError,
+    SecretToolInstanceSecretProvider,
+    StaticSecretProvider,
+    _instance_secret_fingerprint,
+)
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
@@ -22,6 +32,305 @@ def _store(tmp_path: Path) -> AccountStore:
         "Demo",
         secret_provider=StaticSecretProvider(b"x" * 32),
     )
+
+
+def _make_instance(tmp_path: Path) -> None:
+    instance_dir = tmp_path / "instances" / "Demo"
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+
+
+class FakeSecretStatusProvider:
+    def __init__(self, present: set[str] | None = None, errors: dict[str, str] | None = None, **_kwargs: object) -> None:
+        self.present = set(present or ())
+        self.errors = dict(errors or {})
+
+    def has_secret(self, _instance_name: str, purpose: str) -> bool:
+        if purpose in self.errors:
+            raise AccountStoreError(self.errors[purpose])
+        return purpose in self.present
+
+    def get_secret(self, _instance_name: str, purpose: str) -> bytes:
+        if not self.has_secret(_instance_name, purpose):
+            raise AccountStoreError(f"instance secret is missing for purpose={purpose}")
+        return b"x" * 32
+
+
+class FlakyRequiredSecretProvider:
+    def has_secret(self, _instance_name: str, purpose: str) -> bool:
+        return purpose == INSTANCE_MAPPING_KEY_PURPOSE
+
+    def get_secret(self, _instance_name: str, purpose: str) -> bytes:
+        if purpose in {INSTANCE_MAPPING_KEY_PURPOSE, ACCOUNT_MEMORY_KEY_PURPOSE}:
+            return b"x" * 32
+        raise AccountStoreError(f"instance secret is missing for purpose={purpose}")
+
+
+def test_account_identity_health_warns_when_signal_runtime_has_no_linked_identity(tmp_path: Path, monkeypatch) -> None:
+    _make_instance(tmp_path)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEMO": "telegram-token",
+        "SIGNAL_BOT_SERVICE_DEMO": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEMO": "+491",
+    }
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path, env=env)
+
+    assert lines[0] == (
+        "account_identity=Demo status=warning identity_warnings=1 "
+        "runtime_slots=signal:1,telegram:1 identities=telegram:1"
+    )
+    assert any(
+        "account_identity_warning=Demo code=runtime_channel_without_identity channel=signal" in line
+        and "configured_runtime_slots=1" in line
+        and "runtime_labels=signal:1" in line
+        and "identity_channels=telegram:1" in line
+        and "action=First run /register or /rotate_secret in an already linked private chat" in line
+        and "then open a private signal chat and link the existing account with /login <account_id> <secret>" in line
+        and "separate account until the user links it" in line
+        for line in lines
+    )
+
+
+def test_account_identity_health_does_not_require_memory_secret(tmp_path: Path, monkeypatch) -> None:
+    _make_instance(tmp_path)
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_llm_state(account_id, {"previous_response_id": "resp_1"})
+    provider = SecretToolInstanceSecretProvider(create_if_missing=False)
+
+    def lookup(_instance: str, purpose: str) -> bytes | None:
+        if purpose == INSTANCE_MAPPING_KEY_PURPOSE:
+            return b"x" * 32
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            return None
+        raise AssertionError(f"unexpected secret purpose requested: {purpose}")
+
+    monkeypatch.setattr(provider, "_lookup", lookup)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: provider)
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEMO": "telegram-token",
+        "SIGNAL_BOT_SERVICE_DEMO": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEMO": "+491",
+    }
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path, env=env)
+
+    assert lines[0] == (
+        "account_identity=Demo status=warning identity_warnings=1 "
+        "runtime_slots=signal:1,telegram:1 identities=telegram:1"
+    )
+
+
+def test_account_identity_health_is_ok_when_signal_identity_is_linked(tmp_path: Path, monkeypatch) -> None:
+    _make_instance(tmp_path)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    _, secret = store.register_account(account_id)
+    store.link_identity("signal:uuid:abc", account_id, secret)
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEMO": "telegram-token",
+        "SIGNAL_BOT_SERVICE_DEMO": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEMO": "+491",
+    }
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path, env=env)
+
+    assert lines == [
+        "account_identity=Demo status=ok identity_warnings=0 runtime_slots=signal:1,telegram:1 identities=signal:1,telegram:1"
+    ]
+
+
+def test_account_memory_index_health_uses_read_only_secret_provider(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    provider_kwargs: list[dict[str, object]] = []
+
+    def fake_secret_provider(**kwargs: object) -> StaticSecretProvider:
+        provider_kwargs.append(dict(kwargs))
+        return StaticSecretProvider(b"x" * 32)
+
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", fake_secret_provider)
+
+    account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert provider_kwargs
+    assert all(kwargs.get("create_if_missing") is False for kwargs in provider_kwargs)
+
+
+def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_memory_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider({INSTANCE_MAPPING_KEY_PURPOSE}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=present memory=missing_required pepper=not_required keyring=broken error=keyring:missing_manifest; memory:missing"
+    ]
+
+
+def test_account_secret_health_confirms_required_secret_before_reporting_missing(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_llm_state(account_id, {"previous_response_id": "resp_1"})
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    (accounts_root / ACCOUNT_KEYRING_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "instance": "Demo",
+                "purposes": {
+                    INSTANCE_MAPPING_KEY_PURPOSE: {
+                        "algorithm": "HMAC-SHA256",
+                        "fingerprint": _instance_secret_fingerprint("Demo", INSTANCE_MAPPING_KEY_PURPOSE, b"x" * 32),
+                        "purpose": INSTANCE_MAPPING_KEY_PURPOSE,
+                    },
+                    ACCOUNT_MEMORY_KEY_PURPOSE: {
+                        "algorithm": "HMAC-SHA256",
+                        "fingerprint": _instance_secret_fingerprint("Demo", ACCOUNT_MEMORY_KEY_PURPOSE, b"x" * 32),
+                        "purpose": ACCOUNT_MEMORY_KEY_PURPOSE,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: FlakyRequiredSecretProvider())
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=ok mapping=present memory=present pepper=not_required keyring=ok"
+    ]
+
+
+def test_account_secret_health_does_not_require_pepper_for_empty_secret_container(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    store.vault.write_json(store.secrets_path, {})
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider({INSTANCE_MAPPING_KEY_PURPOSE}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=present memory=not_required pepper=not_required keyring=broken error=keyring:missing_manifest"
+    ]
+
+
+def test_account_secret_health_reports_missing_required_pepper(tmp_path: Path, monkeypatch) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.register_account(account_id)
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider({INSTANCE_MAPPING_KEY_PURPOSE}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=present memory=not_required pepper=missing_required keyring=broken error=keyring:missing_manifest; pepper:missing"
+    ]
+
+
+def test_account_secret_health_reports_lookup_error_without_leaking_secret(tmp_path: Path, monkeypatch) -> None:
+    _make_instance(tmp_path)
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+    leaked = "sk-" + "A" * 24
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider(errors={INSTANCE_MAPPING_KEY_PURPOSE: f"secret-tool lookup failed {leaked}"}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=error memory=not_required pepper=not_required keyring=not_required error=mapping:AccountStoreError: secret-tool lookup failed sk-<redacted>"
+    ]
+    assert leaked not in lines[0]
+
+
+def test_account_secret_health_reports_keyring_mismatch_without_leaking_secret(tmp_path: Path, monkeypatch) -> None:
+    _make_instance(tmp_path)
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+    wrong_fingerprint = _instance_secret_fingerprint("Demo", INSTANCE_MAPPING_KEY_PURPOSE, b"y" * 32)
+    (accounts_root / ACCOUNT_KEYRING_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "instance": "Demo",
+                "purposes": {
+                    INSTANCE_MAPPING_KEY_PURPOSE: {
+                        "algorithm": "HMAC-SHA256",
+                        "fingerprint": wrong_fingerprint,
+                        "purpose": INSTANCE_MAPPING_KEY_PURPOSE,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider({INSTANCE_MAPPING_KEY_PURPOSE}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=present memory=not_required pepper=not_required keyring=broken error=keyring:account-identity-mapping-key:mismatch"
+    ]
+    assert wrong_fingerprint not in lines[0]
+
+
+def test_account_secret_health_reports_partial_keyring_for_required_memory(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_memory_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    mapping_fingerprint = _instance_secret_fingerprint("Demo", INSTANCE_MAPPING_KEY_PURPOSE, b"x" * 32)
+    (accounts_root / ACCOUNT_KEYRING_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "instance": "Demo",
+                "purposes": {
+                    INSTANCE_MAPPING_KEY_PURPOSE: {
+                        "algorithm": "HMAC-SHA256",
+                        "fingerprint": mapping_fingerprint,
+                        "purpose": INSTANCE_MAPPING_KEY_PURPOSE,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **kwargs: FakeSecretStatusProvider({INSTANCE_MAPPING_KEY_PURPOSE, ACCOUNT_MEMORY_KEY_PURPOSE}, **kwargs),
+    )
+
+    lines = account_secret_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_crypto=Demo status=broken mapping=present memory=present pepper=not_required keyring=partial error=keyring:missing_required_purpose:account-structured-memory-key"
+    ]
+    assert mapping_fingerprint not in lines[0]
 
 
 def test_recent_telegram_recipients_filters_last_seen_window(tmp_path: Path) -> None:
@@ -201,7 +510,7 @@ def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypa
 
 
 def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
     store.write_memory_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
@@ -229,9 +538,40 @@ def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path,
     )
 
 
+def test_account_memory_index_health_sqlite_env_does_not_create_missing_database(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_memory_entries(account_id, [{"id": "mem_live", "user_text": "Mond"}])
+    store.write_memory_index(
+        account_id,
+        {
+            "scope": "legacy",
+            "index": {
+                "recent_ids": ["mem_missing"],
+                "keywords": {"mond": ["mem_live"]},
+                "entries": {"mem_live": {}, "mem_missing": {}},
+            },
+        },
+    )
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    fallback = accounts_root / "Account_Memory.backup.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert any("index scope is not account" in line for line in lines)
+    assert not primary.exists()
+    assert not fallback.exists()
+
+
 def test_account_memory_index_health_uses_database_when_profile_envelope_is_stale(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
     store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
@@ -261,7 +601,7 @@ def test_account_memory_index_health_uses_database_when_profile_envelope_is_stal
 
 def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
     accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
     bad_store = AccountStore(accounts_root, "Demo", secret_provider=StaticSecretProvider(b"y" * 32))
     account_id = bad_store.resolve_or_create_account("telegram:user:111", display_label="Stale")
@@ -297,13 +637,14 @@ def test_account_memory_index_health_reports_recovery_when_store_open_fails(tmp_
 
     assert lines == [
         "account_memory=Demo status=broken error=AccountStoreError: instance secret is missing",
+        f"account_memory=Demo/{account_id} status=broken error=account_store_unavailable:AccountStoreError: instance secret is missing",
         f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"',
     ]
 
 
 def test_account_memory_index_health_suppresses_expected_database_decryption_logs(tmp_path: Path, monkeypatch, caplog) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
     old_backend = SQLiteAccountMemoryBackend(

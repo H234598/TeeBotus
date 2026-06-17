@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
-from TeeBotus.benchmarks.core import BenchmarkResult
+from TeeBotus.benchmarks.core import BENCHMARK_CONTEXT_DEPENDENCIES, BenchmarkResult
 
 
 def render_markdown(suite: dict[str, Any]) -> str:
@@ -221,22 +221,8 @@ def benchmark_context() -> dict[str, Any]:
 
 
 def dependency_context() -> dict[str, dict[str, str]]:
-    packages = (
-        "teebotus",
-        "litellm",
-        "signalbot",
-        "nio-bot",
-        "matrix-nio",
-        "faster-whisper",
-        "pydantic-ai-slim",
-        "langgraph",
-        "haystack-ai",
-        "llama-index-core",
-        "qdrant-haystack",
-        "fastmcp",
-    )
     context: dict[str, dict[str, str]] = {}
-    for package in packages:
+    for package in BENCHMARK_CONTEXT_DEPENDENCIES:
         if package == "teebotus":
             context[package] = {"version": TEEBOTUS_VERSION, "status": "worktree"}
             continue

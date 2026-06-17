@@ -75,6 +75,48 @@ def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     assert rows[-1]["stored_path"] == str(promoted.promoted_path)
 
 
+def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    with pytest.raises(ValueError, match="relative library subdirectory"):
+        harvester.promote_accepted(harvest.stored_path, destination_dir=str(tmp_path / "outside"))
+
+
+def test_source_harvester_rejects_promote_destination_ignored_by_indexer(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    with pytest.raises(ValueError, match="indexed Bibliothek source path"):
+        harvester.promote_accepted(harvest.stored_path, destination_dir="data/accounts")
+
+    assert not (store.library_dir / "data" / "accounts").exists()
+
+
 def test_source_harvester_quarantines_review_sources_and_dedupes_by_hash(tmp_path):
     source = tmp_path / "notes.txt"
     duplicate = tmp_path / "copy.txt"

@@ -18,9 +18,19 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from TeeBotus.runtime.accounts import (  # noqa: E402
+    ACCOUNT_KEYRING_FILENAME,
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    AGENT_STATE_FILENAME,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    PROACTIVE_AUDIT_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
     AccountStore,
     AccountStoreError,
     SecretToolInstanceSecretProvider,
+    TOKEN_HEX_RE,
     USER_MEMORY_ENTRIES_FILENAME,
     USER_MEMORY_INDEX_FILENAME,
     telegram_identity_key,
@@ -30,7 +40,17 @@ from TeeBotus.runtime.sqlite_memory import SQLITE_BACKEND_ENV, SQLITE_DEFAULT_FA
 
 
 USER_MEMORY_LEGACY_ROOT = "users"
-TEEBOTUS_MODULE_RUNTIME_RE = re.compile(r"(?:^|\s)-m\s+teebotus(?:\s|$)")
+TEEBOTUS_MODULE_RUNTIME_RE = re.compile(r"(?:^|\s)-m\s+teebotus(?:\s|$|\.proactive(?:\s|$))")
+ACCOUNT_METADATA_SECRET_GUARD_PURPOSES = (INSTANCE_MAPPING_KEY_PURPOSE, INSTANCE_PEPPER_PURPOSE)
+ACCOUNT_MEMORY_STATE_FILENAMES = (
+    USER_MEMORY_INDEX_FILENAME,
+    USER_MEMORY_ENTRIES_FILENAME,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    AGENT_STATE_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
+    PROACTIVE_AUDIT_FILENAME,
+)
 
 
 class LegacyPlaintextReadError(ValueError):
@@ -54,6 +74,7 @@ class ImportStats:
     unreadable_metadata: int = 0
     backups_created: int = 0
     metadata_backups_created: int = 0
+    memory_keyring_repairs: int = 0
     account_store_resets: int = 0
     requested_legacy_instances_dir: str = ""
     effective_legacy_instances_dir: str = ""
@@ -184,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         f"accounts_existing={stats.accounts_existing} accounts_created={stats.accounts_created} "
         f"unreadable_targets={stats.unreadable_targets} unreadable_metadata={stats.unreadable_metadata} "
         f"backups_created={stats.backups_created} metadata_backups_created={stats.metadata_backups_created} "
-        f"account_store_resets={stats.account_store_resets}"
+        f"memory_keyring_repairs={stats.memory_keyring_repairs} account_store_resets={stats.account_store_resets}"
     )
     return 0
 
@@ -207,7 +228,7 @@ def import_legacy_user_memory(
     backup_current: bool = True,
     provider: Any | None = None,
 ) -> ImportStats:
-    provider = provider or SecretToolInstanceSecretProvider(create_if_missing=apply)
+    provider = provider or SecretToolInstanceSecretProvider(create_if_missing=False)
     stats = ImportStats()
     requested_legacy_instances_dir = Path(legacy_instances_dir)
     if not requested_legacy_instances_dir.exists():
@@ -217,6 +238,9 @@ def import_legacy_user_memory(
     stats.effective_legacy_instances_dir = str(legacy_instances_dir)
     selected = set(instances)
     reset_account_stores: set[Path] = set()
+    memory_keyring_repair_roots: dict[Path, str] = {}
+    deferred_strict_verifications: list[tuple[Path, str, str, str, str]] = []
+    metadata_reset_accounts_by_root: dict[Path, list[str]] = {}
     user_dirs = _legacy_user_dirs(legacy_instances_dir, selected)
     entries_by_user_dir: dict[Path, list[dict[str, Any]]] = {}
     read_errors_by_user_dir: dict[Path, LegacyPlaintextReadError] = {}
@@ -231,19 +255,23 @@ def import_legacy_user_memory(
         for user_dir, entries in entries_by_user_dir.items()
         if entries and user_dir not in read_errors_by_user_dir
     ]
-    if apply and replace_unreadable_account_metadata:
+    if replace_unreadable_account_metadata:
         for instance_name in _instances_with_legacy_user_dirs(importable_user_dirs):
             target_root = target_instances_dir / instance_name / "data" / "accounts"
+            existing_account_ids = _metadata_reset_existing_account_ids(target_root)
             try:
-                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                target_store = _metadata_account_store(target_root, instance_name, provider)
             except AccountStoreError:
                 target_store = None
             if target_store is not None and not _account_store_metadata_unreadable(target_store):
                 continue
+            metadata_reset_accounts_by_root[target_root] = existing_account_ids
+            reset_account_stores.add(target_root)
+            if not apply:
+                continue
             moved = _reset_unreadable_account_store(target_root)
             stats.metadata_backups_created += moved
             stats.account_store_resets += 1
-            reset_account_stores.add(target_root)
     for user_dir in user_dirs:
         stats.sources += 1
         instance_name = user_dir.parents[2].name
@@ -296,42 +324,48 @@ def import_legacy_user_memory(
             stats.unreadable_metadata += 1
         target_store: AccountStore | None = None
         existing_account_id: str | None = None
-        try:
-            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
-            existing_account_id = target_store.get_account_for_identity(identity)
-        except AccountStoreError as exc:
-            if not metadata_unreadable_for_source:
-                stats.unreadable_metadata += 1
-                metadata_unreadable_for_source = True
-            if not replace_unreadable_account_metadata:
-                stats.skipped_sources += 1
-                stats.events.append(
-                    _event(
-                        instance_name=instance_name,
-                        legacy_user_id=user_dir.name,
-                        account_id="<metadata-unreadable>",
-                        entries=len(entries),
-                        imported=0,
-                        action="skip-unreadable-account-metadata",
-                        metadata_unreadable=True,
-                        error=str(exc),
+        if not (metadata_unreadable_for_source and replace_unreadable_account_metadata and not apply):
+            try:
+                metadata_store = _metadata_account_store(target_root, instance_name, provider)
+                existing_account_id = metadata_store.get_account_for_identity(identity)
+            except AccountStoreError as exc:
+                if not metadata_unreadable_for_source:
+                    stats.unreadable_metadata += 1
+                    metadata_unreadable_for_source = True
+                    metadata_reset_accounts_by_root.setdefault(target_root, _metadata_reset_existing_account_ids(target_root))
+                if not replace_unreadable_account_metadata:
+                    stats.skipped_sources += 1
+                    stats.events.append(
+                        _event(
+                            instance_name=instance_name,
+                            legacy_user_id=user_dir.name,
+                            account_id="<metadata-unreadable>",
+                            entries=len(entries),
+                            imported=0,
+                            action="skip-unreadable-account-metadata",
+                            metadata_unreadable=True,
+                            metadata_reset_existing_accounts=metadata_reset_accounts_by_root.get(target_root, []),
+                            error=str(exc),
+                        )
                     )
-                )
-                print(
-                    f"instance={instance_name} legacy_user={user_dir.name} account=<metadata-unreadable> "
-                    f"entries={len(entries)} action=skip-unreadable-account-metadata error={exc}"
-                )
-                continue
-            if apply:
-                if target_root not in reset_account_stores:
-                    moved = _reset_unreadable_account_store(target_root)
-                    stats.metadata_backups_created += moved
-                    stats.account_store_resets += 1
-                    reset_account_stores.add(target_root)
-                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
-                existing_account_id = target_store.get_account_for_identity(identity)
-            else:
-                existing_account_id = None
+                    print(
+                        f"instance={instance_name} legacy_user={user_dir.name} account=<metadata-unreadable> "
+                        f"entries={len(entries)} action=skip-unreadable-account-metadata error={exc}"
+                    )
+                    continue
+                if apply:
+                    if target_root not in reset_account_stores:
+                        metadata_reset_accounts_by_root[target_root] = _metadata_reset_existing_account_ids(target_root)
+                        moved = _reset_unreadable_account_store(target_root)
+                        stats.metadata_backups_created += moved
+                        stats.account_store_resets += 1
+                        reset_account_stores.add(target_root)
+                    target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                    existing_account_id = target_store.get_account_for_identity(identity)
+                else:
+                    existing_account_id = None
+        elif target_root not in metadata_reset_accounts_by_root:
+            metadata_reset_accounts_by_root[target_root] = _metadata_reset_existing_account_ids(target_root)
         if existing_account_id:
             account_id = existing_account_id
             stats.accounts_existing += 1
@@ -347,15 +381,21 @@ def import_legacy_user_memory(
         target_entries: list[dict[str, Any]] = []
         target_unreadable = False
         if existing_account_id:
-            if target_store is None:
-                raise AccountStoreError(f"account store unavailable for existing account {instance_name}/{existing_account_id}")
             try:
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
                 target_entries = target_store.read_memory_entries(existing_account_id)
             except AccountStoreError:
                 target_unreadable = True
-            backend = target_store.account_memory_backend
-            if str(getattr(backend, "last_entry_read_error", "") or ""):
-                target_unreadable = True
+                if replace_unreadable:
+                    try:
+                        target_store = _memory_replacement_account_store(target_root, instance_name, provider)
+                        target_entries = target_store.read_memory_entries(existing_account_id)
+                    except AccountStoreError:
+                        target_store = None
+            if target_store is not None:
+                backend = target_store.account_memory_backend
+                if str(getattr(backend, "last_entry_read_error", "") or ""):
+                    target_unreadable = True
         if target_unreadable:
             stats.unreadable_targets += 1
             if not replace_unreadable:
@@ -376,7 +416,6 @@ def import_legacy_user_memory(
                     f"entries={len(entries)} action=skip-unreadable-target"
                 )
                 continue
-            target_entries = []
 
         merged_entries = _merge_entries(target_entries, entries, instance_name=instance_name, legacy_user_id=user_dir.name)
         imported_count = max(0, len(merged_entries) - len(target_entries))
@@ -393,6 +432,7 @@ def import_legacy_user_memory(
                 action=action,
                 target_unreadable=target_unreadable,
                 metadata_unreadable=metadata_unreadable_for_source,
+                metadata_reset_existing_accounts=metadata_reset_accounts_by_root.get(target_root, []),
                 account_created=not bool(existing_account_id),
             )
         )
@@ -405,25 +445,51 @@ def import_legacy_user_memory(
             stats.entries_imported += imported_count
             continue
         if target_store is None:
-            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+            if target_unreadable and replace_unreadable:
+                target_store = _memory_replacement_account_store(target_root, instance_name, provider)
+            else:
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
         if backup_current:
             stats.backups_created += _backup_sqlite_files(target_root)
         if target_unreadable and replace_unreadable:
+            memory_keyring_repair_roots[target_root] = instance_name
             _clear_unreadable_account_memory(target_store, account_id)
+            stats.backups_created += _backup_unreadable_account_memory_state_files(target_store, account_id)
         target_store.write_memory_entries(account_id, merged_entries)
         target_store.rebuild_structured_memory_index(account_id)
         health = target_store.check_structured_memory_index(account_id)
         if not health.ok:
             raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
-        _verify_imported_account_identity(
-            target_store,
-            identity,
-            account_id,
-            instance_name=instance_name,
-            legacy_user_id=user_dir.name,
-        )
+        if target_root in memory_keyring_repair_roots:
+            deferred_strict_verifications.append((target_root, instance_name, identity, account_id, user_dir.name))
+        else:
+            _verify_imported_account_identity(
+                target_store,
+                identity,
+                account_id,
+                instance_name=instance_name,
+                legacy_user_id=user_dir.name,
+            )
         stats.imported_sources += 1
         stats.entries_imported += imported_count
+    if apply:
+        strict_stores: dict[Path, AccountStore] = {}
+        for target_root, instance_name in memory_keyring_repair_roots.items():
+            if _drop_account_keyring_purpose(target_root, ACCOUNT_MEMORY_KEY_PURPOSE):
+                stats.memory_keyring_repairs += 1
+            strict_stores[target_root] = AccountStore(target_root, instance_name, secret_provider=provider)
+        for target_root, instance_name, identity, account_id, legacy_user_id in deferred_strict_verifications:
+            strict_store = strict_stores[target_root]
+            _verify_imported_account_identity(
+                strict_store,
+                identity,
+                account_id,
+                instance_name=instance_name,
+                legacy_user_id=legacy_user_id,
+            )
+            health = strict_store.check_structured_memory_index(account_id)
+            if not health.ok:
+                raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
     return stats
 
 
@@ -437,10 +503,11 @@ def _event(
     action: str,
     target_unreadable: bool = False,
     metadata_unreadable: bool = False,
+    metadata_reset_existing_accounts: Iterable[str] = (),
     account_created: bool = False,
     error: str = "",
 ) -> dict[str, Any]:
-    return {
+    event = {
         "instance": instance_name,
         "legacy_user_id": legacy_user_id,
         "identity": telegram_identity_key(legacy_user_id),
@@ -453,6 +520,10 @@ def _event(
         "account_created": bool(account_created),
         "error": error,
     }
+    reset_accounts = _valid_account_id_list(metadata_reset_existing_accounts)
+    if reset_accounts:
+        event["metadata_reset_existing_accounts"] = reset_accounts
+    return event
 
 
 def _verify_imported_account_identity(
@@ -542,6 +613,7 @@ def _build_import_report(
             "unreadable_metadata": stats.unreadable_metadata,
             "backups_created": stats.backups_created,
             "metadata_backups_created": stats.metadata_backups_created,
+            "memory_keyring_repairs": stats.memory_keyring_repairs,
             "account_store_resets": stats.account_store_resets,
         },
         "events": list(stats.events),
@@ -609,6 +681,8 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
         if event.get("account_created"):
             flags.append("account_created")
         flags_text = f" flags=`{','.join(flags)}`" if flags else ""
+        reset_accounts_text = _format_metadata_reset_account_ids(event.get("metadata_reset_existing_accounts"))
+        reset_text = f" metadata_reset_accounts=`{reset_accounts_text}`" if reset_accounts_text else ""
         lines.append(
             "- "
             f"instance=`{event.get('instance', '')}` "
@@ -618,6 +692,7 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
             f"imported=`{event.get('imported', 0)}` "
             f"action=`{event.get('action', '')}`"
             f"{flags_text}"
+            f"{reset_text}"
         )
     return "\n".join(lines) + "\n"
 
@@ -696,6 +771,60 @@ def _instances_with_legacy_user_dirs(user_dirs: Iterable[Path]) -> tuple[str, ..
     return tuple(names)
 
 
+def _metadata_account_store(accounts_root: Path, instance_name: str, provider: Any) -> AccountStore:
+    return _account_store_with_secret_guard(
+        accounts_root,
+        instance_name,
+        provider,
+        memory_backend_enabled=False,
+        guard_purposes=ACCOUNT_METADATA_SECRET_GUARD_PURPOSES,
+    )
+
+
+def _memory_replacement_account_store(accounts_root: Path, instance_name: str, provider: Any) -> AccountStore:
+    return _account_store_with_secret_guard(
+        accounts_root,
+        instance_name,
+        provider,
+        memory_backend_enabled=True,
+        guard_purposes=ACCOUNT_METADATA_SECRET_GUARD_PURPOSES,
+    )
+
+
+def _account_store_with_secret_guard(
+    accounts_root: Path,
+    instance_name: str,
+    provider: Any,
+    *,
+    memory_backend_enabled: bool,
+    guard_purposes: tuple[str, ...],
+) -> AccountStore:
+    guarded_provider = _provider_with_secret_guard(accounts_root, instance_name, provider, guard_purposes)
+    return AccountStore(
+        accounts_root,
+        instance_name,
+        secret_provider=guarded_provider,
+        memory_backend_enabled=memory_backend_enabled,
+        secret_guard_purposes=guard_purposes,
+    )
+
+
+def _provider_with_secret_guard(accounts_root: Path, instance_name: str, provider: Any, guard_purposes: tuple[str, ...]) -> Any:
+    delegate = getattr(provider, "delegate", None)
+    provider_type = type(provider)
+    if delegate is None or not hasattr(provider, "manifest_path"):
+        return provider
+    try:
+        return provider_type(
+            instance_name=instance_name,
+            root=accounts_root,
+            delegate=delegate,
+            guard_purposes=guard_purposes,
+        )
+    except TypeError:
+        return provider
+
+
 def _account_store_metadata_unreadable(store: AccountStore) -> bool:
     try:
         store._load_identities()
@@ -707,6 +836,30 @@ def _account_store_metadata_unreadable(store: AccountStore) -> bool:
     except AccountStoreError:
         return True
     return False
+
+
+def _metadata_reset_existing_account_ids(accounts_root: Path) -> list[str]:
+    accounts_dir = accounts_root / "accounts"
+    if not accounts_dir.exists() or not accounts_dir.is_dir():
+        return []
+    return _valid_account_id_list(path.name for path in accounts_dir.iterdir() if path.is_dir())
+
+
+def _valid_account_id_list(values: Iterable[Any]) -> list[str]:
+    account_ids = sorted({str(value).strip().lower() for value in values if TOKEN_HEX_RE.fullmatch(str(value).strip().lower())})
+    return account_ids
+
+
+def _format_metadata_reset_account_ids(value: Any) -> str:
+    if not isinstance(value, list):
+        return ""
+    account_ids = _valid_account_id_list(value)
+    if not account_ids:
+        return ""
+    visible = ",".join(account_id[:12] for account_id in account_ids[:3])
+    if len(account_ids) > 3:
+        visible = f"{visible},+{len(account_ids) - 3}"
+    return visible
 
 
 def _resolve_legacy_instances_dir(path: Path, selected_instances: set[str]) -> Path:
@@ -922,10 +1075,30 @@ def _clear_unreadable_account_memory(store: AccountStore, account_id: str) -> No
         (store.account_dir(account_id) / filename).unlink(missing_ok=True)
 
 
+def _backup_unreadable_account_memory_state_files(store: AccountStore, account_id: str) -> int:
+    account_dir = store.account_dir(account_id)
+    if not account_dir.exists():
+        return 0
+    backup_dir = _unique_backup_dir(account_dir, ".pre-legacy-user-memory-state-replace")
+    moved = 0
+    for filename in ACCOUNT_MEMORY_STATE_FILENAMES:
+        path = account_dir / filename
+        if not path.exists():
+            continue
+        try:
+            store.account_memory_vault._guard_existing_payload_decryptable(path)
+        except AccountStoreError:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            path.rename(backup_dir / filename)
+            moved += 1
+    return moved
+
+
 def _reset_unreadable_account_store(accounts_root: Path) -> int:
     backup_dir = _unique_backup_dir(accounts_root, ".pre-legacy-user-memory-account-store-reset")
     moved = 0
     for filename in (
+        ACCOUNT_KEYRING_FILENAME,
         "Account_Index.json",
         "Account_Identities.json",
         "Account_Secrets.json",
@@ -948,6 +1121,27 @@ def _reset_unreadable_account_store(accounts_root: Path) -> int:
         accounts_dir.rename(backup_dir / accounts_dir.name)
         moved += 1
     return moved
+
+
+def _drop_account_keyring_purpose(accounts_root: Path, purpose: str) -> bool:
+    path = accounts_root / ACCOUNT_KEYRING_FILENAME
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return False
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AccountStoreError(f"account key manifest is invalid: {path}") from exc
+    if not isinstance(data, dict):
+        raise AccountStoreError(f"account key manifest must contain an object: {path}")
+    purposes = data.get("purposes")
+    if not isinstance(purposes, dict) or purpose not in purposes:
+        return False
+    purposes.pop(purpose, None)
+    data["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+    return True
 
 
 def _unique_backup_dir(parent: Path, prefix: str) -> Path:

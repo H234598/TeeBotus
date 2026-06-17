@@ -5,16 +5,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
+from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider, build_embedding_provider
 from TeeBotus.instructions import BotInstructions, load_instructions
-from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, validate_sha512_token
+from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, runtime_secret_provider, validate_sha512_token
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.qdrant import (
+    DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
+    QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
     QdrantCollectionResult,
     QdrantCollectionSpec,
     default_qdrant_collection_specs,
     ensure_default_collections,
 )
+from TeeBotus.runtime.qdrant_bibliothekar import QdrantBibliothekarIndex
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 
 
@@ -41,6 +45,21 @@ class QdrantCollectionEnsureResult:
     qdrant_url: str = ""
     vector_size: int = 0
     embedding_model: str = ""
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class QdrantBibliothekarRebuildResult:
+    instance_name: str
+    status: str
+    chunk_count: int = 0
+    point_count: int = 0
+    point_ids: tuple[str, ...] = ()
+    qdrant_url: str = ""
+    collection_name: str = QDRANT_BIBLIOTHEKAR_COLLECTION
+    embedding_provider: str = ""
+    embedding_model: str = ""
+    embedding_dimensions: int = 0
     error: str = ""
 
 
@@ -89,9 +108,10 @@ def rebuild_qdrant_memory_indexes(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
         )
-        store_kwargs: dict[str, Any] = {"create_dirs": False}
-        if secret_provider is not None:
-            store_kwargs["secret_provider"] = secret_provider
+        store_kwargs: dict[str, Any] = {
+            "create_dirs": False,
+            "secret_provider": secret_provider or runtime_secret_provider(),
+        }
         store = AccountStore(root / instance_name / "data" / "accounts", instance_name, **store_kwargs)
         try:
             target_accounts = requested_accounts or store.list_account_ids()
@@ -168,6 +188,84 @@ def rebuild_qdrant_memory_indexes(
                         error=f"{type(exc).__name__}: {exc}",
                     )
                 )
+    return tuple(results)
+
+
+def rebuild_qdrant_bibliothekar_indexes(
+    *,
+    instances_dir: str | Path = "instances",
+    instance_names: Iterable[str] = (),
+    qdrant_url: str | None = None,
+    embedding_config: EmbeddingConfig | None = None,
+    embedding_overrides: Mapping[str, Any] | None = None,
+    dry_run: bool = False,
+    qdrant_index_factory: Callable[..., QdrantBibliothekarIndex] = QdrantBibliothekarIndex,
+) -> tuple[QdrantBibliothekarRebuildResult, ...]:
+    root = Path(instances_dir)
+    selected_instances = _resolve_instruction_instance_names(root, instance_names)
+    results: list[QdrantBibliothekarRebuildResult] = []
+    for instance_name in selected_instances:
+        instructions = _load_instance_memory_instructions(root, instance_name)
+        effective_qdrant_url = qdrant_url or instructions.bibliothekar_qdrant_url
+        effective_embedding_config = _resolve_bibliothekar_embedding_config(
+            embedding_config=embedding_config,
+            overrides=embedding_overrides,
+        )
+        try:
+            embedding_provider = build_embedding_provider(effective_embedding_config)
+            store = BibliothekarStore(instance_name, root)
+            chunks = store.read_chunks()
+            if dry_run:
+                results.append(
+                    _bibliothekar_rebuild_result(
+                        instance_name,
+                        "dry_run",
+                        chunk_count=len(chunks),
+                        point_count=len(chunks),
+                        qdrant_url=effective_qdrant_url,
+                        embedding_config=effective_embedding_config,
+                    )
+                )
+                continue
+            if not chunks:
+                results.append(
+                    _bibliothekar_rebuild_result(
+                        instance_name,
+                        "skipped",
+                        qdrant_url=effective_qdrant_url,
+                        embedding_config=effective_embedding_config,
+                        error="no chunks",
+                    )
+                )
+                continue
+            index = qdrant_index_factory(
+                url=effective_qdrant_url,
+                collection=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                embedding_provider=embedding_provider,
+            )
+            point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
+            results.append(
+                _bibliothekar_rebuild_result(
+                    instance_name,
+                    "rebuilt",
+                    chunk_count=len(chunks),
+                    point_count=len(point_ids),
+                    point_ids=tuple(point_ids),
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                    embedding_config=effective_embedding_config,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - operator command should report every instance.
+            results.append(
+                _bibliothekar_rebuild_result(
+                    instance_name,
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    embedding_config=effective_embedding_config,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            )
     return tuple(results)
 
 
@@ -264,6 +362,33 @@ def _rebuild_result(
     )
 
 
+def _bibliothekar_rebuild_result(
+    instance_name: str,
+    status: str,
+    *,
+    qdrant_url: str,
+    embedding_config: EmbeddingConfig,
+    collection_name: str = QDRANT_BIBLIOTHEKAR_COLLECTION,
+    chunk_count: int = 0,
+    point_count: int = 0,
+    point_ids: tuple[str, ...] = (),
+    error: str = "",
+) -> QdrantBibliothekarRebuildResult:
+    return QdrantBibliothekarRebuildResult(
+        instance_name=instance_name,
+        status=status,
+        chunk_count=chunk_count,
+        point_count=point_count,
+        point_ids=point_ids,
+        qdrant_url=str(qdrant_url or ""),
+        collection_name=str(collection_name or QDRANT_BIBLIOTHEKAR_COLLECTION),
+        embedding_provider=str(embedding_config.provider or ""),
+        embedding_model=str(embedding_config.model_name or ""),
+        embedding_dimensions=int(embedding_config.dimensions),
+        error=error,
+    )
+
+
 def _load_instance_memory_instructions(instances_dir: Path, instance_name: str) -> BotInstructions:
     return load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
 
@@ -348,6 +473,26 @@ def _resolve_memory_embedding_config(
     )
 
 
+def _resolve_bibliothekar_embedding_config(
+    *,
+    embedding_config: EmbeddingConfig | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> EmbeddingConfig:
+    base = embedding_config or EmbeddingConfig(
+        provider="fake",
+        model_name="teebotus-fake-bibliothekar-embedding-v1",
+        dimensions=DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
+    )
+    override = dict(overrides or {})
+    return EmbeddingConfig(
+        provider=str(override.get("provider") or base.provider).strip(),
+        model_name=str(override.get("model_name") or base.model_name).strip(),
+        dimensions=_positive_int(override.get("dimensions"), default=base.dimensions),
+        endpoint=str(override.get("endpoint") if override.get("endpoint") is not None else base.endpoint).strip(),
+        api_key_env=str(override.get("api_key_env") if override.get("api_key_env") is not None else base.api_key_env).strip(),
+    )
+
+
 def _memory_embedding_config_from_instructions(instructions: BotInstructions) -> EmbeddingConfig:
     return EmbeddingConfig(
         provider=instructions.memory_search_embedding_provider,
@@ -376,9 +521,27 @@ def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tu
     for path in sorted(instances_dir.iterdir()):
         if not path.is_dir():
             continue
-        if (path / "data" / "accounts").exists():
+        if _looks_like_account_store_instance(path):
             names.append(path.name)
     return tuple(names)
+
+
+def _looks_like_account_store_instance(instance_dir: Path) -> bool:
+    accounts_dir = instance_dir / "data" / "accounts"
+    if not accounts_dir.is_dir():
+        return False
+    if (instance_dir / "Bot_Verhalten.md").is_file():
+        return True
+    account_store_markers = (
+        "Account_Index.json",
+        "Account_Identities.json",
+        "Account_Keyring.json",
+        "Account_Memory.json",
+        "Account_Memory.sqlite",
+        "Account_Memory.sqlite3",
+        "Account_Memory.backup.sqlite3",
+    )
+    return any((accounts_dir / marker).exists() for marker in account_store_markers)
 
 
 def _resolve_instruction_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:
@@ -414,9 +577,11 @@ def _collection_ensure_result(
 
 
 __all__ = [
+    "QdrantBibliothekarRebuildResult",
     "QdrantCollectionEnsureResult",
     "QdrantMemoryRebuildResult",
     "ensure_qdrant_collections_for_instances",
+    "rebuild_qdrant_bibliothekar_indexes",
     "rebuild_qdrant_memory_index",
     "rebuild_qdrant_memory_indexes",
 ]

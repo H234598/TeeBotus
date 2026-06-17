@@ -368,6 +368,24 @@ python3 -m TeeBotus.admin accounts report --instances-dir instances
 ```
 
 Der Report liest den AccountStore read-only und erzeugt keine neuen Secrets.
+`--runtime-status` meldet zusaetzlich pro Instanz `account_crypto=<Instanz>`
+mit `mapping`, `memory`, `pepper` und `keyring`. Diese Zeile zeigt fuer
+Secrets nur `present`, `missing_required`, `not_required` oder `error`;
+`keyring` meldet `ok`, `partial`, `not_recorded`, `not_required` oder
+`broken`. Secret-Werte und Key-Fingerprints werden nicht ausgegeben und ein
+Statuslauf erzeugt keine neuen Secrets.
+`Account_Keyring.json` enthaelt nur nicht-geheime Key-Fingerprints fuer diese
+Instanz-Purposes. Wenn der Desktop Secret Service ploetzlich einen fehlenden
+oder anderen Key liefert, stoppt der Store dadurch hart, statt einen neuen
+Memory-/Mapping-Key zu erzeugen und alte Memories unlesbar zu machen.
+`account_identity_warning=...` nennt bei Fragmentierungsgefahr auch
+`configured_runtime_slots`, `runtime_labels` und `identity_channels`. So ist
+sichtbar, ob zum Beispiel `signal:1` konfiguriert ist, aber im AccountStore
+nur Telegram-Identities existieren. `action=...` nennt den sicheren naechsten
+Schritt: erst in einem bereits verknuepften privaten Chat `/register` oder
+`/rotate_secret` nutzen, danach im privaten Zielkanal mit
+`/login <account_id> <secret>` verbinden; `/register` im Zielkanal nur, wenn
+bewusst ein separater Account entstehen soll.
 
 Wenn `/status` oder `--runtime-status` nicht entschluesselbare
 Account-Memory-Payloads oder `account_memory_metadata=... status=broken`
@@ -383,7 +401,7 @@ python3 -m TeeBotus.admin memory-recovery --instances-dir instances --format jso
 
 Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JSON-Dateien pro Account. Er gibt nur Zaehler, Dateipfade und Fehlerklassen aus, keine Secrets und keine rohen Memory-Payloads. Wenn kein Source als `recoverable=True` markiert ist, darf der Bot keine automatische Datenmigration oder Loeschung versuchen; dann fehlt der passende alte Schluessel oder eine lesbare Sicherung.
 
-Wenn eine alte Plaintext-Sicherung mit `instances/<Instanz>/data/users/<telegram_id>/User_Memory_Entries.jsonl` existiert, kann der Recovery-Report diese Quelle zusaetzlich nur zaehlen:
+Wenn eine alte Plaintext-Sicherung mit `instances/<Instanz>/data/users/<telegram_id>/User_Memory_Entries.jsonl` existiert, zaehlt der Recovery-Report diese Quelle zusaetzlich. Wenn die aktuelle Account-Metadaten lesbar sind und `telegram:user:<telegram_id>` bereits auf einen Account zeigt, erscheint sie ausserdem als `legacy_plaintext_user_memory` in den Quellen dieses Accounts und macht den Account im Report `recoverable`.
 
 ```bash
 python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2
@@ -403,7 +421,7 @@ python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi
 
 Der Preflight-Bericht enthaelt `apply_safety`. Vor einem echten Import muss `apply_allowed_now=true`, `apply_requires_stopped_bot=false` und `running_bot_process_count=0` gelten. Wenn dort laufende Prozesse aufgefuehrt sind, zuerst Bot und Proactive-Jobs stoppen und den Preflight erneut schreiben.
 
-Ein echter Import braucht `--apply`. Wenn aktuelle Account-Metadaten nicht entschluesselbar sind, sichert `--replace-unreadable-account-metadata --apply` den aktiven Account-Store komplett weg: `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json`, `accounts/`, `Account_Memory.sqlite3`, Fallback-SQLite sowie WAL/SHM. Danach werden neue Account-Mappings aus `telegram:user:<id>` erzeugt und die Legacy-Eintraege verschluesselt in den aktuellen AccountStore geschrieben. Vor diesem Schritt muss der Bot gestoppt sein; das Script verweigert `--apply` standardmaessig, wenn `python -m TeeBotus` oder `teebotus-proactive` noch laufen. Danach `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren.
+Ein echter Import braucht `--apply`. Wenn aktuelle Account-Metadaten nicht entschluesselbar sind, sichert `--replace-unreadable-account-metadata --apply` den aktiven Account-Store komplett weg: `Account_Keyring.json`, `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json`, `accounts/`, `Account_Memory.sqlite3`, Fallback-SQLite sowie WAL/SHM. Danach werden neue Account-Mappings aus `telegram:user:<id>` erzeugt und die Legacy-Eintraege verschluesselt in den aktuellen AccountStore geschrieben. Vor diesem Schritt muss der Bot gestoppt sein; das Script verweigert `--apply` standardmaessig, wenn `python -m TeeBotus` oder `teebotus-proactive` noch laufen. Danach `python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix` ausfuehren.
 
 ## Verhalten steuern
 
@@ -869,6 +887,8 @@ teebotus-embedding --instances-dir instances --instance Depressionsbot collectio
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --dry-run
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model intfloat/multilingual-e5-small --embedding-dimensions 384 --embedding-endpoint http://127.0.0.1:8080/embeddings
+teebotus-embedding --instances-dir instances --instance Depressionsbot bibliothekar-rebuild --dry-run
+teebotus-embedding --instances-dir instances --instance Depressionsbot bibliothekar-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model BAAI/bge-m3 --embedding-dimensions 1024 --embedding-endpoint http://127.0.0.1:8080/embeddings
 ```
 
 Alte v2-Qdrant-Cachepunkte konnten noch rohe `account_id` im Payload tragen.
@@ -882,7 +902,10 @@ diese noch kein `schema`-Feld hatten.
 entsprechende opt-in Sockel fuer Bibliothekar-Chunks. Er indexiert Testchunks
 mit Fake-Embeddings in Standardtests, haelt `BAAI/bge-m3` als vorbereiteten
 Provider fest und speichert Chunk-Text nur als Hash plus Quellenmetadaten im
-Qdrant-Payload.
+Qdrant-Payload. `bibliothekar-rebuild` baut den lokalen Bibliothekar-Store neu
+auf und schreibt dessen Chunks in den rebuildbaren Qdrant-Cache; ohne
+Embedding-Override nutzt der Operatorpfad einen lokalen Fake-Embeddingvertrag,
+damit Dry-Runs und Standardlaeufe keine Providerkosten verursachen.
 `LlamaIndexBibliothekarBackend` ist ein optionaler Pilot hinter
 `BibliothekarService`: Wenn `llama-index-core` installiert ist, baut er aus den
 lokalen Bibliothekar-Chunks einen lokalen In-Memory-Retriever mit LlamaIndex-

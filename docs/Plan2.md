@@ -1519,6 +1519,10 @@ ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b,qwen2.5:7b
 
 bibliothekar=Depressionsbot backend=haystack store=qdrant collection=teebotus_books status=reachable documents=12421 chunks=98334
 
+account_crypto=Depressionsbot status=ok mapping=present memory=present pepper=present keyring=ok
+account_memory=Depressionsbot/<account_id> status=ok
+account_identity=Depressionsbot status=ok identity_warnings=0 runtime_slots=signal:1,telegram:1 identities=signal:1,telegram:1
+
 signal_service=Depressionsbot/signal:1 target=127.0.0.1:8080 status=reachable
 matrix_homeserver=Depressionsbot/matrix:1 target=matrix.example:443 status=reachable
 ```

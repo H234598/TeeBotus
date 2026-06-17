@@ -33,6 +33,7 @@ core_decisions:
   storage_layout:
     root: "instances/<instance>/data/accounts"
     global_files:
+      - "Account_Keyring.json"
       - "Account_Index.json"
       - "Account_Identities.json"
       - "Account_Secrets.json"

@@ -13,7 +13,7 @@ from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_mess
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -56,7 +56,7 @@ class MatrixRuntimeBridge:
         instance_dir = Path(instances_dir) / run_config.instance_name
         data_dir = instance_dir / "data"
         self.instruction_store = InstructionStore(instance_dir / "Bot_Verhalten.md")
-        resolved_secret_provider = secret_provider or SecretToolInstanceSecretProvider()
+        resolved_secret_provider = secret_provider or runtime_secret_provider()
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")

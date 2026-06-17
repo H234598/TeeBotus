@@ -3,11 +3,11 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
-import logging
 import os
 import shutil
 import shlex
 import sqlite3
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,20 +18,23 @@ from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNT_PROFILE_FILENAME,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    INSTANCE_PEPPER_PURPOSE,
     AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
     TOKEN_HEX_RE,
     USER_MEMORY_ENTRIES_FILENAME,
     USER_MEMORY_INDEX_FILENAME,
+    telegram_identity_key,
 )
 from TeeBotus.runtime.artifacts import safe_artifact_name
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
-LOGGER = logging.getLogger("TeeBotus")
 RECOVERY_SCHEMA_VERSION = 2
 SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes")
 LEGACY_USER_MEMORY_DIRNAME = "users"
+ACCOUNT_METADATA_SECRET_GUARD_PURPOSES = (INSTANCE_MAPPING_KEY_PURPOSE, INSTANCE_PEPPER_PURPOSE)
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,7 @@ class RecoverySource:
     name: str
     kind: str
     path: Path
+    active: bool = True
 
 
 def utc_now() -> str:
@@ -103,9 +107,31 @@ def build_instance_recovery_report(
     accounts_root = instances_dir / instance_name / "data" / "accounts"
     account_ids = _discover_account_ids(accounts_root)
     sources = _discover_recovery_sources(accounts_root)
+    legacy_import = (
+        _legacy_plaintext_import_report(
+            legacy_instances_dir=legacy_instances_dir,
+            target_instances_dir=instances_dir,
+            instance_name=instance_name,
+        )
+        if legacy_instances_dir is not None
+        else None
+    )
+    legacy_sources_by_account = _legacy_plaintext_sources_by_account(
+        accounts_root=accounts_root,
+        instance_name=instance_name,
+        legacy_import=legacy_import,
+        provider=provider,
+    )
+    legacy_instance_source_names = {
+        str(source.get("name") or "")
+        for sources_for_account in legacy_sources_by_account.values()
+        for source in sources_for_account
+        if str(source.get("name") or "")
+    }
     account_reports = []
     for account_id in account_ids:
         source_reports = [_inspect_source(source, instance_name=instance_name, account_id=account_id, provider=provider) for source in sources]
+        source_reports.extend(legacy_sources_by_account.get(account_id, []))
         recovery_status, recommendation = _account_recovery_status(source_reports)
         account_reports.append(
             {
@@ -121,15 +147,23 @@ def build_instance_recovery_report(
         "accounts_root": str(accounts_root),
         "metadata_health": _metadata_health_report(accounts_root, instance_name, provider),
         "accounts": account_reports,
-        "source_count": len(sources),
-        "sources": [{"name": source.name, "kind": source.kind, "path": str(source.path)} for source in sources],
+        "source_count": len(sources) + len(legacy_instance_source_names),
+        "sources": [
+            {"name": source.name, "kind": source.kind, "path": str(source.path), "active": source.active}
+            for source in sources
+        ]
+        + [
+            {
+                "name": source_name,
+                "kind": "legacy_plaintext",
+                "path": _legacy_source_path_by_name(legacy_sources_by_account, source_name),
+                "active": False,
+            }
+            for source_name in sorted(legacy_instance_source_names)
+        ],
     }
-    if legacy_instances_dir is not None:
-        result["legacy_plaintext_import"] = _legacy_plaintext_import_report(
-            legacy_instances_dir=legacy_instances_dir,
-            target_instances_dir=instances_dir,
-            instance_name=instance_name,
-        )
+    if legacy_import is not None:
+        result["legacy_plaintext_import"] = legacy_import
     return result
 
 
@@ -198,9 +232,20 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 if not isinstance(source, Mapping):
                     continue
                 status = "readable" if source.get("readable") else "unreadable"
-                detail = f"entries={source.get('entries', 0)} index_present={source.get('index_present', False)}"
+                role = "active" if source.get("active", True) is not False else "inactive"
+                flags: list[str] = []
+                if source.get("partial") is True:
+                    flags.append("partial")
+                elif source.get("fully_readable") is True:
+                    flags.append("fully_readable")
+                flag_text = f" ({', '.join(flags)})" if flags else ""
+                detail = (
+                    f"entries={source.get('entries', 0)} raw_entries={source.get('raw_entries', 0)} "
+                    f"index_present={source.get('index_present', False)} "
+                    f"raw_index_present={source.get('raw_index_present', False)}"
+                )
                 error = f" error={source.get('error')}" if source.get("error") else ""
-                lines.append(f"  - {source.get('name', '')}: {status} {detail}{error}")
+                lines.append(f"  - {source.get('name', '')}: {role} {status}{flag_text} {detail}{error}")
     quarantine = report.get("quarantine")
     if isinstance(quarantine, Mapping):
         lines.extend(["", "## Quarantine", ""])
@@ -411,7 +456,14 @@ def _quarantine_instance_unreadable_metadata(
 
 
 def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> list[dict[str, Any]]:
-    store = AccountStore(accounts_root, instance_name, secret_provider=provider, create_dirs=False)
+    store = AccountStore(
+        accounts_root,
+        instance_name,
+        secret_provider=provider,
+        create_dirs=False,
+        memory_backend_enabled=False,
+        secret_guard_purposes=ACCOUNT_METADATA_SECRET_GUARD_PURPOSES,
+    )
     items: list[dict[str, Any]] = []
     for kind, path, default in (
         ("account_index", store.account_index_path, {"schema_version": 1, "accounts": {}}),
@@ -613,7 +665,9 @@ def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, A
         for source in account.get("sources", []) if isinstance(account.get("sources"), list) else []:
             if not isinstance(source, Mapping) or source.get("kind") != "sqlite":
                 continue
-            if int(source.get("raw_entries", 0) or 0) <= 0 and not bool(source.get("raw_index_present")):
+            if source.get("active", True) is False:
+                continue
+            if _source_count(source, "raw_entries") <= 0 and not bool(source.get("raw_index_present")):
                 continue
             raw_path = str(source.get("path") or "").strip()
             if not raw_path:
@@ -718,9 +772,18 @@ def _running_teebotus_processes() -> list[dict[str, str]]:
         lowered = cmdline.casefold()
         if "teebotus.admin" in lowered or "memory-recovery" in lowered or "--runtime-status" in lowered:
             continue
-        if "teebotus-proactive" in lowered or "-m teebotus " in f"{lowered} ":
+        if _looks_like_running_teebotus_runtime(lowered):
             processes.append({"pid": pid_dir.name, "cmdline": cmdline[:500]})
     return processes
+
+
+def _looks_like_running_teebotus_runtime(cmdline_lower: str) -> bool:
+    padded = f"{cmdline_lower} "
+    return (
+        "teebotus-proactive" in cmdline_lower
+        or "-m teebotus " in padded
+        or "-m teebotus.proactive " in padded
+    )
 
 
 def _discover_account_ids(accounts_root: Path) -> list[str]:
@@ -728,8 +791,9 @@ def _discover_account_ids(accounts_root: Path) -> list[str]:
     accounts_dir = accounts_root / ACCOUNTS_DIRNAME
     if accounts_dir.exists():
         account_ids.update(path.name for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
-    for db_path in (accounts_root / "Account_Memory.sqlite3", accounts_root / "Account_Memory.backup.sqlite3"):
-        account_ids.update(_sqlite_account_ids(db_path))
+    for source in _discover_recovery_sources(accounts_root):
+        if source.active and source.kind == "sqlite":
+            account_ids.update(_sqlite_account_ids(source.path))
     return sorted(account_ids)
 
 
@@ -744,7 +808,39 @@ def _discover_recovery_sources(accounts_root: Path) -> list[RecoverySource]:
     accounts_dir = accounts_root / ACCOUNTS_DIRNAME
     if accounts_dir.exists():
         sources.append(RecoverySource("json_files", "json", accounts_dir))
+    sources.extend(_discover_snapshot_sqlite_sources(accounts_root, existing_paths={source.path.resolve() for source in sources}))
     return sources
+
+
+def _discover_snapshot_sqlite_sources(accounts_root: Path, *, existing_paths: set[Path]) -> list[RecoverySource]:
+    candidates = [
+        *accounts_root.glob(".pre-*/Account_Memory*.sqlite3"),
+        *accounts_root.glob("Account_Memory_Quarantine/*/sqlite_snapshots/Account_Memory*.sqlite3"),
+    ]
+    sources: list[RecoverySource] = []
+    seen_names: set[str] = set()
+    for path in sorted(candidates):
+        resolved = path.resolve()
+        if resolved in existing_paths or not path.is_file():
+            continue
+        name = _snapshot_source_name(accounts_root, path, seen_names=seen_names)
+        sources.append(RecoverySource(name, "sqlite", path, active=False))
+    return sources
+
+
+def _snapshot_source_name(accounts_root: Path, path: Path, *, seen_names: set[str]) -> str:
+    try:
+        relative = path.relative_to(accounts_root)
+    except ValueError:
+        relative = path.name
+    base = f"sqlite_snapshot_{safe_artifact_name(relative, default='snapshot')}"
+    name = base
+    suffix = 2
+    while name in seen_names:
+        name = f"{base}_{suffix}"
+        suffix += 1
+    seen_names.add(name)
+    return name
 
 
 def _inspect_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
@@ -755,32 +851,102 @@ def _inspect_source(source: RecoverySource, *, instance_name: str, account_id: s
 
 def _inspect_sqlite_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
     raw_entries, raw_index_present = _sqlite_raw_counts(source.path, instance_name, account_id)
-    backend = SQLiteAccountMemoryBackend(
+    return _inspect_sqlite_snapshot_source(
+        source,
         instance_name=instance_name,
+        account_id=account_id,
         provider=provider,
-        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-        config=SQLiteMemoryConfig(path=source.path, fallback_path=None),
+        raw_entries=raw_entries,
+        raw_index_present=raw_index_present,
     )
-    with _suppress_expected_backend_logs():
-        entries = backend.read_entries(account_id)
-        index = backend.read_index(account_id)
-    errors = []
-    if backend.last_entry_read_error:
-        errors.append(f"entries: {backend.last_entry_read_error}")
-    if backend.last_index_read_error:
-        errors.append(f"index: {backend.last_index_read_error}")
+
+
+def _inspect_sqlite_snapshot_source(
+    source: RecoverySource,
+    *,
+    instance_name: str,
+    account_id: str,
+    provider: InstanceSecretProvider,
+    raw_entries: int,
+    raw_index_present: bool,
+) -> dict[str, Any]:
+    entries, index, errors = _read_sqlite_snapshot_payloads(
+        source.path,
+        instance_name=instance_name,
+        account_id=account_id,
+        provider=provider,
+    )
     return {
         "name": source.name,
         "kind": source.kind,
         "payload_kind": "encrypted_account_memory",
         "path": str(source.path),
-        "readable": not errors,
+        "active": source.active,
+        "readable": bool(not errors or entries or index),
+        "fully_readable": not errors,
+        "partial": bool(errors and (entries or index)),
         "entries": len(entries),
         "raw_entries": raw_entries,
         "index_present": bool(index),
         "raw_index_present": raw_index_present,
         "error": "; ".join(errors),
     }
+
+
+def _read_sqlite_snapshot_payloads(
+    path: Path,
+    *,
+    instance_name: str,
+    account_id: str,
+    provider: InstanceSecretProvider,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    backend = SQLiteAccountMemoryBackend(
+        instance_name=instance_name,
+        provider=provider,
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=path, fallback_path=None),
+    )
+    entries: list[dict[str, Any]] = []
+    index: dict[str, Any] = {}
+    errors: list[str] = []
+    try:
+        with _connect_sqlite_readonly(path) as connection:
+            if _sqlite_table_exists(connection, "memory_entries"):
+                rows = connection.execute(
+                    """
+                    SELECT memory_id, payload_nonce, payload_ciphertext
+                    FROM memory_entries
+                    WHERE instance_name = ? AND account_id = ?
+                    ORDER BY ordinal ASC, created_at ASC, memory_id ASC
+                    """,
+                    (instance_name, account_id),
+                ).fetchall()
+                skipped_error = ""
+                for row in rows:
+                    memory_id = str(row[0])
+                    try:
+                        entries.append(backend._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+                    except AccountStoreError as exc:
+                        skipped_error = skipped_error or str(exc)
+                if skipped_error:
+                    errors.append(f"entries: {skipped_error}")
+            if _sqlite_table_exists(connection, "memory_indexes"):
+                row = connection.execute(
+                    """
+                    SELECT payload_nonce, payload_ciphertext
+                    FROM memory_indexes
+                    WHERE instance_name = ? AND account_id = ?
+                    """,
+                    (instance_name, account_id),
+                ).fetchone()
+                if row is not None:
+                    try:
+                        index = backend._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
+                    except AccountStoreError as exc:
+                        errors.append(f"index: {exc}")
+    except sqlite3.Error as exc:
+        errors.append(f"sqlite: {exc}")
+    return entries, index, errors
 
 
 def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
@@ -805,6 +971,7 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
         "kind": source.kind,
         "payload_kind": "encrypted_account_memory",
         "path": str(source.path),
+        "active": source.active,
         "readable": not errors,
         "entries": len(entries),
         "raw_entries": _count_lines(entries_path),
@@ -829,7 +996,7 @@ def _sqlite_account_ids(path: Path) -> set[str]:
     if not path.exists():
         return set()
     try:
-        with sqlite3.connect(path) as connection:
+        with _connect_sqlite_readonly(path) as connection:
             ids = set()
             for table in SQLITE_MEMORY_TABLES:
                 if not _sqlite_table_exists(connection, table):
@@ -842,7 +1009,7 @@ def _sqlite_account_ids(path: Path) -> set[str]:
 
 def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple[int, bool]:
     try:
-        with sqlite3.connect(path) as connection:
+        with _connect_sqlite_readonly(path) as connection:
             entries = 0
             index_present = False
             if _sqlite_table_exists(connection, "memory_entries"):
@@ -863,6 +1030,24 @@ def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple
             return entries, index_present
     except sqlite3.Error:
         return 0, False
+
+
+@contextlib.contextmanager
+def _connect_sqlite_readonly(path: Path):
+    if not path.exists():
+        raise sqlite3.OperationalError(f"database does not exist: {path}")
+    with tempfile.TemporaryDirectory(prefix="teebotus-sqlite-readonly-") as temp_dir:
+        copied_path = Path(temp_dir) / path.name
+        shutil.copy2(path, copied_path)
+        for suffix in ("-wal", "-shm"):
+            sidecar = Path(str(path) + suffix)
+            if sidecar.exists():
+                shutil.copy2(sidecar, Path(str(copied_path) + suffix))
+        connection = sqlite3.connect(f"{copied_path.resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            yield connection
+        finally:
+            connection.close()
 
 
 def _sqlite_table_exists(connection: sqlite3.Connection, table: str) -> bool:
@@ -914,6 +1099,7 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
             str(target_instances_dir),
             "--instance",
             instance_name,
+            "--replace-unreadable",
             "--replace-unreadable-account-metadata",
             "--json-output",
             str(Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{artifact_name}.json"),
@@ -982,6 +1168,71 @@ def _legacy_plaintext_import_status(
     return "empty"
 
 
+def _legacy_plaintext_sources_by_account(
+    *,
+    accounts_root: Path,
+    instance_name: str,
+    legacy_import: Mapping[str, Any] | None,
+    provider: InstanceSecretProvider,
+) -> dict[str, list[dict[str, Any]]]:
+    if not isinstance(legacy_import, Mapping) or legacy_import.get("status") != "available":
+        return {}
+    users = legacy_import.get("users")
+    if not isinstance(users, list) or not users:
+        return {}
+    try:
+        store = AccountStore(
+            accounts_root,
+            instance_name,
+            secret_provider=provider,
+            create_dirs=False,
+            memory_backend_enabled=False,
+        )
+    except AccountStoreError:
+        return {}
+    sources_by_account: dict[str, list[dict[str, Any]]] = {}
+    for user in users:
+        if not isinstance(user, Mapping):
+            continue
+        user_id = str(user.get("user_id") or "").strip()
+        if not user_id:
+            continue
+        try:
+            identity = telegram_identity_key(user_id)
+            account_id = store.get_account_for_identity(identity)
+        except AccountStoreError:
+            continue
+        if not account_id:
+            continue
+        entries = _source_count(user, "entries")
+        source = {
+            "name": f"legacy_plaintext_import_{user_id}",
+            "kind": "legacy_plaintext",
+            "payload_kind": "legacy_plaintext_user_memory",
+            "path": str(user.get("path") or ""),
+            "active": False,
+            "readable": True,
+            "entries": entries,
+            "raw_entries": entries,
+            "index_present": False,
+            "raw_index_present": False,
+            "error": "",
+            "identity": identity,
+            "legacy_user_id": user_id,
+            "import_action": "import_legacy_user_memory",
+        }
+        sources_by_account.setdefault(account_id, []).append(source)
+    return sources_by_account
+
+
+def _legacy_source_path_by_name(sources_by_account: Mapping[str, Sequence[Mapping[str, Any]]], source_name: str) -> str:
+    for sources in sources_by_account.values():
+        for source in sources:
+            if str(source.get("name") or "") == source_name:
+                return str(source.get("path") or "")
+    return ""
+
+
 def _resolve_legacy_instances_dir(path: Path, instance_name: str) -> Path:
     if (path / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME).exists():
         return path
@@ -1045,7 +1296,7 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
     readable_payload_sources = [
         source
         for source in source_reports
-        if source.get("readable") and (int(source.get("entries", 0) or 0) > 0 or bool(source.get("index_present")))
+        if source.get("readable") and (_source_count(source, "entries") > 0 or bool(source.get("index_present")))
     ]
     if readable_payload_sources:
         names = ", ".join(str(source.get("name") or "<unknown>") for source in readable_payload_sources)
@@ -1053,27 +1304,46 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
     raw_payload_sources = [
         source
         for source in source_reports
-        if int(source.get("raw_entries", 0) or 0) > 0 or bool(source.get("raw_index_present"))
+        if source.get("active", True) is not False and (_source_count(source, "raw_entries") > 0 or bool(source.get("raw_index_present")))
+    ]
+    inactive_raw_payload_sources = [
+        source
+        for source in source_reports
+        if source.get("active", True) is False and (_source_count(source, "raw_entries") > 0 or bool(source.get("raw_index_present")))
     ]
     if raw_payload_sources:
         return (
             "unrecoverable",
             "Raw encrypted payloads exist, but no source is readable with the current instance secret; keep backups and restore the matching old secret if available.",
         )
-    readable_empty_sources = [source for source in source_reports if source.get("readable")]
+    readable_empty_sources = [source for source in source_reports if source.get("active", True) is not False and source.get("readable")]
     if readable_empty_sources:
+        if inactive_raw_payload_sources:
+            names = ", ".join(str(source.get("name") or "<unknown>") for source in inactive_raw_payload_sources)
+            return (
+                "empty",
+                f"Active sources are readable but empty; inactive snapshots contain encrypted payloads that are not readable with the current instance key. Snapshot sources: {names}.",
+            )
         return "empty", "Sources are readable but contain no memory payloads for this account."
+    if source_reports:
+        if inactive_raw_payload_sources:
+            names = ", ".join(str(source.get("name") or "<unknown>") for source in inactive_raw_payload_sources)
+            return (
+                "no_sources",
+                f"Only inactive snapshots exist for this account, and encrypted payloads are not readable with the current instance key. Snapshot sources: {names}.",
+            )
+        return "no_sources", "Only inactive snapshots exist for this account and none is readable with the current instance secret."
     return "unrecoverable", "No source is readable with the current instance secret; keep backups before changing account-memory files."
 
 
-@contextlib.contextmanager
-def _suppress_expected_backend_logs():
-    previous_disabled = LOGGER.disabled
-    LOGGER.disabled = True
+def _source_count(source: Mapping[str, Any], key: str) -> int:
+    value = source.get(key, 0)
+    if isinstance(value, bool):
+        return 0
     try:
-        yield
-    finally:
-        LOGGER.disabled = previous_disabled
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> None:
@@ -1113,8 +1383,8 @@ def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> N
                 totals["unreadable_sources"] += 1
     legacy = instance_report.get("legacy_plaintext_import")
     if isinstance(legacy, Mapping):
-        totals["legacy_plaintext_sources"] += int(legacy.get("sources", 0) or 0)
-        totals["legacy_plaintext_entries"] += int(legacy.get("entries", 0) or 0)
+        totals["legacy_plaintext_sources"] += _source_count(legacy, "sources")
+        totals["legacy_plaintext_entries"] += _source_count(legacy, "entries")
 
 
 __all__ = [
@@ -1123,3 +1393,7 @@ __all__ = [
     "main",
     "render_text_report",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

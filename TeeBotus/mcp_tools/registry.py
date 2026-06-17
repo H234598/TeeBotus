@@ -37,7 +37,7 @@ SECRET_TOKEN_PATTERNS = (
 URL_CREDENTIAL_PATTERN = re.compile(r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@", re.IGNORECASE)
 PRIVATE_DATA_PATH_PATTERN = re.compile(
     r"(?:^|[/\\])(?:"
-    r"account_(?:identities|index|memory|profile|secrets|tombstone)\.json|"
+    r"account_(?:identities|index|keyring|memory|profile|secrets|tombstone)\.json|"
     r"secret_verifier\.json|"
     r"llm_state\.json|"
     r"openai_state\.json|"

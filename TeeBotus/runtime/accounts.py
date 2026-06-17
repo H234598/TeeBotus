@@ -32,6 +32,7 @@ TEEBOTUS_ENCRYPTION_MAGICS = {"TMBMAP1", "TMBMEM1", "TMBKEY1"}
 ACCOUNT_INDEX_FILENAME = "Account_Index.json"
 ACCOUNT_IDENTITIES_FILENAME = "Account_Identities.json"
 ACCOUNT_SECRETS_FILENAME = "Account_Secrets.json"
+ACCOUNT_KEYRING_FILENAME = "Account_Keyring.json"
 ACCOUNTS_DIRNAME = "accounts"
 ACCOUNT_PROFILE_FILENAME = "Account_Profile.json"
 SECRET_VERIFIER_FILENAME = "Secret_Verifier.json"
@@ -367,9 +368,13 @@ class StaticSecretProvider:
 
 
 class SecretToolInstanceSecretProvider:
-    """Secret-Service provider backed by libsecret's `secret-tool` CLI."""
+    """Secret-Service provider backed by libsecret's `secret-tool` CLI.
 
-    def __init__(self, command: str = SECRET_TOOL_COMMAND, *, create_if_missing: bool = True) -> None:
+    Missing secrets are operational errors by default. Secret bootstrap must be
+    requested explicitly so runtime code cannot silently rotate encryption keys.
+    """
+
+    def __init__(self, command: str = SECRET_TOOL_COMMAND, *, create_if_missing: bool = False) -> None:
         self.command = command
         self.create_if_missing = create_if_missing
         self._cache: dict[tuple[str, str], bytes] = {}
@@ -450,21 +455,41 @@ class SecretToolInstanceSecretProvider:
     def _lookup(self, instance_name: str, purpose: str) -> bytes | None:
         result = self._run(["lookup", *self._attrs(instance_name, purpose)])
         if result.returncode != 0:
-            return None
+            if result.returncode == 1 and not result.stdout.strip() and not result.stderr.strip():
+                return None
+            detail = result.stderr.strip() or f"exit status {result.returncode}"
+            raise AccountStoreError(
+                "secret-tool lookup failed; refusing to treat this as a missing secret "
+                f"(instance={instance_name}, purpose={purpose}, error={detail})"
+            )
         value = result.stdout.strip()
         if not value:
-            return None
+            raise AccountStoreError(
+                "secret-tool lookup returned an empty secret; refusing to treat this as a missing secret "
+                f"(instance={instance_name}, purpose={purpose})"
+            )
         try:
             secret = base64.urlsafe_b64decode(value.encode("ascii"))
         except Exception as exc:  # noqa: BLE001
             raise AccountStoreError("secret-tool returned invalid instance secret data") from exc
         if len(secret) != INSTANCE_KEY_SIZE_BYTES:
             raise AccountStoreError("instance secret has invalid length")
+        matches = self._matching_secret_item_paths(instance_name, purpose)
+        if len(matches) > 1:
+            raise AccountStoreError(
+                "secret-tool found multiple matching instance secret items; refusing ambiguous Secret Service key "
+                f"(instance={instance_name}, purpose={purpose}, matches={len(matches)})"
+            )
         return secret
 
     def _store(self, instance_name: str, purpose: str, secret: bytes) -> None:
         if len(secret) != INSTANCE_KEY_SIZE_BYTES:
             raise AccountStoreError("instance secret has invalid length")
+        if self._matching_secret_item_exists(instance_name, purpose):
+            raise AccountStoreError(
+                "secret-tool store refused to overwrite an existing instance secret item "
+                f"(instance={instance_name}, purpose={purpose})"
+            )
         label = f"TeeBotus {purpose}: instance={instance_name}"
         result = self._run(
             ["store", "--label", label, *self._attrs(instance_name, purpose)],
@@ -472,6 +497,199 @@ class SecretToolInstanceSecretProvider:
         )
         if result.returncode != 0:
             raise AccountStoreError("secret-tool could not store the instance secret")
+
+    def _matching_secret_item_exists(self, instance_name: str, purpose: str) -> bool:
+        return bool(self._matching_secret_item_paths(instance_name, purpose))
+
+    def _matching_secret_item_paths(self, instance_name: str, purpose: str) -> tuple[str, ...]:
+        result = self._run(["search", "--all", *self._attrs(instance_name, purpose)])
+        if result.returncode != 0:
+            detail = result.stderr.strip() or f"exit status {result.returncode}"
+            raise AccountStoreError(
+                "secret-tool search failed while checking for an existing instance secret "
+                f"(instance={instance_name}, purpose={purpose}, error={detail})"
+            )
+        output = result.stdout.strip()
+        if not output:
+            return ()
+        paths = tuple(
+            line.strip()
+            for line in output.splitlines()
+            if line.strip().startswith("[") and line.strip().endswith("]")
+        )
+        return paths or ("<unknown-secret-tool-item>",)
+
+
+def runtime_secret_provider() -> SecretToolInstanceSecretProvider:
+    """Strict Secret Service provider for bot runtimes.
+
+    Runtime code must never silently bootstrap new account-store keys. Missing
+    keys are operational errors that require recovery or an explicit setup step.
+    """
+
+    return SecretToolInstanceSecretProvider(create_if_missing=False)
+
+
+class _KeyringManifestSecretProvider:
+    """Guard Secret Service keys with a local, non-secret verifier manifest."""
+
+    def __init__(
+        self,
+        *,
+        instance_name: str,
+        root: Path,
+        delegate: InstanceSecretProvider,
+        guard_purposes: Iterable[str] | None = None,
+    ) -> None:
+        self.instance_name = _normalize_secret_token(instance_name, "instance")
+        self.root = Path(root)
+        self.delegate = delegate
+        self.guard_purposes = (
+            frozenset(_normalize_secret_token(purpose, "purpose") for purpose in guard_purposes)
+            if guard_purposes is not None
+            else None
+        )
+
+    @property
+    def manifest_path(self) -> Path:
+        return self.root / ACCOUNT_KEYRING_FILENAME
+
+    def get_secret(self, instance_name: str, purpose: str) -> bytes:
+        instance = _normalize_secret_token(instance_name, "instance")
+        resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        if instance != self.instance_name or not self._purpose_guarded(resolved_purpose):
+            return self.delegate.get_secret(instance, resolved_purpose)
+        if self._manifest_has_purpose(resolved_purpose):
+            tool_provider = _as_secret_tool_provider(self.delegate)
+            if tool_provider is not None:
+                tool_provider.require_existing_secret(
+                    instance,
+                    resolved_purpose,
+                    reason="account key manifest",
+                    path=self.manifest_path,
+                )
+        secret = self.delegate.get_secret(instance, resolved_purpose)
+        if instance == self.instance_name:
+            self._verify_or_record(resolved_purpose, secret)
+        return secret
+
+    def has_secret(self, instance_name: str, purpose: str) -> bool:
+        has_secret = getattr(self.delegate, "has_secret", None)
+        if callable(has_secret):
+            return bool(has_secret(instance_name, purpose))
+        return bool(self.get_secret(instance_name, purpose))
+
+    def require_existing_secret(self, instance_name: str, purpose: str, *, reason: str, path: Path | None = None) -> None:
+        require_existing = getattr(self.delegate, "require_existing_secret", None)
+        if callable(require_existing):
+            require_existing(instance_name, purpose, reason=reason, path=path)
+            return
+        if self.has_secret(instance_name, purpose):
+            return
+        location = f" ({path})" if path is not None else ""
+        raise AccountStoreError(
+            "refusing to create missing instance secret for existing encrypted "
+            f"{reason}{location}; restore the Secret Service entry or quarantine/recover the encrypted data first "
+            f"(instance={instance_name}, purpose={purpose})"
+        )
+
+    def validate_existing_manifest(self, purposes: Iterable[str] | None = None) -> None:
+        manifest = self._load_manifest()
+        manifest_purposes = tuple(self._manifest_purposes(manifest))
+        if purposes is not None:
+            selected = {
+                _normalize_secret_token(purpose, "purpose")
+                for purpose in purposes
+            }
+            manifest_purposes = tuple(purpose for purpose in manifest_purposes if purpose in selected)
+        for purpose in manifest_purposes:
+            self.get_secret(self.instance_name, purpose)
+
+    def _purpose_guarded(self, purpose: str) -> bool:
+        if self.guard_purposes is None:
+            return True
+        return purpose in self.guard_purposes
+
+    def _manifest_has_purpose(self, purpose: str) -> bool:
+        return purpose in self._manifest_purposes(self._load_manifest())
+
+    def _verify_or_record(self, purpose: str, secret: bytes) -> None:
+        if len(secret) != INSTANCE_KEY_SIZE_BYTES:
+            raise AccountStoreError("instance secret has invalid length")
+        manifest = self._load_manifest()
+        purposes = manifest.setdefault("purposes", {})
+        if not isinstance(purposes, dict):
+            raise AccountStoreError(f"account key manifest is invalid: {self.manifest_path}")
+        fingerprint = _instance_secret_fingerprint(self.instance_name, purpose, secret)
+        current = purposes.get(purpose)
+        if isinstance(current, dict) and str(current.get("fingerprint") or "").strip():
+            if not hmac.compare_digest(str(current["fingerprint"]), fingerprint):
+                raise AccountStoreError(
+                    "instance secret verifier mismatch; refusing to use a changed Secret Service key "
+                    f"(instance={self.instance_name}, purpose={purpose}, manifest={self.manifest_path})"
+                )
+            return
+        purposes[purpose] = {
+            "algorithm": "HMAC-SHA256",
+            "created_at": utc_now(),
+            "fingerprint": fingerprint,
+            "purpose": purpose,
+        }
+        manifest["updated_at"] = utc_now()
+        _atomic_write_json(self.manifest_path, manifest)
+
+    def _load_manifest(self) -> dict[str, Any]:
+        try:
+            data = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return {
+                "schema_version": 1,
+                "instance": self.instance_name,
+                "purposes": {},
+            }
+        except (OSError, json.JSONDecodeError) as exc:
+            raise AccountStoreError(f"account key manifest is invalid: {self.manifest_path}") from exc
+        if not isinstance(data, dict):
+            raise AccountStoreError(f"account key manifest must contain an object: {self.manifest_path}")
+        if data.get("schema_version") != 1:
+            raise AccountStoreError(f"account key manifest schema is unsupported: {self.manifest_path}")
+        manifest_instance = str(data.get("instance") or "").strip()
+        if manifest_instance and manifest_instance != self.instance_name:
+            raise AccountStoreError(
+                f"account key manifest belongs to a different instance: {self.manifest_path}"
+            )
+        data["instance"] = self.instance_name
+        if "purposes" not in data:
+            data["purposes"] = {}
+        if not isinstance(data["purposes"], dict):
+            raise AccountStoreError(f"account key manifest purposes are invalid: {self.manifest_path}")
+        return data
+
+    def _manifest_purposes(self, manifest: dict[str, Any]) -> set[str]:
+        purposes = manifest.get("purposes")
+        if not isinstance(purposes, dict):
+            raise AccountStoreError(f"account key manifest purposes are invalid: {self.manifest_path}")
+        return {str(purpose or "").strip() for purpose in purposes if str(purpose or "").strip()}
+
+
+def _as_secret_tool_provider(provider: object) -> SecretToolInstanceSecretProvider | None:
+    if isinstance(provider, SecretToolInstanceSecretProvider):
+        return provider
+    delegate = getattr(provider, "delegate", None)
+    if isinstance(delegate, SecretToolInstanceSecretProvider):
+        return delegate
+    return None
+
+
+def _as_keyring_manifest_provider(provider: object) -> _KeyringManifestSecretProvider | None:
+    if isinstance(provider, _KeyringManifestSecretProvider):
+        return provider
+    return None
+
+
+def _instance_secret_fingerprint(instance_name: str, purpose: str, secret: bytes) -> str:
+    aad = f"TeeBotus:key-verifier:{instance_name}:{purpose}:v1".encode("utf-8")
+    return hmac.new(secret, aad, hashlib.sha256).hexdigest()
 
 
 def _normalize_secret_token(value: str, field_name: str) -> str:
@@ -617,13 +835,32 @@ class AccountStore:
     instance_name: str
     secret_provider: InstanceSecretProvider = field(default_factory=SecretToolInstanceSecretProvider)
     create_dirs: bool = True
+    memory_backend_enabled: bool = True
+    secret_guard_purposes: tuple[str, ...] | None = None
     _account_memory_backend: Any | None = field(default=None, init=False, repr=False)
+    _secret_guard_purpose_set: frozenset[str] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.root = Path(self.root)
+        if self.secret_guard_purposes is not None:
+            normalized_purposes = tuple(
+                _normalize_secret_token(purpose, "purpose")
+                for purpose in self.secret_guard_purposes
+            )
+            self.secret_guard_purposes = normalized_purposes
+            self._secret_guard_purpose_set = frozenset(normalized_purposes)
         if self.create_dirs:
             self.accounts_dir.mkdir(parents=True, exist_ok=True)
+        if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
+            self.secret_provider = _KeyringManifestSecretProvider(
+                instance_name=self.instance_name,
+                root=self.root,
+                delegate=self.secret_provider,
+                guard_purposes=self._secret_guard_purpose_set,
+            )
         self._guard_secret_autocreate_against_existing_payloads()
+        self._record_required_secret_manifest_purposes()
+        self._guard_secret_manifest_against_changed_keys()
 
     @property
     def vault(self) -> EncryptedJsonVault:
@@ -638,6 +875,8 @@ class AccountStore:
 
     @property
     def account_memory_backend(self) -> Any | None:
+        if not self.memory_backend_enabled:
+            return None
         if self._account_memory_backend is None:
             from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
             from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
@@ -674,24 +913,248 @@ class AccountStore:
         return self._account_memory_backend
 
     def _guard_secret_autocreate_against_existing_payloads(self) -> None:
-        if not isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
+        tool_provider = _as_secret_tool_provider(self.secret_provider)
+        if tool_provider is None:
             return
-        self._guard_secret_for_existing_payloads(
-            INSTANCE_MAPPING_KEY_PURPOSE,
-            self._mapping_secret_payload_paths(),
-            reason="account metadata",
-        )
-        self._guard_secret_for_existing_payloads(
-            ACCOUNT_MEMORY_KEY_PURPOSE,
-            self._memory_secret_payload_paths(),
-            reason="account memory/state",
-        )
+        if self._secret_guard_purpose_enabled(INSTANCE_MAPPING_KEY_PURPOSE):
+            self._guard_secret_for_existing_payloads(
+                INSTANCE_MAPPING_KEY_PURPOSE,
+                self._mapping_secret_payload_paths(),
+                reason="account metadata",
+            )
+        if self._secret_guard_purpose_enabled(ACCOUNT_MEMORY_KEY_PURPOSE):
+            self._guard_secret_for_existing_payloads(
+                ACCOUNT_MEMORY_KEY_PURPOSE,
+                self._memory_secret_payload_paths(),
+                reason="account memory/state",
+            )
+            self._guard_secret_for_existing_sqlite_memory()
+            self._guard_secret_for_existing_postgres_memory()
 
     def _guard_secret_for_existing_payloads(self, purpose: str, paths: Iterable[Path], *, reason: str) -> None:
+        tool_provider = _as_secret_tool_provider(self.secret_provider)
+        if tool_provider is None:
+            return
         for path in paths:
             if _looks_like_teebotus_encrypted_payload(path):
-                self.secret_provider.require_existing_secret(self.instance_name, purpose, reason=reason, path=path)
+                tool_provider.require_existing_secret(self.instance_name, purpose, reason=reason, path=path)
                 return
+
+    def _guard_secret_for_existing_sqlite_memory(self) -> None:
+        tool_provider = _as_secret_tool_provider(self.secret_provider)
+        if tool_provider is None:
+            return
+        for path in self._sqlite_memory_payload_paths():
+            if _sqlite_memory_has_instance_payload_rows(path, self.instance_name):
+                tool_provider.require_existing_secret(
+                    self.instance_name,
+                    ACCOUNT_MEMORY_KEY_PURPOSE,
+                    reason="sqlite account memory",
+                    path=path,
+                )
+                return
+
+    def _guard_secret_for_existing_postgres_memory(self) -> None:
+        try:
+            from TeeBotus.runtime.postgres_memory import PostgresMemoryConfig
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            postgres_config = PostgresMemoryConfig.from_env()
+        except AccountStoreError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise AccountStoreError(f"could not inspect PostgreSQL account memory config: {exc}") from exc
+        if postgres_config is None:
+            return
+        if self.secret_provider.has_secret(self.instance_name, ACCOUNT_MEMORY_KEY_PURPOSE):
+            return
+        if _postgres_memory_has_instance_payload_rows(postgres_config.dsn, self.instance_name, postgres_config.connect_timeout):
+            tool_provider = _as_secret_tool_provider(self.secret_provider)
+            if tool_provider is None:
+                return
+            tool_provider.require_existing_secret(
+                self.instance_name,
+                ACCOUNT_MEMORY_KEY_PURPOSE,
+                reason="postgres account memory",
+            )
+
+    def _guard_secret_manifest_against_changed_keys(self) -> None:
+        manifest_provider = _as_keyring_manifest_provider(self.secret_provider)
+        if manifest_provider is not None:
+            manifest_provider.validate_existing_manifest(purposes=self._secret_guard_purpose_set)
+
+    def _record_required_secret_manifest_purposes(self) -> None:
+        manifest_provider = _as_keyring_manifest_provider(self.secret_provider)
+        tool_provider = _as_secret_tool_provider(self.secret_provider)
+        if manifest_provider is None or tool_provider is None:
+            return
+        for purpose, required, reason in (
+            (INSTANCE_MAPPING_KEY_PURPOSE, self._mapping_secret_is_required(), "account metadata"),
+            (ACCOUNT_MEMORY_KEY_PURPOSE, self._memory_secret_is_required(), "account memory/state"),
+            (INSTANCE_PEPPER_PURPOSE, self._secret_verifier_guard_path() is not None, "account secret verifiers"),
+        ):
+            if not self._secret_guard_purpose_enabled(purpose):
+                continue
+            if not required:
+                continue
+            tool_provider.require_existing_secret(self.instance_name, purpose, reason=reason)
+            if manifest_provider._manifest_has_purpose(purpose):
+                continue
+            candidate_secret = tool_provider.get_secret(self.instance_name, purpose)
+            self._guard_candidate_secret_decrypts_existing_payloads(purpose, candidate_secret)
+            manifest_provider.get_secret(self.instance_name, purpose)
+
+    def _secret_guard_purpose_enabled(self, purpose: str) -> bool:
+        if self._secret_guard_purpose_set is None:
+            return True
+        return purpose in self._secret_guard_purpose_set
+
+    def _mapping_secret_is_required(self) -> bool:
+        return any(_looks_like_teebotus_encrypted_payload(path) for path in self._mapping_secret_payload_paths())
+
+    def _memory_secret_is_required(self) -> bool:
+        if any(_looks_like_teebotus_encrypted_payload(path) for path in self._memory_secret_payload_paths()):
+            return True
+        for path in self._sqlite_memory_payload_paths():
+            if _sqlite_memory_has_instance_payload_rows(path, self.instance_name):
+                return True
+        try:
+            from TeeBotus.runtime.postgres_memory import PostgresMemoryConfig
+        except Exception:  # noqa: BLE001
+            return False
+        postgres_config = PostgresMemoryConfig.from_env()
+        if postgres_config is None:
+            return False
+        return _postgres_memory_has_instance_payload_rows(postgres_config.dsn, self.instance_name, postgres_config.connect_timeout)
+
+    def _guard_candidate_secret_decrypts_existing_payloads(self, purpose: str, secret: bytes) -> None:
+        if len(secret) != INSTANCE_KEY_SIZE_BYTES:
+            raise AccountStoreError("instance secret has invalid length")
+        if purpose == INSTANCE_MAPPING_KEY_PURPOSE:
+            self._guard_candidate_vault_payloads_decryptable(
+                purpose,
+                secret,
+                self._mapping_secret_payload_paths(),
+                reason="account metadata",
+            )
+            return
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            self._guard_candidate_vault_payloads_decryptable(
+                purpose,
+                secret,
+                self._memory_secret_payload_paths(),
+                reason="account memory/state",
+            )
+            self._guard_candidate_sqlite_memory_decryptable(secret)
+            self._guard_candidate_postgres_memory_decryptable(secret)
+            return
+
+    def _guard_candidate_vault_payloads_decryptable(
+        self,
+        purpose: str,
+        secret: bytes,
+        paths: Iterable[Path],
+        *,
+        reason: str,
+    ) -> None:
+        vault = EncryptedJsonVault(self.instance_name, StaticSecretProvider(secret), purpose=purpose)
+        for path in paths:
+            if not _looks_like_teebotus_encrypted_payload(path):
+                continue
+            try:
+                vault.decrypt(path.read_bytes(), kind=path.name)
+            except Exception as exc:  # noqa: BLE001
+                raise AccountStoreError(
+                    "refusing to record instance secret fingerprint because existing encrypted "
+                    f"{reason} is not decryptable with the current Secret Service key ({path})"
+                ) from exc
+
+    def _guard_candidate_sqlite_memory_decryptable(self, secret: bytes) -> None:
+        try:
+            from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
+        except Exception:  # noqa: BLE001
+            return
+        for path in self._sqlite_memory_payload_paths():
+            if not _sqlite_memory_has_instance_payload_rows(path, self.instance_name):
+                continue
+            backend = SQLiteAccountMemoryBackend(
+                instance_name=self.instance_name,
+                provider=StaticSecretProvider(secret),
+                purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                config=SQLiteMemoryConfig(path=path, fallback_path=None),
+            )
+            for account_id in _sqlite_memory_account_ids(path, self.instance_name):
+                backend.read_entries(account_id)
+                if backend.last_entry_read_error or backend.last_entry_skipped:
+                    raise AccountStoreError(
+                        "refusing to record instance secret fingerprint because existing SQLite account "
+                        f"memory entries are not decryptable with the current Secret Service key ({path})"
+                    )
+                backend.read_index(account_id)
+                if backend.last_index_read_error:
+                    raise AccountStoreError(
+                        "refusing to record instance secret fingerprint because existing SQLite account "
+                        f"memory index is not decryptable with the current Secret Service key ({path})"
+                    )
+
+    def _guard_candidate_postgres_memory_decryptable(self, secret: bytes) -> None:
+        try:
+            from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
+        except Exception:  # noqa: BLE001
+            return
+        postgres_config = PostgresMemoryConfig.from_env()
+        if postgres_config is None:
+            return
+        if not _postgres_memory_has_instance_payload_rows(
+            postgres_config.dsn,
+            self.instance_name,
+            postgres_config.connect_timeout,
+        ):
+            return
+        backend = PostgresAccountMemoryBackend(
+            instance_name=self.instance_name,
+            provider=StaticSecretProvider(secret),
+            purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+            config=postgres_config,
+        )
+        for account_id in _postgres_memory_account_ids(
+            postgres_config.dsn,
+            self.instance_name,
+            postgres_config.connect_timeout,
+        ):
+            backend.read_entries(account_id)
+            if backend.last_entry_read_error or backend.last_entry_skipped:
+                raise AccountStoreError(
+                    "refusing to record instance secret fingerprint because existing PostgreSQL account "
+                    "memory entries are not decryptable with the current Secret Service key"
+                )
+            backend.read_index(account_id)
+            if backend.last_index_read_error:
+                raise AccountStoreError(
+                    "refusing to record instance secret fingerprint because existing PostgreSQL account "
+                    "memory index is not decryptable with the current Secret Service key"
+                )
+
+    def _secret_verifier_guard_path(self) -> Path | None:
+        if self.secrets_path.exists():
+            try:
+                secrets_doc = self._load_secrets()
+            except AccountStoreError:
+                if _looks_like_teebotus_encrypted_payload(self.secrets_path):
+                    return self.secrets_path
+                raise
+            if any(_account_secret_payload_has_verifier(payload) for payload in secrets_doc.values()):
+                return self.secrets_path
+        if not self.accounts_dir.exists():
+            return None
+        for account_dir in self.accounts_dir.iterdir():
+            if not account_dir.is_dir():
+                continue
+            verifier_path = account_dir / SECRET_VERIFIER_FILENAME
+            if _secret_verifier_file_has_payload(verifier_path):
+                return verifier_path
+        return None
 
     def _mapping_secret_payload_paths(self) -> Iterable[Path]:
         yield self.account_index_path
@@ -723,6 +1186,32 @@ class AccountStore:
                 continue
             for filename in filenames:
                 yield account_dir / filename
+
+    def _sqlite_memory_payload_paths(self) -> Iterable[Path]:
+        try:
+            from TeeBotus.runtime.sqlite_memory import (
+                SQLITE_DEFAULT_FALLBACK_FILENAME,
+                SQLITE_DEFAULT_FILENAME,
+                SQLiteMemoryConfig,
+            )
+        except Exception:  # noqa: BLE001
+            return
+        candidates: list[Path] = []
+        sqlite_config = SQLiteMemoryConfig.from_env(self.root)
+        if sqlite_config is not None:
+            candidates.append(sqlite_config.path)
+            if sqlite_config.fallback_path is not None:
+                candidates.append(sqlite_config.fallback_path)
+        candidates.append(self.root / SQLITE_DEFAULT_FILENAME)
+        candidates.append(self.root / SQLITE_DEFAULT_FALLBACK_FILENAME)
+        seen: set[str] = set()
+        for path in candidates:
+            normalized = Path(path).expanduser()
+            marker = str(normalized)
+            if marker in seen:
+                continue
+            seen.add(marker)
+            yield normalized
 
     @property
     def accounts_dir(self) -> Path:
@@ -2114,6 +2603,16 @@ class AccountStore:
         vault.write_jsonl(path, rows)
 
     def _secret_verifier(self, secret: str) -> str:
+        tool_provider = _as_secret_tool_provider(self.secret_provider)
+        if tool_provider is not None:
+            verifier_path = self._secret_verifier_guard_path()
+            if verifier_path is not None:
+                tool_provider.require_existing_secret(
+                    self.instance_name,
+                    INSTANCE_PEPPER_PURPOSE,
+                    reason="account secret verifiers",
+                    path=verifier_path,
+                )
         pepper = self.secret_provider.get_secret(self.instance_name, INSTANCE_PEPPER_PURPOSE)
         return hmac.new(pepper, secret.encode("utf-8"), hashlib.sha512).hexdigest()
 
@@ -2375,6 +2874,147 @@ def _looks_like_teebotus_encrypted_payload(path: Path) -> bool:
     except OSError as exc:
         raise AccountStoreError(f"could not inspect encrypted file: {path}") from exc
     return _is_any_teebotus_encrypted_payload(raw)
+
+
+def _account_secret_payload_has_verifier(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    if str(payload.get("verifier") or "").strip():
+        return True
+    nested = payload.get("secrets")
+    if isinstance(nested, dict):
+        return any(_account_secret_payload_has_verifier(item) for item in nested.values())
+    return False
+
+
+def _secret_verifier_file_has_payload(path: Path) -> bool:
+    try:
+        raw = path.read_bytes()
+    except FileNotFoundError:
+        return False
+    except OSError as exc:
+        raise AccountStoreError(f"could not inspect account secret verifier file: {path}") from exc
+    if not raw.strip():
+        return False
+    if _is_any_teebotus_encrypted_payload(raw):
+        return True
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return True
+    return _account_secret_payload_has_verifier(payload)
+
+
+def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> bool:
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return False
+    except OSError:
+        return False
+    import sqlite3
+
+    try:
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+            for table in ("memory_entries", "memory_indexes"):
+                if not _sqlite_guard_table_exists(connection, table):
+                    continue
+                row = connection.execute(
+                    f"SELECT 1 FROM {table} WHERE instance_name = ? LIMIT 1",
+                    (instance_name,),
+                ).fetchone()
+                if row is not None:
+                    return True
+    except sqlite3.DatabaseError:
+        return True
+    return False
+
+
+def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...]:
+    try:
+        if not path.is_file() or path.stat().st_size <= 0:
+            return ()
+    except OSError:
+        return ()
+    import sqlite3
+
+    try:
+        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+            account_ids: set[str] = set()
+            for table in ("memory_entries", "memory_indexes"):
+                if not _sqlite_guard_table_exists(connection, table):
+                    continue
+                rows = connection.execute(
+                    f"SELECT DISTINCT account_id FROM {table} WHERE instance_name = ?",
+                    (instance_name,),
+                ).fetchall()
+                account_ids.update(str(row[0] or "").strip() for row in rows if str(row[0] or "").strip())
+            return tuple(sorted(account_ids))
+    except sqlite3.DatabaseError:
+        return ()
+
+
+def _sqlite_guard_table_exists(connection: Any, table: str) -> bool:
+    return (
+        connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        is not None
+    )
+
+
+def _postgres_memory_has_instance_payload_rows(dsn: str, instance_name: str, connect_timeout: int = 5) -> bool:
+    try:
+        import psycopg
+    except ModuleNotFoundError as exc:
+        raise AccountStoreError("psycopg is required to inspect existing PostgreSQL account memory") from exc
+    try:
+        with psycopg.connect(dsn, connect_timeout=connect_timeout) as connection:
+            for table in ("teebotus_memory_entries", "teebotus_memory_indexes"):
+                exists = connection.execute(
+                    "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = %s",
+                    (table,),
+                ).fetchone()
+                if exists is None:
+                    continue
+                row = connection.execute(
+            f"SELECT 1 FROM {table} WHERE instance_name = %s LIMIT 1",
+                    (instance_name,),
+                ).fetchone()
+                if row is not None:
+                    return True
+    except AccountStoreError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise AccountStoreError(f"could not inspect existing PostgreSQL account memory: {exc}") from exc
+    return False
+
+
+def _postgres_memory_account_ids(dsn: str, instance_name: str, connect_timeout: int = 5) -> tuple[str, ...]:
+    try:
+        import psycopg
+    except ModuleNotFoundError as exc:
+        raise AccountStoreError("psycopg is required to inspect existing PostgreSQL account memory") from exc
+    try:
+        with psycopg.connect(dsn, connect_timeout=connect_timeout) as connection:
+            account_ids: set[str] = set()
+            for table in ("teebotus_memory_entries", "teebotus_memory_indexes"):
+                exists = connection.execute(
+                    "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = %s",
+                    (table,),
+                ).fetchone()
+                if exists is None:
+                    continue
+                rows = connection.execute(
+                    f"SELECT DISTINCT account_id FROM {table} WHERE instance_name = %s",
+                    (instance_name,),
+                ).fetchall()
+                account_ids.update(str(row[0] or "").strip() for row in rows if str(row[0] or "").strip())
+            return tuple(sorted(account_ids))
+    except AccountStoreError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise AccountStoreError(f"could not inspect existing PostgreSQL account memory account ids: {exc}") from exc
 
 
 def _safe_account_text_filename(filename: str) -> str:

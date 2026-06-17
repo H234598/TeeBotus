@@ -25,6 +25,9 @@ GEMINI_FREE_TIER_LIMIT_CACHE_SCHEMA = 1
 
 LimitValues = dict[str, int | None]
 PayloadFetcher = Callable[[str, int], str]
+DEFAULT_GEMINI_FREE_TIER_FALLBACK_MODELS: Mapping[str, LimitValues] = {
+    "gemini-2.5-flash": {"rpm": 5, "tpm": 250_000, "rpd": 20},
+}
 
 _REFRESH_THREAD_LOCK = threading.Lock()
 _REFRESH_THREAD: threading.Thread | None = None
@@ -57,7 +60,11 @@ def refresh_gemini_free_tier_limits_if_due(
     interval_seconds = _refresh_interval_seconds(source)
     current_time = (now or _utcnow)()
     cache = _read_cache(resolved_cache_path)
-    if not force and not _refresh_due(cache, now=current_time, interval_seconds=interval_seconds):
+    if (
+        not force
+        and not _refresh_due(cache, now=current_time, interval_seconds=interval_seconds)
+        and not _cache_needs_default_fallback_upgrade(cache, source_url=source_url)
+    ):
         return GeminiFreeTierRefreshResult(
             "skipped",
             resolved_cache_path,
@@ -88,6 +95,28 @@ def refresh_gemini_free_tier_limits_if_due(
             error=_safe_detail(f"{type(exc).__name__}: {exc}"),
         )
     if not parsed:
+        fallback_models = _fallback_models_for_nonpublic_limit_source(payload, source_url=source_url)
+        if fallback_models:
+            detail = "public source does not expose per-model free-tier limits; using conservative defaults"
+            cache_payload = {
+                "schema": GEMINI_FREE_TIER_LIMIT_CACHE_SCHEMA,
+                "fetched_at": _format_datetime(current_time),
+                "last_refresh_attempt_at": _format_datetime(current_time),
+                "last_refresh_status": "fallback_defaults",
+                "last_refresh_error": detail,
+                "source_url": source_url,
+                "models": dict(fallback_models),
+                "limits_source": "conservative_defaults",
+            }
+            _write_cache(resolved_cache_path, cache_payload)
+            return GeminiFreeTierRefreshResult(
+                "fallback_defaults",
+                resolved_cache_path,
+                source_url,
+                models=len(fallback_models),
+                fetched=True,
+                error=detail,
+            )
         merged = dict(cache)
         merged.update(
             {
@@ -273,6 +302,24 @@ def _parse_text_limit_rows(payload: str) -> dict[str, LimitValues]:
     return result
 
 
+def _fallback_models_for_nonpublic_limit_source(payload: str, *, source_url: str) -> Mapping[str, LimitValues]:
+    if not _is_default_gemini_limit_source(source_url):
+        return {}
+    text = _plain_text_from_payload(payload).casefold()
+    if "view your active rate limits in ai studio" not in text:
+        return {}
+    if "specified rate limits are not guaranteed" not in text and "rate limits depend on" not in text:
+        return {}
+    return dict(DEFAULT_GEMINI_FREE_TIER_FALLBACK_MODELS)
+
+
+def _plain_text_from_payload(payload: str) -> str:
+    normalized_html = re.sub(r"</(?:tr|p|li|div|h[1-6])>", "\n", str(payload or ""), flags=re.IGNORECASE)
+    normalized_html = re.sub(r"</t[dh]>", " ", normalized_html, flags=re.IGNORECASE)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", normalized_html))
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def _limit_values_from_mapping(value: Mapping[str, object]) -> LimitValues:
     aliases = {
         "rpm": ("rpm", "requests_per_minute", "requestsPerMinute", "request_per_minute", "requests/minute"),
@@ -385,6 +432,21 @@ def _refresh_due(cache: Mapping[str, object], *, now: datetime, interval_seconds
     return (now - last).total_seconds() >= max(0, interval_seconds)
 
 
+def _cache_needs_default_fallback_upgrade(cache: Mapping[str, object], *, source_url: str) -> bool:
+    if _cache_models(cache):
+        return False
+    if not _is_default_gemini_limit_source(source_url):
+        return False
+    if str(cache.get("limits_source") or "").strip().casefold() == "conservative_defaults":
+        return False
+    status = str(cache.get("last_refresh_status") or "").strip().casefold()
+    return status in {"", "never", "no_limits_found"}
+
+
+def _is_default_gemini_limit_source(source_url: str) -> bool:
+    return str(source_url or "").strip().rstrip("/").casefold() == DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL.rstrip("/").casefold()
+
+
 def _cache_age_seconds(cache: Mapping[str, object], *, now: datetime) -> int | None:
     timestamp = str(cache.get("fetched_at") or "").strip()
     parsed = _parse_datetime(timestamp)
@@ -447,7 +509,7 @@ def _fetch_timeout_seconds(source: Mapping[str, str]) -> int:
 
 
 def _refresh_relevant_for_runtime(source: Mapping[str, str], *, instance_names: tuple[str, ...]) -> bool:
-    if _source_url(source) != DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL:
+    if not _is_default_gemini_limit_source(_source_url(source)):
         return True
     direct_names = (
         "GEMINI_API_KEY",

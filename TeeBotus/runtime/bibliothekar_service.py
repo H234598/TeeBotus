@@ -400,6 +400,7 @@ class LlamaIndexBibliothekarBackend:
         self.fallback_store = BibliothekarStore(instance_name, instances_dir)
         self._query_engine_factory = query_engine_factory
         self._query_engine_cache: Any | None = None
+        self._query_engine_cache_signature: tuple[int, int, int] | None = None
 
     @property
     def available(self) -> bool:
@@ -419,16 +420,30 @@ class LlamaIndexBibliothekarBackend:
         return _selection_from_chunks(index, _apply_chunk_filters(chunks, query.filters), query)
 
     def rebuild(self) -> dict[str, Any]:
-        return self.fallback_store.rebuild()
+        index = self.fallback_store.rebuild()
+        self._query_engine_cache = None
+        self._query_engine_cache_signature = None
+        return index
 
     def _query_engine(self) -> Any:
-        if self._query_engine_cache is not None:
+        self.fallback_store.ensure_current()
+        signature = self._chunk_store_signature()
+        if self._query_engine_cache is not None and self._query_engine_cache_signature == signature:
             return self._query_engine_cache
         if self._query_engine_factory is not None:
             self._query_engine_cache = self._query_engine_factory(self.fallback_store)
+            self._query_engine_cache_signature = self._chunk_store_signature()
             return self._query_engine_cache
         self._query_engine_cache = self._build_default_query_engine()
+        self._query_engine_cache_signature = self._chunk_store_signature()
         return self._query_engine_cache
+
+    def _chunk_store_signature(self) -> tuple[int, int, int]:
+        try:
+            stat = self.fallback_store.chunks_path.stat()
+        except FileNotFoundError:
+            return (-1, -1, -1)
+        return (int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ino))
 
     def _build_default_query_engine(self) -> Any:
         self.fallback_store.ensure_current()
@@ -910,7 +925,7 @@ def _chunk_matches_filter(chunk: Mapping[str, Any], key: str, value: object) -> 
 
 
 def _chunk_has_required_citation_metadata(chunk: Mapping[str, Any]) -> bool:
-    return all(field in chunk for field in REQUIRED_CITATION_CHUNK_KEYS) and all(
+    return bool(str(chunk.get("text") or "").strip()) and all(field in chunk for field in REQUIRED_CITATION_CHUNK_KEYS) and all(
         str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS
     ) and _chunk_has_library_source_path(dict(chunk))
 

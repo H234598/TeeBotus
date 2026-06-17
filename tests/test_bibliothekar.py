@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
 from pathlib import Path
@@ -145,6 +146,148 @@ def test_bibliothekar_rebuilds_local_chunk_store_without_citation_metadata(tmp_p
     assert selected["source_id"].startswith("sha256:")
     assert selected["locator"]
     assert "legacy_uncited_chunk" not in store.chunks_path.read_text(encoding="utf-8")
+
+
+def test_bibliothekar_rebuilds_local_chunk_store_with_empty_text_citation_chunk(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    valid_chunk = json.loads(store.chunks_path.read_text(encoding="utf-8").splitlines()[0])
+    empty_text_marker = "EMPTY_TEXT_CITATION_CHUNK_MARKER"
+    store.chunks_path.write_text(
+        json.dumps(
+            {
+                **valid_chunk,
+                "chunk_id": "empty_text_citation_chunk",
+                "text": "",
+                "topics": ["therapie"],
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    selection = store.select(f"Therapie {empty_text_marker}", max_chunks=1)
+    payload = json.loads(selection.prompt_text)
+    selected = payload["selected_library_chunks"][0]
+
+    assert selected["file"] == "therapie.txt"
+    assert selected["quote"]
+    assert selected["chunk_id"] != "empty_text_citation_chunk"
+    assert "empty_text_citation_chunk" not in store.chunks_path.read_text(encoding="utf-8")
+
+
+def test_bibliothekar_rebuilds_when_harvest_manifest_quality_changes(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    accepted_path = library_dir / "accepted" / "therapie.txt"
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+
+    def write_manifest(status: str, reason: str) -> None:
+        rows = [
+            {
+                "accepted_for_ingest": True,
+                "decision": {
+                    "confidence": 0.8,
+                    "reason": reason,
+                    "requires_human_review": status != "usable",
+                    "status": status,
+                },
+                "route": "accepted",
+                "sha256": sha256,
+                "source": {"metadata": {"license": "private", "title": "Therapiequelle"}},
+                "source_path": "/tmp/original-therapie.txt",
+                "stored_path": str(accepted_path),
+            },
+            {
+                "accepted_for_ingest": False,
+                "event": "promoted",
+                "route": "promoted",
+                "sha256": sha256,
+                "source_path": str(accepted_path),
+                "stored_path": str(source),
+            },
+        ]
+        manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    write_manifest("usable", "initial usable source")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    first_payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    assert first_payload["selected_library_chunks"][0]["source_quality"] == "usable"
+
+    write_manifest("weak", "manual review downgraded source")
+    second_payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+
+    assert second_payload["selected_library_chunks"][0]["source_quality"] == "weak"
+    assert second_payload["selected_library_chunks"][0]["citation_quality"] == "weak"
+    assert second_payload["selected_library_chunks"][0]["source_quality_reason"] == "manual review downgraded source"
+
+
+def test_bibliothekar_harvest_manifest_hash_fallback_uses_latest_accepted_review(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "older usable review",
+                "requires_human_review": False,
+                "status": "usable",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Aeltere Therapiequelle"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(library_dir / "accepted" / "old-therapie.txt"),
+        },
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.7,
+                "reason": "newer weak review",
+                "requires_human_review": True,
+                "status": "weak",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Neuere Therapiequelle"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(library_dir / "accepted" / "new-therapie.txt"),
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": str(library_dir / "accepted" / "path-mismatch.txt"),
+            "stored_path": str(source),
+        },
+    ]
+    manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["title"] == "Neuere Therapiequelle"
+    assert chunk["source_quality"] == "weak"
+    assert chunk["source_quality_reason"] == "newer weak review"
 
 
 def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
@@ -1204,6 +1347,45 @@ def test_llamaindex_backend_uses_fake_query_engine_chunks(tmp_path):
     assert created[0].queries == ["Therapie"]
 
 
+def test_llamaindex_backend_refreshes_cached_query_engine_after_library_change(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeQueryEngine:
+        def __init__(self, store):
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+            self.queries = []
+
+        def search(self, query_text):
+            self.queries.append(query_text)
+            return self.chunks
+
+    created = []
+
+    def factory(store):
+        engine = FakeQueryEngine(store)
+        created.append(engine)
+        return engine
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=factory,
+    )
+
+    first = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    (library_dir / "achtsamkeit.txt").write_text("Achtsamkeit Atmung Gegenwart Koerper.", encoding="utf-8")
+    second = backend.search(BibliothekarQuery(text="Achtsamkeit", max_chunks=1))
+    second_payload = json.loads(second.prompt_text)
+
+    assert first.selected_ids
+    assert len(created) == 2
+    assert created[0].queries == ["Therapie"]
+    assert created[1].queries == ["Achtsamkeit"]
+    assert second_payload["selected_library_chunks"][0]["file"] == "achtsamkeit.txt"
+
+
 def test_llamaindex_backend_accepts_chat_engine_source_nodes(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1251,6 +1433,45 @@ def test_llamaindex_backend_accepts_chat_engine_source_nodes(tmp_path):
     assert selection.selected_ids
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
     assert created[0].queries == ["Therapie"]
+
+
+def test_llamaindex_backend_rejects_source_nodes_without_text_and_uses_local_fallback(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeNode:
+        def __init__(self, chunk):
+            self.text = ""
+            self.metadata = {key: value for key, value in chunk.items() if key != "text"}
+
+    class FakeSourceNode:
+        def __init__(self, chunk):
+            self.node = FakeNode(chunk)
+
+    class FakeResponse:
+        def __init__(self, chunks):
+            self.source_nodes = [FakeSourceNode(chunk) for chunk in chunks]
+
+    class FakeQueryEngine:
+        def __init__(self, store):
+            store.rebuild()
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+
+        def query(self, _query_text):
+            return FakeResponse(self.chunks)
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=FakeQueryEngine,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert selection.selected_ids
+    assert "Therapie" in payload["selected_library_chunks"][0]["quote"]
 
 
 def test_llamaindex_backend_falls_back_to_local_when_optional_dependency_missing(tmp_path, monkeypatch):
@@ -1928,6 +2149,33 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     assert "therapie.txt" in query_output
 
 
+def test_bibliothekar_cli_index_source_can_point_to_existing_library(tmp_path, capsys):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "index",
+                "--source",
+                str(library_dir),
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "Depressionsbot: 1 Dokumente, 1 Chunks, dry_run=False" in output
+
+
 def test_bibliothekar_cli_harvest_gates_source_before_ingest(tmp_path, capsys):
     source = tmp_path / "quelle.txt"
     source.write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
@@ -2107,6 +2355,50 @@ def test_bibliothekar_cli_default_status_ignores_data_only_directories(tmp_path,
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Bench", "status"]) == 0
     explicit_output = capsys.readouterr().out
     assert "Bench: backend=local" in explicit_output
+
+
+def test_bibliothekar_cli_accepts_json_after_status_subcommand(tmp_path, capsys):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status", "--json"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["results"][0]["instance"] == "Depressionsbot"
+    assert payload["results"][0]["backend"] == "local"
+
+
+def test_bibliothekar_cli_accepts_json_after_query_subcommand(tmp_path, capsys):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert (
+        bibliothekar_cli_main(
+            [
+                "--instances-dir",
+                str(instances_dir),
+                "--instance",
+                "Depressionsbot",
+                "query",
+                "Schlafhygiene",
+                "--source",
+                "tests/fixtures/books",
+                "--top-k",
+                "1",
+                "--json",
+            ]
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["results"][0]["instance"] == "Depressionsbot"
+    assert payload["results"][0]["backend"] == "local"
+    assert payload["results"][0]["selected_ids"]
 
 
 def _write_docx(path, paragraphs):

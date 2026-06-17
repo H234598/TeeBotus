@@ -308,6 +308,7 @@ class InstructionTests(unittest.TestCase):
         )
 
         self.assertTrue(instructions.memory_search_semantic_enabled)
+        self.assertTrue(instructions.user_memory_enabled)
         self.assertEqual(instructions.memory_search_semantic_backend, "qdrant")
         self.assertEqual(instructions.memory_search_local_limit, 3)
         self.assertEqual(instructions.memory_search_semantic_limit, 5)
@@ -330,9 +331,38 @@ class InstructionTests(unittest.TestCase):
         )
 
         self.assertTrue(instructions.memory_search_semantic_enabled)
+        self.assertTrue(instructions.user_memory_enabled)
         self.assertEqual(instructions.memory_search_semantic_backend, "qdrant")
         self.assertEqual(instructions.memory_search_embedding_provider, "local_hash")
         self.assertEqual(instructions.memory_search_embedding_model, "demo-model")
+
+    def test_user_memory_section_settings_are_parsed(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## User Memory
+            - enabled: ja
+            - max_prompt_chars: 6000
+            - max_entry_chars: 700
+            """
+        )
+
+        self.assertTrue(instructions.user_memory_enabled)
+        self.assertEqual(instructions.user_memory_max_prompt_chars, 6000)
+        self.assertEqual(instructions.user_memory_max_entry_chars, 700)
+
+    def test_user_memory_settings_accept_prefixed_settings_keys(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## Einstellungen
+            - user_memory_enabled: true
+            - user_memory_max_prompt_chars: 5000
+            - account_memory_max_entry_chars: 650
+            """
+        )
+
+        self.assertTrue(instructions.user_memory_enabled)
+        self.assertEqual(instructions.user_memory_max_prompt_chars, 5000)
+        self.assertEqual(instructions.user_memory_max_entry_chars, 650)
 
     def test_render_template_uses_safe_placeholders(self) -> None:
         rendered = render_template(

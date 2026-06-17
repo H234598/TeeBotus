@@ -146,7 +146,7 @@ def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, 
     assert "qdrant=127.0.0.1:6334 status=reachable" in captured.out
     assert "qdrant_collection=teebotus_user_memory target=127.0.0.1:6334 status=ready" in captured.out
     assert "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6334 status=missing" in captured.out
-    assert "memory_index=Demo backend=keyword status=disabled semantic=ready" in captured.out
+    assert "memory_index=Demo backend=keyword status=ready semantic=ready" in captured.out
 
 
 def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> None:
@@ -310,6 +310,56 @@ def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     assert calls[0].instances[0].accounts[0].label == "telegram:1"
 
 
+def test_main_refuses_to_start_when_account_storage_preflight_is_broken(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_secret_health_lines",
+        lambda *, instance_name, project_root: [
+            f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main([]) == 2
+
+    captured = capsys.readouterr()
+    assert calls == []
+    assert "TeeBotus account storage preflight failed; refusing to start bot loops." in captured.err
+    assert "account_crypto=Demo status=broken mapping=present memory=missing_required keyring=broken" in captured.err
+    assert "Emergency override: TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START=1" in captured.err
+
+
+def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START", "1")
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_secret_health_lines",
+        lambda *, instance_name, project_root: [
+            f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda _config: None)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main([]) == 0
+
+    captured = capsys.readouterr()
+    assert calls
+    assert "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START=1 allows startup" in captured.err
+
+
 def test_main_start_does_not_leak_loaded_default_environment(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
@@ -443,7 +493,8 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         "sources=1 entries=2 "
         f"path={tmp_path / 'TeeBotus.bak2' / 'instances.bak'} "
         f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
-        f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable-account-metadata '
+        f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable '
+        f'--replace-unreadable-account-metadata '
         f'--json-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.json"} '
         f'--markdown-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.md"}" '
         f'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '

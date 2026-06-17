@@ -20,7 +20,7 @@ class ProactiveSystemdUnit:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print TeeBotus proactive-agent user systemd units.")
     parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
-    parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to teebotus-proactive.")
+    parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to TeeBotus.proactive.")
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
     parser.add_argument("--interval", default="5min", help="systemd OnUnitActiveSec interval.")
     planner_group = parser.add_mutually_exclusive_group()
@@ -95,7 +95,9 @@ def render_proactive_systemd_unit(
     repo = repo_root.expanduser().resolve()
     instances_arg = str((repo / instances_dir).resolve()) if not Path(instances_dir).is_absolute() else str(Path(instances_dir).resolve())
     command = [
-        _shell_quote(str(Path.home() / ".local" / "bin" / "teebotus-proactive")),
+        "python3",
+        "-m",
+        "TeeBotus.proactive",
         "--instances-dir",
         _shell_quote(instances_arg),
         "--instance",

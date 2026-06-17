@@ -39,14 +39,17 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     status = subparsers.add_parser("status", help="Show Bibliothekar backend status.")
+    status.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     status.set_defaults(command="status")
 
     index = subparsers.add_parser("index", help="Index Bibliothek folders.")
+    index.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     index.add_argument("--source", default="")
     index.add_argument("--dry-run", action="store_true")
     index.set_defaults(command="index")
 
     harvest = subparsers.add_parser("harvest", help="Gate local source files before Bibliothekar ingestion.")
+    harvest.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     harvest.add_argument("source")
     harvest.add_argument("--title", default="", help="Optional source title metadata.")
     harvest.add_argument("--license", default="", help="Optional source license metadata.")
@@ -56,12 +59,14 @@ def _build_parser() -> argparse.ArgumentParser:
     harvest.set_defaults(command="harvest")
 
     promote = subparsers.add_parser("promote", help="Promote an accepted harvested source into the indexed Bibliothek.")
+    promote.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     promote.add_argument("source")
     promote.add_argument("--destination-dir", default="books", help="Relative library subdirectory for promoted sources.")
     promote.add_argument("--move", action="store_true", help="Move instead of copy from accepted staging.")
     promote.set_defaults(command="promote")
 
     query = subparsers.add_parser("query", help="Query indexed Bibliothekar chunks.")
+    query.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     query.add_argument("query")
     query.add_argument("--source", default="", help="Query a source file or directory through a temporary local fixture index.")
     query.add_argument("--top-k", type=int, default=3)
@@ -326,6 +331,11 @@ def _copy_allowed_source_file(source: Path, destination: Path, library_dir: Path
     if destination.suffix.casefold() not in SUPPORTED_SUFFIXES:
         return
     if not _is_allowed_library_source_path(destination, library_dir):
+        return
+    try:
+        if destination.exists() and source.resolve(strict=True) == destination.resolve(strict=True):
+            return
+    except OSError:
         return
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, destination)

@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from TeeBotus.runtime.bibliothekar import _is_allowed_library_source_path
 from TeeBotus.runtime.source_quality import SourceQualityInput, SourceQualityPipeline, SourceQualityReport, SourceRoute
 
 
@@ -123,9 +124,12 @@ class SourceHarvester:
         if not self._manifest_accepts_hash(sha256, staged):
             raise ValueError("Accepted source is not marked accepted_for_ingest in the harvest manifest")
         target_dir = self.library_root / _safe_destination_dir(destination_dir)
+        candidate_path = target_dir / staged.name
+        if not _is_allowed_library_source_path(candidate_path, self.library_root):
+            raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
         target_dir.mkdir(parents=True, exist_ok=True)
         _chmod_private_dir(target_dir)
-        promoted_path = _unique_destination(target_dir / staged.name, sha256=sha256)
+        promoted_path = _unique_destination(candidate_path, sha256=sha256)
         if copy:
             shutil.copy2(staged, promoted_path)
         else:
@@ -244,7 +248,10 @@ def _safe_filename(value: str) -> str:
 
 
 def _safe_destination_dir(value: str) -> str:
-    text = str(value or PROMOTED_DIR).strip().replace("\\", "/")
+    raw = str(value or PROMOTED_DIR).strip()
+    if Path(raw).is_absolute() or raw.startswith(("/", "\\")) or (len(raw) >= 2 and raw[1] == ":"):
+        raise ValueError("destination_dir must be a relative library subdirectory")
+    text = raw.replace("\\", "/")
     parts = tuple(part for part in text.split("/") if part and part != ".")
     if not parts or any(part == ".." for part in parts):
         raise ValueError("destination_dir must be a relative library subdirectory")

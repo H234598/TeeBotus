@@ -17,7 +17,8 @@ def test_render_proactive_systemd_unit_defaults_to_tool_planner(tmp_path) -> Non
     assert unit.timer_name == "teebotus-proactive-depressionsbot.timer"
     assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
     assert "EnvironmentFile=-" in unit.service_text
-    assert "teebotus-proactive" in unit.service_text
+    assert "ExecStart=python3 -m TeeBotus.proactive" in unit.service_text
+    assert ".local/bin/teebotus-proactive" not in unit.service_text
     assert "--dispatch --plan --tool-plan" in unit.service_text
     assert "--llm-plan" not in unit.service_text
     assert "OnUnitActiveSec=5min" in unit.timer_text

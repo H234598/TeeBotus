@@ -11,7 +11,7 @@ from TeeBotus.adapters import telegram_runtime
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig, resolve_llm_setting
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
@@ -52,7 +52,7 @@ class TelegramRuntimeBridge:
         self.instances_dir = Path(instances_dir)
         instance_dir = self.instances_dir / run_config.instance_name
         data_dir = instance_dir / "data"
-        resolved_secret_provider = secret_provider or SecretToolInstanceSecretProvider()
+        resolved_secret_provider = secret_provider or runtime_secret_provider()
         self.instruction_store = instruction_store or InstructionStore(instance_dir / "Bot_Verhalten.md")
         self.account_store = AccountStore(data_dir / "accounts", run_config.instance_name, secret_provider=resolved_secret_provider)
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
@@ -327,7 +327,7 @@ def _notify_recent_users_for_current_version(
             store = AccountStore(
                 instances_dir / instance_config.instance_name / "data" / "accounts",
                 instance_config.instance_name,
-                secret_provider=SecretToolInstanceSecretProvider(),
+                secret_provider=runtime_secret_provider(),
                 create_dirs=False,
             )
             try:

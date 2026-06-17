@@ -183,6 +183,7 @@ class BibliothekarStore:
             "library_dir": str(self.library_dir),
             "created_at": now,
             "updated_at": now,
+            "harvest_manifest": _harvest_manifest_signature(self.library_dir),
             "documents": documents,
             "chunk_store": LIBRARY_CHUNKS_FILENAME,
             "chunk_count": len(chunks),
@@ -199,6 +200,10 @@ class BibliothekarStore:
         index = _read_json(self.index_path)
         if not isinstance(index, dict) or _index_is_stale(index, self.library_dir) or _chunk_store_is_stale(index, self.chunks_path):
             self.rebuild()
+
+    def read_chunks(self) -> list[dict[str, Any]]:
+        self.ensure_current()
+        return _read_chunks(self.chunks_path)
 
     def select(
         self,
@@ -362,7 +367,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         if not sha256 or not stored_path or row.get("accepted_for_ingest") is not True:
             continue
         accepted_by_key[(sha256, stored_path)] = row
-        accepted_by_hash.setdefault(sha256, row)
+        accepted_by_hash[sha256] = row
     metadata: dict[str, dict[str, Any]] = {}
     for row in rows:
         if row.get("event") != "promoted":
@@ -676,6 +681,8 @@ def _prompt_payload(index: dict[str, Any], chunks: list[dict[str, Any]]) -> dict
 def _index_is_stale(index: dict[str, Any], library_dir: Path) -> bool:
     if int(index.get("schema_version") or 0) != LIBRARY_SCHEMA_VERSION:
         return True
+    if _harvest_manifest_is_stale(index, library_dir):
+        return True
     documents = index.get("documents") if isinstance(index.get("documents"), dict) else {}
     current: dict[str, tuple[int, int]] = {}
     for path in _iter_document_paths(library_dir):
@@ -690,6 +697,37 @@ def _index_is_stale(index: dict[str, Any], library_dir: Path) -> bool:
         if relative:
             indexed[relative] = (int(document.get("size_bytes") or -1), int(document.get("mtime_ns") or -1))
     return current != indexed
+
+
+def _harvest_manifest_signature(library_dir: Path) -> dict[str, Any]:
+    manifest_path = library_dir / HARVEST_MANIFEST_FILENAME
+    try:
+        stat = manifest_path.stat()
+    except FileNotFoundError:
+        return {"exists": False, "size_bytes": 0, "mtime_ns": 0, "sha256": ""}
+    try:
+        digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    except OSError:
+        digest = ""
+    return {
+        "exists": True,
+        "size_bytes": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "sha256": digest,
+    }
+
+
+def _harvest_manifest_is_stale(index: dict[str, Any], library_dir: Path) -> bool:
+    current = _harvest_manifest_signature(library_dir)
+    indexed = index.get("harvest_manifest")
+    if not isinstance(indexed, dict):
+        return bool(current.get("exists"))
+    return {
+        "exists": bool(indexed.get("exists")),
+        "size_bytes": int(indexed.get("size_bytes") or 0),
+        "mtime_ns": int(indexed.get("mtime_ns") or 0),
+        "sha256": str(indexed.get("sha256") or ""),
+    } != current
 
 
 def _chunk_store_is_stale(index: dict[str, Any], chunks_path: Path) -> bool:
@@ -719,7 +757,11 @@ def _read_chunks(path: Path) -> list[dict[str, Any]]:
 
 
 def _chunk_has_required_citation_metadata(chunk: dict[str, Any]) -> bool:
-    return all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS) and _chunk_has_library_source_path(chunk)
+    return (
+        bool(str(chunk.get("text") or "").strip())
+        and all(str(chunk.get(field) or "").strip() for field in REQUIRED_CITATION_CHUNK_FIELDS)
+        and _chunk_has_library_source_path(chunk)
+    )
 
 
 def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:

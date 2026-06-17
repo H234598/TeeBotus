@@ -119,3 +119,35 @@ def test_repository_hf_pool_config_declares_plan3_model_buckets_disabled_by_defa
     }.issubset(purposes)
     assert all(target.enabled is False for target in pool.targets)
     assert all(target.base_url == "https://router.huggingface.co/v1" for target in pool.targets)
+
+
+def test_repository_hf_pool_config_declares_plan3_deep_research_model_matrix() -> None:
+    config = load_hf_pool_config(DEFAULT_HF_POOL_CONFIG_PATH)
+    pool = config.pool("default")
+
+    assert pool is not None
+    models_by_purpose = {
+        purpose: {target.model for target in pool.targets if purpose in target.purposes}
+        for purpose in {
+            "normal_chat",
+            "structured_decision",
+            "psychology_explainer",
+            "bibliothekar_answer",
+            "summarizer",
+            "fallback_cheap",
+        }
+    }
+    assert {"Qwen/Qwen3.5-9B", "Qwen/Qwen3-4B-Instruct-2507"}.issubset(models_by_purpose["normal_chat"])
+    assert {"Qwen/Qwen3-4B-Instruct-2507", "Qwen/Qwen2.5-7B-Instruct"}.issubset(
+        models_by_purpose["structured_decision"]
+    )
+    assert {"google/gemma-4-31B-it", "utter-project/EuroLLM-22B-Instruct-2512"}.issubset(
+        models_by_purpose["psychology_explainer"]
+    )
+    assert {"google/gemma-4-31B-it", "Qwen/Qwen3.5-9B", "mistralai/Mistral-Small-3.1-24B-Instruct-2503"}.issubset(
+        models_by_purpose["bibliothekar_answer"]
+    )
+    assert {"google/gemma-4-31B-it", "Qwen/Qwen3.5-9B"}.issubset(models_by_purpose["summarizer"])
+    assert {"meta-llama/Llama-3.1-8B-Instruct", "Qwen/Qwen3-4B-Instruct-2507"}.issubset(
+        models_by_purpose["fallback_cheap"]
+    )

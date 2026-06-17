@@ -7,13 +7,65 @@ from datetime import datetime, timezone
 import pytest
 
 import scripts.import_legacy_user_memory as legacy_import
+import TeeBotus.runtime.accounts as accounts_module
 from scripts.import_legacy_user_memory import import_legacy_user_memory, main as import_main
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_KEYRING_FILENAME,
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    AccountStore,
+    AccountStoreError,
+    StaticSecretProvider,
+    telegram_identity_key,
+)
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
 def provider(secret: bytes = b"a" * 32) -> StaticSecretProvider:
     return StaticSecretProvider(secret)
+
+
+class PurposeSecretProvider:
+    def __init__(self, secrets: dict[str, bytes], default: bytes = b"a" * 32) -> None:
+        self.secrets = dict(secrets)
+        self.default = default
+
+    def get_secret(self, instance_name: str, purpose: str) -> bytes:
+        secret = self.secrets.get(purpose, self.default)
+        if len(secret) != 32:
+            raise AssertionError("test secret must be 32 bytes")
+        return secret
+
+
+def keyring_manifest_provider(accounts_root: Path, instance_name: str, delegate: PurposeSecretProvider):
+    return accounts_module._KeyringManifestSecretProvider(  # noqa: SLF001
+        instance_name=instance_name,
+        root=accounts_root,
+        delegate=delegate,
+    )
+
+
+def write_account_keyring_manifest(accounts_root: Path, instance_name: str, secrets: dict[str, bytes]) -> None:
+    purposes = {}
+    for purpose, secret in secrets.items():
+        purposes[purpose] = {
+            "algorithm": "HMAC-SHA256",
+            "created_at": "2026-06-01T00:00:00+00:00",
+            "fingerprint": accounts_module._instance_secret_fingerprint(instance_name, purpose, secret),  # noqa: SLF001
+            "purpose": purpose,
+        }
+    (accounts_root / ACCOUNT_KEYRING_FILENAME).write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "instance": instance_name,
+                "purposes": purposes,
+                "updated_at": "2026-06-01T00:00:00+00:00",
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
 
 
 def write_legacy_entries(
@@ -442,7 +494,7 @@ def test_legacy_user_memory_import_can_replace_unreadable_account_metadata(tmp_p
     write_legacy_entries(legacy_root)
     accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
     bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
-    bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_account_id = bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
 
     skipped = import_legacy_user_memory(
         legacy_instances_dir=legacy_root,
@@ -464,6 +516,7 @@ def test_legacy_user_memory_import_can_replace_unreadable_account_metadata(tmp_p
     assert replaced.account_store_resets == 1
     assert replaced.events[0]["action"] == "import-after-metadata-reset"
     assert replaced.events[0]["metadata_unreadable"] is True
+    assert replaced.events[0]["metadata_reset_existing_accounts"] == [bad_account_id]
     store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
     account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
     assert account_id
@@ -560,6 +613,51 @@ def test_legacy_user_memory_import_pre_resets_when_account_profile_is_unreadable
     ]
 
 
+def test_legacy_user_memory_import_dry_run_simulates_unreadable_account_profile_reset(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, user_id="395935293")
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    good_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    unreadable_profile_account = good_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
+    profile_path = bad_store.account_dir(unreadable_profile_account) / "Account_Profile.json"
+    profile_path.write_bytes(
+        bad_store.vault.encrypt(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "instance": "Depressionsbot",
+                    "account_id": unreadable_profile_account,
+                    "status": "active",
+                    "linked_identities": [telegram_identity_key("395935293")],
+                },
+                sort_keys=True,
+            ).encode("utf-8"),
+            kind="Account_Profile.json",
+        )
+    )
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=False,
+        replace_unreadable_account_metadata=True,
+        provider=provider(),
+    )
+
+    assert stats.account_store_resets == 0
+    assert stats.metadata_backups_created == 0
+    assert stats.unreadable_metadata == 1
+    assert stats.accounts_existing == 0
+    assert stats.accounts_created == 1
+    assert stats.events[0]["account_id"] == "<new>"
+    assert stats.events[0]["action"] == "would-import-after-metadata-reset"
+    assert stats.events[0]["metadata_unreadable"] is True
+    assert stats.events[0]["metadata_reset_existing_accounts"] == [unreadable_profile_account]
+
+
 def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     legacy_root = tmp_path / "legacy"
@@ -567,7 +665,7 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
     write_legacy_entries(legacy_root)
     accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
     bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
-    bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_account_id = bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
 
     stats = import_legacy_user_memory(
         legacy_instances_dir=legacy_root,
@@ -583,6 +681,7 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
     assert stats.metadata_backups_created == 0
     assert stats.events[0]["action"] == "would-import-after-metadata-reset"
     assert stats.events[0]["metadata_unreadable"] is True
+    assert stats.events[0]["metadata_reset_existing_accounts"] == [bad_account_id]
     report = legacy_import._build_import_report(
         stats,
         mode="dry-run",
@@ -598,6 +697,134 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
     markdown = legacy_import._render_markdown_report(report)
     assert "action=`would-import-after-metadata-reset`" in markdown
     assert "flags=`metadata_unreadable,account_created`" in markdown
+    assert f"metadata_reset_accounts=`{bad_account_id[:12]}`" in markdown
+
+
+def test_legacy_user_memory_import_treats_memory_keyring_mismatch_as_unreadable_target(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    mapping_key = b"m" * 32
+    old_memory_key = b"o" * 32
+    current_memory_key = b"n" * 32
+    writer = PurposeSecretProvider(
+        {
+            INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+            ACCOUNT_MEMORY_KEY_PURPOSE: old_memory_key,
+        }
+    )
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=writer)
+    account_id = store.resolve_or_create_account(telegram_identity_key("395935293"))
+    store.write_memory_entries(account_id, [{"id": "old_mem", "user_text": "old encrypted memory"}])
+    write_account_keyring_manifest(
+        accounts_root,
+        "Depressionsbot",
+        {
+            INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+            ACCOUNT_MEMORY_KEY_PURPOSE: old_memory_key,
+        },
+    )
+    guarded_provider = keyring_manifest_provider(
+        accounts_root,
+        "Depressionsbot",
+        PurposeSecretProvider(
+            {
+                INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+                ACCOUNT_MEMORY_KEY_PURPOSE: current_memory_key,
+            }
+        ),
+    )
+
+    with pytest.raises(AccountStoreError, match="account-structured-memory-key"):
+        AccountStore(accounts_root, "Depressionsbot", secret_provider=guarded_provider)
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=False,
+        replace_unreadable=True,
+        replace_unreadable_account_metadata=True,
+        provider=guarded_provider,
+    )
+
+    assert stats.unreadable_metadata == 0
+    assert stats.unreadable_targets == 1
+    assert stats.accounts_existing == 1
+    assert stats.accounts_created == 0
+    assert stats.entries_imported == 1
+    assert stats.events[0]["account_id"] == account_id
+    assert stats.events[0]["action"] == "would-import"
+    assert stats.events[0]["metadata_unreadable"] is False
+    assert stats.events[0]["target_unreadable"] is True
+
+
+def test_legacy_user_memory_import_apply_repairs_memory_keyring_and_preserves_readable_rows(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    mapping_key = b"m" * 32
+    stale_memory_key = b"s" * 32
+    current_memory_key = b"c" * 32
+    current_delegate = PurposeSecretProvider(
+        {
+            INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+            ACCOUNT_MEMORY_KEY_PURPOSE: current_memory_key,
+        }
+    )
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=current_delegate)
+    account_id = store.resolve_or_create_account(telegram_identity_key("395935293"))
+    store.write_memory_entries(account_id, [{"id": "current_mem", "user_text": "current readable memory"}])
+    stale_state_store = AccountStore(
+        accounts_root,
+        "Depressionsbot",
+        secret_provider=PurposeSecretProvider(
+            {
+                INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+                ACCOUNT_MEMORY_KEY_PURPOSE: stale_memory_key,
+            }
+        ),
+    )
+    stale_state_store.account_memory_vault.write_json(
+        stale_state_store.account_dir(account_id) / "Agent_State.json",
+        {"stale": True},
+    )
+    write_account_keyring_manifest(
+        accounts_root,
+        "Depressionsbot",
+        {
+            INSTANCE_MAPPING_KEY_PURPOSE: mapping_key,
+            ACCOUNT_MEMORY_KEY_PURPOSE: stale_memory_key,
+        },
+    )
+    guarded_provider = keyring_manifest_provider(accounts_root, "Depressionsbot", current_delegate)
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        replace_unreadable=True,
+        provider=guarded_provider,
+    )
+
+    strict_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=guarded_provider)
+    entries = strict_store.read_memory_entries(account_id)
+    assert stats.unreadable_targets == 1
+    assert stats.memory_keyring_repairs == 1
+    assert stats.entries_imported == 1
+    assert [entry["id"] for entry in entries] == ["current_mem", "legacy_mem_1"]
+    assert strict_store.check_structured_memory_index(account_id).ok
+    assert not (strict_store.account_dir(account_id) / "Agent_State.json").exists()
+    assert list(strict_store.account_dir(account_id).glob(".pre-legacy-user-memory-state-replace-*/Agent_State.json"))
 
 
 def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Path, monkeypatch) -> None:
@@ -707,6 +934,7 @@ def test_legacy_user_memory_import_apply_report_still_blocks_running_bot_without
 def test_legacy_user_memory_runtime_process_detection_ignores_admin_false_positives() -> None:
     assert legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus --all --channels telegram")
     assert legacy_import._looks_like_running_teebotus_runtime("bash -lc cd repo && python3 -m teebotus --all")
+    assert legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus.proactive --dispatch --plan --tool-plan")
     assert legacy_import._looks_like_running_teebotus_runtime("/home/user/.local/bin/teebotus-proactive --once")
     assert not legacy_import._looks_like_running_teebotus_runtime("python3 -m teebotus.admin memory-recovery")
     assert not legacy_import._looks_like_running_teebotus_runtime("python3 scripts/import_legacy_user_memory.py --legacy-instances-dir backup")
@@ -732,6 +960,34 @@ def test_legacy_user_memory_import_dry_run_does_not_create_missing_secret(tmp_pa
             str(legacy_root),
             "--target-instances-dir",
             str(target_root),
+        ]
+    )
+
+    assert result == 0
+    assert created_with == [False]
+
+
+def test_legacy_user_memory_import_apply_does_not_create_missing_secret(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(legacy_import, "_detect_running_teebotus_processes", lambda: [])
+    created_with: list[bool] = []
+
+    class FakeSecretProvider(StaticSecretProvider):
+        def __init__(self, *, create_if_missing: bool = True) -> None:
+            created_with.append(create_if_missing)
+            super().__init__(b"a" * 32)
+
+    monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", FakeSecretProvider)
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--apply",
         ]
     )
 
@@ -983,14 +1239,16 @@ def test_legacy_user_memory_import_metadata_reset_backups_are_unique_within_same
     accounts_root = tmp_path / "accounts"
     accounts_root.mkdir()
     (accounts_root / "Account_Index.json").write_text('{"old": 1}', encoding="utf-8")
+    (accounts_root / "Account_Keyring.json").write_text('{"old_keyring": 1}', encoding="utf-8")
 
     first_count = legacy_import._reset_unreadable_account_store(accounts_root)
     (accounts_root / "Account_Index.json").write_text('{"new": 2}', encoding="utf-8")
+    (accounts_root / "Account_Keyring.json").write_text('{"new_keyring": 2}', encoding="utf-8")
     second_count = legacy_import._reset_unreadable_account_store(accounts_root)
 
     backup_dirs = sorted(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
-    assert first_count == 1
-    assert second_count == 1
+    assert first_count == 2
+    assert second_count == 2
     assert len(backup_dirs) == 2
     assert [path.name for path in backup_dirs] == [
         ".pre-legacy-user-memory-account-store-reset-20260616T120000Z",
@@ -998,3 +1256,5 @@ def test_legacy_user_memory_import_metadata_reset_backups_are_unique_within_same
     ]
     assert (backup_dirs[0] / "Account_Index.json").read_text(encoding="utf-8") == '{"old": 1}'
     assert (backup_dirs[1] / "Account_Index.json").read_text(encoding="utf-8") == '{"new": 2}'
+    assert (backup_dirs[0] / "Account_Keyring.json").read_text(encoding="utf-8") == '{"old_keyring": 1}'
+    assert (backup_dirs[1] / "Account_Keyring.json").read_text(encoding="utf-8") == '{"new_keyring": 2}'

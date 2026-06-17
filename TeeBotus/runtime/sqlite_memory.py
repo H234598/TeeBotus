@@ -70,8 +70,11 @@ class SQLiteAccountMemoryBackend:
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
-        self._ensure_schema()
-        with self._connect() as connection:
+        if not self.config.path.exists():
+            return []
+        with self._connect_readonly() as connection:
+            if not _table_exists(connection, "memory_entries"):
+                return []
             rows = connection.execute(
                 """
                 SELECT memory_id, payload_nonce, payload_ciphertext
@@ -113,9 +116,12 @@ class SQLiteAccountMemoryBackend:
             return []
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
-        self._ensure_schema()
+        if not self.config.path.exists():
+            return []
         placeholders = ",".join("?" for _ in requested_ids)
-        with self._connect() as connection:
+        with self._connect_readonly() as connection:
+            if not _table_exists(connection, "memory_entries"):
+                return []
             rows = connection.execute(
                 f"""
                 SELECT memory_id, payload_nonce, payload_ciphertext
@@ -175,8 +181,11 @@ class SQLiteAccountMemoryBackend:
 
     def read_index(self, account_id: str) -> dict[str, Any]:
         self.last_index_read_error = ""
-        self._ensure_schema()
-        with self._connect() as connection:
+        if not self.config.path.exists():
+            return {}
+        with self._connect_readonly() as connection:
+            if not _table_exists(connection, "memory_indexes"):
+                return {}
             row = connection.execute(
                 """
                 SELECT payload_nonce, payload_ciphertext
@@ -239,6 +248,11 @@ class SQLiteAccountMemoryBackend:
         connection = sqlite3.connect(self.config.path)
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=NORMAL")
+        connection.execute("PRAGMA foreign_keys=ON")
+        return connection
+
+    def _connect_readonly(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(f"{self.config.path.resolve().as_uri()}?mode=ro", uri=True)
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
@@ -386,3 +400,7 @@ def _int_value(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
+    return connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?", (table,)).fetchone() is not None

@@ -12,6 +12,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from TeeBotus.benchmarks.reporting import render_markdown  # noqa: E402
 from TeeBotus.benchmarks.suite import (  # noqa: E402
+    BENCHMARK_CONTEXT_DEPENDENCIES,
     BENCHMARK_RANKING_NAME_SETS,
     BenchmarkResult,
     REQUIRED_BENCHMARK_CATEGORIES,

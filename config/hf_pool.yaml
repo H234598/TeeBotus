@@ -10,12 +10,25 @@
       "cooldown_seconds_on_timeout": 120,
       "targets": [
         {
-          "name": "qwen_4b_normal_chat",
+          "name": "qwen_35_9b_normal_chat",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3.5-9B",
+          "weight": 5,
+          "purposes": ["normal_chat"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_4b_normal_chat_fallback",
           "kind": "hf_router_chat",
           "base_url": "https://router.huggingface.co/v1",
           "api_key_env": "HF_TOKEN_MAIN",
           "model": "Qwen/Qwen3-4B-Instruct-2507",
-          "weight": 3,
+          "weight": 2,
           "purposes": ["normal_chat"],
           "enabled": false,
           "required": {
@@ -37,12 +50,25 @@
           }
         },
         {
-          "name": "qwen_4b_psychology_explainer",
+          "name": "qwen_25_7b_structured_fallback",
           "kind": "hf_router_chat",
           "base_url": "https://router.huggingface.co/v1",
           "api_key_env": "HF_TOKEN_MAIN",
-          "model": "Qwen/Qwen3-4B-Instruct-2507",
-          "weight": 4,
+          "model": "Qwen/Qwen2.5-7B-Instruct",
+          "weight": 3,
+          "purposes": ["structured_decision"],
+          "enabled": false,
+          "required": {
+            "supports_structured_output": true
+          }
+        },
+        {
+          "name": "gemma_4_31b_psychology_explainer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "google/gemma-4-31B-it",
+          "weight": 5,
           "purposes": ["psychology_explainer"],
           "enabled": false,
           "required": {
@@ -50,11 +76,37 @@
           }
         },
         {
-          "name": "qwen_4b_bibliothekar_answer",
+          "name": "eurollm_22b_psychology_explainer_fallback",
           "kind": "hf_router_chat",
           "base_url": "https://router.huggingface.co/v1",
           "api_key_env": "HF_TOKEN_MAIN",
-          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "model": "utter-project/EuroLLM-22B-Instruct-2512",
+          "weight": 3,
+          "purposes": ["psychology_explainer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "gemma_4_31b_bibliothekar_answer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "google/gemma-4-31B-it",
+          "weight": 5,
+          "purposes": ["bibliothekar_answer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_35_9b_bibliothekar_answer_fallback",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3.5-9B",
           "weight": 4,
           "purposes": ["bibliothekar_answer"],
           "enabled": false,
@@ -63,16 +115,68 @@
           }
         },
         {
-          "name": "qwen_4b_summarizer",
+          "name": "mistral_small_31_bibliothekar_answer_fallback",
           "kind": "hf_router_chat",
           "base_url": "https://router.huggingface.co/v1",
           "api_key_env": "HF_TOKEN_MAIN",
-          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "model": "mistralai/Mistral-Small-3.1-24B-Instruct-2503",
+          "weight": 3,
+          "purposes": ["bibliothekar_answer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "gemma_4_31b_summarizer",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "google/gemma-4-31B-it",
+          "weight": 5,
+          "purposes": ["summarizer"],
+          "enabled": false,
+          "required": {
+            "context_length": 32768
+          }
+        },
+        {
+          "name": "qwen_35_9b_summarizer_fallback",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3.5-9B",
           "weight": 3,
           "purposes": ["summarizer"],
           "enabled": false,
           "required": {
             "context_length": 32768
+          }
+        },
+        {
+          "name": "llama_31_8b_fallback_cheap",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "meta-llama/Llama-3.1-8B-Instruct",
+          "weight": 4,
+          "purposes": ["fallback_cheap"],
+          "enabled": false,
+          "required": {
+            "context_length": 8192
+          }
+        },
+        {
+          "name": "qwen_4b_fallback_cheap",
+          "kind": "hf_router_chat",
+          "base_url": "https://router.huggingface.co/v1",
+          "api_key_env": "HF_TOKEN_MAIN",
+          "model": "Qwen/Qwen3-4B-Instruct-2507",
+          "weight": 2,
+          "purposes": ["fallback_cheap"],
+          "enabled": false,
+          "required": {
+            "context_length": 8192
           }
         }
       ]

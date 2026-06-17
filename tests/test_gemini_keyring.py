@@ -10,6 +10,7 @@ from TeeBotus.llm.free_tier import (
     resolve_gemini_free_tier_limits,
 )
 from TeeBotus.llm.gemini_limits_refresh import (
+    DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL,
     cached_gemini_free_tier_limit_values,
     gemini_free_tier_limit_status_line,
     parse_gemini_free_tier_limits_payload,
@@ -177,6 +178,108 @@ def test_refresh_gemini_free_tier_limits_preserves_cache_when_source_has_no_tabl
     }
     status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc))
     assert "gemini_free_tier_limits status=no_limits_found" in status
+    assert "models=1" in status
+
+
+def test_refresh_gemini_free_tier_limits_uses_conservative_defaults_when_official_page_has_no_public_table(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    env = {"TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path)}
+    payload = """
+    <p>Rate limits are usually measured across three dimensions: RPM, TPM, and RPD.</p>
+    <a>View your active rate limits in AI Studio</a>
+    <p>Rate limits depend on a variety of factors and can be viewed in Google AI Studio.</p>
+    <p>Specified rate limits are not guaranteed and actual capacity may vary.</p>
+    """
+
+    result = refresh_gemini_free_tier_limits_if_due(
+        env,
+        force=True,
+        now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc),
+        fetcher=lambda _url, _timeout: payload,
+    )
+
+    assert result.status == "fallback_defaults"
+    assert result.models == 1
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash") == {
+        "rpm": 5,
+        "tpm": 250_000,
+        "rpd": 20,
+    }
+    status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc))
+    assert "gemini_free_tier_limits status=fallback_defaults" in status
+    assert "models=1" in status
+
+
+def test_refresh_gemini_free_tier_limits_rechecks_old_empty_default_no_limits_cache_before_interval(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "last_refresh_attempt_at": "2026-06-17T00:00:00Z",
+                "last_refresh_status": "no_limits_found",
+                "last_refresh_error": "source contained no parseable free-tier RPM/TPM/RPD table",
+                "source_url": DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL,
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {
+        "TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path),
+        "TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS": "86400",
+    }
+    calls: list[str] = []
+
+    result = refresh_gemini_free_tier_limits_if_due(
+        env,
+        now=lambda: datetime(2026, 6, 17, 1, tzinfo=timezone.utc),
+        fetcher=lambda url, _timeout: calls.append(url)
+        or "<a>View your active rate limits in AI Studio</a><p>Specified rate limits are not guaranteed.</p>",
+    )
+
+    assert result.status == "fallback_defaults"
+    assert calls == [DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL]
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash")["rpm"] == 5
+
+
+def test_refresh_gemini_free_tier_limits_keeps_default_fallback_status_on_next_official_refresh(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "fetched_at": "2026-06-16T00:00:00Z",
+                "last_refresh_attempt_at": "2026-06-16T00:00:00Z",
+                "last_refresh_status": "fallback_defaults",
+                "limits_source": "conservative_defaults",
+                "source_url": DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL,
+                "models": {"gemini-2.5-flash": {"rpm": 5, "tpm": 250000, "rpd": 20}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {"TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path)}
+    payload = """
+    <p>Rate limits are usually measured across RPM, TPM, and RPD.</p>
+    <a>View your active rate limits in AI Studio</a>
+    <p>Rate limits depend on project capacity.</p>
+    """
+
+    result = refresh_gemini_free_tier_limits_if_due(
+        env,
+        force=True,
+        now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc),
+        fetcher=lambda _url, _timeout: payload,
+    )
+
+    assert result.status == "fallback_defaults"
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash") == {
+        "rpm": 5,
+        "tpm": 250_000,
+        "rpd": 20,
+    }
+    status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, 0, 1, tzinfo=timezone.utc))
+    assert "gemini_free_tier_limits status=fallback_defaults" in status
     assert "models=1" in status
 
 

@@ -44,7 +44,7 @@ from TeeBotus.core.youtube import (
 from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
@@ -3087,7 +3087,7 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
         store = AccountStore(
             instances_dir / instance_config.instance_name / "data" / "accounts",
             instance_config.instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(),
+            secret_provider=runtime_secret_provider(),
             create_dirs=False,
         )
         try:

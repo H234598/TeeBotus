@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE  # noqa: E402
+from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE, runtime_secret_provider  # noqa: E402
 from TeeBotus.runtime.proactive_agent import check_proactive_agent_account  # noqa: E402
 
 
@@ -23,7 +23,12 @@ def main(argv: list[str] | None = None) -> int:
 
     results = []
     for instance_dir in _instance_dirs(Path(args.instances_dir), args.instance):
-        store = AccountStore(instance_dir / "data" / "accounts", instance_dir.name)
+        store = AccountStore(
+            instance_dir / "data" / "accounts",
+            instance_dir.name,
+            secret_provider=runtime_secret_provider(),
+            create_dirs=False,
+        )
         for account_dir in _account_dirs(store.accounts_dir):
             health = check_proactive_agent_account(store, account_dir.name)
             results.append(

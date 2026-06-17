@@ -8,8 +8,11 @@ import sys
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        print("Usage: python -m TeeBotus.admin {accounts|memory-recovery} ...", file=sys.stderr)
+        _print_usage(sys.stderr)
         return 2
+    if args[0] in {"-h", "--help"}:
+        _print_usage(sys.stdout)
+        return 0
     if args[0] == "memory-recovery":
         try:
             module = importlib.import_module("TeeBotus.admin.account_memory_recovery")
@@ -21,6 +24,14 @@ def main(argv: list[str] | None = None) -> int:
     except ModuleNotFoundError as exc:
         return _dependency_error(args, exc)
     return module.main(args)
+
+
+def _print_usage(stream) -> None:  # noqa: ANN001
+    print("Usage: python -m TeeBotus.admin {accounts|memory-recovery} ...", file=stream)
+    print("", file=stream)
+    print("Admin areas:", file=stream)
+    print("  accounts         Account-store report commands", file=stream)
+    print("  memory-recovery  Account-memory recovery report and quarantine commands", file=stream)
 
 
 def _dependency_error(args: list[str], exc: ModuleNotFoundError) -> int:

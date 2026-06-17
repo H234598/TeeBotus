@@ -18,6 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 from TeeBotus import __version__
 
 _TELEGRAM_MODULE = "TeeBotus.adapters.telegram_runtime"
+ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV = "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START"
 _COMPAT_EXPORT_MODULES = (
     _TELEGRAM_MODULE,
     "TeeBotus.core.youtube",
@@ -96,7 +97,7 @@ def _load_runtime_environment() -> None:
 def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
-        from TeeBotus.core.status import account_memory_index_health_lines, mcp_tool_runtime_status_line
+        from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines, mcp_tool_runtime_status_line
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
         from TeeBotus.llm.gemini_limits_refresh import gemini_free_tier_limit_status_line
@@ -286,7 +287,16 @@ def _runtime_status(argv: Sequence[str]) -> int:
             continue
         tool_lines.append(_sanitize_status_text(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools)))
     for instance_name in config.selected_instances:
+        for line in account_secret_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+            tool_lines.append(_sanitize_status_text(line))
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+            tool_lines.append(_sanitize_status_text(line))
+        for line in account_identity_health_lines(
+            instance_name=instance_name,
+            project_root=config.instances_dir.parent,
+            env=os.environ,
+            runtime_channels=tuple(config.channels),
+        ):
             tool_lines.append(_sanitize_status_text(line))
     _print_runtime_status_section("Tools und Account-Memory", tool_lines)
     return 0
@@ -1365,6 +1375,66 @@ def _runtime_config_from_main_args(args: list[str]) -> Any | None:
         return None
 
 
+def _account_storage_preflight_broken_lines(config: Any) -> tuple[str, ...]:
+    try:
+        from TeeBotus.core.status import account_memory_index_health_lines, account_secret_health_lines
+    except Exception as exc:  # pragma: no cover - defensive only
+        return (f"account_storage_preflight status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}",)
+    project_root = config.instances_dir.parent
+    selected_raw = getattr(config, "selected_instances", ()) or ()
+    instance_names = tuple(str(name) for name in selected_raw if str(name or "").strip())
+    if instance_names:
+        selected = instance_names
+    else:
+        instances_raw = getattr(config, "instances", ()) or ()
+        selected = tuple(str(instance.instance_name) for instance in instances_raw if str(getattr(instance, "instance_name", "")).strip())
+    broken: list[str] = []
+    for instance_name in selected:
+        for line in (
+            *account_secret_health_lines(instance_name=instance_name, project_root=project_root),
+            *account_memory_index_health_lines(instance_name=instance_name, project_root=project_root),
+        ):
+            sanitized = _sanitize_status_text(line)
+            if _account_storage_health_line_is_broken(sanitized):
+                broken.append(sanitized)
+    return tuple(broken)
+
+
+def _account_storage_health_line_is_broken(line: str) -> bool:
+    text = str(line or "").strip()
+    return bool(text and re.search(r"(^|\s)status=broken(\s|$)", text))
+
+
+def _allow_broken_account_memory_start() -> bool:
+    return str(os.environ.get(ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV, "") or "").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _run_account_storage_preflight(config: Any) -> bool:
+    broken_lines = _account_storage_preflight_broken_lines(config)
+    if not broken_lines:
+        return True
+    if _allow_broken_account_memory_start():
+        print(
+            f"TeeBotus account storage preflight is broken, but {ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV}=1 allows startup.",
+            file=sys.stderr,
+        )
+        for line in broken_lines:
+            print(line, file=sys.stderr)
+        return True
+    channels = ",".join(str(channel) for channel in getattr(config, "channels", ()) if str(channel or "").strip()) or "telegram,signal,matrix"
+    print("TeeBotus account storage preflight failed; refusing to start bot loops.", file=sys.stderr)
+    for line in broken_lines:
+        print(line, file=sys.stderr)
+    print(f"Diagnose: python3 -m TeeBotus --runtime-status --channels {channels}", file=sys.stderr)
+    print(f"Emergency override: {ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV}=1", file=sys.stderr)
+    return False
+
+
 def _runtime_has_signal_accounts(config: Any) -> bool:
     return _runtime_has_channel_accounts(config, "signal")
 
@@ -1499,6 +1569,8 @@ def _main_impl(argv: list[str] | None = None) -> int:
         return 2
     if "telegram" not in config.channels and len(_non_telegram_channels(config)) != 1:
         print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
+        return 2
+    if not _run_account_storage_preflight(config):
         return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
         _start_gemini_free_tier_limit_refresh(config)

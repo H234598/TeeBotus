@@ -5,7 +5,11 @@ import json
 from dataclasses import asdict
 from typing import Any
 
-from TeeBotus.embedding.rebuild import ensure_qdrant_collections_for_instances, rebuild_qdrant_memory_indexes
+from TeeBotus.embedding.rebuild import (
+    ensure_qdrant_collections_for_instances,
+    rebuild_qdrant_bibliothekar_indexes,
+    rebuild_qdrant_memory_indexes,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -40,6 +44,20 @@ def main(argv: list[str] | None = None) -> int:
             for result in results:
                 print(_format_collection_ensure_result(result))
         return 1 if any(not result.ok for result in results) else 0
+    if args.command == "bibliothekar-rebuild":
+        results = rebuild_qdrant_bibliothekar_indexes(
+            instances_dir=args.instances_dir,
+            instance_names=args.instance,
+            qdrant_url=args.qdrant_url or None,
+            embedding_overrides=_embedding_overrides_from_args(args),
+            dry_run=args.dry_run,
+        )
+        if args.json:
+            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+        else:
+            for result in results:
+                print(_format_bibliothekar_rebuild_result(result))
+        return 1 if any(result.status == "error" for result in results) else 0
     parser.print_help()
     return 2
 
@@ -52,6 +70,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     memory = subparsers.add_parser("memory-rebuild", help="Rebuild Qdrant Usermemory cache from AccountStore.")
+    memory.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     memory.add_argument("--account-id", action="append", default=[], help="Limit rebuild to one or more account IDs.")
     memory.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bot_Verhalten.md Memory Search config.")
     memory.add_argument("--embedding-provider", default=None, help="Override embedding provider: hash/local_hash or hf/tei.")
@@ -68,6 +87,7 @@ def _build_parser() -> argparse.ArgumentParser:
     memory.set_defaults(command="memory-rebuild")
 
     collections = subparsers.add_parser("collections-ensure", help="Ensure Qdrant collections using instance Memory Search config.")
+    collections.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     collections.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bot_Verhalten.md Memory Search config.")
     collections.add_argument("--embedding-provider", default=None, help="Override usermemory embedding provider for metadata parity.")
     collections.add_argument("--embedding-model", default=None, help="Override usermemory embedding model name.")
@@ -75,6 +95,17 @@ def _build_parser() -> argparse.ArgumentParser:
     collections.add_argument("--embedding-endpoint", default=None, help="Override HF/TEI/OpenAI-compatible embedding endpoint metadata.")
     collections.add_argument("--embedding-api-key-env", default=None, help="Override embedding API key environment variable metadata.")
     collections.set_defaults(command="collections-ensure")
+
+    bibliothekar = subparsers.add_parser("bibliothekar-rebuild", help="Rebuild Qdrant Bibliothekar chunk cache from local BibliothekarStore.")
+    bibliothekar.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
+    bibliothekar.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bibliothekar config.")
+    bibliothekar.add_argument("--embedding-provider", default=None, help="Override Bibliothekar embedding provider: fake/hash or hf/tei.")
+    bibliothekar.add_argument("--embedding-model", default=None, help="Override Bibliothekar embedding model name.")
+    bibliothekar.add_argument("--embedding-dimensions", type=int, default=None, help="Override Bibliothekar embedding vector dimensions.")
+    bibliothekar.add_argument("--embedding-endpoint", default=None, help="Override HF/TEI/OpenAI-compatible embedding endpoint.")
+    bibliothekar.add_argument("--embedding-api-key-env", default=None, help="Override embedding API key environment variable.")
+    bibliothekar.add_argument("--dry-run", action="store_true", help="Rebuild the local Bibliothekar chunk store and count chunks without writing Qdrant.")
+    bibliothekar.set_defaults(command="bibliothekar-rebuild")
     return parser
 
 
@@ -130,6 +161,28 @@ def _format_collection_ensure_result(result: object) -> str:
         detail += f" embedding_model={embedding_model}"
     suffix = f" error={error}" if error else ""
     return f"{instances}/{collection}: status={status}{detail}{suffix}"
+
+
+def _format_bibliothekar_rebuild_result(result: object) -> str:
+    instance = str(getattr(result, "instance_name", "") or "default")
+    status = str(getattr(result, "status", "") or "unknown")
+    chunk_count = int(getattr(result, "chunk_count", 0) or 0)
+    point_count = int(getattr(result, "point_count", 0) or 0)
+    qdrant_url = str(getattr(result, "qdrant_url", "") or "")
+    collection = str(getattr(result, "collection_name", "") or "")
+    embedding_provider = str(getattr(result, "embedding_provider", "") or "")
+    embedding_model = str(getattr(result, "embedding_model", "") or "")
+    embedding_dimensions = int(getattr(result, "embedding_dimensions", 0) or 0)
+    error = str(getattr(result, "error", "") or "")
+    detail = f" chunks={chunk_count} points={point_count}"
+    if qdrant_url:
+        detail += f" qdrant_url={qdrant_url}"
+    if collection:
+        detail += f" collection={collection}"
+    if embedding_model:
+        detail += f" embedding_provider={embedding_provider or 'unknown'} embedding_model={embedding_model} embedding_dimensions={embedding_dimensions}"
+    suffix = f" error={error}" if error else ""
+    return f"{instance}: status={status}{detail}{suffix}"
 
 
 if __name__ == "__main__":  # pragma: no cover
