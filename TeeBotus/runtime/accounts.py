@@ -395,6 +395,30 @@ class SecretToolInstanceSecretProvider:
         self._cache[cache_key] = key
         return key
 
+    def has_secret(self, instance_name: str, purpose: str) -> bool:
+        instance = _normalize_secret_token(instance_name, "instance")
+        resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        cache_key = (instance, resolved_purpose)
+        if cache_key in self._cache:
+            return True
+        existing = self._lookup(instance, resolved_purpose)
+        if existing is None:
+            return False
+        self._cache[cache_key] = existing
+        return True
+
+    def require_existing_secret(self, instance_name: str, purpose: str, *, reason: str, path: Path | None = None) -> None:
+        instance = _normalize_secret_token(instance_name, "instance")
+        resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        if self.has_secret(instance, resolved_purpose):
+            return
+        location = f" ({path})" if path is not None else ""
+        raise AccountStoreError(
+            "refusing to create missing instance secret for existing encrypted "
+            f"{reason}{location}; restore the Secret Service entry or quarantine/recover the encrypted data first "
+            f"(instance={instance}, purpose={resolved_purpose})"
+        )
+
     def _secret_tool(self) -> str:
         binary = shutil.which(self.command)
         if binary is None:
@@ -599,6 +623,7 @@ class AccountStore:
         self.root = Path(self.root)
         if self.create_dirs:
             self.accounts_dir.mkdir(parents=True, exist_ok=True)
+        self._guard_secret_autocreate_against_existing_payloads()
 
     @property
     def vault(self) -> EncryptedJsonVault:
@@ -647,6 +672,57 @@ class AccountStore:
                     config=postgres_config,
                 )
         return self._account_memory_backend
+
+    def _guard_secret_autocreate_against_existing_payloads(self) -> None:
+        if not isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
+            return
+        self._guard_secret_for_existing_payloads(
+            INSTANCE_MAPPING_KEY_PURPOSE,
+            self._mapping_secret_payload_paths(),
+            reason="account metadata",
+        )
+        self._guard_secret_for_existing_payloads(
+            ACCOUNT_MEMORY_KEY_PURPOSE,
+            self._memory_secret_payload_paths(),
+            reason="account memory/state",
+        )
+
+    def _guard_secret_for_existing_payloads(self, purpose: str, paths: Iterable[Path], *, reason: str) -> None:
+        for path in paths:
+            if _looks_like_teebotus_encrypted_payload(path):
+                self.secret_provider.require_existing_secret(self.instance_name, purpose, reason=reason, path=path)
+                return
+
+    def _mapping_secret_payload_paths(self) -> Iterable[Path]:
+        yield self.account_index_path
+        yield self.identities_path
+        yield self.secrets_path
+        if not self.accounts_dir.exists():
+            return
+        for account_dir in self.accounts_dir.iterdir():
+            if not account_dir.is_dir():
+                continue
+            yield account_dir / ACCOUNT_PROFILE_FILENAME
+            yield account_dir / SECRET_VERIFIER_FILENAME
+            yield account_dir / "Account_Tombstone.json"
+
+    def _memory_secret_payload_paths(self) -> Iterable[Path]:
+        if not self.accounts_dir.exists():
+            return
+        filenames = (
+            USER_MEMORY_INDEX_FILENAME,
+            USER_MEMORY_ENTRIES_FILENAME,
+            LLM_STATE_FILENAME,
+            OPENAI_STATE_FILENAME,
+            AGENT_STATE_FILENAME,
+            PROACTIVE_OUTBOX_FILENAME,
+            PROACTIVE_AUDIT_FILENAME,
+        )
+        for account_dir in self.accounts_dir.iterdir():
+            if not account_dir.is_dir():
+                continue
+            for filename in filenames:
+                yield account_dir / filename
 
     @property
     def accounts_dir(self) -> Path:

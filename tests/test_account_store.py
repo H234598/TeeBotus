@@ -8,6 +8,7 @@ import pytest
 
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
+    EncryptedJsonVault,
     AccountStore,
     AccountStoreError,
     LLM_STATE_FILENAME,
@@ -47,6 +48,44 @@ def test_secret_tool_provider_can_refuse_missing_secret(monkeypatch) -> None:
 
     with pytest.raises(AccountStoreError, match="instance secret is missing"):
         provider_instance.get_secret("Demo", "account_memory")
+
+
+def test_account_store_refuses_to_autocreate_mapping_secret_for_existing_encrypted_metadata(tmp_path, monkeypatch) -> None:
+    first = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    first.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+
+    secret_provider = SecretToolInstanceSecretProvider()
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing encrypted metadata"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account metadata"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypted_state(tmp_path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+    EncryptedJsonVault(
+        "Depressionsbot",
+        provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+    ).write_json(account_dir / LLM_STATE_FILENAME, {"previous_response_id": "resp_1"})
+
+    secret_provider = SecretToolInstanceSecretProvider()
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing encrypted state"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account memory/state"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
 
 
 def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
