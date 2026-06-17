@@ -20,6 +20,12 @@ from TeeBotus.benchmarks.core import (
     stable_backend_ranking,
 )
 from TeeBotus.benchmarks.hf_pool import benchmark_hf_pool_eval_matrix, benchmark_hf_pool_live, benchmark_hf_pool_quick
+from TeeBotus.benchmarks.langgraph_flows import (
+    benchmark_langgraph_bibliothekar_deep_query,
+    benchmark_langgraph_bibliothekar_fake_installed,
+    benchmark_langgraph_bibliothekar_linear,
+    benchmark_langgraph_source_harvester_workflow,
+)
 from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
 from TeeBotus.benchmarks.memory import benchmark_memory_jsonl_to_sqlite_migration, memory_results
 from TeeBotus.benchmarks.pydantic_ai import benchmark_decision_fake_model, benchmark_pydantic_structured_decisions
@@ -58,6 +64,10 @@ __all__ = [
     "benchmark_hf_pool_eval_matrix",
     "benchmark_hf_pool_live",
     "benchmark_hf_pool_quick",
+    "benchmark_langgraph_bibliothekar_deep_query",
+    "benchmark_langgraph_bibliothekar_fake_installed",
+    "benchmark_langgraph_bibliothekar_linear",
+    "benchmark_langgraph_source_harvester_workflow",
     "benchmark_llm_router",
     "benchmark_memory_jsonl_to_sqlite_migration",
     "benchmark_pydantic_structured_decisions",

@@ -14,6 +14,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     bibliothekar = importlib.import_module("TeeBotus.benchmarks.bibliothekar")
     core = importlib.import_module("TeeBotus.benchmarks.core")
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
+    langgraph_flows = importlib.import_module("TeeBotus.benchmarks.langgraph_flows")
     llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
     memory = importlib.import_module("TeeBotus.benchmarks.memory")
     pydantic_ai = importlib.import_module("TeeBotus.benchmarks.pydantic_ai")
@@ -29,6 +30,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "bibliothekar.py").exists()
     assert (package_dir / "core.py").exists()
     assert (package_dir / "hf_pool.py").exists()
+    assert (package_dir / "langgraph_flows.py").exists()
     assert (package_dir / "llm_routing.py").exists()
     assert (package_dir / "memory.py").exists()
     assert (package_dir / "pydantic_ai.py").exists()
@@ -49,6 +51,10 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_hf_pool_quick is hf_pool.benchmark_hf_pool_quick
     assert benchmark_module._benchmark_hf_pool_eval_matrix is hf_pool.benchmark_hf_pool_eval_matrix
     assert benchmark_module._benchmark_hf_pool_live is hf_pool.benchmark_hf_pool_live
+    assert benchmark_module._benchmark_langgraph_flow is langgraph_flows.benchmark_langgraph_bibliothekar_deep_query
+    assert benchmark_module._benchmark_langgraph_linear_flow is langgraph_flows.benchmark_langgraph_bibliothekar_linear
+    assert benchmark_module._benchmark_langgraph_fake_installed_flow is langgraph_flows.benchmark_langgraph_bibliothekar_fake_installed
+    assert benchmark_module._benchmark_langgraph_source_harvester_workflow is langgraph_flows.benchmark_langgraph_source_harvester_workflow
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
     assert benchmark_module.benchmark_memory_results is memory.memory_results
