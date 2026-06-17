@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.profiles import (
     LLMProfile,
@@ -406,6 +407,7 @@ def test_runtime_text_client_builds_hf_pool_provider_for_explicit_profile() -> N
     assert client.pool_name == "default"
     assert client.purpose == "normal_chat"
     assert client.model_selector == "pool:default#normal_chat"
+    assert client.capabilities is HF_POOL_TEXT_CAPABILITIES
 
 
 def test_runtime_text_client_uses_hf_pool_model_selector_purpose_for_explicit_profile() -> None:

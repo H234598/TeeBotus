@@ -6,7 +6,7 @@ from typing import Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
-from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
+from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, OpenAICompatibleHFPoolExecutor
@@ -17,7 +17,7 @@ from TeeBotus.llm.profiles import normalize_llm_purpose
 
 class HFPoolProvider:
     provider_name = "hf_pool"
-    capabilities = LITELLM_TEXT_CAPABILITIES
+    capabilities = HF_POOL_TEXT_CAPABILITIES
 
     def __init__(
         self,

@@ -13,7 +13,7 @@ from TeeBotus.llm import (
     build_text_llm_client,
     normalize_llm_provider,
 )
-from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES, OPENAI_CAPABILITIES
+from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES, LITELLM_TEXT_CAPABILITIES, OPENAI_CAPABILITIES
 from TeeBotus.llm.config import load_llm_profiles, load_llm_routing, select_llm_route
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIImage, OpenAIResponse, OpenAIVoice
 
@@ -24,6 +24,9 @@ def test_plan1_llm_package_exports_existing_router_and_litellm_adapter() -> None
     assert LiteLLMTextClient.__name__ == "LiteLLMTextClient"
     assert LITELLM_TEXT_CAPABILITIES.text is True
     assert LITELLM_TEXT_CAPABILITIES.voice is False
+    assert HF_POOL_TEXT_CAPABILITIES.text is True
+    assert HF_POOL_TEXT_CAPABILITIES.previous_response_id is False
+    assert HF_POOL_TEXT_CAPABILITIES is not LITELLM_TEXT_CAPABILITIES
     assert OPENAI_CAPABILITIES.previous_response_id is True
     assert OPENAI_CAPABILITIES.transcription is True
 
