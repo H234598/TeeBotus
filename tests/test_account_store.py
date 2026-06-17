@@ -297,6 +297,30 @@ def test_privacy_confirmation_is_persisted_in_profile_and_reset_by_memory_reset(
     assert store.has_privacy_confirmation(account_id) is False
 
 
+def test_reset_structured_account_memory_writes_empty_schema_index(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Mond", "bot_text": "Gemerkt."})
+
+    store.reset_structured_memory(account_id)
+
+    index_doc = store.read_memory_index(account_id)
+    nested_index = index_doc["index"]
+    assert index_doc["schema_version"] == 2
+    assert index_doc["scope"] == "account"
+    assert index_doc["account_id"] == account_id
+    assert nested_index["recent_ids"] == []
+    assert nested_index["accessed_ids"] == []
+    assert nested_index["keywords"] == {}
+    assert nested_index["entries"] == {}
+    assert nested_index["graph"]["relations"] == []
+    assert nested_index["semantic_cache"]["source"] == "User_Memory_Entries.jsonl"
+    assert nested_index["semantic_cache"]["rebuildable"] is True
+    assert nested_index["semantic_cache"]["entries"] == {}
+    assert store.read_memory_entries(account_id) == []
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

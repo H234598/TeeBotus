@@ -1160,8 +1160,15 @@ class AccountStore:
         return memory_id
 
     def reset_structured_memory(self, account_id: str) -> None:
-        self.write_memory_index(account_id, {})
         self.write_memory_entries(account_id, [])
+        reset_index = self._normalized_memory_index(
+            account_id,
+            {
+                "index": _new_account_memory_index(),
+            },
+        )
+        reset_index["updated_at"] = utc_now()
+        self.write_memory_index(account_id, reset_index)
         self.clear_privacy_confirmation(account_id)
 
     def has_privacy_confirmation(self, account_id: str) -> bool:

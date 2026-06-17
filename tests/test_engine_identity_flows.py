@@ -1955,7 +1955,12 @@ def test_engine_account_memory_reset_requires_confirmation_and_resets_structured
 
     assert confirm_actions[0].text == BotInstructions().user_memory_reset_confirm
     assert done_actions[0].text == BotInstructions().user_memory_reset_success
-    assert account_store.read_memory_index(account_id) == {}
+    reset_index = account_store.read_memory_index(account_id)
+    assert reset_index["scope"] == "account"
+    assert reset_index["account_id"] == account_id
+    assert reset_index["index"]["recent_ids"] == []
+    assert reset_index["index"]["entries"] == {}
+    assert reset_index["index"]["semantic_cache"]["entries"] == {}
     assert account_store.read_memory_entries(account_id) == []
     assert account_store.read_account_text(account_id, "User_Habbits_and_behave.md") == "Adminhinweis bleibt."
 
