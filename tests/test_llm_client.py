@@ -7,7 +7,7 @@ import builtins
 import pytest
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
+from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
 def test_build_text_llm_client_uses_openai_client_by_default() -> None:
@@ -145,6 +145,54 @@ def test_litellm_text_client_prefixes_vertex_ai_models_from_runtime_overrides(mo
 
     assert response.text == "vertex"
     assert calls[0]["model"] == "vertex_ai/gemini-2.5-flash"
+
+
+def test_litellm_text_client_rotates_gemini_key_ring_on_usage_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        api_key = str(kwargs.get("api_key") or "")
+        calls.append(api_key)
+        if api_key == "gemini-a1":
+            exc = RuntimeError("429 RESOURCE_EXHAUSTED quota exceeded")
+            setattr(exc, "status_code", 429)
+            raise exc
+        return {"choices": [{"message": {"content": f"ok:{api_key}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="gemini",
+            model="gemini-2.5-flash",
+            api_key_ring=("gemini-a1", "gemini-b1"),
+        )
+    )
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "ok:gemini-b1"
+    assert calls == ["gemini-a1", "gemini-b1"]
+
+
+def test_litellm_text_client_does_not_rotate_key_ring_on_non_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        calls.append(str(kwargs.get("api_key") or ""))
+        raise RuntimeError("provider exploded")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="gemini",
+            model="gemini-2.5-flash",
+            api_key_ring=("gemini-nonlimit-a", "gemini-nonlimit-b"),
+        )
+    )
+
+    with pytest.raises(LLMAPIError):
+        client.create_reply("Ping", BotInstructions(), None)
+
+    assert calls == ["gemini-nonlimit-a"]
 
 
 def test_litellm_text_client_tries_fallback_models(monkeypatch: pytest.MonkeyPatch) -> None:

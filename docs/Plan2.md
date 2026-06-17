@@ -965,6 +965,13 @@ profiles:
     api_key_env: OPENAI_API_KEY
 ```
 
+Gemini-Keyrotation ist fuer `gemini_flash` zusaetzlich ueber
+`GEMINI_API_KEYS_ACCOUNT_N` oder instanzspezifisch
+`TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` verfuegbar. Die Buckets werden
+spaltenweise sortiert, also Account 1 Key 1, Account 2 Key 1, Account 3 Key 1,
+danach Account 1 Key 2 usw. Bei `429`/Quota-/Usage-Limit wechselt der
+LiteLLM-Client auf den naechsten Key; sonst bleibt der aktive Key stehen.
+
 ### 11.2 Routing-Datei
 
 `config/llm_routing.yaml`:

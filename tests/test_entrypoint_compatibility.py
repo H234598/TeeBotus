@@ -766,6 +766,32 @@ def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value
     assert "/private/vertex-service-account.json" not in captured.out
 
 
+def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "gemini_flash")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_1", "a1,a2")
+    monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_2", "b1,b2")
+    monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_3", "c1,c2")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=gemini/gemini-2.5-flash "
+        "status=configured profile=gemini_flash api_key=configured api_key_ring=6"
+    ) in captured.out
+    assert "a1" not in captured.out
+
+
 def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

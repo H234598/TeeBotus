@@ -74,6 +74,23 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert routing["hard_reasoning"].fallback == "gemini_flash"
 
 
+def test_runtime_profile_client_uses_gemini_key_ring_for_gemini_profile(monkeypatch) -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash",
+        env={
+            "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
+            "GEMINI_API_KEYS_ACCOUNT_2": "b1,b2",
+            "GEMINI_API_KEYS_ACCOUNT_3": "c1,c2",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key_ring is not None
+    assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
+
+
 def test_normalize_llm_provider_accepts_hf_pool_aliases() -> None:
     assert normalize_llm_provider("hf_pool") == "hf_pool"
     assert normalize_llm_provider("hfpool") == "hf_pool"

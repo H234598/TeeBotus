@@ -293,6 +293,13 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         route_api_key_env=route_api_key_env,
         instructions=instructions,
     )
+    gemini_key_ring_count = _status_gemini_key_ring_count(
+        instance_name=getattr(account, "instance_name", ""),
+        provider=provider,
+        model=model,
+    )
+    if gemini_key_ring_count:
+        key_configured = True
     key_required = _llm_key_required_for_status(
         account,
         provider=provider,
@@ -335,6 +342,8 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         detail += f" base_url={base_url}"
     if provider != "openai":
         detail += f" api_key={'configured' if key_configured else 'none'}"
+    if gemini_key_ring_count > 1:
+        detail += f" api_key_ring={gemini_key_ring_count}"
     fallback_count = _status_effective_fallback_count(
         account,
         instructions=instructions,
@@ -817,6 +826,23 @@ def _status_fallback_model_requires_key(*, provider: str, model: object, base_ur
     if normalized_provider == "litellm":
         return not _status_base_url_is_loopback(base_url)
     return normalized_provider in {"openai", "huggingface", "hf", "groq", "gemini", "vertex_ai"}
+
+
+def _status_gemini_key_ring_count(*, instance_name: object, provider: str, model: object) -> int:
+    if not _status_route_uses_gemini_api(provider=provider, model=model):
+        return 0
+    try:
+        from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
+
+        return len(resolve_gemini_api_key_ring(instance_name=str(instance_name or "")))
+    except Exception:
+        return 0
+
+
+def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
 
 
 def _normalize_status_llm_provider(provider: object) -> str:

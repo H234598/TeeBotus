@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
+from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
@@ -32,6 +33,7 @@ def build_runtime_text_llm_client(
     temperature: float | str | None = None,
     max_tokens: int | str | None = None,
     env: Mapping[str, str] | None = None,
+    instance_name: str = "",
     openai_client_factory: Callable[[str], object] = OpenAIClient,
 ) -> object | None:
     enabled_override = _parse_optional_bool(enabled)
@@ -60,6 +62,7 @@ def build_runtime_text_llm_client(
             temperature=temperature,
             max_tokens=max_tokens,
             env=env,
+            instance_name=instance_name,
             openai_client_factory=openai_client_factory,
         )
     if route_purpose and not (has_direct_provider or has_direct_model):
@@ -77,6 +80,7 @@ def build_runtime_text_llm_client(
             temperature=temperature,
             max_tokens=max_tokens,
             env=env,
+            instance_name=instance_name,
             openai_client_factory=openai_client_factory,
         )
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
@@ -99,6 +103,13 @@ def build_runtime_text_llm_client(
             allow_remote_fallback=remote_fallback_allowed,
         ),
         api_key=resolved_api_key,
+        api_key_ring=_gemini_api_key_ring_for_route(
+            env,
+            instance_name=instance_name,
+            provider=resolved_provider,
+            model=resolved_model,
+            explicit_api_key=api_key,
+        ),
         api_base=api_base,
         purpose=route_purpose or "normal_chat",
         timeout=timeout,
@@ -186,6 +197,7 @@ def _build_route_client(
     temperature: float | str | None,
     max_tokens: int | str | None,
     env: Mapping[str, str] | None,
+    instance_name: str,
     openai_client_factory: Callable[[str], object],
 ) -> object | None:
     source = os.environ if env is None else env
@@ -218,6 +230,13 @@ def _build_route_client(
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         fallback_api_bases={route.fallback_model: fallback_api_base} if route.fallback_model and fallback_api_base else None,
         api_key=resolved_api_key,
+        api_key_ring=_gemini_api_key_ring_for_route(
+            source,
+            instance_name=instance_name,
+            provider=route.provider,
+            model=route.model,
+            explicit_api_key=override_api_key,
+        ),
         api_base=resolved_api_base,
         purpose=route.purpose,
         timeout=timeout,
@@ -241,6 +260,7 @@ def _build_profile_client(
     temperature: float | str | None,
     max_tokens: int | str | None,
     env: Mapping[str, str] | None,
+    instance_name: str,
     openai_client_factory: Callable[[str], object],
 ) -> object | None:
     profiles = load_llm_profiles()
@@ -268,6 +288,13 @@ def _build_profile_client(
             allow_remote_fallback=allow_remote_fallback,
         ),
         api_key=resolved_api_key,
+        api_key_ring=_gemini_api_key_ring_for_route(
+            source,
+            instance_name=instance_name,
+            provider=profile.provider,
+            model=profile.model,
+            explicit_api_key=override_api_key,
+        ),
         api_base=resolved_api_base,
         purpose="normal_chat",
         timeout=timeout,
@@ -281,6 +308,27 @@ def _require_profile(profiles: Mapping[str, LLMProfile], profile_name: str) -> L
     if profile_name not in profiles:
         raise KeyError(f"Unknown LLM profile: {profile_name}")
     return profiles[profile_name]
+
+
+def _gemini_api_key_ring_for_route(
+    env: Mapping[str, str] | None,
+    *,
+    instance_name: str,
+    provider: str,
+    model: str,
+    explicit_api_key: str,
+) -> tuple[str, ...]:
+    if str(explicit_api_key or "").strip():
+        return ()
+    if not _route_uses_gemini_api(provider=provider, model=model):
+        return ()
+    return resolve_gemini_api_key_ring(env, instance_name=instance_name)
+
+
+def _route_uses_gemini_api(*, provider: str, model: str) -> bool:
+    normalized_provider = normalize_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
 
 
 class _OpenAITextModelOverrideClient:

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.router import build_text_llm_client, normalize_llm_provider
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -174,6 +175,7 @@ def build_profiled_text_llm_client(
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
+        api_key_ring=resolve_gemini_api_key_ring(source) if _route_uses_gemini_api(route.provider, route.model) else (),
         api_base=route.base_url,
         purpose=route.purpose,
         use_instruction_fallback_models=False,
@@ -187,6 +189,12 @@ def normalize_llm_purpose(value: object) -> str:
     normalized = re.sub(r"[\s-]+", "_", text)
     normalized = re.sub(r"_+", "_", normalized).strip("_")
     return normalized or "normal_chat"
+
+
+def _route_uses_gemini_api(provider: str, model: str) -> bool:
+    normalized_provider = normalize_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
 
 
 def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfile:

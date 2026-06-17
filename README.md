@@ -502,6 +502,29 @@ Remote-Profile werden genauso per Profil geschaltet. `gemini_flash` erwartet
 `GEMINI_API_KEY`; `vertex_gemini_flash` erwartet
 `GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale Vertex/Google-Credentials.
 
+Gemini-Keyrotation:
+
+```bash
+TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT=gemini_flash
+GEMINI_API_KEYS_ACCOUNT_1=acc1_key1,acc1_key2,acc1_key3
+GEMINI_API_KEYS_ACCOUNT_2=acc2_key1,acc2_key2,acc2_key3
+GEMINI_API_KEYS_ACCOUNT_3=acc3_key1,acc3_key2,acc3_key3
+```
+
+Der Bot verwoben diese Buckets spaltenweise:
+`acc1_key1, acc2_key1, acc3_key1, acc1_key2, acc2_key2, acc3_key2, ...`.
+Trifft ein Gemini/LiteLLM-Aufruf auf `429`, `RESOURCE_EXHAUSTED`, Quota- oder
+Usage-Limit, springt der Client im laufenden Prozess auf den naechsten Key.
+Normale Provider-/Netzwerkfehler rotieren den Key nicht. Alternativ kann die
+fertig sortierte Liste direkt ueber `GEMINI_API_KEY_RING` oder
+`TEEBOTUS_GEMINI_API_KEY_RING` gesetzt werden; instanzspezifisch sind
+`TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` und
+`TEEBOTUS_GEMINI_API_KEY_RING_<INSTANZ>` moeglich.
+
+Das ist die normale Gemini-Text-API ueber LiteLLM. Die Gemini/Vertex Live API
+ist ein separater, stateful WebSocket-/GenAI-SDK-Pfad fuer Echtzeit-Audio,
+Video und Text und wird nicht automatisch fuer normale Chatantworten genutzt.
+
 `--runtime-status` nutzt dieselbe effektive LLM-Aufloesung wie der Bot-Start. Er beruecksichtigt also `Bot_Verhalten.md`, Runtime-Overrides und deaktivierte LLMs gleich wie die Runtime-Fabrik. Lokale Ollama-Targets werden nur fuer effektiv aktive Ollama-Konfigurationen geprueft und melden gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
 
 Remote-Profile und Remote-Fallbacks werden im Status als `missing_key` oder

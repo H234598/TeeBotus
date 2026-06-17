@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMResponse
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
+from TeeBotus.llm.keyring import RotatingAPIKeyRing
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_provider")
 LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -53,6 +54,7 @@ class LiteLLMSettings:
     fallback_api_bases: Mapping[str, str] | None = None
     use_instruction_fallback_models: bool = True
     api_key: str = ""
+    api_key_ring: tuple[str, ...] = ()
     api_base: str = ""
     timeout: int = 90
     temperature: float | None = None
@@ -93,6 +95,7 @@ class LiteLLMTextClient:
             fallback_api_keys=None,
             fallback_api_bases=None,
             api_key=api_key,
+            api_key_ring=(),
             api_base=api_base,
             timeout=timeout,
             temperature=temperature,
@@ -114,6 +117,7 @@ class LiteLLMTextClient:
         }
         self.use_instruction_fallback_models = bool(resolved.use_instruction_fallback_models)
         self.api_key = resolved.api_key.strip()
+        self.api_key_ring = RotatingAPIKeyRing(resolved.api_key_ring, name=f"{self.provider}:{self.model}") if resolved.api_key_ring else None
         self.api_base = resolved.api_base.strip()
         self.timeout = resolved.timeout
         self.temperature = resolved.temperature
@@ -140,37 +144,49 @@ class LiteLLMTextClient:
         if not models:
             raise LLMAPIError("LiteLLM model must not be empty")
 
-        base_kwargs = self._completion_kwargs(user_text, instructions)
-        _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
+        key_attempts = self.api_key_ring.ordered_keys() if self.api_key_ring else (None,)
         if previous_response_id:
             LOGGER.debug("Ignoring previous_response_id for LiteLLM text provider; provider has no Responses state capability.")
 
         errors: list[str] = []
-        for model in models:
-            kwargs = self._completion_kwargs_for_model(base_kwargs, model)
-            try:
-                response = completion(model=model, **kwargs)
-            except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
-                detail = _redact_litellm_error(exc, kwargs)
-                errors.append(f"provider={self.provider} model={model}: {type(exc).__name__}: {detail}")
-                LOGGER.warning("LiteLLM completion failed for provider=%s model=%s: %s", self.provider, model, detail)
-                continue
-            text = _extract_litellm_text(response)
-            if not text:
-                errors.append(f"provider={self.provider} model={model}: empty text")
-                LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
-                continue
-            return LLMResponse(
-                text=text,
-                response_id=None,
-                provider="litellm",
-                model=model,
-                usage=_extract_usage(response),
-            )
+        for ring_key in key_attempts:
+            base_kwargs = self._completion_kwargs(user_text, instructions, api_key_override=ring_key)
+            _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
+            key_was_limited = False
+            for model in models:
+                kwargs = self._completion_kwargs_for_model(base_kwargs, model)
+                try:
+                    response = completion(model=model, **kwargs)
+                except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
+                    detail = _redact_litellm_error(exc, kwargs)
+                    errors.append(f"provider={self.provider} model={model}: {type(exc).__name__}: {detail}")
+                    LOGGER.warning("LiteLLM completion failed for provider=%s model=%s: %s", self.provider, model, detail)
+                    if ring_key and _is_usage_limit_error(exc, detail):
+                        key_was_limited = True
+                        self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
+                        LOGGER.warning("Gemini/LiteLLM API key hit a usage limit; trying next configured key.")
+                        break
+                    continue
+                text = _extract_litellm_text(response)
+                if not text:
+                    errors.append(f"provider={self.provider} model={model}: empty text")
+                    LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
+                    continue
+                if ring_key:
+                    self.api_key_ring.mark_success(ring_key)  # type: ignore[union-attr]
+                return LLMResponse(
+                    text=text,
+                    response_id=None,
+                    provider="litellm",
+                    model=model,
+                    usage=_extract_usage(response),
+                )
+            if not key_was_limited:
+                break
         detail = "; ".join(errors) if errors else "no models attempted"
         raise LLMAPIError(f"LiteLLM completion failed for all configured models: {detail}")
 
-    def _completion_kwargs(self, user_text: str, instructions: BotInstructions) -> dict[str, object]:
+    def _completion_kwargs(self, user_text: str, instructions: BotInstructions, *, api_key_override: str | None = None) -> dict[str, object]:
         kwargs: dict[str, object] = {
             "messages": [
                 {"role": "system", "content": instructions.openai_instructions_text()},
@@ -195,7 +211,7 @@ class LiteLLMTextClient:
         api_base = (self.api_base or instructions.llm_base_url).strip()
         if api_base:
             kwargs["api_base"] = api_base
-        api_key = _resolve_litellm_api_key(instructions, self.api_key)
+        api_key = str(api_key_override or "").strip() or _resolve_litellm_api_key(instructions, self.api_key)
         if api_key:
             kwargs["api_key"] = api_key
         return kwargs
@@ -285,6 +301,27 @@ def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str
     if env_name:
         return os.environ.get(env_name, "").strip() or default_api_key.strip()
     return default_api_key.strip()
+
+
+def _is_usage_limit_error(exc: Exception, redacted_detail: str) -> bool:
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if str(status or "").strip() == "429":
+        return True
+    text = f"{type(exc).__name__} {redacted_detail} {exc}".casefold()
+    return any(
+        marker in text
+        for marker in (
+            "429",
+            "too many requests",
+            "rate limit",
+            "ratelimit",
+            "resource_exhausted",
+            "insufficient_quota",
+            "quota exceeded",
+            "quota_exceeded",
+            "usage limit",
+        )
+    )
 
 
 def _validate_litellm_local_service_targets(
