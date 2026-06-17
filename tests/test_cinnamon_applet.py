@@ -25,7 +25,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "actions-page" in schema["layout"]["pages"]
     assert schema["repo-path"]["default"] == "/home/teladi/TeeBotus"
     assert schema["channels"]["default"] == "telegram,signal"
-    assert schema["runtime-unit"]["default"] == "teebotus-runtime.service"
+    assert schema["runtime-unit"]["default"] == "teebotus.service"
     assert schema["status-timeout-seconds"]["default"] == 30
     assert (PROJECT_ROOT / "scripts" / "install_cinnamon_applet.py").is_file()
 

@@ -141,7 +141,7 @@
   "runtime-unit": {
     "type": "entry",
     "description": "User-systemd bot unit",
-    "default": "teebotus-runtime.service"
+    "default": "teebotus.service"
   },
   "default-instance": {
     "type": "entry",

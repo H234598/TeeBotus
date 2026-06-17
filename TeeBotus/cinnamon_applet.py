@@ -14,7 +14,7 @@ from TeeBotus import __version__
 
 DEFAULT_REPO_ROOT = Path.home() / "TeeBotus"
 DEFAULT_CHANNELS = "telegram,signal"
-DEFAULT_UNIT_NAME = "teebotus-runtime.service"
+DEFAULT_UNIT_NAME = "teebotus.service"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000

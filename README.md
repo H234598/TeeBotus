@@ -124,7 +124,7 @@ Terminalprogramm, Bibliothekar-/Proaktiv-Instanz und Projektlinks. Die Applet-
 Statusabfrage laeuft ueber den festen Helfer:
 
 ```bash
-python3 -m TeeBotus.cinnamon_applet status --repo-root "$PWD" --channels telegram,signal --unit teebotus-runtime.service
+python3 -m TeeBotus.cinnamon_applet status --repo-root "$PWD" --channels telegram,signal --unit teebotus.service
 ```
 
 Zum lokalen Testen installiert der Helfer den Applet-Ordner nach
