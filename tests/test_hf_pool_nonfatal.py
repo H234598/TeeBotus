@@ -125,9 +125,33 @@ def test_hf_pool_provider_passes_executor_state_to_scheduler(tmp_path):
     assert executor.selected_target == "low_target"
 
 
+def test_hf_pool_provider_retries_next_target_before_fallback(tmp_path):
+    path = _two_target_config(tmp_path)
+    executor = _RetryExecutor()
+
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=executor)
+    response = provider.create_reply("ping", BotInstructions())
+
+    assert response.text == "selected low_target"
+    assert executor.selected_targets == ["high_target", "low_target"]
+
+
 def test_hf_pool_provider_redacts_unexpected_executor_errors(tmp_path):
     path = _enabled_config(tmp_path)
     provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=_BrokenSecretExecutor())
+
+    with pytest.raises(HFPoolUnavailable) as excinfo:
+        provider.create_reply("ping", BotInstructions())
+
+    message = str(excinfo.value)
+    assert "hf_TESTSECRET123" not in message
+    assert "Bearer hf_" not in message
+    assert "Bearer <REDACTED>" in message
+
+
+def test_hf_pool_provider_redacts_executor_unavailable_errors(tmp_path):
+    path = _enabled_config(tmp_path)
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=_BrokenUnavailableSecretExecutor())
 
     with pytest.raises(HFPoolUnavailable) as excinfo:
         provider.create_reply("ping", BotInstructions())
@@ -160,9 +184,25 @@ class _RecordingExecutor:
         return LLMResponse(text=f"selected {scheduled.target.name}", provider="hf_pool", model=scheduled.target.request_model)
 
 
+class _RetryExecutor:
+    def __init__(self) -> None:
+        self.selected_targets: list[str] = []
+
+    def create_reply(self, scheduled, user_text, instructions):  # noqa: ANN001, ARG002
+        self.selected_targets.append(scheduled.target.name)
+        if scheduled.target.name == "high_target":
+            raise HFPoolUnavailable("high target failed")
+        return LLMResponse(text=f"selected {scheduled.target.name}", provider="hf_pool", model=scheduled.target.request_model)
+
+
 class _BrokenSecretExecutor:
     def create_reply(self, scheduled, user_text, instructions):  # noqa: ANN001, ARG002
         raise RuntimeError("upstream failed with Bearer hf_TESTSECRET123")
+
+
+class _BrokenUnavailableSecretExecutor:
+    def create_reply(self, scheduled, user_text, instructions):  # noqa: ANN001, ARG002
+        raise HFPoolUnavailable("upstream unavailable with Bearer hf_TESTSECRET123")
 
 
 def _enabled_config(tmp_path):

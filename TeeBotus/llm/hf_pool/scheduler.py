@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from TeeBotus.llm.hf_pool.config import HFPool, HFPoolConfig
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
@@ -27,6 +27,7 @@ def select_target(
     env: Mapping[str, str] | None = None,
     state: HFPoolRuntimeState | None = None,
     now: datetime | None = None,
+    exclude_targets: Iterable[str] = (),
 ) -> ScheduledTarget:
     if config.error:
         raise HFPoolUnavailable(config.error)
@@ -37,7 +38,8 @@ def select_target(
         raise HFPoolUnavailable(f"pool {pool.name} disabled")
     purpose_name = normalize_llm_purpose(purpose)
     source = os.environ if env is None else env
-    candidates = [target for target in pool.targets if target.enabled and target.supports_purpose(purpose_name)]
+    excluded = {str(target or "").strip() for target in exclude_targets if str(target or "").strip()}
+    candidates = [target for target in pool.targets if target.enabled and target.supports_purpose(purpose_name) and target.name not in excluded]
     if not candidates:
         raise HFPoolUnavailable(f"pool {pool.name} has no enabled targets for purpose {purpose_name}")
     missing_key = 0

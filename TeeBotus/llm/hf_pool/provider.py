@@ -47,21 +47,34 @@ class HFPoolProvider:
     ) -> LLMResponse:
         try:
             config = load_hf_pool_config(self.config_path)
-            scheduled = select_target(
-                config,
-                pool_name=self.pool_name,
-                purpose=self.purpose,
-                env=self.env,
-                state=_scheduler_state_from_executor(self.executor),
-            )
-            if self.executor is None:
-                raise HFPoolUnavailable("hf_pool live executor is not enabled")
-            return self.executor.create_reply(scheduled, user_text, instructions)
+            failed_targets: list[str] = []
+            last_target_error: HFPoolUnavailable | None = None
+            for _attempt in range(_max_attempts(config.pool(self.pool_name))):
+                try:
+                    scheduled = select_target(
+                        config,
+                        pool_name=self.pool_name,
+                        purpose=self.purpose,
+                        env=self.env,
+                        state=_scheduler_state_from_executor(self.executor),
+                        exclude_targets=failed_targets,
+                    )
+                except HFPoolUnavailable as exc:
+                    raise last_target_error or exc
+                if self.executor is None:
+                    raise HFPoolUnavailable("hf_pool live executor is not enabled")
+                try:
+                    return self.executor.create_reply(scheduled, user_text, instructions)
+                except HFPoolUnavailable as exc:
+                    failed_targets.append(scheduled.target.name)
+                    last_target_error = HFPoolUnavailable(redact_hf_secrets(str(exc)))
+                except Exception as exc:  # noqa: BLE001 - provider boundary normalizes executor failures.
+                    failed_targets.append(scheduled.target.name)
+                    detail = redact_hf_secrets(f"{type(exc).__name__}: {exc}")
+                    last_target_error = HFPoolUnavailable(f"hf_pool target failed: {detail}")
+            raise last_target_error or HFPoolUnavailable("hf_pool has no usable targets after retries")
         except HFPoolUnavailable as exc:
             return self._fallback_or_raise(user_text, instructions, previous_response_id, exc)
-        except Exception as exc:  # noqa: BLE001 - provider boundary normalizes executor failures.
-            detail = redact_hf_secrets(f"{type(exc).__name__}: {exc}")
-            return self._fallback_or_raise(user_text, instructions, previous_response_id, HFPoolUnavailable(f"hf_pool target failed: {detail}"))
 
     def _fallback_or_raise(
         self,
@@ -135,6 +148,11 @@ def _executor_from_env(env: Mapping[str, str] | None) -> HFPoolExecutor | None:
     state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
     state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
     return OpenAICompatibleHFPoolExecutor(state_store=SQLiteHFPoolRuntimeStateStore(state_path))
+
+
+def _max_attempts(pool: object) -> int:
+    retries = int(getattr(pool, "max_retries", 0) or 0)
+    return max(1, retries + 1)
 
 
 def _scheduler_state_from_executor(executor: HFPoolExecutor | None) -> HFPoolRuntimeState | None:

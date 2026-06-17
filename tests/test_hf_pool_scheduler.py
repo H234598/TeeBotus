@@ -83,6 +83,19 @@ def test_hf_pool_scheduler_skips_targets_in_active_cooldown(tmp_path) -> None:
     assert scheduled.target.name == "low"
 
 
+def test_hf_pool_scheduler_skips_excluded_targets_for_retry(tmp_path) -> None:
+    config = _weighted_two_target_config(tmp_path)
+
+    scheduled = select_target(
+        config,
+        purpose="normal_chat",
+        env={"HF_TOKEN_MAIN": "hf_fake_token"},
+        exclude_targets=("high",),
+    )
+
+    assert scheduled.target.name == "low"
+
+
 def test_hf_pool_scheduler_reports_all_configured_targets_in_cooldown(tmp_path) -> None:
     config = _weighted_two_target_config(tmp_path)
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
