@@ -2321,6 +2321,29 @@ def test_runtime_status_missing_required_lines_flags_malformed_structured_route(
     assert "runtime-status bibliothekar route must show free_tier_guard" in missing
 
 
+def test_runtime_status_account_memory_recovery_requires_matching_recovery_line() -> None:
+    missing_lines = [
+        "account_memory_metadata=Demo status=broken item=account_index path=/repo/instances/Demo/data/accounts/Account_Index.json error=encrypted envelope authentication failed",
+    ]
+    valid_lines = [
+        missing_lines[0],
+        'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir /repo/instances --instances Demo"',
+    ]
+    malformed_lines = [
+        "account_memory=Demo/abc status=broken error=index_missing",
+        'account_memory_recovery=Demo status=available command="python3 -m TeeBotus.admin memory-recovery --instances-dir /repo/instances --instances Other"',
+    ]
+
+    missing = check_plan2_acceptance._runtime_status_account_memory_recovery_errors(missing_lines)
+    valid = check_plan2_acceptance._runtime_status_account_memory_recovery_errors(valid_lines)
+    malformed = check_plan2_acceptance._runtime_status_account_memory_recovery_errors(malformed_lines)
+
+    assert "runtime-status account-memory recovery missing for broken account-memory instance Demo" in missing
+    assert valid == []
+    assert any("must use status=needed" in error for error in malformed)
+    assert any("command instance does not match status line" in error for error in malformed)
+
+
 def test_runtime_status_missing_required_lines_validates_account_memory_legacy_recovery() -> None:
     valid_line = (
         'account_memory_recovery_legacy=Demo status=available sources=1 entries=2 path=/tmp/TeeBotus_Backups/TeeBotus.bak2/instances.bak '

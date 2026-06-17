@@ -1782,6 +1782,7 @@ def _runtime_status_missing_required_lines(output: str) -> list[str]:
             missing.append(f"runtime-status missing {label}: {prefix}")
     missing.extend(_runtime_status_structured_route_errors(lines))
     missing.extend(_runtime_status_bibliothekar_route_errors(lines))
+    missing.extend(_runtime_status_account_memory_recovery_errors(lines))
     missing.extend(_runtime_status_account_memory_recovery_legacy_errors(lines))
     return missing
 
@@ -1866,6 +1867,66 @@ def _runtime_status_account_memory_recovery_legacy_errors(lines: Sequence[str]) 
                 instance_name=instance_name,
             )
         )
+    return errors
+
+
+def _runtime_status_account_memory_recovery_errors(lines: Sequence[str]) -> list[str]:
+    errors: list[str] = []
+    broken_instances = _runtime_status_broken_account_memory_instances(lines)
+    recovery_instances: set[str] = set()
+    for line in lines:
+        if not line.startswith("account_memory_recovery="):
+            continue
+        fields, orphan_tokens = _runtime_status_fields(line)
+        instance_name = fields.get("account_memory_recovery") or "<unknown>"
+        recovery_instances.add(instance_name)
+        if orphan_tokens:
+            errors.append(f"runtime-status account-memory recovery line has unkeyed tokens for {instance_name}: {' '.join(orphan_tokens)}")
+        if fields.get("status") != "needed":
+            errors.append(f"runtime-status account-memory recovery must use status=needed for {instance_name}")
+        errors.extend(
+            _runtime_status_recovery_command_errors(
+                fields.get("command", ""),
+                instance_name=instance_name,
+            )
+        )
+    for instance_name in sorted(broken_instances - recovery_instances):
+        errors.append(f"runtime-status account-memory recovery missing for broken account-memory instance {instance_name}")
+    return errors
+
+
+def _runtime_status_broken_account_memory_instances(lines: Sequence[str]) -> set[str]:
+    broken_instances: set[str] = set()
+    for line in lines:
+        if not line.startswith(("account_memory=", "account_memory_metadata=")):
+            continue
+        if " status=broken" not in line:
+            continue
+        fields, _orphan_tokens = _runtime_status_fields(line)
+        instance_name = fields.get("account_memory_metadata", "")
+        if not instance_name:
+            instance_name = fields.get("account_memory", "").split("/", 1)[0]
+        if instance_name:
+            broken_instances.add(instance_name)
+    return broken_instances
+
+
+def _runtime_status_recovery_command_errors(command: str, *, instance_name: str) -> list[str]:
+    if not command:
+        return [f"runtime-status account-memory recovery missing command for {instance_name}"]
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return [f"runtime-status account-memory recovery command is not shell-parseable for {instance_name}: {exc}"]
+    errors: list[str] = []
+    if "TeeBotus.admin" not in argv or "memory-recovery" not in argv:
+        errors.append(f"runtime-status account-memory recovery command must call TeeBotus.admin memory-recovery for {instance_name}")
+    if "--instances-dir" not in argv:
+        errors.append(f"runtime-status account-memory recovery command missing --instances-dir for {instance_name}")
+    if "--instances" not in argv:
+        errors.append(f"runtime-status account-memory recovery command missing --instances for {instance_name}")
+    elif _option_value(argv, "--instances") != instance_name:
+        errors.append(f"runtime-status account-memory recovery command instance does not match status line for {instance_name}")
     return errors
 
 
