@@ -14,6 +14,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     core = importlib.import_module("TeeBotus.benchmarks.core")
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
     llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
+    memory = importlib.import_module("TeeBotus.benchmarks.memory")
     pydantic_ai = importlib.import_module("TeeBotus.benchmarks.pydantic_ai")
     qdrant = importlib.import_module("TeeBotus.benchmarks.qdrant")
     source_quality = importlib.import_module("TeeBotus.benchmarks.source_quality")
@@ -24,6 +25,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "core.py").exists()
     assert (package_dir / "hf_pool.py").exists()
     assert (package_dir / "llm_routing.py").exists()
+    assert (package_dir / "memory.py").exists()
     assert (package_dir / "pydantic_ai.py").exists()
     assert (package_dir / "qdrant.py").exists()
     assert (package_dir / "source_quality.py").exists()
@@ -37,6 +39,8 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_hf_pool_live is hf_pool.benchmark_hf_pool_live
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
+    assert benchmark_module.benchmark_memory_results is memory.memory_results
+    assert benchmark_module._benchmark_memory_jsonl_to_sqlite_migration is memory.benchmark_memory_jsonl_to_sqlite_migration
     assert benchmark_module._benchmark_decision_fake_model is pydantic_ai.benchmark_decision_fake_model
     assert benchmark_module._benchmark_pydantic_structured_decisions is pydantic_ai.benchmark_pydantic_structured_decisions
     assert benchmark_module._benchmark_qdrant_health_quick is qdrant.benchmark_qdrant_health_quick
