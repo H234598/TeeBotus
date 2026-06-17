@@ -587,7 +587,7 @@ Konfiguration in `Bot_Verhalten.md`:
 ## Bibliothekar
 - enabled: ja
 - backend: local
-- collection: teebotus_books
+- collection: teebotus_bibliothekar_chunks
 - qdrant_url: http://127.0.0.1:6333
 - max_prompt_chars: 5000
 - max_chunks: 5
@@ -595,7 +595,7 @@ Konfiguration in `Bot_Verhalten.md`:
 - require_citations: ja
 ```
 
-`backend: local` nutzt den JSONL-Store. `backend: haystack` oder `backend: qdrant` aktiviert den optionalen Haystack/Qdrant-Backendpfad hinter derselben `BibliothekarService`-Schnittstelle. Der lokale Store bleibt dabei die rebuildbare Quelle; Haystack/Qdrant ist ein Backend/Cache fuer produktivere Suche.
+`backend: local` nutzt den JSONL-Store. `backend: haystack` oder `backend: qdrant` aktiviert den optionalen Haystack/Qdrant-Backendpfad hinter derselben `BibliothekarService`-Schnittstelle. `backend: llamaindex` aktiviert den lokalen LlamaIndex-Pilot, wenn `llama-index-core` installiert ist. Der lokale Store bleibt dabei die rebuildbare Quelle; Haystack/Qdrant und LlamaIndex sind Backend-/Cache-Schichten fuer produktivere Suche.
 
 Vor dem Bibliothekar-Kontext kann ein optionaler Pydantic-Subtask `BibliothekarQueryDecision` laufen. Er entscheidet, ob der Quellenindex fuer die aktuelle natuerliche Sprache durchsucht werden soll, und kann die Suchfrage knapp normalisieren. Ohne strukturierten Runner bleibt das alte Verhalten erhalten: der Bibliothekar sucht weiter, sobald er in der Instanz aktiviert ist. Fuer echte Pydantic-AI-Laeufe gibt es `TeeBotus.decisions.pydantic_agent.build_router_pydantic_ai_model_runner("structured_decision")`, der den TeeBotus-LLM-Router nutzt und aktuell auf den `hf_pool_structured`-Bucket zeigt. `build_pydantic_ai_model_runner(model)` bleibt fuer direkte Tests/Fakes verfuegbar. Der Adapter ist optional, nutzt Pydantic-AIs strukturierte `output_type`-Ausgabe und meldet klar, wenn das Extra `[agents]` nicht installiert ist.
 
@@ -616,7 +616,7 @@ python3 -m TeeBotus.bibliothekar --instance Depressionsbot query "System Therapi
 `query --source` baut einen temporaeren lokalen Fixture-Index und veraendert die echte Instanz-Bibliothek nicht. Das ist fuer Akzeptanztests und Benchmarkvergleiche gedacht.
 `query` kann mit `--category`, `--topic`/`--keyword`, `--file`/`--relative-path`, `--extension` und `--suffix` auf indexierte Metadaten eingeschraenkt werden; dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend.
 
-Haystack/Qdrant optional:
+Haystack/Qdrant/LlamaIndex optional:
 
 ```bash
 python3 -m pip install '.[rag]'
@@ -642,7 +642,7 @@ Collections anzulegen.
 Die vorbereiteten Collection-Namen sind `teebotus_user_memory` und
 `teebotus_bibliothekar_chunks`. Usermemory nutzt die vorhandene lokale
 semantische Cache-Dimension, Bibliothekar-Chunks sind fuer
-`intfloat/multilingual-e5-small` vorbereitet.
+`BAAI/bge-m3` vorbereitet.
 Die Embedding-Schicht liegt unter `TeeBotus.embedding`: `EmbeddingProvider`
 unterstuetzt `embed_text` und Batch-`embed_texts`, `FakeEmbeddingProvider`
 bleibt der lokale Teststandard, `HFEmbeddingProvider` kann per injiziertem
@@ -690,14 +690,17 @@ mit Fake-Embeddings in Standardtests, haelt `BAAI/bge-m3` als vorbereiteten
 Provider fest und speichert Chunk-Text nur als Hash plus Quellenmetadaten im
 Qdrant-Payload.
 `LlamaIndexBibliothekarBackend` ist ein optionaler Pilot hinter
-`BibliothekarService`: Fake-/Test-Query-Engines koennen zitierfaehige Chunks
-liefern, ohne den lokalen Store zu ersetzen. Neben `search`/`retrieve` werden
-auch typische LlamaIndex-`query`-/`chat`-Responses mit `source_nodes`
-akzeptiert. Wenn LlamaIndex nicht verfuegbar oder die Query-Engine nicht nutzbar
-ist, bleibt `LocalBibliothekarBackend` der Fallback. Wenn zwar die Dependency
-installiert ist, aber keine Query-Engine verdrahtet wurde, meldet der
-Runtime-Status `backend=llamaindex status=unavailable` statt ein falsches
-`ready`.
+`BibliothekarService`: Wenn `llama-index-core` installiert ist, baut er aus den
+lokalen Bibliothekar-Chunks einen lokalen In-Memory-Retriever mit LlamaIndex-
+`MockEmbedding`; dadurch entstehen keine OpenAI- oder Provider-Kosten. Der
+lokale Store bleibt Wahrheit und Rebuild-Quelle. Fake-/Test-Query-Engines
+koennen weiterhin zitierfaehige Chunks liefern, ohne den lokalen Store zu
+ersetzen. Neben `search`/`retrieve` werden auch typische LlamaIndex-`query`-/
+`chat`-Responses mit `source_nodes` akzeptiert. Wenn LlamaIndex nicht verfuegbar
+oder die Query-Engine nicht nutzbar ist, bleibt `LocalBibliothekarBackend` der
+Fallback; der Runtime-Status meldet dann `backend=llamaindex
+status=unavailable`. Bei erfolgreichem lokalen Pilot meldet er
+`backend=llamaindex status=ready store=llamaindex target=local_in_memory`.
 `TeeBotus.runtime.source_quality.SourceQualityPipeline` ist ein lokaler
 Vor-Index-Gate fuer Quellen: Dateityp/Groesse/Metadaten werden deterministisch
 geprueft, ein optionaler NLI-Verifier kann Claims gegen Evidenz klassifizieren,

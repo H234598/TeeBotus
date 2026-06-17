@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
-from TeeBotus.runtime.bibliothekar import DEFAULT_EMBEDDING_MODEL
 from TeeBotus.runtime.qdrant import (
+    BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
@@ -38,7 +38,7 @@ def test_default_qdrant_collection_specs_prepare_usermemory_and_bibliothekar() -
     assert bibliothekar.name == QDRANT_BIBLIOTHEKAR_COLLECTION
     assert bibliothekar.vector_size == DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS
     assert bibliothekar.distance == "Cosine"
-    assert bibliothekar.embedding_model == DEFAULT_EMBEDDING_MODEL
+    assert bibliothekar.embedding_model == BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL
 
 
 def test_ensure_collection_sends_idempotent_put_with_vector_schema() -> None:
@@ -131,7 +131,7 @@ def test_format_qdrant_collection_status_lines_reports_specs_when_unavailable() 
         "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable "
         f"vector_size={ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS} embedding_model=teebotus-account-memory-hash error=connection refused",
         "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable "
-        f"vector_size={DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS} embedding_model={DEFAULT_EMBEDDING_MODEL} error=connection refused",
+        f"vector_size={DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS} embedding_model={BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL} error=connection refused",
     )
 
 

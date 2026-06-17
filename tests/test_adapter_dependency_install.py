@@ -126,7 +126,7 @@ def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_
         [project.optional-dependencies]
         dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
         llm = ["litellm==1.83.7", "python-dotenv==1.0.1", "openai==2.30.0", "ollama==0.6.2", "surprise-llm"]
-        rag = ["haystack-ai==2.30.1", "qdrant-haystack==10.3.0", "sentence-transformers==5.5.1", "pypdf==6.13.2", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.14.3"]
+        rag = ["haystack-ai==2.30.1", "qdrant-haystack==10.3.0", "sentence-transformers==5.5.1", "pypdf==6.13.2", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.14.3", "llama-index-core==0.14.22"]
         agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.5"]
         tools = ["fastmcp==2.0.0"]
 

@@ -10,15 +10,14 @@ from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
 
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
-from TeeBotus.runtime.bibliothekar import DEFAULT_EMBEDDING_MODEL
-
-
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 QDRANT_URL_ENV = "TEEBOTUS_QDRANT_URL"
 QDRANT_USER_MEMORY_COLLECTION = "teebotus_user_memory"
 QDRANT_BIBLIOTHEKAR_COLLECTION = "teebotus_bibliothekar_chunks"
 DEFAULT_QDRANT_TIMEOUT_SECONDS = 0.35
-DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS = 384
+BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL = "BAAI/bge-m3"
+BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS = 1024
+DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS = BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS
 LOCAL_QDRANT_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 QDRANT_COLLECTION_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,255}$")
 
@@ -146,7 +145,7 @@ def default_qdrant_collection_specs(
         QdrantCollectionSpec(
             name=QDRANT_BIBLIOTHEKAR_COLLECTION,
             vector_size=_validate_vector_size(bibliothekar_vector_size),
-            embedding_model=DEFAULT_EMBEDDING_MODEL,
+            embedding_model=BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
         ),
     )
 

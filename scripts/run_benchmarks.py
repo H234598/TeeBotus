@@ -125,6 +125,7 @@ REQUIRED_BENCHMARK_NAMES = frozenset(
         "memory_jsonl",
         "memory_sqlite_projection",
         "bibliothekar_local_query",
+        "bibliothekar_llamaindex_fake_query",
         "bibliothekar_haystack_fake_query",
         "hf_pool_quick_health",
         "hf_pool_eval_matrix",
@@ -219,6 +220,7 @@ def run_benchmarks(
     results: list[BenchmarkResult] = []
     results.extend(_memory_results(entries=entries, select_runs=max(1, min(5, iterations)), postgres_dsn=postgres_dsn if include_live else ""))
     results.append(_benchmark_bibliothekar(iterations=iterations))
+    results.append(_benchmark_bibliothekar_llamaindex_fake(iterations=iterations))
     results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
     results.append(_benchmark_retrieval_embedding_reranker_matrix(iterations=iterations))
     results.append(_benchmark_source_harvester_quality_gate(iterations=iterations))
@@ -563,7 +565,7 @@ def _markdown_details(details: dict[str, Any]) -> str:
 def _build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
     categories = {
         "account_memory": {"memory_jsonl", "memory_sqlite_projection", "memory_postgres"},
-        "bibliothekar": {"bibliothekar_local_query", "bibliothekar_haystack_fake_query"},
+        "bibliothekar": {"bibliothekar_local_query", "bibliothekar_llamaindex_fake_query", "bibliothekar_haystack_fake_query"},
         "langgraph_flows": {
             "langgraph_bibliothekar_deep_query",
             "langgraph_bibliothekar_linear",
@@ -789,6 +791,71 @@ def _benchmark_bibliothekar(*, iterations: int) -> BenchmarkResult:
         )
 
 
+def _benchmark_bibliothekar_llamaindex_fake(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-llamaindex-") as tmp:
+        root = Path(tmp)
+        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
+        _copy_benchmark_books(library_dir)
+        backend = LlamaIndexBibliothekarBackend(
+            instance_name="Bench",
+            instances_dir=root / "instances",
+            query_engine_factory=lambda source_store: _BenchmarkLlamaIndexQueryEngine(source_store),
+        )
+        rebuild_ms = _timed_ms(backend.rebuild)
+        timings = [
+            _timed_ms(
+                lambda: backend.search(
+                    BibliothekarQuery(
+                        text="Therapie Schlaf",
+                        max_chunks=2,
+                        max_prompt_chars=5000,
+                        max_quote_chars=500,
+                    )
+                )
+            )
+            for _ in range(iterations)
+        ]
+        selection = backend.search(
+            BibliothekarQuery(
+                text="Therapie Schlaf",
+                max_chunks=2,
+                max_prompt_chars=5000,
+                max_quote_chars=500,
+            )
+        )
+        private_filter_selection = backend.search(
+            BibliothekarQuery(
+                text="Therapie Schlaf",
+                filters={"account_id": "private-account-id", "memory_id": "mem_private"},
+                max_chunks=2,
+                max_prompt_chars=5000,
+                max_quote_chars=500,
+            )
+        )
+        fallback_store = backend.fallback_store
+        index = json.loads(fallback_store.index_path.read_text(encoding="utf-8"))
+        private_filter_prompt = private_filter_selection.prompt_text
+        return _result(
+            name="bibliothekar_llamaindex_fake_query",
+            category="bibliothekar",
+            iterations=iterations,
+            total_ms=rebuild_ms + sum(timings),
+            payload_bytes=fallback_store.chunks_path.stat().st_size,
+            index_bytes=fallback_store.index_path.stat().st_size,
+            note="fake_llamaindex_query_engine",
+            details={
+                "documents": len(index.get("documents", {})),
+                "chunks": int(index.get("chunk_count") or 0),
+                "fixture": "tests/fixtures/books",
+                "query_engine": "fake_llamaindex_chunks",
+                "median_query_ms": statistics.median(timings),
+                "private_filter_selected_chunks": len(private_filter_selection.selected_ids),
+                "private_filter_payload_leaked": any(marker in private_filter_prompt for marker in ("private-account-id", "mem_private")),
+                **_bibliothekar_payload_details(selection.prompt_text),
+            },
+        )
+
+
 def _benchmark_bibliothekar_haystack_fake(*, iterations: int) -> BenchmarkResult:
     with tempfile.TemporaryDirectory(prefix="teebotus-bench-haystack-") as tmp:
         root = Path(tmp)
@@ -910,18 +977,10 @@ def _benchmark_retrieval_embedding_reranker_matrix(*, iterations: int) -> Benchm
         backend_timings["haystack_fake"] = sum(_timed_ms(lambda: haystack_backend.search(BibliothekarQuery(text=query, max_chunks=2))) for _ in range(iterations))
         backend_selected["haystack_fake"] = len(haystack_backend.search(BibliothekarQuery(text=query, max_chunks=2)).selected_ids)
 
-        class FakeLlamaIndexQueryEngine:
-            def __init__(self, source_store: BibliothekarStore) -> None:
-                source_store.ensure_current()
-                self.chunks = [json.loads(line) for line in source_store.chunks_path.read_text(encoding="utf-8").splitlines()]
-
-            def search(self, _query_text: str) -> list[dict[str, Any]]:
-                return list(self.chunks)
-
         llama_backend = LlamaIndexBibliothekarBackend(
             instance_name="Bench",
             instances_dir=root / "instances",
-            query_engine_factory=lambda source_store: FakeLlamaIndexQueryEngine(source_store),
+            query_engine_factory=lambda source_store: _BenchmarkLlamaIndexQueryEngine(source_store),
         )
         backend_timings["llamaindex_fake"] = sum(_timed_ms(lambda: llama_backend.search(BibliothekarQuery(text=query, max_chunks=2))) for _ in range(iterations))
         backend_selected["llamaindex_fake"] = len(llama_backend.search(BibliothekarQuery(text=query, max_chunks=2)).selected_ids)
@@ -3052,6 +3111,7 @@ def _dependency_context() -> dict[str, dict[str, str]]:
         "pydantic-ai-slim",
         "langgraph",
         "haystack-ai",
+        "llama-index-core",
         "qdrant-haystack",
         "fastmcp",
     )
@@ -3074,6 +3134,17 @@ class _BenchmarkDocument:
         self.content = content
         self.meta = meta
         self.id = id or str(meta.get("chunk_id", ""))
+
+
+class _BenchmarkLlamaIndexQueryEngine:
+    def __init__(self, source_store: BibliothekarStore) -> None:
+        source_store.ensure_current()
+        self.chunks = [json.loads(line) for line in source_store.chunks_path.read_text(encoding="utf-8").splitlines()]
+        self.queries: list[str] = []
+
+    def search(self, query_text: str) -> list[dict[str, Any]]:
+        self.queries.append(query_text)
+        return list(self.chunks)
 
 
 class _BenchmarkDocumentStore:

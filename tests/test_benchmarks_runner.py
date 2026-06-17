@@ -18,6 +18,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["context"]["cpu_count"] >= 1
     assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
     assert suite["context"]["dependencies"]["litellm"]["status"] in {"installed", "missing"}
+    assert suite["context"]["dependencies"]["llama-index-core"]["status"] in {"installed", "missing"}
     assert suite["context"]["dependencies"]["signalbot"]["version"]
     assert suite["comparisons"]["auto_switching"] is False
     assert suite["quality_gate"] == {
@@ -73,18 +74,25 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert migration["details"]["verified"] is True
     assert any(result["name"] == "bibliothekar_local_query" for result in suite["results"])
     local_library = next(result for result in suite["results"] if result["name"] == "bibliothekar_local_query")
+    llamaindex_library = next(result for result in suite["results"] if result["name"] == "bibliothekar_llamaindex_fake_query")
     haystack_library = next(result for result in suite["results"] if result["name"] == "bibliothekar_haystack_fake_query")
     assert local_library["details"]["fixture"] == "tests/fixtures/books"
+    assert llamaindex_library["details"]["fixture"] == "tests/fixtures/books"
     assert haystack_library["details"]["fixture"] == "tests/fixtures/books"
     assert local_library["details"]["selected_chunks"] >= 1
+    assert llamaindex_library["details"]["selected_chunks"] >= 1
     assert haystack_library["details"]["selected_chunks"] >= 1
     assert local_library["details"]["citation_payload_bytes"] > 0
+    assert llamaindex_library["details"]["citation_payload_bytes"] > 0
     assert haystack_library["details"]["citation_payload_bytes"] > 0
     assert local_library["details"]["has_citation_format"] is True
+    assert llamaindex_library["details"]["has_citation_format"] is True
     assert haystack_library["details"]["has_citation_format"] is True
     assert local_library["details"]["provenance_fields_complete"] is True
+    assert llamaindex_library["details"]["provenance_fields_complete"] is True
     assert haystack_library["details"]["provenance_fields_complete"] is True
     assert local_library["details"]["citation_missing_fields"] == []
+    assert llamaindex_library["details"]["citation_missing_fields"] == []
     assert haystack_library["details"]["citation_missing_fields"] == []
     assert {
         "chunk_id",
@@ -103,8 +111,16 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "embedding_model",
         "citation_format",
     }.issubset(set(local_library["details"]["citation_required_fields"]))
+    assert llamaindex_library["details"]["query_engine"] == "fake_llamaindex_chunks"
+    assert llamaindex_library["details"]["private_filter_selected_chunks"] >= 1
+    assert llamaindex_library["details"]["private_filter_payload_leaked"] is False
     assert haystack_library["details"]["private_filter_selected_chunks"] >= 1
     assert haystack_library["details"]["private_filter_payload_leaked"] is False
+    assert {candidate["name"] for candidate in rankings["bibliothekar"]["candidates"]} == {
+        "bibliothekar_local_query",
+        "bibliothekar_llamaindex_fake_query",
+        "bibliothekar_haystack_fake_query",
+    }
     assert any(result["name"] == "langgraph_bibliothekar_linear" for result in suite["results"])
     fake_graph = next(result for result in suite["results"] if result["name"] == "langgraph_bibliothekar_fake_installed")
     assert fake_graph["details"]["mode"] == "fake_installed_langgraph"
@@ -310,6 +326,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "Die Rangliste dokumentiert Messwerte nur" in markdown
     assert "memory_jsonl" in markdown
     assert "memory_migration_jsonl_to_sqlite" in markdown
+    assert "bibliothekar_llamaindex_fake_query" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "pydantic_structured_decisions" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown

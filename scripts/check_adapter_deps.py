@@ -142,6 +142,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
             "pymupdf==1.27.2.3",
             "ebooklib==0.20",
             "beautifulsoup4==4.14.3",
+            "llama-index-core==0.14.22",
         },
         "agents": {"pydantic-ai-slim==1.107.0", "langgraph==1.2.5"},
         "tools": {"fastmcp==2.0.0"},

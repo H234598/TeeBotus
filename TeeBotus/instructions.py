@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
+
 LOGGER = logging.getLogger("TeeBotus.instructions")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
@@ -184,7 +186,7 @@ class BotInstructions:
     memory_search_qdrant_url: str = "http://127.0.0.1:6333"
     bibliothekar_enabled: bool = True
     bibliothekar_backend: str = "local"
-    bibliothekar_collection: str = "teebotus_books"
+    bibliothekar_collection: str = QDRANT_BIBLIOTHEKAR_COLLECTION
     bibliothekar_qdrant_url: str = "http://127.0.0.1:6333"
     bibliothekar_max_prompt_chars: int = 5000
     bibliothekar_max_chunks: int = 5

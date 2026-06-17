@@ -4,12 +4,13 @@ import json
 import zipfile
 from pathlib import Path
 
+import TeeBotus.runtime.bibliothekar_service as bibliothekar_service_module
+from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.instructions import BotInstructions, parse_instructions
 from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.bibliothekar import BibliothekarStore, LIBRARY_SCHEMA_VERSION
-from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.runtime.bibliothekar_service import (
     BibliothekarQuery,
     BibliothekarService,
@@ -20,6 +21,7 @@ from TeeBotus.runtime.bibliothekar_service import (
 )
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
 
 
 def test_bibliothekar_indexes_txt_epub_docx_and_retrieves_cited_chunks(tmp_path):
@@ -1265,11 +1267,11 @@ def test_llamaindex_backend_falls_back_to_local_when_optional_dependency_missing
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
-def test_llamaindex_backend_without_query_engine_factory_uses_local_fallback(tmp_path, monkeypatch):
+def test_llamaindex_backend_without_dependency_uses_local_fallback(tmp_path, monkeypatch):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
-    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: False)
     backend = LlamaIndexBibliothekarBackend(instance_name="Depressionsbot", instances_dir=tmp_path / "instances")
 
     selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
@@ -1280,11 +1282,44 @@ def test_llamaindex_backend_without_query_engine_factory_uses_local_fallback(tmp
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
 
 
-def test_llamaindex_health_reports_unconfigured_query_engine_as_unavailable(tmp_path, monkeypatch):
+def test_llamaindex_backend_without_query_engine_factory_builds_default_local_retriever(tmp_path, monkeypatch):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    created = []
+
+    class FakeDefaultRetriever:
+        def __init__(self, store):
+            store.rebuild()
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+            self.queries = []
+
+        def retrieve(self, query_text):
+            self.queries.append(query_text)
+            return self.chunks
+
+    def fake_build_default(self):
+        engine = FakeDefaultRetriever(self.fallback_store)
+        created.append(engine)
+        return engine
+
+    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", fake_build_default)
+    backend = LlamaIndexBibliothekarBackend(instance_name="Depressionsbot", instances_dir=tmp_path / "instances")
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert backend.available is True
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+    assert created[0].queries == ["Therapie"]
+
+
+def test_llamaindex_health_reports_missing_dependency_as_unavailable_without_crashing(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
 
     health = check_bibliothekar_service(
         "Depressionsbot",
@@ -1295,9 +1330,81 @@ def test_llamaindex_health_reports_unconfigured_query_engine_as_unavailable(tmp_
     assert health.backend == "llamaindex"
     assert health.status == "unavailable"
     assert health.store == "json"
-    assert "query engine is not configured" in health.error
+    assert "missing optional dependency" in health.error
     assert health.documents == 1
     assert health.chunks == 1
+
+
+def test_llamaindex_health_reports_default_local_retriever_as_ready(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", lambda self: object())
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="llamaindex"),
+    )
+
+    assert health.backend == "llamaindex"
+    assert health.status == "ready"
+    assert health.store == "llamaindex"
+    assert health.target == "local_in_memory"
+    assert health.error == ""
+    assert health.documents == 1
+    assert health.chunks == 1
+
+
+def test_llamaindex_vector_index_builder_never_falls_back_without_explicit_local_embedding():
+    calls = []
+
+    class RejectingVectorStoreIndex:
+        @classmethod
+        def from_documents(cls, _documents, **kwargs):
+            calls.append(dict(kwargs))
+            raise TypeError("unsupported kwargs")
+
+    try:
+        bibliothekar_service_module._llamaindex_vector_index_from_documents(
+            RejectingVectorStoreIndex,
+            [object()],
+            embed_model="local-mock-embedding",
+        )
+    except RuntimeError as exc:
+        assert "explicit local embed_model" in str(exc)
+    else:  # pragma: no cover - defensive assertion for the no-remote invariant.
+        raise AssertionError("LlamaIndex builder must not fall back without explicit local embedding")
+
+    assert calls == [
+        {"embed_model": "local-mock-embedding", "show_progress": False},
+        {"embed_model": "local-mock-embedding"},
+    ]
+
+
+def test_llamaindex_vector_index_builder_uses_second_explicit_embedding_signature():
+    calls = []
+
+    class AcceptingVectorStoreIndex:
+        @classmethod
+        def from_documents(cls, _documents, **kwargs):
+            calls.append(dict(kwargs))
+            if "show_progress" in kwargs:
+                raise TypeError("show_progress unsupported")
+            return "index"
+
+    index = bibliothekar_service_module._llamaindex_vector_index_from_documents(
+        AcceptingVectorStoreIndex,
+        [object()],
+        embed_model="local-mock-embedding",
+    )
+
+    assert index == "index"
+    assert calls == [
+        {"embed_model": "local-mock-embedding", "show_progress": False},
+        {"embed_model": "local-mock-embedding"},
+    ]
 
 
 def test_haystack_backend_detects_installed_qdrant_haystack_integration(tmp_path):
@@ -1773,6 +1880,13 @@ def test_bibliothekar_section_settings_are_parsed():
     assert instructions.bibliothekar_require_citations is False
 
 
+def test_bibliothekar_default_collection_matches_plan3_qdrant_collection():
+    instructions = parse_instructions("")
+
+    assert instructions.bibliothekar_collection == QDRANT_BIBLIOTHEKAR_COLLECTION
+    assert instructions.bibliothekar_collection == "teebotus_bibliothekar_chunks"
+
+
 def test_bibliothekar_llamaindex_backend_setting_is_parsed():
     instructions = parse_instructions(
         """
@@ -1804,7 +1918,7 @@ def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
 
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
     status_output = capsys.readouterr().out
-    assert "Depressionsbot: backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1" in status_output
+    assert "Depressionsbot: backend=local store=json collection=teebotus_bibliothekar_chunks status=ready documents=1 chunks=1" in status_output
     assert "target=" not in status_output
 
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "query", "Therapie", "--top-k", "1"]) == 0
@@ -1902,6 +2016,35 @@ def test_bibliothekar_cli_status_reports_haystack_target_in_text_and_json(tmp_pa
     json_output = capsys.readouterr().out
     payload = json.loads(json_output)
     assert payload["results"][0]["target"] == "http://localhost:6334"
+
+
+def test_bibliothekar_cli_status_reports_llamaindex_ready_in_text_and_json(tmp_path, capsys, monkeypatch):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: llamaindex\n",
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", lambda self: object())
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
+    text_output = capsys.readouterr().out
+    assert (
+        "Depressionsbot: backend=llamaindex store=llamaindex collection=teebotus_bibliothekar_chunks "
+        "target=local_in_memory status=ready documents=1 chunks=1"
+    ) in text_output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "--json", "status"]) == 0
+    json_output = capsys.readouterr().out
+    row = json.loads(json_output)["results"][0]
+    assert row["backend"] == "llamaindex"
+    assert row["store"] == "llamaindex"
+    assert row["target"] == "local_in_memory"
+    assert row["status"] == "ready"
 
 
 def test_bibliothekar_cli_query_applies_metadata_filters(tmp_path, capsys):

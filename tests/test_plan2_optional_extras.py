@@ -19,6 +19,7 @@ def test_plan2_optional_extras_inventory_reports_declared_groups() -> None:
     assert "haystack-ai==2.30.1" in report["extras"]["rag"]["declared"]
     assert "qdrant-haystack==10.3.0" in report["extras"]["rag"]["declared"]
     assert "beautifulsoup4==4.14.3" in report["extras"]["rag"]["declared"]
+    assert "llama-index-core==0.14.22" in report["extras"]["rag"]["declared"]
     assert "pydantic-ai-slim==1.107.0" in report["extras"]["agents"]["declared"]
     assert "langgraph==1.2.5" in report["extras"]["agents"]["declared"]
     assert "fastmcp==2.0.0" in report["extras"]["tools"]["declared"]

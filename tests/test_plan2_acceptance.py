@@ -17,6 +17,31 @@ RANKING_RESULT_NAMES = {
 
 
 def _valid_ranking(category: str) -> dict:
+    if category == "bibliothekar":
+        candidates = [
+            ("bibliothekar_local_query", 100.0, 1.0),
+            ("bibliothekar_llamaindex_fake_query", 75.0, 1.5),
+            ("bibliothekar_haystack_fake_query", 50.0, 2.0),
+        ]
+        return {
+            "category": category,
+            "fastest_stable": candidates[0][0],
+            "candidates": [
+                {
+                    "rank": rank,
+                    "name": name,
+                    "mode": "local",
+                    "throughput_ops_s": throughput,
+                    "total_ms": total_ms,
+                    "errors": 0,
+                    "payload_bytes": 1,
+                    "index_bytes": 1,
+                    "note": "",
+                }
+                for rank, (name, throughput, total_ms) in enumerate(candidates, start=1)
+            ],
+            "skipped": [],
+        }
     name = RANKING_RESULT_NAMES.get(category, f"{category}_benchmark")
     alternate_name = f"{name}_alternate"
     return {
@@ -113,6 +138,28 @@ def _valid_benchmark_payload() -> dict:
                 "errors": 0,
                 "payload_bytes": 1,
                 "index_bytes": 1,
+                "details": {
+                    "network_calls": 0,
+                    "openai_calls": 0,
+                    "provider_calls": 0,
+                    "remote_calls": 0,
+                    "llm_calls": 0,
+                },
+            }
+        )
+    for candidate in _valid_ranking("bibliothekar")["candidates"]:
+        payload["results"].append(
+            {
+                "name": candidate["name"],
+                "category": "bibliothekar",
+                "ok": True,
+                "mode": candidate["mode"],
+                "iterations": 1,
+                "total_ms": candidate["total_ms"],
+                "throughput_ops_s": candidate["throughput_ops_s"],
+                "errors": candidate["errors"],
+                "payload_bytes": candidate["payload_bytes"],
+                "index_bytes": candidate["index_bytes"],
                 "details": {
                     "network_calls": 0,
                     "openai_calls": 0,
@@ -1519,6 +1566,36 @@ def test_benchmark_artifact_validation_requires_bibliothekar_provenance_details(
     assert any("bibliothekar citation_required_fields missing" in error and "file_sha256" in error and "ingested_at" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_requires_bibliothekar_backend_results() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"] = [
+        result
+        for result in payload["results"]
+        if result["name"] != "bibliothekar_llamaindex_fake_query"
+    ]
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("benchmark results missing required bibliothekar backends" in error for error in errors)
+    assert any("bibliothekar_llamaindex_fake_query" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_bibliothekar_ranking_backends() -> None:
+    payload = _valid_benchmark_payload()
+    bibliothekar_ranking = next(ranking for ranking in payload["comparisons"]["stable_backend_rankings"] if ranking["category"] == "bibliothekar")
+    bibliothekar_ranking["candidates"] = [
+        candidate
+        for candidate in bibliothekar_ranking["candidates"]
+        if candidate["name"] != "bibliothekar_llamaindex_fake_query"
+    ]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("bibliothekar candidates missing required backends" in error for error in errors)
+    assert any("bibliothekar_llamaindex_fake_query" in error for error in errors)
+
+
 def test_benchmark_artifact_validation_requires_pydantic_decision_details() -> None:
     payload = _valid_benchmark_payload()
     decision_result = next(result for result in payload["results"] if result["name"] == "pydantic_structured_decisions")
@@ -1854,7 +1931,7 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
             "account_memory=Demo/abc status=ok",
             "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b",
             "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper",
-            "bibliothekar=Demo backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1",
+            "bibliothekar=Demo backend=local store=json collection=teebotus_bibliothekar_chunks status=ready documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=reachable documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://localhost:6334 status=reachable documents=1 chunks=1",
         ]
@@ -1871,7 +1948,7 @@ def test_runtime_status_missing_required_lines_flags_missing_plan3_diagnostics()
             "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
             "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
             "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
-            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=384",
+            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=1024",
         ]
     )
     incomplete = "\n".join(
@@ -1896,7 +1973,7 @@ def test_runtime_status_missing_required_lines_flags_malformed_structured_route(
             "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
             "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
             "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
-            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=384",
+            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=1024",
         ]
     )
 

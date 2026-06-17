@@ -27,6 +27,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
         "pymupdf==1.27.2.3",
         "ebooklib==0.20",
         "beautifulsoup4==4.14.3",
+        "llama-index-core==0.14.22",
     }
     assert set(optional["tools"]) >= {"fastmcp==2.0.0"}
 

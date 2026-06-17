@@ -19,9 +19,11 @@ from TeeBotus.runtime.bibliothekar import (
     _rank_chunks,
     _read_chunks,
 )
+from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
 
 
 HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdrant_haystack")
+DEFAULT_BIBLIOTHEKAR_COLLECTION = QDRANT_BIBLIOTHEKAR_COLLECTION
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 LOCAL_QDRANT_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 REQUIRED_CITATION_CHUNK_FIELDS = (
@@ -153,7 +155,7 @@ class HaystackBibliothekarBackend:
         *,
         instance_name: str,
         instances_dir: str | Path = "instances",
-        collection: str = "teebotus_books",
+        collection: str = DEFAULT_BIBLIOTHEKAR_COLLECTION,
         qdrant_url: str = DEFAULT_QDRANT_URL,
         fallback_store: BibliothekarStore | None = None,
         document_store_factory: Callable[[], Any] | None = None,
@@ -161,7 +163,7 @@ class HaystackBibliothekarBackend:
     ) -> None:
         self.instance_name = str(instance_name or "default")
         self.instances_dir = Path(instances_dir)
-        self.collection = str(collection or "teebotus_books").strip() or "teebotus_books"
+        self.collection = str(collection or DEFAULT_BIBLIOTHEKAR_COLLECTION).strip() or DEFAULT_BIBLIOTHEKAR_COLLECTION
         self.qdrant_url = _normalize_local_qdrant_url(qdrant_url)
         self.fallback_store = fallback_store or BibliothekarStore(self.instance_name, self.instances_dir)
         self._document_store_factory = document_store_factory
@@ -401,7 +403,7 @@ class LlamaIndexBibliothekarBackend:
 
     @property
     def available(self) -> bool:
-        return self._query_engine_factory is not None
+        return self._query_engine_factory is not None or _module_available("llama_index.core")
 
     def search(self, query: BibliothekarQuery) -> BibliothekarSelection:
         if not self.available:
@@ -425,7 +427,24 @@ class LlamaIndexBibliothekarBackend:
         if self._query_engine_factory is not None:
             self._query_engine_cache = self._query_engine_factory(self.fallback_store)
             return self._query_engine_cache
-        raise RuntimeError("llama_index backend is installed but no query engine factory is configured")
+        self._query_engine_cache = self._build_default_query_engine()
+        return self._query_engine_cache
+
+    def _build_default_query_engine(self) -> Any:
+        self.fallback_store.ensure_current()
+        chunks = _read_chunks(self.fallback_store.chunks_path)
+        documents = [_llamaindex_document_from_chunk(chunk) for chunk in chunks if _chunk_has_required_citation_metadata(chunk)]
+        if not documents:
+            return _StaticLlamaIndexRetriever([])
+        try:
+            from llama_index.core import VectorStoreIndex  # type: ignore[import-not-found]
+        except ModuleNotFoundError as exc:
+            raise RuntimeError("missing optional dependency: llama-index-core") from exc
+
+        embed_model = _llamaindex_mock_embedding()
+        index = _llamaindex_vector_index_from_documents(VectorStoreIndex, documents, embed_model)
+        retriever = index.as_retriever(similarity_top_k=DEFAULT_MAX_CHUNKS)
+        return _LlamaIndexRetrieverAdapter(retriever)
 
     def _chunks_from_query_engine(self, query: BibliothekarQuery) -> list[dict[str, Any]]:
         engine = self._query_engine()
@@ -438,6 +457,22 @@ class LlamaIndexBibliothekarBackend:
             if chunks:
                 return chunks
         return []
+
+
+class _StaticLlamaIndexRetriever:
+    def __init__(self, chunks: list[dict[str, Any]]) -> None:
+        self.chunks = chunks
+
+    def retrieve(self, _query_text: str) -> list[dict[str, Any]]:
+        return self.chunks
+
+
+class _LlamaIndexRetrieverAdapter:
+    def __init__(self, retriever: Any) -> None:
+        self.retriever = retriever
+
+    def retrieve(self, query_text: str) -> list[Any]:
+        return list(self.retriever.retrieve(query_text) or [])
 
 
 class BibliothekarService:
@@ -461,7 +496,7 @@ class BibliothekarService:
                 HaystackBibliothekarBackend(
                     instance_name=instance_name,
                     instances_dir=instances_dir,
-                    collection=str(getattr(instructions, "bibliothekar_collection", "") or "teebotus_books"),
+                    collection=str(getattr(instructions, "bibliothekar_collection", "") or DEFAULT_BIBLIOTHEKAR_COLLECTION),
                     qdrant_url=str(getattr(instructions, "bibliothekar_qdrant_url", "") or DEFAULT_QDRANT_URL),
                 )
             )
@@ -517,7 +552,7 @@ class BibliothekarService:
 
 def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, instructions: object) -> BibliothekarServiceHealth:
     backend = _normalize_backend(getattr(instructions, "bibliothekar_backend", "local"))
-    collection = str(getattr(instructions, "bibliothekar_collection", "") or "teebotus_books")
+    collection = str(getattr(instructions, "bibliothekar_collection", "") or DEFAULT_BIBLIOTHEKAR_COLLECTION)
     qdrant_url = str(getattr(instructions, "bibliothekar_qdrant_url", "") or DEFAULT_QDRANT_URL)
     if not bool(getattr(instructions, "bibliothekar_enabled", True)):
         return BibliothekarServiceHealth(instance_name, backend, "disabled", collection=collection, target=qdrant_url if backend == "haystack" else "")
@@ -612,17 +647,31 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 documents=len(documents),
                 chunks=int(index.get("chunk_count") or 0),
                 store="json",
-                error="missing optional dependency: llama-index",
+                error="missing optional dependency: llama-index-core",
+            )
+        backend = LlamaIndexBibliothekarBackend(instance_name=instance_name, instances_dir=instances_dir)
+        try:
+            backend._query_engine()
+        except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose optional pilot failures.
+            return BibliothekarServiceHealth(
+                instance_name,
+                "llamaindex",
+                "unavailable",
+                collection=collection,
+                documents=len(documents),
+                chunks=int(index.get("chunk_count") or 0),
+                store="json",
+                error=f"llamaindex query engine unavailable: {type(exc).__name__}: {exc}",
             )
         return BibliothekarServiceHealth(
             instance_name,
             "llamaindex",
-            "unavailable",
+            "ready",
             collection=collection,
             documents=len(documents),
             chunks=int(index.get("chunk_count") or 0),
-            store="json",
-            error="llamaindex query engine is not configured; local fallback remains available",
+            store="llamaindex",
+            target="local_in_memory",
         )
     store = BibliothekarStore(instance_name, instances_dir)
     try:
@@ -657,7 +706,7 @@ def _coerce_query_engine_chunks(value: Any) -> list[dict[str, Any]]:
     items = value
     if hasattr(value, "source_nodes"):
         items = getattr(value, "source_nodes")
-    if not isinstance(items, list):
+    if not isinstance(items, (list, tuple)):
         return []
     chunks: list[dict[str, Any]] = []
     for item in items:
@@ -668,11 +717,69 @@ def _coerce_query_engine_chunks(value: Any) -> list[dict[str, Any]]:
             metadata = getattr(node, "metadata", None)
             if not isinstance(metadata, Mapping):
                 metadata = {}
-            text = str(getattr(node, "text", "") or getattr(node, "get_content", lambda: "")())
+            text = _llamaindex_node_text(node)
             chunk = {**dict(metadata), "text": text}
         if _chunk_has_required_citation_metadata(chunk):
             chunks.append(chunk)
     return chunks
+
+
+def _llamaindex_node_text(node: Any) -> str:
+    text = getattr(node, "text", "")
+    if text:
+        return str(text)
+    get_content = getattr(node, "get_content", None)
+    if callable(get_content):
+        try:
+            return str(get_content())
+        except TypeError:
+            try:
+                return str(get_content(metadata_mode="none"))
+            except Exception:
+                return ""
+        except Exception:
+            return ""
+    return ""
+
+
+def _llamaindex_document_from_chunk(chunk: Mapping[str, Any]) -> Any:
+    try:
+        from llama_index.core import Document  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:
+        raise RuntimeError("missing optional dependency: llama-index-core") from exc
+    metadata = {key: value for key, value in dict(chunk).items() if key != "text"}
+    text = str(chunk.get("text") or "")
+    chunk_id = str(chunk.get("chunk_id") or "")
+    try:
+        return Document(text=text, metadata=metadata, id_=chunk_id)
+    except TypeError:
+        return Document(text=text, metadata=metadata)
+
+
+def _llamaindex_mock_embedding() -> Any:
+    import_errors: list[str] = []
+    for module_name in ("llama_index.core.embeddings", "llama_index.core.embeddings.mock_embed_model"):
+        try:
+            module = __import__(module_name, fromlist=["MockEmbedding"])
+        except ModuleNotFoundError as exc:
+            import_errors.append(str(exc))
+            continue
+        mock_embedding = getattr(module, "MockEmbedding", None)
+        if mock_embedding is not None:
+            return mock_embedding(embed_dim=384)
+    raise RuntimeError("missing optional dependency: llama-index-core MockEmbedding: " + "; ".join(import_errors))
+
+
+def _llamaindex_vector_index_from_documents(vector_store_index: Any, documents: list[Any], embed_model: Any) -> Any:
+    for kwargs in (
+        {"embed_model": embed_model, "show_progress": False},
+        {"embed_model": embed_model},
+    ):
+        try:
+            return vector_store_index.from_documents(documents, **kwargs)
+        except TypeError:
+            continue
+    raise RuntimeError("llama-index-core VectorStoreIndex does not accept an explicit local embed_model")
 
 
 def _normalize_local_qdrant_url(value: object) -> str:
@@ -851,7 +958,10 @@ def _normalize_filter_text(value: object) -> str:
 
 
 def _module_available(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
+    try:
+        return importlib.util.find_spec(name) is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def _read_index(path: Path) -> dict[str, object]:

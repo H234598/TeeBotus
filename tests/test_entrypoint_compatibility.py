@@ -1315,7 +1315,7 @@ def test_runtime_status_reports_local_bibliothekar_health(monkeypatch, capsys, t
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
-    assert "bibliothekar=Demo backend=local store=json collection=teebotus_books status=ready documents=1 chunks=1" in captured.out
+    assert "bibliothekar=Demo backend=local store=json collection=teebotus_bibliothekar_chunks status=ready documents=1 chunks=1" in captured.out
 
 
 def test_runtime_status_reports_haystack_bibliothekar_dependency_gap(monkeypatch, capsys, tmp_path) -> None:
@@ -1372,6 +1372,30 @@ def test_runtime_status_reports_reachable_haystack_bibliothekar(monkeypatch, cap
 
     captured = capsys.readouterr()
     assert "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=reachable documents=1 chunks=1" in captured.out
+
+
+def test_runtime_status_reports_llamaindex_bibliothekar_ready(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    library_dir = demo_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: llamaindex\n",
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service.LlamaIndexBibliothekarBackend._build_default_query_engine", lambda self: object())
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "bibliothekar=Demo backend=llamaindex store=llamaindex collection=teebotus_bibliothekar_chunks target=local_in_memory status=ready documents=1 chunks=1" in captured.out
 
 
 def test_runtime_status_reports_mcp_tool_policy(monkeypatch, capsys, tmp_path) -> None:

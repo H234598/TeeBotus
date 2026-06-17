@@ -51,6 +51,13 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
     }
 )
 REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
+REQUIRED_BIBLIOTHEKAR_BENCHMARK_NAMES = frozenset(
+    {
+        "bibliothekar_local_query",
+        "bibliothekar_llamaindex_fake_query",
+        "bibliothekar_haystack_fake_query",
+    }
+)
 REQUIRED_HF_POOL_EVAL_PURPOSES = frozenset(
     {
         "structured_decision",
@@ -1065,6 +1072,14 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         missing_categories = sorted(REQUIRED_BENCHMARK_CATEGORIES - categories)
         if missing_categories:
             errors.append(f"{prefix}benchmark results missing required categories: {', '.join(missing_categories)}")
+        successful_names = {
+            str(result.get("name") or "")
+            for result in results
+            if isinstance(result, dict) and result.get("ok") is True and not result.get("skipped")
+        }
+        missing_bibliothekar_results = sorted(REQUIRED_BIBLIOTHEKAR_BENCHMARK_NAMES - successful_names)
+        if missing_bibliothekar_results:
+            errors.append(f"{prefix}benchmark results missing required bibliothekar backends: {', '.join(missing_bibliothekar_results)}")
         for index, result in enumerate(results):
             if not isinstance(result, dict):
                 errors.append(f"{prefix}results[{index}] must be an object")
@@ -1365,6 +1380,18 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
                 f"{prefix}rankings[{ranking_index}] {category} must compare at least "
                 f"{REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates"
             )
+        candidate_names = {
+            str(candidate.get("name") or "")
+            for candidate in candidates
+            if isinstance(candidate, Mapping)
+        }
+        if category == "bibliothekar":
+            missing_bibliothekar_candidates = sorted(REQUIRED_BIBLIOTHEKAR_BENCHMARK_NAMES - candidate_names)
+            if missing_bibliothekar_candidates:
+                errors.append(
+                    f"{prefix}rankings[{ranking_index}] bibliothekar candidates missing required backends: "
+                    f"{', '.join(missing_bibliothekar_candidates)}"
+                )
         if not fastest_stable:
             errors.append(f"{prefix}rankings[{ranking_index}] fastest_stable must be non-empty")
         if not isinstance(skipped, list):
