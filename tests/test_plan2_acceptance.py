@@ -2871,6 +2871,26 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> N
     assert any("rankings[0] fastest_stable must not be skipped" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_rejects_invalid_ranking_skips() -> None:
+    payload = _valid_benchmark_payload()
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["skipped"] = [
+        {"name": "", "mode": "", "reason": ""},
+        {"name": "account_memory_benchmark", "mode": "live_optional", "reason": ""},
+        {"name": "duplicate_skip", "mode": "live_optional", "reason": "missing dsn"},
+        {"name": "duplicate_skip", "mode": "live_optional", "reason": "still missing dsn"},
+    ]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0].skipped[0] name must be non-empty" in error for error in errors)
+    assert any("rankings[0].skipped[0] mode must be non-empty" in error for error in errors)
+    assert any("rankings[0].skipped[0] reason must be non-empty" in error for error in errors)
+    assert any("rankings[0].skipped[1] reason must be non-empty" in error for error in errors)
+    assert any("rankings[0] skipped item must not also be a candidate: account_memory_benchmark" in error for error in errors)
+    assert any("rankings[0] duplicate skipped name: duplicate_skip" in error for error in errors)
+
+
 def test_benchmark_artifact_validation_rejects_rankings_without_matching_results() -> None:
     payload = _valid_benchmark_payload()
     ranking = payload["comparisons"]["stable_backend_rankings"][0]

@@ -1806,11 +1806,23 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
         if not isinstance(skipped, list):
             errors.append(f"{prefix}rankings[{ranking_index}] skipped must be a list")
             skipped = []
-        skipped_names = {
-            str(item.get("name") or "")
-            for item in skipped
-            if isinstance(item, Mapping)
-        }
+        skipped_names: set[str] = set()
+        for skipped_index, skipped_item in enumerate(skipped):
+            if not isinstance(skipped_item, Mapping):
+                errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] must be an object")
+                continue
+            skipped_name = str(skipped_item.get("name") or "")
+            skipped_mode = str(skipped_item.get("mode") or "")
+            skipped_reason = str(skipped_item.get("reason") or "")
+            if not skipped_name:
+                errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] name must be non-empty")
+            elif skipped_name in skipped_names:
+                errors.append(f"{prefix}rankings[{ranking_index}] duplicate skipped name: {skipped_name}")
+            skipped_names.add(skipped_name)
+            if not skipped_mode:
+                errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] mode must be non-empty")
+            if not skipped_reason:
+                errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] reason must be non-empty")
         seen_names: set[str] = set()
         for candidate_index, candidate in enumerate(candidates, start=1):
             if not isinstance(candidate, Mapping):
@@ -1845,6 +1857,9 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must not use live mode")
             if not _is_positive_number(candidate.get("payload_bytes")) and not _is_positive_number(candidate.get("index_bytes")):
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must report payload_bytes or index_bytes")
+        for skipped_name in sorted(skipped_names & seen_names):
+            if skipped_name:
+                errors.append(f"{prefix}rankings[{ranking_index}] skipped item must not also be a candidate: {skipped_name}")
         first_name = str(candidates[0].get("name") or "") if isinstance(candidates[0], Mapping) else ""
         if fastest_stable and first_name and fastest_stable != first_name:
             errors.append(f"{prefix}rankings[{ranking_index}] fastest_stable must match rank 1 candidate")
