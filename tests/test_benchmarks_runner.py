@@ -1,10 +1,24 @@
 from __future__ import annotations
 
+import importlib
 import json
+from pathlib import Path
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
 from scripts import run_benchmarks as benchmark_module
 from scripts.run_benchmarks import main, render_markdown, run_benchmarks
+
+
+def test_plan3_benchmark_core_lives_in_package() -> None:
+    core = importlib.import_module("TeeBotus.benchmarks.core")
+    package_dir = Path(core.__file__).resolve().parent
+
+    assert (package_dir / "__init__.py").exists()
+    assert (package_dir / "core.py").exists()
+    assert benchmark_module._build_quality_gate is core.build_quality_gate
+    assert benchmark_module._build_comparisons is core.build_comparisons
+    assert benchmark_module._result is core.result
+    assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
 
 
 def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
