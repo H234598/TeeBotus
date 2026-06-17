@@ -770,6 +770,15 @@ def _find_legacy_plaintext_backup(*, project_root: Path, instance_name: str) -> 
         candidate = _legacy_plaintext_backup_candidate(path, instance_name)
         if candidate:
             candidates.append(candidate)
+    backup_collection = project_root.parent / f"{project_root.name}_Backups"
+    try:
+        collection_candidates = sorted(backup_collection.glob(f"{project_root.name}*")) if backup_collection.exists() else []
+    except OSError:
+        collection_candidates = []
+    for path in collection_candidates:
+        candidate = _legacy_plaintext_backup_candidate(path, instance_name)
+        if candidate:
+            candidates.append(candidate)
     if not candidates:
         return None
     return max(
@@ -885,11 +894,15 @@ def _requested_backup_priority(name: str) -> int:
         return 0
     suffix = path_name.rsplit(marker, 1)[1]
     if not suffix:
-        return 1
-    try:
-        return 1 + int(suffix)
-    except ValueError:
-        return 1
+        priority = 1
+    else:
+        try:
+            priority = 1 + int(suffix)
+        except ValueError:
+            priority = 1
+    if "kopie" in path_name.casefold() or "copy" in path_name.casefold():
+        priority -= 1
+    return max(0, priority)
 
 
 def looks_like_encrypted_payload(path: Path) -> bool:

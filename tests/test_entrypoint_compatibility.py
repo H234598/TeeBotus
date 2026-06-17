@@ -381,6 +381,14 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         '{"id":"legacy_1","user_text":"A"}\n{"id":"legacy_2","user_text":"B"}\n',
         encoding="utf-8",
     )
+    copy_backup_user_dir = (
+        tmp_path / "TeeBotus_Backups" / "TeeBotus (Kopie).bak2" / "instances.bak" / "Demo" / "data" / "users" / "395935293"
+    )
+    copy_backup_user_dir.mkdir(parents=True)
+    (copy_backup_user_dir / "User_Memory_Entries.jsonl").write_text(
+        '{"id":"legacy_1","user_text":"A"}\n{"id":"legacy_2","user_text":"B"}\n',
+        encoding="utf-8",
+    )
     older_backup_user_dir = tmp_path / "TeeBotus.bak" / "instances.bak" / "Demo" / "data" / "users" / "395935293"
     older_backup_user_dir.mkdir(parents=True)
     (older_backup_user_dir / "User_Memory_Entries.jsonl").write_text(
@@ -403,6 +411,29 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable '
         '--replace-unreadable-account-metadata --apply"'
     ) in lines
+
+
+def test_account_memory_status_detects_legacy_backup_collection_directory(tmp_path) -> None:
+    project_root = tmp_path / "TeeBotus"
+    accounts_root = project_root / "instances" / "Demo" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Demo", secret_provider=StaticSecretProvider(b"b" * 32))
+    account_id = bad_store.resolve_or_create_account(telegram_identity_key("395935293"))
+    bad_store.write_memory_entries(account_id, [{"id": "bad", "user_text": "unreadable"}])
+    backup_user_dir = tmp_path / "TeeBotus_Backups" / "TeeBotus.bak2" / "instances.bak" / "Demo" / "data" / "users" / "395935293"
+    backup_user_dir.mkdir(parents=True)
+    (backup_user_dir / "User_Memory_Entries.jsonl").write_text(
+        '{"id":"legacy_1","user_text":"A"}\n{"id":"legacy_2","user_text":"B"}\n',
+        encoding="utf-8",
+    )
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=project_root)
+
+    legacy_line = next(line for line in lines if line.startswith("account_memory_recovery_legacy=Demo "))
+    assert "status=available" in legacy_line
+    assert "sources=1 entries=2" in legacy_line
+    assert f"path={tmp_path / 'TeeBotus_Backups' / 'TeeBotus.bak2' / 'instances.bak'} " in legacy_line
+    assert f"--legacy-instances-dir {tmp_path / 'TeeBotus_Backups' / 'TeeBotus.bak2'}" in legacy_line
+    assert "Kopie" not in legacy_line
 
 
 def test_account_memory_status_quotes_legacy_preflight_command_for_spaced_instance(tmp_path) -> None:
