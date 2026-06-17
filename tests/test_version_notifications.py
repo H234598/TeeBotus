@@ -12,7 +12,7 @@ from TeeBotus.core.version_notifications import (
     recent_telegram_recipients,
 )
 from TeeBotus.core.status import account_memory_index_health_lines, github_commit_history_url
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
@@ -277,6 +277,25 @@ def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_pat
     assert lines[-1] == (
         f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"'
     )
+
+
+def test_account_memory_index_health_reports_recovery_when_store_open_fails(tmp_path: Path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class FailingStore:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AccountStoreError("instance secret is missing")
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FailingStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_memory=Demo status=broken error=AccountStoreError: instance secret is missing",
+        f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"',
+    ]
 
 
 def test_account_memory_index_health_suppresses_expected_database_decryption_logs(tmp_path: Path, monkeypatch, caplog) -> None:

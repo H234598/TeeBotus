@@ -2073,6 +2073,7 @@ def test_runtime_status_broken_lines_flags_unhealthy_configured_resources() -> N
             "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused",
             "local_transcription=Demo backend=local model=tiny status=unavailable error=missing backend",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books status=unavailable error=missing dependency",
+            "account_memory_metadata=Demo status=broken item=account_index path=/repo/instances/Demo/data/accounts/Account_Index.json error=encrypted envelope authentication failed",
             "account_memory_recovery=Demo status=needed command=\"python3 -m TeeBotus.admin memory-recovery\"",
         ]
     )

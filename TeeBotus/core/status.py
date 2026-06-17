@@ -545,7 +545,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             create_dirs=False,
         )
     except Exception as exc:
-        return [f"account_memory={instance_name} status=broken error={type(exc).__name__}: {exc}"]
+        lines = [f"account_memory={instance_name} status=broken error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+        lines.extend(_account_memory_recovery_lines(instance_name=instance_name, project_root=project_root))
+        return lines
     lines: list[str] = []
     has_broken_memory = False
     has_broken_metadata = False
@@ -592,64 +594,67 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             )
             has_broken_memory = True
     if has_broken_memory or has_broken_metadata:
-        instances_dir = project_root / "instances"
-        recovery_command = shlex.join(
+        lines.extend(_account_memory_recovery_lines(instance_name=instance_name, project_root=project_root))
+    return lines
+
+
+def _account_memory_recovery_lines(*, instance_name: str, project_root: Path) -> list[str]:
+    instances_dir = project_root / "instances"
+    recovery_command = shlex.join(
+        [
+            "python3",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--instances-dir",
+            str(instances_dir),
+            "--instances",
+            instance_name,
+        ]
+    )
+    lines = [f'account_memory_recovery={instance_name} status=needed command="{recovery_command}"']
+    legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
+    if legacy:
+        legacy_artifact_name = safe_artifact_name(instance_name, default="instance")
+        legacy_preflight_json = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.json"
+        legacy_preflight_md = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.md"
+        legacy_command = shlex.join(
             [
                 "python3",
-                "-m",
-                "TeeBotus.admin",
-                "memory-recovery",
-                "--instances-dir",
+                "scripts/import_legacy_user_memory.py",
+                "--legacy-instances-dir",
+                str(legacy["requested_path"]),
+                "--target-instances-dir",
                 str(instances_dir),
-                "--instances",
+                "--instance",
                 instance_name,
+                "--replace-unreadable-account-metadata",
+                "--json-output",
+                str(legacy_preflight_json),
+                "--markdown-output",
+                str(legacy_preflight_md),
+            ]
+        )
+        legacy_apply_command = shlex.join(
+            [
+                "python3",
+                "scripts/import_legacy_user_memory.py",
+                "--legacy-instances-dir",
+                str(legacy["requested_path"]),
+                "--target-instances-dir",
+                str(instances_dir),
+                "--instance",
+                instance_name,
+                "--replace-unreadable",
+                "--replace-unreadable-account-metadata",
+                "--apply",
             ]
         )
         lines.append(
-            f'account_memory_recovery={instance_name} status=needed command="{recovery_command}"'
+            f'account_memory_recovery_legacy={instance_name} status=available '
+            f'sources={legacy["sources"]} entries={legacy["entries"]} path={legacy["effective_path"]} '
+            f'command="{legacy_command}" apply_command="{legacy_apply_command}"'
         )
-        legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
-        if legacy:
-            legacy_artifact_name = safe_artifact_name(instance_name, default="instance")
-            legacy_preflight_json = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.json"
-            legacy_preflight_md = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.md"
-            legacy_command = shlex.join(
-                [
-                    "python3",
-                    "scripts/import_legacy_user_memory.py",
-                    "--legacy-instances-dir",
-                    str(legacy["requested_path"]),
-                    "--target-instances-dir",
-                    str(instances_dir),
-                    "--instance",
-                    instance_name,
-                    "--replace-unreadable-account-metadata",
-                    "--json-output",
-                    str(legacy_preflight_json),
-                    "--markdown-output",
-                    str(legacy_preflight_md),
-                ]
-            )
-            legacy_apply_command = shlex.join(
-                [
-                    "python3",
-                    "scripts/import_legacy_user_memory.py",
-                    "--legacy-instances-dir",
-                    str(legacy["requested_path"]),
-                    "--target-instances-dir",
-                    str(instances_dir),
-                    "--instance",
-                    instance_name,
-                    "--replace-unreadable",
-                    "--replace-unreadable-account-metadata",
-                    "--apply",
-                ]
-            )
-            lines.append(
-                f'account_memory_recovery_legacy={instance_name} status=available '
-                f'sources={legacy["sources"]} entries={legacy["entries"]} path={legacy["effective_path"]} '
-                f'command="{legacy_command}" apply_command="{legacy_apply_command}"'
-            )
     return lines
 
 
