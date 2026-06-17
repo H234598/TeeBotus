@@ -692,6 +692,8 @@ def _merge_entries(
     merged = [dict(entry) for entry in target_entries if isinstance(entry, dict)]
     existing_ids = {str(entry.get("id") or "").strip() for entry in merged if str(entry.get("id") or "").strip()}
     existing_legacy_keys = _existing_legacy_import_keys(merged)
+    new_entries: list[dict[str, Any]] = []
+    remapped_ids: dict[str, str] = {}
     for entry in legacy_entries:
         normalized = dict(entry)
         memory_id = str(normalized.get("id") or "").strip()
@@ -704,6 +706,8 @@ def _merge_entries(
             if target_id in existing_ids:
                 continue
             normalized["id"] = target_id
+        if memory_id and target_id != memory_id:
+            remapped_ids[memory_id] = target_id
         normalized.setdefault("source", {})
         if isinstance(normalized["source"], dict):
             normalized["source"] = {
@@ -720,10 +724,53 @@ def _merge_entries(
                 "legacy_user_id": legacy_user_id,
                 "legacy_original_id": memory_id,
             }
-        merged.append(normalized)
+        new_entries.append(normalized)
         existing_ids.add(target_id)
         existing_legacy_keys.add(legacy_key)
+    for entry in new_entries:
+        _remap_legacy_memory_links(entry, remapped_ids)
+    merged.extend(new_entries)
     return merged
+
+
+def _remap_legacy_memory_links(entry: dict[str, Any], remapped_ids: dict[str, str]) -> None:
+    if not remapped_ids:
+        return
+    for key in ("related_ids", "supports", "contradicts", "supersedes"):
+        entry[key] = _remap_legacy_memory_link_list(entry.get(key), remapped_ids)
+    relations = entry.get("relations")
+    if not isinstance(relations, list):
+        return
+    remapped_relations: list[Any] = []
+    for relation in relations:
+        if not isinstance(relation, dict):
+            remapped_relations.append(relation)
+            continue
+        remapped = dict(relation)
+        for key in ("target_id", "id"):
+            target_id = str(remapped.get(key) or "").strip()
+            if target_id in remapped_ids:
+                remapped[key] = remapped_ids[target_id]
+        remapped_relations.append(remapped)
+    entry["relations"] = remapped_relations
+
+
+def _remap_legacy_memory_link_list(value: Any, remapped_ids: dict[str, str]) -> list[Any]:
+    if not isinstance(value, list):
+        return []
+    remapped_values: list[Any] = []
+    for item in value:
+        if isinstance(item, dict):
+            remapped = dict(item)
+            for key in ("target_id", "id"):
+                target_id = str(remapped.get(key) or "").strip()
+                if target_id in remapped_ids:
+                    remapped[key] = remapped_ids[target_id]
+            remapped_values.append(remapped)
+            continue
+        target_id = str(item or "").strip()
+        remapped_values.append(remapped_ids.get(target_id, item))
+    return remapped_values
 
 
 def _existing_legacy_import_keys(entries: Iterable[dict[str, Any]]) -> set[tuple[str, str, str]]:

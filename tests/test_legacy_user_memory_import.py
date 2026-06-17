@@ -156,7 +156,22 @@ def test_legacy_user_memory_import_scopes_colliding_legacy_ids_in_same_account(t
     legacy_root = tmp_path / "legacy"
     target_root = tmp_path / "target"
     write_legacy_entries(legacy_root, user_id="111", memory_id="shared_legacy_id")
-    write_legacy_entries(legacy_root, user_id="222", memory_id="shared_legacy_id")
+    linked_user_dir = write_legacy_entries(legacy_root, user_id="222", memory_id="shared_legacy_id")
+    linked_entry = {
+        "id": "link_to_shared",
+        "created_at": "2026-06-01T00:00:01+00:00",
+        "updated_at": "2026-06-01T00:00:01+00:00",
+        "sender": {"id": "222"},
+        "source": {"legacy": True},
+        "user_text": "Second legacy user links to shared memory",
+        "bot_text": "",
+        "keywords": ["legacy", "link"],
+        "related_ids": ["shared_legacy_id"],
+        "supports": [{"target_id": "shared_legacy_id"}],
+        "relations": [{"type": "related", "target_id": "shared_legacy_id"}],
+    }
+    with (linked_user_dir / "User_Memory_Entries.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(linked_entry, sort_keys=True) + "\n")
     accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
     store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
     account_id = store.resolve_or_create_account(telegram_identity_key("111"))
@@ -179,15 +194,24 @@ def test_legacy_user_memory_import_scopes_colliding_legacy_ids_in_same_account(t
     entries = store.read_memory_entries(account_id)
     entry_ids = sorted(entry["id"] for entry in entries)
     source_user_ids = sorted(entry["source"]["legacy_user_id"] for entry in entries)
-    original_ids = {entry["source"]["legacy_original_id"] for entry in entries}
+    by_original_id = {entry["source"]["legacy_original_id"]: entry for entry in entries}
+    scoped_id = next(entry_id for entry_id in entry_ids if entry_id.startswith("legacy_"))
+    link_entry = by_original_id["link_to_shared"]
+    index = store.read_memory_index(account_id)
+    graph = index["index"]["graph"]["links"]
 
-    assert first.entries_imported == 2
+    assert first.entries_imported == 3
     assert second.entries_imported == 0
-    assert len(entries) == 2
-    assert entry_ids[0].startswith("legacy_") or entry_ids[1].startswith("legacy_")
+    assert len(entries) == 3
     assert "shared_legacy_id" in entry_ids
-    assert source_user_ids == ["111", "222"]
-    assert original_ids == {"shared_legacy_id"}
+    assert "link_to_shared" in entry_ids
+    assert source_user_ids == ["111", "222", "222"]
+    assert {entry["source"]["legacy_original_id"] for entry in entries} == {"shared_legacy_id", "link_to_shared"}
+    assert link_entry["related_ids"] == [scoped_id]
+    assert link_entry["supports"] == [scoped_id]
+    assert link_entry["relations"][0]["target_id"] == scoped_id
+    assert graph["related_ids"]["link_to_shared"] == [scoped_id]
+    assert graph["supports"]["link_to_shared"] == [scoped_id]
     assert store.check_structured_memory_index(account_id).ok
 
 
