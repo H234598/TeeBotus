@@ -170,6 +170,8 @@ def test_legacy_user_memory_import_can_replace_unreadable_account_metadata(tmp_p
     assert skipped.unreadable_metadata == 1
     assert replaced.metadata_backups_created >= 1
     assert replaced.account_store_resets == 1
+    assert replaced.events[0]["action"] == "import-after-metadata-reset"
+    assert replaced.events[0]["metadata_unreadable"] is True
     store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
     account_id = store.get_account_for_identity(telegram_identity_key("395935293"))
     assert account_id
@@ -287,6 +289,23 @@ def test_legacy_user_memory_import_dry_run_can_simulate_metadata_replacement(tmp
     assert stats.entries_seen == 1
     assert stats.entries_imported == 1
     assert stats.metadata_backups_created == 0
+    assert stats.events[0]["action"] == "would-import-after-metadata-reset"
+    assert stats.events[0]["metadata_unreadable"] is True
+    report = legacy_import._build_import_report(
+        stats,
+        mode="dry-run",
+        legacy_instances_dir=legacy_root,
+        requested_legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        instances=(),
+        backend="sqlite",
+        replace_unreadable=False,
+        replace_unreadable_account_metadata=True,
+        backup_current=True,
+    )
+    markdown = legacy_import._render_markdown_report(report)
+    assert "action=`would-import-after-metadata-reset`" in markdown
+    assert "flags=`metadata_unreadable,account_created`" in markdown
 
 
 def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Path, monkeypatch) -> None:

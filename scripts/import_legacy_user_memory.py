@@ -189,10 +189,15 @@ def import_legacy_user_memory(
         target_root = target_instances_dir / instance_name / "data" / "accounts"
         target_store = AccountStore(target_root, instance_name, secret_provider=provider)
         identity = telegram_identity_key(user_dir.name)
+        metadata_unreadable_for_source = target_root in reset_account_stores
+        if metadata_unreadable_for_source:
+            stats.unreadable_metadata += 1
         try:
             existing_account_id = target_store.get_account_for_identity(identity)
         except AccountStoreError as exc:
-            stats.unreadable_metadata += 1
+            if not metadata_unreadable_for_source:
+                stats.unreadable_metadata += 1
+                metadata_unreadable_for_source = True
             if not replace_unreadable_account_metadata:
                 stats.skipped_sources += 1
                 stats.events.append(
@@ -284,6 +289,8 @@ def import_legacy_user_memory(
         merged_entries = _merge_entries(target_entries, entries, instance_name=instance_name, legacy_user_id=user_dir.name)
         imported_count = max(0, len(merged_entries) - len(target_entries))
         action = "would-import" if not apply else "import"
+        if metadata_unreadable_for_source and replace_unreadable_account_metadata:
+            action = "would-import-after-metadata-reset" if not apply else "import-after-metadata-reset"
         stats.events.append(
             _event(
                 instance_name=instance_name,
@@ -293,7 +300,7 @@ def import_legacy_user_memory(
                 imported=imported_count,
                 action=action,
                 target_unreadable=target_unreadable,
-                metadata_unreadable=False,
+                metadata_unreadable=metadata_unreadable_for_source,
                 account_created=not bool(existing_account_id),
             )
         )
@@ -462,6 +469,14 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
     for event in report.get("events", []) if isinstance(report.get("events"), list) else []:
         if not isinstance(event, dict):
             continue
+        flags = []
+        if event.get("metadata_unreadable"):
+            flags.append("metadata_unreadable")
+        if event.get("target_unreadable"):
+            flags.append("target_unreadable")
+        if event.get("account_created"):
+            flags.append("account_created")
+        flags_text = f" flags=`{','.join(flags)}`" if flags else ""
         lines.append(
             "- "
             f"instance=`{event.get('instance', '')}` "
@@ -470,6 +485,7 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
             f"entries=`{event.get('entries', 0)}` "
             f"imported=`{event.get('imported', 0)}` "
             f"action=`{event.get('action', '')}`"
+            f"{flags_text}"
         )
     return "\n".join(lines) + "\n"
 
