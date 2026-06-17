@@ -8,7 +8,13 @@ import pytest
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
-from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA, QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex, qdrant_memory_point_id
+from TeeBotus.runtime.qdrant_memory import (
+    QDRANT_MEMORY_PAYLOAD_SCHEMA,
+    QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION,
+    QDRANT_MEMORY_RESULT_PAYLOAD_KEYS,
+    QdrantMemoryIndex,
+    qdrant_memory_point_id,
+)
 
 
 ACCOUNT_A = "a" * 128
@@ -237,6 +243,34 @@ def test_qdrant_memory_search_filters_stale_vectors_after_payload_schema_change(
     results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=10)
 
     assert [result.memory_id for result in results] == ["mem_current"]
+
+
+def test_qdrant_memory_search_sanitizes_result_payloads_even_if_backend_returns_extra_fields() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    point_id = index.index_memory(
+        instance_name="Depressionsbot",
+        account_id=ACCOUNT_A,
+        entry={"id": "mem_sensitive", "user_text": "Privater Inhalt"},
+    )
+    fake_qdrant.points[point_id]["payload"].update(
+        {
+            "account_id": ACCOUNT_A,
+            "user_text": "Privater Inhalt",
+            "clinical_category": "risk",
+            "created_at": "2026-06-16T10:00:00Z",
+        }
+    )
+
+    results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Privat", limit=1)
+
+    assert [result.memory_id for result in results] == ["mem_sensitive"]
+    assert set(results[0].payload) == QDRANT_MEMORY_RESULT_PAYLOAD_KEYS
+    result_json = json.dumps(results[0].payload, ensure_ascii=False).casefold()
+    assert ACCOUNT_A not in result_json
+    assert "privater inhalt" not in result_json
+    assert "clinical_category" not in result_json
+    assert "2026-06" not in result_json
 
 
 def test_qdrant_memory_payload_excludes_messenger_identity_fields() -> None:

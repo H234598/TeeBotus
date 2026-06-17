@@ -25,6 +25,17 @@ from TeeBotus.runtime.qdrant import (
 
 QDRANT_MEMORY_PAYLOAD_SCHEMA = "teebotus_qdrant_memory_v1"
 QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 3
+QDRANT_MEMORY_RESULT_PAYLOAD_KEYS = frozenset(
+    {
+        "schema",
+        "schema_version",
+        "instance_name",
+        "account_scope",
+        "memory_id",
+        "embedding_model",
+        "embedding_dimensions",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -131,7 +142,15 @@ class QdrantMemoryIndex:
                 score = float(item.get("score", 0.0))
             except (TypeError, ValueError):
                 score = 0.0
-            results.append(QdrantMemoryResult(memory_id=memory_id, account_id=account, instance_name=instance, score=score, payload=dict(payload)))
+            results.append(
+                QdrantMemoryResult(
+                    memory_id=memory_id,
+                    account_id=account,
+                    instance_name=instance,
+                    score=score,
+                    payload=_result_payload(payload),
+                )
+            )
         return tuple(results)
 
     def delete_memory(self, *, instance_name: str, account_id: str, memory_id: str) -> None:
@@ -240,6 +259,10 @@ def _memory_payload(
         "embedding_dimensions": int(embedding_dimensions),
     }
     return payload
+
+
+def _result_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: payload[key] for key in QDRANT_MEMORY_RESULT_PAYLOAD_KEYS if key in payload}
 
 
 def _memory_embedding_text(entry: dict[str, Any]) -> str:
