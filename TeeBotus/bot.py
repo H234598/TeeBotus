@@ -320,14 +320,27 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         bool(route_fallback_count and route_fallback_api_key_env and not fallback_key_configured)
         or direct_fallback_key_status == "missing"
     )
+    purpose = str(getattr(account, "llm_purpose", "") or "").strip()
     if route_error:
         status = "broken"
-    elif key_required and not key_configured:
-        status = "missing_key"
-    elif fallback_key_missing:
-        status = "degraded"
     else:
-        status = "configured"
+        pool_status, pool_error = _runtime_status_hf_pool_status(
+            account,
+            instructions=instructions,
+            provider=provider,
+            model=model,
+            purpose=purpose,
+            route_mode=route_mode,
+        )
+        if pool_status == "unavailable":
+            status = "unavailable"
+            route_error = pool_error
+        elif key_required and not key_configured:
+            status = "missing_key"
+        elif fallback_key_missing:
+            status = "degraded"
+        else:
+            status = "configured"
     detail = (
         f"llm={account.instance_name}/{account.label} "
         f"provider={provider} model={model} status={status}"
@@ -335,7 +348,6 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
     profile = _effective_llm_profile(account, instructions)
     if profile:
         detail += f" profile={profile}"
-    purpose = str(getattr(account, "llm_purpose", "") or "").strip()
     if purpose:
         detail += f" purpose={purpose}"
     if base_url:
@@ -659,12 +671,54 @@ def _runtime_route_status(route: Any) -> tuple[str, str]:
     return "configured", ""
 
 
+def _runtime_status_hf_pool_status(
+    account: Any,
+    *,
+    instructions: Any | None,
+    provider: str,
+    model: str,
+    purpose: str,
+    route_mode: str,
+) -> tuple[str, str]:
+    if _normalize_status_llm_provider(provider) != "hf_pool":
+        return "", ""
+    try:
+        if route_mode == "purpose" and purpose:
+            from TeeBotus.llm.profiles import select_llm_route
+
+            allow_remote_fallback = _parse_optional_status_bool(getattr(account, "llm_allow_remote_fallback", "")) is True
+            route = select_llm_route(purpose, allow_remote_fallback=allow_remote_fallback)
+        else:
+            route = types.SimpleNamespace(
+                provider="hf_pool",
+                model=model,
+                purpose=_hf_pool_route_purpose(model, fallback=purpose),
+            )
+    except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose optional routing failures.
+        return "unavailable", f"{type(exc).__name__}: {exc}"
+    return _runtime_route_status(route)
+
+
 def _hf_pool_route_pool_name(model: str) -> str:
     text = str(model or "").strip()
     if not text.startswith("pool:"):
         return "default"
     selector = text.removeprefix("pool:")
     return selector.split("#", maxsplit=1)[0].strip() or "default"
+
+
+def _hf_pool_route_purpose(model: str, *, fallback: str = "") -> str:
+    text = str(model or "").strip()
+    if text.startswith("pool:") and "#" in text:
+        purpose = text.split("#", maxsplit=1)[1].strip()
+        if purpose:
+            try:
+                from TeeBotus.llm.profiles import normalize_llm_purpose
+
+                return normalize_llm_purpose(purpose)
+            except Exception:
+                return purpose
+    return str(fallback or "normal_chat").strip() or "normal_chat"
 
 
 def _status_value(value: object, *, default: str) -> str:

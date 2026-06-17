@@ -1929,6 +1929,7 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
             "llm=Demo/signal:1 provider=litellm model=ollama_chat/qwen status=configured api_key=configured",
             "signal_service=Demo/signal:1 target=127.0.0.1:8080 status=reachable",
             "account_memory=Demo/abc status=ok",
+            "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision status=unavailable purpose=structured_decision api_key=none fallback_models=1 fallback_profile=local_ollama fallback_model=ollama_chat/llama3.1:8b",
             "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b",
             "local_transcription=Demo backend=local model=tiny status=ready engine=faster-whisper",
             "bibliothekar=Demo backend=local store=json collection=teebotus_bibliothekar_chunks status=ready documents=1 chunks=1",

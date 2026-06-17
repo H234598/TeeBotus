@@ -811,7 +811,7 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
-        "status=configured purpose=structured_decision api_key=none "
+        "status=unavailable purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
         "remote_fallback=enabled"
@@ -877,7 +877,7 @@ def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, caps
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
-        "status=configured purpose=structured_decision api_key=none "
+        "status=unavailable purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
         "remote_fallback=enabled"
@@ -1260,7 +1260,7 @@ def test_runtime_status_runtime_purpose_overrides_instruction_remote_profile(mon
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
-        "status=configured purpose=structured_decision api_key=none fallback_models=1"
+        "status=unavailable purpose=structured_decision api_key=none fallback_models=1"
     ) in captured.out
     assert "profile=hf_mistral" not in captured.out
     assert calls == ["http://127.0.0.1:11434/api/tags"]
@@ -1348,7 +1348,7 @@ def test_runtime_status_checks_ollama_for_local_purpose_route(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
-    assert "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision status=configured purpose=structured_decision" in captured.out
+    assert "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision status=unavailable purpose=structured_decision" in captured.out
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 
@@ -1391,7 +1391,7 @@ def test_runtime_status_purpose_route_uses_runtime_base_url_override_for_llm_and
     assert calls == ["http://127.0.0.1:11556/api/tags"]
     assert (
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
-        "status=configured purpose=structured_decision base_url=http://127.0.0.1:11556/api api_key=none"
+        "status=unavailable purpose=structured_decision base_url=http://127.0.0.1:11556/api api_key=none"
     ) in captured.out
     assert "ollama=127.0.0.1:11556 status=reachable models=llama3.1:8b" in captured.out
     assert "ollama=127.0.0.1:11434" not in captured.out
