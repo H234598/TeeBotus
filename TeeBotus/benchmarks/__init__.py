@@ -20,6 +20,10 @@ from TeeBotus.benchmarks.qdrant import (
     benchmark_qdrant_health_quick,
     benchmark_qdrant_memory_index_quick,
 )
+from TeeBotus.benchmarks.source_quality import (
+    benchmark_source_harvester_promote_index_flow,
+    benchmark_source_harvester_quality_gate,
+)
 
 __all__ = [
     "BenchmarkResult",
@@ -40,6 +44,8 @@ __all__ = [
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
+    "benchmark_source_harvester_promote_index_flow",
+    "benchmark_source_harvester_quality_gate",
     "result",
     "stable_backend_ranking",
 ]
