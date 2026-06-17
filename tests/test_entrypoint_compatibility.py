@@ -513,6 +513,19 @@ def test_runtime_status_text_redacts_generic_secret_assignments() -> None:
     assert "xyz" not in text
 
 
+def test_runtime_status_text_keeps_secret_named_paths_visible() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "account_memory_metadata=Demo status=broken item=account_secrets "
+        "path=/repo/instances/Demo/data/accounts/Account_Secrets.json secret=plain-secret"
+    )
+
+    assert "path=/repo/instances/Demo/data/accounts/Account_Secrets.json" in text
+    assert "secret=<redacted>" in text
+    assert "plain-secret" not in text
+
+
 def test_runtime_status_counts_only_effective_local_fallbacks_without_remote_allow(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

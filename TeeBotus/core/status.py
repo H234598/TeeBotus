@@ -60,8 +60,8 @@ STATUS_SECRET_REDACTIONS = (
     (re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"), "AIza<redacted>"),
     (
         re.compile(
-            r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)"
-            r"[A-Za-z0-9_ -]*)\s*([:=])\s*([^,\s)]+)",
+            r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+            r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
             re.IGNORECASE,
         ),
         r"\1\2<redacted>",
