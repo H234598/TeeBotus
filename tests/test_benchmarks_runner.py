@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
+from TeeBotus.benchmarks import suite as benchmark_suite
 from scripts import run_benchmarks as benchmark_module
 from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
@@ -24,6 +25,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     reporting = importlib.import_module("TeeBotus.benchmarks.reporting")
     runtime_health = importlib.import_module("TeeBotus.benchmarks.runtime_health")
     source_quality = importlib.import_module("TeeBotus.benchmarks.source_quality")
+    suite = importlib.import_module("TeeBotus.benchmarks.suite")
     youtube = importlib.import_module("TeeBotus.benchmarks.youtube")
     package_dir = Path(core.__file__).resolve().parent
 
@@ -42,6 +44,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "reporting.py").exists()
     assert (package_dir / "runtime_health.py").exists()
     assert (package_dir / "source_quality.py").exists()
+    assert (package_dir / "suite.py").exists()
     assert (package_dir / "youtube.py").exists()
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
@@ -74,6 +77,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._dependency_context is reporting.dependency_context
     assert benchmark_module._build_regression_report is reporting.build_regression_report
     assert benchmark_module.render_markdown is reporting.render_markdown
+    assert benchmark_module.run_benchmarks is suite.run_benchmarks
     assert benchmark_module._benchmark_status_doctor is runtime_health.benchmark_status_doctor
     assert benchmark_module._benchmark_database_fallback_policy is runtime_health.benchmark_database_fallback_policy
     assert benchmark_module._benchmark_source_harvester_quality_gate is source_quality.benchmark_source_harvester_quality_gate
@@ -627,7 +631,7 @@ def test_run_benchmarks_requires_explicit_include_live_for_postgres(monkeypatch)
             "select_median_ms": 0.0,
         }
 
-    monkeypatch.setattr(benchmark_module, "benchmark_postgres_backend", fake_postgres_backend)
+    monkeypatch.setattr(benchmark_suite, "benchmark_postgres_backend", fake_postgres_backend)
 
     quick_suite = run_benchmarks(entries=1, iterations=1, quick=True, postgres_dsn="postgresql://bench")
     live_suite = run_benchmarks(entries=1, iterations=1, quick=False, include_live=True, postgres_dsn="postgresql://bench")
@@ -661,8 +665,8 @@ def test_run_benchmarks_live_flags_add_explicit_optional_results(monkeypatch) ->
             details={"target": "http://127.0.0.1:6333", "network_calls": 1, "provider_calls": 0, "remote_calls": 0},
         )
 
-    monkeypatch.setattr(benchmark_module, "_benchmark_hf_pool_live", fake_hf_live)
-    monkeypatch.setattr(benchmark_module, "_benchmark_qdrant_health_live", fake_qdrant_live)
+    monkeypatch.setattr(benchmark_suite, "_benchmark_hf_pool_live", fake_hf_live)
+    monkeypatch.setattr(benchmark_suite, "_benchmark_qdrant_health_live", fake_qdrant_live)
 
     suite = run_benchmarks(
         entries=1,
