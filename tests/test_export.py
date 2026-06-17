@@ -47,6 +47,7 @@ def test_export_explains_semantic_index_cache(tmp_path):
     assert "not Qdrant vectors" in note["exported_truth"]
     assert "must not be stored in Qdrant" in note["plaintext_policy"]
     assert "memory-rebuild" in note["rebuild_command"]
+    assert "Bot_Verhalten.md" in note["rebuild_config"]
     assert b"semantic_memory_index" in md_result.data
     assert b"semantic_memory_index.qdrant_payload" in csv_result.data
 

@@ -41,6 +41,49 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
     assert results[0].point_ids == ("point:mem_sleep", "point:mem_plan")
 
 
+def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_default(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
+    calls: list[tuple[str, str, str, str, int]] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, *, url=None, embedding_provider, **_kwargs) -> None:
+            self.url = str(url)
+            self.embedding_provider = embedding_provider
+
+        def rebuild(self, *, account_store, instance_name: str, account_id: str):
+            calls.append((instance_name, account_id, self.url, self.embedding_provider.model_name, self.embedding_provider.dimensions))
+            return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - semantic_enabled: true
+        - semantic_backend: qdrant
+        - qdrant_url: http://localhost:6334
+        - embedding_provider: hash
+        - embedding_model: instance-memory-model
+        - embedding_dimensions: 48
+        """,
+        encoding="utf-8",
+    )
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=FakeQdrantMemoryIndex,
+    )
+
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "instance-memory-model", 48)]
+    assert results[0].status == "rebuilt"
+    assert results[0].point_count == 1
+
+
 def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     class UnexpectedQdrantMemoryIndex:
         def __init__(self, **_kwargs) -> None:
@@ -71,11 +114,13 @@ def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path
         assert kwargs["instance_names"] == ["Depressionsbot"]
         assert kwargs["account_ids"] == []
         assert kwargs["dry_run"] is True
-        assert kwargs["embedding_config"].provider == "tei"
-        assert kwargs["embedding_config"].model_name == "intfloat/multilingual-e5-small"
-        assert kwargs["embedding_config"].dimensions == 384
-        assert kwargs["embedding_config"].endpoint == "http://127.0.0.1:8080/embeddings"
-        assert kwargs["embedding_config"].api_key_env == "HF_TOKEN"
+        assert kwargs["embedding_overrides"] == {
+            "provider": "tei",
+            "model_name": "intfloat/multilingual-e5-small",
+            "dimensions": 384,
+            "endpoint": "http://127.0.0.1:8080/embeddings",
+            "api_key_env": "HF_TOKEN",
+        }
         from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
 
         return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "dry_run", point_count=2),)

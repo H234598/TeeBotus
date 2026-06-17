@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
+from TeeBotus.instructions import BotInstructions, load_instructions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, validate_sha512_token
-from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 
 
@@ -38,6 +38,7 @@ def rebuild_qdrant_memory_indexes(
     account_ids: Iterable[str] = (),
     qdrant_url: str | None = None,
     embedding_config: EmbeddingConfig | None = None,
+    embedding_overrides: Mapping[str, Any] | None = None,
     dry_run: bool = False,
     secret_provider: InstanceSecretProvider | None = None,
     qdrant_index_factory: Callable[..., QdrantMemoryIndex] = QdrantMemoryIndex,
@@ -51,6 +52,13 @@ def rebuild_qdrant_memory_indexes(
     )
     results: list[QdrantMemoryRebuildResult] = []
     for instance_name in selected_instances:
+        instructions = _load_instance_memory_instructions(root, instance_name)
+        effective_qdrant_url = qdrant_url or instructions.memory_search_qdrant_url
+        effective_embedding_config = _resolve_memory_embedding_config(
+            instructions,
+            embedding_config=embedding_config,
+            overrides=embedding_overrides,
+        )
         store_kwargs: dict[str, Any] = {"create_dirs": False}
         if secret_provider is not None:
             store_kwargs["secret_provider"] = secret_provider
@@ -70,8 +78,8 @@ def rebuild_qdrant_memory_indexes(
                     results.append(QdrantMemoryRebuildResult(instance_name, account_id, "dry_run", point_count=len(entries)))
                     continue
                 index = qdrant_index_factory(
-                    url=qdrant_url,
-                    embedding_provider=build_embedding_provider(embedding_config or _default_memory_embedding_config()),
+                    url=effective_qdrant_url,
+                    embedding_provider=build_embedding_provider(effective_embedding_config),
                 )
                 point_ids = rebuild_qdrant_memory_index(
                     account_store=store,
@@ -85,12 +93,43 @@ def rebuild_qdrant_memory_indexes(
     return tuple(results)
 
 
-def _default_memory_embedding_config() -> EmbeddingConfig:
+def _load_instance_memory_instructions(instances_dir: Path, instance_name: str) -> BotInstructions:
+    return load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
+
+
+def _resolve_memory_embedding_config(
+    instructions: BotInstructions,
+    *,
+    embedding_config: EmbeddingConfig | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> EmbeddingConfig:
+    base = embedding_config or _memory_embedding_config_from_instructions(instructions)
+    override = dict(overrides or {})
     return EmbeddingConfig(
-        provider="hash",
-        model_name=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
-        dimensions=USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+        provider=str(override.get("provider") or base.provider).strip(),
+        model_name=str(override.get("model_name") or base.model_name).strip(),
+        dimensions=_positive_int(override.get("dimensions"), default=base.dimensions),
+        endpoint=str(override.get("endpoint") if override.get("endpoint") is not None else base.endpoint).strip(),
+        api_key_env=str(override.get("api_key_env") if override.get("api_key_env") is not None else base.api_key_env).strip(),
     )
+
+
+def _memory_embedding_config_from_instructions(instructions: BotInstructions) -> EmbeddingConfig:
+    return EmbeddingConfig(
+        provider=instructions.memory_search_embedding_provider,
+        model_name=instructions.memory_search_embedding_model,
+        dimensions=instructions.memory_search_embedding_dimensions,
+        endpoint=instructions.memory_search_embedding_endpoint,
+        api_key_env=instructions.memory_search_embedding_api_key_env,
+    )
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return max(1, int(default))
+    return parsed if parsed > 0 else max(1, int(default))
 
 
 def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:

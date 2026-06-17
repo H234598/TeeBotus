@@ -696,7 +696,10 @@ Cache nicht geloescht werden kann, wird kein erfolgreicher Reset gemeldet.
 `--runtime-status` meldet den Pfad als `memory_index=<Instanz> backend=keyword
 status=... semantic=... embedding_provider=... embedding_model=...
 embedding_dimensions=...`.
-Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt:
+Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt. Ohne
+Embedding-Flags liest `memory-rebuild` die aktive `Bot_Verhalten.md` der
+Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags
+sind nur Overrides fuer Tests oder einen bewussten Modellwechsel:
 
 ```bash
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --dry-run

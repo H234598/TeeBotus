@@ -3,10 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
+from typing import Any
 
-from TeeBotus.embedding.config import EmbeddingConfig
 from TeeBotus.embedding.rebuild import rebuild_qdrant_memory_indexes
-from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -18,13 +17,7 @@ def main(argv: list[str] | None = None) -> int:
             instance_names=args.instance,
             account_ids=args.account_id,
             qdrant_url=args.qdrant_url or None,
-            embedding_config=EmbeddingConfig(
-                provider=args.embedding_provider,
-                model_name=args.embedding_model,
-                dimensions=max(1, int(args.embedding_dimensions)),
-                endpoint=args.embedding_endpoint,
-                api_key_env=args.embedding_api_key_env,
-            ),
+            embedding_overrides=_embedding_overrides_from_args(args),
             dry_run=args.dry_run,
         )
         if args.json:
@@ -46,15 +39,30 @@ def _build_parser() -> argparse.ArgumentParser:
 
     memory = subparsers.add_parser("memory-rebuild", help="Rebuild Qdrant Usermemory cache from AccountStore.")
     memory.add_argument("--account-id", action="append", default=[], help="Limit rebuild to one or more account IDs.")
-    memory.add_argument("--qdrant-url", default="", help="Override Qdrant URL. Defaults to TEEBOTUS_QDRANT_URL or localhost.")
-    memory.add_argument("--embedding-provider", default="hash", help="Embedding provider: hash/local_hash or hf/tei.")
-    memory.add_argument("--embedding-model", default=USER_MEMORY_QDRANT_EMBEDDING_MODEL, help="Embedding model name stored in Qdrant payload.")
-    memory.add_argument("--embedding-dimensions", type=int, default=USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, help="Embedding vector dimensions.")
-    memory.add_argument("--embedding-endpoint", default="", help="Optional HF/TEI/OpenAI-compatible embedding endpoint.")
-    memory.add_argument("--embedding-api-key-env", default="", help="Optional environment variable containing the embedding API key.")
+    memory.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bot_Verhalten.md Memory Search config.")
+    memory.add_argument("--embedding-provider", default=None, help="Override embedding provider: hash/local_hash or hf/tei.")
+    memory.add_argument("--embedding-model", default=None, help="Override embedding model name stored in Qdrant payload.")
+    memory.add_argument("--embedding-dimensions", type=int, default=None, help="Override embedding vector dimensions.")
+    memory.add_argument("--embedding-endpoint", default=None, help="Override HF/TEI/OpenAI-compatible embedding endpoint.")
+    memory.add_argument("--embedding-api-key-env", default=None, help="Override environment variable containing the embedding API key.")
     memory.add_argument("--dry-run", action="store_true", help="Count AccountStore entries without writing Qdrant.")
     memory.set_defaults(command="memory-rebuild")
     return parser
+
+
+def _embedding_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    overrides: dict[str, Any] = {}
+    if args.embedding_provider is not None:
+        overrides["provider"] = args.embedding_provider
+    if args.embedding_model is not None:
+        overrides["model_name"] = args.embedding_model
+    if args.embedding_dimensions is not None:
+        overrides["dimensions"] = args.embedding_dimensions
+    if args.embedding_endpoint is not None:
+        overrides["endpoint"] = args.embedding_endpoint
+    if args.embedding_api_key_env is not None:
+        overrides["api_key_env"] = args.embedding_api_key_env
+    return overrides
 
 
 def _format_memory_rebuild_result(result: object) -> str:

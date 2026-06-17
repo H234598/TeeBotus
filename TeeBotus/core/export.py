@@ -26,7 +26,8 @@ SEMANTIC_INDEX_EXPORT_NOTE = {
         "qdrant_payload": "Qdrant stores memory IDs, vectors, scope metadata, and content hashes only.",
         "plaintext_policy": "Usermemory cleartext must stay in AccountStore and must not be stored in Qdrant.",
         "reset_behavior": "/reset_memorys deletes the account Qdrant cache first when semantic Qdrant search is active.",
-        "rebuild_command": "teebotus-embedding --instances-dir <instances> --instance <instance> memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider hash --embedding-model teebotus-account-memory-hash --embedding-dimensions 64",
+        "rebuild_command": "teebotus-embedding --instances-dir <instances> --instance <instance> memory-rebuild",
+        "rebuild_config": "Without embedding flags, memory-rebuild reads the instance Bot_Verhalten.md Memory Search config; flags override it for tests or model changes.",
     }
 }
 
