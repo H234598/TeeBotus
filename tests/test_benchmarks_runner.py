@@ -16,6 +16,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
     langgraph_flows = importlib.import_module("TeeBotus.benchmarks.langgraph_flows")
     llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
+    mcp = importlib.import_module("TeeBotus.benchmarks.mcp")
     memory = importlib.import_module("TeeBotus.benchmarks.memory")
     pydantic_ai = importlib.import_module("TeeBotus.benchmarks.pydantic_ai")
     proactive = importlib.import_module("TeeBotus.benchmarks.proactive")
@@ -32,6 +33,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "hf_pool.py").exists()
     assert (package_dir / "langgraph_flows.py").exists()
     assert (package_dir / "llm_routing.py").exists()
+    assert (package_dir / "mcp.py").exists()
     assert (package_dir / "memory.py").exists()
     assert (package_dir / "pydantic_ai.py").exists()
     assert (package_dir / "proactive.py").exists()
@@ -57,6 +59,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_langgraph_source_harvester_workflow is langgraph_flows.benchmark_langgraph_source_harvester_workflow
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
+    assert benchmark_module._benchmark_mcp_tools is mcp.benchmark_mcp_readonly_bibliothekar_and_memory_search
     assert benchmark_module.benchmark_memory_results is memory.memory_results
     assert benchmark_module._benchmark_memory_jsonl_to_sqlite_migration is memory.benchmark_memory_jsonl_to_sqlite_migration
     assert benchmark_module._benchmark_decision_fake_model is pydantic_ai.benchmark_decision_fake_model

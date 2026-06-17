@@ -6,28 +6,16 @@ import importlib.metadata
 import json
 import os
 import platform
-import statistics
 import sys
-import tempfile
-import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
-from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
-from TeeBotus.mcp_tools import MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry  # noqa: E402
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
-from TeeBotus.runtime.actions import SendText  # noqa: E402
-from TeeBotus.runtime.bibliothekar import BibliothekarStore  # noqa: E402
-from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
-    BibliothekarService,
-    LocalBibliothekarBackend,
-)
 from TeeBotus.benchmarks.core import (  # noqa: E402
     BenchmarkResult,
     REQUIRED_BENCHMARK_CATEGORIES,
@@ -91,6 +79,7 @@ from TeeBotus.benchmarks.langgraph_flows import (  # noqa: E402
     benchmark_langgraph_bibliothekar_linear as _benchmark_langgraph_linear_flow,
     benchmark_langgraph_source_harvester_workflow as _benchmark_langgraph_source_harvester_workflow,
 )
+from TeeBotus.benchmarks.mcp import benchmark_mcp_readonly_bibliothekar_and_memory_search as _benchmark_mcp_tools  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -415,100 +404,6 @@ def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> lis
         sqlite_backend=benchmark_sqlite_row_encrypted_projection,
         postgres_backend=benchmark_postgres_backend,
     )
-
-
-def _benchmark_mcp_tools(*, iterations: int) -> BenchmarkResult:
-    with tempfile.TemporaryDirectory(prefix="teebotus-bench-mcp-") as tmp:
-        root = Path(tmp)
-        library_dir = root / "instances" / "Bench" / "data" / "Bibliothek"
-        library_dir.mkdir(parents=True)
-        (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
-        store = BibliothekarStore("Bench", root / "instances")
-        store.rebuild()
-        service = BibliothekarService(LocalBibliothekarBackend(store))
-        account_store = AccountStore(root / "accounts", "Bench", StaticSecretProvider(b"m" * 32))
-        account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="bench-mcp"))
-        account_store.append_structured_memory_entry(
-            account_id,
-            {
-                "id": "mem_mcp_bench",
-                "kind": "preference",
-                "memory_type": "semantic",
-                "user_text": "Der Nutzer mag kurze Antworten zu Therapieaufgaben.",
-                "bot_text": "Notiert.",
-                "keywords": ["therapieaufgaben", "kurz"],
-            },
-        )
-        tool_config = {
-            "bibliothekar.search": {"enabled": True, "read_only": True},
-            "memory.search": {"enabled": True, "read_only": True},
-        }
-        registry = build_readonly_mcp_registry(
-            account_store=account_store,
-            account_id=account_id,
-            bibliothekar_service=service,
-            tool_config=tool_config,
-            private_chat=True,
-        )
-        group_registry = build_readonly_mcp_registry(
-            account_store=account_store,
-            account_id=account_id,
-            bibliothekar_service=service,
-            tool_config=tool_config,
-            private_chat=False,
-        )
-        calls: list[Any] = []
-        timings = [
-            _timed_ms(
-                lambda: calls.append(
-                    (
-                        registry.call("bibliothekar.search", {"query": "Therapie", "top_k": 1}),
-                        registry.call("memory.search", {"query": "Therapieaufgaben"}),
-                    )
-                )
-            )
-            for _ in range(iterations)
-        ]
-        latest_library = calls[-1][0] if calls else {}
-        latest_memory = calls[-1][1] if calls else {}
-        group_blocks_memory = "memory.search" not in group_registry.tool_names
-        unknown_registry = MCPToolRegistry(
-            {"shell.exec": MCPToolPolicy(enabled=True, read_only=True)},
-            {"shell.exec": lambda _arguments: {"stdout": "would run"}},
-        )
-        unknown_tool_blocked = "shell.exec" not in unknown_registry.tool_names and not unknown_registry.policy("shell.exec").enabled
-        ok = (
-            bool(latest_library.get("selected_ids"))
-            and latest_memory.get("selected_ids") == ["mem_mcp_bench"]
-            and group_blocks_memory
-            and unknown_tool_blocked
-        )
-        return _result(
-            name="mcp_readonly_bibliothekar_and_memory_search",
-            category="mcp_tools",
-            iterations=iterations * 2,
-            total_ms=sum(timings),
-            ok=ok,
-            errors=0 if ok else 1,
-            payload_bytes=len(json.dumps(calls[-1] if calls else {}, ensure_ascii=False).encode("utf-8")),
-            index_bytes=store.index_path.stat().st_size if store.index_path.exists() else 0,
-            details={
-                "tool_names": registry.tool_names,
-                "group_tool_names": group_registry.tool_names,
-                "library_selected": len(latest_library.get("selected_ids") or []),
-                "memory_selected": len(latest_memory.get("selected_ids") or []),
-                "group_blocks_memory": group_blocks_memory,
-                "unknown_tool_blocked": unknown_tool_blocked,
-                "network_calls": 0,
-                "median_tool_pair_ms": statistics.median(timings),
-            },
-        )
-
-
-def _timed_ms(func: Callable[[], Any]) -> float:
-    start = time.perf_counter()
-    func()
-    return (time.perf_counter() - start) * 1000
 
 
 def _context() -> dict[str, Any]:

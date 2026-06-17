@@ -27,6 +27,7 @@ from TeeBotus.benchmarks.langgraph_flows import (
     benchmark_langgraph_source_harvester_workflow,
 )
 from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
+from TeeBotus.benchmarks.mcp import benchmark_mcp_readonly_bibliothekar_and_memory_search
 from TeeBotus.benchmarks.memory import benchmark_memory_jsonl_to_sqlite_migration, memory_results
 from TeeBotus.benchmarks.pydantic_ai import benchmark_decision_fake_model, benchmark_pydantic_structured_decisions
 from TeeBotus.benchmarks.proactive import benchmark_proactive_tool_plan_due_dispatch_gates
@@ -69,6 +70,7 @@ __all__ = [
     "benchmark_langgraph_bibliothekar_linear",
     "benchmark_langgraph_source_harvester_workflow",
     "benchmark_llm_router",
+    "benchmark_mcp_readonly_bibliothekar_and_memory_search",
     "benchmark_memory_jsonl_to_sqlite_migration",
     "benchmark_pydantic_structured_decisions",
     "benchmark_proactive_tool_plan_due_dispatch_gates",
