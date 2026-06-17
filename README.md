@@ -546,6 +546,21 @@ auf serverseitige Google-Conversation-State. Gemini Live API und Interactions
 API bleiben separate, stateful/gespeicherte Spezialpfade und werden hier nicht
 automatisch verwendet.
 
+Gemini/Vertex-Service-Tier:
+
+```bash
+TEEBOTUS_GEMINI_SERVICE_TIER=flex
+TEEBOTUS_GEMINI_SERVICE_TIER_DEPRESSIONSBOT=flex
+TEEBOTUS_GEMINI_FLEX_SERVICE_TIER_DEPRESSIONSBOT=yes
+TEEBOTUS_LLM_SERVICE_TIER_DEPRESSIONSBOT=flex
+```
+
+Der Wert wird nur bei Google-Gemini/Vertex-Modellen an LiteLLM uebergeben. Fuer
+Ollama, Groq, Hugging Face und lokale Fallbacks wird `service_tier` nicht in den
+Provider-Call geschrieben. In `Bot_Verhalten.md` kann derselbe Schalter im
+`## LLM`-Block als `service_tier: flex` stehen; im `## OpenAI`-Block bleibt
+`service_tier: flex` weiterhin der bestehende OpenAI-Responses-Schalter.
+
 Gemini-Keyrotation:
 
 ```bash
@@ -606,8 +621,9 @@ Instanzspezifisch funktionieren
 `TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine einzelne
 Dimension, `TEEBOTUS_GEMINI_FREE_TIER_ENABLED=false` schaltet den Guard ab.
-`--runtime-status` meldet Google-Routen als `google_mode=stateless`, zeigt die
-wirksamen Guard-Werte als `free_tier_guard=...` und gibt den Cachezustand als
+`--runtime-status` meldet Google-Routen als `google_mode=stateless`, zeigt bei
+aktiviertem Schalter `service_tier=flex`, die wirksamen Guard-Werte als
+`free_tier_guard=...` und gibt den Cachezustand als
 `gemini_free_tier_limits status=...` aus.
 
 Das ist die normale Gemini-Text-API ueber LiteLLM. Die Gemini/Vertex Live API
@@ -958,7 +974,7 @@ python3 -m pip install '.[tools]'
 
 Plan2-Extras sind absichtlich gepinnt. `litellm==1.83.7` verlangt `python-dotenv==1.0.1`; deshalb nutzt TeeBotus fuer strukturierte Pydantic-AI-Subtasks `pydantic-ai-slim==1.107.0` und fuer Tools `fastmcp==2.0.0`, statt die Full-Meta-Pakete zu installieren, die aktuell `python-dotenv>=1.1.0` ziehen.
 
-Flex Processing wird ueber `service_tier: flex` in der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
+OpenAI-Flex-Processing wird ueber `service_tier: flex` im `## OpenAI`-Block der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Gemini/Vertex-Flex laeuft getrennt ueber `service_tier: flex` im `## LLM`-Block oder die oben genannten `TEEBOTUS_GEMINI_*`-/`TEEBOTUS_LLM_SERVICE_TIER*`-Schalter. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 
 Websuche wird ueber `web_search: true` aktiviert. Mit `web_search_context_size: medium` bekommt das Modell einen mittleren Suchkontext. `web_search_required: false` laesst `tool_choice` auf `auto`, damit das Modell nur sucht, wenn es fuer die Antwort sinnvoll ist.
 

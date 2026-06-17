@@ -91,6 +91,54 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_gemini_profile(monkeypa
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
 
 
+def test_runtime_profile_client_uses_gemini_service_tier_env_switch() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash",
+        env={
+            "GEMINI_API_KEY": "gemini-key",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "Flex",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.service_tier == "flex"
+
+
+def test_runtime_profile_client_prefers_instance_gemini_flex_flag() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash",
+        env={
+            "GEMINI_API_KEY": "gemini-key",
+            "TEEBOTUS_GEMINI_FLEX_SERVICE_TIER_DEMO": "yes",
+        },
+        instance_name="Demo",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.service_tier == "flex"
+
+
+def test_runtime_profile_client_instance_service_tier_off_overrides_global_flex() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash",
+        env={
+            "GEMINI_API_KEY": "gemini-key",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
+            "TEEBOTUS_GEMINI_SERVICE_TIER_DEMO": "off",
+        },
+        instance_name="Demo",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.service_tier == ""
+
+
 def test_normalize_llm_provider_accepts_hf_pool_aliases() -> None:
     assert normalize_llm_provider("hf_pool") == "hf_pool"
     assert normalize_llm_provider("hfpool") == "hf_pool"
@@ -248,6 +296,31 @@ def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> N
     assert client.provider == "litellm"
     assert client.model == "huggingface/mistralai/Mistral-7B-Instruct-v0.3"
     assert client.api_key == "hf-secret"
+
+
+def test_profiled_text_client_passes_gemini_service_tier_from_profile() -> None:
+    profiles = {
+        "gemini_flex": LLMProfile(
+            "gemini_flex",
+            "litellm",
+            "gemini/gemini-2.5-flash",
+            api_key_env="GEMINI_API_KEY",
+            service_tier="flex",
+        ),
+    }
+    routing = {"normal_chat": LLMRoutingRule("normal_chat", "gemini_flex")}
+
+    client = build_profiled_text_llm_client(
+        purpose="normal_chat",
+        instructions=BotInstructions(),
+        openai_client=None,
+        profiles=profiles,
+        routing=routing,
+        env={"GEMINI_API_KEY": "gemini-secret"},
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.service_tier == "flex"
 
 
 def test_profiled_text_client_does_not_reuse_instruction_remote_fallbacks_when_route_blocks_them() -> None:

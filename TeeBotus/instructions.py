@@ -68,6 +68,7 @@ class BotInstructions:
     llm_timeout_seconds: int | None = None
     llm_max_output_tokens: int | None = None
     llm_temperature: float | None = None
+    llm_service_tier: str = ""
     llm_profile: str = ""
     structured_decision_enabled: bool | None = None
     openai_model: str = "gpt-5.5"
@@ -675,6 +676,8 @@ def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> N
         instructions.llm_max_output_tokens = _parse_optional_int(value, default=instructions.llm_max_output_tokens)
     elif normalized in {"temperature", "llm_temperature"}:
         instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
+    elif normalized in {"service_tier", "llm_service_tier", "litellm_service_tier", "text_service_tier"}:
+        instructions.llm_service_tier = value.strip()
     elif normalized in {"profile", "llm_profile"}:
         instructions.llm_profile = value.strip()
     elif normalized in {"structured_decision_enabled", "structured_decisions_enabled", "pydantic_decision_enabled", "pydantic_decisions_enabled"}:
@@ -718,6 +721,8 @@ def _apply_openai_setting(
         instructions.llm_max_output_tokens = _parse_optional_int(value, default=instructions.llm_max_output_tokens)
     elif normalized in {"llm_temperature", "text_temperature"}:
         instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
+    elif normalized in {"llm_service_tier", "litellm_service_tier", "text_service_tier"}:
+        instructions.llm_service_tier = value.strip()
     elif normalized in {"profile", "llm_profile"}:
         instructions.llm_profile = value.strip()
     elif normalized == "model":

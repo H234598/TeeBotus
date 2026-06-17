@@ -70,6 +70,7 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
         "TEEBOTUS_LLM_TIMEOUT_SECONDS_DEPRESSIONSBOT": "180",
         "TEEBOTUS_LLM_MAX_OUTPUT_TOKENS_DEPRESSIONSBOT": "700",
         "TEEBOTUS_LLM_TEMPERATURE_DEPRESSIONSBOT": "0.7",
+        "TEEBOTUS_LLM_SERVICE_TIER_DEPRESSIONSBOT": "flex",
     }
 
     assert resolve_llm_setting("Depressionsbot", "signal", 2, "PROVIDER", env) == "groq"
@@ -133,6 +134,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
         "TEEBOTUS_LLM_TIMEOUT_SECONDS_DEPRESSIONSBOT": "180",
         "TEEBOTUS_LLM_MAX_OUTPUT_TOKENS_DEPRESSIONSBOT": "700",
         "TEEBOTUS_LLM_TEMPERATURE_DEPRESSIONSBOT": "0.7",
+        "TEEBOTUS_LLM_SERVICE_TIER_DEPRESSIONSBOT": "flex",
     }
 
     accounts = build_account_run_configs("Depressionsbot", ("telegram", "signal", "matrix"), env)
@@ -151,6 +153,7 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
     assert {account.llm_timeout_seconds for account in accounts} == {"180"}
     assert {account.llm_max_output_tokens for account in accounts} == {"700"}
     assert {account.llm_temperature for account in accounts} == {"0.7"}
+    assert {account.llm_service_tier for account in accounts} == {"flex"}
 
 
 def test_runtime_discovers_instances(tmp_path: Path):

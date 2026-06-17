@@ -17,6 +17,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
         - timeout_seconds: 180
         - max_tokens: 700
         - temperature: 0.4
+        - service_tier: flex
         """
     )
 
@@ -29,6 +30,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
     assert instructions.llm_timeout_seconds == 180
     assert instructions.llm_max_output_tokens == 700
     assert instructions.llm_temperature == 0.4
+    assert instructions.llm_service_tier == "flex"
 
     instances_dir = tmp_path / "instances"
     (instances_dir / "Demo").mkdir(parents=True)
@@ -44,6 +46,7 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
         "TEEBOTUS_LLM_PROFILE_DEMO": "local_ollama",
         "TEEBOTUS_LLM_API_KEY_DEMO": "runtime-key",
         "TEEBOTUS_LLM_BASE_URL_DEMO": "http://127.0.0.1:11434",
+        "TEEBOTUS_LLM_SERVICE_TIER_DEMO": "flex",
     }
 
     assert resolve_llm_setting("Demo", "telegram", 1, "PROFILE", env) == "local_ollama"
@@ -56,3 +59,4 @@ def test_plan2_llm_config_acceptance_covers_instructions_and_runtime_env(tmp_pat
     assert account.llm_profile == "local_ollama"
     assert account.llm_api_key == "runtime-key"
     assert account.llm_base_url == "http://127.0.0.1:11434"
+    assert account.llm_service_tier == "flex"

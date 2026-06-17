@@ -134,6 +134,7 @@ class InstructionTests(unittest.TestCase):
             - timeout_seconds: 180
             - max_output_tokens: 456
             - temperature: 0.7
+            - service_tier: flex
             - error: LLM kaputt.
             - missing_key: LLM-Key fehlt.
             - reset: LLM-Reset.
@@ -199,6 +200,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.llm_timeout_seconds, 180)
         self.assertEqual(instructions.llm_max_output_tokens, 456)
         self.assertEqual(instructions.llm_temperature, 0.7)
+        self.assertEqual(instructions.llm_service_tier, "flex")
         self.assertEqual(instructions.llm_error, "LLM kaputt.")
         self.assertEqual(instructions.llm_missing_key, "LLM-Key fehlt.")
         self.assertEqual(instructions.llm_reset, "LLM-Reset.")

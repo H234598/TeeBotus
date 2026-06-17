@@ -69,6 +69,7 @@ class LiteLLMSettings:
     timeout: int = 90
     temperature: float | None = None
     max_tokens: int | None = None
+    service_tier: str = ""
     timeout_override: bool = False
     temperature_override: bool = False
     max_tokens_override: bool = False
@@ -111,6 +112,7 @@ class LiteLLMTextClient:
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
+            service_tier="",
         )
         self.settings = resolved
         self.provider = normalize_llm_provider(resolved.provider)
@@ -133,6 +135,7 @@ class LiteLLMTextClient:
         self.timeout = resolved.timeout
         self.temperature = resolved.temperature
         self.max_tokens = resolved.max_tokens
+        self.service_tier = _normalize_litellm_service_tier(resolved.service_tier)
         self.gemini_free_tier_limits = resolved.gemini_free_tier_limits or resolve_gemini_free_tier_limits(
             provider=self.provider,
             model=self.model,
@@ -275,6 +278,8 @@ class LiteLLMTextClient:
         api_key = self.fallback_api_keys.get(model)
         if api_key:
             kwargs["api_key"] = api_key
+        if self.service_tier and route_uses_google_gemini(provider=self.provider, model=model):
+            kwargs["service_tier"] = self.service_tier
         return kwargs
 
     def _reserve_google_free_tier_budget(
@@ -381,6 +386,16 @@ def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str
     if env_name:
         return os.environ.get(env_name, "").strip() or default_api_key.strip()
     return default_api_key.strip()
+
+
+def _normalize_litellm_service_tier(value: object) -> str:
+    text = str(value or "").strip()
+    normalized = text.casefold()
+    if normalized in {"", "none", "null", "0", "false", "off", "disabled", "aus", "nein", "no"}:
+        return ""
+    if normalized == "flex":
+        return "flex"
+    return text
 
 
 def _is_usage_limit_error(exc: Exception, redacted_detail: str) -> bool:

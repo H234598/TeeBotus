@@ -818,13 +818,15 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
     monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_1", "a1,a2")
     monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_2", "b1,b2")
     monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_3", "c1,c2")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_SERVICE_TIER_DEMO", "flex")
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm model=gemini/gemini-2.5-flash "
-        "status=configured profile=gemini_flash api_key=configured api_key_ring=6"
+        "status=configured profile=gemini_flash api_key=configured api_key_ring=6 "
+        "google_mode=stateless service_tier=flex"
     ) in captured.out
     assert "a1" not in captured.out
 

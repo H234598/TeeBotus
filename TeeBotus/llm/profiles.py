@@ -10,6 +10,7 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.router import build_text_llm_client, normalize_llm_provider
+from TeeBotus.llm.service_tier import resolve_gemini_service_tier
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE_PATH = PROJECT_ROOT / "config" / "llm_profiles.yaml"
@@ -24,6 +25,7 @@ class LLMProfile:
     model: str
     base_url: str = ""
     api_key_env: str = ""
+    service_tier: str = ""
 
     @property
     def is_remote(self) -> bool:
@@ -55,6 +57,7 @@ class LLMRoute:
     model: str
     base_url: str = ""
     api_key_env: str = ""
+    service_tier: str = ""
     fallback_profile_name: str = ""
     fallback_model: str = ""
     fallback_api_key_env: str = ""
@@ -80,6 +83,7 @@ def load_llm_profiles(path: str | Path = DEFAULT_PROFILE_PATH) -> dict[str, LLMP
             model=str(raw_profile.get("model") or "").strip(),
             base_url=str(raw_profile.get("base_url") or raw_profile.get("api_base") or "").strip(),
             api_key_env=str(raw_profile.get("api_key_env") or "").strip(),
+            service_tier=str(raw_profile.get("service_tier") or "").strip(),
         )
         if profile.provider and profile.model:
             profiles[profile.name] = profile
@@ -139,6 +143,7 @@ def select_llm_route(
         model=profile.model,
         base_url=profile.base_url,
         api_key_env=profile.api_key_env,
+        service_tier=profile.service_tier,
         fallback_profile_name=fallback_profile_name,
         fallback_model=fallback_model,
         fallback_api_key_env=fallback_api_key_env,
@@ -180,6 +185,12 @@ def build_profiled_text_llm_client(
         gemini_free_tier_limits=resolve_gemini_free_tier_limits(source, provider=route.provider, model=route.model)
         if route_uses_google_gemini(provider=route.provider, model=route.model)
         else None,
+        service_tier=resolve_gemini_service_tier(
+            source,
+            provider=route.provider,
+            model=route.model,
+            explicit_service_tier=route.service_tier or instructions.llm_service_tier,
+        ),
         api_base=route.base_url,
         purpose=route.purpose,
         use_instruction_fallback_models=False,

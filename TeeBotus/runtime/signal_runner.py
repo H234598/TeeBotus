@@ -108,6 +108,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             timeout=run_config.llm_timeout_seconds,
             max_tokens=run_config.llm_max_output_tokens,
             temperature=run_config.llm_temperature,
+            service_tier=run_config.llm_service_tier,
             instance_name=run_config.instance_name,
         )
         self.structured_decision_runner = build_runtime_structured_decision_runner(

@@ -6,7 +6,7 @@ import types
 import pytest
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient
+from TeeBotus.llm_client import LLMAPIError, LiteLLMSettings, LiteLLMTextClient
 
 
 def test_plan2_litellm_provider_acceptance_uses_fake_completion_without_network(monkeypatch) -> None:
@@ -142,3 +142,48 @@ def test_litellm_provider_allows_local_ollama_api_base(monkeypatch) -> None:
     assert response.text == "lokal ok"
     assert calls[0]["model"] == "ollama/llama3.1:8b"
     assert calls[0]["api_base"] == "localhost:11434/api"
+
+
+def test_litellm_provider_adds_service_tier_for_gemini_only(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "gemini ok"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm",
+            model="gemini/gemini-2.5-flash",
+            service_tier="Flex",
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "gemini ok"
+    assert calls[0]["service_tier"] == "flex"
+
+
+def test_litellm_provider_ignores_service_tier_for_non_google_models(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "ollama ok"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm",
+            model="ollama_chat/llama3.1:8b",
+            api_base="http://127.0.0.1:11434",
+            service_tier="flex",
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "ollama ok"
+    assert "service_tier" not in calls[0]

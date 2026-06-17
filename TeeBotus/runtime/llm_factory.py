@@ -10,6 +10,7 @@ from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
 from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
+from TeeBotus.llm.service_tier import resolve_gemini_service_tier
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
 
@@ -33,6 +34,7 @@ def build_runtime_text_llm_client(
     timeout: int | str | None = None,
     temperature: float | str | None = None,
     max_tokens: int | str | None = None,
+    service_tier: str = "",
     env: Mapping[str, str] | None = None,
     instance_name: str = "",
     openai_client_factory: Callable[[str], object] = OpenAIClient,
@@ -62,6 +64,7 @@ def build_runtime_text_llm_client(
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
+            service_tier=service_tier,
             env=env,
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
@@ -80,6 +83,7 @@ def build_runtime_text_llm_client(
             timeout=timeout,
             temperature=temperature,
             max_tokens=max_tokens,
+            service_tier=service_tier,
             env=env,
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
@@ -122,6 +126,13 @@ def build_runtime_text_llm_client(
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        service_tier=_gemini_service_tier_for_route(
+            env,
+            instance_name=instance_name,
+            provider=resolved_provider,
+            model=resolved_model,
+            explicit_service_tier=service_tier or instructions.llm_service_tier,
+        ),
         use_instruction_fallback_models=False,
         env=env,
     )
@@ -204,6 +215,7 @@ def _build_route_client(
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
+    service_tier: str,
     env: Mapping[str, str] | None,
     instance_name: str,
     openai_client_factory: Callable[[str], object],
@@ -256,6 +268,13 @@ def _build_route_client(
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        service_tier=_gemini_service_tier_for_route(
+            source,
+            instance_name=instance_name,
+            provider=route.provider,
+            model=route.model,
+            explicit_service_tier=service_tier or route.service_tier or instructions.llm_service_tier,
+        ),
         use_instruction_fallback_models=False,
         env=source,
     )
@@ -274,6 +293,7 @@ def _build_profile_client(
     timeout: int | str | None,
     temperature: float | str | None,
     max_tokens: int | str | None,
+    service_tier: str,
     env: Mapping[str, str] | None,
     instance_name: str,
     openai_client_factory: Callable[[str], object],
@@ -321,6 +341,13 @@ def _build_profile_client(
         timeout=timeout,
         temperature=temperature,
         max_tokens=max_tokens,
+        service_tier=_gemini_service_tier_for_route(
+            source,
+            instance_name=instance_name,
+            provider=profile.provider,
+            model=profile.model,
+            explicit_service_tier=service_tier or profile.service_tier or instructions.llm_service_tier,
+        ),
         use_instruction_fallback_models=False,
         env=source,
     )
@@ -357,6 +384,23 @@ def _gemini_free_tier_limits_for_route(
     if not route_uses_google_gemini(provider=provider, model=model):
         return None
     return resolve_gemini_free_tier_limits(env, instance_name=instance_name, provider=provider, model=model)
+
+
+def _gemini_service_tier_for_route(
+    env: Mapping[str, str] | None,
+    *,
+    instance_name: str,
+    provider: str,
+    model: str,
+    explicit_service_tier: str,
+) -> str:
+    return resolve_gemini_service_tier(
+        env,
+        instance_name=instance_name,
+        provider=provider,
+        model=model,
+        explicit_service_tier=explicit_service_tier,
+    )
 
 
 def _route_uses_gemini_api(*, provider: str, model: str) -> bool:

@@ -320,6 +320,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         route_fallback_count,
         route_api_key_env,
         route_fallback_api_key_env,
+        route_service_tier,
         route_error,
         route_mode,
     ) = _status_llm_route(account, instructions=instructions)
@@ -397,6 +398,14 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         detail += f" api_key_ring={gemini_key_ring_count}"
     if _status_route_uses_google_gemini(provider=provider, model=model):
         detail += " google_mode=stateless"
+        service_tier = _status_gemini_service_tier(
+            account,
+            provider=provider,
+            model=model,
+            explicit_service_tier=route_service_tier,
+        )
+        if service_tier:
+            detail += f" service_tier={_sanitize_status_text(service_tier)}"
         detail += f" free_tier_guard={_status_gemini_free_tier_guard(account, provider=provider, model=model)}"
     fallback_count = _status_effective_fallback_count(
         account,
@@ -616,7 +625,7 @@ def _status_route_fallback_identity(account: Any, *, purpose: str, route_mode: s
     return _sanitize_status_text(" ".join(parts))
 
 
-def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple[str, str, str, int, str, str, str, str]:
+def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple[str, str, str, int, str, str, str, str, str]:
     account_provider = str(getattr(account, "llm_provider", "") or "").strip()
     account_model = str(getattr(account, "llm_model", "") or "").strip()
     account_base_url = str(getattr(account, "llm_base_url", "") or "").strip()
@@ -638,6 +647,7 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
                 0,
                 profile.api_key_env,
                 "",
+                profile.service_tier,
                 "",
                 "profile",
             )
@@ -653,12 +663,14 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
                 0 if account_fallbacks else len(route.fallback_models),
                 route.api_key_env,
                 "" if account_fallbacks else route.fallback_api_key_env,
+                route.service_tier,
                 "",
                 "purpose",
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
-        return provider, model, base_url, 0, "", "", f"{type(exc).__name__}: {exc}", "broken"
-    return provider, model, base_url, 0, "", "", "", "direct"
+        return provider, model, base_url, 0, "", "", "", f"{type(exc).__name__}: {exc}", "broken"
+    service_tier = _effective_llm_text(account, instructions, "llm_service_tier", "llm_service_tier")
+    return provider, model, base_url, 0, "", "", service_tier, "", "direct"
 
 
 def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str] = ()) -> str:
@@ -690,6 +702,14 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         detail += f" api_key_instances={configured_instances}/{total_instances}"
     if _status_route_uses_google_gemini(provider=route.provider, model=route.model):
         detail += " google_mode=stateless"
+        service_tier = _status_gemini_service_tier_for_instances(
+            instance_names,
+            provider=route.provider,
+            model=route.model,
+            explicit_service_tier=route.service_tier,
+        )
+        if service_tier:
+            detail += f" service_tier={_sanitize_status_text(service_tier)}"
         detail += f" free_tier_guard={_status_gemini_free_tier_guard(types.SimpleNamespace(instance_name=''), provider=route.provider, model=route.model)}"
     if route.fallback_profile_name:
         detail += f" fallback={route.fallback_profile_name} fallback_profile={route.fallback_profile_name} fallback_model={route.fallback_model}"
@@ -1042,6 +1062,56 @@ def _status_gemini_free_tier_guard(account: Any, *, provider: str, model: object
         return limits.status_summary()
     except Exception:
         return "unknown"
+
+
+def _status_gemini_service_tier(account: Any, *, provider: str, model: object, explicit_service_tier: str = "") -> str:
+    try:
+        from TeeBotus.llm.service_tier import resolve_gemini_service_tier
+
+        return resolve_gemini_service_tier(
+            instance_name=str(getattr(account, "instance_name", "") or ""),
+            provider=provider,
+            model=str(model or ""),
+            explicit_service_tier=explicit_service_tier,
+        )
+    except Exception:
+        return ""
+
+
+def _status_gemini_service_tier_for_instances(
+    instance_names: Sequence[str],
+    *,
+    provider: str,
+    model: object,
+    explicit_service_tier: str = "",
+) -> str:
+    try:
+        from TeeBotus.llm.service_tier import resolve_gemini_service_tier
+
+        if explicit_service_tier:
+            return resolve_gemini_service_tier(
+                provider=provider,
+                model=str(model or ""),
+                explicit_service_tier=explicit_service_tier,
+            )
+        names = tuple(str(name or "").strip() for name in instance_names if str(name or "").strip())
+        if not names:
+            return resolve_gemini_service_tier(provider=provider, model=str(model or ""))
+        tiers = {
+            resolve_gemini_service_tier(
+                instance_name=name,
+                provider=provider,
+                model=str(model or ""),
+            )
+            for name in names
+        }
+        if len(tiers) == 1:
+            return next(iter(tiers))
+        if len(tiers) > 1:
+            return "mixed"
+    except Exception:
+        return ""
+    return ""
 
 
 def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:

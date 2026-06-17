@@ -35,6 +35,7 @@ class AccountRunConfig:
     llm_timeout_seconds: str = ""
     llm_max_output_tokens: str = ""
     llm_temperature: str = ""
+    llm_service_tier: str = ""
     telegram_token: str = ""
     signal_service: str = ""
     signal_phone_number: str = ""
@@ -324,6 +325,7 @@ def _resolve_llm_runtime_kwargs(
         "llm_timeout_seconds": resolve_llm_setting(instance_name, channel, slot, "TIMEOUT_SECONDS", env),
         "llm_max_output_tokens": resolve_llm_setting(instance_name, channel, slot, "MAX_OUTPUT_TOKENS", env),
         "llm_temperature": resolve_llm_setting(instance_name, channel, slot, "TEMPERATURE", env),
+        "llm_service_tier": resolve_llm_setting(instance_name, channel, slot, "SERVICE_TIER", env),
     }
 
 
