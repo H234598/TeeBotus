@@ -1612,6 +1612,132 @@ def test_legacy_import_artifact_validation_accepts_skip_empty_without_created_ac
     assert errors == []
 
 
+def test_legacy_import_artifact_validation_rejects_inconsistent_skip_events(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 0,
+                    "skipped_sources": 1,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 1,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        action="skip-empty",
+                        entries=1,
+                        imported=1,
+                        account_created=True,
+                        target_unreadable=True,
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("skip actions must not import entries" in error for error in errors)
+    assert any("skip-empty must use account_id <not-created>" in error for error in errors)
+    assert any("skip-empty must have zero entries and zero imported" in error for error in errors)
+    assert any("skip-empty must not create an account" in error for error in errors)
+    assert any("skip-empty must not claim unreadable target or metadata" in error for error in errors)
+
+
+def test_legacy_import_artifact_validation_derives_existing_accounts(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        account_id="a" * 128,
+                        entries=1,
+                        imported=0,
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("legacy import totals.accounts_existing must match events (1)" in error for error in errors)
+
+
 def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_events(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
     markdown_path = tmp_path / "import-demo.md"

@@ -1134,6 +1134,7 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
         "entries_seen": 0,
         "entries_imported": 0,
         "accounts_created": 0,
+        "accounts_existing": 0,
         "unreadable_targets": 0,
         "unreadable_metadata": 0,
     }
@@ -1165,16 +1166,51 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
             skipped_sources += 1
         entries = event.get("entries")
         imported = event.get("imported")
+        entries_count: int | None = None
+        imported_count: int | None = None
         if not _is_nonnegative_integer(entries):
             errors.append(f"{prefix}{label}.entries must be a non-negative integer")
         else:
-            derived["entries_seen"] += int(entries or 0)
+            entries_count = int(entries or 0)
+            derived["entries_seen"] += entries_count
         if not _is_nonnegative_integer(imported):
             errors.append(f"{prefix}{label}.imported must be a non-negative integer")
         else:
-            derived["entries_imported"] += int(imported or 0)
+            imported_count = int(imported or 0)
+            derived["entries_imported"] += imported_count
+        if entries_count is not None and imported_count is not None and imported_count > entries_count:
+            errors.append(f"{prefix}{label}.imported must not exceed entries")
+        if action.startswith("skip-") and imported_count not in (None, 0):
+            errors.append(f"{prefix}{label}.skip actions must not import entries")
+        if action == "skip-empty":
+            if account_id != "<not-created>":
+                errors.append(f"{prefix}{label}.skip-empty must use account_id <not-created>")
+            if entries_count not in (None, 0) or imported_count not in (None, 0):
+                errors.append(f"{prefix}{label}.skip-empty must have zero entries and zero imported")
+            if event.get("account_created") is True:
+                errors.append(f"{prefix}{label}.skip-empty must not create an account")
+            if event.get("metadata_unreadable") is True or event.get("target_unreadable") is True:
+                errors.append(f"{prefix}{label}.skip-empty must not claim unreadable target or metadata")
+        elif account_id == "<not-created>":
+            errors.append(f"{prefix}{label}.account_id <not-created> is only valid for skip-empty")
+        if action == "skip-unreadable-account-metadata":
+            if account_id != "<metadata-unreadable>":
+                errors.append(f"{prefix}{label}.skip-unreadable-account-metadata must use account_id <metadata-unreadable>")
+            if event.get("metadata_unreadable") is not True:
+                errors.append(f"{prefix}{label}.skip-unreadable-account-metadata must set metadata_unreadable")
+        elif account_id == "<metadata-unreadable>":
+            errors.append(f"{prefix}{label}.account_id <metadata-unreadable> is only valid for skip-unreadable-account-metadata")
+        if action == "skip-unreadable-target":
+            if event.get("target_unreadable") is not True:
+                errors.append(f"{prefix}{label}.skip-unreadable-target must set target_unreadable")
+            if imported_count not in (None, 0):
+                errors.append(f"{prefix}{label}.skip-unreadable-target must not import entries")
+        if event.get("account_created") is True and account_id in {"<not-created>", "<metadata-unreadable>"}:
+            errors.append(f"{prefix}{label}.account_created requires a new or concrete account id")
         if event.get("account_created") is True:
             derived["accounts_created"] += 1
+        elif ACCOUNT_ID_RE.fullmatch(account_id):
+            derived["accounts_existing"] += 1
         if event.get("target_unreadable") is True:
             derived["unreadable_targets"] += 1
         metadata_unreadable = event.get("metadata_unreadable") is True
