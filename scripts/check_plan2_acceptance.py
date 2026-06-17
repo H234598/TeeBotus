@@ -115,12 +115,12 @@ RUNTIME_STATUS_SECRET_PATTERNS = (
     re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
 )
 RUNTIME_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)"
-    r"[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
+    r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_-]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
 )
 SECRET_FIELD_ASSIGNMENT_RE = re.compile(
-    r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)[A-Za-z0-9_ -]*)\s*[:=]\s*([^,\s)]+)",
+    r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_-]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
 )
 SECRET_FIELD_NAME_RE = re.compile(
@@ -751,6 +751,7 @@ def _memory_recovery_markdown_artifact_errors(argv: Sequence[str]) -> list[str]:
         "# TeeBotus Account-Memory Recovery Report": "heading",
         "## Totals": "totals section",
         "## Instance:": "instance section",
+        "metadata_health": "metadata health summary",
         "recovery_status": "account recovery status",
     }
     for needle, label in required_sections.items():
@@ -762,6 +763,8 @@ def _memory_recovery_markdown_artifact_errors(argv: Sequence[str]) -> list[str]:
     instance_position = text.find("## Instance:")
     if totals_position != -1 and instance_position != -1 and totals_position > instance_position:
         errors.append(f"memory recovery markdown artifact places totals after instances: {output_path}")
+    if "legacy_plaintext_import: sources=`" in text and re.search(r"legacy_plaintext_import: sources=`[1-9][0-9]*`", text) and "  - users: `" not in text:
+        errors.append(f"memory recovery markdown artifact lacks legacy users summary: {output_path}")
     return errors
 
 
@@ -1853,6 +1856,8 @@ def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
         value_text.isdigit() or re.fullmatch(r"\d+/\d+", value_text) is not None
     ):
         return False
+    if key_text == "account_secrets" and _secret_field_value_is_account_secrets_path(value_text):
+        return False
     return True
 
 
@@ -1860,6 +1865,11 @@ def _secret_field_value_is_env_reference(key: object, value: object) -> bool:
     key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
     value_text = str(value or "").strip()
     return key_text.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value_text) is not None
+
+
+def _secret_field_value_is_account_secrets_path(value: object) -> bool:
+    value_text = str(value or "").strip().strip("\"'`")
+    return value_text.endswith("Account_Secrets.json") and ("/" in value_text or "\\" in value_text)
 
 
 def _expand_test_patterns(patterns: Sequence[str]) -> list[str]:

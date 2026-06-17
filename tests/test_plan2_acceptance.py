@@ -311,6 +311,8 @@ def _write_valid_memory_recovery_markdown(path: Path) -> None:
                 "## Instance: Demo",
                 "",
                 "- source_count: `1`",
+                "- metadata_health: readable=`True` unreadable_items=`0`",
+                "  - account_secrets: `instances/Demo/data/accounts/Account_Secrets.json` error=encrypted envelope authentication failed",
                 "",
                 "### Account: " + ("a" * 128),
                 "- recovery_status: `empty`",
@@ -852,6 +854,38 @@ def test_plan2_acceptance_runner_fails_on_malformed_memory_recovery_markdown(tmp
 
     assert result == 1
     assert calls == [("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path))]
+
+
+def test_memory_recovery_markdown_validation_requires_legacy_users_summary(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.md"
+    output_path.write_text(
+        "\n".join(
+            [
+                "# TeeBotus Account-Memory Recovery Report",
+                "",
+                "## Totals",
+                "",
+                "- accounts: `0`",
+                "",
+                "## Instance: Demo",
+                "",
+                "- source_count: `0`",
+                "- metadata_health: readable=`True` unreadable_items=`0`",
+                "- legacy_plaintext_import: sources=`1` entries=`2` path=`legacy/Demo/data/users`",
+                "",
+                "### Account: " + ("a" * 128),
+                "- recovery_status: `empty`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_markdown_artifact_errors(
+        ("python-test", "-m", "TeeBotus.admin", "memory-recovery", "--output", str(output_path))
+    )
+
+    assert any("lacks legacy users summary" in error for error in errors)
 
 
 def test_plan2_acceptance_runner_fails_on_secret_artifact_leak(tmp_path: Path, monkeypatch) -> None:
