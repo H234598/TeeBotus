@@ -703,6 +703,9 @@ meldet der Status `status=config_conflict`. Wenn eine erreichbare Qdrant-
 Collection mit falscher Vektorgroesse existiert, meldet der Status
 `status=schema_mismatch actual_vector_size=...`; dann muss der rebuildbare
 Cache mit konsistenter Modellkonfiguration neu angelegt werden.
+Qdrant-Suchen filtern Usermemory-Treffer zusaetzlich nach
+`embedding_model` und `embedding_dimensions`, damit alte Vektoren nach einem
+Modellwechsel nicht mit neuen Treffern vermischt werden.
 Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt. Ohne
 Embedding-Flags liest `memory-rebuild` die aktive `Bot_Verhalten.md` der
 Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags

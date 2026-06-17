@@ -91,7 +91,12 @@ class QdrantMemoryIndex:
                 "vector": vector,
                 "limit": limit_value,
                 "with_payload": True,
-                "filter": _qdrant_scope_filter(instance_name=instance, account_id=account),
+                "filter": _qdrant_scope_filter(
+                    instance_name=instance,
+                    account_id=account,
+                    embedding_model=self.embedding_provider.model_name,
+                    embedding_dimensions=int(self.embedding_provider.dimensions),
+                ),
             },
         )
         raw_results = response.get("result")
@@ -243,13 +248,27 @@ def _memory_embedding_text(entry: dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
-def _qdrant_scope_filter(*, instance_name: str, account_id: str) -> dict[str, Any]:
-    return {
-        "must": [
-            {"key": "instance_name", "match": {"value": instance_name}},
-            {"key": "account_id", "match": {"value": account_id}},
-        ]
-    }
+def _qdrant_scope_filter(
+    *,
+    instance_name: str,
+    account_id: str,
+    embedding_model: str = "",
+    embedding_dimensions: int | None = None,
+) -> dict[str, Any]:
+    must = [
+        {"key": "instance_name", "match": {"value": instance_name}},
+        {"key": "account_id", "match": {"value": account_id}},
+    ]
+    if str(embedding_model or "").strip():
+        must.append({"key": "embedding_model", "match": {"value": str(embedding_model).strip()}})
+    if embedding_dimensions is not None:
+        try:
+            dimensions = int(embedding_dimensions)
+        except (TypeError, ValueError):
+            dimensions = 0
+        if dimensions > 0:
+            must.append({"key": "embedding_dimensions", "match": {"value": dimensions}})
+    return {"must": must}
 
 
 def _memory_id(entry: dict[str, Any]) -> str:
