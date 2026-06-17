@@ -5,7 +5,13 @@ from TeeBotus.llm.hf_pool.errors import HFPoolConfigError, HFPoolError, HFPoolRa
 from TeeBotus.llm.hf_pool.executor import HFPoolMockExecutor, OpenAICompatibleHFPoolExecutor
 from TeeBotus.llm.hf_pool.health import HFPoolHealth, check_hf_pool, format_hf_pool_status_lines
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
-from TeeBotus.llm.hf_pool.models_feed import HFPoolModelInfo
+from TeeBotus.llm.hf_pool.models_feed import (
+    HFPoolModelInfo,
+    HFPoolModelsFeed,
+    fetch_hf_pool_models,
+    model_info_by_id,
+    parse_hf_pool_models_payload,
+)
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget, select_target
@@ -19,6 +25,7 @@ __all__ = [
     "HFPoolError",
     "HFPoolHealth",
     "HFPoolModelInfo",
+    "HFPoolModelsFeed",
     "HFPoolMockExecutor",
     "OpenAICompatibleHFPoolExecutor",
     "HFPoolProvider",
@@ -33,7 +40,10 @@ __all__ = [
     "TargetCapabilities",
     "check_hf_pool",
     "format_hf_pool_status_lines",
+    "fetch_hf_pool_models",
     "load_hf_pool_config",
+    "model_info_by_id",
+    "parse_hf_pool_models_payload",
     "redact_hf_secrets",
     "select_target",
 ]
