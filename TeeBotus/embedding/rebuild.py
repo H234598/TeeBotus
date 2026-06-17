@@ -121,6 +121,7 @@ def rebuild_qdrant_memory_indexes(
             continue
         for account_id in target_accounts:
             try:
+                embedding_provider = build_account_memory_embedding_provider(effective_embedding_config)
                 entries = store.read_memory_entries(account_id)
                 if dry_run:
                     results.append(
@@ -136,7 +137,7 @@ def rebuild_qdrant_memory_indexes(
                     continue
                 index = qdrant_index_factory(
                     url=effective_qdrant_url,
-                    embedding_provider=build_account_memory_embedding_provider(effective_embedding_config),
+                    embedding_provider=embedding_provider,
                 )
                 point_ids = rebuild_qdrant_memory_index(
                     account_store=store,
