@@ -23,6 +23,7 @@ from TeeBotus.benchmarks.hf_pool import benchmark_hf_pool_eval_matrix, benchmark
 from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
 from TeeBotus.benchmarks.memory import benchmark_memory_jsonl_to_sqlite_migration, memory_results
 from TeeBotus.benchmarks.pydantic_ai import benchmark_decision_fake_model, benchmark_pydantic_structured_decisions
+from TeeBotus.benchmarks.proactive import benchmark_proactive_tool_plan_due_dispatch_gates
 from TeeBotus.benchmarks.qdrant import (
     benchmark_qdrant_health_live,
     benchmark_qdrant_health_quick,
@@ -54,6 +55,7 @@ __all__ = [
     "benchmark_llm_router",
     "benchmark_memory_jsonl_to_sqlite_migration",
     "benchmark_pydantic_structured_decisions",
+    "benchmark_proactive_tool_plan_due_dispatch_gates",
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
