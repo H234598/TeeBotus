@@ -321,6 +321,13 @@ def import_legacy_user_memory(
         health = target_store.check_structured_memory_index(account_id)
         if not health.ok:
             raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
+        _verify_imported_account_identity(
+            target_store,
+            identity,
+            account_id,
+            instance_name=instance_name,
+            legacy_user_id=user_dir.name,
+        )
         stats.imported_sources += 1
         stats.entries_imported += imported_count
     return stats
@@ -352,6 +359,35 @@ def _event(
         "account_created": bool(account_created),
         "error": error,
     }
+
+
+def _verify_imported_account_identity(
+    store: AccountStore,
+    identity: str,
+    account_id: str,
+    *,
+    instance_name: str,
+    legacy_user_id: str,
+) -> None:
+    try:
+        resolved_account_id = store.get_account_for_identity(identity)
+    except AccountStoreError as exc:
+        raise SystemExit(f"import identity verification failed for {instance_name}/{legacy_user_id}: {exc}") from exc
+    if resolved_account_id != account_id:
+        raise SystemExit(
+            f"import identity verification failed for {instance_name}/{legacy_user_id}: "
+            f"{identity} resolves to {resolved_account_id or '<none>'}, expected {account_id}"
+        )
+    try:
+        profile = store._read_account_profile(account_id)
+    except AccountStoreError as exc:
+        raise SystemExit(f"import profile verification failed for {instance_name}/{legacy_user_id}: {exc}") from exc
+    linked = {str(value) for value in profile.get("linked_identities", [])}
+    if identity not in linked:
+        raise SystemExit(
+            f"import profile verification failed for {instance_name}/{legacy_user_id}: "
+            f"{identity} is missing from account profile {account_id}"
+        )
 
 
 def _build_import_report(

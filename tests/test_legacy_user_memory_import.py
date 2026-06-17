@@ -96,6 +96,42 @@ def test_legacy_user_memory_import_apply_creates_encrypted_account_memory(tmp_pa
     assert health.ok
 
 
+def test_legacy_user_memory_import_verifies_imported_identity_mapping_and_profile(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    accounts_root = tmp_path / "target" / "Depressionsbot" / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    identity = telegram_identity_key("395935293")
+    account_id = store.resolve_or_create_account(identity)
+
+    legacy_import._verify_imported_account_identity(
+        store,
+        identity,
+        account_id,
+        instance_name="Depressionsbot",
+        legacy_user_id="395935293",
+    )
+    with pytest.raises(SystemExit, match="identity verification failed"):
+        legacy_import._verify_imported_account_identity(
+            store,
+            telegram_identity_key("1284666801"),
+            account_id,
+            instance_name="Depressionsbot",
+            legacy_user_id="1284666801",
+        )
+
+    profile = store._read_account_profile(account_id)
+    profile["linked_identities"] = []
+    store._write_account_profile(account_id, profile)
+    with pytest.raises(SystemExit, match="profile verification failed"):
+        legacy_import._verify_imported_account_identity(
+            store,
+            identity,
+            account_id,
+            instance_name="Depressionsbot",
+            legacy_user_id="395935293",
+        )
+
+
 def test_legacy_user_memory_import_requires_replace_for_unreadable_target(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     legacy_root = tmp_path / "legacy"

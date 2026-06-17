@@ -24,6 +24,7 @@ DEFAULT_LEGACY_IMPORT_MD = Path.home() / "Downloads" / "teebotus-legacy-import-p
 DEFAULT_LEGACY_REHEARSAL_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.json"
 DEFAULT_LEGACY_REHEARSAL_MD = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.md"
 DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehearsal")
+ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{128}")
 REQUIRED_BENCHMARK_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -980,7 +981,7 @@ def _memory_recovery_metadata_health_errors(instances: Sequence[Any], *, prefix:
             if not isinstance(account_ids, list):
                 errors.append(f"{prefix}memory recovery {label}.account_ids must be a list")
                 continue
-            invalid_account_ids = [str(account_id) for account_id in account_ids if not re.fullmatch(r"[0-9a-f]{128}", str(account_id))]
+            invalid_account_ids = [str(account_id) for account_id in account_ids if not ACCOUNT_ID_RE.fullmatch(str(account_id))]
             if invalid_account_ids:
                 errors.append(f"{prefix}memory recovery {label}.account_ids contains invalid account ids")
     return errors
@@ -1142,9 +1143,24 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
         if not isinstance(event, Mapping):
             errors.append(f"{prefix}{label} must be an object")
             continue
+        instance_name = str(event.get("instance") or "").strip()
+        legacy_user_id = str(event.get("legacy_user_id") or "").strip()
+        identity = str(event.get("identity") or "").strip()
+        account_id = str(event.get("account_id") or "").strip()
+        if not instance_name:
+            errors.append(f"{prefix}{label}.instance must be non-empty")
+        if not legacy_user_id:
+            errors.append(f"{prefix}{label}.legacy_user_id must be non-empty")
+        if identity != f"telegram:user:{legacy_user_id}":
+            errors.append(f"{prefix}{label}.identity must match legacy_user_id")
+        if not _legacy_import_event_account_id_is_valid(account_id):
+            errors.append(f"{prefix}{label}.account_id must be a SHA-512 account id or an allowed dry-run placeholder")
         action = str(event.get("action") or "").strip()
         if not action:
             errors.append(f"{prefix}{label}.action must be non-empty")
+        mode = str(payload.get("mode") or "")
+        if mode in {"apply", "rehearsal-apply"} and action and not action.startswith("skip-") and not ACCOUNT_ID_RE.fullmatch(account_id):
+            errors.append(f"{prefix}{label}.account_id must be concrete for apply imports")
         if action.startswith("skip-"):
             skipped_sources += 1
         entries = event.get("entries")
@@ -1177,6 +1193,10 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
         if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
             errors.append(f"{prefix}legacy import totals.{key} must match events ({value})")
     return errors
+
+
+def _legacy_import_event_account_id_is_valid(account_id: str) -> bool:
+    return bool(ACCOUNT_ID_RE.fullmatch(account_id) or account_id in {"<new>", "<metadata-unreadable>"})
 
 
 def _legacy_import_scope_errors(payload: Mapping[str, Any], argv: Sequence[str], *, path: Path | None = None) -> list[str]:

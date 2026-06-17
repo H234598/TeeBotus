@@ -294,6 +294,32 @@ def _write_valid_legacy_import_markdown(path: Path) -> None:
     )
 
 
+def _valid_legacy_import_event(
+    *,
+    instance: str = "Demo",
+    legacy_user_id: str = "123",
+    account_id: str = "<new>",
+    action: str = "would-import",
+    entries: int = 1,
+    imported: int = 1,
+    account_created: bool = False,
+    **extra: object,
+) -> dict[str, object]:
+    event: dict[str, object] = {
+        "instance": instance,
+        "legacy_user_id": legacy_user_id,
+        "identity": f"telegram:user:{legacy_user_id}",
+        "account_id": account_id,
+        "action": action,
+        "entries": entries,
+        "imported": imported,
+    }
+    if account_created:
+        event["account_created"] = True
+    event.update(extra)
+    return event
+
+
 def _write_valid_memory_recovery_markdown(path: Path) -> None:
     path.write_text(
         "\n".join(
@@ -1342,7 +1368,7 @@ def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path)
                     "metadata_backups_created": 0,
                     "account_store_resets": 0,
                 },
-                "events": [{"instance": "Demo", "action": "would-import", "entries": 1, "imported": 1, "account_created": True}],
+                "events": [_valid_legacy_import_event(account_created=True)],
             }
         ),
         encoding="utf-8",
@@ -1393,7 +1419,7 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
                     "metadata_backups_created": 0,
                     "account_store_resets": 0,
                 },
-                "events": [{"instance": "Demo", "action": "would-import", "entries": 1, "imported": 1, "account_created": True}],
+                "events": [_valid_legacy_import_event(account_created=True)],
             }
         ),
         encoding="utf-8",
@@ -1447,8 +1473,8 @@ def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(
                     "account_store_resets": 0,
                 },
                 "events": [
-                    {"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0},
-                    {"instance": "Other", "action": "would-import", "entries": 0, "imported": 0},
+                    _valid_legacy_import_event(entries=0, imported=0),
+                    _valid_legacy_import_event(instance="Other", legacy_user_id="124", entries=0, imported=0),
                 ],
             }
         ),
@@ -1503,7 +1529,7 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
                     "metadata_backups_created": 0,
                     "account_store_resets": 0,
                 },
-                "events": [{"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0}],
+                "events": [_valid_legacy_import_event(entries=0, imported=0)],
             }
         ),
         encoding="utf-8",
@@ -1558,14 +1584,13 @@ def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_e
                     "account_store_resets": 0,
                 },
                 "events": [
-                    {
-                        "instance": "Demo",
-                        "action": "would-import-after-metadata-reset",
-                        "entries": 2,
-                        "imported": 2,
-                        "account_created": True,
-                        "metadata_unreadable": False,
-                    }
+                    _valid_legacy_import_event(
+                        action="would-import-after-metadata-reset",
+                        entries=2,
+                        imported=2,
+                        account_created=True,
+                        metadata_unreadable=False,
+                    )
                 ],
             }
         ),
@@ -1620,7 +1645,7 @@ def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp
                     "metadata_backups_created": 0,
                     "account_store_resets": 0,
                 },
-                "events": [{"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0}],
+                "events": [_valid_legacy_import_event(entries=0, imported=0)],
             }
         ),
         encoding="utf-8",
