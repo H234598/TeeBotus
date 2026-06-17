@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
+from TeeBotus.admin import __main__ as admin_entrypoint
 from TeeBotus.admin.account_memory_recovery import (
     build_account_memory_recovery_report,
     main as recovery_main,
@@ -104,7 +106,9 @@ def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted
         report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
 
     account = report["instances"][0]["accounts"][0]
+    assert report["scope"] == "account_memory"
     sources = {source["name"]: source for source in account["sources"]}
+    assert sources["sqlite_primary"]["payload_kind"] == "encrypted_account_memory"
     assert account["recoverable"] is True
     assert account["recovery_status"] == "recoverable"
     assert account["recommendation"] == "Recover from readable source(s): sqlite_fallback."
@@ -179,6 +183,8 @@ def test_memory_recovery_quarantines_unrecoverable_sqlite_rows(tmp_path: Path) -
     result = quarantine_unrecoverable_account_memory(report, apply=True, quarantine_dir=quarantine_dir, running_processes=[])
 
     assert result["status"] == "applied"
+    assert result["scope"] == "account_memory"
+    assert result["payload_kind"] == "encrypted_account_memory"
     assert result["totals"]["accounts_quarantined"] == 1
     assert result["totals"]["snapshots_created"] == 1
     assert result["totals"]["sqlite_rows_quarantined"] == 2
@@ -194,6 +200,20 @@ def test_memory_recovery_quarantines_unrecoverable_sqlite_rows(tmp_path: Path) -
         config=SQLiteMemoryConfig(path=snapshot, fallback_path=None),
     )
     assert snapshot_backend.read_entries(account_id)[0]["id"] == "mem_bad"
+
+
+def test_admin_entrypoint_returns_json_dependency_error(monkeypatch, capsys) -> None:
+    def fail_import(name: str):
+        raise ModuleNotFoundError("No module named 'cryptography'", name="cryptography")
+
+    monkeypatch.setattr(admin_entrypoint.importlib, "import_module", fail_import)
+
+    result = admin_entrypoint.main(["memory-recovery", "--format", "json"])
+
+    assert result == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["missing_dependency"] == "cryptography"
 
 
 def test_memory_recovery_quarantine_refuses_running_runtime(tmp_path: Path) -> None:

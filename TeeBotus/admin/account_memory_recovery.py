@@ -58,6 +58,7 @@ def build_account_memory_recovery_report(
     selected_instances = discover_instances(resolved_instances_dir, instances)
     report: dict[str, Any] = {
         "schema_version": RECOVERY_SCHEMA_VERSION,
+        "scope": "account_memory",
         "generated_at": utc_now(),
         "instances_dir": str(resolved_instances_dir),
         "instance_count": len(selected_instances),
@@ -220,6 +221,8 @@ def quarantine_unrecoverable_account_memory(
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     result: dict[str, Any] = {
         "schema_version": 1,
+        "scope": "account_memory",
+        "payload_kind": "encrypted_account_memory",
         "generated_at": utc_now(),
         "mode": "apply" if apply else "dry-run",
         "status": "blocked" if blocked else ("applied" if apply else "dry-run"),
@@ -452,7 +455,15 @@ def _quarantine_instance_unrecoverable(
     result["totals"]["json_files_quarantined"] = len(json_files)
     if not apply:
         result["totals"]["accounts_quarantined"] = len(account_ids)
-        result["sqlite_sources"] = [{"path": str(path), "would_snapshot": True, "would_delete_rows": True} for path in sqlite_sources]
+        result["sqlite_sources"] = [
+            {
+                "path": str(path),
+                "payload_kind": "encrypted_account_memory",
+                "would_snapshot": True,
+                "would_delete_rows": True,
+            }
+            for path in sqlite_sources
+        ]
         result["json_files"] = [{"path": str(path), "would_move": True} for path in json_files]
         return result
 
@@ -464,7 +475,14 @@ def _quarantine_instance_unrecoverable(
         result["totals"]["snapshots_created"] += 1
         deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
         result["totals"]["sqlite_rows_quarantined"] += deleted_rows
-        result["sqlite_sources"].append({"path": str(sqlite_path), "snapshot": str(snapshot_path), "rows_deleted": deleted_rows})
+        result["sqlite_sources"].append(
+            {
+                "path": str(sqlite_path),
+                "payload_kind": "encrypted_account_memory",
+                "snapshot": str(snapshot_path),
+                "rows_deleted": deleted_rows,
+            }
+        )
     moved_files = []
     for path in json_files:
         target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
@@ -486,7 +504,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--legacy-instances-dir", default="", help="Optional plaintext legacy instances directory to inspect for importable data/users memory.")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--output", default="")
-    parser.add_argument("--quarantine-unrecoverable", action="store_true", help="Move unrecoverable encrypted memory payloads out of active stores.")
+    parser.add_argument("--quarantine-unrecoverable", action="store_true", help="Move unrecoverable encrypted account-memory payloads out of active stores.")
     parser.add_argument("--quarantine-unreadable-metadata", action="store_true", help="Move unreadable encrypted account metadata out of active stores.")
     parser.add_argument("--apply", action="store_true", help="Apply --quarantine-unrecoverable. Without this, only report what would move.")
     parser.add_argument("--quarantine-dir", default="", help="Optional base directory for quarantine artifacts. Defaults below each accounts root.")
@@ -688,6 +706,7 @@ def _inspect_sqlite_source(source: RecoverySource, *, instance_name: str, accoun
     return {
         "name": source.name,
         "kind": source.kind,
+        "payload_kind": "encrypted_account_memory",
         "path": str(source.path),
         "readable": not errors,
         "entries": len(entries),
@@ -718,6 +737,7 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
     return {
         "name": source.name,
         "kind": source.kind,
+        "payload_kind": "encrypted_account_memory",
         "path": str(source.path),
         "readable": not errors,
         "entries": len(entries),
