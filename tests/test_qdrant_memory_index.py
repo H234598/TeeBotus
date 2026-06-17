@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from urllib.parse import urlparse
 
+import pytest
+
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
@@ -350,6 +352,22 @@ def test_qdrant_memory_rebuild_uses_account_store_as_truth(tmp_path) -> None:
         qdrant_memory_point_id(instance_name="Depressionsbot", account_id=account_id, memory_id=second_id),
     }
     assert {point["payload"]["memory_id"] for point in fake_qdrant.points.values()} == {first_id, second_id}
+
+
+def test_qdrant_memory_rebuild_preserves_cache_when_account_store_is_unreadable() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    old_point_id = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "old", "user_text": "Alt"})
+
+    class BrokenAccountStore:
+        def read_memory_entries(self, _account_id):
+            raise RuntimeError("account store unreadable")
+
+    with pytest.raises(RuntimeError, match="account store unreadable"):
+        index.rebuild(account_store=BrokenAccountStore(), instance_name="Depressionsbot", account_id=ACCOUNT_A)  # type: ignore[arg-type]
+
+    assert old_point_id in fake_qdrant.points
+    assert all(call["path"] != "/collections/teebotus_user_memory/points/delete" for call in fake_qdrant.calls)
 
 
 def _payload_matches(payload: dict[str, object], must: list[dict[str, object]]) -> bool:

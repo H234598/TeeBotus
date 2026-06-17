@@ -161,15 +161,14 @@ class QdrantMemoryIndex:
     ) -> tuple[str, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
+        entries = tuple(entry for entry in account_store.read_memory_entries(account) if isinstance(entry, dict))
         self.delete_account(
             instance_name=instance,
             account_id=account,
             include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
         )
         point_ids: list[str] = []
-        for entry in account_store.read_memory_entries(account):
-            if not isinstance(entry, dict):
-                continue
+        for entry in entries:
             point_ids.append(self.index_memory(instance_name=instance, account_id=account, entry=entry))
         return tuple(point_ids)
 
