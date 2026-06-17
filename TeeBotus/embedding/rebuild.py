@@ -290,7 +290,9 @@ def _resolve_collection_memory_embedding_config(
     overrides: Mapping[str, Any] | None = None,
 ) -> tuple[EmbeddingConfig, str]:
     if not instructions_by_instance:
-        return _resolve_memory_embedding_config(BotInstructions(), embedding_config=embedding_config, overrides=overrides), ""
+        config = _resolve_memory_embedding_config(BotInstructions(), embedding_config=embedding_config, overrides=overrides)
+        error = _account_memory_embedding_config_error(config)
+        return config, f"invalid user-memory embedding config: {error}" if error else ""
     configs = {
         instance_name: _resolve_memory_embedding_config(
             instructions,
@@ -299,6 +301,15 @@ def _resolve_collection_memory_embedding_config(
         )
         for instance_name, instructions in instructions_by_instance.items()
     }
+    config_errors = {
+        instance_name: error
+        for instance_name, config in configs.items()
+        for error in (_account_memory_embedding_config_error(config),)
+        if error
+    }
+    if config_errors:
+        errors = ", ".join(f"{instance}:{error}" for instance, error in sorted(config_errors.items()))
+        return next(iter(configs.values())), f"invalid user-memory embedding config: {errors}"
     unique_contracts = {(config.model_name, config.dimensions) for config in configs.values()}
     if len(unique_contracts) == 1:
         return next(iter(configs.values())), ""
@@ -309,6 +320,14 @@ def _resolve_collection_memory_embedding_config(
     return _resolve_memory_embedding_config(BotInstructions(), embedding_config=embedding_config, overrides=overrides), (
         f"conflicting user-memory embedding configs: {conflicts}"
     )
+
+
+def _account_memory_embedding_config_error(config: EmbeddingConfig) -> str:
+    try:
+        build_account_memory_embedding_provider(config)
+    except ValueError as exc:
+        return str(exc)
+    return ""
 
 
 def _resolve_memory_embedding_config(

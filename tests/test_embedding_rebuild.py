@@ -337,6 +337,42 @@ def test_ensure_qdrant_collections_for_instances_reports_conflicting_memory_conf
     assert "B:model-b/64" in results[0].error
 
 
+def test_ensure_qdrant_collections_for_instances_rejects_remote_memory_embedding_config(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
+
+    def unexpected_ensure(**_kwargs):
+        raise AssertionError("invalid account-memory embedding configs must not touch Qdrant")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - semantic_enabled: true
+        - semantic_backend: qdrant
+        - embedding_provider: hf
+        - embedding_model: intfloat/multilingual-e5-small
+        - embedding_dimensions: 384
+        """,
+        encoding="utf-8",
+    )
+
+    results = ensure_qdrant_collections_for_instances(
+        instances_dir=instances_dir,
+        qdrant_ensure_factory=unexpected_ensure,
+    )
+
+    assert len(results) == 1
+    assert results[0].collection_name == QDRANT_USER_MEMORY_COLLECTION
+    assert results[0].status == "config_conflict"
+    assert results[0].ok is False
+    assert results[0].vector_size == 384
+    assert results[0].embedding_model == "intfloat/multilingual-e5-small"
+    assert "invalid user-memory embedding config" in results[0].error
+    assert "Account-memory embeddings require a local endpoint" in results[0].error
+
+
 def test_embedding_cli_collections_ensure_json(monkeypatch, capsys, tmp_path):
     def fake_ensure(**kwargs):
         assert kwargs["instances_dir"] == str(tmp_path / "instances")
@@ -389,3 +425,38 @@ def test_embedding_cli_collections_ensure_json(monkeypatch, capsys, tmp_path):
     assert payload[0]["collection_name"] == QDRANT_USER_MEMORY_COLLECTION
     assert payload[0]["vector_size"] == 32
     assert payload[0]["embedding_model"] == "custom-model"
+
+
+def test_embedding_cli_collections_ensure_rejects_remote_memory_embedding_config(capsys, tmp_path):
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - semantic_enabled: true
+        - semantic_backend: qdrant
+        """,
+        encoding="utf-8",
+    )
+
+    result = embedding_cli_main(
+        [
+            "--instances-dir",
+            str(instances_dir),
+            "--instance",
+            "Depressionsbot",
+            "collections-ensure",
+            "--embedding-provider",
+            "hf",
+            "--embedding-model",
+            "intfloat/multilingual-e5-small",
+            "--embedding-dimensions",
+            "384",
+        ]
+    )
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "status=config_conflict" in output
+    assert "Account-memory embeddings require a local endpoint" in output
