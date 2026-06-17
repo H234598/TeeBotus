@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
@@ -12,7 +13,7 @@ from TeeBotus.llm.hf_pool.executor import HFPoolOpener, OpenAICompatibleHFPoolEx
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeStateStore
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore
 from TeeBotus.llm.hf_pool.targets import HFPoolTarget
 
 
@@ -24,6 +25,7 @@ class HFPoolTargetHealth:
     model: str = ""
     api_key_env: str = ""
     error: str = ""
+    cooldown_until: str = ""
     latency_ms: int | None = None
 
 
@@ -57,8 +59,10 @@ def check_hf_pool(
     if not pool.enabled:
         return HFPoolHealth(pool=pool.name, status="disabled")
     source = os.environ if env is None else env
+    runtime_state, state_error = _load_state(state_store)
     targets: list[HFPoolTargetHealth] = []
     for target in pool.targets:
+        cooldown_until = ""
         if not target.enabled:
             status = "disabled"
             error = ""
@@ -66,6 +70,10 @@ def check_hf_pool(
         elif target.api_key_env and not source.get(target.api_key_env, "").strip():
             status = "missing_key"
             error = f"env={target.api_key_env}"
+            latency_ms = None
+        elif not live and runtime_state is not None and (cooldown_until := _active_cooldown_until(runtime_state, target.name)):
+            status = "cooldown"
+            error = ""
             latency_ms = None
         elif live:
             status, error, latency_ms = _live_target_status(
@@ -87,14 +95,18 @@ def check_hf_pool(
                 model=target.model,
                 api_key_env=target.api_key_env,
                 error=error,
+                cooldown_until=cooldown_until,
                 latency_ms=latency_ms,
             )
         )
     if not targets:
         return HFPoolHealth(pool=pool.name, status="unavailable", targets=(), error="targets=0")
     if not any(target.status in {"configured", "healthy"} for target in targets):
-        return HFPoolHealth(pool=pool.name, status="unavailable", targets=tuple(targets), error="no_configured_targets")
-    return HFPoolHealth(pool=pool.name, status="configured", targets=tuple(targets))
+        error = "all_configured_targets_in_cooldown" if any(target.status == "cooldown" for target in targets) else "no_configured_targets"
+        if state_error:
+            error = f"{error}; state_error={state_error}"
+        return HFPoolHealth(pool=pool.name, status="unavailable", targets=tuple(targets), error=error)
+    return HFPoolHealth(pool=pool.name, status="configured", targets=tuple(targets), error=f"state_error={state_error}" if state_error else "")
 
 
 def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
@@ -109,12 +121,38 @@ def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
             line += f" model={_status_text(target.model)}"
         if target.api_key_env:
             line += f" env={_status_text(target.api_key_env)}"
+        if target.cooldown_until:
+            line += f" until={_status_text(target.cooldown_until)}"
         if target.latency_ms is not None:
             line += f" latency_ms={max(0, int(target.latency_ms))}"
         if target.error and not target.error.startswith("env="):
             line += f" error={_status_text(target.error)}"
         lines.append(line)
     return lines
+
+
+def _load_state(state_store: HFPoolRuntimeStateStore | None) -> tuple[HFPoolRuntimeState | None, str]:
+    if state_store is None:
+        return None, ""
+    try:
+        return state_store.load(), ""
+    except Exception as exc:  # noqa: BLE001 - status must stay non-fatal for optional state.
+        return None, redact_hf_secrets(f"{type(exc).__name__}: {exc}")
+
+
+def _active_cooldown_until(state: HFPoolRuntimeState, target_name: str) -> str:
+    cooldown_until = str(state.cooldowns.get(target_name) or "").strip()
+    if not cooldown_until:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(cooldown_until)
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    if parsed <= datetime.now(timezone.utc):
+        return ""
+    return cooldown_until
 
 
 def _live_target_status(

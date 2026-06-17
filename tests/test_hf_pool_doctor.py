@@ -4,7 +4,7 @@ import json
 
 from TeeBotus.llm.hf_pool.doctor import main as doctor_main
 from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
-from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
 
 
 class _Response:
@@ -79,6 +79,40 @@ def test_hf_pool_doctor_cli_never_requires_live_hf(capsys, tmp_path):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "hf_pool=default status=not_configured" in captured.out
+
+
+def test_hf_pool_doctor_reports_persistent_cooldown_without_live_check(tmp_path):
+    path = _enabled_config(tmp_path)
+    state_store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")
+    state_store.save(HFPoolRuntimeState(cooldowns={"live_target": "2999-01-01T00:00:00+00:00"}))
+
+    health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        state_store=state_store,
+    )
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert health.status == "unavailable"
+    assert health.targets[0].status == "cooldown"
+    assert "error=all_configured_targets_in_cooldown" in lines
+    assert "target=live_target status=cooldown" in lines
+    assert "until=2999-01-01T00:00:00+00:00" in lines
+    assert "hf_TESTSECRET123" not in lines
+
+
+def test_hf_pool_doctor_cli_uses_state_db_without_live_network(monkeypatch, capsys, tmp_path):
+    path = _enabled_config(tmp_path)
+    state_db = tmp_path / "hf_pool_state.sqlite3"
+    SQLiteHFPoolRuntimeStateStore(state_db).save(HFPoolRuntimeState(cooldowns={"live_target": "2999-01-01T00:00:00+00:00"}))
+    monkeypatch.setenv("HF_TOKEN_MAIN", "hf_TESTSECRET123")
+
+    exit_code = doctor_main(["--config", str(path), "--state-db", str(state_db)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "target=live_target status=cooldown" in captured.out
+    assert "until=2999-01-01T00:00:00+00:00" in captured.out
 
 
 def test_hf_pool_live_check_marks_configured_target_healthy_without_secret_leak(tmp_path):

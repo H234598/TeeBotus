@@ -158,7 +158,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         else:
             llm_backend_lines.append(f"ollama={_sanitize_status_url(health.target)} status={state} error={_sanitize_status_text(health.error)}")
     try:
-        for line in format_hf_pool_status_lines(check_hf_pool()):
+        for line in format_hf_pool_status_lines(check_hf_pool(state_store=_runtime_status_hf_pool_state_store())):
             llm_backend_lines.append(_sanitize_status_text(line))
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional hf_pool.
         llm_backend_lines.append(f"hf_pool=default status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
@@ -752,10 +752,33 @@ def _runtime_route_status(route: Any, *, instance_names: Sequence[str] = ()) -> 
             load_hf_pool_config(),
             pool_name=_hf_pool_route_pool_name(str(getattr(route, "model", "") or "")),
             purpose=str(getattr(route, "purpose", "") or "normal_chat"),
+            state=_runtime_status_hf_pool_state(),
         )
     except Exception as exc:  # noqa: BLE001 - route status must be diagnostic, not fatal.
         return "unavailable", f"{type(exc).__name__}: {exc}"
     return "configured", ""
+
+
+def _runtime_status_hf_pool_state_store() -> Any | None:
+    try:
+        from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
+
+        state_path = default_hf_pool_state_path()
+        if not state_path.exists():
+            return None
+        return SQLiteHFPoolRuntimeStateStore(state_path)
+    except Exception:
+        return None
+
+
+def _runtime_status_hf_pool_state() -> Any | None:
+    state_store = _runtime_status_hf_pool_state_store()
+    if state_store is None:
+        return None
+    try:
+        return state_store.load()
+    except Exception:
+        return None
 
 
 def _runtime_route_key_status(route: Any, *, instance_names: Sequence[str] = ()) -> tuple[str, str]:
