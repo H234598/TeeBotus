@@ -24,6 +24,7 @@ from TeeBotus.runtime.qdrant import (
 
 
 QDRANT_MEMORY_PAYLOAD_SCHEMA = "teebotus_qdrant_memory_v1"
+QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -94,6 +95,7 @@ class QdrantMemoryIndex:
                 "filter": _qdrant_scope_filter(
                     instance_name=instance,
                     account_id=account,
+                    schema_version=QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION,
                     embedding_model=self.embedding_provider.model_name,
                     embedding_dimensions=int(self.embedding_provider.dimensions),
                 ),
@@ -205,6 +207,7 @@ def _memory_payload(
     keywords = entry.get("keywords") if isinstance(entry.get("keywords"), list) else []
     payload = {
         "schema": QDRANT_MEMORY_PAYLOAD_SCHEMA,
+        "schema_version": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION,
         "instance_name": instance_name,
         "account_id": account_id,
         "memory_id": memory_id,
@@ -252,6 +255,7 @@ def _qdrant_scope_filter(
     *,
     instance_name: str,
     account_id: str,
+    schema_version: int | None = None,
     embedding_model: str = "",
     embedding_dimensions: int | None = None,
 ) -> dict[str, Any]:
@@ -259,6 +263,13 @@ def _qdrant_scope_filter(
         {"key": "instance_name", "match": {"value": instance_name}},
         {"key": "account_id", "match": {"value": account_id}},
     ]
+    if schema_version is not None:
+        try:
+            version = int(schema_version)
+        except (TypeError, ValueError):
+            version = 0
+        if version > 0:
+            must.append({"key": "schema_version", "match": {"value": version}})
     if str(embedding_model or "").strip():
         must.append({"key": "embedding_model", "match": {"value": str(embedding_model).strip()}})
     if embedding_dimensions is not None:

@@ -272,7 +272,9 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert qdrant_memory["ok"] is True
     assert qdrant_memory["details"]["points"] >= 1
     assert qdrant_memory["details"]["selected"] >= 1
+    assert qdrant_memory["details"]["schema_versions"] == [1]
     assert qdrant_memory["details"]["cleartext_in_payload"] is False
+    assert qdrant_memory["details"]["messenger_identity_in_payload"] is False
     assert qdrant_memory["details"]["network_calls"] == 0
     retrieval = next(result for result in suite["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
     assert retrieval["ok"] is True

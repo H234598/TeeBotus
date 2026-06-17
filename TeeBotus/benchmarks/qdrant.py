@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from TeeBotus.benchmarks.core import BenchmarkResult, result
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.qdrant import check_qdrant_health, format_qdrant_status_line
-from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
+from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex
 
 
 def benchmark_qdrant_health_quick(*, iterations: int) -> BenchmarkResult:
@@ -95,6 +95,9 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
                 "kind": "preference",
                 "memory_type": "semantic",
                 "user_text": "Schlaf und Tagesstruktur helfen beim Planen.",
+                "telegram_user_id": "123456",
+                "matrix_user_id": "@bench:example.test",
+                "signal_source_uuid": "bench-source",
                 "keywords": ["schlaf", "tagesstruktur"],
             },
         )
@@ -103,7 +106,10 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
     timings = [_timed_ms(lambda i=i: run_once(i)) for i in range(iterations)]
     stored_payloads = [point.get("payload", {}) for point in opener.points.values()]
     serialized_points = json.dumps(opener.points, ensure_ascii=False).casefold()
-    ok = bool(selected_ids) and "schlaf und tagesstruktur" not in serialized_points and "user_text" not in serialized_points
+    cleartext_in_payload = "schlaf und tagesstruktur" in serialized_points or "user_text" in serialized_points
+    messenger_identity_in_payload = any(marker in serialized_points for marker in ("telegram", "matrix", "signal_source", "bench-source"))
+    schema_versions = sorted({payload.get("schema_version") for payload in stored_payloads if isinstance(payload, dict)})
+    ok = bool(selected_ids) and not cleartext_in_payload and not messenger_identity_in_payload and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
     return result(
         name="qdrant_memory_index_quick",
         category="qdrant",
@@ -117,7 +123,9 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
         details={
             "points": len(opener.points),
             "selected": len(selected_ids),
-            "cleartext_in_payload": "schlaf und tagesstruktur" in serialized_points or "user_text" in serialized_points,
+            "schema_versions": schema_versions,
+            "cleartext_in_payload": cleartext_in_payload,
+            "messenger_identity_in_payload": messenger_identity_in_payload,
             "fake_requests": opener.request_count,
             "network_calls": 0,
         },

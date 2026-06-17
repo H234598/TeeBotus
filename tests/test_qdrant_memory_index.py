@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
-from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex, qdrant_memory_point_id
+from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex, qdrant_memory_point_id
 
 
 ACCOUNT_A = "a" * 128
@@ -105,6 +105,7 @@ def test_qdrant_memory_index_indexes_searches_and_deletes_without_cleartext() ->
     assert "bot_text" not in stored_json
     payload = fake_qdrant.points[point_id]["payload"]
     assert payload["memory_id"] == "mem_sleep"
+    assert payload["schema_version"] == QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
     assert payload["account_id"] == ACCOUNT_A
     assert payload["instance_name"] == "Depressionsbot"
     assert payload["keyword_sha256"]
@@ -144,6 +145,7 @@ def test_qdrant_memory_search_is_scoped_by_instance_and_account() -> None:
     assert search_body["filter"]["must"] == [
         {"key": "instance_name", "match": {"value": "Depressionsbot"}},
         {"key": "account_id", "match": {"value": ACCOUNT_A}},
+        {"key": "schema_version", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION}},
         {"key": "embedding_model", "match": {"value": USER_MEMORY_QDRANT_EMBEDDING_MODEL}},
         {"key": "embedding_dimensions", "match": {"value": USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS}},
     ]
@@ -168,8 +170,51 @@ def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change
 
     assert [result.memory_id for result in results] == ["mem_new"]
     search_body = fake_qdrant.calls[-1]["body"]
+    assert {"key": "schema_version", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION}} in search_body["filter"]["must"]
     assert {"key": "embedding_model", "match": {"value": "new-memory-model"}} in search_body["filter"]["must"]
     assert {"key": "embedding_dimensions", "match": {"value": 16}} in search_body["filter"]["must"]
+
+
+def test_qdrant_memory_search_filters_stale_vectors_after_payload_schema_change() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    stale_point_id = index.index_memory(
+        instance_name="Depressionsbot",
+        account_id=ACCOUNT_A,
+        entry={"id": "mem_stale", "user_text": "Schlaf"},
+    )
+    index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_current", "user_text": "Schlaf"})
+    fake_qdrant.points[stale_point_id]["payload"]["schema_version"] = 0
+
+    results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=10)
+
+    assert [result.memory_id for result in results] == ["mem_current"]
+
+
+def test_qdrant_memory_payload_excludes_messenger_identity_fields() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    point_id = index.index_memory(
+        instance_name="Depressionsbot",
+        account_id=ACCOUNT_A,
+        entry={
+            "id": "mem_identity",
+            "user_text": "Privater Inhalt",
+            "telegram_user_id": "123456",
+            "telegram_chat_id": "654321",
+            "matrix_user_id": "@user:example.test",
+            "signal_source_uuid": "source-uuid",
+            "provider_user_id": "provider-user",
+        },
+    )
+
+    stored_json = json.dumps(fake_qdrant.points[point_id]["payload"], ensure_ascii=False).casefold()
+
+    assert "telegram" not in stored_json
+    assert "matrix" not in stored_json
+    assert "signal" not in stored_json
+    assert "provider-user" not in stored_json
+    assert "privater inhalt" not in stored_json
 
 
 def test_qdrant_memory_delete_account_removes_only_matching_scope() -> None:

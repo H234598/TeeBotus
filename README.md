@@ -788,8 +788,9 @@ Payloads verarbeiten. `KeywordRerankerProvider` und `check_embedding_provider`
 decken den lokalen Reranker-/Health-Sockel ab.
 `TeeBotus.runtime.qdrant_memory.QdrantMemoryIndex` ist ein opt-in Cache:
 AccountStore bleibt die Wahrheit, `index_memory`, `search`, `delete_memory`,
-`delete_account` und `rebuild` schreiben nur Vektoren, Scope-Metadaten und
-Hashes nach Qdrant, keine `user_text`-/`bot_text`-/Keyword-Klartexte.
+`delete_account` und `rebuild` schreiben nur Vektoren, Scope-Metadaten,
+`schema_version` und Hashes nach Qdrant, keine
+`user_text`-/`bot_text`-/Keyword-Klartexte und keine Messenger-Identitaeten.
 `TeeBotus.runtime.memory_search.MemorySearchService` merged lokale
 Keyword-/Metadaten-Kandidaten aus `KeywordMemorySearch` mit optionalen
 Qdrant-Kandidaten aus `QdrantMemorySearch`. Ohne explizite Config bleibt die
@@ -843,9 +844,10 @@ Cache mit konsistenter Modellkonfiguration neu angelegt werden.
 `--runtime-status` prueft Qdrant gegen die aktive Qdrant-URL aus
 `Bot_Verhalten.md`; wenn aktive Usermemory-/Bibliothekar-Qdrant-Pfade
 verschiedene URLs fordern, meldet der Status ebenfalls `config_conflict`.
-Qdrant-Suchen filtern Usermemory-Treffer zusaetzlich nach
-`embedding_model` und `embedding_dimensions`, damit alte Vektoren nach einem
-Modellwechsel nicht mit neuen Treffern vermischt werden.
+Qdrant-Suchen filtern Usermemory-Treffer zusaetzlich nach `schema_version`,
+`embedding_model` und `embedding_dimensions`, damit alte Payload- oder
+Vektorformate nach einem Schema-/Modellwechsel nicht mit neuen Treffern
+vermischt werden.
 Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt. Ohne
 Embedding-Flags liest `memory-rebuild` die aktive `Bot_Verhalten.md` der
 Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags
