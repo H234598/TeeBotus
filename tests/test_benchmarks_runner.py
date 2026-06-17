@@ -508,6 +508,38 @@ def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:
     assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_non_skipped_live_optional_mode() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [
+            {
+                "name": "memory_jsonl",
+                "category": "account_memory",
+                "ok": True,
+                "skipped": False,
+                "iterations": 1,
+                "total_ms": 1.0,
+                "throughput_ops_s": 1.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 0,
+                "mode": "live_optional",
+                "details": {
+                    "network_calls": 0,
+                    "openai_calls": 0,
+                    "provider_calls": 0,
+                    "remote_calls": 0,
+                    "llm_calls": 0,
+                },
+            }
+        ],
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert "memory_jsonl must not use live mode in standard quick benchmarks" in quality_gate["errors"]
+
+
 def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> None:
     quality_gate = benchmark_module._build_quality_gate(
         [],

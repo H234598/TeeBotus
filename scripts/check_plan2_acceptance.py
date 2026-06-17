@@ -1451,7 +1451,7 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             if not isinstance(details, Mapping) or not details:
                 errors.append(f"{prefix}results[{index}] details must be a non-empty object")
                 continue
-            if str(result.get("mode") or "local").casefold() == "live":
+            if str(result.get("mode") or "local").casefold().startswith("live"):
                 errors.append(f"{prefix}results[{index}] must not use live mode in standard Plan2 benchmark artifacts")
             missing_counters = sorted(STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS - set(details))
             if missing_counters:
@@ -1841,7 +1841,7 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] errors must be a non-negative integer")
             elif int(candidate.get("errors") or 0) != 0:
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] errors must be 0")
-            if str(candidate.get("mode") or "").casefold() == "live":
+            if str(candidate.get("mode") or "").casefold().startswith("live"):
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must not use live mode")
             if not _is_positive_number(candidate.get("payload_bytes")) and not _is_positive_number(candidate.get("index_bytes")):
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must report payload_bytes or index_bytes")

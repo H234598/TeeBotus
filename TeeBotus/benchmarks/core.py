@@ -161,7 +161,7 @@ def build_quality_gate(
                 errors.append(f"{name} details missing standard no-live counters: {', '.join(missing_counters)}")
             for key, value in _forbidden_standard_benchmark_calls(details):
                 errors.append(f"{name} details.{key} must be 0 in standard quick benchmarks, got {value}")
-        if quick and not include_live and str(item.get("mode") or "local").casefold() == "live":
+        if quick and not include_live and str(item.get("mode") or "local").casefold().startswith("live"):
             errors.append(f"{name} must not use live mode in standard quick benchmarks")
 
     return {

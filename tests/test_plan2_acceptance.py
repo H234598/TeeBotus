@@ -2823,7 +2823,7 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
 
 def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_standard_artifacts() -> None:
     payload = _valid_benchmark_payload()
-    payload["results"][0]["mode"] = "live"
+    payload["results"][0]["mode"] = "live_optional"
     payload["results"][1]["details"]["network_calls"] = 1
     payload["results"][2]["details"]["nested"] = {"openai_calls": 2}
     payload["results"][3]["details"]["llm_calls"] = 1
@@ -2853,7 +2853,7 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> N
     ranking["candidates"][0] = {
         "rank": 2,
         "name": "candidate_with_errors",
-        "mode": "live",
+        "mode": "live_optional",
         "throughput_ops_s": 1000.0,
         "total_ms": 0.1,
         "errors": 1,
