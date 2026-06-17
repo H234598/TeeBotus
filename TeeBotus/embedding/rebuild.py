@@ -8,6 +8,13 @@ from typing import Any
 from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
 from TeeBotus.instructions import BotInstructions, load_instructions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, validate_sha512_token
+from TeeBotus.runtime.qdrant import (
+    QDRANT_USER_MEMORY_COLLECTION,
+    QdrantCollectionResult,
+    QdrantCollectionSpec,
+    default_qdrant_collection_specs,
+    ensure_default_collections,
+)
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 
 
@@ -22,6 +29,18 @@ class QdrantMemoryRebuildResult:
     embedding_provider: str = ""
     embedding_model: str = ""
     embedding_dimensions: int = 0
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class QdrantCollectionEnsureResult:
+    instance_names: tuple[str, ...]
+    collection_name: str
+    status: str
+    ok: bool
+    qdrant_url: str = ""
+    vector_size: int = 0
+    embedding_model: str = ""
     error: str = ""
 
 
@@ -143,6 +162,74 @@ def rebuild_qdrant_memory_indexes(
     return tuple(results)
 
 
+def ensure_qdrant_collections_for_instances(
+    *,
+    instances_dir: str | Path = "instances",
+    instance_names: Iterable[str] = (),
+    qdrant_url: str | None = None,
+    embedding_config: EmbeddingConfig | None = None,
+    embedding_overrides: Mapping[str, Any] | None = None,
+    qdrant_ensure_factory: Callable[..., tuple[QdrantCollectionResult, ...]] = ensure_default_collections,
+) -> tuple[QdrantCollectionEnsureResult, ...]:
+    root = Path(instances_dir)
+    selected_instances = _resolve_instruction_instance_names(root, instance_names)
+    instructions_by_instance = {
+        instance_name: _load_instance_memory_instructions(root, instance_name)
+        for instance_name in selected_instances
+    }
+    effective_qdrant_url, qdrant_error = _resolve_collection_qdrant_url(
+        instructions_by_instance,
+        override=qdrant_url,
+    )
+    memory_embedding_config, embedding_error = _resolve_collection_memory_embedding_config(
+        instructions_by_instance,
+        embedding_config=embedding_config,
+        overrides=embedding_overrides,
+    )
+    if qdrant_error or embedding_error:
+        return (
+            QdrantCollectionEnsureResult(
+                instance_names=selected_instances,
+                collection_name=QDRANT_USER_MEMORY_COLLECTION,
+                status="config_conflict",
+                ok=False,
+                qdrant_url=effective_qdrant_url,
+                vector_size=memory_embedding_config.dimensions,
+                embedding_model=memory_embedding_config.model_name,
+                error=qdrant_error or embedding_error,
+            ),
+        )
+    specs = default_qdrant_collection_specs(
+        user_memory_vector_size=memory_embedding_config.dimensions,
+        user_memory_embedding_model=memory_embedding_config.model_name,
+    )
+    spec_by_name = {spec.name: spec for spec in specs}
+    try:
+        results = qdrant_ensure_factory(url=effective_qdrant_url, specs=specs)
+    except Exception as exc:  # noqa: BLE001 - operator command should report controlled failures.
+        return (
+            QdrantCollectionEnsureResult(
+                instance_names=selected_instances,
+                collection_name=QDRANT_USER_MEMORY_COLLECTION,
+                status="error",
+                ok=False,
+                qdrant_url=effective_qdrant_url,
+                vector_size=memory_embedding_config.dimensions,
+                embedding_model=memory_embedding_config.model_name,
+                error=f"{type(exc).__name__}: {exc}",
+            ),
+        )
+    return tuple(
+        _collection_ensure_result(
+            selected_instances,
+            result,
+            qdrant_url=effective_qdrant_url,
+            spec=spec_by_name.get(result.name),
+        )
+        for result in results
+    )
+
+
 def _rebuild_result(
     instance_name: str,
     account_id: str,
@@ -170,6 +257,50 @@ def _rebuild_result(
 
 def _load_instance_memory_instructions(instances_dir: Path, instance_name: str) -> BotInstructions:
     return load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
+
+
+def _resolve_collection_qdrant_url(instructions_by_instance: Mapping[str, BotInstructions], *, override: str | None = None) -> tuple[str, str]:
+    if override:
+        return override, ""
+    if not instructions_by_instance:
+        return BotInstructions().memory_search_qdrant_url, ""
+    urls = {
+        instance_name: str(instructions.memory_search_qdrant_url or "").strip() or BotInstructions().memory_search_qdrant_url
+        for instance_name, instructions in instructions_by_instance.items()
+    }
+    unique_urls = set(urls.values())
+    if len(unique_urls) == 1:
+        return next(iter(unique_urls)), ""
+    conflicts = ", ".join(f"{instance}:{url}" for instance, url in sorted(urls.items()))
+    return BotInstructions().memory_search_qdrant_url, f"conflicting qdrant urls: {conflicts}"
+
+
+def _resolve_collection_memory_embedding_config(
+    instructions_by_instance: Mapping[str, BotInstructions],
+    *,
+    embedding_config: EmbeddingConfig | None = None,
+    overrides: Mapping[str, Any] | None = None,
+) -> tuple[EmbeddingConfig, str]:
+    if not instructions_by_instance:
+        return _resolve_memory_embedding_config(BotInstructions(), embedding_config=embedding_config, overrides=overrides), ""
+    configs = {
+        instance_name: _resolve_memory_embedding_config(
+            instructions,
+            embedding_config=embedding_config,
+            overrides=overrides,
+        )
+        for instance_name, instructions in instructions_by_instance.items()
+    }
+    unique_contracts = {(config.model_name, config.dimensions) for config in configs.values()}
+    if len(unique_contracts) == 1:
+        return next(iter(configs.values())), ""
+    conflicts = ", ".join(
+        f"{instance}:{config.model_name}/{config.dimensions}"
+        for instance, config in sorted(configs.items())
+    )
+    return _resolve_memory_embedding_config(BotInstructions(), embedding_config=embedding_config, overrides=overrides), (
+        f"conflicting user-memory embedding configs: {conflicts}"
+    )
 
 
 def _resolve_memory_embedding_config(
@@ -222,8 +353,42 @@ def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tu
     return tuple(names)
 
 
+def _resolve_instruction_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:
+    explicit = tuple(dict.fromkeys(str(value or "").strip() for value in requested if str(value or "").strip()))
+    if explicit:
+        return explicit
+    if not instances_dir.exists():
+        return ()
+    names: list[str] = []
+    for path in sorted(instances_dir.iterdir()):
+        if path.is_dir() and (path / "Bot_Verhalten.md").exists():
+            names.append(path.name)
+    return tuple(names)
+
+
+def _collection_ensure_result(
+    instance_names: tuple[str, ...],
+    result: QdrantCollectionResult,
+    *,
+    qdrant_url: str,
+    spec: QdrantCollectionSpec | None,
+) -> QdrantCollectionEnsureResult:
+    return QdrantCollectionEnsureResult(
+        instance_names=instance_names,
+        collection_name=result.name,
+        status=result.status,
+        ok=result.ok,
+        qdrant_url=qdrant_url or result.target,
+        vector_size=spec.vector_size if spec is not None else 0,
+        embedding_model=spec.embedding_model if spec is not None else "",
+        error=result.error,
+    )
+
+
 __all__ = [
+    "QdrantCollectionEnsureResult",
     "QdrantMemoryRebuildResult",
+    "ensure_qdrant_collections_for_instances",
     "rebuild_qdrant_memory_index",
     "rebuild_qdrant_memory_indexes",
 ]

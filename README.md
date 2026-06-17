@@ -712,6 +712,7 @@ Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags
 sind nur Overrides fuer Tests oder einen bewussten Modellwechsel:
 
 ```bash
+teebotus-embedding --instances-dir instances --instance Depressionsbot collections-ensure
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --dry-run
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model intfloat/multilingual-e5-small --embedding-dimensions 384 --embedding-endpoint http://127.0.0.1:8080/embeddings
