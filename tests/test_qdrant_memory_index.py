@@ -352,6 +352,8 @@ def test_qdrant_memory_rebuild_uses_account_store_as_truth(tmp_path) -> None:
         qdrant_memory_point_id(instance_name="Depressionsbot", account_id=account_id, memory_id=second_id),
     }
     assert {point["payload"]["memory_id"] for point in fake_qdrant.points.values()} == {first_id, second_id}
+    upsert_calls = [call for call in fake_qdrant.calls if call["method"] == "PUT" and call["path"] == "/collections/teebotus_user_memory/points"]
+    assert len(upsert_calls[-1]["body"]["points"]) == 2
 
 
 def test_qdrant_memory_rebuild_preserves_cache_when_account_store_is_unreadable() -> None:
@@ -365,6 +367,22 @@ def test_qdrant_memory_rebuild_preserves_cache_when_account_store_is_unreadable(
 
     with pytest.raises(RuntimeError, match="account store unreadable"):
         index.rebuild(account_store=BrokenAccountStore(), instance_name="Depressionsbot", account_id=ACCOUNT_A)  # type: ignore[arg-type]
+
+    assert old_point_id in fake_qdrant.points
+    assert all(call["path"] != "/collections/teebotus_user_memory/points/delete" for call in fake_qdrant.calls)
+
+
+def test_qdrant_memory_rebuild_preserves_cache_when_entry_is_not_indexable() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    old_point_id = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "old", "user_text": "Alt"})
+
+    class BrokenEntryStore:
+        def read_memory_entries(self, _account_id):
+            return [{"user_text": "missing id"}]
+
+    with pytest.raises(ValueError, match="memory entry must contain id"):
+        index.rebuild(account_store=BrokenEntryStore(), instance_name="Depressionsbot", account_id=ACCOUNT_A)  # type: ignore[arg-type]
 
     assert old_point_id in fake_qdrant.points
     assert all(call["path"] != "/collections/teebotus_user_memory/points/delete" for call in fake_qdrant.calls)

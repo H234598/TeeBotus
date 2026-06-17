@@ -50,33 +50,38 @@ class QdrantMemoryIndex:
     def index_memory(self, *, instance_name: str, account_id: str, entry: dict[str, Any]) -> str:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
+        point = self._memory_point(instance_name=instance, account_id=account, entry=entry)
+        self._upsert_points((point,))
+        return str(point["id"])
+
+    def _memory_point(self, *, instance_name: str, account_id: str, entry: dict[str, Any]) -> dict[str, Any]:
         memory_id = _memory_id(entry)
-        point_id = qdrant_memory_point_id(instance_name=instance, account_id=account, memory_id=memory_id)
+        point_id = qdrant_memory_point_id(instance_name=instance_name, account_id=account_id, memory_id=memory_id)
         text = _memory_embedding_text(entry)
         vector = self.embedding_provider.embed_text(text)
         _validate_vector(vector, expected_dimensions=int(self.embedding_provider.dimensions))
         payload = _memory_payload(
-            instance_name=instance,
-            account_id=account,
+            instance_name=instance_name,
+            account_id=account_id,
             memory_id=memory_id,
             entry=entry,
             embedding_model=self.embedding_provider.model_name,
             embedding_dimensions=self.embedding_provider.dimensions,
         )
+        return {
+            "id": point_id,
+            "vector": vector,
+            "payload": payload,
+        }
+
+    def _upsert_points(self, points: tuple[dict[str, Any], ...]) -> None:
+        if not points:
+            return
         self._request_json(
             "PUT",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points?wait=true",
-            {
-                "points": [
-                    {
-                        "id": point_id,
-                        "vector": vector,
-                        "payload": payload,
-                    }
-                ]
-            },
+            {"points": list(points)},
         )
-        return point_id
 
     def search(self, *, instance_name: str, account_id: str, query: str, limit: int = 5) -> tuple[QdrantMemoryResult, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
@@ -162,15 +167,14 @@ class QdrantMemoryIndex:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
         entries = tuple(entry for entry in account_store.read_memory_entries(account) if isinstance(entry, dict))
+        points = tuple(self._memory_point(instance_name=instance, account_id=account, entry=entry) for entry in entries)
         self.delete_account(
             instance_name=instance,
             account_id=account,
             include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
         )
-        point_ids: list[str] = []
-        for entry in entries:
-            point_ids.append(self.index_memory(instance_name=instance, account_id=account, entry=entry))
-        return tuple(point_ids)
+        self._upsert_points(points)
+        return tuple(str(point["id"]) for point in points)
 
     def _request_json(self, method: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         target = resolve_qdrant_url(self.url)
