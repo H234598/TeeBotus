@@ -108,8 +108,15 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
     serialized_points = json.dumps(opener.points, ensure_ascii=False).casefold()
     cleartext_in_payload = "schlaf und tagesstruktur" in serialized_points or "user_text" in serialized_points
     messenger_identity_in_payload = any(marker in serialized_points for marker in ("telegram", "matrix", "signal_source", "bench-source"))
+    content_hash_in_payload = "source_sha256" in serialized_points or "keyword_sha256" in serialized_points
     schema_versions = sorted({payload.get("schema_version") for payload in stored_payloads if isinstance(payload, dict)})
-    ok = bool(selected_ids) and not cleartext_in_payload and not messenger_identity_in_payload and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
+    ok = (
+        bool(selected_ids)
+        and not cleartext_in_payload
+        and not messenger_identity_in_payload
+        and not content_hash_in_payload
+        and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
+    )
     return result(
         name="qdrant_memory_index_quick",
         category="qdrant",
@@ -126,6 +133,7 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
             "schema_versions": schema_versions,
             "cleartext_in_payload": cleartext_in_payload,
             "messenger_identity_in_payload": messenger_identity_in_payload,
+            "content_hash_in_payload": content_hash_in_payload,
             "fake_requests": opener.request_count,
             "network_calls": 0,
         },

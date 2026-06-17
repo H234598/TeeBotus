@@ -6,6 +6,7 @@ from pathlib import Path
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
 from TeeBotus.benchmarks import suite as benchmark_suite
+from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
 from scripts import run_benchmarks as benchmark_module
 from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
@@ -272,9 +273,10 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert qdrant_memory["ok"] is True
     assert qdrant_memory["details"]["points"] >= 1
     assert qdrant_memory["details"]["selected"] >= 1
-    assert qdrant_memory["details"]["schema_versions"] == [1]
+    assert qdrant_memory["details"]["schema_versions"] == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
     assert qdrant_memory["details"]["cleartext_in_payload"] is False
     assert qdrant_memory["details"]["messenger_identity_in_payload"] is False
+    assert qdrant_memory["details"]["content_hash_in_payload"] is False
     assert qdrant_memory["details"]["network_calls"] == 0
     retrieval = next(result for result in suite["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
     assert retrieval["ok"] is True

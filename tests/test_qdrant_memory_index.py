@@ -108,7 +108,8 @@ def test_qdrant_memory_index_indexes_searches_and_deletes_without_cleartext() ->
     assert payload["schema_version"] == QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
     assert payload["account_id"] == ACCOUNT_A
     assert payload["instance_name"] == "Depressionsbot"
-    assert payload["keyword_sha256"]
+    assert "source_sha256" not in payload
+    assert "keyword_sha256" not in payload
 
     results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=3)
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import uuid
@@ -24,7 +23,7 @@ from TeeBotus.runtime.qdrant import (
 
 
 QDRANT_MEMORY_PAYLOAD_SCHEMA = "teebotus_qdrant_memory_v1"
-QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 1
+QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -60,7 +59,6 @@ class QdrantMemoryIndex:
             account_id=account,
             memory_id=memory_id,
             entry=entry,
-            source_text=text,
             embedding_model=self.embedding_provider.model_name,
             embedding_dimensions=self.embedding_provider.dimensions,
         )
@@ -200,11 +198,9 @@ def _memory_payload(
     account_id: str,
     memory_id: str,
     entry: dict[str, Any],
-    source_text: str,
     embedding_model: str,
     embedding_dimensions: int,
 ) -> dict[str, Any]:
-    keywords = entry.get("keywords") if isinstance(entry.get("keywords"), list) else []
     payload = {
         "schema": QDRANT_MEMORY_PAYLOAD_SCHEMA,
         "schema_version": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION,
@@ -219,8 +215,6 @@ def _memory_payload(
         "updated_at": str(entry.get("updated_at") or ""),
         "valid_from": str(entry.get("valid_from") or ""),
         "valid_to": str(entry.get("valid_to") or ""),
-        "source_sha256": hashlib.sha256(source_text.encode("utf-8")).hexdigest(),
-        "keyword_sha256": [_short_hash(str(keyword)) for keyword in keywords if str(keyword or "").strip()],
         "embedding_model": str(embedding_model or ""),
         "embedding_dimensions": int(embedding_dimensions),
     }
@@ -309,10 +303,6 @@ def _validate_vector(vector: list[float], *, expected_dimensions: int) -> None:
     for value in vector:
         if not isinstance(value, (int, float)):
             raise ValueError("Embedding vector must contain numbers only.")
-
-
-def _short_hash(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:24]
 
 
 def _float_or_zero(value: Any) -> float:
