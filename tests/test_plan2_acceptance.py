@@ -219,10 +219,31 @@ def _valid_benchmark_payload() -> dict:
                 "remote_calls": 0,
                 "llm_calls": 0,
                 "purposes": sorted(check_plan2_acceptance.REQUIRED_HF_POOL_EVAL_PURPOSES),
+                "routed_purposes": sorted(check_plan2_acceptance.REQUIRED_HF_POOL_EVAL_PURPOSES),
                 "structured_decision_json_valid": True,
+                "structured_decision_confidence": 0.92,
+                "normal_chat_median_latency_ms": 0.5,
+                "psychology_quality_score": 4,
+                "psychology_quality_checks": {
+                    "validierend": True,
+                    "keine_diagnose": True,
+                    "kleiner_schritt": True,
+                    "sanft": True,
+                },
                 "psychology_quality_ok": True,
                 "bibliothekar_citation_faithful": True,
+                "bibliothekar_citation_fields": {
+                    "chunk_id": True,
+                    "file": True,
+                    "locator": True,
+                },
                 "summarizer_faithful": True,
+                "summarizer_terms": {
+                    "aktivierung": True,
+                    "schlafhygiene": True,
+                    "kleine_aufgaben": True,
+                },
+                "summarizer_hallucinated": False,
                 "provider_failure_fallback": True,
                 "cooldown_fallback": True,
                 "cooldown_state_key": "default/bench_normal_chat",
@@ -2390,7 +2411,7 @@ def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> No
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert any("benchmark rankings missing required categories" in error for error in errors)
-    assert any("bibliothekar" in error and "langgraph_flows" in error and "transcription_youtube" in error for error in errors)
+    assert any("bibliothekar" in error and "langgraph_flows" in error and "retrieval" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:
@@ -2498,20 +2519,39 @@ def test_benchmark_artifact_validation_requires_hf_pool_eval_details() -> None:
     payload = _valid_benchmark_payload()
     hf_eval = next(result for result in payload["results"] if result["name"] == "hf_pool_eval_matrix")
     hf_eval["details"]["purposes"] = ["normal_chat"]
+    hf_eval["details"]["routed_purposes"] = ["normal_chat"]
     hf_eval["details"]["structured_decision_json_valid"] = False
+    hf_eval["details"]["structured_decision_confidence"] = 1.5
+    hf_eval["details"]["normal_chat_median_latency_ms"] = 0.0
+    hf_eval["details"]["psychology_quality_score"] = 2
+    hf_eval["details"]["psychology_quality_checks"] = {"validierend": True, "keine_diagnose": False}
     hf_eval["details"]["bibliothekar_citation_faithful"] = False
+    hf_eval["details"]["bibliothekar_citation_fields"] = {"chunk_id": True, "file": False}
     hf_eval["details"]["cooldown_state_key"] = "bench_normal_chat"
     hf_eval["details"]["cooldown_network_calls"] = 1
+    hf_eval["details"]["summarizer_terms"] = {"aktivierung": True, "schlafhygiene": False}
+    hf_eval["details"]["summarizer_hallucinated"] = True
     hf_eval["details"]["mock_executor_calls"] = 0
 
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert any("hf_pool purposes missing required evals" in error and "structured_decision" in error for error in errors)
+    assert any("hf_pool routed_purposes missing" in error and "structured_decision" in error for error in errors)
     assert any("hf_pool structured_decision_json_valid must be true" in error for error in errors)
+    assert any("hf_pool structured_decision_confidence must be between 0 and 1" in error for error in errors)
+    assert any("hf_pool normal_chat_median_latency_ms must be positive" in error for error in errors)
+    assert any("hf_pool psychology_quality_score must be at least 3" in error for error in errors)
+    assert any("hf_pool psychology_quality_checks missing" in error and "kleiner_schritt" in error for error in errors)
+    assert any("hf_pool psychology_quality_checks entries must be true" in error and "keine_diagnose" in error for error in errors)
     assert any("hf_pool bibliothekar_citation_faithful must be true" in error for error in errors)
+    assert any("hf_pool bibliothekar_citation_fields missing" in error and "locator" in error for error in errors)
+    assert any("hf_pool bibliothekar_citation_fields entries must be true" in error and "file" in error for error in errors)
+    assert any("hf_pool summarizer_terms missing" in error and "kleine_aufgaben" in error for error in errors)
+    assert any("hf_pool summarizer_terms entries must be true" in error and "schlafhygiene" in error for error in errors)
+    assert any("hf_pool summarizer_hallucinated must be false" in error for error in errors)
     assert any("hf_pool cooldown_state_key must be pool-scoped" in error for error in errors)
     assert any("hf_pool cooldown_network_calls must be 0" in error for error in errors)
-    assert any("hf_pool mock_executor_calls must be a positive integer" in error for error in errors)
+    assert any("hf_pool mock_executor_calls must cover all eval purposes" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_hf_pool_eval_result() -> None:

@@ -263,9 +263,17 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "summarizer",
     ]
     assert hf_eval["details"]["structured_decision_json_valid"] is True
+    assert hf_eval["details"]["routed_purposes"] == hf_eval["details"]["purposes"]
+    assert 0 < hf_eval["details"]["structured_decision_confidence"] <= 1
+    assert hf_eval["details"]["normal_chat_median_latency_ms"] > 0
+    assert hf_eval["details"]["psychology_quality_score"] >= 3
+    assert all(hf_eval["details"]["psychology_quality_checks"].values())
     assert hf_eval["details"]["psychology_quality_ok"] is True
     assert hf_eval["details"]["bibliothekar_citation_faithful"] is True
+    assert all(hf_eval["details"]["bibliothekar_citation_fields"].values())
     assert hf_eval["details"]["summarizer_faithful"] is True
+    assert all(hf_eval["details"]["summarizer_terms"].values())
+    assert hf_eval["details"]["summarizer_hallucinated"] is False
     assert hf_eval["details"]["provider_failure_fallback"] is True
     assert hf_eval["details"]["cooldown_fallback"] is True
     assert hf_eval["details"]["cooldown_state_key"] == "default/bench_normal_chat"

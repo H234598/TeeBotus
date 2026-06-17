@@ -31,6 +31,7 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "database_fallback",
+        "gemini_free_tier",
         "hf_pool",
         "langgraph_flows",
         "llm_router",
@@ -50,6 +51,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "langgraph_flows",
+        "retrieval",
         "transcription_youtube",
     }
 )
@@ -1555,13 +1557,58 @@ def _hf_pool_eval_benchmark_detail_errors(details: Mapping[str, Any], *, result_
     for key in sorted(required_true_flags):
         if details.get(key) is not True:
             errors.append(f"{prefix}results[{result_index}] hf_pool {key} must be true")
+    errors.extend(
+        _required_string_list_errors(
+            details.get("routed_purposes"),
+            required=REQUIRED_HF_POOL_EVAL_PURPOSES,
+            label="hf_pool routed_purposes",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    confidence = details.get("structured_decision_confidence")
+    if not _is_nonnegative_number(confidence) or float(confidence) > 1:
+        errors.append(f"{prefix}results[{result_index}] hf_pool structured_decision_confidence must be between 0 and 1")
+    if not _is_positive_number(details.get("normal_chat_median_latency_ms")):
+        errors.append(f"{prefix}results[{result_index}] hf_pool normal_chat_median_latency_ms must be positive")
+    if not _is_positive_integer(details.get("psychology_quality_score")) or int(details.get("psychology_quality_score") or 0) < 3:
+        errors.append(f"{prefix}results[{result_index}] hf_pool psychology_quality_score must be at least 3")
+    errors.extend(
+        _required_true_mapping_errors(
+            details.get("psychology_quality_checks"),
+            required=frozenset({"validierend", "keine_diagnose", "kleiner_schritt", "sanft"}),
+            label="hf_pool psychology_quality_checks",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    errors.extend(
+        _required_true_mapping_errors(
+            details.get("bibliothekar_citation_fields"),
+            required=frozenset({"chunk_id", "file", "locator"}),
+            label="hf_pool bibliothekar_citation_fields",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    errors.extend(
+        _required_true_mapping_errors(
+            details.get("summarizer_terms"),
+            required=frozenset({"aktivierung", "schlafhygiene", "kleine_aufgaben"}),
+            label="hf_pool summarizer_terms",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    if details.get("summarizer_hallucinated") is not False:
+        errors.append(f"{prefix}results[{result_index}] hf_pool summarizer_hallucinated must be false")
     cooldown_state_key = str(details.get("cooldown_state_key") or "")
     if "/" not in cooldown_state_key or cooldown_state_key.startswith("/") or cooldown_state_key.endswith("/"):
         errors.append(f"{prefix}results[{result_index}] hf_pool cooldown_state_key must be pool-scoped")
     if details.get("cooldown_network_calls") not in {0, 0.0}:
         errors.append(f"{prefix}results[{result_index}] hf_pool cooldown_network_calls must be 0")
-    if not _is_positive_integer(details.get("mock_executor_calls")):
-        errors.append(f"{prefix}results[{result_index}] hf_pool mock_executor_calls must be a positive integer")
+    if not _is_positive_integer(details.get("mock_executor_calls")) or int(details.get("mock_executor_calls") or 0) < len(REQUIRED_HF_POOL_EVAL_PURPOSES):
+        errors.append(f"{prefix}results[{result_index}] hf_pool mock_executor_calls must cover all eval purposes")
     return errors
 
 
@@ -1640,6 +1687,19 @@ def _required_string_list_errors(value: Any, *, required: frozenset[str], label:
     if missing:
         return [f"{prefix}results[{result_index}] {label} missing: {', '.join(missing)}"]
     return []
+
+
+def _required_true_mapping_errors(value: Any, *, required: frozenset[str], label: str, result_index: int, prefix: str = "") -> list[str]:
+    if not isinstance(value, Mapping):
+        return [f"{prefix}results[{result_index}] {label} must be an object"]
+    missing = sorted(required - {str(key) for key in value})
+    errors: list[str] = []
+    if missing:
+        errors.append(f"{prefix}results[{result_index}] {label} missing: {', '.join(missing)}")
+    false_items = sorted(str(key) for key in required if key in value and value.get(key) is not True)
+    if false_items:
+        errors.append(f"{prefix}results[{result_index}] {label} entries must be true: {', '.join(false_items)}")
+    return errors
 
 
 def _pydantic_decision_benchmark_detail_errors(details: Mapping[str, Any], *, result_index: int, prefix: str = "") -> list[str]:
