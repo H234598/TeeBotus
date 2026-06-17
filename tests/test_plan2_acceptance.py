@@ -324,6 +324,32 @@ def _write_valid_memory_recovery_markdown(path: Path) -> None:
     )
 
 
+def _valid_legacy_plaintext_import_payload() -> dict[str, object]:
+    return {
+        "requested_legacy_instances_dir": "legacy",
+        "requested_legacy_instances_dir_exists": True,
+        "legacy_instances_dir": "legacy/instances.bak",
+        "legacy_instances_dir_exists": True,
+        "path": "legacy/instances.bak/Demo/data/users",
+        "path_exists": True,
+        "status": "available",
+        "sources": 1,
+        "entries": 2,
+        "users": [{"user_id": "2", "entries": 2, "path": "legacy/instances.bak/Demo/data/users/2"}],
+        "encrypted_sources": 0,
+        "malformed_sources": 0,
+        "dry_run_command": (
+            "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+            "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
+            "--json-output out.json --markdown-output out.md"
+        ),
+        "apply_command": (
+            "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+            "--target-instances-dir instances --instance Demo --replace-unreadable --replace-unreadable-account-metadata --apply"
+        ),
+    }
+
+
 def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path) -> None:
     commands = check_plan2_acceptance.build_acceptance_commands(
         python="python-test",
@@ -871,7 +897,7 @@ def test_memory_recovery_markdown_validation_requires_legacy_users_summary(tmp_p
                 "",
                 "- source_count: `0`",
                 "- metadata_health: readable=`True` unreadable_items=`0`",
-                "- legacy_plaintext_import: sources=`1` entries=`2` path=`legacy/Demo/data/users`",
+                "- legacy_plaintext_import: status=`available` sources=`1` entries=`2` requested_path_exists=`True` legacy_path_exists=`True` users_path_exists=`True` path=`legacy/Demo/data/users`",
                 "",
                 "### Account: " + ("a" * 128),
                 "- recovery_status: `empty`",
@@ -939,16 +965,7 @@ def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: P
                                 "sources": [{"name": "json_files", "readable": True}],
                             },
                         ],
-                        "legacy_plaintext_import": {
-                            "sources": 1,
-                            "entries": 2,
-                            "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
-                            "dry_run_command": (
-                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
-                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
-                                "--json-output /tmp/import-Demo.json --markdown-output /tmp/import-Demo.md"
-                            ),
-                        },
+                        "legacy_plaintext_import": _valid_legacy_plaintext_import_payload(),
                     }
                 ],
                 "totals": {
@@ -1003,16 +1020,7 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
                                 "sources": [{"name": "sqlite_fallback", "readable": True}],
                             }
                         ],
-                        "legacy_plaintext_import": {
-                            "sources": 1,
-                            "entries": 2,
-                            "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
-                            "dry_run_command": (
-                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
-                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
-                                "--json-output /tmp/import-Demo.json --markdown-output /tmp/import-Demo.md"
-                            ),
-                        },
+                        "legacy_plaintext_import": _valid_legacy_plaintext_import_payload(),
                     }
                 ],
                 "totals": {
@@ -1123,6 +1131,7 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_legacy_users(t
                         "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [],
                         "legacy_plaintext_import": {
+                            **_valid_legacy_plaintext_import_payload(),
                             "sources": 2,
                             "entries": 4,
                             "users": [
@@ -1187,6 +1196,7 @@ def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(
                         "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [],
                         "legacy_plaintext_import": {
+                            **_valid_legacy_plaintext_import_payload(),
                             "sources": 1,
                             "entries": 2,
                             "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
@@ -1651,6 +1661,23 @@ def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp
     )
 
     assert any("places running processes before totals" in error for error in errors)
+
+
+def test_legacy_import_markdown_validation_requires_metadata_reset_flag(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    text = markdown_path.read_text(encoding="utf-8")
+    markdown_path.write_text(
+        text.replace(
+            "action=`would-import`",
+            "action=`would-import-after-metadata-reset`",
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_markdown_artifact_errors(markdown_path)
+
+    assert errors == [f"legacy import markdown artifact metadata-reset event lacks metadata_unreadable flag: {markdown_path}"]
 
 
 def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> None:

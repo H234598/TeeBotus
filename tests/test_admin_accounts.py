@@ -388,6 +388,10 @@ def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path:
     legacy = report["instances"][0]["legacy_plaintext_import"]
     assert legacy["sources"] == 1
     assert legacy["entries"] == 2
+    assert legacy["status"] == "available"
+    assert legacy["requested_legacy_instances_dir_exists"] is True
+    assert legacy["legacy_instances_dir_exists"] is True
+    assert legacy["path_exists"] is True
     assert legacy["users"] == [{"user_id": "395935293", "entries": 2, "path": str(user_dir)}]
     assert "--replace-unreadable-account-metadata" in legacy["dry_run_command"]
     assert "--json-output" in legacy["dry_run_command"]
@@ -412,11 +416,33 @@ def test_memory_recovery_report_resolves_legacy_backup_root(tmp_path: Path) -> N
 
     legacy = report["instances"][0]["legacy_plaintext_import"]
     assert legacy["requested_legacy_instances_dir"] == str(backup_root)
+    assert legacy["requested_legacy_instances_dir_exists"] is True
     assert legacy["legacy_instances_dir"] == str(backup_root / "instances.bak")
+    assert legacy["legacy_instances_dir_exists"] is True
+    assert legacy["path_exists"] is True
+    assert legacy["status"] == "available"
     assert legacy["sources"] == 2
     assert legacy["entries"] == 2
     assert [user["user_id"] for user in legacy["users"]] == ["1682346404", "395935293"]
     assert "--apply" in legacy["apply_command"]
+
+
+def test_memory_recovery_report_marks_missing_legacy_backup_root(tmp_path: Path) -> None:
+    target_dir = tmp_path / "target"
+    missing_root = tmp_path / "missing-backup"
+    make_instance(target_dir)
+
+    report = build_account_memory_recovery_report(instances_dir=target_dir, legacy_instances_dir=missing_root, provider=provider())
+
+    legacy = report["instances"][0]["legacy_plaintext_import"]
+    assert legacy["requested_legacy_instances_dir"] == str(missing_root)
+    assert legacy["requested_legacy_instances_dir_exists"] is False
+    assert legacy["legacy_instances_dir"] == str(missing_root)
+    assert legacy["legacy_instances_dir_exists"] is False
+    assert legacy["path_exists"] is False
+    assert legacy["status"] == "missing"
+    assert legacy["sources"] == 0
+    assert legacy["entries"] == 0
 
 
 def test_memory_recovery_report_sanitizes_legacy_preflight_artifact_name(tmp_path: Path) -> None:

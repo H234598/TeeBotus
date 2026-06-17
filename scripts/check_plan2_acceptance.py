@@ -214,6 +214,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_secret_hygiene.py",
     "tests/test_benchmarks_runner.py",
     "tests/test_ci_workflow.py",
+    "tests/test_cinnamon_applet.py",
     "tests/test_memory_store_benchmark.py",
     "tests/test_plan2_acceptance.py",
     "tests/test_plan2_optional_extras.py",
@@ -763,7 +764,7 @@ def _memory_recovery_markdown_artifact_errors(argv: Sequence[str]) -> list[str]:
     instance_position = text.find("## Instance:")
     if totals_position != -1 and instance_position != -1 and totals_position > instance_position:
         errors.append(f"memory recovery markdown artifact places totals after instances: {output_path}")
-    if "legacy_plaintext_import: sources=`" in text and re.search(r"legacy_plaintext_import: sources=`[1-9][0-9]*`", text) and "  - users: `" not in text:
+    if "legacy_plaintext_import:" in text and re.search(r"legacy_plaintext_import:.*sources=`[1-9][0-9]*`", text) and "  - users: `" not in text:
         errors.append(f"memory recovery markdown artifact lacks legacy users summary: {output_path}")
     return errors
 
@@ -882,6 +883,13 @@ def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: 
 
 def _memory_recovery_legacy_users_errors(legacy: Mapping[str, Any], *, instance_name: str, prefix: str) -> list[str]:
     errors: list[str] = []
+    status = str(legacy.get("status") or "").strip()
+    valid_statuses = {"available", "missing", "encrypted-only", "malformed-only", "no-users-path", "empty"}
+    if status not in valid_statuses:
+        errors.append(f"{prefix}memory recovery legacy status must be one of {', '.join(sorted(valid_statuses))} for {instance_name}")
+    for key in ("requested_legacy_instances_dir_exists", "legacy_instances_dir_exists", "path_exists"):
+        if not isinstance(legacy.get(key), bool):
+            errors.append(f"{prefix}memory recovery legacy {key} must be boolean for {instance_name}")
     sources = legacy.get("sources")
     entries = legacy.get("entries")
     if not _is_nonnegative_integer(sources):
@@ -919,6 +927,14 @@ def _memory_recovery_legacy_users_errors(legacy: Mapping[str, Any], *, instance_
         summed_entries += int(user_entries or 0)
     if entries_valid and _is_nonnegative_integer(entries) and int(entries or 0) != summed_entries:
         errors.append(f"{prefix}memory recovery legacy users entries sum must match entries for {instance_name}")
+    if status == "available" and _is_nonnegative_integer(sources) and int(sources or 0) == 0:
+        errors.append(f"{prefix}memory recovery legacy status available requires sources for {instance_name}")
+    if status == "missing" and legacy.get("requested_legacy_instances_dir_exists") is not False:
+        errors.append(f"{prefix}memory recovery legacy status missing requires requested_legacy_instances_dir_exists=false for {instance_name}")
+    if status != "missing" and legacy.get("requested_legacy_instances_dir_exists") is False:
+        errors.append(f"{prefix}memory recovery legacy missing requested path must use status missing for {instance_name}")
+    if status == "no-users-path" and legacy.get("path_exists") is not False:
+        errors.append(f"{prefix}memory recovery legacy status no-users-path requires path_exists=false for {instance_name}")
     return errors
 
 
@@ -1026,6 +1042,11 @@ def _legacy_import_markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"legacy import markdown artifact places totals after events: {path}")
     if totals_position != -1 and running_position != -1 and totals_position > running_position:
         errors.append(f"legacy import markdown artifact places running processes before totals: {path}")
+    for line in text.splitlines():
+        if "action=`" not in line or "metadata-reset" not in line:
+            continue
+        if "metadata_unreadable" not in line:
+            errors.append(f"legacy import markdown artifact metadata-reset event lacks metadata_unreadable flag: {path}")
     return errors
 
 

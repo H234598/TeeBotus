@@ -332,10 +332,10 @@ python3 scripts/check_plan2_acceptance.py --list --include-qdrant-live --include
 Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur lesende Recovery-Reports und einen Legacy-Import-Dry-run nach `/home/teladi/Downloads` schreiben:
 
 ```bash
-python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus.bak2
+python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2
 ```
 
-Der Legacy-Pfad darf auf einen Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner wie `/home/teladi/TeeBotus.bak2/instances.bak` zeigen. Der Recovery-Reporter und Importer waehlen bei Backup-Roots automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
+Der Legacy-Pfad darf auf einen Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner wie `/home/teladi/TeeBotus_Backups/TeeBotus.bak2/instances.bak` zeigen. Der Recovery-Reporter und Importer waehlen bei Backup-Roots automatisch den besten passenden `instances*`-Unterordner mit Plaintext-User-Memorys.
 
 Hinweis zur Plan2-Testhistorie: Die frueher getrennt geplanten LLM-Basis- und
 OpenAI-Provider-Tests sind in der aktuellen Teststruktur zusammengefuehrt.
@@ -386,19 +386,19 @@ Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JS
 Wenn eine alte Plaintext-Sicherung mit `instances/<Instanz>/data/users/<telegram_id>/User_Memory_Entries.jsonl` existiert, kann der Recovery-Report diese Quelle zusaetzlich nur zaehlen:
 
 ```bash
-python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus.bak2
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2
 ```
 
 Der eigentliche Import ist ein separater, standardmaessig nicht-destruktiver Dry-Run:
 
 ```bash
-python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata
 ```
 
 Fuer eine pruefbare Preflight-Akte koennen Markdown und JSON geschrieben werden:
 
 ```bash
-python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
 ```
 
 Der Preflight-Bericht enthaelt `apply_safety`. Vor einem echten Import muss `apply_allowed_now=true`, `apply_requires_stopped_bot=false` und `running_bot_process_count=0` gelten. Wenn dort laufende Prozesse aufgefuehrt sind, zuerst Bot und Proactive-Jobs stoppen und den Preflight erneut schreiben.

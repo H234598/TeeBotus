@@ -162,7 +162,14 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 lines.append(f"  - {item.get('kind', '')}: `{item.get('path', '')}`{account_text} error={item.get('error', '')}")
         legacy = instance.get("legacy_plaintext_import")
         if isinstance(legacy, Mapping):
-            lines.append(f"- legacy_plaintext_import: sources=`{legacy.get('sources', 0)}` entries=`{legacy.get('entries', 0)}` path=`{legacy.get('path', '')}`")
+            lines.append(
+                f"- legacy_plaintext_import: status=`{legacy.get('status', '')}` "
+                f"sources=`{legacy.get('sources', 0)}` entries=`{legacy.get('entries', 0)}` "
+                f"requested_path_exists=`{legacy.get('requested_legacy_instances_dir_exists', False)}` "
+                f"legacy_path_exists=`{legacy.get('legacy_instances_dir_exists', False)}` "
+                f"users_path_exists=`{legacy.get('path_exists', False)}` "
+                f"path=`{legacy.get('path', '')}`"
+            )
             users = legacy.get("users")
             if isinstance(users, list) and users:
                 user_text = ", ".join(f"{user.get('user_id')}({user.get('entries', 0)})" for user in users if isinstance(user, Mapping))
@@ -869,8 +876,11 @@ def _count_lines(path: Path) -> int:
 
 
 def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
+    requested_path_exists = legacy_instances_dir.exists()
     effective_legacy_instances_dir = _resolve_legacy_instances_dir(legacy_instances_dir, instance_name)
     instance_users_dir = effective_legacy_instances_dir / instance_name / "data" / LEGACY_USER_MEMORY_DIRNAME
+    legacy_path_exists = effective_legacy_instances_dir.exists()
+    users_path_exists = instance_users_dir.exists()
     sources = 0
     entries = 0
     encrypted_sources = 0
@@ -925,8 +935,18 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
     )
     return {
         "requested_legacy_instances_dir": str(legacy_instances_dir),
+        "requested_legacy_instances_dir_exists": requested_path_exists,
         "legacy_instances_dir": str(effective_legacy_instances_dir),
+        "legacy_instances_dir_exists": legacy_path_exists,
         "path": str(instance_users_dir),
+        "path_exists": users_path_exists,
+        "status": _legacy_plaintext_import_status(
+            requested_path_exists=requested_path_exists,
+            users_path_exists=users_path_exists,
+            sources=sources,
+            encrypted_sources=encrypted_sources,
+            malformed_sources=malformed_sources,
+        ),
         "sources": sources,
         "entries": entries,
         "users": users,
@@ -936,6 +956,27 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "apply_command": apply_command,
         "apply_requires": "--apply plus explicit review of metadata/account-memory replacement flags",
     }
+
+
+def _legacy_plaintext_import_status(
+    *,
+    requested_path_exists: bool,
+    users_path_exists: bool,
+    sources: int,
+    encrypted_sources: int,
+    malformed_sources: int,
+) -> str:
+    if not requested_path_exists:
+        return "missing"
+    if sources:
+        return "available"
+    if encrypted_sources:
+        return "encrypted-only"
+    if malformed_sources:
+        return "malformed-only"
+    if not users_path_exists:
+        return "no-users-path"
+    return "empty"
 
 
 def _resolve_legacy_instances_dir(path: Path, instance_name: str) -> Path:
