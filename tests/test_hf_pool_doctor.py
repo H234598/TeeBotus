@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from TeeBotus.llm.hf_pool.doctor import main as doctor_main
-from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
+from TeeBotus.llm.hf_pool.health import HFPoolHealth, HFPoolTargetHealth, check_hf_pool, format_hf_pool_status_lines
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
 
 
@@ -54,6 +54,32 @@ def test_hf_pool_doctor_reports_malformed_config_as_broken(tmp_path):
     assert health.status == "broken"
     assert lines[0].startswith("hf_pool=default status=broken")
     assert "root must be a mapping" in lines[0]
+
+
+def test_hf_pool_status_formatter_redacts_errors_defensively():
+    health = HFPoolHealth(
+        pool="default",
+        status="broken",
+        error="failed with Bearer hf_TESTSECRET123",
+        targets=(
+            HFPoolTargetHealth(
+                pool="default",
+                name="target_hf_TESTSECRET456",
+                status="unavailable",
+                error="api_key=plain-secret token=HF_TOKEN_MAIN",
+            ),
+        ),
+    )
+
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert "hf_TESTSECRET123" not in lines
+    assert "hf_TESTSECRET456" not in lines
+    assert "plain-secret" not in lines
+    assert "Bearer <REDACTED>" in lines
+    assert "hf_<REDACTED>" in lines
+    assert "api_key=<REDACTED>" in lines
+    assert "token=HF_TOKEN_MAIN" in lines
 
 
 def test_hf_pool_doctor_reports_missing_key_without_secret_leak(tmp_path):

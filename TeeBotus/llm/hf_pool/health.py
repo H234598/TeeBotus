@@ -157,7 +157,7 @@ def check_hf_pool(
 
 
 def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
-    lines = [f"hf_pool={health.pool} status={health.status}"]
+    lines = [f"hf_pool={_status_text(health.pool)} status={_status_text(health.status)}"]
     if health.targets:
         lines[0] += (
             f" targets={len(health.targets)} healthy={health.healthy_count}"
@@ -169,7 +169,7 @@ def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
     if health.error:
         lines[0] += f" error={_status_text(health.error)}"
     for target in health.targets:
-        line = f"hf_pool={health.pool} target={target.name} status={target.status}"
+        line = f"hf_pool={_status_text(health.pool)} target={_status_text(target.name)} status={_status_text(target.status)}"
         if target.model:
             line += f" model={_status_text(target.model)}"
         if target.api_key_env:
@@ -315,4 +315,4 @@ def _last_latency(events: list[HFPoolUsageEvent]) -> int | None:
 
 
 def _status_text(value: object) -> str:
-    return str(value or "").replace("\n", " ").replace("\r", " ").strip()
+    return redact_hf_secrets(value).replace("\n", " ").replace("\r", " ").strip()

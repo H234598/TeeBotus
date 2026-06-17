@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-HF_TOKEN_RE = re.compile(r"\bhf_[A-Za-z0-9]{8,}\b")
+HF_TOKEN_RE = re.compile(r"hf_[A-Za-z0-9]{8,}")
 BEARER_RE = re.compile(r"\bBearer\s+[^,\s;\"')\]}]+", re.IGNORECASE)
 URL_SECRET_PARAM_RE = re.compile(
     r"(?i)([?&#](?:api[_-]?key|access[_-]?token|token|secret|password|key)=)([^&#\s]+)"
