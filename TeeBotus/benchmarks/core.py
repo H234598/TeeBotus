@@ -136,21 +136,40 @@ def build_quality_gate(
         if result is not None and str(result.get("category") or "") != expected_category:
             errors.append(f"{name} category must be {expected_category}")
 
-    rankings = comparisons.get("stable_backend_rankings") if isinstance(comparisons, dict) else None
+    rankings: list[Any] = []
+    if not isinstance(comparisons, dict):
+        errors.append("comparisons must be an object")
+    else:
+        raw_rankings = comparisons.get("stable_backend_rankings")
+        if not isinstance(raw_rankings, list) or not raw_rankings:
+            errors.append("comparisons.stable_backend_rankings must be a non-empty list")
+        else:
+            rankings = raw_rankings
     ranking_categories = {
         str(ranking.get("category") or "")
-        for ranking in rankings or []
+        for ranking in rankings
         if isinstance(ranking, dict) and isinstance(ranking.get("candidates"), list) and ranking.get("candidates")
     }
     missing_rankings = sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES - ranking_categories)
     if missing_rankings:
         errors.append(f"missing required benchmark rankings: {', '.join(missing_rankings)}")
-    for ranking in rankings or []:
+    seen_ranking_categories: set[str] = set()
+    for ranking_index, ranking in enumerate(rankings):
         if not isinstance(ranking, dict):
+            errors.append(f"rankings[{ranking_index}] must be an object")
             continue
         category = str(ranking.get("category") or "")
         candidates = ranking.get("candidates")
+        skipped = ranking.get("skipped", [])
         expected_names = BENCHMARK_RANKING_NAME_SETS.get(category, frozenset())
+        ranking_label = f"ranking {category}" if category else f"rankings[{ranking_index}]"
+        if not category:
+            errors.append(f"rankings[{ranking_index}] category must be non-empty")
+        elif category in seen_ranking_categories:
+            errors.append(f"duplicate ranking category: {category}")
+        seen_ranking_categories.add(category)
+        if not isinstance(candidates, list) or not candidates:
+            errors.append(f"{ranking_label} candidates must be a non-empty list")
         if (
             category in REQUIRED_BENCHMARK_RANKING_CATEGORIES
             and isinstance(candidates, list)
@@ -175,7 +194,8 @@ def build_quality_gate(
                             errors.append(f"ranking {category} candidate {candidate_name} {key} must match result")
                 if candidate.get("rank") != candidate_index:
                     errors.append(f"ranking {category} candidate {candidate_name or candidate_index} rank must be {candidate_index}")
-        skipped = ranking.get("skipped")
+        if not isinstance(skipped, list):
+            errors.append(f"{ranking_label} skipped must be a list")
         if expected_names and isinstance(skipped, list):
             for skipped_item in skipped:
                 if not isinstance(skipped_item, dict):

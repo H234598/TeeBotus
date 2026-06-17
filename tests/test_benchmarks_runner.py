@@ -569,6 +569,43 @@ def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> 
     assert "ranking bibliothekar must compare at least 2 successful candidates" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_malformed_ranking_structure() -> None:
+    no_comparisons = benchmark_module._build_quality_gate(
+        [],
+        comparisons=[],
+        quick=True,
+        include_live=False,
+    )
+    wrong_rankings = benchmark_module._build_quality_gate(
+        [],
+        comparisons={"stable_backend_rankings": {}},
+        quick=True,
+        include_live=False,
+    )
+    malformed_rankings = benchmark_module._build_quality_gate(
+        [],
+        comparisons={
+            "stable_backend_rankings": [
+                None,
+                {"category": "", "candidates": [], "skipped": []},
+                {"category": "account_memory", "candidates": "memory_jsonl", "skipped": "memory_postgres"},
+                {"category": "account_memory", "candidates": [{"name": "memory_jsonl"}], "skipped": []},
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert "comparisons must be an object" in no_comparisons["errors"]
+    assert "comparisons.stable_backend_rankings must be a non-empty list" in wrong_rankings["errors"]
+    assert "rankings[0] must be an object" in malformed_rankings["errors"]
+    assert "rankings[1] category must be non-empty" in malformed_rankings["errors"]
+    assert "rankings[1] candidates must be a non-empty list" in malformed_rankings["errors"]
+    assert "ranking account_memory candidates must be a non-empty list" in malformed_rankings["errors"]
+    assert "ranking account_memory skipped must be a list" in malformed_rankings["errors"]
+    assert "duplicate ranking category: account_memory" in malformed_rankings["errors"]
+
+
 def test_benchmark_quality_gate_rejects_ranking_names_outside_configured_sets() -> None:
     quality_gate = benchmark_module._build_quality_gate(
         [],
