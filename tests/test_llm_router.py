@@ -60,6 +60,12 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         model="gemini/gemini-2.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
+    assert profiles["vertex_gemini_flash"] == LLMProfile(
+        name="vertex_gemini_flash",
+        provider="litellm",
+        model="vertex_ai/gemini-2.5-flash",
+        api_key_env="GOOGLE_APPLICATION_CREDENTIALS",
+    )
     assert profiles["openai_premium"].provider == "openai"
     assert profiles["openai_premium"].api_key_env == "OPENAI_API_KEY"
     assert routing["structured_decision"].profile == "hf_pool_structured"

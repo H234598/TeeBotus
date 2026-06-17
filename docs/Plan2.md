@@ -925,7 +925,7 @@ Manueller Bot-Test:
 
 ---
 
-## 11. Phase 5 — Providerprofile für HuggingFace/Groq/Gemini
+## 11. Phase 5 — Providerprofile für HuggingFace/Groq/Gemini/Vertex
 
 ### 11.1 Profile-Datei
 
@@ -953,6 +953,11 @@ profiles:
     provider: litellm
     model: gemini/gemini-2.5-flash
     api_key_env: GEMINI_API_KEY
+
+  vertex_gemini_flash:
+    provider: litellm
+    model: vertex_ai/gemini-2.5-flash
+    api_key_env: GOOGLE_APPLICATION_CREDENTIALS
 
   openai_premium:
     provider: openai

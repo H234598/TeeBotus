@@ -40,6 +40,11 @@ profiles:
     model: gemini/gemini-2.5-flash
     api_key_env: GEMINI_API_KEY
 
+  vertex_gemini_flash:
+    provider: litellm
+    model: vertex_ai/gemini-2.5-flash
+    api_key_env: GOOGLE_APPLICATION_CREDENTIALS
+
   openai_premium:
     provider: openai
     model: gpt-5.5

@@ -12,7 +12,7 @@ from TeeBotus.llm.router import build_text_llm_client, normalize_llm_provider
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE_PATH = PROJECT_ROOT / "config" / "llm_profiles.yaml"
 DEFAULT_ROUTING_PATH = PROJECT_ROOT / "config" / "llm_routing.yaml"
-REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini", "hf_pool"})
+REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini", "vertex_ai", "hf_pool"})
 
 
 @dataclass(frozen=True)
@@ -31,7 +31,7 @@ class LLMProfile:
         model = self.model.casefold()
         if model.startswith(("ollama/", "ollama_chat/")):
             return False
-        if model.startswith(("huggingface/", "groq/", "gemini/", "openai/")):
+        if model.startswith(("huggingface/", "groq/", "gemini/", "vertex_ai/", "openai/")):
             return True
         if provider == "litellm":
             return True

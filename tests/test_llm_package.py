@@ -33,7 +33,7 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
     default_profile, routing = load_llm_routing()
 
     assert default_profile == "local_ollama"
-    assert {"local_ollama", "hf_mistral", "groq_fast", "gemini_flash", "openai_premium"} <= set(profiles)
+    assert {"local_ollama", "hf_mistral", "groq_fast", "gemini_flash", "vertex_gemini_flash", "openai_premium"} <= set(profiles)
     assert {"normal_chat", "structured_decision", "bibliothekar_answer"} <= set(routing)
 
     normal = select_llm_route("normal chat", profiles=profiles, default_profile=default_profile, routing=routing)

@@ -743,6 +743,29 @@ def test_runtime_status_reports_missing_key_for_remote_profile(monkeypatch, caps
     ) in captured.out
 
 
+def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "vertex_gemini_flash")
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/private/vertex-service-account.json")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=vertex_ai/gemini-2.5-flash "
+        "status=configured profile=vertex_gemini_flash api_key=configured"
+    ) in captured.out
+    assert "/private/vertex-service-account.json" not in captured.out
+
+
 def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

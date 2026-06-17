@@ -284,6 +284,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         route_error,
         route_mode,
     ) = _status_llm_route(account, instructions=instructions)
+    provider = _normalize_status_llm_provider(provider)
     if provider == "openai" and model == "<legacy>":
         model = "<Bot_Verhalten/OpenAI>"
     key_configured = _llm_key_configured(
@@ -696,14 +697,14 @@ def _llm_key_required_for_status(
     base_url: str,
     route_api_key_env: str = "",
 ) -> bool:
-    normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
+    normalized_provider = _normalize_status_llm_provider(provider)
     if normalized_provider == "openai":
         return True
     if normalized_provider in {"ollama", "local_ollama"}:
         return False
     if _status_model_uses_ollama(model):
         return False
-    if normalized_provider in {"huggingface", "hf", "groq", "gemini"}:
+    if normalized_provider in {"huggingface", "hf", "groq", "gemini", "vertex_ai"}:
         return True
     if normalized_provider == "litellm":
         if route_api_key_env:
@@ -808,14 +809,23 @@ def _direct_remote_fallback_key_status(
 
 
 def _status_fallback_model_requires_key(*, provider: str, model: object, base_url: str) -> bool:
-    normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
+    normalized_provider = _normalize_status_llm_provider(provider)
     if _status_model_uses_ollama(model):
         return False
     if _status_model_uses_remote_provider(model):
         return True
     if normalized_provider == "litellm":
         return not _status_base_url_is_loopback(base_url)
-    return normalized_provider in {"openai", "huggingface", "hf", "groq", "gemini"}
+    return normalized_provider in {"openai", "huggingface", "hf", "groq", "gemini", "vertex_ai"}
+
+
+def _normalize_status_llm_provider(provider: object) -> str:
+    try:
+        from TeeBotus.llm_client import normalize_llm_provider
+
+        return normalize_llm_provider(str(provider or ""))
+    except Exception:
+        return str(provider or "").strip().casefold().replace("-", "_")
 
 
 def _csv_count(value: object) -> int:

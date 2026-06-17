@@ -36,6 +36,8 @@ def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
         ("ollama", "ollama"),
         ("hf", "huggingface"),
         ("Google", "gemini"),
+        ("Vertex", "vertex_ai"),
+        ("google-vertex-ai", "vertex_ai"),
     ],
 )
 def test_normalize_llm_provider(value: str, expected: str) -> None:
@@ -125,6 +127,24 @@ def test_litellm_text_client_prefixes_provider_models_from_runtime_overrides(mon
     assert calls[0]["model"] == "ollama/llama3.1:8b"
     assert calls[0]["api_base"] == "http://localhost:11434"
     assert "api_key" not in calls[0]
+
+
+def test_litellm_text_client_prefixes_vertex_ai_models_from_runtime_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "vertex"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        provider="vertex",
+        model="gemini-2.5-flash",
+    ).create_reply("Ping", BotInstructions(openai_model="gpt-would-be-wrong"), None)
+
+    assert response.text == "vertex"
+    assert calls[0]["model"] == "vertex_ai/gemini-2.5-flash"
 
 
 def test_litellm_text_client_tries_fallback_models(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -339,13 +339,13 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
         return False
     if value.startswith(("ollama/", "ollama_chat/")):
         return False
-    if value.startswith(("openai/", "huggingface/", "groq/", "gemini/", "hf_pool/")):
+    if value.startswith(("openai/", "huggingface/", "groq/", "gemini/", "vertex_ai/", "hf_pool/")):
         return True
     if provider == "litellm":
         return True
     if provider == "ollama":
         return False
-    return provider in {"openai", "huggingface", "groq", "gemini", "hf_pool"}
+    return provider in {"openai", "huggingface", "groq", "gemini", "vertex_ai", "hf_pool"}
 
 
 __all__ = ["build_runtime_text_llm_client", "build_runtime_structured_decision_runner", "filter_runtime_fallback_models"]

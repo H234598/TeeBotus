@@ -429,7 +429,7 @@ Die zentralen Profil-Dateien sind:
 - `config/llm_profiles.yaml`
 - `config/llm_routing.yaml`
 
-Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama, Hugging Face, Groq, Gemini und OpenAI-kompatible LiteLLM-Modelle. Remote-Fallbacks sind standardmaessig aus. Ein Fallback auf ein Remote-Profil wird nur genutzt, wenn der jeweilige Codepfad explizit `allow_remote_fallback=True` setzt.
+Vorbereitete Profile decken lokale und Remote-Provider ab, unter anderem Ollama, Hugging Face, Groq, Gemini, Vertex AI und OpenAI-kompatible LiteLLM-Modelle. Remote-Fallbacks sind standardmaessig aus. Ein Fallback auf ein Remote-Profil wird nur genutzt, wenn der jeweilige Codepfad explizit `allow_remote_fallback=True` setzt.
 
 Zusaetzlich gibt es einen optionalen `hf_pool`-Provider unter `TeeBotus/llm/hf_pool/`. Er ist lazy, non-fatal und nicht Default: fehlende oder deaktivierte `config/hf_pool.yaml`-Ziele erscheinen im Doctor/Runtime-Status, brechen aber den Botstart nicht. Fallbacks greifen nur, wenn der Router sie explizit durch `allow_remote_fallback=True` erlaubt; Standardtests nutzen nur den MockExecutor. `OpenAICompatibleHFPoolExecutor` kann OpenAI-kompatible HF-Chat-Completions ausfuehren, ist aber nur per expliziter Injektion aktiv und bringt Token-Redaction, optionalen SQLite-Cooldown-State und Usage Events mit. Live-Hugging-Face-Tests muessen explizit aktiviert werden.
 Die vorbereitete, deaktivierte Modellmatrix deckt `normal_chat`,
@@ -497,6 +497,10 @@ TEEBOTUS_LLM_MODEL=ollama_chat/llama3.1:8b \
 TEEBOTUS_LLM_BASE_URL=http://127.0.0.1:11434 \
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
+
+Remote-Profile werden genauso per Profil geschaltet. `gemini_flash` erwartet
+`GEMINI_API_KEY`; `vertex_gemini_flash` erwartet
+`GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale Vertex/Google-Credentials.
 
 `--runtime-status` nutzt dieselbe effektive LLM-Aufloesung wie der Bot-Start. Er beruecksichtigt also `Bot_Verhalten.md`, Runtime-Overrides und deaktivierte LLMs gleich wie die Runtime-Fabrik. Lokale Ollama-Targets werden nur fuer effektiv aktive Ollama-Konfigurationen geprueft und melden gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
 

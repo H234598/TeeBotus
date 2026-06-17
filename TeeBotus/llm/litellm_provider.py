@@ -21,6 +21,7 @@ LITELLM_PROVIDER_ALIASES = {
     "hf",
     "groq",
     "gemini",
+    "vertex_ai",
 }
 KNOWN_LITELLM_MODEL_PREFIXES = (
     "openai/",
@@ -226,6 +227,8 @@ def normalize_llm_provider(value: str) -> str:
         return "groq"
     if normalized in {"gemini", "google", "google_ai"}:
         return "gemini"
+    if normalized in {"vertex", "vertex_ai", "google_vertex", "google_vertex_ai"}:
+        return "vertex_ai"
     return normalized
 
 
@@ -269,6 +272,7 @@ def _litellm_model_name(provider: str, model: str) -> str:
         "huggingface": "huggingface/",
         "groq": "groq/",
         "gemini": "gemini/",
+        "vertex_ai": "vertex_ai/",
     }
     prefix = prefixes.get(provider, "")
     if prefix and not value.startswith(prefix):
