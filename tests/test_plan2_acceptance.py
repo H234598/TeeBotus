@@ -908,6 +908,7 @@ def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: P
                         "legacy_plaintext_import": {
                             "sources": 1,
                             "entries": 2,
+                            "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
                             "dry_run_command": (
                                 "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
                                 "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
@@ -971,6 +972,7 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
                         "legacy_plaintext_import": {
                             "sources": 1,
                             "entries": 2,
+                            "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
                             "dry_run_command": (
                                 "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
                                 "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
@@ -1074,6 +1076,70 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_metadata_healt
     assert any("metadata_health.items[0].account_ids contains invalid account ids" in error for error in errors)
 
 
+def test_memory_recovery_artifact_validation_rejects_inconsistent_legacy_users(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
+                        "accounts": [],
+                        "legacy_plaintext_import": {
+                            "sources": 2,
+                            "entries": 4,
+                            "users": [
+                                {"user_id": "395935293", "entries": 1, "path": "legacy/Demo/data/users/395935293"},
+                                {"user_id": "395935293", "entries": 2, "path": ""},
+                                "not-an-object",
+                            ],
+                            "dry_run_command": (
+                                "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
+                                "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata "
+                                "--json-output /tmp/import-Demo.json --markdown-output /tmp/import-Demo.md"
+                            ),
+                        },
+                    }
+                ],
+                "totals": {
+                    "accounts": 0,
+                    "recoverable_accounts": 0,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 0,
+                    "no_source_accounts": 0,
+                    "sources": 0,
+                    "readable_sources": 0,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 2,
+                    "legacy_plaintext_entries": 4,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("legacy users length must match sources for Demo" in error for error in errors)
+    assert any("legacy_plaintext_import.users[1].user_id is duplicated" in error for error in errors)
+    assert any("legacy_plaintext_import.users[1].path must be non-empty" in error for error in errors)
+    assert any("legacy_plaintext_import.users[2] must be an object" in error for error in errors)
+
+
 def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(tmp_path: Path) -> None:
     output_path = tmp_path / "recovery.json"
     output_path.write_text(
@@ -1089,6 +1155,7 @@ def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(
                         "legacy_plaintext_import": {
                             "sources": 1,
                             "entries": 2,
+                            "users": [{"user_id": "395935293", "entries": 2, "path": "legacy/Demo/data/users/395935293"}],
                             "dry_run_command": (
                                 "python3 scripts/import_legacy_user_memory.py --legacy-instances-dir legacy "
                                 "--target-instances-dir instances --instance Demo --replace-unreadable-account-metadata"

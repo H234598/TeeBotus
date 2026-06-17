@@ -850,8 +850,10 @@ def _derive_memory_recovery_totals(instances: Sequence[Any]) -> dict[str, int]:
                             totals["unreadable_sources"] += 1
         legacy = instance.get("legacy_plaintext_import")
         if isinstance(legacy, Mapping):
-            totals["legacy_plaintext_sources"] += int(legacy.get("sources", 0) or 0)
-            totals["legacy_plaintext_entries"] += int(legacy.get("entries", 0) or 0)
+            if _is_nonnegative_integer(legacy.get("sources")):
+                totals["legacy_plaintext_sources"] += int(legacy.get("sources") or 0)
+            if _is_nonnegative_integer(legacy.get("entries")):
+                totals["legacy_plaintext_entries"] += int(legacy.get("entries") or 0)
     return totals
 
 
@@ -871,6 +873,49 @@ def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: 
             errors.append(f"{prefix}memory recovery legacy dry_run_command missing metadata replacement flag for {instance_name}")
         if "--json-output" not in command or "--markdown-output" not in command:
             errors.append(f"{prefix}memory recovery legacy dry_run_command must write JSON and Markdown artifacts for {instance_name}")
+        errors.extend(_memory_recovery_legacy_users_errors(legacy, instance_name=instance_name, prefix=prefix))
+    return errors
+
+
+def _memory_recovery_legacy_users_errors(legacy: Mapping[str, Any], *, instance_name: str, prefix: str) -> list[str]:
+    errors: list[str] = []
+    sources = legacy.get("sources")
+    entries = legacy.get("entries")
+    if not _is_nonnegative_integer(sources):
+        errors.append(f"{prefix}memory recovery legacy sources must be a non-negative integer for {instance_name}")
+    if not _is_nonnegative_integer(entries):
+        errors.append(f"{prefix}memory recovery legacy entries must be a non-negative integer for {instance_name}")
+    users = legacy.get("users")
+    if not isinstance(users, list):
+        errors.append(f"{prefix}memory recovery legacy users must be a list for {instance_name}")
+        return errors
+    if _is_nonnegative_integer(sources) and int(sources or 0) != len(users):
+        errors.append(f"{prefix}memory recovery legacy users length must match sources for {instance_name}")
+    seen_user_ids: set[str] = set()
+    summed_entries = 0
+    entries_valid = True
+    for user_index, user in enumerate(users):
+        label = f"{instance_name}.legacy_plaintext_import.users[{user_index}]"
+        if not isinstance(user, Mapping):
+            errors.append(f"{prefix}memory recovery {label} must be an object")
+            entries_valid = False
+            continue
+        user_id = str(user.get("user_id") or "").strip()
+        if not user_id:
+            errors.append(f"{prefix}memory recovery {label}.user_id must be non-empty")
+        elif user_id in seen_user_ids:
+            errors.append(f"{prefix}memory recovery {label}.user_id is duplicated")
+        seen_user_ids.add(user_id)
+        if not str(user.get("path") or "").strip():
+            errors.append(f"{prefix}memory recovery {label}.path must be non-empty")
+        user_entries = user.get("entries")
+        if not _is_nonnegative_integer(user_entries):
+            errors.append(f"{prefix}memory recovery {label}.entries must be a non-negative integer")
+            entries_valid = False
+            continue
+        summed_entries += int(user_entries or 0)
+    if entries_valid and _is_nonnegative_integer(entries) and int(entries or 0) != summed_entries:
+        errors.append(f"{prefix}memory recovery legacy users entries sum must match entries for {instance_name}")
     return errors
 
 
