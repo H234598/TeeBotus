@@ -12,6 +12,7 @@ from TeeBotus.benchmarks.core import (
     result,
     stable_backend_ranking,
 )
+from TeeBotus.benchmarks.hf_pool import benchmark_hf_pool_eval_matrix, benchmark_hf_pool_live, benchmark_hf_pool_quick
 from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
 
 __all__ = [
@@ -24,6 +25,9 @@ __all__ = [
     "build_comparisons",
     "build_quality_gate",
     "benchmark_gemini_free_tier_guard",
+    "benchmark_hf_pool_eval_matrix",
+    "benchmark_hf_pool_live",
+    "benchmark_hf_pool_quick",
     "benchmark_llm_router",
     "result",
     "stable_backend_ranking",
