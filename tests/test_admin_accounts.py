@@ -287,6 +287,23 @@ def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path)
     assert (timestamp_dir / "manifest.json").exists()
 
 
+def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    account_id = bad_store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    metadata_health = report["instances"][0]["metadata_health"]
+    assert metadata_health["readable"] is False
+    assert metadata_health["unreadable_items"] == 3
+    kinds = {item["kind"] for item in metadata_health["items"]}
+    assert kinds == {"account_index", "identity_mapping", "accounts_dir"}
+    accounts_dir_item = next(item for item in metadata_health["items"] if item["kind"] == "accounts_dir")
+    assert accounts_dir_item["account_ids"] == [account_id]
+
+
 def test_memory_recovery_metadata_quarantine_refuses_running_runtime(tmp_path: Path) -> None:
     make_instance(tmp_path)
 
@@ -347,6 +364,7 @@ def test_memory_recovery_text_report_is_markdown_structured(tmp_path: Path) -> N
     assert "# TeeBotus Account-Memory Recovery Report" in text
     assert "## Totals" in text
     assert "## Instance: Depressionsbot" in text
+    assert "- metadata_health: readable=`True` unreadable_items=`0`" in text
     assert "- recovery_status: `empty`" in text
     assert text.index("## Totals") < text.index("## Instance: Depressionsbot")
 
@@ -370,6 +388,7 @@ def test_memory_recovery_report_counts_legacy_plaintext_import_sources(tmp_path:
     legacy = report["instances"][0]["legacy_plaintext_import"]
     assert legacy["sources"] == 1
     assert legacy["entries"] == 2
+    assert legacy["users"] == [{"user_id": "395935293", "entries": 2, "path": str(user_dir)}]
     assert "--replace-unreadable-account-metadata" in legacy["dry_run_command"]
     assert "--json-output" in legacy["dry_run_command"]
     assert "--markdown-output" in legacy["dry_run_command"]
@@ -396,6 +415,7 @@ def test_memory_recovery_report_resolves_legacy_backup_root(tmp_path: Path) -> N
     assert legacy["legacy_instances_dir"] == str(backup_root / "instances.bak")
     assert legacy["sources"] == 2
     assert legacy["entries"] == 2
+    assert [user["user_id"] for user in legacy["users"]] == ["1682346404", "395935293"]
     assert "--apply" in legacy["apply_command"]
 
 

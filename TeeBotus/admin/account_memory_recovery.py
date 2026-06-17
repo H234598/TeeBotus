@@ -116,6 +116,7 @@ def build_instance_recovery_report(
     result = {
         "instance": instance_name,
         "accounts_root": str(accounts_root),
+        "metadata_health": _metadata_health_report(accounts_root, instance_name, provider),
         "accounts": account_reports,
         "source_count": len(sources),
         "sources": [{"name": source.name, "kind": source.kind, "path": str(source.path)} for source in sources],
@@ -147,9 +148,26 @@ def render_text_report(report: Mapping[str, Any]) -> str:
         if not isinstance(instance, Mapping):
             continue
         lines.extend(["", f"## Instance: {instance.get('instance', '')}", "", f"- source_count: `{instance.get('source_count', 0)}`"])
+        metadata_health = instance.get("metadata_health")
+        if isinstance(metadata_health, Mapping):
+            lines.append(
+                f"- metadata_health: readable=`{metadata_health.get('readable', False)}` "
+                f"unreadable_items=`{metadata_health.get('unreadable_items', 0)}`"
+            )
+            for item in metadata_health.get("items", []):
+                if not isinstance(item, Mapping):
+                    continue
+                account_ids = item.get("account_ids")
+                account_text = f" accounts={', '.join(str(value)[:12] for value in account_ids)}" if isinstance(account_ids, list) and account_ids else ""
+                lines.append(f"  - {item.get('kind', '')}: `{item.get('path', '')}`{account_text} error={item.get('error', '')}")
         legacy = instance.get("legacy_plaintext_import")
         if isinstance(legacy, Mapping):
             lines.append(f"- legacy_plaintext_import: sources=`{legacy.get('sources', 0)}` entries=`{legacy.get('entries', 0)}` path=`{legacy.get('path', '')}`")
+            users = legacy.get("users")
+            if isinstance(users, list) and users:
+                user_text = ", ".join(f"{user.get('user_id')}({user.get('entries', 0)})" for user in users if isinstance(user, Mapping))
+                if user_text:
+                    lines.append(f"  - users: `{user_text}`")
             command = str(legacy.get("dry_run_command") or "").strip()
             if command:
                 lines.append(f"  - dry_run_command: `{command}`")
@@ -399,6 +417,7 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
     accounts_dir = store.accounts_dir
     if accounts_dir.exists():
         unreadable_profiles: list[str] = []
+        unreadable_profile_accounts: list[str] = []
         for account_dir in sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name)):
             profile_path = account_dir / ACCOUNT_PROFILE_FILENAME
             if not profile_path.exists():
@@ -407,9 +426,40 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
                 store.vault.read_json(profile_path, {})
             except AccountStoreError as exc:
                 unreadable_profiles.append(f"{account_dir.name}:{exc}")
+                unreadable_profile_accounts.append(account_dir.name)
         if unreadable_profiles:
-            items.append({"kind": "accounts_dir", "path": accounts_dir, "error": "; ".join(unreadable_profiles[:5])})
+            items.append(
+                {
+                    "kind": "accounts_dir",
+                    "path": accounts_dir,
+                    "account_ids": unreadable_profile_accounts,
+                    "error": "; ".join(unreadable_profiles[:5]),
+                }
+            )
     return items
+
+
+def _metadata_health_report(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> dict[str, Any]:
+    try:
+        items = _unreadable_metadata_items(accounts_root, instance_name, provider)
+    except AccountStoreError as exc:
+        items = [{"kind": "account_store", "path": accounts_root, "error": str(exc)}]
+    normalized_items = []
+    for item in items:
+        account_ids = item.get("account_ids") if isinstance(item.get("account_ids"), list) else []
+        normalized_items.append(
+            {
+                "kind": str(item.get("kind") or ""),
+                "path": str(item.get("path") or ""),
+                "account_ids": [str(account_id) for account_id in account_ids if TOKEN_HEX_RE.fullmatch(str(account_id))],
+                "error": str(item.get("error") or ""),
+            }
+        )
+    return {
+        "readable": not normalized_items,
+        "unreadable_items": len(normalized_items),
+        "items": normalized_items,
+    }
 
 
 def _quarantine_instance_unrecoverable(
@@ -825,6 +875,7 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
     entries = 0
     encrypted_sources = 0
     malformed_sources = 0
+    users: list[dict[str, Any]] = []
     if instance_users_dir.exists():
         for user_dir in sorted(path for path in instance_users_dir.iterdir() if path.is_dir()):
             entries_path = user_dir / USER_MEMORY_ENTRIES_FILENAME
@@ -834,6 +885,7 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
             if source_kind == "plaintext":
                 sources += 1
                 entries += source_entries
+                users.append({"user_id": user_dir.name, "entries": source_entries, "path": str(user_dir)})
             elif source_kind == "encrypted":
                 encrypted_sources += 1
             else:
@@ -877,6 +929,7 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
         "path": str(instance_users_dir),
         "sources": sources,
         "entries": entries,
+        "users": users,
         "encrypted_sources": encrypted_sources,
         "malformed_sources": malformed_sources,
         "dry_run_command": command,
