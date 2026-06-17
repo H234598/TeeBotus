@@ -33,6 +33,11 @@ from TeeBotus.benchmarks.source_quality import (
     benchmark_source_harvester_promote_index_flow,
     benchmark_source_harvester_quality_gate,
 )
+from TeeBotus.benchmarks.youtube import (
+    benchmark_youtube_local_job_queue,
+    benchmark_youtube_local_pipeline_cache,
+    benchmark_youtube_parser,
+)
 
 __all__ = [
     "BenchmarkResult",
@@ -62,6 +67,9 @@ __all__ = [
     "benchmark_retrieval_embedding_reranker_matrix",
     "benchmark_source_harvester_promote_index_flow",
     "benchmark_source_harvester_quality_gate",
+    "benchmark_youtube_local_job_queue",
+    "benchmark_youtube_local_pipeline_cache",
+    "benchmark_youtube_parser",
     "memory_results",
     "result",
     "stable_backend_ranking",

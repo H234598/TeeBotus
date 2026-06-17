@@ -20,6 +20,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     proactive = importlib.import_module("TeeBotus.benchmarks.proactive")
     qdrant = importlib.import_module("TeeBotus.benchmarks.qdrant")
     source_quality = importlib.import_module("TeeBotus.benchmarks.source_quality")
+    youtube = importlib.import_module("TeeBotus.benchmarks.youtube")
     package_dir = Path(core.__file__).resolve().parent
 
     assert (package_dir / "__init__.py").exists()
@@ -33,6 +34,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "proactive.py").exists()
     assert (package_dir / "qdrant.py").exists()
     assert (package_dir / "source_quality.py").exists()
+    assert (package_dir / "youtube.py").exists()
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
@@ -57,6 +59,9 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
     assert benchmark_module._benchmark_source_harvester_quality_gate is source_quality.benchmark_source_harvester_quality_gate
     assert benchmark_module._benchmark_source_harvester_promote_index_flow is source_quality.benchmark_source_harvester_promote_index_flow
+    assert benchmark_module._benchmark_youtube_parser is youtube.benchmark_youtube_parser
+    assert benchmark_module._benchmark_youtube_local_job_queue is youtube.benchmark_youtube_local_job_queue
+    assert benchmark_module._benchmark_youtube_local_pipeline_cache is youtube.benchmark_youtube_local_pipeline_cache
 
 
 def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
