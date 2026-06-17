@@ -108,6 +108,37 @@ def main(argv: list[str] | None = None) -> int:
     running_processes = _detect_running_teebotus_processes()
     if args.apply and not args.allow_running_bot and rehearsal_copy_dir is None:
         if running_processes:
+            if args.json_output or args.markdown_output:
+                previous_env = _apply_backend(args.backend)
+                try:
+                    requested_legacy_instances_dir = Path(args.legacy_instances_dir)
+                    stats = import_legacy_user_memory(
+                        legacy_instances_dir=requested_legacy_instances_dir,
+                        target_instances_dir=target_instances_dir,
+                        instances=tuple(args.instance),
+                        apply=False,
+                        replace_unreadable=args.replace_unreadable,
+                        replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
+                        backup_current=not args.no_backup_current,
+                    )
+                finally:
+                    _restore_env(previous_env)
+                report = _build_import_report(
+                    stats,
+                    mode="apply-blocked",
+                    legacy_instances_dir=Path(stats.effective_legacy_instances_dir or args.legacy_instances_dir),
+                    requested_legacy_instances_dir=Path(stats.requested_legacy_instances_dir or args.legacy_instances_dir),
+                    target_instances_dir=target_instances_dir,
+                    requested_target_instances_dir=requested_target_instances_dir,
+                    instances=tuple(args.instance),
+                    backend=args.backend,
+                    replace_unreadable=args.replace_unreadable,
+                    replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
+                    backup_current=not args.no_backup_current,
+                    allow_running_bot=args.allow_running_bot,
+                    running_processes=running_processes,
+                )
+                _write_import_report_artifacts(report, json_output=args.json_output, markdown_output=args.markdown_output)
             print("Refusing legacy memory import --apply because TeeBotus-related processes are running:", file=sys.stderr)
             for process in running_processes:
                 print(f"  pid={process['pid']} cmd={process['cmdline']}", file=sys.stderr)
@@ -145,10 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         rehearsal_copy_dir=rehearsal_copy_dir,
         running_processes=running_processes,
     )
-    if args.json_output:
-        Path(args.json_output).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    if args.markdown_output:
-        Path(args.markdown_output).write_text(_render_markdown_report(report), encoding="utf-8")
+    _write_import_report_artifacts(report, json_output=args.json_output, markdown_output=args.markdown_output)
     print(
         f"legacy-user-memory-import {mode}: sources={stats.sources} imported_sources={stats.imported_sources} "
         f"skipped_sources={stats.skipped_sources} malformed_sources={stats.malformed_sources} "
@@ -159,6 +187,13 @@ def main(argv: list[str] | None = None) -> int:
         f"account_store_resets={stats.account_store_resets}"
     )
     return 0
+
+
+def _write_import_report_artifacts(report: dict[str, Any], *, json_output: str, markdown_output: str) -> None:
+    if json_output:
+        Path(json_output).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if markdown_output:
+        Path(markdown_output).write_text(_render_markdown_report(report), encoding="utf-8")
 
 
 def import_legacy_user_memory(

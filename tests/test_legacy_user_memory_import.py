@@ -794,6 +794,49 @@ def test_legacy_user_memory_import_apply_refuses_running_bot(tmp_path: Path, mon
     assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
 
 
+def test_legacy_user_memory_import_apply_block_writes_preflight_reports(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr(
+        legacy_import,
+        "_detect_running_teebotus_processes",
+        lambda: [{"pid": "123", "cmdline": "python3 -m TeeBotus --all --channels telegram,signal"}],
+    )
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    json_output = tmp_path / "blocked.json"
+    markdown_output = tmp_path / "blocked.md"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--apply",
+            "--json-output",
+            str(json_output),
+            "--markdown-output",
+            str(markdown_output),
+        ]
+    )
+
+    assert result == 2
+    assert "Refusing legacy memory import --apply" in capsys.readouterr().err
+    payload = json.loads(json_output.read_text(encoding="utf-8"))
+    markdown = markdown_output.read_text(encoding="utf-8")
+    assert payload["mode"] == "apply-blocked"
+    assert payload["apply_safety"]["apply_allowed_now"] is False
+    assert payload["apply_safety"]["apply_requires_stopped_bot"] is True
+    assert payload["apply_safety"]["running_bot_process_count"] == 1
+    assert payload["totals"]["entries_imported"] == 1
+    assert payload["events"][0]["action"] == "would-import"
+    assert "mode: `apply-blocked`" in markdown
+    assert "Running Bot Processes" in markdown
+    store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
+    assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
+
+
 def test_legacy_user_memory_import_apply_can_override_running_bot_guard(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setattr(
