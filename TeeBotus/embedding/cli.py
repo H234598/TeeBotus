@@ -63,7 +63,7 @@ def _build_parser() -> argparse.ArgumentParser:
     memory.add_argument(
         "--include-legacy-raw-account-id-cleanup",
         action="store_true",
-        help="Also delete old Qdrant cache payloads scoped by raw account_id. This sends the account ID to local Qdrant for cleanup.",
+        help="Also delete old Qdrant cache payloads scoped by raw account_id, including schema-less legacy payloads. This sends the account ID to local Qdrant for cleanup.",
     )
     memory.set_defaults(command="memory-rebuild")
 

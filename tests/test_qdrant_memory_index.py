@@ -350,6 +350,7 @@ def test_qdrant_memory_delete_account_can_explicitly_remove_legacy_raw_account_p
     fake_qdrant = _FakeQdrant()
     index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
     legacy_point_id = "legacy-a"
+    schema_less_legacy_point_id = "legacy-schema-less"
     fake_qdrant.points[legacy_point_id] = {
         "id": legacy_point_id,
         "vector": [0.0] * USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
@@ -361,6 +362,15 @@ def test_qdrant_memory_delete_account_can_explicitly_remove_legacy_raw_account_p
             "memory_id": "legacy_mem",
         },
     }
+    fake_qdrant.points[schema_less_legacy_point_id] = {
+        "id": schema_less_legacy_point_id,
+        "vector": [0.0] * USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+        "payload": {
+            "instance_name": "Depressionsbot",
+            "account_id": ACCOUNT_A,
+            "memory_id": "schema_less_legacy_mem",
+        },
+    }
 
     index.delete_account(
         instance_name="Depressionsbot",
@@ -369,7 +379,8 @@ def test_qdrant_memory_delete_account_can_explicitly_remove_legacy_raw_account_p
     )
 
     assert legacy_point_id not in fake_qdrant.points
-    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} in fake_qdrant.calls[-1]["body"]["filter"]["must"]
+    assert schema_less_legacy_point_id not in fake_qdrant.points
+    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} not in fake_qdrant.calls[-1]["body"]["filter"]["must"]
     assert {"key": "account_id", "match": {"value": ACCOUNT_A}} in fake_qdrant.calls[-1]["body"]["filter"]["must"]
 
 

@@ -309,7 +309,6 @@ def _qdrant_legacy_account_filter(*, instance_name: str, account_id: str) -> dic
     return {
         "must": [
             {"key": "instance_name", "match": {"value": instance_name}},
-            {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}},
             {"key": "account_id", "match": {"value": account_id}},
         ]
     }

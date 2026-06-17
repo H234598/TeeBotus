@@ -875,7 +875,8 @@ Alte v2-Qdrant-Cachepunkte konnten noch rohe `account_id` im Payload tragen.
 Der normale Runtime-Reset und `memory-rebuild` senden keine rohe Account-ID an
 Qdrant. Nur fuer eine bewusste lokale Altlast-Bereinigung gibt es den expliziten
 Maintenance-Flag `--include-legacy-raw-account-id-cleanup`; dieser sendet die
-betroffene Account-ID zum Loeschen der alten lokalen Qdrant-Payloads.
+betroffene Account-ID zum Loeschen der alten lokalen Qdrant-Payloads, auch wenn
+diese noch kein `schema`-Feld hatten.
 
 `TeeBotus.runtime.qdrant_bibliothekar.QdrantBibliothekarIndex` ist der
 entsprechende opt-in Sockel fuer Bibliothekar-Chunks. Er indexiert Testchunks
