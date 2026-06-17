@@ -1196,7 +1196,7 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
 
 
 def _legacy_import_event_account_id_is_valid(account_id: str) -> bool:
-    return bool(ACCOUNT_ID_RE.fullmatch(account_id) or account_id in {"<new>", "<metadata-unreadable>"})
+    return bool(ACCOUNT_ID_RE.fullmatch(account_id) or account_id in {"<new>", "<metadata-unreadable>", "<not-created>"})
 
 
 def _legacy_import_scope_errors(payload: Mapping[str, Any], argv: Sequence[str], *, path: Path | None = None) -> list[str]:

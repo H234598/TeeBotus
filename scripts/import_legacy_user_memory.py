@@ -173,8 +173,13 @@ def import_legacy_user_memory(
     selected = set(instances)
     reset_account_stores: set[Path] = set()
     user_dirs = _legacy_user_dirs(legacy_instances_dir, selected)
+    entries_by_user_dir = {
+        user_dir: _read_plaintext_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
+        for user_dir in user_dirs
+    }
+    importable_user_dirs = [user_dir for user_dir, entries in entries_by_user_dir.items() if entries]
     if apply and replace_unreadable_account_metadata:
-        for instance_name in _instances_with_legacy_user_dirs(user_dirs):
+        for instance_name in _instances_with_legacy_user_dirs(importable_user_dirs):
             target_root = target_instances_dir / instance_name / "data" / "accounts"
             target_store = AccountStore(target_root, instance_name, secret_provider=provider)
             if not _account_store_metadata_unreadable(target_store):
@@ -186,6 +191,23 @@ def import_legacy_user_memory(
     for user_dir in user_dirs:
         stats.sources += 1
         instance_name = user_dir.parents[2].name
+        entries = entries_by_user_dir[user_dir]
+        stats.entries_seen += len(entries)
+        if not entries:
+            stats.skipped_sources += 1
+            stats.events.append(
+                _event(
+                    instance_name=instance_name,
+                    legacy_user_id=user_dir.name,
+                    account_id="<not-created>",
+                    entries=0,
+                    imported=0,
+                    action="skip-empty",
+                )
+            )
+            print(f"instance={instance_name} legacy_user={user_dir.name} account=<not-created> entries=0 action=skip-empty")
+            continue
+
         target_root = target_instances_dir / instance_name / "data" / "accounts"
         target_store = AccountStore(target_root, instance_name, secret_provider=provider)
         identity = telegram_identity_key(user_dir.name)
@@ -236,23 +258,6 @@ def import_legacy_user_memory(
         else:
             account_id = "<new>"
             stats.accounts_created += 1
-
-        entries = _read_plaintext_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
-        stats.entries_seen += len(entries)
-        if not entries:
-            stats.skipped_sources += 1
-            stats.events.append(
-                _event(
-                    instance_name=instance_name,
-                    legacy_user_id=user_dir.name,
-                    account_id=account_id,
-                    entries=0,
-                    imported=0,
-                    action="skip-empty",
-                )
-            )
-            print(f"instance={instance_name} legacy_user={user_dir.name} account={account_id} entries=0 action=skip-empty")
-            continue
 
         target_entries: list[dict[str, Any]] = []
         target_unreadable = False

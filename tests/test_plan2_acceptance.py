@@ -1551,6 +1551,67 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
     assert errors == []
 
 
+def test_legacy_import_artifact_validation_accepts_skip_empty_without_created_account(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 0,
+                    "skipped_sources": 1,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        account_id="<not-created>",
+                        action="skip-empty",
+                        entries=0,
+                        imported=0,
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert errors == []
+
+
 def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_events(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
     markdown_path = tmp_path / "import-demo.md"
