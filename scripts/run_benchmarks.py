@@ -56,10 +56,20 @@ from TeeBotus.embedding import FakeEmbeddingProvider, KeywordRerankerProvider  #
 from TeeBotus.bibliothekar.source_harvester import SourceHarvester  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
 from TeeBotus.llm.base import LLMResponse  # noqa: E402
+from TeeBotus.llm.free_tier import (  # noqa: E402
+    GeminiFreeTierGuard,
+    reset_gemini_free_tier_budget_state,
+    resolve_gemini_free_tier_limits,
+)
+from TeeBotus.llm.gemini_limits_refresh import (  # noqa: E402
+    cached_gemini_free_tier_limit_values,
+    refresh_gemini_free_tier_limits_if_due,
+)
 from TeeBotus.llm.hf_pool.executor import OpenAICompatibleHFPoolExecutor  # noqa: E402
 from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines  # noqa: E402
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider  # noqa: E402
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState  # noqa: E402
+from TeeBotus.llm.keyring import RotatingAPIKeyRing, resolve_gemini_api_key_ring  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route  # noqa: E402
 from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
 from TeeBotus.mcp_tools import MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry  # noqa: E402
@@ -105,6 +115,7 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "database_fallback",
+        "gemini_free_tier",
         "hf_pool",
         "langgraph_flows",
         "llm_router",
@@ -144,6 +155,7 @@ REQUIRED_BENCHMARK_NAMES = frozenset(
         "youtube_local_pipeline_cache_no_openai",
         "status_doctor_runtime_dependency_health",
         "database_fallback_policy",
+        "gemini_free_tier_guard_cache_rotation",
         "langgraph_bibliothekar_deep_query",
         "langgraph_bibliothekar_linear",
         "langgraph_bibliothekar_fake_installed",
@@ -226,6 +238,7 @@ def run_benchmarks(
     results.append(_benchmark_source_harvester_quality_gate(iterations=iterations))
     results.append(_benchmark_source_harvester_promote_index_flow(iterations=iterations))
     results.append(_benchmark_llm_router(iterations=iterations))
+    results.append(_benchmark_gemini_free_tier_guard(iterations=iterations))
     results.append(_benchmark_hf_pool_quick(iterations=iterations))
     results.append(_benchmark_hf_pool_eval_matrix(iterations=iterations))
     if live_hf:
@@ -1280,6 +1293,127 @@ def _benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
             "network_calls": 0,
         },
     )
+
+
+def _benchmark_gemini_free_tier_guard(*, iterations: int) -> BenchmarkResult:
+    with tempfile.TemporaryDirectory(prefix="teebotus-gemini-bench-") as tmp:
+        cache_path = Path(tmp) / "gemini_free_tier_limits.json"
+        env = {
+            "TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path),
+            "TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL": "https://bench.local/gemini-free-tier.json",
+            "TEEBOTUS_GEMINI_API_KEYS_ACCOUNT_1": "bench-a1,bench-a2",
+            "TEEBOTUS_GEMINI_API_KEYS_ACCOUNT_2": "bench-b1,bench-b2",
+            "TEEBOTUS_GEMINI_API_KEYS_ACCOUNT_3": "bench-c1,bench-c2",
+        }
+        refresh = refresh_gemini_free_tier_limits_if_due(
+            env,
+            force=True,
+            now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc),
+            fetcher=lambda _url, _timeout: json.dumps(
+                {
+                    "models": {
+                        "gemini-2.5-flash": {
+                            "rpm": 2,
+                            "tpm": 100,
+                            "rpd": 3,
+                            "reserve_tokens": 10,
+                        }
+                    }
+                }
+            ),
+        )
+        cached_limits = cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash")
+        limits = resolve_gemini_free_tier_limits(env, provider="litellm", model="gemini/gemini-2.5-flash")
+        ring_keys = resolve_gemini_api_key_ring(env)
+        ring = RotatingAPIKeyRing(ring_keys, name="benchmark-gemini-free-tier")
+        if ring_keys:
+            ring.mark_success(ring_keys[0])
+        reset_gemini_free_tier_budget_state()
+        guard = GeminiFreeTierGuard(
+            limits,
+            now=lambda: datetime(2026, 6, 17, 12, 0, tzinfo=timezone.utc),
+        )
+
+        blocked_reasons: list[str] = []
+        rotated_to: list[str] = []
+        allowed = 0
+        blocked = 0
+
+        def exercise_once(index: int) -> None:
+            nonlocal allowed, blocked
+            active_key = ring.ordered_keys()[0]
+            quota_owner = f"{active_key}:{index}"
+            first = guard.reserve(
+                quota_owner=quota_owner,
+                model="gemini/gemini-2.5-flash",
+                estimated_input_tokens=85,
+            )
+            second = guard.reserve(
+                quota_owner=quota_owner,
+                model="gemini/gemini-2.5-flash",
+                estimated_input_tokens=6,
+            )
+            allowed += 1 if first.allowed else 0
+            blocked += 0 if second.allowed else 1
+            if not second.allowed:
+                blocked_reasons.append(second.reason)
+                ring.mark_limited(active_key)
+            rotated_key = ring.ordered_keys()[0]
+            rotated_to.append(rotated_key)
+            third = guard.reserve(
+                quota_owner=f"{rotated_key}:{index}",
+                model="gemini/gemini-2.5-flash",
+                estimated_input_tokens=6,
+            )
+            allowed += 1 if third.allowed else 0
+            if ring_keys:
+                ring.mark_success(ring_keys[0])
+
+        total_ms = _timed_ms(lambda: [exercise_once(index) for index in range(iterations)])
+        expected_order = ("bench-a1", "bench-b1", "bench-c1", "bench-a2", "bench-b2", "bench-c2")
+        payload = {
+            "cached_limits": cached_limits,
+            "refresh_status": refresh.status,
+            "ring_size": len(ring_keys),
+            "allowed": allowed,
+            "blocked": blocked,
+            "blocked_reasons": blocked_reasons[:3],
+            "rotated_to": rotated_to[:3],
+        }
+        details = {
+            "refresh_status": refresh.status,
+            "cached_limits": cached_limits,
+            "resolved_summary": limits.status_summary(),
+            "ring_size": len(ring_keys),
+            "ring_order_ok": ring_keys == expected_order,
+            "blocked_before_provider": blocked == iterations,
+            "rotation_after_limit_ok": all(key == "bench-b1" for key in rotated_to),
+            "allowed_reservations": allowed,
+            "blocked_reservations": blocked,
+            "blocked_reason_contains_tpm": any("TPM free-tier budget" in reason for reason in blocked_reasons),
+            "cache_file_written": cache_path.exists(),
+            "network_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+            "llm_calls": 0,
+            "openai_calls": 0,
+        }
+        return _result(
+            name="gemini_free_tier_guard_cache_rotation",
+            category="gemini_free_tier",
+            iterations=iterations * 3,
+            total_ms=total_ms,
+            ok=refresh.status == "ok"
+            and cached_limits == {"rpm": 2, "tpm": 100, "rpd": 3, "reserve_tokens": 10}
+            and details["ring_order_ok"]
+            and details["blocked_before_provider"]
+            and details["rotation_after_limit_ok"],
+            errors=0,
+            payload_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+            index_bytes=cache_path.stat().st_size if cache_path.exists() else 0,
+            note="gemini free-tier guard and key rotation",
+            details=details,
+        )
 
 
 def _benchmark_client_provider(client: object | None) -> str:

@@ -42,6 +42,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert {
         "account_memory",
         "bibliothekar",
+        "gemini_free_tier",
         "hf_pool",
         "llm_router",
         "pydantic_ai",
@@ -146,6 +147,19 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "ollama_chat/qwen2.5:7b",
     ]
     assert llm_router["details"]["network_calls"] == 0
+    gemini_free_tier = next(result for result in suite["results"] if result["name"] == "gemini_free_tier_guard_cache_rotation")
+    assert gemini_free_tier["ok"] is True
+    assert gemini_free_tier["category"] == "gemini_free_tier"
+    assert gemini_free_tier["details"]["refresh_status"] == "ok"
+    assert gemini_free_tier["details"]["cached_limits"] == {"rpm": 2, "tpm": 100, "rpd": 3, "reserve_tokens": 10}
+    assert gemini_free_tier["details"]["resolved_summary"] == "on(rpm=2,tpm=100,rpd=3,reserve=10)"
+    assert gemini_free_tier["details"]["ring_size"] == 6
+    assert gemini_free_tier["details"]["ring_order_ok"] is True
+    assert gemini_free_tier["details"]["blocked_before_provider"] is True
+    assert gemini_free_tier["details"]["rotation_after_limit_ok"] is True
+    assert gemini_free_tier["details"]["blocked_reason_contains_tpm"] is True
+    assert gemini_free_tier["details"]["network_calls"] == 0
+    assert gemini_free_tier["details"]["provider_calls"] == 0
     hf_pool = next(result for result in suite["results"] if result["name"] == "hf_pool_quick_health")
     assert hf_pool["ok"] is True
     assert hf_pool["category"] == "hf_pool"
@@ -330,6 +344,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "bibliothekar_llamaindex_fake_query" in markdown
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "pydantic_structured_decisions" in markdown
+    assert "gemini_free_tier_guard_cache_rotation" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "langgraph_source_harvester_workflow" in markdown

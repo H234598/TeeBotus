@@ -2238,6 +2238,7 @@ Abdecken:
 - Account-Memory: JSON/SQL/PostgreSQL-Pfade, Lesen, Schreiben, Suche, Index-Rebuild, Migration.
 - Bibliothekar: lokaler Store, Haystack/Qdrant-Backend, Indexing, Query, Citation-Payload-Aufbau.
 - LLM-Router: Provider-Auswahl, Fallback-Entscheidung, strukturierte Decisions ohne echte Provider-Calls.
+- Gemini-Free-Tier: Cache-Refresh, lokale Budget-Reserve und Keyrotation ohne echte Provider-Calls.
 - Proactive-Agent: Planen, Due-Selection, Dispatch-Simulation, Safety-/Policy-Gates.
 - Messenger-Adapter: Telegram, Signal, Matrix Runtime-Checks ohne echte Netzsendung.
 - Transkription/YouTube: lokale Pipeline, Parser, Job-Queue, keine OpenAI-Fallbackkosten.
