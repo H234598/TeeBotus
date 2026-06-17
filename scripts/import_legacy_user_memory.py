@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -181,8 +182,11 @@ def import_legacy_user_memory(
     if apply and replace_unreadable_account_metadata:
         for instance_name in _instances_with_legacy_user_dirs(importable_user_dirs):
             target_root = target_instances_dir / instance_name / "data" / "accounts"
-            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
-            if not _account_store_metadata_unreadable(target_store):
+            try:
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+            except AccountStoreError:
+                target_store = None
+            if target_store is not None and not _account_store_metadata_unreadable(target_store):
                 continue
             moved = _reset_unreadable_account_store(target_root)
             stats.metadata_backups_created += moved
@@ -209,12 +213,14 @@ def import_legacy_user_memory(
             continue
 
         target_root = target_instances_dir / instance_name / "data" / "accounts"
-        target_store = AccountStore(target_root, instance_name, secret_provider=provider)
         identity = telegram_identity_key(user_dir.name)
         metadata_unreadable_for_source = target_root in reset_account_stores
         if metadata_unreadable_for_source:
             stats.unreadable_metadata += 1
+        target_store: AccountStore | None = None
+        existing_account_id: str | None = None
         try:
+            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
             existing_account_id = target_store.get_account_for_identity(identity)
         except AccountStoreError as exc:
             if not metadata_unreadable_for_source:
@@ -227,7 +233,7 @@ def import_legacy_user_memory(
                         instance_name=instance_name,
                         legacy_user_id=user_dir.name,
                         account_id="<metadata-unreadable>",
-                        entries=0,
+                        entries=len(entries),
                         imported=0,
                         action="skip-unreadable-account-metadata",
                         metadata_unreadable=True,
@@ -236,7 +242,7 @@ def import_legacy_user_memory(
                 )
                 print(
                     f"instance={instance_name} legacy_user={user_dir.name} account=<metadata-unreadable> "
-                    f"entries=unknown action=skip-unreadable-account-metadata error={exc}"
+                    f"entries={len(entries)} action=skip-unreadable-account-metadata error={exc}"
                 )
                 continue
             if apply:
@@ -253,6 +259,8 @@ def import_legacy_user_memory(
             account_id = existing_account_id
             stats.accounts_existing += 1
         elif apply:
+            if target_store is None:
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
             account_id = target_store.resolve_or_create_account(identity, display_label=f"legacy telegram {user_dir.name}")
             stats.accounts_created += 1
         else:
@@ -262,6 +270,8 @@ def import_legacy_user_memory(
         target_entries: list[dict[str, Any]] = []
         target_unreadable = False
         if existing_account_id:
+            if target_store is None:
+                raise AccountStoreError(f"account store unavailable for existing account {instance_name}/{existing_account_id}")
             try:
                 target_entries = target_store.read_memory_entries(existing_account_id)
             except AccountStoreError:
@@ -317,6 +327,8 @@ def import_legacy_user_memory(
             stats.imported_sources += 1
             stats.entries_imported += imported_count
             continue
+        if target_store is None:
+            target_store = AccountStore(target_root, instance_name, secret_provider=provider)
         if backup_current:
             stats.backups_created += _backup_sqlite_files(target_root)
         if target_unreadable and replace_unreadable:
@@ -678,12 +690,20 @@ def _merge_entries(
     legacy_user_id: str,
 ) -> list[dict[str, Any]]:
     merged = [dict(entry) for entry in target_entries if isinstance(entry, dict)]
-    existing_ids = {str(entry.get("id") or "") for entry in merged}
+    existing_ids = {str(entry.get("id") or "").strip() for entry in merged if str(entry.get("id") or "").strip()}
+    existing_legacy_keys = _existing_legacy_import_keys(merged)
     for entry in legacy_entries:
         normalized = dict(entry)
         memory_id = str(normalized.get("id") or "").strip()
-        if memory_id in existing_ids:
+        legacy_key = (instance_name, legacy_user_id, memory_id)
+        if memory_id and legacy_key in existing_legacy_keys:
             continue
+        target_id = memory_id
+        if not target_id or target_id in existing_ids:
+            target_id = _scoped_legacy_memory_id(instance_name=instance_name, legacy_user_id=legacy_user_id, memory_id=memory_id)
+            if target_id in existing_ids:
+                continue
+            normalized["id"] = target_id
         normalized.setdefault("source", {})
         if isinstance(normalized["source"], dict):
             normalized["source"] = {
@@ -691,12 +711,40 @@ def _merge_entries(
                 "legacy_import": True,
                 "legacy_instance": instance_name,
                 "legacy_user_id": legacy_user_id,
+                "legacy_original_id": memory_id,
             }
         else:
-            normalized["source"] = {"legacy_import": True, "legacy_instance": instance_name, "legacy_user_id": legacy_user_id}
+            normalized["source"] = {
+                "legacy_import": True,
+                "legacy_instance": instance_name,
+                "legacy_user_id": legacy_user_id,
+                "legacy_original_id": memory_id,
+            }
         merged.append(normalized)
-        existing_ids.add(memory_id)
+        existing_ids.add(target_id)
+        existing_legacy_keys.add(legacy_key)
     return merged
+
+
+def _existing_legacy_import_keys(entries: Iterable[dict[str, Any]]) -> set[tuple[str, str, str]]:
+    keys: set[tuple[str, str, str]] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        source = entry.get("source")
+        if not isinstance(source, dict) or source.get("legacy_import") is not True:
+            continue
+        instance_name = str(source.get("legacy_instance") or "").strip()
+        legacy_user_id = str(source.get("legacy_user_id") or "").strip()
+        original_id = str(source.get("legacy_original_id") or entry.get("id") or "").strip()
+        if instance_name and legacy_user_id and original_id:
+            keys.add((instance_name, legacy_user_id, original_id))
+    return keys
+
+
+def _scoped_legacy_memory_id(*, instance_name: str, legacy_user_id: str, memory_id: str) -> str:
+    digest = hashlib.sha256(f"{instance_name}\0{legacy_user_id}\0{memory_id}".encode("utf-8")).hexdigest()
+    return f"legacy_{digest[:32]}"
 
 
 def _backup_sqlite_files(accounts_root: Path) -> int:

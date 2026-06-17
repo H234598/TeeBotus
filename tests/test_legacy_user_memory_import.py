@@ -16,12 +16,18 @@ def provider(secret: bytes = b"a" * 32) -> StaticSecretProvider:
     return StaticSecretProvider(secret)
 
 
-def write_legacy_entries(root: Path, *, instance: str = "Depressionsbot", user_id: str = "395935293") -> Path:
+def write_legacy_entries(
+    root: Path,
+    *,
+    instance: str = "Depressionsbot",
+    user_id: str = "395935293",
+    memory_id: str = "legacy_mem_1",
+) -> Path:
     user_dir = root / instance / "data" / "users" / user_id
     user_dir.mkdir(parents=True)
     rows = [
         {
-            "id": "legacy_mem_1",
+            "id": memory_id,
             "created_at": "2026-06-01T00:00:00+00:00",
             "updated_at": "2026-06-01T00:00:00+00:00",
             "sender": {"id": user_id},
@@ -33,7 +39,7 @@ def write_legacy_entries(root: Path, *, instance: str = "Depressionsbot", user_i
         }
     ]
     (user_dir / "User_Memory_Entries.jsonl").write_text("\n".join(json.dumps(row, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
-    (user_dir / "User_Memory_Index.json").write_text(json.dumps({"index": {"entries": {"legacy_mem_1": {}}}}), encoding="utf-8")
+    (user_dir / "User_Memory_Index.json").write_text(json.dumps({"index": {"entries": {memory_id: {}}}}), encoding="utf-8")
     return user_dir
 
 
@@ -143,6 +149,46 @@ def test_legacy_user_memory_import_apply_creates_encrypted_account_memory(tmp_pa
     assert entries[0]["source"]["legacy_import"] is True
     health = store.check_structured_memory_index(account_id)
     assert health.ok
+
+
+def test_legacy_user_memory_import_scopes_colliding_legacy_ids_in_same_account(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, user_id="111", memory_id="shared_legacy_id")
+    write_legacy_entries(legacy_root, user_id="222", memory_id="shared_legacy_id")
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key("111"))
+    _account_id, account_secret = store.rotate_secret(account_id)
+    store.link_identity(telegram_identity_key("222"), account_id, account_secret)
+
+    first = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        provider=provider(),
+    )
+    second = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        provider=provider(),
+    )
+
+    entries = store.read_memory_entries(account_id)
+    entry_ids = sorted(entry["id"] for entry in entries)
+    source_user_ids = sorted(entry["source"]["legacy_user_id"] for entry in entries)
+    original_ids = {entry["source"]["legacy_original_id"] for entry in entries}
+
+    assert first.entries_imported == 2
+    assert second.entries_imported == 0
+    assert len(entries) == 2
+    assert entry_ids[0].startswith("legacy_") or entry_ids[1].startswith("legacy_")
+    assert "shared_legacy_id" in entry_ids
+    assert source_user_ids == ["111", "222"]
+    assert original_ids == {"shared_legacy_id"}
+    assert store.check_structured_memory_index(account_id).ok
 
 
 def test_legacy_user_memory_import_verifies_imported_identity_mapping_and_profile(tmp_path: Path, monkeypatch) -> None:
