@@ -1316,10 +1316,11 @@ def test_llamaindex_backend_without_query_engine_factory_builds_default_local_re
     assert created[0].queries == ["Therapie"]
 
 
-def test_llamaindex_health_reports_missing_dependency_as_unavailable_without_crashing(tmp_path):
+def test_llamaindex_health_reports_missing_dependency_as_unavailable_without_crashing(tmp_path, monkeypatch):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda _name: False)
 
     health = check_bibliothekar_service(
         "Depressionsbot",

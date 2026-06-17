@@ -1535,6 +1535,23 @@ def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) ->
     assert "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused" in captured.out
 
 
+def test_runtime_status_reports_requested_matrix_without_config(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+
+    assert bot.main(["--runtime-status", "--channels", "matrix"]) == 0
+
+    captured = capsys.readouterr()
+    assert "runtime_slot=Demo/matrix status=not_configured reason=missing_matrix_credentials" in captured.out
+    assert "structured_decision=Demo/matrix status=not_applicable reason=no_runtime_slot" in captured.out
+
+
 def test_runtime_status_redacts_secret_like_health_errors(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

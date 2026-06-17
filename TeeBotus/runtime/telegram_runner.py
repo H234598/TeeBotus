@@ -170,13 +170,6 @@ def build_telegram_runtime_bridge(
         llm_max_output_tokens=resolve_llm_setting(instance_name, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
         llm_temperature=resolve_llm_setting(instance_name, "telegram", adapter_slot, "TEMPERATURE"),
     )
-
-
-def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
-    return any(
-        str(getattr(run_config, attr, "") or "").strip()
-        for attr in ("llm_profile", "llm_purpose", "llm_provider", "llm_model")
-    )
     return TelegramRuntimeBridge(
         run_config=run_config,
         api=api,
@@ -185,6 +178,13 @@ def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
         youtube_job_runner=youtube_job_runner,
         bot_identity=bot_identity,
         instruction_store=instruction_store,
+    )
+
+
+def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
+    return any(
+        str(getattr(run_config, attr, "") or "").strip()
+        for attr in ("llm_profile", "llm_purpose", "llm_provider", "llm_model")
     )
 
 

@@ -137,6 +137,8 @@ def _runtime_status(argv: Sequence[str]) -> int:
         for account in instance.accounts:
             print(_runtime_status_llm_line(account, instructions=instructions, instruction_error=instruction_error))
             print(_runtime_status_structured_decision_line(account, instructions=instructions, instruction_error=instruction_error))
+        for line in _runtime_status_missing_channel_slot_lines(config.channels, instance):
+            print(line)
     for health in check_ollama_services(config, instructions_by_instance=instructions_by_instance):
         state = "reachable" if health.ok else "unreachable"
         if health.ok:
@@ -363,6 +365,19 @@ def _runtime_status_memory_index_line(instance_name: str, instructions: Any | No
     else:
         semantic = "unsupported"
     return f"memory_index={instance} backend=keyword status={status} semantic={semantic}"
+
+
+def _runtime_status_missing_channel_slot_lines(channels: Sequence[str], instance: Any) -> tuple[str, ...]:
+    account_channels = {str(account.channel) for account in getattr(instance, "accounts", ())}
+    lines: list[str] = []
+    for channel in channels:
+        channel_name = str(channel or "").strip().casefold()
+        if not channel_name or channel_name in account_channels:
+            continue
+        label = f"{instance.instance_name}/{channel_name}"
+        lines.append(f"runtime_slot={label} status=not_configured reason=missing_{channel_name}_credentials")
+        lines.append(f"structured_decision={label} status=not_applicable reason=no_runtime_slot")
+    return tuple(lines)
 
 
 def _runtime_status_structured_decision_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
