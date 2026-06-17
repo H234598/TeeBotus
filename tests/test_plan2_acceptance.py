@@ -890,6 +890,7 @@ def test_memory_recovery_artifact_validation_accepts_consistent_json(tmp_path: P
                 "instances": [
                     {
                         "instance": "Demo",
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [
                             {
                                 "account_id": "a" * 128,
@@ -958,6 +959,7 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
                 "instances": [
                     {
                         "instance": "Demo",
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [
                             {
                                 "account_id": "a" * 128,
@@ -1012,6 +1014,66 @@ def test_memory_recovery_artifact_validation_rejects_inconsistent_totals(tmp_pat
     assert any("totals.legacy_plaintext_entries must match instances (2)" in error for error in errors)
 
 
+def test_memory_recovery_artifact_validation_rejects_inconsistent_metadata_health(tmp_path: Path) -> None:
+    output_path = tmp_path / "recovery.json"
+    output_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 2,
+                "instance_count": 1,
+                "instances": [
+                    {
+                        "instance": "Demo",
+                        "metadata_health": {
+                            "readable": True,
+                            "unreadable_items": 2,
+                            "items": [
+                                {
+                                    "kind": "accounts_dir",
+                                    "path": "instances/Demo/data/accounts/accounts",
+                                    "error": "encrypted envelope authentication failed",
+                                    "account_ids": ["not-an-account-id"],
+                                }
+                            ],
+                        },
+                        "accounts": [],
+                    }
+                ],
+                "totals": {
+                    "accounts": 0,
+                    "recoverable_accounts": 0,
+                    "unrecoverable_accounts": 0,
+                    "empty_accounts": 0,
+                    "no_source_accounts": 0,
+                    "sources": 0,
+                    "readable_sources": 0,
+                    "unreadable_sources": 0,
+                    "legacy_plaintext_sources": 0,
+                    "legacy_plaintext_entries": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._memory_recovery_artifact_errors(
+        (
+            "python-test",
+            "-m",
+            "TeeBotus.admin",
+            "memory-recovery",
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert any("metadata_health.unreadable_items must match items length for Demo" in error for error in errors)
+    assert any("metadata_health.readable true requires empty items for Demo" in error for error in errors)
+    assert any("metadata_health.items[0].account_ids contains invalid account ids" in error for error in errors)
+
+
 def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(tmp_path: Path) -> None:
     output_path = tmp_path / "recovery.json"
     output_path.write_text(
@@ -1022,6 +1084,7 @@ def test_memory_recovery_artifact_validation_requires_artifacted_legacy_dry_run(
                 "instances": [
                     {
                         "instance": "Demo",
+                        "metadata_health": {"readable": True, "unreadable_items": 0, "items": []},
                         "accounts": [],
                         "legacy_plaintext_import": {
                             "sources": 1,

@@ -802,6 +802,7 @@ def _memory_recovery_payload_errors(payload: Mapping[str, Any], *, path: Path | 
     for key, value in derived.items():
         if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
             errors.append(f"{prefix}memory recovery totals.{key} must match instances ({value})")
+    errors.extend(_memory_recovery_metadata_health_errors(instances, prefix=prefix))
     errors.extend(_memory_recovery_legacy_command_errors(instances, prefix=prefix))
     return errors
 
@@ -870,6 +871,53 @@ def _memory_recovery_legacy_command_errors(instances: Sequence[Any], *, prefix: 
             errors.append(f"{prefix}memory recovery legacy dry_run_command missing metadata replacement flag for {instance_name}")
         if "--json-output" not in command or "--markdown-output" not in command:
             errors.append(f"{prefix}memory recovery legacy dry_run_command must write JSON and Markdown artifacts for {instance_name}")
+    return errors
+
+
+def _memory_recovery_metadata_health_errors(instances: Sequence[Any], *, prefix: str) -> list[str]:
+    errors: list[str] = []
+    for instance_index, instance in enumerate(instances):
+        if not isinstance(instance, Mapping):
+            continue
+        instance_name = str(instance.get("instance") or f"instances[{instance_index}]")
+        metadata = instance.get("metadata_health")
+        if not isinstance(metadata, Mapping):
+            errors.append(f"{prefix}memory recovery metadata_health must be an object for {instance_name}")
+            continue
+        readable = metadata.get("readable")
+        if not isinstance(readable, bool):
+            errors.append(f"{prefix}memory recovery metadata_health.readable must be boolean for {instance_name}")
+        unreadable_items = metadata.get("unreadable_items")
+        if not _is_nonnegative_integer(unreadable_items):
+            errors.append(f"{prefix}memory recovery metadata_health.unreadable_items must be a non-negative integer for {instance_name}")
+        items = metadata.get("items")
+        if not isinstance(items, list):
+            errors.append(f"{prefix}memory recovery metadata_health.items must be a list for {instance_name}")
+            continue
+        if _is_nonnegative_integer(unreadable_items) and int(unreadable_items or 0) != len(items):
+            errors.append(f"{prefix}memory recovery metadata_health.unreadable_items must match items length for {instance_name}")
+        if readable is True and items:
+            errors.append(f"{prefix}memory recovery metadata_health.readable true requires empty items for {instance_name}")
+        if readable is False and not items:
+            errors.append(f"{prefix}memory recovery metadata_health.readable false requires unreadable items for {instance_name}")
+        for item_index, item in enumerate(items):
+            label = f"{instance_name}.metadata_health.items[{item_index}]"
+            if not isinstance(item, Mapping):
+                errors.append(f"{prefix}memory recovery {label} must be an object")
+                continue
+            if not str(item.get("kind") or "").strip():
+                errors.append(f"{prefix}memory recovery {label}.kind must be non-empty")
+            if not str(item.get("path") or "").strip():
+                errors.append(f"{prefix}memory recovery {label}.path must be non-empty")
+            if not str(item.get("error") or "").strip():
+                errors.append(f"{prefix}memory recovery {label}.error must be non-empty")
+            account_ids = item.get("account_ids", [])
+            if not isinstance(account_ids, list):
+                errors.append(f"{prefix}memory recovery {label}.account_ids must be a list")
+                continue
+            invalid_account_ids = [str(account_id) for account_id in account_ids if not re.fullmatch(r"[0-9a-f]{128}", str(account_id))]
+            if invalid_account_ids:
+                errors.append(f"{prefix}memory recovery {label}.account_ids contains invalid account ids")
     return errors
 
 
