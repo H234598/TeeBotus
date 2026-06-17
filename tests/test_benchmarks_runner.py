@@ -13,12 +13,14 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     core = importlib.import_module("TeeBotus.benchmarks.core")
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
     llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
+    qdrant = importlib.import_module("TeeBotus.benchmarks.qdrant")
     package_dir = Path(core.__file__).resolve().parent
 
     assert (package_dir / "__init__.py").exists()
     assert (package_dir / "core.py").exists()
     assert (package_dir / "hf_pool.py").exists()
     assert (package_dir / "llm_routing.py").exists()
+    assert (package_dir / "qdrant.py").exists()
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
@@ -28,6 +30,9 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_hf_pool_live is hf_pool.benchmark_hf_pool_live
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
+    assert benchmark_module._benchmark_qdrant_health_quick is qdrant.benchmark_qdrant_health_quick
+    assert benchmark_module._benchmark_qdrant_health_live is qdrant.benchmark_qdrant_health_live
+    assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
 
 
 def test_quick_benchmark_suite_covers_plan_core_categories() -> None:

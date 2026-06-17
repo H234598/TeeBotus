@@ -14,6 +14,11 @@ from TeeBotus.benchmarks.core import (
 )
 from TeeBotus.benchmarks.hf_pool import benchmark_hf_pool_eval_matrix, benchmark_hf_pool_live, benchmark_hf_pool_quick
 from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
+from TeeBotus.benchmarks.qdrant import (
+    benchmark_qdrant_health_live,
+    benchmark_qdrant_health_quick,
+    benchmark_qdrant_memory_index_quick,
+)
 
 __all__ = [
     "BenchmarkResult",
@@ -29,6 +34,9 @@ __all__ = [
     "benchmark_hf_pool_live",
     "benchmark_hf_pool_quick",
     "benchmark_llm_router",
+    "benchmark_qdrant_health_live",
+    "benchmark_qdrant_health_quick",
+    "benchmark_qdrant_memory_index_quick",
     "result",
     "stable_backend_ranking",
 ]
