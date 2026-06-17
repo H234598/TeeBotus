@@ -25,6 +25,7 @@ from TeeBotus.decisions import (
 )
 from TeeBotus.decisions.pydantic_agent import PydanticAIUnavailableError
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
 
 
 def test_intent_decision_validates_confidence_range() -> None:
@@ -512,6 +513,59 @@ def test_pydantic_ai_adapter_resolves_hf_pool_selector_to_openai_compatible_mode
     assert getattr(runner, "hf_pool_target") == "qwen_structured_test"
     assert getattr(runner, "hf_pool_request_model") == "Qwen/Qwen3-4B-Instruct-2507"
     assert getattr(runner, "hf_pool_base_url") == "https://router.huggingface.co/v1"
+    assert getattr(runner, "hf_pool_state_loaded") is False
+
+
+def test_pydantic_ai_adapter_uses_persistent_hf_pool_cooldown_state(tmp_path) -> None:
+    config_path = tmp_path / "hf_pool.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "targets": [
+                            {
+                                "name": "high_structured",
+                                "kind": "hf_router_chat",
+                                "base_url": "https://router.huggingface.co/v1",
+                                "api_key_env": "HF_TOKEN_TEST",
+                                "model": "high-model",
+                                "weight": 10,
+                                "purposes": ["structured_decision"],
+                                "enabled": True,
+                            },
+                            {
+                                "name": "low_structured",
+                                "kind": "hf_router_chat",
+                                "base_url": "https://router.huggingface.co/v1",
+                                "api_key_env": "HF_TOKEN_TEST",
+                                "model": "low-model",
+                                "weight": 1,
+                                "purposes": ["structured_decision"],
+                                "enabled": True,
+                            },
+                        ],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    state_db = tmp_path / "hf_pool_state.sqlite3"
+    SQLiteHFPoolRuntimeStateStore(state_db).save(
+        HFPoolRuntimeState(cooldowns={"default/high_structured": "2999-01-01T00:00:00+00:00"})
+    )
+
+    runner = build_pydantic_ai_model_runner(
+        "pool:default#structured_decision",
+        hf_pool_config_path=config_path,
+        env={"HF_TOKEN_TEST": "hf_fake_test_token", "TEEBOTUS_HF_POOL_STATE_DB": str(state_db)},
+    )
+
+    assert getattr(runner, "hf_pool_target") == "low_structured"
+    assert getattr(runner, "pydantic_ai_model_name") == "low-model"
+    assert getattr(runner, "hf_pool_state_loaded") is True
 
 
 def test_pydantic_ai_adapter_resolves_ollama_selector_to_local_model() -> None:

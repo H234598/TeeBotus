@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -7,6 +8,11 @@ from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_poo
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import select_target
+from TeeBotus.llm.hf_pool.state import (
+    HFPoolRuntimeState,
+    SQLiteHFPoolRuntimeStateStore,
+    default_hf_pool_state_path,
+)
 from TeeBotus.llm.profiles import normalize_llm_purpose
 
 
@@ -186,11 +192,13 @@ def _build_hf_pool_openai_chat_model(
         raise PydanticAIUnavailableError("pydantic-ai OpenAI-compatible provider is not installed; install TeeBotus with the [agents] extra") from exc
     selector = _parse_hf_pool_selector(model_selector)
     config = load_hf_pool_config(config_path)
+    runtime_state = _hf_pool_runtime_state(env)
     scheduled = select_target(
         config,
         pool_name=selector["pool_name"],
         purpose=selector["purpose"],
         env=env,
+        state=runtime_state,
     )
     provider = OpenAIProvider(
         base_url=_openai_compatible_base_url(scheduled.target.base_url),
@@ -203,6 +211,7 @@ def _build_hf_pool_openai_chat_model(
         "hf_pool_target": scheduled.target.name,
         "hf_pool_request_model": scheduled.target.request_model,
         "hf_pool_base_url": _openai_compatible_base_url(scheduled.target.base_url),
+        "hf_pool_state_loaded": runtime_state is not None,
     }
 
 
@@ -220,6 +229,19 @@ def _openai_compatible_base_url(base_url: str) -> str:
     if text.endswith(suffix):
         text = text[: -len(suffix)]
     return text or "https://router.huggingface.co/v1"
+
+
+def _hf_pool_runtime_state(env: Mapping[str, str] | None) -> HFPoolRuntimeState | None:
+    source = os.environ if env is None else env
+    state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
+    state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
+    if not state_path.exists():
+        return None
+    try:
+        state = SQLiteHFPoolRuntimeStateStore(state_path).load()
+    except Exception:  # noqa: BLE001 - corrupt state must not block structured fallback routing.
+        return None
+    return state if isinstance(state, HFPoolRuntimeState) else None
 
 
 def _build_ollama_model(model_selector: str, *, base_url: str) -> tuple[Any, dict[str, Any]]:
