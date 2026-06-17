@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
-import logging
 import os
 import platform
 import statistics
@@ -20,16 +19,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from scripts.check_adapter_deps import (  # noqa: E402
-    LOCKFILE,
-    _check_litellm_supply_chain_guard,
-    _check_pyproject_plan2_contract,
-    _read_pins,
-)
 from TeeBotus import __version__ as TEEBOTUS_VERSION  # noqa: E402
 from TeeBotus.bibliothekar.source_harvester import SourceHarvester  # noqa: E402
 from TeeBotus.instructions import BotInstructions  # noqa: E402
-from TeeBotus.llm.profiles import select_llm_route  # noqa: E402
 from TeeBotus.llm_client import LiteLLMTextClient  # noqa: E402
 from TeeBotus.mcp_tools import MCPToolPolicy, MCPToolRegistry, build_readonly_mcp_registry  # noqa: E402
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key  # noqa: E402
@@ -38,12 +30,9 @@ from TeeBotus.runtime.bibliothekar import BibliothekarStore  # noqa: E402
 from TeeBotus.runtime.bibliothekar_service import (  # noqa: E402
     BibliothekarService,
     LocalBibliothekarBackend,
-    check_bibliothekar_service,
 )
-from TeeBotus.runtime.config import build_runtime_config  # noqa: E402
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query, run_source_harvester_workflow  # noqa: E402
 from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityPipeline  # noqa: E402
-from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend  # noqa: E402
 from TeeBotus.benchmarks.core import (  # noqa: E402
     BenchmarkResult,
     REQUIRED_BENCHMARK_CATEGORIES,
@@ -96,6 +85,10 @@ from TeeBotus.benchmarks.youtube import (  # noqa: E402
     benchmark_youtube_local_job_queue as _benchmark_youtube_local_job_queue,
     benchmark_youtube_local_pipeline_cache as _benchmark_youtube_local_pipeline_cache,
     benchmark_youtube_parser as _benchmark_youtube_parser,
+)
+from TeeBotus.benchmarks.runtime_health import (  # noqa: E402
+    benchmark_database_fallback_policy as _benchmark_database_fallback_policy,
+    benchmark_status_doctor as _benchmark_status_doctor,
 )
 
 
@@ -420,198 +413,6 @@ def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> lis
         jsonl_backend=benchmark_jsonl_backend,
         sqlite_backend=benchmark_sqlite_row_encrypted_projection,
         postgres_backend=benchmark_postgres_backend,
-    )
-
-
-def _benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
-    with tempfile.TemporaryDirectory(prefix="teebotus-bench-status-") as tmp:
-        root = Path(tmp)
-        instances_dir = root / "instances"
-        instance_dir = instances_dir / "Bench"
-        instance_dir.mkdir(parents=True)
-        (instance_dir / "Bot_Verhalten.md").write_text(
-            "## LLM\n- enabled: true\n- profile: local_ollama\n\n## Bibliothekar\n- enabled: true\n- backend: local\n",
-            encoding="utf-8",
-        )
-        env = {
-            "TEEBOTUS_INSTANCES_DIR": str(instances_dir),
-            "TEEBOTUS_INSTANCE": "Bench",
-            "TELEGRAM_BOT_TOKEN_BENCH": "telegram-token",
-            "SIGNAL_BOT_SERVICE_BENCH": "http://127.0.0.1:8080",
-            "SIGNAL_BOT_PHONE_NUMBER_BENCH": "+491",
-            "MATRIX_BOT_HOMESERVER_BENCH": "https://matrix.example",
-            "MATRIX_BOT_USER_ID_BENCH": "@bench:example",
-            "MATRIX_BOT_ACCESS_TOKEN_BENCH": "matrix-token",
-            "TEEBOTUS_LLM_PROFILE_BENCH": "local_ollama",
-        }
-        instructions = BotInstructions(bibliothekar_backend="local")
-        health_timings = [_timed_ms(lambda: check_bibliothekar_service("Bench", instances_dir, instructions)) for _ in range(iterations)]
-        config_results = []
-        config_timings = [
-            _timed_ms(lambda: config_results.append(build_runtime_config(env=env, cli_channels="telegram,signal,matrix")))
-            for _ in range(iterations)
-        ]
-        pins = _read_pins(LOCKFILE)
-        dependency_checks = []
-        dependency_timings = [
-            _timed_ms(
-                lambda: dependency_checks.extend(
-                    [
-                        _check_pyproject_plan2_contract(),
-                        _check_litellm_supply_chain_guard(pins["litellm"]),
-                    ]
-                )
-            )
-            for _ in range(iterations)
-        ]
-        latest_config = config_results[-1] if config_results else None
-        latest_health = check_bibliothekar_service("Bench", instances_dir, instructions)
-        latest_dependency_checks = dependency_checks[-2:] if len(dependency_checks) >= 2 else dependency_checks
-        dependency_ok = all(ok for ok, _message in latest_dependency_checks)
-        runtime_channels = list(latest_config.channels) if latest_config is not None else []
-        runtime_accounts = sum(len(instance.accounts) for instance in latest_config.instances) if latest_config is not None else 0
-        decision_route = select_llm_route("structured_decision")
-        from TeeBotus.runtime.crew_pilots import crew_pilot_status_lines
-
-        crew_lines = crew_pilot_status_lines(dependency_available=False)
-        ok = (
-            latest_config is not None
-            and runtime_channels == ["telegram", "signal", "matrix"]
-            and runtime_accounts == 3
-            and latest_health.status == "ready"
-            and decision_route.provider == "hf_pool"
-            and bool(crew_lines)
-            and dependency_ok
-        )
-        return _result(
-            name="status_doctor_runtime_dependency_health",
-            category="status_doctor",
-            iterations=iterations * 3,
-            total_ms=sum(health_timings) + sum(config_timings) + sum(dependency_timings),
-            ok=ok,
-            errors=0 if ok else 1,
-            payload_bytes=len(json.dumps(env, ensure_ascii=False).encode("utf-8")),
-            index_bytes=LOCKFILE.stat().st_size if LOCKFILE.exists() else 0,
-            details={
-                "runtime_instances": list(latest_config.selected_instances) if latest_config is not None else [],
-                "runtime_channels": runtime_channels,
-                "runtime_accounts": runtime_accounts,
-                "bibliothekar_status": latest_health.status,
-                "bibliothekar_backend": latest_health.backend,
-                "decision_provider": decision_route.provider,
-                "decision_model": decision_route.model,
-                "decision_profile": decision_route.profile_name,
-                "crew_pilot_lines": len(crew_lines),
-                "dependency_checks": [message for _ok, message in latest_dependency_checks],
-                "dependency_ok": dependency_ok,
-                "median_runtime_config_ms": statistics.median(config_timings),
-                "median_backend_health_ms": statistics.median(health_timings),
-                "median_dependency_check_ms": statistics.median(dependency_timings),
-            },
-        )
-
-
-def _benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:
-    class Backend:
-        def __init__(self, *, fail_write: bool = False) -> None:
-            self.fail_write = fail_write
-            self.entries: dict[str, list[dict[str, str]]] = {}
-            self.indexes: dict[str, dict[str, Any]] = {}
-            self.write_entries_count = 0
-            self.write_index_count = 0
-
-        def read_entries(self, account_id: str) -> list[dict[str, str]]:
-            return [dict(row) for row in self.entries.get(account_id, [])]
-
-        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
-            self.write_entries_count += 1
-            if self.fail_write:
-                raise OSError("primary unavailable")
-            self.entries[account_id] = [dict(row) for row in rows]
-
-        def read_index(self, account_id: str) -> dict[str, Any]:
-            return dict(self.indexes.get(account_id, {}))
-
-        def write_index(self, account_id: str, data: dict[str, Any]) -> None:
-            self.write_index_count += 1
-            if self.fail_write:
-                raise OSError("primary unavailable")
-            self.indexes[account_id] = dict(data)
-
-    class CountingCriticalHandler(logging.Handler):
-        def __init__(self) -> None:
-            super().__init__(level=logging.CRITICAL)
-            self.messages: list[str] = []
-
-        def emit(self, record: logging.LogRecord) -> None:
-            self.messages.append(record.getMessage())
-
-    primary = Backend(fail_write=True)
-    secondary = Backend()
-    backend = WarningFallbackAccountMemoryBackend(primary, secondary, label="Bench:sqlite")
-    account_id = "b" * 128
-    handler = CountingCriticalHandler()
-    logger = logging.getLogger("TeeBotus")
-    logger.addHandler(handler)
-    previous_level = logger.level
-    logger.setLevel(min(previous_level, logging.CRITICAL) if previous_level else logging.CRITICAL)
-    try:
-        timings = []
-        for index in range(iterations):
-            entry = {"id": f"mem_fallback_{index:06d}", "user_text": "Fallback Benchmark"}
-            timings.append(_timed_ms(lambda entry=entry: backend.write_entries(account_id, [entry])))
-            timings.append(
-                _timed_ms(
-                    lambda index=index: backend.write_index(
-                        account_id,
-                        {
-                            "scope": "account",
-                            "index": {"entries": {f"mem_fallback_{index:06d}": {}}},
-                        },
-                    )
-                )
-            )
-        primary.fail_write = False
-        timings.append(_timed_ms(lambda: backend.read_entries(account_id)))
-        timings.append(_timed_ms(lambda: backend.read_index(account_id)))
-    finally:
-        logger.removeHandler(handler)
-        logger.setLevel(previous_level)
-    synced_entries = primary.entries.get(account_id) == secondary.entries.get(account_id)
-    synced_index = primary.indexes.get(account_id) == secondary.indexes.get(account_id)
-    warning_count = sum(1 for message in handler.messages if "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in message)
-    recovery_count = sum(1 for message in handler.messages if "primary backend recovered" in message)
-    errors = 0
-    if not synced_entries:
-        errors += 1
-    if not synced_index:
-        errors += 1
-    if warning_count < 1:
-        errors += 1
-    if recovery_count < 1:
-        errors += 1
-    return _result(
-        name="database_fallback_policy",
-        category="database_fallback",
-        iterations=iterations * 2 + 2,
-        total_ms=sum(timings),
-        ok=errors == 0,
-        errors=errors,
-        payload_bytes=sum(len(json.dumps(row, ensure_ascii=False)) for row in primary.entries.get(account_id, [])),
-        note="primary_failure_secondary_sync_recovery_warning",
-        details={
-            "primary": "sqlite-primary",
-            "secondary": "sqlite-fallback",
-            "fallback_warnings": warning_count,
-            "recovery_warnings": recovery_count,
-            "synced_entries": synced_entries,
-            "synced_index": synced_index,
-            "primary_entry_writes": primary.write_entries_count,
-            "secondary_entry_writes": secondary.write_entries_count,
-            "primary_index_writes": primary.write_index_count,
-            "secondary_index_writes": secondary.write_index_count,
-            "median_operation_ms": statistics.median(timings),
-        },
     )
 
 
