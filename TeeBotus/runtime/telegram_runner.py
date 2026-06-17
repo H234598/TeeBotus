@@ -14,7 +14,7 @@ from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig, resolve_llm_setting
-from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
@@ -78,6 +78,12 @@ class TelegramRuntimeBridge:
             max_tokens=run_config.llm_max_output_tokens,
             temperature=run_config.llm_temperature,
         )
+        self.structured_decision_runner = build_runtime_structured_decision_runner(
+            instructions=instructions,
+            enabled=run_config.llm_enabled,
+            runtime_llm_configured=_run_config_has_llm_route(run_config),
+            allow_remote_fallback=run_config.llm_allow_remote_fallback,
+        )
         self.bibliothekar_store = BibliothekarService.from_instructions(run_config.instance_name, self.instances_dir, instructions)
         self.bot_identity = bot_identity or telegram_runtime._resolve_bot_identity(api)
         self.chat_state = telegram_runtime.ChatState(
@@ -99,6 +105,7 @@ class TelegramRuntimeBridge:
             bot_identity=self.bot_identity,
             llm_client=self.llm_client,
             llm_enabled_override=run_config.llm_enabled,
+            structured_decision_runner=self.structured_decision_runner,
         )
 
     def run_polling(self, *, stop_event: threading.Event | None = None, poll_timeout: int | None = None, youtube_job_runner: Any | None = None) -> None:
@@ -162,6 +169,13 @@ def build_telegram_runtime_bridge(
         llm_timeout_seconds=resolve_llm_setting(instance_name, "telegram", adapter_slot, "TIMEOUT_SECONDS"),
         llm_max_output_tokens=resolve_llm_setting(instance_name, "telegram", adapter_slot, "MAX_OUTPUT_TOKENS"),
         llm_temperature=resolve_llm_setting(instance_name, "telegram", adapter_slot, "TEMPERATURE"),
+    )
+
+
+def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
+    return any(
+        str(getattr(run_config, attr, "") or "").strip()
+        for attr in ("llm_profile", "llm_purpose", "llm_provider", "llm_model")
     )
     return TelegramRuntimeBridge(
         run_config=run_config,
@@ -304,42 +318,51 @@ def _notify_recent_users_for_current_version(
 ) -> None:
     instances_dir = Path(config.instances_dir)
     for instance_config in instance_configs:
-        if not instance_config.token_configs:
-            continue
-        api = telegram_runtime.TelegramAPI(instance_config.token_configs[0].token)
-        store = AccountStore(
-            instances_dir / instance_config.instance_name / "data" / "accounts",
-            instance_config.instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(),
-            create_dirs=False,
-        )
-        try:
-            count = notify_recent_telegram_users_for_version(
-                version=__version__,
-                instances_dir=instances_dir,
-                instance_name=instance_config.instance_name,
-                account_store=store,
-                send_message=api.send_message,
-                repo_root=telegram_runtime.PROJECT_ROOT,
-                on_error=lambda recipient, exc: LOGGER.warning(
-                    "Version notification failed version=%s instance=%s identity=%s: %s",
-                    __version__,
-                    instance_config.instance_name,
-                    recipient.identity_key,
-                    exc,
-                ),
-                on_skip=lambda reason: LOGGER.info(
-                    "Version notification skipped version=%s instance=%s reason=%s.",
-                    __version__,
-                    instance_config.instance_name,
-                    reason,
-                ),
+        for token_config in instance_config.token_configs:
+            adapter_slot = _telegram_slot_from_label(token_config.label)
+            api = telegram_runtime.TelegramAPI(token_config.token)
+            store = AccountStore(
+                instances_dir / instance_config.instance_name / "data" / "accounts",
+                instance_config.instance_name,
+                secret_provider=SecretToolInstanceSecretProvider(),
+                create_dirs=False,
             )
-        except (AccountStoreError, telegram_runtime.TelegramAPIError, telegram_runtime.TelegramNetworkError, OSError) as exc:
-            LOGGER.warning("Version notification skipped for instance=%s: %s", instance_config.instance_name, exc)
-            continue
-        if count:
-            LOGGER.info("Sent version notification version=%s instance=%s recipients=%s.", __version__, instance_config.instance_name, count)
+            try:
+                count = notify_recent_telegram_users_for_version(
+                    version=__version__,
+                    instances_dir=instances_dir,
+                    instance_name=instance_config.instance_name,
+                    account_store=store,
+                    send_message=api.send_message,
+                    repo_root=telegram_runtime.PROJECT_ROOT,
+                    adapter_slot=adapter_slot,
+                    on_error=lambda recipient, exc: LOGGER.warning(
+                        "Version notification failed version=%s instance=%s slot=%s identity=%s: %s",
+                        __version__,
+                        instance_config.instance_name,
+                        recipient.adapter_slot,
+                        recipient.identity_key,
+                        exc,
+                    ),
+                    on_skip=lambda reason: LOGGER.info(
+                        "Version notification skipped version=%s instance=%s slot=%s reason=%s.",
+                        __version__,
+                        instance_config.instance_name,
+                        adapter_slot,
+                        reason,
+                    ),
+                )
+            except (AccountStoreError, telegram_runtime.TelegramAPIError, telegram_runtime.TelegramNetworkError, OSError) as exc:
+                LOGGER.warning("Version notification skipped for instance=%s slot=%s: %s", instance_config.instance_name, adapter_slot, exc)
+                continue
+            if count:
+                LOGGER.info(
+                    "Sent version notification version=%s instance=%s slot=%s recipients=%s.",
+                    __version__,
+                    instance_config.instance_name,
+                    adapter_slot,
+                    count,
+                )
 
 
 def _telegram_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
@@ -364,6 +387,17 @@ def _duplicate_telegram_token_error(instance_configs: tuple[telegram_runtime.Ins
         "Each Telegram name needs its own BotFather token. Duplicate slot pairs: "
         + ", ".join(duplicates)
     )
+
+
+def _telegram_slot_from_label(label: str) -> int:
+    text = str(label or "").strip()
+    if ":" in text:
+        text = text.rsplit(":", 1)[-1]
+    try:
+        slot = int(text)
+    except ValueError:
+        return 1
+    return slot if slot > 0 else 1
 
 
 __all__ = [

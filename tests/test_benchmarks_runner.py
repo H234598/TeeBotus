@@ -96,6 +96,8 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "language",
         "locator",
         "license",
+        "source_quality",
+        "citation_quality",
         "ingested_at",
         "chunk_index",
         "embedding_model",
@@ -110,7 +112,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     llm_router = next(result for result in suite["results"] if result["name"] == "llm_router_structured_decision")
     assert llm_router["details"]["runtime_client"] == "HFPoolProvider"
     assert llm_router["details"]["runtime_provider"] == "hf_pool"
-    assert llm_router["details"]["runtime_model"] == "pool:default"
+    assert llm_router["details"]["runtime_model"] == "pool:default#structured_decision"
     assert llm_router["details"]["runtime_fallback_client"] == "LiteLLMTextClient"
     assert llm_router["details"]["runtime_fallback_model"] == "ollama_chat/llama3.1:8b"
     assert llm_router["details"]["memory_candidate_kind"] == "therapy_goal"
@@ -133,6 +135,24 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert hf_pool["category"] == "hf_pool"
     assert hf_pool["details"]["network_calls"] == 0
     assert any(line.startswith("hf_pool=") for line in hf_pool["details"]["status_lines"])
+    hf_eval = next(result for result in suite["results"] if result["name"] == "hf_pool_eval_matrix")
+    assert hf_eval["ok"] is True
+    assert hf_eval["category"] == "hf_pool"
+    assert hf_eval["details"]["purposes"] == [
+        "structured_decision",
+        "normal_chat",
+        "psychology_explainer",
+        "bibliothekar_answer",
+        "summarizer",
+    ]
+    assert hf_eval["details"]["structured_decision_json_valid"] is True
+    assert hf_eval["details"]["psychology_quality_ok"] is True
+    assert hf_eval["details"]["bibliothekar_citation_faithful"] is True
+    assert hf_eval["details"]["summarizer_faithful"] is True
+    assert hf_eval["details"]["provider_failure_fallback"] is True
+    assert hf_eval["details"]["cooldown_fallback"] is True
+    assert hf_eval["details"]["cooldown_network_calls"] == 0
+    assert hf_eval["details"]["network_calls"] == 0
     qdrant_health = next(result for result in suite["results"] if result["name"] == "qdrant_health_quick")
     assert qdrant_health["ok"] is True
     assert qdrant_health["details"]["latest_status"] == "qdrant=127.0.0.1:6333 status=reachable"
@@ -148,6 +168,12 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert retrieval["category"] == "retrieval"
     assert retrieval["details"]["usermemory_models"] == ["intfloat/multilingual-e5-small", "intfloat/multilingual-e5-base"]
     assert retrieval["details"]["book_models"] == ["BAAI/bge-m3", "intfloat/multilingual-e5-base"]
+    assert retrieval["details"]["reranker"] == "BAAI/bge-reranker-v2-m3"
+    assert retrieval["details"]["reranker_backend"] == "keyword_overlap_fake"
+    assert retrieval["details"]["reranker_comparison"]["without_reranker_model"] == "BAAI/bge-m3"
+    assert retrieval["details"]["reranker_comparison"]["with_reranker_model"] == "BAAI/bge-reranker-v2-m3"
+    assert len(retrieval["details"]["reranker_comparison"]["without_reranker_top"]) == 2
+    assert len(retrieval["details"]["reranker_comparison"]["with_reranker_top"]) == 2
     assert retrieval["details"]["backend_modes"] == ["local", "llamaindex_fake", "haystack_fake"]
     assert all(count >= 1 for count in retrieval["details"]["backend_selected"].values())
     assert retrieval["details"]["network_calls"] == 0
@@ -157,6 +183,14 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert source_harvester["details"]["routes"] == {"accepted": 1}
     assert source_harvester["details"]["accepted_for_ingest"] == 1
     assert source_harvester["details"]["network_calls"] == 0
+    source_promote = next(result for result in suite["results"] if result["name"] == "source_harvester_promote_index_flow")
+    assert source_promote["ok"] is True
+    assert source_promote["category"] == "source_harvester"
+    assert source_promote["details"]["promoted"] == 1
+    assert source_promote["details"]["pre_promote_chunk_counts"] == [0]
+    assert source_promote["details"]["post_promote_final_chunks"] == 1
+    assert source_promote["details"]["promoted_dir"] == "books"
+    assert source_promote["details"]["network_calls"] == 0
     decision_fake = next(result for result in suite["results"] if result["name"] == "decision_fake_model")
     assert decision_fake["ok"] is True
     assert decision_fake["details"]["fake_model_calls"] == 1
@@ -166,13 +200,19 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert pydantic_ai["ok"] is True
     assert pydantic_ai["category"] == "pydantic_ai"
     assert pydantic_ai["details"]["schemas"] == [
+        "AgentTaskDecision",
         "BibliothekarQueryDecision",
         "MemoryCandidate",
         "ReminderDecision",
+        "SourceQualityDecision",
         "ToolSafetyDecision",
         "ProactiveToolCallDecision",
+        "YouTubeOptionsDecision",
     ]
     assert pydantic_ai["details"]["fake_agent_calls"] == 1
+    assert pydantic_ai["details"]["fake_agent_model"] == "pool:default#structured_decision"
+    assert pydantic_ai["details"]["router_purpose"] == "structured_decision"
+    assert pydantic_ai["details"]["router_provider"] == "hf_pool"
     assert pydantic_ai["details"]["latest_runner_query"] == "Therapie Schlaf"
     assert pydantic_ai["details"]["network_calls"] == 0
     source_harvester_flow = next(result for result in suite["results"] if result["name"] == "langgraph_source_harvester_workflow")
@@ -226,7 +266,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert status_doctor["details"]["bibliothekar_status"] == "ready"
     assert status_doctor["details"]["bibliothekar_backend"] == "local"
     assert status_doctor["details"]["decision_provider"] == "hf_pool"
-    assert status_doctor["details"]["decision_model"] == "pool:default"
+    assert status_doctor["details"]["decision_model"] == "pool:default#structured_decision"
     assert status_doctor["details"]["decision_profile"] == "hf_pool_structured"
     assert status_doctor["details"]["crew_pilot_lines"] >= 3
     assert status_doctor["details"]["dependency_ok"] is True
@@ -280,6 +320,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "qdrant_memory_index_quick" in markdown
     assert "retrieval_embedding_reranker_matrix" in markdown
     assert "source_harvester_quality_gate" in markdown
+    assert "source_harvester_promote_index_flow" in markdown
     assert "decision_fake_model" in markdown
     assert "youtube_parser_local" in markdown
     assert "proactive_tool_plan_due_dispatch_gates" in markdown
@@ -454,6 +495,9 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["ok"] is True
     assert payload["include_live"] is False
+    assert payload["live_hf"] is False
+    assert payload["live_qdrant"] is False
+    assert payload["profile"] == ""
     assert payload["results"]
     assert payload["comparisons"]["stable_backend_rankings"]
     assert payload["regression"]["status"] == "not_configured"
@@ -482,6 +526,51 @@ def test_run_benchmarks_requires_explicit_include_live_for_postgres(monkeypatch)
     assert seen_dsns == ["", "postgresql://bench"]
     assert quick_suite["include_live"] is False
     assert live_suite["include_live"] is True
+
+
+def test_run_benchmarks_live_flags_add_explicit_optional_results(monkeypatch) -> None:
+    def fake_hf_live(*, profile: str):
+        assert profile == "hf_pool_default"
+        return benchmark_module._result(
+            name="hf_pool_live_health",
+            category="hf_pool",
+            iterations=1,
+            total_ms=1.0,
+            ok=True,
+            mode="live_hf",
+            details={"profile": profile, "network_calls": 1, "provider_calls": 1, "remote_calls": 1},
+        )
+
+    def fake_qdrant_live():
+        return benchmark_module._result(
+            name="qdrant_health_live",
+            category="qdrant",
+            iterations=1,
+            total_ms=1.0,
+            ok=True,
+            mode="live_qdrant",
+            details={"target": "http://127.0.0.1:6333", "network_calls": 1, "provider_calls": 0, "remote_calls": 0},
+        )
+
+    monkeypatch.setattr(benchmark_module, "_benchmark_hf_pool_live", fake_hf_live)
+    monkeypatch.setattr(benchmark_module, "_benchmark_qdrant_health_live", fake_qdrant_live)
+
+    suite = run_benchmarks(
+        entries=1,
+        iterations=1,
+        quick=True,
+        live_hf=True,
+        live_qdrant=True,
+        profile="hf_pool_default",
+    )
+
+    names = {result["name"] for result in suite["results"]}
+    assert suite["include_live"] is True
+    assert suite["live_hf"] is True
+    assert suite["live_qdrant"] is True
+    assert suite["profile"] == "hf_pool_default"
+    assert "hf_pool_live_health" in names
+    assert "qdrant_health_live" in names
 
 
 def test_run_benchmarks_compares_optional_baseline(tmp_path) -> None:

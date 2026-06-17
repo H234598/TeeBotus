@@ -86,6 +86,78 @@ def test_memory_search_service_uses_qdrant_only_when_enabled(tmp_path) -> None:
     assert "qdrant" in result.candidates[0].sources
 
 
+def test_memory_search_service_filters_stale_qdrant_candidates_through_account_store(tmp_path) -> None:
+    store, account_id = _store_with_entries(tmp_path)
+    semantic_index = _FakeSemanticIndex(
+        [
+            QdrantMemoryResult(
+                memory_id="mem_missing",
+                account_id=account_id,
+                instance_name="Depressionsbot",
+                score=3.0,
+                payload={"memory_id": "mem_missing", "account_id": account_id, "instance_name": "Depressionsbot"},
+            ),
+            QdrantMemoryResult(
+                memory_id="mem_plan",
+                account_id=account_id,
+                instance_name="Depressionsbot",
+                score=2.0,
+                payload={"memory_id": "mem_plan", "account_id": account_id, "instance_name": "Depressionsbot"},
+            ),
+        ]
+    )
+    service = MemorySearchService(
+        account_store=store,
+        instance_name="Depressionsbot",
+        config=MemorySearchConfig(semantic_enabled=True, semantic_backend="qdrant", local_limit=1),
+        qdrant_index=semantic_index,
+    )
+
+    result = service.search(account_id, "Tagesstruktur", limit=2, exclude_ids=("mem_sleep",))
+
+    assert [entry["id"] for entry in result.entries] == ["mem_plan"]
+    assert [candidate.memory_id for candidate in result.candidates] == ["mem_plan"]
+    assert "qdrant" in result.candidates[0].sources
+    entries_by_id = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    assert entries_by_id["mem_plan"]["access_count"] == 1
+    assert entries_by_id["mem_plan"]["last_accessed_at"]
+    assert entries_by_id["mem_sleep"].get("access_count") in (None, 0)
+    assert entries_by_id["mem_sleep"].get("last_accessed_at") in (None, "")
+
+
+def test_memory_search_service_refills_limit_after_dropping_stale_qdrant_candidates(tmp_path) -> None:
+    store, account_id = _store_with_entries(tmp_path)
+    semantic_index = _FakeSemanticIndex(
+        [
+            QdrantMemoryResult(
+                memory_id="mem_missing",
+                account_id=account_id,
+                instance_name="Depressionsbot",
+                score=3.0,
+                payload={"memory_id": "mem_missing", "account_id": account_id, "instance_name": "Depressionsbot"},
+            ),
+            QdrantMemoryResult(
+                memory_id="mem_plan",
+                account_id=account_id,
+                instance_name="Depressionsbot",
+                score=2.0,
+                payload={"memory_id": "mem_plan", "account_id": account_id, "instance_name": "Depressionsbot"},
+            ),
+        ]
+    )
+    service = MemorySearchService(
+        account_store=store,
+        instance_name="Depressionsbot",
+        config=MemorySearchConfig(semantic_enabled=True, semantic_backend="qdrant", local_limit=1, semantic_limit=2),
+        qdrant_index=semantic_index,
+    )
+
+    result = service.search(account_id, "Schlaf", limit=2)
+
+    assert [candidate.memory_id for candidate in result.candidates] == ["mem_plan", "mem_sleep"]
+    assert [entry["id"] for entry in result.entries] == ["mem_plan", "mem_sleep"]
+
+
 def test_qdrant_memory_search_wraps_semantic_results_and_respects_excludes(tmp_path) -> None:
     _store, account_id = _store_with_entries(tmp_path)
     semantic_index = _FakeSemanticIndex(

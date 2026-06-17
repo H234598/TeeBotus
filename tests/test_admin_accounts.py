@@ -231,6 +231,32 @@ def test_memory_recovery_quarantine_refuses_running_runtime(tmp_path: Path) -> N
     assert result["apply_safety"]["apply_allowed_now"] is False
 
 
+def test_memory_recovery_quarantine_dry_run_reports_apply_blocked_by_runtime(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=accounts_root / "Account_Memory.sqlite3", fallback_path=None),
+    )
+    primary.write_entries(account_id, [{"id": "mem_bad", "user_text": "Primary"}])
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    result = quarantine_unrecoverable_account_memory(
+        report,
+        apply=False,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+    )
+
+    assert result["status"] == "dry-run"
+    assert result["apply_safety"]["apply_allowed_now"] is False
+    assert result["apply_safety"]["apply_requires_stopped_bot"] is True
+
+
 def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
@@ -274,6 +300,25 @@ def test_memory_recovery_metadata_quarantine_refuses_running_runtime(tmp_path: P
 
     assert result["status"] == "blocked"
     assert result["apply_safety"]["apply_allowed_now"] is False
+
+
+def test_memory_recovery_metadata_quarantine_dry_run_reports_apply_blocked_by_runtime(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    bad_store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=False,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+    )
+
+    assert result["status"] == "dry-run"
+    assert result["apply_safety"]["apply_allowed_now"] is False
+    assert result["apply_safety"]["apply_requires_stopped_bot"] is True
 
 
 def test_memory_recovery_report_counts_empty_accounts(tmp_path: Path) -> None:

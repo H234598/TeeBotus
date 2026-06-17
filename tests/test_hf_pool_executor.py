@@ -14,6 +14,7 @@ from TeeBotus.llm.hf_pool import (
     HFPoolUsageEvent,
     OpenAICompatibleHFPoolExecutor,
     ScheduledTarget,
+    SQLiteHFPoolRuntimeStateStore,
 )
 
 
@@ -114,6 +115,52 @@ def test_openai_compatible_hf_executor_skips_http_while_target_is_in_cooldown() 
 
     with pytest.raises(HFPoolRateLimited, match="cooldown"):
         executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
+
+
+def test_sqlite_hf_pool_state_store_roundtrips_state_and_usage(tmp_path) -> None:
+    store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")
+    state = HFPoolRuntimeState(
+        cooldowns={"target_a": "2999-01-01T00:00:00+00:00"},
+        failures={"target_a": 2},
+        successes={"target_b": 3},
+        avg_latency_ms={"target_a": 42.5},
+    )
+
+    store.save(state)
+    store.append_usage(HFPoolUsageEvent(pool="default", target="target_a", model="Model", status="rate_limited", latency_ms=12, usage={"http_status": 429}))
+
+    loaded = store.load()
+    usage = store.read_usage()
+
+    assert loaded.cooldowns == state.cooldowns
+    assert loaded.failures == state.failures
+    assert loaded.successes == state.successes
+    assert loaded.avg_latency_ms == state.avg_latency_ms
+    assert len(usage) == 1
+    assert usage[0].target == "target_a"
+    assert usage[0].usage == {"http_status": 429}
+
+
+def test_openai_compatible_hf_executor_reuses_persistent_cooldown(tmp_path) -> None:
+    def rate_limited(request, *, timeout):  # noqa: ARG001
+        body = json.dumps({"error": {"message": "rate limited"}}).encode("utf-8")
+        raise HTTPError(request.full_url, 429, "Too Many Requests", hdrs=None, fp=_ErrorBody(body))
+
+    state_store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")
+    executor = OpenAICompatibleHFPoolExecutor(opener=rate_limited, state_store=state_store)
+
+    with pytest.raises(HFPoolRateLimited):
+        executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
+
+    assert "target_a" in state_store.load().cooldowns
+
+    def unexpected_http(_request, *, timeout):  # pragma: no cover - must not be called
+        raise AssertionError("persistent cooldown should stop before HTTP")
+
+    second_executor = OpenAICompatibleHFPoolExecutor(opener=unexpected_http, state_store=state_store)
+
+    with pytest.raises(HFPoolRateLimited, match="cooldown"):
+        second_executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
 
 
 class _ErrorBody:

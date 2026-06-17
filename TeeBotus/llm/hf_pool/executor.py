@@ -15,7 +15,7 @@ from TeeBotus.llm.hf_pool.errors import HFPoolRateLimited, HFPoolTargetUnavailab
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore
 
 
 class HFPoolExecutor(Protocol):
@@ -44,9 +44,10 @@ class OpenAICompatibleHFPoolExecutor:
     opener: HFPoolOpener | None = None
     state: HFPoolRuntimeState | None = None
     usage_events: list[HFPoolUsageEvent] | None = None
+    state_store: HFPoolRuntimeStateStore | None = None
 
     def create_reply(self, scheduled: ScheduledTarget, user_text: str, instructions: BotInstructions) -> LLMResponse:
-        state = self.state or HFPoolRuntimeState()
+        state = self._runtime_state()
         self._raise_if_in_cooldown(scheduled, state)
         started = time.monotonic()
         request = self._request(scheduled, user_text, instructions)
@@ -60,34 +61,34 @@ class OpenAICompatibleHFPoolExecutor:
         except HTTPError as exc:
             self._record_failure(scheduled, state, exc.code)
             error_text = _http_error_text(exc)
-            self._append_usage(scheduled, "rate_limited" if exc.code == 429 else "http_error", started, {"http_status": exc.code})
+            self._append_usage(scheduled, "rate_limited" if exc.code == 429 else "http_error", started, {"http_status": exc.code}, state)
             if exc.code == 429:
                 raise HFPoolRateLimited(redact_hf_secrets(error_text)) from exc
             raise HFPoolTargetUnavailable(redact_hf_secrets(error_text)) from exc
         except (URLError, TimeoutError, OSError) as exc:
             self._record_failure(scheduled, state, 0)
-            self._append_usage(scheduled, "transport_error", started, {})
+            self._append_usage(scheduled, "transport_error", started, {}, state)
             raise HFPoolTargetUnavailable(redact_hf_secrets(str(exc))) from exc
         if not 200 <= status_code < 300:
             self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "http_error", started, {"http_status": status_code})
+            self._append_usage(scheduled, "http_error", started, {"http_status": status_code}, state)
             raise HFPoolTargetUnavailable(f"hf_pool HTTP {status_code}")
         try:
             payload = json.loads(raw.decode("utf-8")) if raw else {}
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "invalid_json", started, {"http_status": status_code})
+            self._append_usage(scheduled, "invalid_json", started, {"http_status": status_code}, state)
             raise HFPoolTargetUnavailable("hf_pool target returned invalid JSON") from exc
         text = _extract_chat_text(payload)
         if not text:
             self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "empty_response", started, {"http_status": status_code})
+            self._append_usage(scheduled, "empty_response", started, {"http_status": status_code}, state)
             raise HFPoolTargetUnavailable("hf_pool target returned no message content")
         state.successes[scheduled.target.name] = state.successes.get(scheduled.target.name, 0) + 1
         state.failures.pop(scheduled.target.name, None)
         state.cooldowns.pop(scheduled.target.name, None)
         usage = dict(payload.get("usage") or {}) if isinstance(payload.get("usage"), dict) else {}
-        self._append_usage(scheduled, "ok", started, usage)
+        self._append_usage(scheduled, "ok", started, usage, state)
         return LLMResponse(
             text=text,
             response_id=str(payload.get("id") or "") or None,
@@ -96,6 +97,20 @@ class OpenAICompatibleHFPoolExecutor:
             usage=usage,
             raw=payload if isinstance(payload, dict) else None,
         )
+
+    def _runtime_state(self) -> HFPoolRuntimeState:
+        if self.state_store is not None:
+            state = self.state_store.load()
+            self.state = state
+            return state
+        if self.state is None:
+            self.state = HFPoolRuntimeState()
+        return self.state
+
+    def _persist_state(self, state: HFPoolRuntimeState) -> None:
+        self.state = state
+        if self.state_store is not None:
+            self.state_store.save(state)
 
     def _request(self, scheduled: ScheduledTarget, user_text: str, instructions: BotInstructions) -> Request:
         body: dict[str, Any] = {
@@ -121,10 +136,12 @@ class OpenAICompatibleHFPoolExecutor:
             parsed = datetime.fromisoformat(cooldown_until)
         except ValueError:
             state.cooldowns.pop(scheduled.target.name, None)
+            self._persist_state(state)
             return
         if parsed > datetime.now(timezone.utc):
             raise HFPoolRateLimited(f"hf_pool target {scheduled.target.name} is in cooldown until {cooldown_until}")
         state.cooldowns.pop(scheduled.target.name, None)
+        self._persist_state(state)
 
     def _record_failure(self, scheduled: ScheduledTarget, state: HFPoolRuntimeState, status_code: int) -> None:
         state.failures[scheduled.target.name] = state.failures.get(scheduled.target.name, 0) + 1
@@ -138,19 +155,22 @@ class OpenAICompatibleHFPoolExecutor:
         if cooldown_seconds > 0:
             state.cooldowns[scheduled.target.name] = (datetime.now(timezone.utc) + timedelta(seconds=cooldown_seconds)).isoformat()
 
-    def _append_usage(self, scheduled: ScheduledTarget, status: str, started: float, usage: dict[str, Any]) -> None:
-        if self.usage_events is None:
-            return
-        self.usage_events.append(
-            HFPoolUsageEvent(
-                pool=scheduled.pool.name,
-                target=scheduled.target.name,
-                model=scheduled.target.request_model,
-                status=status,
-                latency_ms=max(0, int(round((time.monotonic() - started) * 1000))),
-                usage=dict(usage),
-            )
+    def _append_usage(self, scheduled: ScheduledTarget, status: str, started: float, usage: dict[str, Any], state: HFPoolRuntimeState) -> None:
+        latency_ms = max(0, int(round((time.monotonic() - started) * 1000)))
+        _record_average_latency(state, scheduled.target.name, latency_ms)
+        event = HFPoolUsageEvent(
+            pool=scheduled.pool.name,
+            target=scheduled.target.name,
+            model=scheduled.target.request_model,
+            status=status,
+            latency_ms=latency_ms,
+            usage=dict(usage),
         )
+        if self.usage_events is not None:
+            self.usage_events.append(event)
+        if self.state_store is not None:
+            self.state_store.append_usage(event)
+        self._persist_state(state)
 
 
 def _chat_completions_endpoint(base_url: str) -> str:
@@ -158,6 +178,15 @@ def _chat_completions_endpoint(base_url: str) -> str:
     if base.endswith("/chat/completions"):
         return base
     return f"{base}/chat/completions"
+
+
+def _record_average_latency(state: HFPoolRuntimeState, target_name: str, latency_ms: int) -> None:
+    previous = float(state.avg_latency_ms.get(target_name, 0.0) or 0.0)
+    completed = max(0, state.successes.get(target_name, 0) + state.failures.get(target_name, 0) - 1)
+    if completed <= 0 or previous <= 0:
+        state.avg_latency_ms[target_name] = float(latency_ms)
+        return
+    state.avg_latency_ms[target_name] = ((previous * completed) + latency_ms) / (completed + 1)
 
 
 def _extract_chat_text(payload: Any) -> str:

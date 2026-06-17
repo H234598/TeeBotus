@@ -21,6 +21,7 @@ class VersionNotificationRecipient:
     account_id: str
     identity_key: str
     chat_id: int
+    adapter_slot: int = 1
 
 
 def notify_recent_telegram_users_for_version(
@@ -32,6 +33,7 @@ def notify_recent_telegram_users_for_version(
     send_message: Callable[[int, str], object],
     repo_root: Path | None = None,
     repo_url: str | None = None,
+    adapter_slot: int | None = None,
     on_error: Callable[[VersionNotificationRecipient, Exception], object] | None = None,
     on_skip: Callable[[str], object] | None = None,
     now: datetime | None = None,
@@ -47,7 +49,7 @@ def notify_recent_telegram_users_for_version(
     version_state = state.setdefault("versions", {}).setdefault(version, {})
     sent_identities = set(str(value) for value in version_state.get("sent_identities", []) if isinstance(value, str))
     sent_count = 0
-    for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, now=resolved_now):
+    for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
         if recipient.identity_key in sent_identities:
             continue
         message = build_version_notification_text(
@@ -69,7 +71,13 @@ def notify_recent_telegram_users_for_version(
     return sent_count
 
 
-def recent_telegram_recipients(account_store: AccountStore, *, instance_name: str, now: datetime | None = None) -> list[VersionNotificationRecipient]:
+def recent_telegram_recipients(
+    account_store: AccountStore,
+    *,
+    instance_name: str,
+    adapter_slot: int | None = None,
+    now: datetime | None = None,
+) -> list[VersionNotificationRecipient]:
     resolved_now = now or datetime.now(timezone.utc)
     threshold = resolved_now - timedelta(days=ACTIVE_WINDOW_DAYS)
     recipients: list[VersionNotificationRecipient] = []
@@ -86,7 +94,14 @@ def recent_telegram_recipients(account_store: AccountStore, *, instance_name: st
         last_seen = _parse_datetime(str(payload.get("last_seen_at") or ""))
         if not account_id or last_seen is None or last_seen < threshold:
             continue
-        chat_id_text = identity_key.removeprefix("telegram:user:")
+        route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
+        route_channel = str(route.get("channel") or "telegram").strip().casefold()
+        route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
+        if adapter_slot is not None and route_slot != int(adapter_slot):
+            continue
+        if route_channel != "telegram":
+            continue
+        chat_id_text = str(route.get("chat_id") or "").strip() or identity_key.removeprefix("telegram:user:")
         if not chat_id_text.isdigit():
             continue
         recipients.append(
@@ -95,6 +110,7 @@ def recent_telegram_recipients(account_store: AccountStore, *, instance_name: st
                 account_id=account_id,
                 identity_key=identity_key,
                 chat_id=int(chat_id_text),
+                adapter_slot=route_slot,
             )
         )
     return sorted(recipients, key=lambda item: item.identity_key)
@@ -213,6 +229,14 @@ def _parse_datetime(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
+    try:
+        slot = int(value)
+    except (TypeError, ValueError):
+        return default
+    return slot if slot > 0 else default
 
 
 def _load_state(path: Path) -> dict[str, Any]:

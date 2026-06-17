@@ -122,6 +122,90 @@ def _valid_benchmark_payload() -> dict:
                 },
             }
         )
+    payload["results"].append(
+        {
+            "name": "retrieval_embedding_reranker_matrix",
+            "category": "retrieval",
+            "ok": True,
+            "mode": "local",
+            "iterations": 7,
+            "total_ms": 1.0,
+            "throughput_ops_s": 100.0,
+            "errors": 0,
+            "payload_bytes": 1,
+            "index_bytes": 1,
+            "details": {
+                "network_calls": 0,
+                "openai_calls": 0,
+                "provider_calls": 0,
+                "remote_calls": 0,
+                "llm_calls": 0,
+                "usermemory_models": sorted(check_plan2_acceptance.REQUIRED_RETRIEVAL_USERMEMORY_MODELS),
+                "book_models": sorted(check_plan2_acceptance.REQUIRED_RETRIEVAL_BOOK_MODELS),
+                "backend_modes": sorted(check_plan2_acceptance.REQUIRED_RETRIEVAL_BACKEND_MODES),
+                "backend_selected": {"local": 1, "llamaindex_fake": 1, "haystack_fake": 1},
+                "reranker_comparison": {
+                    "without_reranker_model": "BAAI/bge-m3",
+                    "without_reranker_top": [0, 1],
+                    "with_reranker_model": "BAAI/bge-reranker-v2-m3",
+                    "with_reranker_top": [0, 1],
+                },
+            },
+        }
+    )
+    payload["results"].append(
+        {
+            "name": "hf_pool_eval_matrix",
+            "category": "hf_pool",
+            "ok": True,
+            "mode": "local",
+            "iterations": 7,
+            "total_ms": 1.0,
+            "throughput_ops_s": 100.0,
+            "errors": 0,
+            "payload_bytes": 1,
+            "index_bytes": 1,
+            "details": {
+                "network_calls": 0,
+                "openai_calls": 0,
+                "provider_calls": 0,
+                "remote_calls": 0,
+                "llm_calls": 0,
+                "purposes": sorted(check_plan2_acceptance.REQUIRED_HF_POOL_EVAL_PURPOSES),
+                "structured_decision_json_valid": True,
+                "psychology_quality_ok": True,
+                "bibliothekar_citation_faithful": True,
+                "summarizer_faithful": True,
+                "provider_failure_fallback": True,
+                "cooldown_fallback": True,
+                "cooldown_network_calls": 0,
+                "mock_executor_calls": 5,
+            },
+        }
+    )
+    payload["results"].append(
+        {
+            "name": "pydantic_structured_decisions",
+            "category": "pydantic_ai",
+            "ok": True,
+            "mode": "local",
+            "iterations": 1,
+            "total_ms": 1.0,
+            "throughput_ops_s": 100.0,
+            "errors": 0,
+            "payload_bytes": 1,
+            "index_bytes": 1,
+            "details": {
+                "network_calls": 0,
+                "openai_calls": 0,
+                "provider_calls": 0,
+                "remote_calls": 0,
+                "llm_calls": 0,
+                "schemas": sorted(check_plan2_acceptance.REQUIRED_PYDANTIC_DECISION_SCHEMAS),
+                "fake_agent_calls": 1,
+            },
+        }
+    )
     payload["quality_gate"]["checked_results"] = len(payload["results"])
     required_fields = sorted(check_plan2_acceptance.REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS)
     for result in payload["results"]:
@@ -1435,11 +1519,99 @@ def test_benchmark_artifact_validation_requires_bibliothekar_provenance_details(
     assert any("bibliothekar citation_required_fields missing" in error and "file_sha256" in error and "ingested_at" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_requires_pydantic_decision_details() -> None:
+    payload = _valid_benchmark_payload()
+    decision_result = next(result for result in payload["results"] if result["name"] == "pydantic_structured_decisions")
+    decision_result["details"]["schemas"] = ["BibliothekarQueryDecision"]
+    decision_result["details"]["fake_agent_calls"] = 0
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("pydantic schemas missing required decisions" in error and "AgentTaskDecision" in error for error in errors)
+    assert any("pydantic fake_agent_calls must be a positive integer" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_hf_pool_eval_details() -> None:
+    payload = _valid_benchmark_payload()
+    hf_eval = next(result for result in payload["results"] if result["name"] == "hf_pool_eval_matrix")
+    hf_eval["details"]["purposes"] = ["normal_chat"]
+    hf_eval["details"]["structured_decision_json_valid"] = False
+    hf_eval["details"]["bibliothekar_citation_faithful"] = False
+    hf_eval["details"]["cooldown_network_calls"] = 1
+    hf_eval["details"]["mock_executor_calls"] = 0
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("hf_pool purposes missing required evals" in error and "structured_decision" in error for error in errors)
+    assert any("hf_pool structured_decision_json_valid must be true" in error for error in errors)
+    assert any("hf_pool bibliothekar_citation_faithful must be true" in error for error in errors)
+    assert any("hf_pool cooldown_network_calls must be 0" in error for error in errors)
+    assert any("hf_pool mock_executor_calls must be a positive integer" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_hf_pool_eval_result() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"] = [result for result in payload["results"] if result["name"] != "hf_pool_eval_matrix"]
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "benchmark results missing required hf_pool_eval_matrix result" in errors
+
+
+def test_benchmark_artifact_validation_requires_retrieval_matrix_details() -> None:
+    payload = _valid_benchmark_payload()
+    retrieval = next(result for result in payload["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
+    retrieval["details"]["usermemory_models"] = ["intfloat/multilingual-e5-small"]
+    retrieval["details"]["book_models"] = ["BAAI/bge-m3"]
+    retrieval["details"]["backend_modes"] = ["local"]
+    retrieval["details"]["backend_selected"] = {"local": 1, "llamaindex_fake": 0}
+    retrieval["details"]["reranker_comparison"] = {
+        "without_reranker_model": "wrong",
+        "without_reranker_top": [],
+        "with_reranker_model": "wrong",
+        "with_reranker_top": [],
+    }
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("retrieval usermemory_models missing" in error and "intfloat/multilingual-e5-base" in error for error in errors)
+    assert any("retrieval book_models missing" in error and "intfloat/multilingual-e5-base" in error for error in errors)
+    assert any("retrieval backend_modes missing" in error and "haystack_fake" in error for error in errors)
+    assert any("retrieval without_reranker_model must be BAAI/bge-m3" in error for error in errors)
+    assert any("retrieval with_reranker_model must be BAAI/bge-reranker-v2-m3" in error for error in errors)
+    assert any("retrieval without_reranker_top must be a non-empty list" in error for error in errors)
+    assert any("retrieval backend_selected missing" in error and "haystack_fake" in error for error in errors)
+    assert any("retrieval backend_selected.llamaindex_fake must be a positive integer" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_requires_retrieval_matrix_result() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"] = [result for result in payload["results"] if result["name"] != "retrieval_embedding_reranker_matrix"]
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "benchmark results missing required retrieval_embedding_reranker_matrix result" in errors
+
+
+def test_benchmark_artifact_validation_requires_pydantic_structured_result() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"] = [result for result in payload["results"] if result["name"] != "pydantic_structured_decisions"]
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "benchmark results missing required pydantic_structured_decisions result" in errors
+
+
 def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifacts() -> None:
     payload = {
         "schema_version": 1,
         "quick": False,
         "include_live": True,
+        "live_hf": True,
+        "live_qdrant": True,
         "ok": True,
         "results": [
             {
@@ -1477,6 +1649,8 @@ def test_benchmark_artifact_validation_rejects_live_or_nonquick_standard_artifac
 
     assert "quick must be true for standard Plan2 benchmark artifacts" in errors
     assert "include_live must be false for standard Plan2 benchmark artifacts" in errors
+    assert "live_hf must be false for standard Plan2 benchmark artifacts" in errors
+    assert "live_qdrant must be false for standard Plan2 benchmark artifacts" in errors
 
 
 def test_benchmark_artifact_validation_rejects_provider_or_network_calls_in_standard_artifacts() -> None:
@@ -1687,6 +1861,51 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
     )
 
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == []
+
+
+def test_runtime_status_missing_required_lines_flags_missing_plan3_diagnostics() -> None:
+    complete = "\n".join(
+        [
+            "hf_pool=default status=disabled",
+            "llm_route=structured_decision profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision status=unavailable fallback=local_ollama",
+            "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
+            "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
+            "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
+            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=384",
+        ]
+    )
+    incomplete = "\n".join(
+        [
+            "hf_pool=default status=disabled",
+            "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_missing_required_lines(complete) == []
+    missing = check_plan2_acceptance._runtime_status_missing_required_lines(incomplete)
+    assert "runtime-status missing structured decision provider line: llm_route=structured_decision" in missing
+    assert "runtime-status missing structured decision instance line: structured_decision=" in missing
+    assert "runtime-status missing qdrant user-memory collection line: qdrant_collection=teebotus_user_memory" in missing
+
+
+def test_runtime_status_missing_required_lines_flags_malformed_structured_route() -> None:
+    output = "\n".join(
+        [
+            "hf_pool=default status=disabled",
+            "llm_route=structured_decision profile=openai_premium provider=openai model=gpt-5.5 status=unavailable",
+            "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
+            "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
+            "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
+            "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable vector_size=384",
+        ]
+    )
+
+    missing = check_plan2_acceptance._runtime_status_missing_required_lines(output)
+
+    assert "runtime-status structured decision route must use profile=hf_pool_structured" in missing
+    assert "runtime-status structured decision route must use provider=hf_pool" in missing
+    assert "runtime-status structured decision route must use model=pool:default#structured_decision" in missing
+    assert "runtime-status unavailable structured decision route must show fallback" in missing
 
 
 def test_runtime_status_broken_lines_flags_secret_leaks() -> None:

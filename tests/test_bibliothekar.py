@@ -76,6 +76,9 @@ def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path)
     assert chunk["chunk_index"] == 1
     assert chunk["section"] == "Zeilen 1-1"
     assert chunk["license"] == "private"
+    assert chunk["source_quality"] == "unreviewed"
+    assert chunk["citation_quality"] == "unreviewed"
+    assert chunk["source_harvest_route"] == "manual"
     assert prompt_chunk["source_id"] == document["source_id"]
     assert prompt_chunk["file_path"] == document["file_path"]
     assert prompt_chunk["file_sha256"] == document["file_sha256"]
@@ -83,6 +86,9 @@ def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path)
     assert prompt_chunk["author"] == ""
     assert prompt_chunk["language"] == "de"
     assert prompt_chunk["license"] == "private"
+    assert prompt_chunk["source_quality"] == "unreviewed"
+    assert prompt_chunk["citation_quality"] == "unreviewed"
+    assert prompt_chunk["source_harvest_route"] == "manual"
     assert prompt_chunk["ingested_at"] == chunk["ingested_at"]
     assert prompt_chunk["chunk_index"] == 1
     assert prompt_chunk["embedding_model"] == "intfloat/multilingual-e5-small"
@@ -1049,6 +1055,41 @@ def test_bibliothekar_rebuild_skips_sensitive_files_copied_into_library(tmp_path
     assert "User_Habbits_and_behave.md" not in index_text
 
 
+def test_bibliothekar_rebuild_skips_source_harvester_staging_dirs(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    safe_marker = "SAFE_LIBRARY_MARKER_C734"
+    staged_markers = {
+        "accepted": "STAGED_ACCEPTED_MARKER_115B",
+        "quarantine": "STAGED_QUARANTINE_MARKER_4EA1",
+        "rejected": "STAGED_REJECTED_MARKER_37A9",
+        "inbox": "STAGED_INBOX_MARKER_D9C2",
+    }
+    (library_dir / "therapie.txt").write_text(
+        f"Depression Therapie Aktivierung Schlaf {safe_marker}.",
+        encoding="utf-8",
+    )
+    for dirname, marker in staged_markers.items():
+        staged_dir = library_dir / dirname
+        staged_dir.mkdir()
+        (staged_dir / f"{dirname}.txt").write_text(
+            f"Diese Harvest-Staging-Datei darf nicht blind indexiert werden: {marker}.",
+            encoding="utf-8",
+        )
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    chunks_text = store.chunks_path.read_text(encoding="utf-8")
+    index_text = json.dumps(index, ensure_ascii=False, sort_keys=True)
+
+    assert index["chunk_count"] == 1
+    assert safe_marker in chunks_text
+    for dirname, marker in staged_markers.items():
+        assert marker not in chunks_text
+        assert marker not in index_text
+        assert f"{dirname}.txt" not in index_text
+
+
 def test_bibliothekar_rebuild_skips_symlinked_library_files(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1222,6 +1263,41 @@ def test_llamaindex_backend_falls_back_to_local_when_optional_dependency_missing
 
     assert selection.selected_ids
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
+def test_llamaindex_backend_without_query_engine_factory_uses_local_fallback(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    backend = LlamaIndexBibliothekarBackend(instance_name="Depressionsbot", instances_dir=tmp_path / "instances")
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+
+    assert backend.available is False
+    assert selection.selected_ids
+    assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
+
+
+def test_llamaindex_health_reports_unconfigured_query_engine_as_unavailable(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+
+    health = check_bibliothekar_service(
+        "Depressionsbot",
+        tmp_path / "instances",
+        BotInstructions(bibliothekar_backend="llamaindex"),
+    )
+
+    assert health.backend == "llamaindex"
+    assert health.status == "unavailable"
+    assert health.store == "json"
+    assert "query engine is not configured" in health.error
+    assert health.documents == 1
+    assert health.chunks == 1
 
 
 def test_haystack_backend_detects_installed_qdrant_haystack_integration(tmp_path):
@@ -1697,6 +1773,17 @@ def test_bibliothekar_section_settings_are_parsed():
     assert instructions.bibliothekar_require_citations is False
 
 
+def test_bibliothekar_llamaindex_backend_setting_is_parsed():
+    instructions = parse_instructions(
+        """
+        ## Bibliothekar
+        - backend: llama-index
+        """
+    )
+
+    assert instructions.bibliothekar_backend == "llamaindex"
+
+
 def test_bibliothekar_cli_status_index_dry_run_and_query(tmp_path, capsys):
     source = tmp_path / "books"
     source.mkdir()
@@ -1761,6 +1848,26 @@ def test_bibliothekar_cli_harvest_gates_source_before_ingest(tmp_path, capsys):
     assert stored_path.parent.name == "accepted"
     assert stored_path.exists()
     assert source.exists()
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "--json", "promote", str(stored_path)]) == 0
+    promote_payload = json.loads(capsys.readouterr().out)
+    promoted_path = Path(promote_payload["results"][0]["promoted_path"])
+    assert promoted_path.parent.name == "books"
+    assert promoted_path.exists()
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "index"]) == 0
+    index_output = capsys.readouterr().out
+    assert "Depressionsbot: 1 Dokumente, 1 Chunks, dry_run=False" in index_output
+
+    assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "--json", "query", "Therapie", "--top-k", "1"]) == 0
+    query_payload = json.loads(capsys.readouterr().out)
+    prompt_payload = json.loads(query_payload["results"][0]["prompt_text"])
+    prompt_chunk = prompt_payload["selected_library_chunks"][0]
+    assert prompt_chunk["title"] == "Therapiequelle"
+    assert prompt_chunk["license"] == "private"
+    assert prompt_chunk["source_quality"] == "usable"
+    assert prompt_chunk["citation_quality"] == "usable"
+    assert prompt_chunk["source_harvest_route"] == "accepted"
 
 
 def test_bibliothekar_cli_status_reports_haystack_target_in_text_and_json(tmp_path, capsys, monkeypatch):

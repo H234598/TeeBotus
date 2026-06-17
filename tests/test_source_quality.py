@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import ValidationError
 import pytest
 
-from TeeBotus.ai_structures import SourceQualityDecision
+from TeeBotus.decisions.source_quality import SourceQualityDecision
 from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityInput, SourceQualityPipeline
 
 
@@ -90,3 +90,13 @@ def test_source_quality_pipeline_quarantines_missing_license_without_llm_judge()
     assert report.decision.status == "needs_review"
     assert report.nli_results == ()
     assert "missing license" in report.decision.reason
+
+
+def test_source_quality_pipeline_quarantines_sources_without_convertible_suffix() -> None:
+    pipeline = SourceQualityPipeline()
+
+    report = pipeline.evaluate(SourceQualityInput(identifier="quelle", size_bytes=20, suffix="", metadata={"title": "Quelle", "license": "private"}))
+
+    assert report.route == "quarantine"
+    assert report.decision.status == "needs_review"
+    assert "missing file suffix" in report.decision.reason

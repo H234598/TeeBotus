@@ -17,8 +17,20 @@ IntentName = Literal[
     "reminder",
     "youtube_transcript",
     "bibliothekar_query",
+    "source_harvest",
     "tool_request",
     "unknown",
+]
+
+AgentTaskName = Literal[
+    "none",
+    "source_harvest",
+    "bibliothekar_query",
+    "memory_reflection",
+    "reminder_planning",
+    "tool_safety",
+    "proactive_planning",
+    "workflow",
 ]
 
 
@@ -111,14 +123,37 @@ class YouTubeOptionsDecision(BaseModel):
 class BibliothekarQueryDecision(BaseModel):
     should_search: bool
     query: str = Field(default="", max_length=800)
+    filters: dict[str, str] = Field(default_factory=dict)
+    requires_sources: bool = True
     confidence: float = Field(ge=0.0, le=1.0)
     reason_short: str = Field(default="", max_length=240)
     source: Literal["classic", "model", "fallback"] = "model"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_plan3_field_names(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "should_search" not in value and "should_query_bibliothekar" in value:
+            value = dict(value)
+            value["should_search"] = value.pop("should_query_bibliothekar")
+        return value
 
     @field_validator("query", "reason_short")
     @classmethod
     def _strip_text(cls, value: str) -> str:
         return str(value or "").strip()
+
+    @field_validator("filters", mode="before")
+    @classmethod
+    def _coerce_filters(cls, value: Any) -> dict[str, str]:
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("filters must be an object")
+        return {str(key).strip(): str(item).strip() for key, item in value.items() if str(key).strip()}
+
+    @property
+    def should_query_bibliothekar(self) -> bool:
+        return self.should_search
 
 
 class SourceQualityDecision(BaseModel):
@@ -148,6 +183,36 @@ class ToolSafetyDecision(BaseModel):
     def _keep_blocked_tools_denied(self) -> "ToolSafetyDecision":
         if self.risk_level == "blocked" and self.allowed:
             raise ValueError("blocked tools must not be allowed")
+        return self
+
+
+class AgentTaskDecision(BaseModel):
+    should_run: bool
+    task: AgentTaskName = "none"
+    objective: str = Field(default="", max_length=800)
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason_short: str = Field(default="", max_length=240)
+    risk_level: Literal["low", "medium", "high", "blocked"] = "low"
+    source: Literal["classic", "model", "fallback"] = "model"
+
+    @field_validator("task", mode="before")
+    @classmethod
+    def _normalize_task(cls, value: str) -> str:
+        return str(value or "none").strip().casefold().replace("-", "_") or "none"
+
+    @field_validator("objective", "reason_short")
+    @classmethod
+    def _strip_agent_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @model_validator(mode="after")
+    def _require_task_for_run(self) -> "AgentTaskDecision":
+        if self.risk_level == "blocked" and self.should_run:
+            raise ValueError("blocked agent tasks must not run")
+        if self.should_run and self.task == "none":
+            raise ValueError("task must not be none when should_run is true")
+        if self.should_run and not self.objective:
+            raise ValueError("objective must be non-empty when should_run is true")
         return self
 
 

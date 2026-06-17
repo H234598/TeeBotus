@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 
+from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm_client import LiteLLMTextClient
 from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
@@ -680,7 +681,16 @@ def test_matrix_bridge_constructs_openai_client_from_run_config(monkeypatch, tmp
     assert bridge.engine.openai_client is bridge.openai_client
 
 
-def test_matrix_bridge_uses_llm_profile_for_text_client(tmp_path) -> None:
+def test_matrix_bridge_uses_llm_profile_for_text_client(monkeypatch, tmp_path) -> None:
+    import TeeBotus.runtime.matrix_runner as matrix_runner_module
+
+    decision_kwargs = []
+
+    def fake_decision_runner(**kwargs):
+        decision_kwargs.append(kwargs)
+        return "decision-runner"
+
+    monkeypatch.setattr(matrix_runner_module, "build_runtime_structured_decision_runner", fake_decision_runner)
     bridge = MatrixRuntimeBridge(
         run_config=AccountRunConfig(
             instance_name="Demo",
@@ -701,6 +711,8 @@ def test_matrix_bridge_uses_llm_profile_for_text_client(tmp_path) -> None:
     assert isinstance(bridge.llm_client, LiteLLMTextClient)
     assert bridge.llm_client.model == "ollama_chat/llama3.1:8b"
     assert bridge.engine.llm_client is bridge.llm_client
+    assert bridge.engine.structured_decision_runner == "decision-runner"
+    assert decision_kwargs and isinstance(decision_kwargs[0]["instructions"], BotInstructions)
 
 
 def test_matrix_cleanup_redacts_tracked_current_room_messages(tmp_path) -> None:

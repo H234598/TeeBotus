@@ -34,6 +34,23 @@ def test_json_export_redacts_secret_verifier(tmp_path):
     assert b"do-not-export" not in result.data
 
 
+def test_export_explains_semantic_index_cache(tmp_path):
+    account_dir = make_account_dir(tmp_path)
+    json_result = export_account_data(ACCOUNT_ID, account_dir, "json")
+    md_result = export_account_data(ACCOUNT_ID, account_dir, "md")
+    csv_result = export_account_data(ACCOUNT_ID, account_dir, "csv")
+
+    payload = json.loads(json_result.data.decode("utf-8"))
+    note = payload["export_notes"]["semantic_memory_index"]
+
+    assert note["truth_store"] == "AccountStore"
+    assert "not Qdrant vectors" in note["exported_truth"]
+    assert "must not be stored in Qdrant" in note["plaintext_policy"]
+    assert "memory-rebuild" in note["rebuild_command"]
+    assert b"semantic_memory_index" in md_result.data
+    assert b"semantic_memory_index.qdrant_payload" in csv_result.data
+
+
 def test_markdown_and_csv_exports(tmp_path):
     account_dir = make_account_dir(tmp_path)
     md = export_account_data(ACCOUNT_ID, account_dir, "md")

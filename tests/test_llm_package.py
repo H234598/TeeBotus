@@ -50,7 +50,7 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
     assert normal.base_url == "http://127.0.0.1:11434"
     assert structured.profile_name == "hf_pool_structured"
     assert structured.provider == "hf_pool"
-    assert structured.model == "pool:default"
+    assert structured.model == "pool:default#structured_decision"
     assert structured.fallback_profile_name == "local_ollama"
     assert structured.fallback_models == ("ollama_chat/llama3.1:8b",)
     assert structured.fallback_base_url == "http://127.0.0.1:11434"

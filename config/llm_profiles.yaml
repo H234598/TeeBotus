@@ -12,22 +12,22 @@ profiles:
 
   hf_pool_default:
     provider: hf_pool
-    model: pool:default
+    model: pool:default#normal_chat
     api_key_env: ""
 
   hf_pool_structured:
     provider: hf_pool
-    model: pool:default
+    model: pool:default#structured_decision
     api_key_env: ""
 
   hf_pool_quality:
     provider: hf_pool
-    model: pool:default
+    model: pool:default#psychology_explainer
     api_key_env: ""
 
   hf_pool_bibliothekar:
     provider: hf_pool
-    model: pool:default
+    model: pool:default#bibliothekar_answer
     api_key_env: ""
 
   groq_fast:

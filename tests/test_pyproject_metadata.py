@@ -47,3 +47,11 @@ def test_pytest_config_points_at_local_tests() -> None:
 
     assert pytest_config["testpaths"] == ["tests"]
     assert pytest_config["pythonpath"] == ["."]
+
+
+def test_pyproject_declares_operator_scripts() -> None:
+    scripts = _pyproject()["project"]["scripts"]
+
+    assert scripts["teebotus-bibliothekar"] == "TeeBotus.bibliothekar.cli:main"
+    assert scripts["teebotus-qdrant-systemd"] == "TeeBotus.qdrant_systemd:main"
+    assert scripts["teebotus-embedding"] == "TeeBotus.embedding.cli:main"

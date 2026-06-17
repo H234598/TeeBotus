@@ -27,8 +27,10 @@ class HFPoolProvider:
         executor: HFPoolExecutor | None = None,
         fallback_client: object | None = None,
     ) -> None:
-        self.pool_name = _normalize_pool_name(pool_name)
-        self.purpose = normalize_llm_purpose(purpose)
+        selector = _parse_pool_selector(pool_name)
+        self.pool_name = selector["pool_name"]
+        self.purpose = _select_effective_purpose(purpose, selector["purpose"])
+        self.model_selector = _format_pool_selector(self.pool_name, self.purpose)
         self.config_path = Path(config_path)
         self.env = env
         self.executor = executor or HFPoolMockExecutor()
@@ -78,3 +80,30 @@ def _normalize_pool_name(value: object) -> str:
     if text.startswith("pool:"):
         text = text.split(":", maxsplit=1)[1]
     return text or "default"
+
+
+def _parse_pool_selector(value: object) -> dict[str, str]:
+    text = str(value or "").strip()
+    if not text:
+        return {"pool_name": "default", "purpose": ""}
+    if "#" in text:
+        pool_text, purpose_text = text.split("#", maxsplit=1)
+    else:
+        pool_text, purpose_text = text, ""
+    return {
+        "pool_name": _normalize_pool_name(pool_text),
+        "purpose": normalize_llm_purpose(purpose_text) if purpose_text.strip() else "",
+    }
+
+
+def _select_effective_purpose(explicit: object, selector_purpose: str) -> str:
+    normalized = normalize_llm_purpose(explicit)
+    if selector_purpose and normalized == "normal_chat":
+        return selector_purpose
+    return normalized
+
+
+def _format_pool_selector(pool_name: str, purpose: str) -> str:
+    normalized_pool = _normalize_pool_name(pool_name)
+    normalized_purpose = normalize_llm_purpose(purpose)
+    return f"pool:{normalized_pool}#{normalized_purpose}"

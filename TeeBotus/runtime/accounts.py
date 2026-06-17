@@ -672,6 +672,33 @@ class AccountStore:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
         return self.get_account_for_identity(identity_key)
 
+    def list_account_ids(self, *, include_unresolvable: bool = False) -> tuple[str, ...]:
+        ids: set[str] = set()
+        index = self._load_index()
+        accounts = index.get("accounts") if isinstance(index.get("accounts"), dict) else {}
+        for key, payload in accounts.items():
+            key_id = str(key or "").strip().lower()
+            if TOKEN_HEX_RE.fullmatch(key_id):
+                ids.add(key_id)
+            if isinstance(payload, dict):
+                payload_id = str(payload.get("account_id") or "").strip().lower()
+                if TOKEN_HEX_RE.fullmatch(payload_id):
+                    ids.add(payload_id)
+        if self.accounts_dir.exists():
+            for path in self.accounts_dir.iterdir():
+                if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name):
+                    ids.add(path.name)
+        if include_unresolvable:
+            return tuple(sorted(ids))
+        resolvable_ids: list[str] = []
+        for account_id in sorted(ids):
+            try:
+                if self._account_is_resolvable(account_id):
+                    resolvable_ids.append(account_id)
+            except AccountStoreError:
+                continue
+        return tuple(resolvable_ids)
+
     def resolve_or_create_account(self, identity_key: str, *, display_label: str = "") -> str:
         identities = self._load_identities()
         key = self._normalize_identity_key(identity_key)
@@ -1423,6 +1450,62 @@ class AccountStore:
         if max_prompt_chars < 1:
             return AccountMemorySelection("", ())
         excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
+        entries = self.read_memory_entries(account_id)
+        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        ordered_entries = [
+            entry
+            for entry in self._rank_structured_memory_entries(entries, index, query_text)
+            if str(entry.get("id") or "").strip() not in excluded_ids
+        ]
+        return self._select_structured_memory_entries(
+            account_id,
+            ordered_entries,
+            max_prompt_chars=max_prompt_chars,
+            max_entry_chars=max_entry_chars,
+            habits_max_chars=habits_max_chars,
+            mark_accessed=True,
+        )
+
+    def select_structured_memory_by_ids(
+        self,
+        account_id: str,
+        memory_ids: Iterable[str],
+        *,
+        max_prompt_chars: int = 12000,
+        max_entry_chars: int = 2000,
+        habits_max_chars: int = 4000,
+        exclude_ids: Iterable[str] = (),
+        mark_accessed: bool = True,
+    ) -> AccountMemorySelection:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        if max_prompt_chars < 1:
+            return AccountMemorySelection("", ())
+        excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
+        requested_ids = [
+            memory_id
+            for memory_id in dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip())
+            if memory_id not in excluded_ids
+        ]
+        ordered_entries = self.read_memory_entries_by_ids(account_id, requested_ids)
+        return self._select_structured_memory_entries(
+            account_id,
+            ordered_entries,
+            max_prompt_chars=max_prompt_chars,
+            max_entry_chars=max_entry_chars,
+            habits_max_chars=habits_max_chars,
+            mark_accessed=mark_accessed,
+        )
+
+    def _select_structured_memory_entries(
+        self,
+        account_id: str,
+        ordered_entries: Iterable[dict[str, Any]],
+        *,
+        max_prompt_chars: int,
+        max_entry_chars: int,
+        habits_max_chars: int,
+        mark_accessed: bool,
+    ) -> AccountMemorySelection:
         parts: list[str] = []
         selected_ids: list[str] = []
         total_chars = 0
@@ -1439,15 +1522,10 @@ class AccountStore:
                 parts.append(habits_block)
                 total_chars += len(habits_block)
 
-        entries = self.read_memory_entries(account_id)
-        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
-        ordered_entries = [
-            entry
-            for entry in self._rank_structured_memory_entries(entries, index, query_text)
-            if str(entry.get("id") or "").strip() not in excluded_ids
-        ]
         selected: list[dict[str, Any]] = []
         for entry in ordered_entries:
+            if not isinstance(entry, dict):
+                continue
             compact = _compact_account_memory_entry(entry, max_entry_chars=max_entry_chars)
             candidate_payload = _account_memory_prompt_payload(account_id, [*selected_ids, str(compact["id"])], [*selected, compact])
             candidate_text = json.dumps(candidate_payload, ensure_ascii=False, indent=2)
@@ -1464,7 +1542,8 @@ class AccountStore:
             selected_ids.append(str(compact["id"]))
 
         if selected:
-            self.mark_structured_memory_accessed(account_id, selected_ids)
+            if mark_accessed:
+                self.mark_structured_memory_accessed(account_id, selected_ids)
             memory_text = json.dumps(_account_memory_prompt_payload(account_id, selected_ids, selected), ensure_ascii=False, indent=2)
             parts.extend(
                 [

@@ -40,6 +40,9 @@ from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttac
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
+from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchService
+from TeeBotus.runtime.qdrant import QdrantError
+from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 from TeeBotus.runtime.state import RuntimeState
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
@@ -622,8 +625,9 @@ class TeeBotusEngine:
             if _is_memory_reset_confirmation(event.text):
                 self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
                 try:
+                    _delete_semantic_memory_index(self.account_store, account_id, instructions)
                     self.account_store.reset_structured_memory(account_id)
-                except (AccountStoreError, OSError):
+                except (AccountStoreError, OSError, QdrantError, ValueError):
                     return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_success)]
             if _is_memory_reset_cancellation(event.text):
@@ -1449,7 +1453,7 @@ def _build_bibliothekar_context(
     if bibliothekar_store is None or not instructions.bibliothekar_enabled:
         return ""
     try:
-        from TeeBotus.ai_structures import decide_bibliothekar_query
+        from TeeBotus.decisions.bibliothekar import decide_bibliothekar_query
 
         decision = decide_bibliothekar_query(query_text, model_runner=structured_decision_runner)
         if decision.source == "model" and decision.confidence < 0.7:
@@ -1491,6 +1495,33 @@ def _select_account_memory(
     if not instructions.user_memory_enabled:
         return AccountMemorySelection("", ())
     try:
+        if _semantic_memory_search_enabled(instructions):
+            config = MemorySearchConfig(
+                semantic_enabled=True,
+                semantic_backend=instructions.memory_search_semantic_backend,
+                local_limit=max(1, instructions.memory_search_local_limit),
+                semantic_limit=max(1, instructions.memory_search_semantic_limit),
+            )
+            service = MemorySearchService(
+                account_store=account_store,
+                instance_name=account_store.instance_name,
+                config=config,
+                qdrant_index=QdrantMemoryIndex(url=instructions.memory_search_qdrant_url),
+            )
+            search_result = service.search(
+                account_id,
+                query_text,
+                limit=config.local_limit + config.semantic_limit,
+                exclude_ids=exclude_ids,
+            )
+            return account_store.select_structured_memory_by_ids(
+                account_id,
+                [candidate.memory_id for candidate in search_result.candidates],
+                max_prompt_chars=max_prompt_chars if max_prompt_chars is not None else instructions.user_memory_max_prompt_chars,
+                max_entry_chars=instructions.user_memory_max_entry_chars,
+                exclude_ids=exclude_ids,
+                mark_accessed=False,
+            )
         return account_store.select_structured_memory(
             account_id,
             query_text=query_text,
@@ -1500,6 +1531,19 @@ def _select_account_memory(
         )
     except (AccountStoreError, OSError):
         return AccountMemorySelection("", ())
+
+
+def _semantic_memory_search_enabled(instructions: BotInstructions) -> bool:
+    return bool(instructions.memory_search_semantic_enabled and instructions.memory_search_semantic_backend == "qdrant")
+
+
+def _delete_semantic_memory_index(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> None:
+    if not _semantic_memory_search_enabled(instructions):
+        return
+    QdrantMemoryIndex(url=instructions.memory_search_qdrant_url).delete_account(
+        instance_name=account_store.instance_name,
+        account_id=account_id,
+    )
 
 
 @dataclass(frozen=True)
@@ -1625,7 +1669,7 @@ def _append_account_memory_interaction(
             "confidence": candidate.confidence,
         }
     try:
-        account_store.append_structured_memory_entry(
+        memory_id = account_store.append_structured_memory_entry(
             account_id,
             entry,
             profile_updates={
@@ -1638,6 +1682,28 @@ def _append_account_memory_interaction(
         )
     except (AccountStoreError, OSError):
         return
+    _maybe_index_semantic_memory_entry(account_store, account_id, memory_id, instructions)
+
+
+def _maybe_index_semantic_memory_entry(
+    account_store: AccountStore,
+    account_id: str,
+    memory_id: str,
+    instructions: BotInstructions,
+) -> None:
+    if not _semantic_memory_search_enabled(instructions):
+        return
+    try:
+        entries = account_store.read_memory_entries_by_ids(account_id, [memory_id])
+        if not entries:
+            return
+        QdrantMemoryIndex(url=instructions.memory_search_qdrant_url).index_memory(
+            instance_name=account_store.instance_name,
+            account_id=account_id,
+            entry=entries[0],
+        )
+    except (AccountStoreError, OSError, QdrantError, ValueError):
+        return
 
 
 def _memory_candidate_decision(
@@ -1649,7 +1715,7 @@ def _memory_candidate_decision(
     if structured_decision_runner is None:
         return None
     try:
-        from TeeBotus.ai_structures import MemoryCandidate, parse_memory_candidate
+        from TeeBotus.decisions.memory import MemoryCandidate, parse_memory_candidate
 
         payload = structured_decision_runner(_memory_candidate_prompt(user_text, bot_text), MemoryCandidate)
         return parse_memory_candidate(payload)

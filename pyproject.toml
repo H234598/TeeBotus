@@ -45,6 +45,7 @@ teebotus-proactive = "TeeBotus.proactive:main"
 teebotus-proactive-review = "TeeBotus.proactive_review:main"
 teebotus-proactive-systemd = "TeeBotus.proactive_systemd:main"
 teebotus-qdrant-systemd = "TeeBotus.qdrant_systemd:main"
+teebotus-embedding = "TeeBotus.embedding.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["TeeBotus*"]
@@ -55,3 +56,6 @@ version = {attr = "TeeBotus.__version__"}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "live: tests that require explicit live external services or provider calls",
+]

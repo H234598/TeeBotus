@@ -127,8 +127,15 @@ def test_telegram_runtime_bridge_builds_modern_context(monkeypatch, tmp_path: Pa
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()
     (instance_dir / "Bot_Verhalten.md").write_text("# Demo\n", encoding="utf-8")
+    decision_kwargs = []
     monkeypatch.setattr(telegram_runner.BibliothekarService, "from_instructions", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(telegram_runner, "build_runtime_text_llm_client", lambda **_kwargs: "llm-client")
+
+    def fake_decision_runner(**kwargs):
+        decision_kwargs.append(kwargs)
+        return "decision-runner"
+
+    monkeypatch.setattr(telegram_runner, "build_runtime_structured_decision_runner", fake_decision_runner)
 
     bridge = TelegramRuntimeBridge(
         run_config=AccountRunConfig(
@@ -150,6 +157,8 @@ def test_telegram_runtime_bridge_builds_modern_context(monkeypatch, tmp_path: Pa
     assert bridge.context.instance_name == "Demo"
     assert bridge.context.adapter_slot == 2
     assert bridge.context.engine.llm_client == "llm-client"
+    assert bridge.context.engine.structured_decision_runner == "decision-runner"
+    assert decision_kwargs and decision_kwargs[0]["instructions"] is bridge.instruction_store.get()
     assert bridge.context.bot_identity.mention == "@demo_bot"
     assert bridge.account_store.instance_name == "Demo"
     assert bridge.chat_state.teladi_call_state_path == tmp_path / "Demo" / "data" / "Teladi_Emergency_State.json"
@@ -337,7 +346,7 @@ def test_runtime_version_notifications_use_runtime_instances_dir(monkeypatch, tm
             return 1
 
     def fake_notify(**kwargs):  # noqa: ANN001 - mirrors notification helper kwargs.
-        events.append(("notify", kwargs["instances_dir"], kwargs["instance_name"], kwargs["repo_root"]))
+        events.append(("notify", kwargs["instances_dir"], kwargs["instance_name"], kwargs["repo_root"], kwargs["adapter_slot"]))
         return 0
 
     monkeypatch.setattr(telegram_runner.telegram_runtime, "TelegramAPI", FakeAPI)
@@ -346,7 +355,61 @@ def test_runtime_version_notifications_use_runtime_instances_dir(monkeypatch, tm
     telegram_runner._notify_recent_users_for_current_version(config, build_telegram_instance_configs(config))
 
     assert ("api", "telegram-token") in events
-    assert ("notify", tmp_path, "Demo", telegram_runner.telegram_runtime.PROJECT_ROOT) in events
+    assert ("notify", tmp_path, "Demo", telegram_runner.telegram_runtime.PROJECT_ROOT, 1) in events
+
+
+def test_runtime_version_notifications_use_matching_telegram_slot_token(monkeypatch, tmp_path: Path) -> None:
+    events = []
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("telegram",),
+        instances=(
+            InstanceRunConfig(
+                instance_name="Demo",
+                instruction_path=tmp_path / "Demo" / "Bot_Verhalten.md",
+                accounts=(
+                    AccountRunConfig(
+                        instance_name="Demo",
+                        channel="telegram",
+                        slot=1,
+                        label="telegram:1",
+                        telegram_token="telegram-token-1",
+                        openai_api_key="",
+                    ),
+                    AccountRunConfig(
+                        instance_name="Demo",
+                        channel="telegram",
+                        slot=2,
+                        label="telegram:2",
+                        telegram_token="telegram-token-2",
+                        openai_api_key="",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    class FakeAPI:
+        def __init__(self, token: str) -> None:
+            self.token = token
+            events.append(("api", token))
+
+        def send_message(self, chat_id: str, text: str) -> int:
+            events.append(("send", self.token, chat_id, text))
+            return 1
+
+    def fake_notify(**kwargs):  # noqa: ANN001 - mirrors notification helper kwargs.
+        events.append(("notify", kwargs["adapter_slot"], kwargs["send_message"].__self__.token))
+        return 0
+
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "TelegramAPI", FakeAPI)
+    monkeypatch.setattr(telegram_runner, "notify_recent_telegram_users_for_version", fake_notify)
+
+    telegram_runner._notify_recent_users_for_current_version(config, build_telegram_instance_configs(config))
+
+    assert ("notify", 1, "telegram-token-1") in events
+    assert ("notify", 2, "telegram-token-2") in events
 
 
 def test_run_telegram_accounts_rejects_duplicate_tokens_across_instances(tmp_path: Path) -> None:

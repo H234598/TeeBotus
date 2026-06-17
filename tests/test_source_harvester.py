@@ -5,6 +5,7 @@ import json
 import pytest
 
 from TeeBotus.bibliothekar.source_harvester import HARVEST_DIRS, SourceHarvester
+from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityPipeline
 
 
@@ -35,6 +36,45 @@ def test_source_harvester_routes_accepted_file_without_blind_ingest(tmp_path):
     assert manifest[0]["decision"]["status"] == "trusted"
 
 
+def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    marker = "PROMOTED_SOURCE_MARKER_D71E"
+    source.write_text(f"Schlafhygiene und Aktivierung {marker}.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    assert store.rebuild()["chunk_count"] == 0
+
+    promoted = harvester.promote_accepted(harvest.stored_path)
+    index = store.rebuild()
+    chunks_text = store.chunks_path.read_text(encoding="utf-8")
+    chunk = json.loads(chunks_text.splitlines()[0])
+    rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
+
+    assert promoted.promoted_path.parent == store.library_dir / "books"
+    assert promoted.promoted_path.exists()
+    assert index["chunk_count"] == 1
+    assert marker in chunks_text
+    assert chunk["title"] == "Therapie"
+    assert chunk["source_quality"] == "trusted"
+    assert chunk["citation_quality"] == "trusted"
+    assert chunk["source_quality_reason"] == "metadata checks passed and NLI evidence supports extracted claims"
+    assert chunk["source_harvest_route"] == "accepted"
+    assert rows[-1]["event"] == "promoted"
+    assert rows[-1]["stored_path"] == str(promoted.promoted_path)
+
+
 def test_source_harvester_quarantines_review_sources_and_dedupes_by_hash(tmp_path):
     source = tmp_path / "notes.txt"
     duplicate = tmp_path / "copy.txt"
@@ -53,6 +93,33 @@ def test_source_harvester_quarantines_review_sources_and_dedupes_by_hash(tmp_pat
     rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
     assert len(rows) == 2
     assert rows[1]["duplicate_of"] == str(first.stored_path)
+
+    with pytest.raises(ValueError, match="accepted harvest staging"):
+        harvester.promote_accepted(first.stored_path)
+
+
+def test_source_harvester_allows_reclassification_with_better_metadata(tmp_path):
+    source = tmp_path / "quelle.txt"
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    harvester = SourceHarvester(
+        tmp_path / "library",
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    quarantined = harvester.harvest_path(source, metadata={"title": "Quelle"})
+    accepted = harvester.harvest_path(
+        source,
+        metadata={"title": "Quelle", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert quarantined.route == "quarantine"
+    assert accepted.route == "accepted"
+    assert accepted.duplicate_of is None
+    assert accepted.accepted_for_ingest is True
+    assert accepted.stored_path is not None
+    assert accepted.stored_path.parent == tmp_path / "library" / "accepted"
 
 
 def test_source_harvester_rejects_executables_and_refuses_symlinks(tmp_path):

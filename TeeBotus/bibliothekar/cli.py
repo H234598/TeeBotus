@@ -23,6 +23,8 @@ def main(argv: list[str] | None = None) -> int:
         return _index(args)
     if args.command == "harvest":
         return _harvest(args)
+    if args.command == "promote":
+        return _promote(args)
     if args.command == "query":
         return _query(args)
     parser.print_help()
@@ -52,6 +54,12 @@ def _build_parser() -> argparse.ArgumentParser:
     harvest.add_argument("--evidence", action="append", default=[], help="Evidence text paired with --claim.")
     harvest.add_argument("--move", action="store_true", help="Move instead of copy after the quality gate.")
     harvest.set_defaults(command="harvest")
+
+    promote = subparsers.add_parser("promote", help="Promote an accepted harvested source into the indexed Bibliothek.")
+    promote.add_argument("source")
+    promote.add_argument("--destination-dir", default="books", help="Relative library subdirectory for promoted sources.")
+    promote.add_argument("--move", action="store_true", help="Move instead of copy from accepted staging.")
+    promote.set_defaults(command="promote")
 
     query = subparsers.add_parser("query", help="Query indexed Bibliothekar chunks.")
     query.add_argument("query")
@@ -153,6 +161,36 @@ def _harvest(args: argparse.Namespace) -> int:
         rows,
         args.json,
         "{instance}: route={route} decision={decision_status} accepted_for_ingest={accepted_for_ingest} stored_path={stored_path}{duplicate_suffix}",
+    )
+
+
+def _promote(args: argparse.Namespace) -> int:
+    instances_dir = Path(args.instances_dir)
+    source = Path(args.source)
+    if not source.exists():
+        raise SystemExit(f"source does not exist: {source}")
+    rows = []
+    for instance_name in _resolve_instances(instances_dir, args.instance):
+        store = BibliothekarStore(instance_name, instances_dir)
+        harvester = SourceHarvester(store.library_dir)
+        result = harvester.promote_accepted(
+            source,
+            destination_dir=args.destination_dir,
+            copy=not bool(args.move),
+        )
+        rows.append(
+            {
+                "instance": instance_name,
+                "sha256": result.sha256,
+                "staged_path": str(result.staged_path),
+                "promoted_path": str(result.promoted_path),
+                "copied": result.copied,
+            }
+        )
+    return _emit_rows(
+        rows,
+        args.json,
+        "{instance}: promoted_path={promoted_path} copied={copied}",
     )
 
 

@@ -128,6 +128,9 @@ def test_readonly_mcp_registry_exposes_only_allowed_registered_tools(tmp_path) -
     assert "therapie.txt" in library["prompt_text"]
     assert memory["read_only"] is True
     assert memory["selected_ids"] == ["mem_1"]
+    entry = account_store.read_memory_entries_by_ids(account_id, ["mem_1"])[0]
+    assert entry["access_count"] == 1
+    assert entry["last_accessed_at"]
     with pytest.raises(MCPToolError, match="not read-only"):
         registry.call("codex.exec", {"command": "id"})
     with pytest.raises(MCPToolError, match="disabled"):

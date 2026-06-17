@@ -217,7 +217,8 @@ def quarantine_unrecoverable_account_memory(
     running_processes: Sequence[Mapping[str, str]] | None = None,
 ) -> dict[str, Any]:
     running = [dict(process) for process in (running_processes if running_processes is not None else _running_teebotus_processes())]
-    blocked = bool(apply and running and not allow_running_bot)
+    apply_allowed_now = _quarantine_apply_allowed_now(running, allow_running_bot=allow_running_bot)
+    blocked = bool(apply and not apply_allowed_now)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     result: dict[str, Any] = {
         "schema_version": 1,
@@ -230,7 +231,7 @@ def quarantine_unrecoverable_account_memory(
         "apply_safety": {
             "running_bot_processes": running,
             "running_bot_process_count": len(running),
-            "apply_allowed_now": bool(not blocked),
+            "apply_allowed_now": apply_allowed_now,
             "apply_requires_stopped_bot": bool(running and not allow_running_bot),
             "message": _quarantine_safety_message(running, allow_running_bot=allow_running_bot),
         },
@@ -277,7 +278,8 @@ def quarantine_unreadable_account_metadata(
     resolved_instances_dir = Path(instances_dir)
     provider = provider or ReadOnlySecretToolInstanceSecretProvider()
     running = [dict(process) for process in (running_processes if running_processes is not None else _running_teebotus_processes())]
-    blocked = bool(apply and running and not allow_running_bot)
+    apply_allowed_now = _quarantine_apply_allowed_now(running, allow_running_bot=allow_running_bot)
+    blocked = bool(apply and not apply_allowed_now)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     result: dict[str, Any] = {
         "schema_version": 1,
@@ -288,7 +290,7 @@ def quarantine_unreadable_account_metadata(
         "apply_safety": {
             "running_bot_processes": running,
             "running_bot_process_count": len(running),
-            "apply_allowed_now": bool(not blocked),
+            "apply_allowed_now": apply_allowed_now,
             "apply_requires_stopped_bot": bool(running and not allow_running_bot),
             "message": _quarantine_safety_message(running, allow_running_bot=allow_running_bot),
         },
@@ -622,6 +624,10 @@ def _prepare_private_dir(path: Path) -> None:
         os.chmod(path, 0o700)
     except OSError:
         pass
+
+
+def _quarantine_apply_allowed_now(running_processes: Sequence[Mapping[str, str]], *, allow_running_bot: bool) -> bool:
+    return bool(allow_running_bot or not running_processes)
 
 
 def _quarantine_safety_message(running_processes: Sequence[Mapping[str, str]], *, allow_running_bot: bool) -> str:

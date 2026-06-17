@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Literal, Mapping, Protocol
 
-from TeeBotus.ai_structures import SourceQualityDecision
+from TeeBotus.decisions.source_quality import SourceQualityDecision
 
 
 SourceRoute = Literal["accepted", "quarantine", "rejected"]
@@ -149,6 +149,8 @@ def _deterministic_source_issues(
     suffix = str(source.suffix or Path(source.identifier).suffix or "").casefold()
     if suffix in EXECUTABLE_SUFFIXES:
         issues.append(f"reject: executable suffix {suffix}")
+    elif not suffix:
+        issues.append("needs_review: missing file suffix")
     elif suffix and suffix not in allowed_suffixes:
         issues.append(f"needs_review: unsupported suffix {suffix}")
     if source.size_bytes > max_source_bytes:

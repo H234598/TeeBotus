@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
@@ -61,8 +61,9 @@ class MatrixRuntimeBridge:
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
+        instructions = self.instruction_store.get()
         self.llm_client = build_runtime_text_llm_client(
-            instructions=self.instruction_store.get(),
+            instructions=instructions,
             openai_client=self.openai_client,
             default_api_key=run_config.openai_api_key,
             enabled=run_config.llm_enabled,
@@ -78,11 +79,17 @@ class MatrixRuntimeBridge:
             max_tokens=run_config.llm_max_output_tokens,
             temperature=run_config.llm_temperature,
         )
+        self.structured_decision_runner = build_runtime_structured_decision_runner(
+            instructions=instructions,
+            enabled=run_config.llm_enabled,
+            runtime_llm_configured=_run_config_has_llm_route(run_config),
+            allow_remote_fallback=run_config.llm_allow_remote_fallback,
+        )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, Path(instances_dir))
         self.bibliothekar_store = BibliothekarService.from_instructions(
             run_config.instance_name,
             Path(instances_dir),
-            self.instruction_store.get(),
+            instructions,
         )
         self.youtube_job_runner = YouTubeTranscriptionJobRunner()
         self.engine = TeeBotusEngine(
@@ -98,6 +105,7 @@ class MatrixRuntimeBridge:
             bibliothekar_store=self.bibliothekar_store,
             youtube_job_runner=self.youtube_job_runner,
             background_action_dispatcher=self._dispatch_background_actions,
+            structured_decision_runner=self.structured_decision_runner,
         )
         self._dispatch_loop: asyncio.AbstractEventLoop | None = None
         self._dispatch_loop_thread_id: int | None = None
@@ -730,6 +738,13 @@ def _matrix_homeserver_host_port(homeserver: str) -> tuple[str, int, str]:
         port = 443 if parsed.scheme == "https" else 80
     target = f"{parsed.hostname}:{port}"
     return parsed.hostname, port, target
+
+
+def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
+    return any(
+        str(getattr(run_config, attr, "") or "").strip()
+        for attr in ("llm_profile", "llm_purpose", "llm_provider", "llm_model")
+    )
 
 
 def _import_niobot() -> Any:

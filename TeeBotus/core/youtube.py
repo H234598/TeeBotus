@@ -18,7 +18,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from TeeBotus.ai_structures.schemas import YouTubeOptionsDecision
+from TeeBotus.decisions.youtube import parse_youtube_options_decision
 from TeeBotus.runtime.maintenance import runtime_dir
 
 LOGGER = logging.getLogger("TeeBotus")
@@ -375,7 +375,7 @@ def _parse_youtube_local_options_from_llm_response(text: str) -> tuple[bool, boo
     if payload is None:
         return None
     try:
-        decision = YouTubeOptionsDecision.model_validate(payload)
+        decision = parse_youtube_options_decision(payload)
     except (TypeError, ValueError):
         return None
     if "confidence" not in payload or decision.confidence < 0.7 or decision.live_output is None or decision.send_to_llm is None:

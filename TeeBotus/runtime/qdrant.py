@@ -151,6 +151,89 @@ def default_qdrant_collection_specs(
     )
 
 
+def check_collection(
+    spec: QdrantCollectionSpec,
+    *,
+    url: object | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout_seconds: float = DEFAULT_QDRANT_TIMEOUT_SECONDS,
+    opener: QdrantOpener | None = None,
+) -> QdrantCollectionResult:
+    target = resolve_qdrant_url(url, env=env)
+    name = _validate_collection_name(spec.name)
+    request = Request(
+        f"{target}/collections/{quote(name, safe='')}",
+        method="GET",
+        headers={"Accept": "application/json"},
+    )
+    open_url = urlopen if opener is None else opener
+    try:
+        response = open_url(request, timeout=timeout_seconds)
+        status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
+    except HTTPError as exc:
+        if exc.code == 404:
+            return QdrantCollectionResult(name=name, target=target, status="missing", ok=False, error="HTTP 404")
+        return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
+    except (URLError, TimeoutError, OSError) as exc:
+        return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
+    except Exception as exc:  # noqa: BLE001 - Qdrant remains optional and reports controlled failures.
+        return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
+    if 200 <= status_code < 300:
+        return QdrantCollectionResult(name=name, target=target, status="ready", ok=True)
+    if status_code == 404:
+        return QdrantCollectionResult(name=name, target=target, status="missing", ok=False, error="HTTP 404")
+    return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=f"HTTP {status_code}")
+
+
+def check_default_collections(
+    *,
+    url: object | None = None,
+    env: Mapping[str, str] | None = None,
+    timeout_seconds: float = DEFAULT_QDRANT_TIMEOUT_SECONDS,
+    opener: QdrantOpener | None = None,
+) -> tuple[QdrantCollectionResult, QdrantCollectionResult]:
+    return tuple(
+        check_collection(spec, url=url, env=env, timeout_seconds=timeout_seconds, opener=opener)
+        for spec in default_qdrant_collection_specs()
+    )
+
+
+def format_qdrant_collection_status_lines(
+    health: QdrantHealth,
+    *,
+    collection_results: tuple[QdrantCollectionResult, ...] | None = None,
+) -> tuple[str, ...]:
+    specs = default_qdrant_collection_specs()
+    spec_by_name = {spec.name: spec for spec in specs}
+    if collection_results is None:
+        collection_results = tuple(
+            QdrantCollectionResult(
+                name=spec.name,
+                target=health.target,
+                status="unavailable",
+                ok=False,
+                error=health.error if not health.ok else "",
+            )
+            for spec in specs
+        )
+    lines: list[str] = []
+    for result in collection_results:
+        spec = spec_by_name.get(result.name)
+        vector_size = f" vector_size={spec.vector_size}" if spec is not None else ""
+        embedding_model = f" embedding_model={spec.embedding_model}" if spec is not None and spec.embedding_model else ""
+        line = (
+            f"qdrant_collection={result.name} target={qdrant_display_target(result.target)} "
+            f"status={result.status}{vector_size}{embedding_model}"
+        )
+        if result.error:
+            line += f" error={result.error}"
+        lines.append(line)
+    return tuple(lines)
+
+
 def ensure_collection(
     spec: QdrantCollectionSpec,
     *,

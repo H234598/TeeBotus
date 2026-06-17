@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from TeeBotus import __version__
 from TeeBotus.core.call_a_teladi import build_teladi_header
@@ -740,6 +740,7 @@ def build_telegram_runtime_context(
     bot_identity: BotIdentity,
     llm_client: object | None = None,
     llm_enabled_override: bool | str | None = None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> TelegramRuntimeContext:
     engine = TeeBotusEngine(
         account_store,
@@ -753,6 +754,7 @@ def build_telegram_runtime_context(
         working_memory_store=working_memory_store,
         bibliothekar_store=bibliothekar_store,
         youtube_job_runner=youtube_job_runner,
+        structured_decision_runner=structured_decision_runner,
         background_action_dispatcher=lambda event, actions: _dispatch_modern_telegram_actions(
             api,
             message_tracker,

@@ -74,6 +74,18 @@ def test_account_id_convenience_lookup_and_optional_create(tmp_path):
     assert store.resolve_or_create_account(identity) == created
 
 
+def test_list_account_ids_discovers_resolvable_accounts(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    first = store.resolve_or_create_account(telegram_identity_key(1))
+    second = store.resolve_or_create_account(telegram_identity_key(2))
+    profile = store._read_account_profile(second)
+    profile["status"] = "tombstoned"
+    store._write_account_profile(second, profile)
+
+    assert store.list_account_ids() == (first,)
+    assert set(store.list_account_ids(include_unresolvable=True)) == {first, second}
+
+
 def test_telegram_identity_key_uses_username_and_display_fallbacks() -> None:
     assert telegram_identity_key(395935293, username="Teladi") == "telegram:user:395935293"
     assert telegram_identity_key("", username="@Teladi") == "telegram:username:teladi"
@@ -1304,6 +1316,27 @@ def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path)
     assert set(index["index"]["entries"]) == set(ids)
     assert index["index"]["keywords"]["mond"] == [ids[0]]
     assert index["index"]["keywords"]["kaffee"] == [ids[1]]
+
+
+def test_select_structured_account_memory_by_ids_preserves_order_and_habits(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_account_text(account_id, "User_Habbits_and_behave.md", "Ada mag knappe Antworten.")
+    store.write_memory_entries(
+        account_id,
+        [
+            {"id": "mem_sleep", "user_text": "Schlaf ist wichtig.", "bot_text": "Gemerkt.", "keywords": ["schlaf"]},
+            {"id": "mem_plan", "user_text": "Morgens hilft eine kleine Struktur.", "bot_text": "Gemerkt.", "keywords": ["struktur"]},
+        ],
+    )
+
+    selection = store.select_structured_memory_by_ids(account_id, ["mem_plan", "missing", "mem_sleep"], mark_accessed=False)
+
+    assert selection.selected_ids == ("mem_plan", "mem_sleep")
+    assert "Interne, admingepflegte Zusatzhinweise fuer diesen Account:" in selection.prompt_text
+    assert "Ada mag knappe Antworten." in selection.prompt_text
+    assert selection.prompt_text.index('"id": "mem_plan"') < selection.prompt_text.index('"id": "mem_sleep"')
+    assert store.read_memory_entries_by_ids(account_id, ["mem_plan"])[0].get("access_count") is None
 
 
 def test_structured_account_memory_index_health_reports_ok(tmp_path):

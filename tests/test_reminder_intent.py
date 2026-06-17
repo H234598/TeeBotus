@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from TeeBotus.ai_structures import ReminderDecision
+from TeeBotus.decisions.reminder import ReminderDecision
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder, parse_reminder_intent
 

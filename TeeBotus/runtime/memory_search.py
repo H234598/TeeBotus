@@ -124,13 +124,23 @@ class MemorySearchService:
             except (QdrantError, ValueError) as exc:
                 semantic_error = str(exc)
                 semantic_candidates = ()
-        merged = merge_memory_candidates(local_candidates, semantic_candidates, limit=max_results)
+        merged = merge_memory_candidates(
+            local_candidates,
+            semantic_candidates,
+            limit=max(max_results, len(local_candidates) + len(semantic_candidates)),
+        )
         selected_ids = [candidate.memory_id for candidate in merged]
-        entries = tuple(self.account_store.read_memory_entries_by_ids(account, selected_ids))
-        returned_ids = [str(entry.get("id") or "").strip() for entry in entries if isinstance(entry, dict)]
+        entries_by_id = {
+            str(entry.get("id") or "").strip(): entry
+            for entry in self.account_store.read_memory_entries_by_ids(account, selected_ids)
+            if isinstance(entry, dict) and str(entry.get("id") or "").strip()
+        }
+        verified_candidates = tuple(candidate for candidate in merged if candidate.memory_id in entries_by_id)[:max_results]
+        returned_ids = [candidate.memory_id for candidate in verified_candidates]
+        entries = tuple(entries_by_id[memory_id] for memory_id in returned_ids)
         if returned_ids:
             self.account_store.mark_structured_memory_accessed(account, returned_ids)
-        return MemorySearchResult(entries=entries, candidates=merged, semantic_used=semantic_used, semantic_error=semantic_error)
+        return MemorySearchResult(entries=entries, candidates=verified_candidates, semantic_used=semantic_used, semantic_error=semantic_error)
 
 
 def merge_memory_candidates(*candidate_groups: Iterable[MemoryCandidate], limit: int = 8) -> tuple[MemoryCandidate, ...]:

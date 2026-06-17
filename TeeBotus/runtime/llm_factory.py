@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import replace
 from typing import Any, Callable, Mapping
@@ -9,6 +10,8 @@ from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
+
+LOGGER = logging.getLogger("TeeBotus.runtime.llm_factory")
 
 
 def build_runtime_text_llm_client(
@@ -103,6 +106,70 @@ def build_runtime_text_llm_client(
         max_tokens=max_tokens,
         use_instruction_fallback_models=False,
     )
+
+
+def build_runtime_structured_decision_runner(
+    *,
+    instructions: BotInstructions | None = None,
+    enabled: bool | str | None = None,
+    runtime_llm_configured: bool = False,
+    purpose: str = "structured_decision",
+    allow_remote_fallback: bool | str = False,
+    env: Mapping[str, str] | None = None,
+) -> Callable[[str, type[Any]], Any] | None:
+    enabled_override = _parse_optional_bool(enabled)
+    if enabled_override is False:
+        return None
+    if enabled_override is None:
+        structured_enabled = getattr(instructions, "structured_decision_enabled", None) if instructions is not None else None
+        if structured_enabled is False:
+            return None
+        if runtime_llm_configured:
+            pass
+        elif structured_enabled is None and instructions is not None and not instructions.text_llm_enabled():
+            return None
+    try:
+        from TeeBotus.decisions.pydantic_agent import build_router_pydantic_ai_model_runner
+    except Exception as exc:  # noqa: BLE001 - optional Plan3 decision layer.
+        LOGGER.info("Structured decision runner unavailable: %s: %s", type(exc).__name__, exc)
+        return None
+    try:
+        runner = build_router_pydantic_ai_model_runner(
+            purpose,
+            allow_remote_fallback=_parse_bool(allow_remote_fallback),
+            env=env,
+        )
+    except Exception as exc:  # noqa: BLE001 - missing providers/config must not break bot startup.
+        LOGGER.info("Structured decision runner disabled: %s: %s", type(exc).__name__, exc)
+        return None
+
+    def guarded_runner(prompt: str, schema: type[Any]) -> Any:
+        try:
+            return runner(prompt, schema)
+        except Exception as exc:  # noqa: BLE001 - structured subtasks are best-effort.
+            LOGGER.warning("Structured decision runner failed; using deterministic fallback: %s: %s", type(exc).__name__, exc)
+            return None
+
+    for name in (
+        "llm_route",
+        "llm_purpose",
+        "llm_provider",
+        "model_name",
+        "llm_fallback_used",
+        "llm_fallback_profile",
+        "llm_fallback_model",
+        "llm_primary_error",
+        "pydantic_ai_model_name",
+        "pydantic_ai_provider",
+        "pydantic_ai_base_url",
+        "hf_pool_name",
+        "hf_pool_target",
+        "hf_pool_request_model",
+        "hf_pool_base_url",
+    ):
+        if hasattr(runner, name):
+            setattr(guarded_runner, name, getattr(runner, name))
+    return guarded_runner
 
 
 def _build_route_client(
@@ -281,4 +348,4 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
     return provider in {"openai", "huggingface", "groq", "gemini", "hf_pool"}
 
 
-__all__ = ["build_runtime_text_llm_client", "filter_runtime_fallback_models"]
+__all__ = ["build_runtime_text_llm_client", "build_runtime_structured_decision_runner", "filter_runtime_fallback_models"]

@@ -18,6 +18,17 @@ SECRET_FIELD_NAMES = {"account_secret", "secret", "secret_verifier", "verifier",
 ENCRYPTED_EXPORT_MAGICS = {"TMBMAP1", "TMBMEM1", "TMBKEY1"}
 SECRET_FIELD_FRAGMENTS = ("secret", "token", "api_key", "apikey", "passphrase", "pepper", "verifier", "password")
 SECRET_FIELD_ALLOWLIST = {"account_id", "linked_identities", "identity_key"}
+SEMANTIC_INDEX_EXPORT_NOTE = {
+    "semantic_memory_index": {
+        "role": "optional rebuildable semantic search cache for account memory",
+        "truth_store": "AccountStore",
+        "exported_truth": "This export contains the AccountStore memory data, not Qdrant vectors.",
+        "qdrant_payload": "Qdrant stores memory IDs, vectors, scope metadata, and content hashes only.",
+        "plaintext_policy": "Usermemory cleartext must stay in AccountStore and must not be stored in Qdrant.",
+        "reset_behavior": "/reset_memorys deletes the account Qdrant cache first when semantic Qdrant search is active.",
+        "rebuild_command": "teebotus-embedding --instances-dir <instances> --instance <instance> memory-rebuild --qdrant-url http://127.0.0.1:6333",
+    }
+}
 
 
 class ExportError(RuntimeError):
@@ -93,23 +104,21 @@ def _safe_export_slug(value: str) -> str:
 
 def export_account_data_from_store(account_store: Any, account_id: str, fmt: str) -> ExportResult:
     """Export account data through AccountStore so encrypted files are decrypted first."""
-    payload = {
-        "account_id": account_id,
-        "files": {
-            "Account_Profile.json": _redact_data(account_store.account_summary(account_id)),
-            "User_Memory_Index.json": _redact_data(account_store.read_memory_index(account_id)),
-            "User_Memory_Entries.jsonl": _redact_data(account_store.read_memory_entries(account_id)),
-            "LLM_State.json": _redact_data(account_store.read_llm_state(account_id)),
-            "Agent_State.json": _redact_data(account_store.read_agent_state(account_id)),
-            "Proactive_Outbox.jsonl": _redact_data(account_store.read_proactive_outbox(account_id)),
-            "Proactive_Audit.jsonl": _redact_data(account_store.read_proactive_audit(account_id)),
-        },
+    payload = _new_account_payload(account_id)
+    payload["files"] = {
+        "Account_Profile.json": _redact_data(account_store.account_summary(account_id)),
+        "User_Memory_Index.json": _redact_data(account_store.read_memory_index(account_id)),
+        "User_Memory_Entries.jsonl": _redact_data(account_store.read_memory_entries(account_id)),
+        "LLM_State.json": _redact_data(account_store.read_llm_state(account_id)),
+        "Agent_State.json": _redact_data(account_store.read_agent_state(account_id)),
+        "Proactive_Outbox.jsonl": _redact_data(account_store.read_proactive_outbox(account_id)),
+        "Proactive_Audit.jsonl": _redact_data(account_store.read_proactive_audit(account_id)),
     }
     return _emit_payload(account_id, payload, fmt)
 
 
 def _collect_account_payload(account_id: str, account_dir: Path, *, vault: ExportVault | None = None) -> dict[str, Any]:
-    payload: dict[str, Any] = {"account_id": account_id, "files": {}}
+    payload = _new_account_payload(account_id)
     for filename in [
         "Account_Profile.json",
         "User_Memory_Index.json",
@@ -130,6 +139,18 @@ def _collect_account_payload(account_id: str, account_dir: Path, *, vault: Expor
         else:
             payload["files"][filename] = _read_text_export(path, vault=vault)
     return _redact_data(payload)
+
+
+def _new_account_payload(account_id: str) -> dict[str, Any]:
+    return {
+        "account_id": account_id,
+        "export_notes": _semantic_index_export_note(),
+        "files": {},
+    }
+
+
+def _semantic_index_export_note() -> dict[str, Any]:
+    return json.loads(json.dumps(SEMANTIC_INDEX_EXPORT_NOTE))
 
 
 def _read_json_export(path: Path, *, vault: ExportVault | None) -> dict[str, Any]:
@@ -216,6 +237,10 @@ def _looks_like_encrypted_payload(path: Path) -> bool:
 
 def _payload_to_markdown(payload: dict[str, Any]) -> str:
     lines = ["# TeeBotus Account Export", "", f"Account ID: `{payload.get('account_id', '')}`", ""]
+    for section_name, content in _iter_extra_sections(payload):
+        lines.extend([f"## {_format_section_title(section_name)}", "", "```json"])
+        lines.append(json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True))
+        lines.extend(["```", ""])
     files = payload.get("files", {})
     if isinstance(files, dict):
         for filename, content in files.items():
@@ -254,6 +279,10 @@ def _pdf_markdown_fallback(export_id: str, payload: dict[str, Any], note: str) -
 def _payload_to_html(payload: dict[str, Any]) -> str:
     account_id = html.escape(str(payload.get("account_id", "")))
     sections = [f"<h1>TeeBotus Account Export</h1><p><strong>Account ID:</strong> <code>{account_id}</code></p>"]
+    for section_name, content in _iter_extra_sections(payload):
+        sections.append(f"<h2>{html.escape(_format_section_title(section_name))}</h2>")
+        body = json.dumps(content, ensure_ascii=False, indent=2, sort_keys=True)
+        sections.append(f"<pre>{html.escape(body)}</pre>")
     files = payload.get("files", {})
     if isinstance(files, dict):
         for filename, content in files.items():
@@ -286,12 +315,26 @@ def _payload_to_csv(payload: dict[str, Any]) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["file", "path", "value"])
+    for section_name, content in _iter_extra_sections(payload):
+        for path, value in _flatten_values(content):
+            writer.writerow([section_name, path, value])
     files = payload.get("files", {})
     if isinstance(files, dict):
         for filename, content in files.items():
             for path, value in _flatten_values(content):
                 writer.writerow([filename, path, value])
     return output.getvalue()
+
+
+def _iter_extra_sections(payload: dict[str, Any]) -> Iterable[tuple[str, Any]]:
+    for key, value in payload.items():
+        if key in {"account_id", "files"}:
+            continue
+        yield str(key), value
+
+
+def _format_section_title(name: str) -> str:
+    return str(name).replace("_", " ").strip().title()
 
 
 def _flatten_values(data: Any, prefix: tuple[str, ...] = ()) -> Iterable[tuple[str, str]]:

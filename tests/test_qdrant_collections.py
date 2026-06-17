@@ -8,15 +8,21 @@ from TeeBotus.runtime.qdrant import (
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
+    QdrantCollectionResult,
     QdrantCollectionSpec,
+    QdrantHealth,
+    check_collection,
+    check_default_collections,
     default_qdrant_collection_specs,
     ensure_collection,
     ensure_default_collections,
+    format_qdrant_collection_status_lines,
 )
 
 
 class _Response:
-    status = 200
+    def __init__(self, status: int = 200) -> None:
+        self.status = status
 
     def close(self) -> None:
         return None
@@ -77,6 +83,70 @@ def test_ensure_default_collections_prepares_both_collections() -> None:
         "http://127.0.0.1:6333/collections/teebotus_user_memory",
         "http://127.0.0.1:6333/collections/teebotus_bibliothekar_chunks",
     ]
+
+
+def test_check_collection_uses_non_mutating_get() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def opener(request, *, timeout):
+        assert timeout > 0
+        calls.append((request.get_method(), request.full_url))
+        return _Response(200)
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is True
+    assert result.status == "ready"
+    assert calls == [("GET", "http://127.0.0.1:6333/collections/teebotus_user_memory")]
+
+
+def test_check_default_collections_probes_both_without_creating() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def opener(request, *, timeout):
+        assert timeout > 0
+        calls.append((request.get_method(), request.full_url))
+        return _Response(200)
+
+    results = check_default_collections(url="http://127.0.0.1:6333", opener=opener)
+
+    assert [result.name for result in results] == [QDRANT_USER_MEMORY_COLLECTION, QDRANT_BIBLIOTHEKAR_COLLECTION]
+    assert all(result.status == "ready" for result in results)
+    assert calls == [
+        ("GET", "http://127.0.0.1:6333/collections/teebotus_user_memory"),
+        ("GET", "http://127.0.0.1:6333/collections/teebotus_bibliothekar_chunks"),
+    ]
+
+
+def test_format_qdrant_collection_status_lines_reports_specs_when_unavailable() -> None:
+    health = QdrantHealth(target="http://127.0.0.1:6333", status="unreachable", ok=False, error="connection refused")
+
+    lines = format_qdrant_collection_status_lines(health)
+
+    assert lines == (
+        "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable "
+        f"vector_size={ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS} embedding_model=teebotus-account-memory-hash error=connection refused",
+        "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable "
+        f"vector_size={DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS} embedding_model={DEFAULT_EMBEDDING_MODEL} error=connection refused",
+    )
+
+
+def test_format_qdrant_collection_status_lines_reports_checked_results() -> None:
+    health = QdrantHealth(target="http://127.0.0.1:6333", status="reachable", ok=True)
+    results = (
+        QdrantCollectionResult(QDRANT_USER_MEMORY_COLLECTION, "http://127.0.0.1:6333", "ready", True),
+        QdrantCollectionResult(QDRANT_BIBLIOTHEKAR_COLLECTION, "http://127.0.0.1:6333", "missing", False, "HTTP 404"),
+    )
+
+    lines = format_qdrant_collection_status_lines(health, collection_results=results)
+
+    assert lines[0].startswith("qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready")
+    assert lines[1].startswith("qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=missing")
+    assert "error=HTTP 404" in lines[1]
 
 
 def test_ensure_collection_rejects_unsafe_name_before_http() -> None:

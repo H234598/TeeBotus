@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 import sys
 import types
 
 import pytest
 from pydantic import ValidationError
 
-from TeeBotus.ai_structures import (
+from TeeBotus.decisions import (
     BibliothekarQueryDecision,
     IntentDecision,
     MemoryCandidate,
@@ -14,6 +15,7 @@ from TeeBotus.ai_structures import (
     ReminderDecision,
     YouTubeOptionsDecision,
     build_pydantic_ai_model_runner,
+    build_router_pydantic_ai_model_runner,
     decide_bibliothekar_query,
     decide_intent,
     parse_bibliothekar_query_decision,
@@ -21,7 +23,8 @@ from TeeBotus.ai_structures import (
     parse_reminder_decision,
     pydantic_ai_available,
 )
-from TeeBotus.ai_structures.pydantic_ai_adapter import PydanticAIUnavailableError
+from TeeBotus.decisions.pydantic_agent import PydanticAIUnavailableError
+from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 
 
 def test_intent_decision_validates_confidence_range() -> None:
@@ -412,3 +415,183 @@ def test_pydantic_ai_adapter_builds_model_runner_with_structured_output(monkeypa
         source="model",
     )
     assert calls == [{"model": "openai:gpt-test", "output_type": BibliothekarQueryDecision, "system_prompt": "Nur JSON."}]
+
+
+def test_pydantic_ai_router_runner_uses_teebotus_structured_decision_route() -> None:
+    calls: list[dict[str, object]] = []
+    route_calls: list[dict[str, object]] = []
+
+    class FakeRunResult:
+        def __init__(self, output: object) -> None:
+            self.output = output
+
+    class FakeAgent:
+        def __init__(self, model: str, **kwargs: object) -> None:
+            calls.append({"model": model, **kwargs})
+            self.output_type = kwargs["output_type"]
+
+        def run_sync(self, prompt: str) -> FakeRunResult:
+            return FakeRunResult(
+                self.output_type(
+                    should_search=True,
+                    query=prompt,
+                    confidence=0.88,
+                    reason_short="router fake",
+                    source="model",
+                )
+            )
+
+    def route_selector(purpose: str, *, allow_remote_fallback: bool):
+        route_calls.append({"purpose": purpose, "allow_remote_fallback": allow_remote_fallback})
+        return types.SimpleNamespace(
+            purpose=purpose,
+            provider="hf_pool",
+            model="pool:default#structured_decision",
+        )
+
+    runner = build_router_pydantic_ai_model_runner(
+        "structured_decision",
+        allow_remote_fallback=True,
+        system_prompt="Nur strukturiert.",
+        agent_factory=FakeAgent,
+        route_selector=route_selector,
+    )
+    decision = runner("Therapie Schlaf", BibliothekarQueryDecision)
+
+    assert decision.query == "Therapie Schlaf"
+    assert getattr(runner, "model_name") == "pool:default#structured_decision"
+    assert getattr(runner, "llm_provider") == "hf_pool"
+    assert getattr(runner, "llm_purpose") == "structured_decision"
+    assert route_calls == [{"purpose": "structured_decision", "allow_remote_fallback": True}]
+    assert calls == [
+        {
+            "model": "pool:default#structured_decision",
+            "output_type": BibliothekarQueryDecision,
+            "system_prompt": "Nur strukturiert.",
+        }
+    ]
+
+
+def test_pydantic_ai_adapter_resolves_hf_pool_selector_to_openai_compatible_model(tmp_path) -> None:
+    config_path = tmp_path / "hf_pool.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "targets": [
+                            {
+                                "name": "qwen_structured_test",
+                                "kind": "hf_router_chat",
+                                "base_url": "https://router.huggingface.co/v1/chat/completions",
+                                "api_key_env": "HF_TOKEN_TEST",
+                                "model": "Qwen/Qwen3-4B-Instruct-2507",
+                                "weight": 5,
+                                "purposes": ["structured_decision"],
+                                "enabled": True,
+                                "required": {"supports_structured_output": True},
+                            }
+                        ],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    runner = build_pydantic_ai_model_runner(
+        "pool:default#structured_decision",
+        hf_pool_config_path=config_path,
+        env={"HF_TOKEN_TEST": "hf_fake_test_token"},
+    )
+
+    assert getattr(runner, "model_name") == "pool:default#structured_decision"
+    assert getattr(runner, "pydantic_ai_model_name") == "Qwen/Qwen3-4B-Instruct-2507"
+    assert getattr(runner, "hf_pool_name") == "default"
+    assert getattr(runner, "hf_pool_target") == "qwen_structured_test"
+    assert getattr(runner, "hf_pool_request_model") == "Qwen/Qwen3-4B-Instruct-2507"
+    assert getattr(runner, "hf_pool_base_url") == "https://router.huggingface.co/v1"
+
+
+def test_pydantic_ai_adapter_resolves_ollama_selector_to_local_model() -> None:
+    runner = build_pydantic_ai_model_runner(
+        "ollama_chat/llama3.1:8b",
+        base_url="http://127.0.0.1:11434",
+    )
+
+    assert getattr(runner, "model_name") == "ollama_chat/llama3.1:8b"
+    assert getattr(runner, "pydantic_ai_model_name") == "llama3.1:8b"
+    assert getattr(runner, "pydantic_ai_provider") == "ollama"
+    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434/v1"
+
+
+def test_pydantic_ai_router_runner_uses_local_fallback_when_hf_pool_unavailable(tmp_path) -> None:
+    config_path = tmp_path / "hf_pool.json"
+    config_path.write_text(
+        json.dumps({"pools": {"default": {"enabled": False, "targets": []}}}),
+        encoding="utf-8",
+    )
+    route_calls: list[dict[str, object]] = []
+
+    def route_selector(purpose: str, *, allow_remote_fallback: bool):
+        route_calls.append({"purpose": purpose, "allow_remote_fallback": allow_remote_fallback})
+        return types.SimpleNamespace(
+            purpose=purpose,
+            provider="hf_pool",
+            model="pool:default#structured_decision",
+            base_url="",
+            fallback_profile_name="local_ollama",
+            fallback_model="ollama_chat/llama3.1:8b",
+            fallback_base_url="http://127.0.0.1:11434",
+        )
+
+    runner = build_router_pydantic_ai_model_runner(
+        "structured_decision",
+        route_selector=route_selector,
+        hf_pool_config_path=config_path,
+        env={},
+    )
+
+    assert getattr(runner, "model_name") == "pool:default#structured_decision"
+    assert getattr(runner, "pydantic_ai_model_name") == "llama3.1:8b"
+    assert getattr(runner, "pydantic_ai_provider") == "ollama"
+    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434/v1"
+    assert getattr(runner, "llm_provider") == "hf_pool"
+    assert getattr(runner, "llm_fallback_used") is True
+    assert getattr(runner, "llm_fallback_profile") == "local_ollama"
+    assert getattr(runner, "llm_fallback_model") == "ollama_chat/llama3.1:8b"
+    assert "disabled" in getattr(runner, "llm_primary_error")
+    assert route_calls == [{"purpose": "structured_decision", "allow_remote_fallback": False}]
+
+
+def test_pydantic_ai_adapter_reports_hf_pool_missing_key_before_live_call(tmp_path) -> None:
+    config_path = tmp_path / "hf_pool.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "targets": [
+                            {
+                                "name": "qwen_structured_test",
+                                "api_key_env": "HF_TOKEN_TEST",
+                                "model": "Qwen/Qwen3-4B-Instruct-2507",
+                                "purposes": ["structured_decision"],
+                                "enabled": True,
+                            }
+                        ],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(HFPoolUnavailable, match="configured API key"):
+        build_pydantic_ai_model_runner(
+            "pool:default#structured_decision",
+            hf_pool_config_path=config_path,
+            env={},
+        )

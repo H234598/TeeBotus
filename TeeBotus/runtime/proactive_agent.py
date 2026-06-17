@@ -13,7 +13,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from pydantic import ValidationError
 
-from TeeBotus.ai_structures.schemas import ProactiveToolCallDecision
+from TeeBotus.decisions.proactive import parse_proactive_tool_call_decision
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
@@ -1767,8 +1767,8 @@ def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCal
             call_id = str(getattr(raw_call, "call_id", None) or getattr(raw_call, "id", "") or "").strip()
         payload = {"name": name, "arguments": dict(arguments), "call_id": call_id}
     try:
-        validated = ProactiveToolCallDecision.model_validate(payload)
-    except ValidationError:
+        validated = parse_proactive_tool_call_decision(payload)
+    except (TypeError, ValueError, ValidationError):
         return None
     return ProactiveAgentToolCall(name=validated.name, arguments=validated.arguments, call_id=validated.call_id)
 

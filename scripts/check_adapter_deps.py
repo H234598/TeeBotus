@@ -169,6 +169,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
         "teebotus-proactive-review",
         "teebotus-proactive-systemd",
         "teebotus-qdrant-systemd",
+        "teebotus-embedding",
     }
     missing_scripts = sorted(expected_scripts - set(scripts))
     if missing_scripts:
@@ -213,6 +214,16 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"profile {name} provider={profile.provider or '<empty>'} expected={provider}")
         if model_prefix and not profile.model.startswith(model_prefix):
             errors.append(f"profile {name} model must start with {model_prefix}")
+    expected_hf_pool_selectors = {
+        "hf_pool_default": "pool:default#normal_chat",
+        "hf_pool_structured": "pool:default#structured_decision",
+        "hf_pool_quality": "pool:default#psychology_explainer",
+        "hf_pool_bibliothekar": "pool:default#bibliothekar_answer",
+    }
+    for name, expected_model in expected_hf_pool_selectors.items():
+        profile = profiles.get(name)
+        if profile is not None and profile.model != expected_model:
+            errors.append(f"profile {name} model={profile.model or '<empty>'} expected={expected_model}")
     for name in ("hf_mistral", "groq_fast", "gemini_flash", "openai_premium"):
         profile = profiles.get(name)
         if profile is not None and not profile.api_key_env:

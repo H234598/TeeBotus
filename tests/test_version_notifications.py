@@ -44,6 +44,23 @@ def test_recent_telegram_recipients_filters_last_seen_window(tmp_path: Path) -> 
     assert stale != fresh
 
 
+def test_recent_telegram_recipients_can_filter_by_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Slot1")
+    store.resolve_or_create_account("telegram:user:222", display_label="Slot2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:user:222", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        adapter_slot=2,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.chat_id, recipient.adapter_slot) for recipient in recipients] == [(222, 2)]
+
+
 def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

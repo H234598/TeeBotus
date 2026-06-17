@@ -85,6 +85,9 @@ def test_qdrant_bibliothekar_index_indexes_test_chunks_without_chunk_text() -> N
     assert payload["chunk_id"] == "chunk_sleep"
     assert payload["title"] == "Therapiehandbuch"
     assert payload["relative_path"] == "therapie.txt"
+    assert payload["source_quality"] == "unreviewed"
+    assert payload["citation_quality"] == "unreviewed"
+    assert payload["source_harvest_route"] == "manual"
 
 
 def test_qdrant_bibliothekar_search_is_scoped_by_instance() -> None:

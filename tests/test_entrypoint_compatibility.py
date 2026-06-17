@@ -74,6 +74,55 @@ def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, 
     assert "telegram-secret-token" not in captured.out
 
 
+def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION, QdrantCollectionResult, QdrantHealth
+
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(
+        "TeeBotus.runtime.qdrant.check_qdrant_health",
+        lambda: QdrantHealth(target="http://127.0.0.1:6333", status="reachable", ok=True),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.qdrant.check_default_collections",
+        lambda **_kwargs: (
+            QdrantCollectionResult(QDRANT_USER_MEMORY_COLLECTION, "http://127.0.0.1:6333", "ready", True),
+            QdrantCollectionResult(QDRANT_BIBLIOTHEKAR_COLLECTION, "http://127.0.0.1:6333", "missing", False, "HTTP 404"),
+        ),
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "qdrant=127.0.0.1:6333 status=reachable" in captured.out
+    assert "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready" in captured.out
+    assert "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=missing" in captured.out
+    assert "memory_index=Demo backend=keyword status=disabled semantic=disabled" in captured.out
+
+
+def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instructions = SimpleNamespace(
+        user_memory_enabled=True,
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+    )
+
+    assert bot._runtime_status_memory_index_line("Demo", instructions, qdrant_ok=False) == (
+        "memory_index=Demo backend=keyword status=ready semantic=unavailable"
+    )
+    assert bot._runtime_status_memory_index_line("Demo", instructions, qdrant_ok=True) == (
+        "memory_index=Demo backend=keyword status=ready semantic=ready"
+    )
+
+
 def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
@@ -616,17 +665,52 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=configured purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
         "remote_fallback=enabled"
     ) in captured.out
     assert (
-        "decision=structured_decision provider=hf_pool model=pool:default "
-        "status=configured profile=hf_pool_structured fallback_profile=local_ollama "
+        "llm_route=structured_decision profile=hf_pool_structured provider=hf_pool "
+        "model=pool:default#structured_decision status=unavailable "
+        "fallback=local_ollama fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
+    assert (
+        "structured_decision=Demo/telegram:1 status=enabled source=runtime_llm_configured "
+        "profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision "
+        "route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.1:8b "
+        "fallback_base_url=http://127.0.0.1:11434 remote_fallback=enabled"
+    ) in captured.out
+
+
+def test_runtime_status_reports_structured_decision_disabled_by_instruction(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        """
+        # Bot
+
+        ## OpenAI
+        - enabled: ja
+
+        ## LLM
+        - structured_decision_enabled: nein
+        """,
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "structured_decision=Demo/telegram:1 status=disabled reason=structured_decision_disabled" in captured.out
 
 
 def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, capsys, tmp_path) -> None:
@@ -647,7 +731,7 @@ def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, caps
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=configured purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
@@ -1030,7 +1114,7 @@ def test_runtime_status_runtime_purpose_overrides_instruction_remote_profile(mon
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=configured purpose=structured_decision api_key=none fallback_models=1"
     ) in captured.out
     assert "profile=hf_mistral" not in captured.out
@@ -1119,7 +1203,7 @@ def test_runtime_status_checks_ollama_for_local_purpose_route(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
-    assert "llm=Demo/telegram:1 provider=hf_pool model=pool:default status=configured purpose=structured_decision" in captured.out
+    assert "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision status=configured purpose=structured_decision" in captured.out
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 
@@ -1161,7 +1245,7 @@ def test_runtime_status_purpose_route_uses_runtime_base_url_override_for_llm_and
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11556/api/tags"]
     assert (
-        "llm=Demo/telegram:1 provider=hf_pool model=pool:default "
+        "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=configured purpose=structured_decision base_url=http://127.0.0.1:11556/api api_key=none"
     ) in captured.out
     assert "ollama=127.0.0.1:11556 status=reachable models=llama3.1:8b" in captured.out

@@ -15,6 +15,8 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
+from TeeBotus.runtime.qdrant import QdrantError
+from TeeBotus.runtime.qdrant_memory import QdrantMemoryResult
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -1337,6 +1339,121 @@ def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
     assert '"selected_memory_ids": [\n    "mem_moon",\n    "mem_tea"\n  ]' in client.user_text
 
 
+def test_engine_uses_semantic_memory_search_only_when_explicitly_enabled(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-semantic-memory", None)
+
+    class FakeQdrantMemoryIndex:
+        calls: list[tuple[str, str, str, int]] = []
+
+        def __init__(self, *, url=None, **_kwargs) -> None:
+            self.url = url
+
+        def search(self, *, instance_name: str, account_id: str, query: str, limit: int):
+            self.calls.append((instance_name, account_id, query, limit))
+            return (
+                QdrantMemoryResult(
+                    memory_id="mem_plan",
+                    account_id=account_id,
+                    instance_name=instance_name,
+                    score=2.0,
+                    payload={"memory_id": "mem_plan", "account_id": account_id, "instance_name": instance_name},
+                    ),
+                )
+
+        def index_memory(self, **_kwargs) -> str:
+            return "point-id"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FakeQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="semantic-memory")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_sleep", "keywords": ["schlaf"], "user_text": "Schlaf stabilisiert.", "bot_text": "Gemerkt."},
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_plan", "keywords": ["struktur"], "user_text": "Morgens hilft eine kleine Struktur.", "bot_text": "Gemerkt."},
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            openai_enabled=True,
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+            memory_search_local_limit=1,
+            memory_search_semantic_limit=1,
+            memory_search_qdrant_url="http://localhost:6334",
+        ),
+        openai_client=client,
+    )
+
+    engine.process(event(identity, "Was hilft bei Schlaf?", channel="signal"))
+
+    assert FakeQdrantMemoryIndex.calls == [("Depressionsbot", account_id, "Was hilft bei Schlaf?", 1)]
+    assert '"id": "mem_plan"' in client.user_text
+    assert client.user_text.index('"id": "mem_plan"') < client.user_text.index('"id": "mem_sleep"')
+
+
+def test_engine_semantic_memory_search_falls_back_to_local_candidates(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort.", "resp-semantic-fallback", None)
+
+    class FailingQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def search(self, **_kwargs):
+            raise QdrantError("qdrant down")
+
+        def index_memory(self, **_kwargs) -> str:
+            return "point-id"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FailingQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="semantic-memory-fallback")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_sleep", "keywords": ["schlaf"], "user_text": "Schlaf stabilisiert.", "bot_text": "Gemerkt."},
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_plan", "keywords": ["struktur"], "user_text": "Morgens hilft eine kleine Struktur.", "bot_text": "Gemerkt."},
+    )
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            openai_enabled=True,
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+            memory_search_local_limit=1,
+            memory_search_semantic_limit=1,
+        ),
+        openai_client=client,
+    )
+
+    engine.process(event(identity, "Was hilft bei Schlaf?", channel="signal"))
+
+    assert '"id": "mem_sleep"' in client.user_text
+    assert '"id": "mem_plan"' not in client.user_text
+
+
 def test_engine_pages_account_memory_when_model_requests_it(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
@@ -1477,6 +1594,92 @@ def test_engine_appends_account_memory_after_openai_reply(tmp_path):
     index = account_store.read_memory_index(account_id)
     assert entries[-1]["id"] in index["index"]["recent_ids"]
     assert "mond" in index["index"]["keywords"]
+
+
+def test_engine_appends_new_account_memory_to_qdrant_cache_when_semantic_enabled(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort mit Mond.", "resp-memory-qdrant", None)
+
+    class FakeQdrantMemoryIndex:
+        search_calls: list[tuple[str, str, str, int]] = []
+        index_calls: list[tuple[str, str, str | None, dict[str, object]]] = []
+
+        def __init__(self, *, url=None, **_kwargs) -> None:
+            self.url = url
+
+        def search(self, *, instance_name: str, account_id: str, query: str, limit: int):
+            self.search_calls.append((instance_name, account_id, query, limit))
+            return ()
+
+        def index_memory(self, *, instance_name: str, account_id: str, entry: dict[str, object]) -> str:
+            self.index_calls.append((instance_name, account_id, self.url, dict(entry)))
+            return "point-id"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FakeQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="write-memory-qdrant")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            openai_enabled=True,
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+            memory_search_qdrant_url="http://localhost:6334",
+        ),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    engine.process(event(identity, "Merke Mond.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert FakeQdrantMemoryIndex.search_calls == [("Depressionsbot", account_id, "Merke Mond.", 8)]
+    assert len(FakeQdrantMemoryIndex.index_calls) == 1
+    instance_name, indexed_account, url, entry = FakeQdrantMemoryIndex.index_calls[0]
+    assert instance_name == "Depressionsbot"
+    assert indexed_account == account_id
+    assert url == "http://localhost:6334"
+    assert entry["user_text"] == "Merke Mond."
+    assert entry["bot_text"] == "Antwort mit Mond."
+
+
+def test_engine_qdrant_cache_index_failure_does_not_block_account_memory_write(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort.", "resp-memory-qdrant-fail", None)
+
+    class FailingQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def search(self, **_kwargs):
+            return ()
+
+        def index_memory(self, **_kwargs) -> str:
+            raise QdrantError("qdrant down")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FailingQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="write-memory-qdrant-fail")
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            openai_enabled=True,
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+        ),
+        openai_client=FakeOpenAIClient(),
+    )
+
+    actions = engine.process(event(identity, "Merke Mond.", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert actions[-1].text == "Antwort."
+    assert account_id is not None
+    assert account_store.read_memory_entries(account_id)[-1]["user_text"] == "Merke Mond."
 
 
 def test_engine_uses_structured_memory_candidate_for_safe_semantic_memory(tmp_path):
@@ -1721,6 +1924,68 @@ def test_engine_account_memory_reset_requires_confirmation_and_resets_structured
     assert account_store.read_memory_index(account_id) == {}
     assert account_store.read_memory_entries(account_id) == []
     assert account_store.read_account_text(account_id, "User_Habbits_and_behave.md") == "Adminhinweis bleibt."
+
+
+def test_engine_account_memory_reset_deletes_semantic_qdrant_cache_when_enabled(tmp_path, monkeypatch):
+    calls: list[tuple[str, str, str | None]] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, *, url=None, **_kwargs) -> None:
+            self.url = url
+
+        def delete_account(self, *, instance_name: str, account_id: str) -> None:
+            calls.append((instance_name, account_id, self.url))
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FakeQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="reset-memory-qdrant")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+            memory_search_qdrant_url="http://localhost:6334",
+        ),
+    )
+
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    done_actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert done_actions[0].text == BotInstructions().user_memory_reset_success
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334")]
+    assert account_store.read_memory_entries(account_id) == []
+
+
+def test_engine_account_memory_reset_reports_error_when_semantic_cache_delete_fails(tmp_path, monkeypatch):
+    class FailingQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def delete_account(self, **_kwargs) -> None:
+            raise QdrantError("qdrant down")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", FailingQdrantMemoryIndex)
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="reset-memory-qdrant-fail")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(
+            user_memory_enabled=True,
+            memory_search_semantic_enabled=True,
+            memory_search_semantic_backend="qdrant",
+        ),
+    )
+
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    error_actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert error_actions[0].text == BotInstructions().user_memory_reset_error
+    assert account_store.read_memory_entries(account_id) == [{"id": "mem_old", "user_text": "Mond"}]
 
 
 def test_engine_privacy_confirmation_is_persistent_until_memory_reset(tmp_path):

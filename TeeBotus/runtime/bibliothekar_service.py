@@ -401,7 +401,7 @@ class LlamaIndexBibliothekarBackend:
 
     @property
     def available(self) -> bool:
-        return self._query_engine_factory is not None or _module_available("llama_index.core")
+        return self._query_engine_factory is not None
 
     def search(self, query: BibliothekarQuery) -> BibliothekarSelection:
         if not self.available:
@@ -617,11 +617,12 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
         return BibliothekarServiceHealth(
             instance_name,
             "llamaindex",
-            "ready",
+            "unavailable",
             collection=collection,
             documents=len(documents),
             chunks=int(index.get("chunk_count") or 0),
-            store="llamaindex",
+            store="json",
+            error="llamaindex query engine is not configured; local fallback remains available",
         )
     store = BibliothekarStore(instance_name, instances_dir)
     try:

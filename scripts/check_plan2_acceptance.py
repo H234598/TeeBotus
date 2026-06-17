@@ -28,12 +28,16 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "database_fallback",
+        "hf_pool",
         "langgraph_flows",
         "llm_router",
         "mcp_tools",
         "messenger_adapters",
         "proactive_agent",
         "pydantic_ai",
+        "qdrant",
+        "retrieval",
+        "source_harvester",
         "status_doctor",
         "transcription_youtube",
     }
@@ -47,6 +51,18 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
     }
 )
 REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
+REQUIRED_HF_POOL_EVAL_PURPOSES = frozenset(
+    {
+        "structured_decision",
+        "normal_chat",
+        "psychology_explainer",
+        "bibliothekar_answer",
+        "summarizer",
+    }
+)
+REQUIRED_RETRIEVAL_USERMEMORY_MODELS = frozenset({"intfloat/multilingual-e5-small", "intfloat/multilingual-e5-base"})
+REQUIRED_RETRIEVAL_BOOK_MODELS = frozenset({"BAAI/bge-m3", "intfloat/multilingual-e5-base"})
+REQUIRED_RETRIEVAL_BACKEND_MODES = frozenset({"local", "llamaindex_fake", "haystack_fake"})
 REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS = frozenset(
     {
         "chunk_id",
@@ -58,10 +74,24 @@ REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS = frozenset(
         "language",
         "locator",
         "license",
+        "source_quality",
+        "citation_quality",
         "ingested_at",
         "chunk_index",
         "embedding_model",
         "citation_format",
+    }
+)
+REQUIRED_PYDANTIC_DECISION_SCHEMAS = frozenset(
+    {
+        "AgentTaskDecision",
+        "BibliothekarQueryDecision",
+        "MemoryCandidate",
+        "ReminderDecision",
+        "SourceQualityDecision",
+        "ToolSafetyDecision",
+        "ProactiveToolCallDecision",
+        "YouTubeOptionsDecision",
     }
 )
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
@@ -158,6 +188,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_bibliothekar.py",
     "tests/test_bibliothekar_*.py",
     "tests/test_decision_schemas.py",
+    "tests/test_embedding_rebuild.py",
     "tests/test_memory_search_service.py",
     "tests/test_pydantic_decisions.py",
     "tests/test_pydantic_decision_fake_model.py",
@@ -594,6 +625,12 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
                 for line in broken_lines:
                     print(f"  {line}", file=sys.stderr)
                 return 1
+            missing_lines = _runtime_status_missing_required_lines("\n".join(part for part in (result.stdout, result.stderr) if part))
+            if missing_lines and not command.nonfatal:
+                print(f"\nPlan2 acceptance failed at {command.label}: runtime-status is missing required Plan3 lines.", file=sys.stderr)
+                for line in missing_lines:
+                    print(f"  {line}", file=sys.stderr)
+                return 1
         if command.validate_benchmark_artifacts:
             artifact_errors = _benchmark_artifact_errors(command.argv)
             if artifact_errors and not command.nonfatal:
@@ -1009,6 +1046,10 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
         errors.append(f"{prefix}quick must be true for standard Plan2 benchmark artifacts")
     if payload.get("include_live") is not False:
         errors.append(f"{prefix}include_live must be false for standard Plan2 benchmark artifacts")
+    if payload.get("live_hf", False) is not False:
+        errors.append(f"{prefix}live_hf must be false for standard Plan2 benchmark artifacts")
+    if payload.get("live_qdrant", False) is not False:
+        errors.append(f"{prefix}live_qdrant must be false for standard Plan2 benchmark artifacts")
     errors.extend(_benchmark_context_errors(payload.get("context"), prefix=prefix))
     results = payload.get("results")
     if not isinstance(results, list) or not results:
@@ -1061,6 +1102,15 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 errors.append(f"{prefix}results[{index}] details.{key} must be 0 in standard Plan2 benchmark artifacts, got {value}")
             if str(result.get("category") or "") == "bibliothekar":
                 errors.extend(_bibliothekar_benchmark_detail_errors(details, result_index=index, prefix=prefix))
+            if str(result.get("name") or "") == "hf_pool_eval_matrix":
+                errors.extend(_hf_pool_eval_benchmark_detail_errors(details, result_index=index, prefix=prefix))
+            if str(result.get("name") or "") == "retrieval_embedding_reranker_matrix":
+                errors.extend(_retrieval_benchmark_detail_errors(details, result_index=index, prefix=prefix))
+            if str(result.get("name") or "") == "pydantic_structured_decisions":
+                errors.extend(_pydantic_decision_benchmark_detail_errors(details, result_index=index, prefix=prefix))
+        errors.extend(_required_hf_pool_eval_benchmark_errors(results, prefix=prefix))
+        errors.extend(_required_retrieval_benchmark_errors(results, prefix=prefix))
+        errors.extend(_required_pydantic_decision_benchmark_errors(results, prefix=prefix))
     comparisons = payload.get("comparisons")
     if not isinstance(comparisons, dict):
         errors.append(f"{prefix}comparisons must be an object")
@@ -1127,6 +1177,152 @@ def _bibliothekar_benchmark_detail_errors(details: Mapping[str, Any], *, result_
         missing_required = sorted(REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS - {str(item) for item in required})
         if missing_required:
             errors.append(f"{prefix}results[{result_index}] bibliothekar citation_required_fields missing: {', '.join(missing_required)}")
+    return errors
+
+
+def _required_pydantic_decision_benchmark_errors(results: Any, *, prefix: str = "") -> list[str]:
+    if not isinstance(results, list):
+        return []
+    for result in results:
+        if (
+            isinstance(result, Mapping)
+            and result.get("ok") is True
+            and not result.get("skipped")
+            and str(result.get("name") or "") == "pydantic_structured_decisions"
+        ):
+            return []
+    return [f"{prefix}benchmark results missing required pydantic_structured_decisions result"]
+
+
+def _required_hf_pool_eval_benchmark_errors(results: Any, *, prefix: str = "") -> list[str]:
+    if not isinstance(results, list):
+        return []
+    for result in results:
+        if (
+            isinstance(result, Mapping)
+            and result.get("ok") is True
+            and not result.get("skipped")
+            and str(result.get("name") or "") == "hf_pool_eval_matrix"
+        ):
+            return []
+    return [f"{prefix}benchmark results missing required hf_pool_eval_matrix result"]
+
+
+def _hf_pool_eval_benchmark_detail_errors(details: Mapping[str, Any], *, result_index: int, prefix: str = "") -> list[str]:
+    errors: list[str] = []
+    purposes = details.get("purposes")
+    if not isinstance(purposes, list):
+        errors.append(f"{prefix}results[{result_index}] hf_pool purposes must be a list")
+    else:
+        missing = sorted(REQUIRED_HF_POOL_EVAL_PURPOSES - {str(item) for item in purposes})
+        if missing:
+            errors.append(f"{prefix}results[{result_index}] hf_pool purposes missing required evals: {', '.join(missing)}")
+    required_true_flags = {
+        "structured_decision_json_valid",
+        "psychology_quality_ok",
+        "bibliothekar_citation_faithful",
+        "summarizer_faithful",
+        "provider_failure_fallback",
+        "cooldown_fallback",
+    }
+    for key in sorted(required_true_flags):
+        if details.get(key) is not True:
+            errors.append(f"{prefix}results[{result_index}] hf_pool {key} must be true")
+    if details.get("cooldown_network_calls") not in {0, 0.0}:
+        errors.append(f"{prefix}results[{result_index}] hf_pool cooldown_network_calls must be 0")
+    if not _is_positive_integer(details.get("mock_executor_calls")):
+        errors.append(f"{prefix}results[{result_index}] hf_pool mock_executor_calls must be a positive integer")
+    return errors
+
+
+def _required_retrieval_benchmark_errors(results: Any, *, prefix: str = "") -> list[str]:
+    if not isinstance(results, list):
+        return []
+    for result in results:
+        if (
+            isinstance(result, Mapping)
+            and result.get("ok") is True
+            and not result.get("skipped")
+            and str(result.get("name") or "") == "retrieval_embedding_reranker_matrix"
+        ):
+            return []
+    return [f"{prefix}benchmark results missing required retrieval_embedding_reranker_matrix result"]
+
+
+def _retrieval_benchmark_detail_errors(details: Mapping[str, Any], *, result_index: int, prefix: str = "") -> list[str]:
+    errors: list[str] = []
+    errors.extend(
+        _required_string_list_errors(
+            details.get("usermemory_models"),
+            required=REQUIRED_RETRIEVAL_USERMEMORY_MODELS,
+            label="retrieval usermemory_models",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    errors.extend(
+        _required_string_list_errors(
+            details.get("book_models"),
+            required=REQUIRED_RETRIEVAL_BOOK_MODELS,
+            label="retrieval book_models",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    errors.extend(
+        _required_string_list_errors(
+            details.get("backend_modes"),
+            required=REQUIRED_RETRIEVAL_BACKEND_MODES,
+            label="retrieval backend_modes",
+            result_index=result_index,
+            prefix=prefix,
+        )
+    )
+    comparison = details.get("reranker_comparison")
+    if not isinstance(comparison, Mapping):
+        errors.append(f"{prefix}results[{result_index}] retrieval reranker_comparison must be an object")
+    else:
+        if comparison.get("without_reranker_model") != "BAAI/bge-m3":
+            errors.append(f"{prefix}results[{result_index}] retrieval without_reranker_model must be BAAI/bge-m3")
+        if comparison.get("with_reranker_model") != "BAAI/bge-reranker-v2-m3":
+            errors.append(f"{prefix}results[{result_index}] retrieval with_reranker_model must be BAAI/bge-reranker-v2-m3")
+        for key in ("without_reranker_top", "with_reranker_top"):
+            value = comparison.get(key)
+            if not isinstance(value, list) or len(value) < 1:
+                errors.append(f"{prefix}results[{result_index}] retrieval {key} must be a non-empty list")
+    selected = details.get("backend_selected")
+    if not isinstance(selected, Mapping):
+        errors.append(f"{prefix}results[{result_index}] retrieval backend_selected must be an object")
+    else:
+        missing = sorted(REQUIRED_RETRIEVAL_BACKEND_MODES - {str(key) for key in selected})
+        if missing:
+            errors.append(f"{prefix}results[{result_index}] retrieval backend_selected missing: {', '.join(missing)}")
+        for key, value in selected.items():
+            if str(key) in REQUIRED_RETRIEVAL_BACKEND_MODES and not _is_positive_integer(value):
+                errors.append(f"{prefix}results[{result_index}] retrieval backend_selected.{key} must be a positive integer")
+    return errors
+
+
+def _required_string_list_errors(value: Any, *, required: frozenset[str], label: str, result_index: int, prefix: str = "") -> list[str]:
+    if not isinstance(value, list):
+        return [f"{prefix}results[{result_index}] {label} must be a list"]
+    missing = sorted(required - {str(item) for item in value})
+    if missing:
+        return [f"{prefix}results[{result_index}] {label} missing: {', '.join(missing)}"]
+    return []
+
+
+def _pydantic_decision_benchmark_detail_errors(details: Mapping[str, Any], *, result_index: int, prefix: str = "") -> list[str]:
+    errors: list[str] = []
+    schemas = details.get("schemas")
+    if not isinstance(schemas, list):
+        errors.append(f"{prefix}results[{result_index}] pydantic schemas must be a list")
+        return errors
+    missing = sorted(REQUIRED_PYDANTIC_DECISION_SCHEMAS - {str(item) for item in schemas})
+    if missing:
+        errors.append(f"{prefix}results[{result_index}] pydantic schemas missing required decisions: {', '.join(missing)}")
+    if not _is_positive_integer(details.get("fake_agent_calls")):
+        errors.append(f"{prefix}results[{result_index}] pydantic fake_agent_calls must be a positive integer")
     return errors
 
 
@@ -1342,6 +1538,42 @@ def _runtime_status_broken_lines(output: str) -> list[str]:
         if _runtime_status_line_is_broken(stripped):
             broken.append(stripped)
     return broken
+
+
+def _runtime_status_missing_required_lines(output: str) -> list[str]:
+    lines = [line.strip() for line in output.splitlines() if line.strip()]
+    required_prefixes = {
+        "hf_pool=": "hf_pool health line",
+        "llm_route=structured_decision": "structured decision provider line",
+        "structured_decision=": "structured decision instance line",
+        "qdrant=": "qdrant health line",
+        "qdrant_collection=teebotus_user_memory": "qdrant user-memory collection line",
+        "qdrant_collection=teebotus_bibliothekar_chunks": "qdrant bibliothekar collection line",
+    }
+    missing: list[str] = []
+    for prefix, label in required_prefixes.items():
+        if not any(line.startswith(prefix) for line in lines):
+            missing.append(f"runtime-status missing {label}: {prefix}")
+    missing.extend(_runtime_status_structured_route_errors(lines))
+    return missing
+
+
+def _runtime_status_structured_route_errors(lines: Sequence[str]) -> list[str]:
+    route = next((line for line in lines if line.startswith("llm_route=structured_decision")), "")
+    if not route:
+        return []
+    errors: list[str] = []
+    if " profile=hf_pool_structured" not in route:
+        errors.append("runtime-status structured decision route must use profile=hf_pool_structured")
+    if " provider=hf_pool" not in route:
+        errors.append("runtime-status structured decision route must use provider=hf_pool")
+    if " model=pool:default#structured_decision" not in route:
+        errors.append("runtime-status structured decision route must use model=pool:default#structured_decision")
+    if not any(status in route for status in (" status=configured", " status=unavailable")):
+        errors.append("runtime-status structured decision route status must be configured or unavailable")
+    if " status=unavailable" in route and " fallback=" not in route:
+        errors.append("runtime-status unavailable structured decision route must show fallback")
+    return errors
 
 
 def _runtime_status_line_is_broken(line: str) -> bool:

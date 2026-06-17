@@ -13,6 +13,7 @@ import pytest
 from signalbot import Command
 from signalbot.message import MessageType
 
+from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.llm_client import LiteLLMTextClient
@@ -820,7 +821,16 @@ def test_signal_command_constructs_openai_client_from_run_config(monkeypatch, tm
     assert command.engine.openai_client is command.openai_client
 
 
-def test_signal_command_uses_llm_profile_for_text_client(tmp_path) -> None:
+def test_signal_command_uses_llm_profile_for_text_client(monkeypatch, tmp_path) -> None:
+    import TeeBotus.runtime.signal_runner as signal_runner_module
+
+    decision_kwargs = []
+
+    def fake_decision_runner(**kwargs):
+        decision_kwargs.append(kwargs)
+        return "decision-runner"
+
+    monkeypatch.setattr(signal_runner_module, "build_runtime_structured_decision_runner", fake_decision_runner)
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
             instance_name="Demo",
@@ -839,6 +849,8 @@ def test_signal_command_uses_llm_profile_for_text_client(tmp_path) -> None:
     assert isinstance(command.llm_client, LiteLLMTextClient)
     assert command.llm_client.model == "ollama_chat/llama3.1:8b"
     assert command.engine.llm_client is command.llm_client
+    assert command.engine.structured_decision_runner == "decision-runner"
+    assert decision_kwargs and isinstance(decision_kwargs[0]["instructions"], BotInstructions)
 
 
 def test_signal_command_ignores_non_content_message_types(tmp_path) -> None:

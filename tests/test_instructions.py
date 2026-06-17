@@ -46,6 +46,23 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.llm_missing_key, "LLM-Key fehlt.")
         self.assertEqual(instructions.llm_reset, "LLM-Reset.")
 
+    def test_structured_decision_enabled_can_be_configured(self) -> None:
+        disabled = parse_instructions(
+            """
+            ## LLM
+            - structured_decision_enabled: nein
+            """
+        )
+        enabled = parse_instructions(
+            """
+            ## Einstellungen
+            - structured_decisions_enabled: ja
+            """
+        )
+
+        self.assertFalse(disabled.structured_decision_enabled)
+        self.assertTrue(enabled.structured_decision_enabled)
+
     def test_parse_markdown_instructions(self) -> None:
         account_a = "a" * 128
         account_b = "b" * 128
@@ -270,6 +287,36 @@ class InstructionTests(unittest.TestCase):
         )
 
         self.assertEqual(instructions.codex_allowed_account_ids, (account_id,))
+
+    def test_memory_search_section_settings_are_parsed(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## Memory Search
+            - semantic_enabled: ja
+            - semantic_backend: qdrant
+            - local_limit: 3
+            - semantic_limit: 5
+            - qdrant_url: http://localhost:6334
+            """
+        )
+
+        self.assertTrue(instructions.memory_search_semantic_enabled)
+        self.assertEqual(instructions.memory_search_semantic_backend, "qdrant")
+        self.assertEqual(instructions.memory_search_local_limit, 3)
+        self.assertEqual(instructions.memory_search_semantic_limit, 5)
+        self.assertEqual(instructions.memory_search_qdrant_url, "http://localhost:6334")
+
+    def test_memory_search_settings_accept_prefixed_settings_keys(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## Einstellungen
+            - memory_search_semantic_enabled: true
+            - memory_search_semantic_backend: qdrant
+            """
+        )
+
+        self.assertTrue(instructions.memory_search_semantic_enabled)
+        self.assertEqual(instructions.memory_search_semantic_backend, "qdrant")
 
     def test_render_template_uses_safe_placeholders(self) -> None:
         rendered = render_template(

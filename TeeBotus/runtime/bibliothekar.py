@@ -20,6 +20,8 @@ LIBRARY_META_DIRNAME = ".bibliothekar"
 LIBRARY_INDEX_FILENAME = "index.json"
 LIBRARY_CHUNKS_FILENAME = "chunks.jsonl"
 LIBRARY_SCHEMA_VERSION = 2
+LIBRARY_STAGING_DIRNAMES = frozenset({"inbox", "accepted", "quarantine", "rejected"})
+HARVEST_MANIFEST_FILENAME = "harvest_manifest.jsonl"
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
 DEFAULT_MAX_PROMPT_CHARS = 5000
 DEFAULT_MAX_CHUNKS = 5
@@ -167,10 +169,11 @@ class BibliothekarStore:
         self.library_dir.mkdir(parents=True, exist_ok=True)
         self.meta_dir.mkdir(parents=True, exist_ok=True)
         now = _utc_timestamp()
+        source_metadata = _read_harvest_source_metadata(self.library_dir)
         documents: dict[str, Any] = {}
         chunks: list[dict[str, Any]] = []
         for path in _iter_document_paths(self.library_dir):
-            document, document_chunks = _index_document(path, self.library_dir, now)
+            document, document_chunks = _index_document(path, self.library_dir, now, source_metadata)
             documents[str(document["document_id"])] = document
             chunks.extend(document_chunks)
         index = {
@@ -323,6 +326,8 @@ def _is_allowed_library_source_path(path: Path, library_dir: Path) -> bool:
     parts = tuple(part for part in normalized.split("/") if part and part != ".")
     if not parts:
         return False
+    if parts[0] in LIBRARY_STAGING_DIRNAMES:
+        return False
     if LIBRARY_META_DIRNAME.casefold() in parts:
         return False
     if any(part in FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS for part in parts):
@@ -332,16 +337,99 @@ def _is_allowed_library_source_path(path: Path, library_dir: Path) -> bool:
     return True
 
 
-def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]]:
+    manifest_path = library_dir / HARVEST_MANIFEST_FILENAME
+    if not manifest_path.exists():
+        return {}
+    rows: list[dict[str, Any]] = []
+    try:
+        for line in manifest_path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+    except OSError:
+        return {}
+    accepted_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    accepted_by_hash: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.get("event") == "promoted":
+            continue
+        sha256 = str(row.get("sha256") or "").strip()
+        stored_path = str(row.get("stored_path") or "").strip()
+        if not sha256 or not stored_path or row.get("accepted_for_ingest") is not True:
+            continue
+        accepted_by_key[(sha256, stored_path)] = row
+        accepted_by_hash.setdefault(sha256, row)
+    metadata: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if row.get("event") != "promoted":
+            continue
+        sha256 = str(row.get("sha256") or "").strip()
+        promoted_text = str(row.get("stored_path") or "").strip()
+        if not sha256 or not promoted_text:
+            continue
+        promoted_path = Path(promoted_text)
+        accepted = accepted_by_key.get((sha256, str(row.get("source_path") or ""))) or accepted_by_hash.get(sha256)
+        if not accepted:
+            continue
+        try:
+            relative_path = promoted_path.resolve(strict=False).relative_to(library_dir.resolve(strict=False)).as_posix()
+        except ValueError:
+            continue
+        metadata[relative_path] = _source_metadata_from_harvest_row(accepted)
+    return metadata
+
+
+def _source_metadata_from_harvest_row(row: dict[str, Any]) -> dict[str, Any]:
+    source = row.get("source") if isinstance(row.get("source"), dict) else {}
+    source_metadata = source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    decision = row.get("decision") if isinstance(row.get("decision"), dict) else {}
+    status = str(decision.get("status") or "").strip()
+    return {
+        "title": str(source_metadata.get("title") or "").strip(),
+        "license": str(source_metadata.get("license") or "").strip(),
+        "source_quality": status or "unreviewed",
+        "citation_quality": _citation_quality_from_source_status(status),
+        "source_quality_reason": str(decision.get("reason") or "").strip(),
+        "source_requires_human_review": bool(decision.get("requires_human_review")),
+        "source_harvest_route": str(row.get("route") or "accepted").strip() or "accepted",
+    }
+
+
+def _citation_quality_from_source_status(status: str) -> str:
+    normalized = str(status or "").strip().casefold()
+    if normalized in {"trusted", "usable", "weak"}:
+        return normalized
+    if normalized in {"reject", "rejected"}:
+        return "rejected"
+    return "unreviewed"
+
+
+def _index_document(
+    path: Path,
+    library_dir: Path,
+    now: str,
+    source_metadata: dict[str, dict[str, Any]] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     relative_path = path.relative_to(library_dir).as_posix()
+    source_meta = dict((source_metadata or {}).get(relative_path) or {})
     document_id = _stable_id("doc", relative_path)
     stat = path.stat()
     file_sha256 = _file_sha256(path)
     source_id = f"sha256:{file_sha256}"
     file_type = path.suffix.casefold().lstrip(".")
     language = "de"
-    title = _document_title(path)
+    title = str(source_meta.get("title") or _document_title(path)).strip() or _document_title(path)
     author = _document_author(path)
+    license_value = str(source_meta.get("license") or "private").strip() or "private"
+    source_quality = str(source_meta.get("source_quality") or "unreviewed").strip() or "unreviewed"
+    citation_quality = str(source_meta.get("citation_quality") or _citation_quality_from_source_status(source_quality)).strip() or "unreviewed"
+    source_quality_reason = str(source_meta.get("source_quality_reason") or "").strip()
+    source_requires_human_review = bool(source_meta.get("source_requires_human_review"))
+    source_harvest_route = str(source_meta.get("source_harvest_route") or "manual").strip() or "manual"
     error = ""
     sections: list[tuple[str, str]] = []
     try:
@@ -368,7 +456,12 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
         "indexed_at": now,
         "ingested_at": now,
         "embedding_model": DEFAULT_EMBEDDING_MODEL,
-        "license": "private",
+        "license": license_value,
+        "source_quality": source_quality,
+        "citation_quality": citation_quality,
+        "source_quality_reason": source_quality_reason,
+        "source_requires_human_review": source_requires_human_review,
+        "source_harvest_route": source_harvest_route,
         "topics": topics,
         "categories": categories,
         "error": error,
@@ -399,7 +492,12 @@ def _index_document(path: Path, library_dir: Path, now: str) -> tuple[dict[str, 
                     "page_end": page_end,
                     "chapter": "",
                     "section": locator,
-                    "license": "private",
+                    "license": license_value,
+                    "source_quality": source_quality,
+                    "citation_quality": citation_quality,
+                    "source_quality_reason": source_quality_reason,
+                    "source_requires_human_review": source_requires_human_review,
+                    "source_harvest_route": source_harvest_route,
                     "ingested_at": now,
                     "chunk_index": chunk_index,
                     "embedding_model": DEFAULT_EMBEDDING_MODEL,
@@ -545,6 +643,11 @@ def _chunk_prompt_item(chunk: dict[str, Any], *, max_quote_chars: int) -> dict[s
         "chapter": str(chunk.get("chapter", "")),
         "section": str(chunk.get("section", "")),
         "license": str(chunk.get("license", "")),
+        "source_quality": str(chunk.get("source_quality", "") or "unreviewed"),
+        "citation_quality": str(chunk.get("citation_quality", "") or "unreviewed"),
+        "source_quality_reason": str(chunk.get("source_quality_reason", "")),
+        "source_requires_human_review": bool(chunk.get("source_requires_human_review")),
+        "source_harvest_route": str(chunk.get("source_harvest_route", "") or "manual"),
         "ingested_at": str(chunk.get("ingested_at", "")),
         "chunk_index": chunk.get("chunk_index"),
         "embedding_model": str(chunk.get("embedding_model", "")),
@@ -563,6 +666,7 @@ def _prompt_payload(index: dict[str, Any], chunks: list[dict[str, Any]]) -> dict
         "citation_rules": [
             "Nutze diese Ausschnitte nur als Quellenkontext.",
             "Wenn du daraus zitierst oder eine konkrete Aussage daraus ableitest, nenne direkt die genaue Quelle mit Titel, Datei, Locator und chunk_id.",
+            "Beachte source_quality/citation_quality: unreviewed oder weak Quellen nur vorsichtig verwenden und Unsicherheit benennen.",
             "Zitiere nur kurze Abschnitte; paraphrasiere laengere Inhalte.",
         ],
         "selected_library_chunks": chunks,
@@ -629,6 +733,8 @@ def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:
         if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
             return False
         parts = tuple(part for part in normalized.split("/") if part and part != ".")
+        if parts and parts[0] in LIBRARY_STAGING_DIRNAMES:
+            return False
         if any(part in FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS for part in parts):
             return False
         if any(_path_contains_segments(parts, forbidden) for forbidden in FORBIDDEN_LIBRARY_SOURCE_PATH_SEGMENTS):

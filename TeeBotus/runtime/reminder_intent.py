@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import json
 import re
 from typing import Any, Callable, Iterable
 
 from pydantic import ValidationError
 
-from TeeBotus.ai_structures.schemas import ReminderDecision
+from TeeBotus.decisions.reminder import ReminderDecision, parse_reminder_decision
 from TeeBotus.runtime.accounts import AccountStore
 from TeeBotus.runtime.proactive_agent import (
     enable_proactive_agent,
@@ -133,8 +132,8 @@ def _structured_reminder_intent(text: str, *, structured_decision_runner: Struct
         return ReminderIntent(False)
     try:
         payload = structured_decision_runner(_structured_reminder_prompt(raw), ReminderDecision)
-        decision = _coerce_reminder_decision(payload)
-    except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        decision = parse_reminder_decision(payload)
+    except (TypeError, ValueError, ValidationError):
         return ReminderIntent(False)
     if not decision.should_create or decision.confidence < 0.7:
         return ReminderIntent(False)
@@ -146,14 +145,6 @@ def _structured_reminder_intent(text: str, *, structured_decision_runner: Struct
     except ValueError:
         return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
     return ReminderIntent(True, due_at=decision.datetime_iso, subject=subject[:240], recurrence=str(decision.recurrence or "").strip(), missing_time=False, source="model")
-
-
-def _coerce_reminder_decision(payload: object) -> ReminderDecision:
-    if isinstance(payload, ReminderDecision):
-        return payload
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-    return ReminderDecision.model_validate(payload)
 
 
 def _structured_reminder_prompt(text: str) -> str:

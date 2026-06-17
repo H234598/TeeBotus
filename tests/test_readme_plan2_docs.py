@@ -35,7 +35,10 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "--replace-unreadable-account-metadata --apply" in text
     assert "Account_Memory.sqlite3" in text
     assert "## Bibliothekar, Haystack und LangGraph" in text
-    assert "Account-Memory wird nicht in Haystack/Qdrant indexiert" in text
+    assert "Account-Memory wird nicht in Haystack und nicht als Klartext in Qdrant" in text
+    assert "Qdrant darf fuer\nUsermemory nur als optionaler, rebuildbarer ID-/Vektor-Cache dienen" in text
+    assert "/reset_memorys` loescht bei aktiver semantischer Qdrant-Suche" in text
+    assert "teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild" in text
     assert "teebotus-qdrant-systemd" in text
     assert "gepinnten `qdrant/qdrant`-Image-Tag statt `latest`" in text
     assert "mit gueltigem Port" in text

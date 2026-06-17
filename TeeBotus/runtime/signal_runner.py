@@ -20,7 +20,7 @@ from urllib.request import urlopen
 from TeeBotus.adapters.signal import _signal_required_timestamp, send_signal_actions, signal_context_to_event
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, SecretToolInstanceSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
@@ -91,8 +91,9 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self.state_store = RuntimeStateStore(data_dir, instance_name=run_config.instance_name, secret_provider=resolved_secret_provider)
         self.message_tracker = MessageTracker(data_dir / "runtime" / "Sent_Message_Refs.json")
         self.openai_client = OpenAIClient(run_config.openai_api_key) if run_config.openai_api_key else None
+        instructions = self.instruction_store.get()
         self.llm_client = build_runtime_text_llm_client(
-            instructions=self.instruction_store.get(),
+            instructions=instructions,
             openai_client=self.openai_client,
             default_api_key=run_config.openai_api_key,
             enabled=run_config.llm_enabled,
@@ -108,11 +109,17 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             max_tokens=run_config.llm_max_output_tokens,
             temperature=run_config.llm_temperature,
         )
+        self.structured_decision_runner = build_runtime_structured_decision_runner(
+            instructions=instructions,
+            enabled=run_config.llm_enabled,
+            runtime_llm_configured=_run_config_has_llm_route(run_config),
+            allow_remote_fallback=run_config.llm_allow_remote_fallback,
+        )
         self.working_memory_store = WorkingMemoryStore(run_config.instance_name, self.instances_dir)
         self.bibliothekar_store = BibliothekarService.from_instructions(
             run_config.instance_name,
             self.instances_dir,
-            self.instruction_store.get(),
+            instructions,
         )
         self.youtube_job_runner = YouTubeTranscriptionJobRunner()
         self.engine = TeeBotusEngine(
@@ -128,6 +135,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             bibliothekar_store=self.bibliothekar_store,
             youtube_job_runner=self.youtube_job_runner,
             background_action_dispatcher=self._dispatch_background_actions,
+            structured_decision_runner=self.structured_decision_runner,
         )
         self.bot: Any | None = None
         self._dispatch_loop: asyncio.AbstractEventLoop | None = None
@@ -1013,6 +1021,13 @@ def _patch_signalbot_signal_cli_api_about(signalbot: Any) -> None:
     signal_api_class.get_signal_cli_rest_api_version = get_signal_cli_rest_api_version
     signal_api_class.get_signal_cli_rest_api_mode = get_signal_cli_rest_api_mode
     signal_api_class._teebotus_signal_cli_api_about_patch = True
+
+
+def _run_config_has_llm_route(run_config: AccountRunConfig) -> bool:
+    return any(
+        str(getattr(run_config, attr, "") or "").strip()
+        for attr in ("llm_profile", "llm_purpose", "llm_provider", "llm_model")
+    )
 
 
 def _import_signalbot() -> Any:

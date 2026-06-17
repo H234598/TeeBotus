@@ -63,6 +63,7 @@ class BotInstructions:
     llm_max_output_tokens: int | None = None
     llm_temperature: float | None = None
     llm_profile: str = ""
+    structured_decision_enabled: bool | None = None
     openai_model: str = "gpt-5.5"
     openai_service_tier: str = ""
     openai_rule_file: str = "Bot_Rüstzeug.md"
@@ -176,6 +177,11 @@ class BotInstructions:
     user_memory_enabled: bool = False
     user_memory_max_prompt_chars: int = 12000
     user_memory_max_entry_chars: int = 2000
+    memory_search_semantic_enabled: bool = False
+    memory_search_semantic_backend: str = ""
+    memory_search_local_limit: int = 8
+    memory_search_semantic_limit: int = 8
+    memory_search_qdrant_url: str = "http://127.0.0.1:6333"
     bibliothekar_enabled: bool = True
     bibliothekar_backend: str = "local"
     bibliothekar_collection: str = "teebotus_books"
@@ -382,6 +388,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             _apply_llm_setting(instructions, key, value)
         elif section == "bibliothekar":
             _apply_bibliothekar_setting(instructions, key, value)
+        elif section == "memory_search":
+            _apply_memory_search_setting(instructions, key, value)
         elif section == "codex":
             _apply_codex_setting(instructions, key, value)
         elif section == "proactive":
@@ -497,6 +505,10 @@ def _section_name(line: str) -> str:
         "bibliothekar": "bibliothekar",
         "bibliothek": "bibliothekar",
         "library": "bibliothekar",
+        "memory search": "memory_search",
+        "memory_search": "memory_search",
+        "memorysuche": "memory_search",
+        "speichersuche": "memory_search",
         "befehle": "commands",
         "commands": "commands",
         "systemprompt": "system_prompt",
@@ -570,6 +582,10 @@ def _apply_setting(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.echo_enabled = _parse_bool(value, default=instructions.echo_enabled)
     elif normalized == "echo_prefix":
         instructions.echo_prefix = value
+    elif normalized.startswith("memory_search_"):
+        _apply_memory_search_setting(instructions, normalized.removeprefix("memory_search_"), value)
+    elif normalized in {"structured_decision_enabled", "structured_decisions_enabled", "pydantic_decision_enabled", "pydantic_decisions_enabled"}:
+        instructions.structured_decision_enabled = _parse_optional_bool(value, default=instructions.structured_decision_enabled)
 
 
 def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
@@ -650,6 +666,8 @@ def _apply_llm_setting(instructions: BotInstructions, key: str, value: str) -> N
         instructions.llm_temperature = _parse_optional_float(value, default=instructions.llm_temperature)
     elif normalized in {"profile", "llm_profile"}:
         instructions.llm_profile = value.strip()
+    elif normalized in {"structured_decision_enabled", "structured_decisions_enabled", "pydantic_decision_enabled", "pydantic_decisions_enabled"}:
+        instructions.structured_decision_enabled = _parse_optional_bool(value, default=instructions.structured_decision_enabled)
     elif normalized in {"error", "llm_error", "text_error"}:
         instructions.llm_error = value
     elif normalized in {"missing_key", "llm_missing_key", "text_missing_key"}:
@@ -807,6 +825,8 @@ def _apply_openai_setting(
         instructions.bibliothekar_max_quote_chars = _parse_required_int(value, default=instructions.bibliothekar_max_quote_chars)
     elif normalized == "bibliothekar_require_citations":
         instructions.bibliothekar_require_citations = _parse_bool(value, default=instructions.bibliothekar_require_citations)
+    elif normalized.startswith("memory_search_"):
+        _apply_memory_search_setting(instructions, normalized.removeprefix("memory_search_"), value)
 
 
 def _apply_bibliothekar_setting(instructions: BotInstructions, key: str, value: str) -> None:
@@ -827,6 +847,23 @@ def _apply_bibliothekar_setting(instructions: BotInstructions, key: str, value: 
         instructions.bibliothekar_max_quote_chars = _parse_required_int(value, default=instructions.bibliothekar_max_quote_chars)
     elif normalized == "require_citations":
         instructions.bibliothekar_require_citations = _parse_bool(value, default=instructions.bibliothekar_require_citations)
+
+
+def _apply_memory_search_setting(instructions: BotInstructions, key: str, value: str) -> None:
+    normalized = _normalize_key(key)
+    if normalized in {"semantic_enabled", "enabled"}:
+        instructions.memory_search_semantic_enabled = _parse_bool(value, default=instructions.memory_search_semantic_enabled)
+    elif normalized in {"semantic_backend", "backend"}:
+        instructions.memory_search_semantic_backend = _normalize_memory_search_backend(
+            value,
+            default=instructions.memory_search_semantic_backend,
+        )
+    elif normalized in {"local_limit", "keyword_limit"}:
+        instructions.memory_search_local_limit = _parse_required_int(value, default=instructions.memory_search_local_limit)
+    elif normalized in {"semantic_limit", "qdrant_limit"}:
+        instructions.memory_search_semantic_limit = _parse_required_int(value, default=instructions.memory_search_semantic_limit)
+    elif normalized in {"qdrant_url", "url", "base_url"}:
+        instructions.memory_search_qdrant_url = value.strip() or instructions.memory_search_qdrant_url
 
 
 def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) -> None:
@@ -893,6 +930,17 @@ def _normalize_bibliothekar_backend(value: str, *, default: str = "local") -> st
         return "local"
     if normalized in {"haystack", "qdrant", "haystack_qdrant"}:
         return "haystack"
+    if normalized in {"llamaindex", "llama_index", "llamaindex_backend", "llama_index_backend"}:
+        return "llamaindex"
+    return default
+
+
+def _normalize_memory_search_backend(value: str, *, default: str = "") -> str:
+    normalized = _normalize_key(value)
+    if normalized in {"", "keyword", "keywords", "local", "lokal", "none", "off", "aus"}:
+        return ""
+    if normalized in {"qdrant", "semantic_qdrant", "vector", "vectors"}:
+        return "qdrant"
     return default
 
 

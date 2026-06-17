@@ -18,7 +18,7 @@ from TeeBotus.llm.profiles import (
     select_llm_route,
 )
 from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient, normalize_llm_provider
-from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 
 
 def test_default_profile_files_define_plan2_provider_profiles() -> None:
@@ -42,9 +42,12 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert profiles["hf_pool_default"] == LLMProfile(
         name="hf_pool_default",
         provider="hf_pool",
-        model="pool:default",
+        model="pool:default#normal_chat",
         api_key_env="",
     )
+    assert profiles["hf_pool_structured"].model == "pool:default#structured_decision"
+    assert profiles["hf_pool_quality"].model == "pool:default#psychology_explainer"
+    assert profiles["hf_pool_bibliothekar"].model == "pool:default#bibliothekar_answer"
     assert profiles["hf_pool_structured"].provider == "hf_pool"
     assert profiles["hf_pool_quality"].provider == "hf_pool"
     assert profiles["hf_pool_bibliothekar"].provider == "hf_pool"
@@ -305,6 +308,21 @@ def test_runtime_text_client_builds_hf_pool_provider_for_explicit_profile() -> N
 
     assert isinstance(client, HFPoolProvider)
     assert client.pool_name == "default"
+    assert client.purpose == "normal_chat"
+    assert client.model_selector == "pool:default#normal_chat"
+
+
+def test_runtime_text_client_uses_hf_pool_model_selector_purpose_for_explicit_profile() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="hf_pool_structured",
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert client.pool_name == "default"
+    assert client.purpose == "structured_decision"
+    assert client.model_selector == "pool:default#structured_decision"
 
 
 def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
@@ -317,6 +335,7 @@ def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
     assert isinstance(client, HFPoolProvider)
     assert client.pool_name == "default"
     assert client.purpose == "structured_decision"
+    assert client.model_selector == "pool:default#structured_decision"
     assert isinstance(client.fallback_client, LiteLLMTextClient)
     assert client.fallback_client.provider == "litellm"
     assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
@@ -807,6 +826,85 @@ def test_runtime_text_client_builds_openai_client_for_legacy_default_key() -> No
 
     assert isinstance(client, FakeOpenAIClient)
     assert captured == ["legacy-openai-key"]
+
+
+def test_runtime_structured_decision_runner_respects_disabled_flag() -> None:
+    assert build_runtime_structured_decision_runner(enabled="off") is None
+
+
+def test_runtime_structured_decision_runner_follows_instruction_llm_enabled(monkeypatch) -> None:
+    import TeeBotus.decisions.pydantic_agent as pydantic_agent
+
+    calls: list[str] = []
+
+    def fake_builder(purpose: str, **_kwargs):
+        calls.append(purpose)
+
+        def runner(_prompt: str, _schema: type[object]) -> object:
+            return object()
+
+        return runner
+
+    monkeypatch.setattr(pydantic_agent, "build_router_pydantic_ai_model_runner", fake_builder)
+
+    disabled = build_runtime_structured_decision_runner(instructions=BotInstructions(llm_enabled=False))
+    explicit = build_runtime_structured_decision_runner(
+        instructions=BotInstructions(llm_enabled=False, structured_decision_enabled=True)
+    )
+
+    assert disabled is None
+    assert explicit is not None
+    assert calls == ["structured_decision"]
+
+
+def test_runtime_structured_decision_runner_treats_runtime_llm_route_as_enabled(monkeypatch) -> None:
+    import TeeBotus.decisions.pydantic_agent as pydantic_agent
+
+    calls: list[str] = []
+
+    def fake_builder(purpose: str, **_kwargs):
+        calls.append(purpose)
+
+        def runner(_prompt: str, _schema: type[object]) -> object:
+            return object()
+
+        return runner
+
+    monkeypatch.setattr(pydantic_agent, "build_router_pydantic_ai_model_runner", fake_builder)
+
+    runner = build_runtime_structured_decision_runner(
+        instructions=BotInstructions(llm_enabled=False),
+        runtime_llm_configured=True,
+    )
+
+    assert runner is not None
+    assert calls == ["structured_decision"]
+
+
+def test_runtime_structured_decision_runner_guards_provider_errors(monkeypatch) -> None:
+    import TeeBotus.decisions.pydantic_agent as pydantic_agent
+
+    calls: list[dict[str, object]] = []
+
+    def fake_builder(purpose: str, *, allow_remote_fallback: bool, **_kwargs):
+        calls.append({"purpose": purpose, "allow_remote_fallback": allow_remote_fallback})
+
+        def runner(_prompt: str, _schema: type[object]) -> object:
+            raise RuntimeError("provider unavailable")
+
+        setattr(runner, "llm_provider", "hf_pool")
+        setattr(runner, "model_name", "pool:default#structured_decision")
+        return runner
+
+    monkeypatch.setattr(pydantic_agent, "build_router_pydantic_ai_model_runner", fake_builder)
+
+    runner = build_runtime_structured_decision_runner(allow_remote_fallback="yes")
+
+    assert runner is not None
+    assert runner("Prompt", object) is None
+    assert getattr(runner, "llm_provider") == "hf_pool"
+    assert getattr(runner, "model_name") == "pool:default#structured_decision"
+    assert calls == [{"purpose": "structured_decision", "allow_remote_fallback": True}]
 
 
 def test_simple_yaml_fallback_parser_handles_plan2_shape(tmp_path: Path, monkeypatch) -> None:

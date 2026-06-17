@@ -9,7 +9,7 @@ from TeeBotus.llm.hf_pool.models_feed import HFPoolModelInfo
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget, select_target
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
 from TeeBotus.llm.hf_pool.targets import HFPoolTarget, TargetCapabilities
 
 __all__ = [
@@ -24,6 +24,7 @@ __all__ = [
     "HFPoolProvider",
     "HFPoolRateLimited",
     "HFPoolRuntimeState",
+    "SQLiteHFPoolRuntimeStateStore",
     "HFPoolTarget",
     "HFPoolTargetUnavailable",
     "HFPoolUnavailable",
