@@ -7,6 +7,7 @@ from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
+from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
@@ -109,6 +110,12 @@ def build_runtime_text_llm_client(
             provider=resolved_provider,
             model=resolved_model,
             explicit_api_key=api_key,
+        ),
+        gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
+            env,
+            instance_name=instance_name,
+            provider=resolved_provider,
+            model=resolved_model,
         ),
         api_base=api_base,
         purpose=route_purpose or "normal_chat",
@@ -237,6 +244,12 @@ def _build_route_client(
             model=route.model,
             explicit_api_key=override_api_key,
         ),
+        gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
+            source,
+            instance_name=instance_name,
+            provider=route.provider,
+            model=route.model,
+        ),
         api_base=resolved_api_base,
         purpose=route.purpose,
         timeout=timeout,
@@ -295,6 +308,12 @@ def _build_profile_client(
             model=profile.model,
             explicit_api_key=override_api_key,
         ),
+        gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
+            source,
+            instance_name=instance_name,
+            provider=profile.provider,
+            model=profile.model,
+        ),
         api_base=resolved_api_base,
         purpose="normal_chat",
         timeout=timeout,
@@ -323,6 +342,18 @@ def _gemini_api_key_ring_for_route(
     if not _route_uses_gemini_api(provider=provider, model=model):
         return ()
     return resolve_gemini_api_key_ring(env, instance_name=instance_name)
+
+
+def _gemini_free_tier_limits_for_route(
+    env: Mapping[str, str] | None,
+    *,
+    instance_name: str,
+    provider: str,
+    model: str,
+):
+    if not route_uses_google_gemini(provider=provider, model=model):
+        return None
+    return resolve_gemini_free_tier_limits(env, instance_name=instance_name, provider=provider, model=model)
 
 
 def _route_uses_gemini_api(*, provider: str, model: str) -> bool:

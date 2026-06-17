@@ -4,6 +4,7 @@ from typing import Mapping, Protocol
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMImage, LLMResponse, LLMVoice
+from TeeBotus.llm.free_tier import GeminiFreeTierLimits
 from TeeBotus.llm.litellm_provider import (
     LITELLM_PROVIDER_ALIASES,
     LiteLLMSettings,
@@ -51,6 +52,7 @@ def build_text_llm_client(
     temperature: float | str | None = None,
     max_tokens: int | str | None = None,
     use_instruction_fallback_models: bool = True,
+    gemini_free_tier_limits: GeminiFreeTierLimits | None = None,
 ) -> object | None:
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
@@ -92,6 +94,7 @@ def build_text_llm_client(
                 timeout_override=parsed_timeout is not None,
                 temperature_override=parsed_temperature is not None,
                 max_tokens_override=parsed_max_tokens is not None,
+                gemini_free_tier_limits=gemini_free_tier_limits,
             )
         )
     raise LLMAPIError(f"Unsupported LLM provider: {provider or instructions.llm_provider}")

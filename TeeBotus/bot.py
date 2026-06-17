@@ -344,6 +344,9 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         detail += f" api_key={'configured' if key_configured else 'none'}"
     if gemini_key_ring_count > 1:
         detail += f" api_key_ring={gemini_key_ring_count}"
+    if _status_route_uses_google_gemini(provider=provider, model=model):
+        detail += " google_mode=stateless"
+        detail += f" free_tier_guard={_status_gemini_free_tier_guard(account, provider=provider, model=model)}"
     fallback_count = _status_effective_fallback_count(
         account,
         instructions=instructions,
@@ -839,10 +842,30 @@ def _status_gemini_key_ring_count(*, instance_name: object, provider: str, model
         return 0
 
 
+def _status_gemini_free_tier_guard(account: Any, *, provider: str, model: object) -> str:
+    try:
+        from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits
+
+        limits = resolve_gemini_free_tier_limits(
+            instance_name=str(getattr(account, "instance_name", "") or ""),
+            provider=provider,
+            model=str(model or ""),
+        )
+        return limits.status_summary()
+    except Exception:
+        return "unknown"
+
+
 def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
     return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
+
+
+def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider in {"gemini", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
 def _normalize_status_llm_provider(provider: object) -> str:

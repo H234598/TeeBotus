@@ -3,13 +3,23 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMAPIError, LLMResponse
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
+from TeeBotus.llm.free_tier import (
+    GeminiBudgetReservation,
+    GeminiFreeTierGuard,
+    GeminiFreeTierLimits,
+    estimate_litellm_input_tokens,
+    quota_owner_id,
+    resolve_gemini_free_tier_limits,
+    route_uses_google_gemini,
+)
 from TeeBotus.llm.keyring import RotatingAPIKeyRing
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_provider")
@@ -62,6 +72,7 @@ class LiteLLMSettings:
     timeout_override: bool = False
     temperature_override: bool = False
     max_tokens_override: bool = False
+    gemini_free_tier_limits: GeminiFreeTierLimits | None = None
 
 
 class LiteLLMTextClient:
@@ -122,6 +133,11 @@ class LiteLLMTextClient:
         self.timeout = resolved.timeout
         self.temperature = resolved.temperature
         self.max_tokens = resolved.max_tokens
+        self.gemini_free_tier_limits = resolved.gemini_free_tier_limits or resolve_gemini_free_tier_limits(
+            provider=self.provider,
+            model=self.model,
+        )
+        self.gemini_free_tier_guard = GeminiFreeTierGuard(self.gemini_free_tier_limits)
 
     def create_reply(
         self,
@@ -155,6 +171,31 @@ class LiteLLMTextClient:
             key_was_limited = False
             for model in models:
                 kwargs = self._completion_kwargs_for_model(base_kwargs, model)
+                quota_owner = quota_owner_id(
+                    api_key=str(kwargs.get("api_key") or ""),
+                    provider=self.provider,
+                    model=model,
+                    api_base=str(kwargs.get("api_base") or ""),
+                )
+                reservation = self._reserve_google_free_tier_budget(
+                    quota_owner=quota_owner,
+                    model=model,
+                    kwargs=kwargs,
+                    ring_key=ring_key,
+                )
+                if reservation is not None and not reservation.allowed:
+                    errors.append(f"provider={self.provider} model={model}: {reservation.reason}")
+                    LOGGER.warning(
+                        "LiteLLM Gemini/Vertex free-tier guard skipped provider call for provider=%s model=%s: %s",
+                        self.provider,
+                        model,
+                        reservation.reason,
+                    )
+                    if ring_key:
+                        key_was_limited = True
+                        self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
+                        break
+                    continue
                 try:
                     response = completion(model=model, **kwargs)
                 except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
@@ -172,6 +213,16 @@ class LiteLLMTextClient:
                     errors.append(f"provider={self.provider} model={model}: empty text")
                     LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
                     continue
+                usage = _extract_usage(response)
+                if reservation is not None:
+                    actual_input_tokens = _extract_input_tokens(usage)
+                    if actual_input_tokens is not None:
+                        self.gemini_free_tier_guard.adjust_reserved_tokens(
+                            quota_owner=quota_owner,
+                            model=model,
+                            reserved_input_tokens=reservation.input_tokens,
+                            actual_input_tokens=actual_input_tokens,
+                        )
                 if ring_key:
                     self.api_key_ring.mark_success(ring_key)  # type: ignore[union-attr]
                 return LLMResponse(
@@ -179,7 +230,7 @@ class LiteLLMTextClient:
                     response_id=None,
                     provider="litellm",
                     model=model,
-                    usage=_extract_usage(response),
+                    usage=usage,
                 )
             if not key_was_limited:
                 break
@@ -225,6 +276,35 @@ class LiteLLMTextClient:
         if api_key:
             kwargs["api_key"] = api_key
         return kwargs
+
+    def _reserve_google_free_tier_budget(
+        self,
+        *,
+        quota_owner: str,
+        model: str,
+        kwargs: Mapping[str, object],
+        ring_key: str | None,
+    ) -> GeminiBudgetReservation | None:
+        if not route_uses_google_gemini(provider=self.provider, model=model):
+            return None
+        messages = kwargs.get("messages")
+        if not isinstance(messages, Sequence):
+            return None
+        estimated_input_tokens = estimate_litellm_input_tokens(
+            tuple(message for message in messages if isinstance(message, Mapping))
+        )
+        reservation = self.gemini_free_tier_guard.reserve(
+            quota_owner=quota_owner,
+            model=model,
+            estimated_input_tokens=estimated_input_tokens,
+        )
+        if not reservation.allowed and ring_key:
+            reservation = GeminiBudgetReservation(
+                allowed=False,
+                input_tokens=reservation.input_tokens,
+                reason=f"{reservation.reason}; trying next configured project key",
+            )
+        return reservation
 
 
 def normalize_llm_provider(value: str) -> str:
@@ -437,6 +517,18 @@ def _extract_usage(response: object) -> dict[str, Any]:
         if isinstance(value, int | float | str):
             result[key] = value
     return result
+
+
+def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
+    for key in ("prompt_tokens", "input_tokens", "input_token_count"):
+        value = usage.get(key)
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed >= 0:
+            return parsed
+    return None
 
 
 def _response_value(response: object, key: str) -> object:

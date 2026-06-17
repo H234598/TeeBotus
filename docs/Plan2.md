@@ -968,9 +968,36 @@ profiles:
 Gemini-Keyrotation ist fuer `gemini_flash` zusaetzlich ueber
 `GEMINI_API_KEYS_ACCOUNT_N` oder instanzspezifisch
 `TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` verfuegbar. Die Buckets werden
-spaltenweise sortiert, also Account 1 Key 1, Account 2 Key 1, Account 3 Key 1,
-danach Account 1 Key 2 usw. Bei `429`/Quota-/Usage-Limit wechselt der
-LiteLLM-Client auf den naechsten Key; sonst bleibt der aktive Key stehen.
+spaltenweise sortiert, also Account 1 Projekt-Key 1, Account 2 Projekt-Key 1,
+Account 3 Projekt-Key 1, danach Account 1 Projekt-Key 2 usw. Google limitiert
+Gemini pro Projekt, nicht pro API-Key; deshalb darf pro Projekt nur ein Key in
+den Ring. Mehrere Keys desselben Projekts erhoehen die Quote nicht. Bei
+`429`/Quota-/Usage-Limit wechselt der LiteLLM-Client auf den naechsten Key;
+sonst bleibt der aktive Key stehen.
+
+Google-Routen (`gemini/...` und `vertex_ai/...`) laufen im normalen Chatpfad
+stateless. TeeBotus sendet den notwendigen lokalen Kontext selbst; Live API,
+Interactions API, `previous_interaction_id` und serverseitige Google-Speicherung
+sind keine Defaults. `--runtime-status` zeigt diese Routen als
+`google_mode=stateless`.
+
+Der Free-Tier-Guard ist fuer Google-Routen default-on und lokal konfigurierbar:
+
+```bash
+TEEBOTUS_GEMINI_FREE_TIER_RPM=5
+TEEBOTUS_GEMINI_FREE_TIER_TPM=250000
+TEEBOTUS_GEMINI_FREE_TIER_RPD=20
+TEEBOTUS_GEMINI_FREE_TIER_RESERVE_TOKENS=2048
+```
+
+Der Guard zaehlt pro Projekt-Key Requests/min, geschaetzte Input-Tokens/min und
+Requests/Tag. Wenn ein Request die Reserve kurz vor dem Free-Tier-Limit
+verletzen wuerde, wird der Provider-Aufruf uebersprungen und der naechste
+Projekt-Key versucht. Sind alle Projekt-Keys lokal erschoepft, bricht der
+LLM-Aufruf sauber ab. Die konkreten Quoten muessen aus AI Studio/Projektquoten
+uebernommen werden; instanzspezifisch funktionieren
+`TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
+`_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine Dimension.
 
 ### 11.2 Routing-Datei
 

@@ -501,6 +501,11 @@ python3 -m TeeBotus --runtime-status --channels telegram
 Remote-Profile werden genauso per Profil geschaltet. `gemini_flash` erwartet
 `GEMINI_API_KEY`; `vertex_gemini_flash` erwartet
 `GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale Vertex/Google-Credentials.
+Der normale Chatpfad nutzt dabei stateless LiteLLM/`generateContent`-Requests:
+TeeBotus sendet den benoetigten lokalen Kontext selbst und verlaesst sich nicht
+auf serverseitige Google-Conversation-State. Gemini Live API und Interactions
+API bleiben separate, stateful/gespeicherte Spezialpfade und werden hier nicht
+automatisch verwendet.
 
 Gemini-Keyrotation:
 
@@ -511,8 +516,12 @@ GEMINI_API_KEYS_ACCOUNT_2=acc2_key1,acc2_key2,acc2_key3
 GEMINI_API_KEYS_ACCOUNT_3=acc3_key1,acc3_key2,acc3_key3
 ```
 
-Der Bot verwoben diese Buckets spaltenweise:
-`acc1_key1, acc2_key1, acc3_key1, acc1_key2, acc2_key2, acc3_key2, ...`.
+Google wendet Gemini-Rate-Limits pro Projekt an, nicht pro API-Key. Die
+Keyring-Eintraege muessen deshalb Projekt-Keys sein: pro Google-Projekt genau
+ein Key. Mehrere Keys aus demselben Projekt erhoehen die Quote nicht und wuerden
+den lokalen Guard nur falsch zaehlen lassen. Der Bot verwebt diese Buckets
+spaltenweise:
+`acc1_project1, acc2_project1, acc3_project1, acc1_project2, acc2_project2, acc3_project2, ...`.
 Trifft ein Gemini/LiteLLM-Aufruf auf `429`, `RESOURCE_EXHAUSTED`, Quota- oder
 Usage-Limit, springt der Client im laufenden Prozess auf den naechsten Key.
 Normale Provider-/Netzwerkfehler rotieren den Key nicht. Alternativ kann die
@@ -520,6 +529,28 @@ fertig sortierte Liste direkt ueber `GEMINI_API_KEY_RING` oder
 `TEEBOTUS_GEMINI_API_KEY_RING` gesetzt werden; instanzspezifisch sind
 `TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` und
 `TEEBOTUS_GEMINI_API_KEY_RING_<INSTANZ>` moeglich.
+
+Gemini-/Vertex-Free-Tier-Guard:
+
+```bash
+TEEBOTUS_GEMINI_FREE_TIER_RPM=5
+TEEBOTUS_GEMINI_FREE_TIER_TPM=250000
+TEEBOTUS_GEMINI_FREE_TIER_RPD=20
+TEEBOTUS_GEMINI_FREE_TIER_RESERVE_TOKENS=2048
+```
+
+Der Guard zaehlt pro Projekt-Key Requests/min, geschaetzte Input-Tokens/min und
+Requests/Tag. Wenn ein Request kurz vor dem Limit die Reserve verletzen wuerde,
+wird der Provider-Aufruf uebersprungen und beim Keyring der naechste Projekt-Key
+versucht. Sind alle Projekt-Keys lokal erschoepft, bricht der LLM-Aufruf sauber
+ab, statt absichtlich in einen Google-429 zu laufen. Die konkreten Free-Tier-
+Werte koennen sich je Modell und Projekt aendern; die Werte sollten deshalb aus
+AI Studio/Projektquoten uebernommen werden. Instanzspezifisch funktionieren
+`TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
+`_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine einzelne
+Dimension, `TEEBOTUS_GEMINI_FREE_TIER_ENABLED=false` schaltet den Guard ab.
+`--runtime-status` meldet Google-Routen als `google_mode=stateless` und zeigt
+die wirksamen Guard-Werte als `free_tier_guard=...`.
 
 Das ist die normale Gemini-Text-API ueber LiteLLM. Die Gemini/Vertex Live API
 ist ein separater, stateful WebSocket-/GenAI-SDK-Pfad fuer Echtzeit-Audio,

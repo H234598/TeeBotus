@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 
+from TeeBotus import __version__
 from TeeBotus.core.status import account_memory_index_health_lines
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
@@ -30,7 +31,7 @@ def test_version_flag_prints_package_version_without_runtime_start(monkeypatch, 
     assert bot.main(["--version"]) == 0
 
     captured = capsys.readouterr()
-    assert captured.out == "TeeBotus 1.6.13\n"
+    assert captured.out == f"TeeBotus {__version__}\n"
     assert captured.err == ""
 
 

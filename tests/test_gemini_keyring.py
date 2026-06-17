@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from TeeBotus.llm.free_tier import (
+    GeminiFreeTierGuard,
+    GeminiFreeTierLimits,
+    reset_gemini_free_tier_budget_state,
+    resolve_gemini_free_tier_limits,
+)
 from TeeBotus.llm.keyring import RotatingAPIKeyRing, interleave_key_buckets, resolve_gemini_api_key_ring
 
 
@@ -53,3 +59,46 @@ def test_rotating_key_ring_advances_only_when_limited() -> None:
     assert ring.ordered_keys()[0] == "k2"
     ring.mark_limited("k2")
     assert ring.ordered_keys()[0] == "k3"
+
+
+def test_resolve_gemini_free_tier_limits_uses_instance_override() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RPM": "7",
+        "TEEBOTUS_GEMINI_FREE_TIER_TPM": "250000",
+        "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RPD": "33",
+        "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RESERVE_TOKENS": "4096",
+    }
+
+    limits = resolve_gemini_free_tier_limits(
+        env,
+        instance_name="Demo",
+        provider="litellm",
+        model="gemini/gemini-2.5-flash",
+    )
+
+    assert limits.requests_per_minute == 7
+    assert limits.input_tokens_per_minute == 250_000
+    assert limits.requests_per_day == 33
+    assert limits.reserve_input_tokens == 4096
+    assert limits.status_summary() == "on(rpm=7,tpm=250000,rpd=33,reserve=4096)"
+
+
+def test_gemini_free_tier_guard_blocks_before_limit() -> None:
+    reset_gemini_free_tier_budget_state()
+    guard = GeminiFreeTierGuard(
+        GeminiFreeTierLimits(
+            requests_per_minute=10,
+            input_tokens_per_minute=100,
+            requests_per_day=10,
+            reserve_input_tokens=10,
+        )
+    )
+
+    first = guard.reserve(quota_owner="project-a", model="gemini/gemini-2.5-flash", estimated_input_tokens=85)
+    second = guard.reserve(quota_owner="project-a", model="gemini/gemini-2.5-flash", estimated_input_tokens=6)
+    other_project = guard.reserve(quota_owner="project-b", model="gemini/gemini-2.5-flash", estimated_input_tokens=6)
+
+    assert first.allowed is True
+    assert second.allowed is False
+    assert "TPM free-tier budget would be exceeded" in second.reason
+    assert other_project.allowed is True

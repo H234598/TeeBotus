@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.router import build_text_llm_client, normalize_llm_provider
 
@@ -176,6 +177,9 @@ def build_profiled_text_llm_client(
         fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
         api_key_ring=resolve_gemini_api_key_ring(source) if _route_uses_gemini_api(route.provider, route.model) else (),
+        gemini_free_tier_limits=resolve_gemini_free_tier_limits(source, provider=route.provider, model=route.model)
+        if route_uses_google_gemini(provider=route.provider, model=route.model)
+        else None,
         api_base=route.base_url,
         purpose=route.purpose,
         use_instruction_fallback_models=False,

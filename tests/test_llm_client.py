@@ -7,6 +7,12 @@ import builtins
 import pytest
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.free_tier import (
+    GeminiFreeTierGuard,
+    GeminiFreeTierLimits,
+    quota_owner_id,
+    reset_gemini_free_tier_budget_state,
+)
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
@@ -171,6 +177,47 @@ def test_litellm_text_client_rotates_gemini_key_ring_on_usage_limit(monkeypatch:
 
     assert response.text == "ok:gemini-b1"
     assert calls == ["gemini-a1", "gemini-b1"]
+
+
+def test_litellm_text_client_rotates_gemini_key_ring_before_free_tier_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_gemini_free_tier_budget_state()
+    calls: list[str] = []
+    limits = GeminiFreeTierLimits(
+        requests_per_minute=100,
+        input_tokens_per_minute=60,
+        requests_per_day=100,
+        reserve_input_tokens=5,
+    )
+    guard = GeminiFreeTierGuard(limits)
+    owner = quota_owner_id(
+        api_key="gemini-budget-a",
+        provider="gemini",
+        model="gemini/gemini-2.5-flash",
+    )
+    assert guard.reserve(
+        quota_owner=owner,
+        model="gemini/gemini-2.5-flash",
+        estimated_input_tokens=35,
+    ).allowed
+
+    def completion(**kwargs):
+        api_key = str(kwargs.get("api_key") or "")
+        calls.append(api_key)
+        return {"choices": [{"message": {"content": f"ok:{api_key}"}}], "usage": {"prompt_tokens": 12}}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="gemini",
+            model="gemini-2.5-flash",
+            api_key_ring=("gemini-budget-a", "gemini-budget-b"),
+            gemini_free_tier_limits=limits,
+        )
+    )
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="S."), None)
+
+    assert response.text == "ok:gemini-budget-b"
+    assert calls == ["gemini-budget-b"]
 
 
 def test_litellm_text_client_does_not_rotate_key_ring_on_non_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
