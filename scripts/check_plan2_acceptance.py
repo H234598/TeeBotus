@@ -1330,14 +1330,22 @@ def _markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"benchmark markdown artifact lacks dependencies section: {path}")
     if "| package | version | status |" not in text:
         errors.append(f"benchmark markdown artifact lacks dependencies table: {path}")
+    if not re.search(r"^\| teebotus \|", text, flags=re.MULTILINE):
+        errors.append(f"benchmark markdown artifact lacks teebotus dependency row: {path}")
     if "## Results" not in text:
         errors.append(f"benchmark markdown artifact lacks results section: {path}")
     if "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" not in text:
         errors.append(f"benchmark markdown artifact lacks results table: {path}")
+    for name in sorted(REQUIRED_BENCHMARK_NAMES):
+        if not re.search(rf"^\| {re.escape(name)} \|", text, flags=re.MULTILINE):
+            errors.append(f"benchmark markdown artifact missing required benchmark result {name}: {path}")
     if "## Stable Backend Rankings" not in text:
         errors.append(f"benchmark markdown artifact lacks stable backend rankings section: {path}")
     if "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" not in text:
         errors.append(f"benchmark markdown artifact lacks stable backend rankings table: {path}")
+    for category in sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES):
+        if not re.search(rf"^\| {re.escape(category)} \| \d+ \|", text, flags=re.MULTILINE):
+            errors.append(f"benchmark markdown artifact missing required benchmark ranking {category}: {path}")
     if "## Quality Gate" not in text:
         errors.append(f"benchmark markdown artifact lacks quality gate section: {path}")
     if "- status: ok" not in text:

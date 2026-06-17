@@ -2341,6 +2341,60 @@ def test_benchmark_markdown_artifact_validation_requires_complete_report_section
     assert any("lacks no-live-calls note" in error for error in errors)
 
 
+def test_benchmark_markdown_artifact_validation_requires_core_result_names(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+
+    payload = _valid_benchmark_payload()
+    payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(
+        render_markdown(payload).replace(
+            "| memory_jsonl | account_memory |",
+            "| memory_jsonl_missing | account_memory |",
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert f"benchmark markdown artifact missing required benchmark result memory_jsonl: {markdown_path}" in errors
+
+
+def test_benchmark_markdown_artifact_validation_requires_core_ranking_categories(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+
+    payload = _valid_benchmark_payload()
+    payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+    markdown = render_markdown(payload)
+    markdown = markdown.replace("| retrieval | 1 |", "| retrieval_missing | 1 |")
+    markdown = markdown.replace("| retrieval | 2 |", "| retrieval_missing | 2 |")
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(markdown, encoding="utf-8")
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert f"benchmark markdown artifact missing required benchmark ranking retrieval: {markdown_path}" in errors
+
+
+def test_benchmark_markdown_artifact_validation_requires_teebotus_dependency(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+
+    payload = _valid_benchmark_payload()
+    payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(
+        render_markdown(payload).replace(
+            "| teebotus | 1.6.13 | worktree |",
+            "| other-package | 1.6.13 | worktree |",
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert f"benchmark markdown artifact lacks teebotus dependency row: {markdown_path}" in errors
+
+
 def test_benchmark_artifact_validation_rejects_secret_lists_in_json(tmp_path: Path) -> None:
     json_path = tmp_path / "bench.json"
     payload = _valid_benchmark_payload()
