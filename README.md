@@ -696,6 +696,13 @@ Cache nicht geloescht werden kann, wird kein erfolgreicher Reset gemeldet.
 `--runtime-status` meldet den Pfad als `memory_index=<Instanz> backend=keyword
 status=... semantic=... embedding_provider=... embedding_model=...
 embedding_dimensions=...`.
+Die Qdrant-Collection-Zeile verwendet fuer Usermemory die aktive semantische
+Memory-Konfiguration der Instanz. Wenn mehrere aktive Instanzen verschiedene
+Usermemory-Embedding-Modelle oder Dimensionen fuer dieselbe Collection fordern,
+meldet der Status `status=config_conflict`. Wenn eine erreichbare Qdrant-
+Collection mit falscher Vektorgroesse existiert, meldet der Status
+`status=schema_mismatch actual_vector_size=...`; dann muss der rebuildbare
+Cache mit konsistenter Modellkonfiguration neu angelegt werden.
 Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt. Ohne
 Embedding-Flags liest `memory-rebuild` die aktive `Bot_Verhalten.md` der
 Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags

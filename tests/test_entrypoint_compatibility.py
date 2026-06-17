@@ -131,6 +131,46 @@ def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> Non
     )
 
 
+def test_runtime_qdrant_collection_specs_follow_active_semantic_memory_config() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instructions = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_model="intfloat/multilingual-e5-small",
+        memory_search_embedding_dimensions=384,
+    )
+
+    specs, error = bot._runtime_qdrant_collection_specs({"Demo": instructions})
+
+    assert error == ""
+    assert specs[0].name == "teebotus_user_memory"
+    assert specs[0].vector_size == 384
+    assert specs[0].embedding_model == "intfloat/multilingual-e5-small"
+
+
+def test_runtime_qdrant_collection_specs_report_conflicting_semantic_memory_configs() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    first = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_model="intfloat/multilingual-e5-small",
+        memory_search_embedding_dimensions=384,
+    )
+    second = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_model="teebotus-account-memory-hash",
+        memory_search_embedding_dimensions=64,
+    )
+
+    specs, error = bot._runtime_qdrant_collection_specs({"A": first, "B": second})
+
+    assert specs[0].vector_size == USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
+    assert "conflicting user-memory embedding configs" in error
+    assert "A:intfloat/multilingual-e5-small/384" in error
+    assert "B:teebotus-account-memory-hash/64" in error
+
+
 def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

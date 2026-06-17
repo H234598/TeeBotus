@@ -51,6 +51,7 @@ class QdrantCollectionResult:
     status: str
     ok: bool
     error: str = ""
+    actual_vector_size: int | None = None
 
 
 QdrantOpener = Callable[..., Any]
@@ -136,18 +137,20 @@ def format_qdrant_status_line(health: QdrantHealth) -> str:
 def default_qdrant_collection_specs(
     *,
     user_memory_vector_size: int = USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    user_memory_embedding_model: str = USER_MEMORY_QDRANT_EMBEDDING_MODEL,
     bibliothekar_vector_size: int = DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
+    bibliothekar_embedding_model: str = BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
 ) -> tuple[QdrantCollectionSpec, QdrantCollectionSpec]:
     return (
         QdrantCollectionSpec(
             name=QDRANT_USER_MEMORY_COLLECTION,
             vector_size=_validate_vector_size(user_memory_vector_size),
-            embedding_model=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
+            embedding_model=str(user_memory_embedding_model or "").strip(),
         ),
         QdrantCollectionSpec(
             name=QDRANT_BIBLIOTHEKAR_COLLECTION,
             vector_size=_validate_vector_size(bibliothekar_vector_size),
-            embedding_model=BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
+            embedding_model=str(bibliothekar_embedding_model or "").strip(),
         ),
     )
 
@@ -171,6 +174,7 @@ def check_collection(
     try:
         response = open_url(request, timeout=timeout_seconds)
         status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+        raw = response.read() if hasattr(response, "read") else b""
         close = getattr(response, "close", None)
         if callable(close):
             close()
@@ -183,6 +187,16 @@ def check_collection(
     except Exception as exc:  # noqa: BLE001 - Qdrant remains optional and reports controlled failures.
         return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     if 200 <= status_code < 300:
+        actual_vector_size = _collection_vector_size(raw)
+        if actual_vector_size is not None and actual_vector_size != spec.vector_size:
+            return QdrantCollectionResult(
+                name=name,
+                target=target,
+                status="schema_mismatch",
+                ok=False,
+                error=f"vector_size expected {spec.vector_size}, got {actual_vector_size}",
+                actual_vector_size=actual_vector_size,
+            )
         return QdrantCollectionResult(name=name, target=target, status="ready", ok=True)
     if status_code == 404:
         return QdrantCollectionResult(name=name, target=target, status="missing", ok=False, error="HTTP 404")
@@ -195,10 +209,11 @@ def check_default_collections(
     env: Mapping[str, str] | None = None,
     timeout_seconds: float = DEFAULT_QDRANT_TIMEOUT_SECONDS,
     opener: QdrantOpener | None = None,
-) -> tuple[QdrantCollectionResult, QdrantCollectionResult]:
+    specs: tuple[QdrantCollectionSpec, ...] | None = None,
+) -> tuple[QdrantCollectionResult, ...]:
     return tuple(
         check_collection(spec, url=url, env=env, timeout_seconds=timeout_seconds, opener=opener)
-        for spec in default_qdrant_collection_specs()
+        for spec in (specs or default_qdrant_collection_specs())
     )
 
 
@@ -206,9 +221,10 @@ def format_qdrant_collection_status_lines(
     health: QdrantHealth,
     *,
     collection_results: tuple[QdrantCollectionResult, ...] | None = None,
+    specs: tuple[QdrantCollectionSpec, ...] | None = None,
 ) -> tuple[str, ...]:
-    specs = default_qdrant_collection_specs()
-    spec_by_name = {spec.name: spec for spec in specs}
+    effective_specs = specs or default_qdrant_collection_specs()
+    spec_by_name = {spec.name: spec for spec in effective_specs}
     if collection_results is None:
         collection_results = tuple(
             QdrantCollectionResult(
@@ -218,7 +234,7 @@ def format_qdrant_collection_status_lines(
                 ok=False,
                 error=health.error if not health.ok else "",
             )
-            for spec in specs
+            for spec in effective_specs
         )
     lines: list[str] = []
     for result in collection_results:
@@ -229,6 +245,8 @@ def format_qdrant_collection_status_lines(
             f"qdrant_collection={result.name} target={qdrant_display_target(result.target)} "
             f"status={result.status}{vector_size}{embedding_model}"
         )
+        if result.actual_vector_size is not None:
+            line += f" actual_vector_size={result.actual_vector_size}"
         if result.error:
             line += f" error={result.error}"
         lines.append(line)
@@ -276,11 +294,34 @@ def ensure_default_collections(
     env: Mapping[str, str] | None = None,
     timeout_seconds: float = DEFAULT_QDRANT_TIMEOUT_SECONDS,
     opener: QdrantOpener | None = None,
-) -> tuple[QdrantCollectionResult, QdrantCollectionResult]:
+    specs: tuple[QdrantCollectionSpec, ...] | None = None,
+) -> tuple[QdrantCollectionResult, ...]:
     return tuple(
         ensure_collection(spec, url=url, env=env, timeout_seconds=timeout_seconds, opener=opener)
-        for spec in default_qdrant_collection_specs()
+        for spec in (specs or default_qdrant_collection_specs())
     )
+
+
+def _collection_vector_size(raw: bytes) -> int | None:
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    result = payload.get("result") if isinstance(payload, dict) else None
+    config = result.get("config") if isinstance(result, dict) else None
+    params = config.get("params") if isinstance(config, dict) else None
+    vectors = params.get("vectors") if isinstance(params, dict) else None
+    if isinstance(vectors, dict) and "size" in vectors:
+        return _optional_positive_int(vectors.get("size"))
+    if isinstance(vectors, dict):
+        for value in vectors.values():
+            if isinstance(value, dict) and "size" in value:
+                parsed = _optional_positive_int(value.get("size"))
+                if parsed is not None:
+                    return parsed
+    return None
 
 
 def _validate_collection_name(value: str) -> str:
@@ -295,6 +336,14 @@ def _validate_vector_size(value: int) -> int:
     if size < 1:
         raise ValueError("Qdrant vector size must be positive.")
     return size
+
+
+def _optional_positive_int(value: object) -> int | None:
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _validate_distance(value: str) -> str:

@@ -23,8 +23,12 @@ from TeeBotus.runtime.qdrant import (
 
 
 class _Response:
-    def __init__(self, status: int = 200) -> None:
+    def __init__(self, status: int = 200, payload: object | None = None) -> None:
         self.status = status
+        self.payload = payload if payload is not None else {}
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
 
     def close(self) -> None:
         return None
@@ -42,6 +46,16 @@ def test_default_qdrant_collection_specs_prepare_usermemory_and_bibliothekar() -
     assert bibliothekar.vector_size == DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS
     assert bibliothekar.distance == "Cosine"
     assert bibliothekar.embedding_model == BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL
+
+
+def test_default_qdrant_collection_specs_accept_usermemory_embedding_overrides() -> None:
+    user_memory, _bibliothekar = default_qdrant_collection_specs(
+        user_memory_vector_size=384,
+        user_memory_embedding_model="intfloat/multilingual-e5-small",
+    )
+
+    assert user_memory.vector_size == 384
+    assert user_memory.embedding_model == "intfloat/multilingual-e5-small"
 
 
 def test_ensure_collection_sends_idempotent_put_with_vector_schema() -> None:
@@ -107,6 +121,34 @@ def test_check_collection_uses_non_mutating_get() -> None:
     assert calls == [("GET", "http://127.0.0.1:6333/collections/teebotus_user_memory")]
 
 
+def test_check_collection_reports_vector_schema_mismatch() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(
+            200,
+            {
+                "result": {
+                    "config": {
+                        "params": {
+                            "vectors": {"size": 64, "distance": "Cosine"},
+                        }
+                    }
+                }
+            },
+        )
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=384),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "schema_mismatch"
+    assert result.actual_vector_size == 64
+    assert result.error == "vector_size expected 384, got 64"
+
+
 def test_check_default_collections_probes_both_without_creating() -> None:
     calls: list[tuple[str, str]] = []
 
@@ -125,6 +167,35 @@ def test_check_default_collections_probes_both_without_creating() -> None:
     ]
 
 
+def test_check_default_collections_uses_supplied_specs() -> None:
+    sizes: list[int] = []
+
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(
+            200,
+            {
+                "result": {
+                    "config": {
+                        "params": {
+                            "vectors": {"size": sizes.pop(0), "distance": "Cosine"},
+                        }
+                    }
+                }
+            },
+        )
+
+    specs = default_qdrant_collection_specs(
+        user_memory_vector_size=384,
+        user_memory_embedding_model="intfloat/multilingual-e5-small",
+    )
+    sizes.extend([384, DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS])
+
+    results = check_default_collections(url="http://127.0.0.1:6333", opener=opener, specs=specs)
+
+    assert all(result.ok for result in results)
+
+
 def test_format_qdrant_collection_status_lines_reports_specs_when_unavailable() -> None:
     health = QdrantHealth(target="http://127.0.0.1:6333", status="unreachable", ok=False, error="connection refused")
 
@@ -135,6 +206,21 @@ def test_format_qdrant_collection_status_lines_reports_specs_when_unavailable() 
         f"vector_size={USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS} embedding_model={USER_MEMORY_QDRANT_EMBEDDING_MODEL} error=connection refused",
         "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=unavailable "
         f"vector_size={DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS} embedding_model={BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL} error=connection refused",
+    )
+
+
+def test_format_qdrant_collection_status_lines_uses_supplied_specs() -> None:
+    health = QdrantHealth(target="http://127.0.0.1:6333", status="unreachable", ok=False, error="connection refused")
+    specs = default_qdrant_collection_specs(
+        user_memory_vector_size=384,
+        user_memory_embedding_model="intfloat/multilingual-e5-small",
+    )
+
+    lines = format_qdrant_collection_status_lines(health, specs=specs)
+
+    assert lines[0] == (
+        "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable "
+        "vector_size=384 embedding_model=intfloat/multilingual-e5-small error=connection refused"
     )
 
 
@@ -150,6 +236,29 @@ def test_format_qdrant_collection_status_lines_reports_checked_results() -> None
     assert lines[0].startswith("qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready")
     assert lines[1].startswith("qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=missing")
     assert "error=HTTP 404" in lines[1]
+
+
+def test_format_qdrant_collection_status_lines_reports_actual_vector_size_on_mismatch() -> None:
+    health = QdrantHealth(target="http://127.0.0.1:6333", status="reachable", ok=True)
+    results = (
+        QdrantCollectionResult(
+            QDRANT_USER_MEMORY_COLLECTION,
+            "http://127.0.0.1:6333",
+            "schema_mismatch",
+            False,
+            "vector_size expected 384, got 64",
+            actual_vector_size=64,
+        ),
+    )
+    specs = (QdrantCollectionSpec(QDRANT_USER_MEMORY_COLLECTION, 384, embedding_model="intfloat/multilingual-e5-small"),)
+
+    lines = format_qdrant_collection_status_lines(health, collection_results=results, specs=specs)
+
+    assert lines == (
+        "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=schema_mismatch "
+        "vector_size=384 embedding_model=intfloat/multilingual-e5-small actual_vector_size=64 "
+        "error=vector_size expected 384, got 64",
+    )
 
 
 def test_ensure_collection_rejects_unsafe_name_before_http() -> None:

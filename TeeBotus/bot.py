@@ -11,7 +11,7 @@ import os
 import re
 import sys
 import types
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
@@ -109,6 +109,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
             check_qdrant_health,
             format_qdrant_collection_status_lines,
             format_qdrant_status_line,
+            qdrant_display_target,
         )
         from TeeBotus.runtime.signal_runner import check_signal_accounts, check_signal_services
         from TeeBotus.runtime.telegram_runner import check_telegram_accounts
@@ -160,13 +161,26 @@ def _runtime_status(argv: Sequence[str]) -> int:
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional CrewAI planning.
         print(f"crew_pilot=all status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
     qdrant_ok = False
+    qdrant_specs, qdrant_collection_config_error = _runtime_qdrant_collection_specs(instructions_by_instance)
     try:
         qdrant_health = check_qdrant_health()
         qdrant_ok = qdrant_health.ok
         print(_sanitize_status_text(format_qdrant_status_line(qdrant_health)))
-        collection_results = check_default_collections(url=qdrant_health.target) if qdrant_health.ok else None
-        for line in format_qdrant_collection_status_lines(qdrant_health, collection_results=collection_results):
+        collection_results = (
+            check_default_collections(url=qdrant_health.target, specs=qdrant_specs)
+            if qdrant_health.ok and not qdrant_collection_config_error
+            else None
+        )
+        for line in format_qdrant_collection_status_lines(qdrant_health, collection_results=collection_results, specs=qdrant_specs):
             print(_sanitize_status_text(line))
+        if qdrant_collection_config_error:
+            print(
+                _sanitize_status_text(
+                    "qdrant_collection=teebotus_user_memory "
+                    f"target={qdrant_display_target(qdrant_health.target)} "
+                    f"status=config_conflict vector_size=mixed embedding_model=mixed error={qdrant_collection_config_error}"
+                )
+            )
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional Qdrant.
         print(f"qdrant=local status=invalid fallback=keyword_memory_search error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
     for instance in config.instances:
@@ -371,6 +385,46 @@ def _runtime_status_memory_index_line(instance_name: str, instructions: Any | No
         dimensions = str(getattr(instructions, "memory_search_embedding_dimensions", "") or "").strip() or "unknown"
         detail += f" embedding_provider={provider} embedding_model={model} embedding_dimensions={dimensions}"
     return detail
+
+
+def _runtime_qdrant_collection_specs(instructions_by_instance: Mapping[str, Any]) -> tuple[tuple[Any, ...], str]:
+    from TeeBotus.runtime.qdrant import default_qdrant_collection_specs
+
+    active_memory_specs: list[tuple[str, int, str]] = []
+    for instance_name, instructions in sorted(instructions_by_instance.items()):
+        if instructions is None:
+            continue
+        semantic_enabled = bool(getattr(instructions, "memory_search_semantic_enabled", False))
+        semantic_backend = str(getattr(instructions, "memory_search_semantic_backend", "") or "").strip().casefold()
+        if not semantic_enabled or semantic_backend != "qdrant":
+            continue
+        dimensions = _positive_status_int(getattr(instructions, "memory_search_embedding_dimensions", 0), default=0)
+        model = str(getattr(instructions, "memory_search_embedding_model", "") or "").strip()
+        if dimensions <= 0 or not model:
+            continue
+        active_memory_specs.append((str(instance_name), dimensions, model))
+    if not active_memory_specs:
+        return default_qdrant_collection_specs(), ""
+    unique_specs = {(dimensions, model) for _instance, dimensions, model in active_memory_specs}
+    if len(unique_specs) == 1:
+        dimensions, model = next(iter(unique_specs))
+        return (
+            default_qdrant_collection_specs(
+                user_memory_vector_size=dimensions,
+                user_memory_embedding_model=model,
+            ),
+            "",
+        )
+    conflicts = ", ".join(f"{instance}:{model}/{dimensions}" for instance, dimensions, model in active_memory_specs)
+    return default_qdrant_collection_specs(), f"conflicting user-memory embedding configs: {conflicts}"
+
+
+def _positive_status_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
 
 
 def _runtime_status_missing_channel_slot_lines(channels: Sequence[str], instance: Any) -> tuple[str, ...]:
