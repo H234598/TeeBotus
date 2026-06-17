@@ -1318,6 +1318,21 @@ def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path)
                     "apply_requires_stopped_bot": True,
                     "message": "TeeBotus runtime processes are running; stop bot/proactive jobs before using --apply.",
                 },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [{"instance": "Demo", "action": "would-import", "entries": 1, "imported": 1, "account_created": True}],
             }
         ),
         encoding="utf-8",
@@ -1354,6 +1369,21 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
                     "apply_requires_stopped_bot": False,
                     "message": "unsafe",
                 },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [{"instance": "Demo", "action": "would-import", "entries": 1, "imported": 1, "account_created": True}],
             }
         ),
         encoding="utf-8",
@@ -1392,9 +1422,23 @@ def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(
                     "apply_requires_stopped_bot": False,
                     "message": "No TeeBotus runtime process detected.",
                 },
+                "totals": {
+                    "sources": 2,
+                    "imported_sources": 2,
+                    "skipped_sources": 0,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
                 "events": [
-                    {"instance": "Demo", "action": "would-import"},
-                    {"instance": "Other", "action": "would-import"},
+                    {"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0},
+                    {"instance": "Other", "action": "would-import", "entries": 0, "imported": 0},
                 ],
             }
         ),
@@ -1435,7 +1479,21 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
                     "apply_requires_stopped_bot": False,
                     "message": "No TeeBotus runtime process detected.",
                 },
-                "events": [{"instance": "Demo", "action": "would-import"}],
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [{"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0}],
             }
         ),
         encoding="utf-8",
@@ -1457,6 +1515,70 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
     assert errors == []
 
 
+def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_events(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "dry-run",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 2,
+                    "entries_imported": 2,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    {
+                        "instance": "Demo",
+                        "action": "would-import-after-metadata-reset",
+                        "entries": 2,
+                        "imported": 2,
+                        "account_created": True,
+                        "metadata_unreadable": False,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("metadata_unreadable must be true for metadata-reset actions" in error for error in errors)
+    assert any("totals.unreadable_metadata must match events (1)" in error for error in errors)
+
+
 def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
     markdown_path = tmp_path / "import-demo.md"
@@ -1474,7 +1596,21 @@ def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp
                     "apply_requires_stopped_bot": False,
                     "message": "No TeeBotus runtime process detected.",
                 },
-                "events": [{"instance": "Demo", "action": "would-import"}],
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [{"instance": "Demo", "action": "would-import", "entries": 0, "imported": 0}],
             }
         ),
         encoding="utf-8",

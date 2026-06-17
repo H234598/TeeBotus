@@ -1077,6 +1077,83 @@ def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | No
             errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be true while runtime processes are detected")
     if int(running_count or 0) == 0 and apply_safety.get("apply_requires_stopped_bot") is not False:
         errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be false when no runtime processes are detected")
+    errors.extend(_legacy_import_event_totals_errors(payload, prefix=prefix))
+    return errors
+
+
+def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: str = "") -> list[str]:
+    errors: list[str] = []
+    totals = payload.get("totals")
+    if not isinstance(totals, Mapping):
+        return [f"{prefix}legacy import report missing totals object"]
+    events = payload.get("events")
+    if not isinstance(events, list):
+        return [f"{prefix}legacy import report events must be a list"]
+    required_total_keys = (
+        "sources",
+        "imported_sources",
+        "skipped_sources",
+        "entries_seen",
+        "entries_imported",
+        "accounts_created",
+        "accounts_existing",
+        "unreadable_targets",
+        "unreadable_metadata",
+        "backups_created",
+        "metadata_backups_created",
+        "account_store_resets",
+    )
+    for key in required_total_keys:
+        if not _is_nonnegative_integer(totals.get(key)):
+            errors.append(f"{prefix}legacy import totals.{key} must be a non-negative integer")
+    derived = {
+        "sources": len(events),
+        "entries_seen": 0,
+        "entries_imported": 0,
+        "accounts_created": 0,
+        "unreadable_targets": 0,
+        "unreadable_metadata": 0,
+    }
+    skipped_sources = 0
+    for index, event in enumerate(events):
+        label = f"legacy import events[{index}]"
+        if not isinstance(event, Mapping):
+            errors.append(f"{prefix}{label} must be an object")
+            continue
+        action = str(event.get("action") or "").strip()
+        if not action:
+            errors.append(f"{prefix}{label}.action must be non-empty")
+        if action.startswith("skip-"):
+            skipped_sources += 1
+        entries = event.get("entries")
+        imported = event.get("imported")
+        if not _is_nonnegative_integer(entries):
+            errors.append(f"{prefix}{label}.entries must be a non-negative integer")
+        else:
+            derived["entries_seen"] += int(entries or 0)
+        if not _is_nonnegative_integer(imported):
+            errors.append(f"{prefix}{label}.imported must be a non-negative integer")
+        else:
+            derived["entries_imported"] += int(imported or 0)
+        if event.get("account_created") is True:
+            derived["accounts_created"] += 1
+        if event.get("target_unreadable") is True:
+            derived["unreadable_targets"] += 1
+        metadata_unreadable = event.get("metadata_unreadable") is True
+        if metadata_unreadable or "metadata-reset" in action:
+            derived["unreadable_metadata"] += 1
+        if "metadata-reset" in action and not metadata_unreadable:
+            errors.append(f"{prefix}{label}.metadata_unreadable must be true for metadata-reset actions")
+    if _is_nonnegative_integer(totals.get("sources")) and _is_nonnegative_integer(totals.get("imported_sources")) and _is_nonnegative_integer(totals.get("skipped_sources")):
+        imported_sources = int(totals.get("imported_sources") or 0)
+        total_sources = int(totals.get("sources") or 0)
+        if imported_sources + int(totals.get("skipped_sources") or 0) != total_sources:
+            errors.append(f"{prefix}legacy import totals.imported_sources + skipped_sources must equal sources")
+        if imported_sources != total_sources - skipped_sources:
+            errors.append(f"{prefix}legacy import totals.imported_sources must match non-skipped events")
+    for key, value in derived.items():
+        if _is_nonnegative_integer(totals.get(key)) and int(totals.get(key) or 0) != value:
+            errors.append(f"{prefix}legacy import totals.{key} must match events ({value})")
     return errors
 
 
