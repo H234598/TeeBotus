@@ -1946,6 +1946,7 @@ def test_runtime_status_missing_required_lines_flags_missing_plan3_diagnostics()
         [
             "hf_pool=default status=disabled",
             "llm_route=structured_decision profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision status=unavailable fallback=local_ollama",
+            "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm model=gemini/gemini-2.5-flash status=configured api_key_env=GEMINI_API_KEY google_mode=stateless free_tier_guard=rpm=5,tpm=250000,rpd=20,reserve=2048",
             "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
             "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
             "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
@@ -1962,6 +1963,7 @@ def test_runtime_status_missing_required_lines_flags_missing_plan3_diagnostics()
     assert check_plan2_acceptance._runtime_status_missing_required_lines(complete) == []
     missing = check_plan2_acceptance._runtime_status_missing_required_lines(incomplete)
     assert "runtime-status missing structured decision provider line: llm_route=structured_decision" in missing
+    assert "runtime-status missing bibliothekar Gemini route line: llm_route=bibliothekar_answer" in missing
     assert "runtime-status missing structured decision instance line: structured_decision=" in missing
     assert "runtime-status missing qdrant user-memory collection line: qdrant_collection=teebotus_user_memory" in missing
 
@@ -1971,6 +1973,7 @@ def test_runtime_status_missing_required_lines_flags_malformed_structured_route(
         [
             "hf_pool=default status=disabled",
             "llm_route=structured_decision profile=openai_premium provider=openai model=gpt-5.5 status=unavailable",
+            "llm_route=bibliothekar_answer profile=local_ollama provider=litellm model=ollama_chat/llama3.1:8b status=configured",
             "structured_decision=Demo/telegram:1 status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama",
             "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
             "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
@@ -1984,6 +1987,10 @@ def test_runtime_status_missing_required_lines_flags_malformed_structured_route(
     assert "runtime-status structured decision route must use provider=hf_pool" in missing
     assert "runtime-status structured decision route must use model=pool:default#structured_decision" in missing
     assert "runtime-status unavailable structured decision route must show fallback" in missing
+    assert "runtime-status bibliothekar route must use profile=gemini_flash" in missing
+    assert "runtime-status bibliothekar route must use model=gemini/gemini-2.5-flash" in missing
+    assert "runtime-status bibliothekar route must show google_mode=stateless" in missing
+    assert "runtime-status bibliothekar route must show free_tier_guard" in missing
 
 
 def test_runtime_status_broken_lines_flags_secret_leaks() -> None:
@@ -2011,6 +2018,17 @@ def test_runtime_status_broken_lines_flags_generic_secret_assignments() -> None:
     )
 
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == output.splitlines()[1:]
+
+
+def test_runtime_status_broken_lines_allow_safe_key_metadata() -> None:
+    output = "\n".join(
+        [
+            "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm model=gemini/gemini-2.5-flash status=configured api_key_env=GEMINI_API_KEY api_key_ring=3 fallback_api_key=missing",
+            "llm_route=cheap_fast profile=groq_fast provider=litellm model=groq/x status=missing_key api_key=plain-secret",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[1]]
 
 
 def test_runtime_status_broken_lines_flags_url_credentials() -> None:

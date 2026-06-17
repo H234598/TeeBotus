@@ -123,10 +123,16 @@ def _runtime_status(argv: Sequence[str]) -> int:
         print(f"TeeBotus runtime configuration error: {exc}", file=sys.stderr)
         return 2
     print("TeeBotus runtime configuration resolves.")
-    print(f"instances_dir={config.instances_dir}")
-    print(f"instances={','.join(config.selected_instances) if config.selected_instances else 'auto'}")
-    print(f"channels={','.join(config.channels)}")
+    _print_runtime_status_section(
+        "Konfiguration",
+        (
+            f"instances_dir={config.instances_dir}",
+            f"instances={','.join(config.selected_instances) if config.selected_instances else 'auto'}",
+            f"channels={','.join(config.channels)}",
+        ),
+    )
     instructions_by_instance: dict[str, Any] = {}
+    account_lines: list[str] = []
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
@@ -136,47 +142,58 @@ def _runtime_status(argv: Sequence[str]) -> int:
             instructions = None
             instruction_error = f"{type(exc).__name__}: {exc}"
         for account in instance.accounts:
-            print(_runtime_status_llm_line(account, instructions=instructions, instruction_error=instruction_error))
-            print(_runtime_status_structured_decision_line(account, instructions=instructions, instruction_error=instruction_error))
+            account_lines.append(_runtime_status_llm_line(account, instructions=instructions, instruction_error=instruction_error))
+            account_lines.append(_runtime_status_structured_decision_line(account, instructions=instructions, instruction_error=instruction_error))
         for line in _runtime_status_missing_channel_slot_lines(config.channels, instance):
-            print(line)
+            account_lines.append(line)
+    _print_runtime_status_section("Accounts und Entscheidungen", account_lines)
+
+    llm_backend_lines: list[str] = []
     for health in check_ollama_services(config, instructions_by_instance=instructions_by_instance):
         state = "reachable" if health.ok else "unreachable"
         if health.ok:
             models = ",".join(health.models) if health.models else "<none>"
-            print(f"ollama={_sanitize_status_url(health.target)} status={state} models={_sanitize_status_text(models)}")
+            llm_backend_lines.append(f"ollama={_sanitize_status_url(health.target)} status={state} models={_sanitize_status_text(models)}")
         else:
-            print(f"ollama={_sanitize_status_url(health.target)} status={state} error={_sanitize_status_text(health.error)}")
+            llm_backend_lines.append(f"ollama={_sanitize_status_url(health.target)} status={state} error={_sanitize_status_text(health.error)}")
     try:
         for line in format_hf_pool_status_lines(check_hf_pool()):
-            print(_sanitize_status_text(line))
+            llm_backend_lines.append(_sanitize_status_text(line))
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional hf_pool.
-        print(f"hf_pool=default status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
-    print(_runtime_status_decision_line("structured_decision"))
+        llm_backend_lines.append(f"hf_pool=default status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+    route_instance_names = tuple(instance.instance_name for instance in config.instances)
+    for purpose in _runtime_status_route_purposes():
+        llm_backend_lines.append(_runtime_status_decision_line(purpose, instance_names=route_instance_names))
+    _print_runtime_status_section("LLM-Routen und Backends", llm_backend_lines)
+
+    crew_lines: list[str] = []
     try:
         from TeeBotus.runtime.crew_pilots import crew_pilot_status_lines
 
         for line in crew_pilot_status_lines():
-            print(_sanitize_status_text(line))
+            crew_lines.append(_sanitize_status_text(line))
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional CrewAI planning.
-        print(f"crew_pilot=all status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+        crew_lines.append(f"crew_pilot=all status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+    _print_runtime_status_section("Agenten-Piloten", crew_lines)
+
     qdrant_ok = False
     qdrant_specs, qdrant_collection_config_error = _runtime_qdrant_collection_specs(instructions_by_instance)
     qdrant_status_url, qdrant_url_config_error = _runtime_qdrant_status_url(instructions_by_instance)
     qdrant_config_error = qdrant_collection_config_error or qdrant_url_config_error
+    memory_lines: list[str] = []
     try:
         qdrant_health = check_qdrant_health(qdrant_status_url)
         qdrant_ok = qdrant_health.ok
-        print(_sanitize_status_text(format_qdrant_status_line(qdrant_health)))
+        memory_lines.append(_sanitize_status_text(format_qdrant_status_line(qdrant_health)))
         collection_results = (
             check_default_collections(url=qdrant_health.target, specs=qdrant_specs)
             if qdrant_health.ok and not qdrant_config_error
             else None
         )
         for line in format_qdrant_collection_status_lines(qdrant_health, collection_results=collection_results, specs=qdrant_specs):
-            print(_sanitize_status_text(line))
+            memory_lines.append(_sanitize_status_text(line))
         if qdrant_config_error:
-            print(
+            memory_lines.append(
                 _sanitize_status_text(
                     "qdrant_collection=teebotus_user_memory "
                     f"target={qdrant_display_target(qdrant_health.target)} "
@@ -184,9 +201,9 @@ def _runtime_status(argv: Sequence[str]) -> int:
                 )
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional Qdrant.
-        print(f"qdrant=local status=invalid fallback=keyword_memory_search error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+        memory_lines.append(f"qdrant=local status=invalid fallback=keyword_memory_search error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
     for instance in config.instances:
-        print(
+        memory_lines.append(
             _sanitize_status_text(
                 _runtime_status_memory_index_line(
                     instance.instance_name,
@@ -195,10 +212,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
                 )
             )
         )
+    _print_runtime_status_section("Memory und semantische Suche", memory_lines)
+
+    messenger_lines: list[str] = []
     for health in check_signal_services(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
-        print(f"signal_service={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
+        messenger_lines.append(f"signal_service={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
     for health in check_signal_accounts(config):
         if health.registered:
             state = "registered"
@@ -207,35 +227,38 @@ def _runtime_status(argv: Sequence[str]) -> int:
         else:
             state = "unavailable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
-        print(
+        messenger_lines.append(
             f"signal_account={health.account.instance_name}/{health.account.label} "
             f"phone={health.account.signal_phone_number} target={_sanitize_status_url(health.target)} status={state}{detail}"
         )
     for health in check_telegram_accounts(config):
         state = "configured" if health.ok else "broken"
         detail = " token=configured" if health.ok else f" error={_sanitize_status_text(health.error)}"
-        print(f"telegram_slot={health.account.instance_name}/{health.account.label} status={state}{detail}")
+        messenger_lines.append(f"telegram_slot={health.account.instance_name}/{health.account.label} status={state}{detail}")
     for health in check_matrix_homeservers(config):
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
-        print(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
+        messenger_lines.append(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
+    _print_runtime_status_section("Messenger", messenger_lines)
+
+    local_service_lines: list[str] = []
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"local_transcription={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+            local_service_lines.append(f"local_transcription={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
         health = check_local_transcription_backend(instance.instance_name, instructions)
         if health is None:
             continue
         state = "ready" if health.ok else "unavailable"
         detail = f" engine={_sanitize_status_text(health.engine)}" if health.ok else f" error={_sanitize_status_text(health.error)}"
-        print(f"local_transcription={health.instance_name} backend={health.backend} model={health.model} status={state}{detail}")
+        local_service_lines.append(f"local_transcription={health.instance_name} backend={health.backend} model={health.model} status={state}{detail}")
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"bibliothekar={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+            local_service_lines.append(f"bibliothekar={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
         health = check_bibliothekar_service(instance.instance_name, config.instances_dir, instructions)
         detail = (
@@ -249,18 +272,32 @@ def _runtime_status(argv: Sequence[str]) -> int:
             detail += f" documents={health.documents} chunks={health.chunks}"
         if health.error:
             detail += f" error={_sanitize_status_text(health.error)}"
-        print(detail)
+        local_service_lines.append(detail)
+    _print_runtime_status_section("Lokale Dienste", local_service_lines)
+
+    tool_lines: list[str] = []
     for instance in config.instances:
         try:
             instructions = InstructionStore(instance.instruction_path).get()
         except Exception as exc:
-            print(f"mcp_tools={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+            tool_lines.append(f"mcp_tools={instance.instance_name} status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
             continue
-        print(_sanitize_status_text(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools)))
+        tool_lines.append(_sanitize_status_text(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools)))
     for instance_name in config.selected_instances:
         for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
-            print(_sanitize_status_text(line))
+            tool_lines.append(_sanitize_status_text(line))
+    _print_runtime_status_section("Tools und Account-Memory", tool_lines)
     return 0
+
+
+def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
+    entries = tuple(str(line or "").strip() for line in lines if str(line or "").strip())
+    if not entries:
+        return
+    print()
+    print(f"[{title}]")
+    for line in entries:
+        print(line)
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -622,7 +659,7 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
     return provider, model, base_url, 0, "", "", "", "direct"
 
 
-def _runtime_status_decision_line(purpose: str) -> str:
+def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str] = ()) -> str:
     purpose_name = str(purpose or "structured_decision").strip() or "structured_decision"
     try:
         from TeeBotus.llm.profiles import select_llm_route
@@ -633,7 +670,7 @@ def _runtime_status_decision_line(purpose: str) -> str:
             f"llm_route={purpose_name} profile=<unknown> provider=<unknown> model=<unknown> "
             f"status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}"
         )
-    status, status_error = _runtime_route_status(route)
+    status, status_error = _runtime_route_status(route, instance_names=instance_names)
     detail = (
         f"llm_route={route.purpose} profile={route.profile_name} provider={route.provider} "
         f"model={route.model} status={status}"
@@ -642,6 +679,16 @@ def _runtime_status_decision_line(purpose: str) -> str:
         detail += f" base_url={_sanitize_status_url(route.base_url)}"
     if route.api_key_env:
         detail += f" api_key_env={_sanitize_status_text(route.api_key_env)}"
+    gemini_key_ring_count = _status_gemini_key_ring_count_for_instances(instance_names, provider=route.provider, model=route.model)
+    if gemini_key_ring_count > 1:
+        detail += f" api_key_ring={gemini_key_ring_count}"
+    gemini_key_instances = _status_gemini_key_instance_availability(instance_names, provider=route.provider, model=route.model)
+    if gemini_key_instances is not None:
+        configured_instances, total_instances = gemini_key_instances
+        detail += f" api_key_instances={configured_instances}/{total_instances}"
+    if _status_route_uses_google_gemini(provider=route.provider, model=route.model):
+        detail += " google_mode=stateless"
+        detail += f" free_tier_guard={_status_gemini_free_tier_guard(types.SimpleNamespace(instance_name=''), provider=route.provider, model=route.model)}"
     if route.fallback_profile_name:
         detail += f" fallback={route.fallback_profile_name} fallback_profile={route.fallback_profile_name} fallback_model={route.fallback_model}"
         if route.fallback_base_url:
@@ -654,9 +701,27 @@ def _runtime_status_decision_line(purpose: str) -> str:
     return _sanitize_status_text(detail)
 
 
-def _runtime_route_status(route: Any) -> tuple[str, str]:
-    if str(getattr(route, "provider", "") or "").strip().casefold() != "hf_pool":
-        return "configured", ""
+def _runtime_status_route_purposes() -> tuple[str, ...]:
+    purposes: list[str] = ["structured_decision"]
+    seen = {"structured_decision"}
+    try:
+        from TeeBotus.llm.profiles import load_llm_routing, normalize_llm_purpose
+
+        _default_profile, routing = load_llm_routing()
+        for purpose in routing:
+            normalized = normalize_llm_purpose(purpose)
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                purposes.append(normalized)
+    except Exception:
+        return tuple(purposes)
+    return tuple(purposes)
+
+
+def _runtime_route_status(route: Any, *, instance_names: Sequence[str] = ()) -> tuple[str, str]:
+    provider = _normalize_status_llm_provider(getattr(route, "provider", ""))
+    if provider != "hf_pool":
+        return _runtime_route_key_status(route, instance_names=instance_names)
     try:
         from TeeBotus.llm.hf_pool.config import load_hf_pool_config
         from TeeBotus.llm.hf_pool.scheduler import select_target
@@ -669,6 +734,37 @@ def _runtime_route_status(route: Any) -> tuple[str, str]:
     except Exception as exc:  # noqa: BLE001 - route status must be diagnostic, not fatal.
         return "unavailable", f"{type(exc).__name__}: {exc}"
     return "configured", ""
+
+
+def _runtime_route_key_status(route: Any, *, instance_names: Sequence[str] = ()) -> tuple[str, str]:
+    provider = _normalize_status_llm_provider(getattr(route, "provider", ""))
+    model = str(getattr(route, "model", "") or "")
+    api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
+    key_required = _llm_key_required_for_status(
+        types.SimpleNamespace(llm_api_key="", openai_api_key=""),
+        provider=provider,
+        model=model,
+        base_url=str(getattr(route, "base_url", "") or ""),
+        route_api_key_env=api_key_env,
+    )
+    if not key_required:
+        return "configured", ""
+    gemini_key_instances = _status_gemini_key_instance_availability(instance_names, provider=provider, model=model)
+    if gemini_key_instances is not None:
+        configured_instances, total_instances = gemini_key_instances
+        if configured_instances == total_instances:
+            return "configured", ""
+        if configured_instances:
+            missing = total_instances - configured_instances
+            return "degraded", f"missing api key for {missing}/{total_instances} instances"
+        return "missing_key", f"missing api key for all {total_instances} instances"
+    if _status_gemini_key_ring_count(instance_name="", provider=provider, model=model):
+        return "configured", ""
+    api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
+    if api_key_env and os.environ.get(api_key_env, "").strip():
+        return "configured", ""
+    error = f"missing api_key_env {api_key_env}" if api_key_env else "missing api key"
+    return "missing_key", error
 
 
 def _runtime_status_hf_pool_status(
@@ -896,6 +992,42 @@ def _status_gemini_key_ring_count(*, instance_name: object, provider: str, model
         return 0
 
 
+def _status_gemini_key_ring_count_for_instances(instance_names: Sequence[str], *, provider: str, model: object) -> int:
+    if not _status_route_uses_gemini_api(provider=provider, model=model):
+        return 0
+    names = _unique_status_instance_names(instance_names)
+    if not names:
+        return _status_gemini_key_ring_count(instance_name="", provider=provider, model=model)
+    return max((_status_gemini_key_ring_count(instance_name=name, provider=provider, model=model) for name in names), default=0)
+
+
+def _status_gemini_key_instance_availability(
+    instance_names: Sequence[str],
+    *,
+    provider: str,
+    model: object,
+) -> tuple[int, int] | None:
+    if not _status_route_uses_gemini_api(provider=provider, model=model):
+        return None
+    names = _unique_status_instance_names(instance_names)
+    if not names:
+        return None
+    configured = sum(1 for name in names if _status_gemini_key_ring_count(instance_name=name, provider=provider, model=model))
+    return configured, len(names)
+
+
+def _unique_status_instance_names(instance_names: Sequence[str]) -> tuple[str, ...]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in instance_names:
+        name = str(value or "").strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        result.append(name)
+    return tuple(result)
+
+
 def _status_gemini_free_tier_guard(account: Any, *, provider: str, model: object) -> str:
     try:
         from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits
@@ -1039,11 +1171,28 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(
         r"\b([A-Za-z0-9_ -]*(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|bearer[_ -]?token|token|secret|password)"
         r"[A-Za-z0-9_ -]*)\s*([:=])\s*([^,\s)]+)",
-        r"\1\2<redacted>",
+        _status_secret_assignment_replacement,
         text,
         flags=re.IGNORECASE,
     )
     return text.replace("\r", " ").replace("\n", " ")
+
+
+def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
+    key = str(match.group(1) or "")
+    separator = str(match.group(2) or "=")
+    value = str(match.group(3) or "")
+    key_token = key.strip().casefold().replace("-", "_").replace(" ", "_")
+    normalized_value = value.strip().strip("\"'`").casefold()
+    if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>"}:
+        return match.group(0)
+    if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value.strip()):
+        return match.group(0)
+    if key_token in {"api_key_ring", "gemini_api_key_ring"} and value.strip().isdigit():
+        return match.group(0)
+    if key_token == "api_key_instances" and re.fullmatch(r"\d+/\d+", value.strip()):
+        return match.group(0)
+    return f"{key}{separator}<redacted>"
 
 
 def _runtime_config_from_main_args(args: list[str]) -> Any | None:

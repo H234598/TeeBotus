@@ -76,6 +76,36 @@ def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, 
     assert "telegram-secret-token" not in captured.out
 
 
+def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.startswith("TeeBotus runtime configuration resolves.\n\n[Konfiguration]\n")
+    for section in (
+        "[Accounts und Entscheidungen]",
+        "[LLM-Routen und Backends]",
+        "[Agenten-Piloten]",
+        "[Memory und semantische Suche]",
+        "[Messenger]",
+        "[Lokale Dienste]",
+        "[Tools und Account-Memory]",
+    ):
+        assert f"\n{section}\n" in captured.out
+    lines = captured.out.splitlines()
+    assert any(line.startswith("llm=Demo/telegram:1 ") for line in lines)
+    assert any(line.startswith("telegram_slot=Demo/telegram:1 ") for line in lines)
+
+
 def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION, QdrantCollectionResult, QdrantHealth
@@ -793,6 +823,71 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
     assert "a1" not in captured.out
 
 
+def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("TEEBOTUS_GEMINI_API_KEY_RING", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY_RING", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
+    monkeypatch.delenv("TEEBOTUS_GEMINI_API_KEYS_ACCOUNT_1", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEYS_ACCOUNT_1", raising=False)
+    monkeypatch.setenv("TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_1", "demo-a1")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_2", "demo-b1")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
+        "model=gemini/gemini-2.5-flash status=configured api_key_env=GEMINI_API_KEY "
+        "api_key_ring=2 api_key_instances=1/1"
+    ) in captured.out
+    assert "demo-a1" not in captured.out
+    assert "demo-b1" not in captured.out
+
+
+def test_runtime_status_route_reports_degraded_instance_scoped_gemini_keys(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    for name in ("Demo", "Other"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "all")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "demo-token")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_OTHER", "other-token")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("TEEBOTUS_GEMINI_API_KEY_RING", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY_RING", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
+    monkeypatch.delenv("TEEBOTUS_GEMINI_API_KEYS_ACCOUNT_1", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEYS_ACCOUNT_1", raising=False)
+    monkeypatch.setenv("TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_1", "demo-a1,demo-a2")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
+        "model=gemini/gemini-2.5-flash status=degraded api_key_env=GEMINI_API_KEY "
+        "api_key_ring=2 api_key_instances=1/2"
+    ) in captured.out
+    assert "error=missing api key for 1/2 instances" in captured.out
+    assert "demo-a1" not in captured.out
+
+
 def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
@@ -822,6 +917,12 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
         "fallback=local_ollama fallback_profile=local_ollama "
         "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
+    assert (
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
+        "model=gemini/gemini-2.5-flash "
+    ) in captured.out
+    assert "llm_route=bibliothekar_answer" in captured.out and " google_mode=stateless" in captured.out
+    assert "llm_route=bibliothekar_answer" in captured.out and " free_tier_guard=" in captured.out
     assert (
         "structured_decision=Demo/telegram:1 status=enabled source=runtime_llm_configured "
         "profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision "
@@ -1796,6 +1897,22 @@ def test_runtime_status_redacts_helper_status_lines(monkeypatch, capsys) -> None
     assert hf_key not in captured.out
     assert "mcp_tools=Demo status=broken error=tool leaked sk-<redacted>" in captured.out
     assert "account_memory=Demo/abc status=broken error=index leaked hf_<redacted>" in captured.out
+
+
+def test_runtime_status_keeps_safe_key_metadata_visible() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    sanitized = bot._sanitize_status_text(
+        "llm_route=bibliothekar_answer api_key_env=GEMINI_API_KEY api_key_ring=3 "
+        "api_key_instances=2/3 fallback_api_key=missing api_key=plain-secret"
+    )
+
+    assert "api_key_env=GEMINI_API_KEY" in sanitized
+    assert "api_key_ring=3" in sanitized
+    assert "api_key_instances=2/3" in sanitized
+    assert "fallback_api_key=missing" in sanitized
+    assert "api_key=<redacted>" in sanitized
+    assert "plain-secret" not in sanitized
 
 
 def test_runtime_status_marks_signal_account_unavailable_when_backend_is_down(monkeypatch, capsys) -> None:

@@ -136,6 +136,7 @@ ARTIFACT_SECRET_JSON_FIELD_RE = re.compile(
     re.IGNORECASE,
 )
 SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset({"configured", "none", "<redacted>", "redacted", "missing"})
+SAFE_RUNTIME_STATUS_SECRET_METADATA_KEYS = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances"})
 LOCAL_RUNTIME_TARGET_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -1574,6 +1575,7 @@ def _runtime_status_missing_required_lines(output: str) -> list[str]:
     required_prefixes = {
         "hf_pool=": "hf_pool health line",
         "llm_route=structured_decision": "structured decision provider line",
+        "llm_route=bibliothekar_answer": "bibliothekar Gemini route line",
         "structured_decision=": "structured decision instance line",
         "qdrant=": "qdrant health line",
         "qdrant_collection=teebotus_user_memory": "qdrant user-memory collection line",
@@ -1584,6 +1586,7 @@ def _runtime_status_missing_required_lines(output: str) -> list[str]:
         if not any(line.startswith(prefix) for line in lines):
             missing.append(f"runtime-status missing {label}: {prefix}")
     missing.extend(_runtime_status_structured_route_errors(lines))
+    missing.extend(_runtime_status_bibliothekar_route_errors(lines))
     return missing
 
 
@@ -1602,6 +1605,24 @@ def _runtime_status_structured_route_errors(lines: Sequence[str]) -> list[str]:
         errors.append("runtime-status structured decision route status must be configured or unavailable")
     if " status=unavailable" in route and " fallback=" not in route:
         errors.append("runtime-status unavailable structured decision route must show fallback")
+    return errors
+
+
+def _runtime_status_bibliothekar_route_errors(lines: Sequence[str]) -> list[str]:
+    route = next((line for line in lines if line.startswith("llm_route=bibliothekar_answer")), "")
+    if not route:
+        return []
+    errors: list[str] = []
+    if " profile=gemini_flash" not in route:
+        errors.append("runtime-status bibliothekar route must use profile=gemini_flash")
+    if " provider=litellm" not in route:
+        errors.append("runtime-status bibliothekar route must use provider=litellm")
+    if " model=gemini/gemini-2.5-flash" not in route:
+        errors.append("runtime-status bibliothekar route must use model=gemini/gemini-2.5-flash")
+    if " google_mode=stateless" not in route:
+        errors.append("runtime-status bibliothekar route must show google_mode=stateless")
+    if " free_tier_guard=" not in route:
+        errors.append("runtime-status bibliothekar route must show free_tier_guard")
     return errors
 
 
@@ -1734,6 +1755,10 @@ def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
     if normalized_value in SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS:
         return False
     if _secret_field_value_is_env_reference(key_text, value_text):
+        return False
+    if key_text in SAFE_RUNTIME_STATUS_SECRET_METADATA_KEYS and (
+        value_text.isdigit() or re.fullmatch(r"\d+/\d+", value_text) is not None
+    ):
         return False
     return True
 
