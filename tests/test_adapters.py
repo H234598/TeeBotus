@@ -1460,6 +1460,41 @@ def test_telegram_send_keeps_string_chat_ids_for_channels():
     assert api.calls == [("message", "@my_channel", "hi"), ("action", "@my_channel", "typing")]
 
 
+def test_telegram_send_text_passes_formatted_text_when_supported():
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, dict[str, str]]] = []
+
+        def send_message(self, chat_id, text, **kwargs):
+            self.calls.append((chat_id, text, kwargs))
+            return 1
+
+    api = API()
+
+    send_telegram_actions(
+        api,
+        [
+            SendText(
+                "@my_channel",
+                "Release Log https://github.com/H234598/TeeBotus/releases",
+                text_mode="html",
+                formatted_text='<a href="https://github.com/H234598/TeeBotus/releases">Release Log</a>',
+            )
+        ],
+    )
+
+    assert api.calls == [
+        (
+            "@my_channel",
+            "Release Log https://github.com/H234598/TeeBotus/releases",
+            {
+                "text_mode": "html",
+                "formatted_text": '<a href="https://github.com/H234598/TeeBotus/releases">Release Log</a>',
+            },
+        )
+    ]
+
+
 def test_telegram_send_edit_uses_optional_edit_message_text():
     class API:
         def __init__(self) -> None:

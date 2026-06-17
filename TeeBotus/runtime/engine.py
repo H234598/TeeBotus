@@ -26,7 +26,7 @@ from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
-from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply
+from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, build_status_reply_html
 from TeeBotus.handlers import build_reply
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import LLMCapabilities
@@ -221,26 +221,29 @@ class TeeBotusEngine:
         if command in EXPORT_COMMANDS:
             return EngineResult(result.account_id, self._export_actions(event, result.account_id), handled=True)
         if command in STATUS_COMMAND_ALIASES:
+            status_text = build_status_reply(
+                account_id=result.account_id,
+                instance_name=event.instance,
+                project_root=self.project_root,
+                account_store=self.account_store,
+                proactive_model_planner=instructions.proactive_model_planner,
+                llm_enabled=self._text_llm_enabled(instructions),
+                llm_provider=instructions.llm_provider,
+                llm_model=instructions.llm_model or instructions.openai_model,
+                llm_fallback_models=instructions.llm_fallback_models,
+                llm_client=self.llm_client,
+                structured_decision_runner=self.structured_decision_runner,
+                bibliothekar_enabled=instructions.bibliothekar_enabled,
+                mcp_tools=instructions.mcp_tools,
+            )
             return EngineResult(
                 result.account_id,
                 [
                     SendText(
                         event.chat_id,
-                        build_status_reply(
-                            account_id=result.account_id,
-                            instance_name=event.instance,
-                            project_root=self.project_root,
-                            account_store=self.account_store,
-                            proactive_model_planner=instructions.proactive_model_planner,
-                            llm_enabled=self._text_llm_enabled(instructions),
-                            llm_provider=instructions.llm_provider,
-                            llm_model=instructions.llm_model or instructions.openai_model,
-                            llm_fallback_models=instructions.llm_fallback_models,
-                            llm_client=self.llm_client,
-                            structured_decision_runner=self.structured_decision_runner,
-                            bibliothekar_enabled=instructions.bibliothekar_enabled,
-                            mcp_tools=instructions.mcp_tools,
-                        ),
+                        status_text,
+                        text_mode="html",
+                        formatted_text=build_status_reply_html(status_text, project_root=self.project_root),
                     )
                 ],
                 handled=True,
@@ -266,6 +269,12 @@ class TeeBotusEngine:
             if llm_actions:
                 return EngineResult(result.account_id, llm_actions, handled=True)
             return EngineResult(result.account_id, [], handled=False)
+        if command == "/help":
+            return EngineResult(
+                result.account_id,
+                [SendText(event.chat_id, reply, text_mode="html", formatted_text=instructions.help_text_html(reply))],
+                handled=True,
+            )
         return EngineResult(result.account_id, [SendText(event.chat_id, reply)], handled=True)
 
     def _natural_reminder_reply(self, event: IncomingEvent, account_id: str) -> str | None:

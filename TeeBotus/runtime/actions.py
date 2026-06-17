@@ -12,6 +12,7 @@ class SendText:
     reply_to_ref: str = ""
     mentions: tuple[dict[str, Any], ...] = ()
     text_mode: str = ""
+    formatted_text: str = ""
     view_once: bool = False
     link_preview: Any | None = None
 

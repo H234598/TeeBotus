@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from TeeBotus import __version__
+from TeeBotus.core.rich_text import html_with_single_link
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
 from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
 from TeeBotus.runtime.accounts import (
@@ -138,6 +139,14 @@ def build_status_reply(
                 env=env,
             ),
         ]
+    )
+
+
+def build_status_reply_html(text: str, *, project_root: Path) -> str:
+    return html_with_single_link(
+        text,
+        label="Commits",
+        url=github_commit_history_url(project_root),
     )
 
 
@@ -435,6 +444,13 @@ def github_commit_history_url(project_root: Path) -> str:
     if not repo_url:
         repo_url = DEFAULT_REPO_URL
     return f"{repo_url.rstrip('/')}/commits/main"
+
+
+def github_release_log_url(project_root: Path | None = None) -> str:
+    repo_url = github_repo_url(project_root) if project_root is not None else DEFAULT_REPO_URL
+    if not repo_url:
+        repo_url = DEFAULT_REPO_URL
+    return f"{repo_url.rstrip('/')}/releases"
 
 
 def account_memory_dir_for_account(account_id: str, *, instance_name: str, project_root: Path) -> Path | None:

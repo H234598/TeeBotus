@@ -15,7 +15,7 @@ class HandlerTests(unittest.TestCase):
         reply = build_reply({"text": "/help"})
 
         self.assertEqual(reply, HELP_TEXT)
-        self.assertIn("/history - GitHub-Repo, Commits und Releases anzeigen", reply)
+        self.assertIn("/history - Release Log https://github.com/H234598/TeeBotus/releases und Commits anzeigen", reply)
         self.assertIn("/reset - setzt nur den Text-LLM-Kontext", reply)
         self.assertIn("/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege", reply)
         self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)

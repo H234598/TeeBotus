@@ -332,6 +332,8 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert len(actions) == 1
     assert "Depressionsbot Status:" in actions[0].text
     assert f"- Version: {__version__} Wirt Commits https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert actions[0].text_mode == "html"
+    assert '<a href="https://github.com/H234598/TeeBotus/commits/main">Commits</a>' in actions[0].formatted_text
     assert "Commits:" not in actions[0].text
     assert "Proactive Agent" in actions[0].text
     assert "- Agent enabled: ja" in actions[0].text
@@ -352,6 +354,17 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
     assert "- Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_engine_help_carries_formatted_release_log_link(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path), project_root=tmp_path)
+
+    actions = engine.process(event(telegram_identity_key(1), "/help"))
+
+    assert len(actions) == 1
+    assert "Release Log https://github.com/H234598/TeeBotus/releases" in actions[0].text
+    assert actions[0].text_mode == "html"
+    assert '<a href="https://github.com/H234598/TeeBotus/releases">Release Log</a>' in actions[0].formatted_text
 
 
 def test_engine_info_alias_uses_core_status_before_configured_commands(tmp_path):

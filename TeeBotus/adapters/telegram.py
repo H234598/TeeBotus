@@ -87,7 +87,15 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
     sent: list[int | None] = []
     for action in actions:
         if isinstance(action, SendText):
-            sent.append(api.send_message(action.chat_id, action.text))
+            sent.append(
+                _send_telegram_text(
+                    api,
+                    action.chat_id,
+                    action.text,
+                    text_mode=action.text_mode,
+                    formatted_text=action.formatted_text,
+                )
+            )
         elif isinstance(action, SendTyping):
             api.send_chat_action(action.chat_id, "typing")
             sent.append(None)
@@ -139,6 +147,17 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
         else:
             sent.append(None)
     return sent
+
+
+def _send_telegram_text(api: Any, chat_id: Any, text: str, *, text_mode: str = "", formatted_text: str = "") -> int | None:
+    if text_mode or formatted_text:
+        try:
+            return api.send_message(chat_id, text, text_mode=text_mode, formatted_text=formatted_text)
+        except TypeError as exc:
+            if "text_mode" not in str(exc) and "formatted_text" not in str(exc):
+                raise
+            return api.send_message(chat_id, text)
+    return api.send_message(chat_id, text)
 
 
 def _normalize_telegram_chat_type(value: str) -> str:

@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from TeeBotus.core.rich_text import html_with_single_link
+from TeeBotus.core.version_notifications import DEFAULT_REPO_URL
 from TeeBotus.runtime.qdrant import (
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
@@ -22,13 +24,14 @@ EASTER_EGGS_FILENAME = "EASTER_EGGS.json"
 DEFAULT_COMMANDS = {
     "/ping": "pong",
 }
+DEFAULT_RELEASE_LOG_URL = f"{DEFAULT_REPO_URL}/releases"
 
 DEFAULT_HELP_LINES = (
     "/start - Bot starten",
     "/help - Hilfe anzeigen",
     "/ping - Verbindung testen",
     "/status - Bot-Status, Version, Memory-Groesse und Userfile-Verschluesselung anzeigen",
-    "/history - GitHub-Repo, Commits und Releases anzeigen",
+    f"/history - Release Log {DEFAULT_RELEASE_LOG_URL} und Commits anzeigen",
     "/account - TeeBotus-Account und verknuepfte Kommunikationswege anzeigen",
     "/register - Account-Secret erzeugen und anzeigen",
     "/login <account_id> <secret> - diesen Kommunikationsweg mit einem Account verbinden",
@@ -47,6 +50,10 @@ DEFAULT_HELP_LINES = (
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
 )
+
+
+def format_help_text_html(text: str) -> str:
+    return html_with_single_link(text, label="Release Log", url=DEFAULT_RELEASE_LOG_URL)
 
 
 @dataclass
@@ -220,6 +227,9 @@ class BotInstructions:
 
     def help_text(self) -> str:
         return "\n".join([self.help_title, *self.help_lines])
+
+    def help_text_html(self, text: str | None = None) -> str:
+        return format_help_text_html(self.help_text() if text is None else text)
 
     def text_llm_enabled(self) -> bool:
         if self.llm_enabled is not None:

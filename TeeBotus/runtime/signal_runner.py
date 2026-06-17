@@ -471,6 +471,7 @@ def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
                     reply_to_ref=reply_to_ref,
                     mentions=action.mentions,
                     text_mode=action.text_mode,
+                    formatted_text=action.formatted_text,
                     view_once=action.view_once,
                     link_preview=action.link_preview,
                 )

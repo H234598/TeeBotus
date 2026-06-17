@@ -77,7 +77,7 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             response = await _send_matrix_text(
                 client,
                 action.chat_id,
-                action.text,
+                action.formatted_text if _matrix_is_html_text_mode(action.text_mode) and action.formatted_text else action.text,
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,

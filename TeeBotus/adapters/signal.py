@@ -108,7 +108,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                             chat_id=action.chat_id,
                             reply_to_ref=action.reply_to_ref,
                             mentions=list(action.mentions) or None,
-                            text_mode=action.text_mode,
+                            text_mode=_signal_text_mode(action),
                             view_once=action.view_once,
                             link_preview=action.link_preview,
                         ),
@@ -450,6 +450,13 @@ def _signal_send_kwargs(
     if link_preview is not None:
         kwargs["link_preview"] = _coerce_signal_link_preview(link_preview)
     return kwargs
+
+
+def _signal_text_mode(action: Any) -> str:
+    mode = str(getattr(action, "text_mode", "") or "").strip()
+    if getattr(action, "formatted_text", "") and mode.casefold() in {"html", "formatted", "org.matrix.custom.html"}:
+        return ""
+    return mode
 
 
 def _coerce_signal_link_preview(link_preview: Any) -> Any:

@@ -20,7 +20,11 @@ from typing import Any, Callable
 
 from TeeBotus import __version__
 from TeeBotus.core.call_a_teladi import build_teladi_header
-from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply as build_core_status_reply
+from TeeBotus.core.status import (
+    STATUS_COMMAND_ALIASES,
+    build_status_reply as build_core_status_reply,
+    build_status_reply_html,
+)
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.version_notifications import notify_recent_telegram_users_for_version
 from TeeBotus.core.youtube import (
@@ -38,7 +42,7 @@ from TeeBotus.core.youtube import (
     transcribe_youtube_video,
 )
 from TeeBotus.handlers import build_reply, should_use_openai
-from TeeBotus.instructions import BotInstructions, InstructionStore, render_template
+from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
@@ -282,14 +286,19 @@ class TelegramAPI:
             username=str(result.get("username") or "").strip().lstrip("@"),
         )
 
-    def send_message(self, chat_id: int, text: str) -> int | None:
+    def send_message(self, chat_id: int, text: str, *, text_mode: str = "", formatted_text: str = "") -> int | None:
+        parse_mode = _telegram_parse_mode(text_mode)
+        body = formatted_text if parse_mode and formatted_text else text
+        params: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": body,
+            "disable_web_page_preview": "true",
+        }
+        if parse_mode:
+            params["parse_mode"] = parse_mode
         payload = self.request(
             "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": text,
-                "disable_web_page_preview": "true",
-            },
+            params,
         )
         result = payload.get("result")
         if not isinstance(result, dict):
@@ -1181,7 +1190,15 @@ def handle_update(
 
     if text and _normalize_command(text) in STATUS_COMMAND_ALIASES:
         reply = _build_status_reply(message, instructions, instance_name, user_memory_store)
-        _send_tracked_message(api, chat_state, chat_id, _with_first_contact_intro(reply, first_contact, bot_identity))
+        reply = _with_first_contact_intro(reply, first_contact, bot_identity)
+        _send_tracked_message(
+            api,
+            chat_state,
+            chat_id,
+            reply,
+            text_mode="html",
+            formatted_text=build_status_reply_html(reply, project_root=PROJECT_ROOT),
+        )
         return
 
     user_memory = _prepare_user_memory(user_memory_store, message, instructions, text, api)
@@ -1328,7 +1345,10 @@ def _process_text_message(
         else:
             reply = _with_first_contact_intro(reply, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
-        _send_tracked_message(api, chat_state, chat_id, reply)
+        if _normalize_command(text) == "/help":
+            _send_tracked_message(api, chat_state, chat_id, reply, text_mode="html", formatted_text=format_help_text_html(reply))
+        else:
+            _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
@@ -3515,6 +3535,33 @@ def _send_untracked_message(api: TelegramAPI, chat_id: int, text: str) -> None:
         )
 
 
+def _telegram_parse_mode(text_mode: str) -> str:
+    mode = str(text_mode or "").strip().casefold()
+    if mode in {"html", "formatted", "org.matrix.custom.html"}:
+        return "HTML"
+    if mode in {"markdown", "md"}:
+        return "Markdown"
+    return ""
+
+
+def _send_telegram_message(
+    api: TelegramAPI,
+    chat_id: int,
+    text: str,
+    *,
+    text_mode: str = "",
+    formatted_text: str = "",
+) -> int | None:
+    if text_mode or formatted_text:
+        try:
+            return api.send_message(chat_id, text, text_mode=text_mode, formatted_text=formatted_text)
+        except TypeError as exc:
+            if "text_mode" not in str(exc) and "formatted_text" not in str(exc):
+                raise
+            return api.send_message(chat_id, text)
+    return api.send_message(chat_id, text)
+
+
 def _copy_untracked_message(api: TelegramAPI, chat_id: int, from_chat_id: int, message_id: int) -> None:
     copied_message_id = api.copy_message(chat_id, from_chat_id, message_id)
     LOGGER.info(
@@ -3526,10 +3573,24 @@ def _copy_untracked_message(api: TelegramAPI, chat_id: int, from_chat_id: int, m
     )
 
 
-def _send_tracked_message(api: TelegramAPI, chat_state: ChatState, chat_id: int, text: str) -> None:
-    chunks = split_telegram_message(text)
-    for index, chunk in enumerate(chunks, start=1):
-        message_id = api.send_message(chat_id, chunk)
+def _send_tracked_message(
+    api: TelegramAPI,
+    chat_state: ChatState,
+    chat_id: int,
+    text: str,
+    *,
+    text_mode: str = "",
+    formatted_text: str = "",
+) -> None:
+    chunk_pairs = _telegram_text_chunks(text, formatted_text=formatted_text)
+    for index, (chunk, formatted_chunk) in enumerate(chunk_pairs, start=1):
+        message_id = _send_telegram_message(
+            api,
+            chat_id,
+            chunk,
+            text_mode=text_mode if formatted_chunk else "",
+            formatted_text=formatted_chunk,
+        )
         chat_state.record_sent_message(chat_id, message_id)
         LOGGER.info(
             "Outgoing Telegram message chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s",
@@ -3537,7 +3598,7 @@ def _send_tracked_message(api: TelegramAPI, chat_state: ChatState, chat_id: int,
             message_id if message_id is not None else "unknown",
             len(chunk),
             index,
-            len(chunks),
+            len(chunk_pairs),
         )
 
 
@@ -3621,6 +3682,14 @@ def split_telegram_message(text: str, chunk_size: int = TELEGRAM_MESSAGE_CHUNK_S
     if remaining:
         chunks.append(remaining)
     return chunks
+
+
+def _telegram_text_chunks(text: str, *, formatted_text: str = "") -> list[tuple[str, str]]:
+    plain = str(text or "")
+    formatted = str(formatted_text or "")
+    if formatted and len(plain) <= TELEGRAM_MESSAGE_CHUNK_SIZE and len(formatted) <= TELEGRAM_MESSAGE_CHUNK_SIZE:
+        return [(plain, formatted)]
+    return [(chunk, "") for chunk in split_telegram_message(plain)]
 
 
 def _find_split_index(text: str, chunk_size: int) -> int:
