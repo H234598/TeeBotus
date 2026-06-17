@@ -5,7 +5,7 @@ import json
 import pytest
 
 from TeeBotus.embedding import FakeEmbeddingProvider, HFEmbeddingProvider, KeywordRerankerProvider, check_embedding_provider
-from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
+from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider, build_embedding_provider
 from TeeBotus.embedding.qdrant_bibliothekar import QdrantBibliothekarIndex
 from TeeBotus.embedding.qdrant_memory import QdrantMemoryIndex
 
@@ -125,6 +125,53 @@ def test_build_embedding_provider_builds_hf_provider_from_config_env() -> None:
     assert provider.dimensions == 384
     assert provider.endpoint == "http://127.0.0.1:8080/embeddings"
     assert provider.api_key == "hf_TEST123456"
+
+
+def test_build_account_memory_embedding_provider_keeps_hash_local() -> None:
+    provider = build_account_memory_embedding_provider(
+        EmbeddingConfig(provider="hash", model_name="teebotus-account-memory-hash", dimensions=16)
+    )
+
+    assert isinstance(provider, FakeEmbeddingProvider)
+    assert provider.model_name == "teebotus-account-memory-hash"
+
+
+def test_build_account_memory_embedding_provider_allows_local_http_endpoint() -> None:
+    provider = build_account_memory_embedding_provider(
+        EmbeddingConfig(
+            provider="tei",
+            model_name="intfloat/multilingual-e5-small",
+            dimensions=384,
+            endpoint="http://localhost:8080/embeddings",
+            api_key_env="HF_TOKEN",
+        ),
+        env={"HF_TOKEN": "hf_TEST123456"},
+    )
+
+    assert isinstance(provider, HFEmbeddingProvider)
+    assert provider.endpoint == "http://localhost:8080/embeddings"
+    assert provider.api_key == "hf_TEST123456"
+
+
+def test_build_account_memory_embedding_provider_rejects_remote_defaults_and_hosts() -> None:
+    with pytest.raises(ValueError, match="Account-memory embeddings require a local endpoint"):
+        build_account_memory_embedding_provider(EmbeddingConfig(provider="hf", model_name="intfloat/multilingual-e5-small"))
+    with pytest.raises(ValueError, match="must stay local"):
+        build_account_memory_embedding_provider(
+            EmbeddingConfig(
+                provider="tei",
+                model_name="intfloat/multilingual-e5-small",
+                endpoint="https://api-inference.huggingface.co/embeddings",
+            )
+        )
+    with pytest.raises(ValueError, match="must include an explicit port"):
+        build_account_memory_embedding_provider(
+            EmbeddingConfig(
+                provider="openai-compatible",
+                model_name="intfloat/multilingual-e5-small",
+                endpoint="http://localhost/embeddings",
+            )
+        )
 
 
 def test_build_embedding_provider_rejects_unknown_provider() -> None:

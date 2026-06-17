@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
+from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
 from TeeBotus.instructions import BotInstructions, load_instructions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, validate_sha512_token
 from TeeBotus.runtime.qdrant import (
@@ -136,7 +136,7 @@ def rebuild_qdrant_memory_indexes(
                     continue
                 index = qdrant_index_factory(
                     url=effective_qdrant_url,
-                    embedding_provider=build_embedding_provider(effective_embedding_config),
+                    embedding_provider=build_account_memory_embedding_provider(effective_embedding_config),
                 )
                 point_ids = rebuild_qdrant_memory_index(
                     account_store=store,

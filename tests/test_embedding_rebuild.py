@@ -135,6 +135,29 @@ def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     assert results[0].point_ids == ()
 
 
+def test_rebuild_qdrant_memory_indexes_rejects_remote_account_memory_embeddings(tmp_path):
+    class UnexpectedQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("remote account-memory embedding config must be rejected before Qdrant writes")
+
+    instances_dir = tmp_path / "instances"
+    store = AccountStore(instances_dir / "Depressionsbot" / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        embedding_config=EmbeddingConfig(provider="hf", model_name="intfloat/multilingual-e5-small", dimensions=384),
+        qdrant_index_factory=UnexpectedQdrantMemoryIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "error"
+    assert results[0].point_count == 0
+    assert "Account-memory embeddings require a local endpoint" in results[0].error
+
+
 def test_rebuild_qdrant_memory_indexes_can_explicitly_request_legacy_raw_cleanup(tmp_path):
     calls: list[bool] = []
 

@@ -825,6 +825,12 @@ lokalen HF-/TEI-kompatiblen Endpoint zeigen:
 - embedding_api_key_env: HF_TOKEN
 ```
 
+Fuer Account-Memory sind nur der lokale Hash-Provider oder explizit lokale
+HTTP-Embedding-Endpoints erlaubt (`127.0.0.1`, `localhost` oder `::1` mit
+Port). `hf`/`tei` ohne Endpoint faellt nicht auf die Hugging-Face-API zurueck,
+sondern wird fuer Usermemory blockiert, damit verschluesselte Erinnerungen
+nicht still als Embedding-Input an Remote-Provider gehen.
+
 Qdrant liefert dabei nur Memory-IDs. Entschluesselung, Rechtepruefung,
 Prompt-Formatierung und `last_accessed_at`/`access_count` bleiben im
 `AccountStore`. Neu gespeicherte Account-Memorys werden bei aktivem semantischem

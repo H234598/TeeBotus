@@ -22,7 +22,7 @@ from TeeBotus.core.youtube import (
     _record_youtube_parser_miss,
     transcribe_youtube_video,
 )
-from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
+from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
@@ -1565,7 +1565,7 @@ def _memory_search_embedding_provider(instructions: BotInstructions):
         endpoint=instructions.memory_search_embedding_endpoint,
         api_key_env=instructions.memory_search_embedding_api_key_env,
     )
-    return build_embedding_provider(config)
+    return build_account_memory_embedding_provider(config)
 
 
 def _delete_semantic_memory_index(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> None:

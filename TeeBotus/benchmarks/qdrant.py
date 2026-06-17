@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from TeeBotus.benchmarks.core import BenchmarkResult, result
 from TeeBotus.embedding import FakeEmbeddingProvider
+from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
 from TeeBotus.runtime.qdrant import check_qdrant_health, format_qdrant_status_line
 from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex
 
@@ -115,6 +116,7 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
     account_id_in_payload = account_id in serialized_points
     content_hash_in_payload = "source_sha256" in serialized_points or "keyword_sha256" in serialized_points
     sensitive_metadata_in_payload = any(marker in serialized_points for marker in ("suicidal_ideation", "risk_signal", "2026-06"))
+    remote_embedding_blocked = _account_memory_remote_embedding_blocked()
     schema_versions = sorted({payload.get("schema_version") for payload in stored_payloads if isinstance(payload, dict)})
     ok = (
         bool(selected_ids)
@@ -123,6 +125,7 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
         and not account_id_in_payload
         and not content_hash_in_payload
         and not sensitive_metadata_in_payload
+        and remote_embedding_blocked
         and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
     )
     return result(
@@ -144,6 +147,7 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
             "account_id_in_payload": account_id_in_payload,
             "content_hash_in_payload": content_hash_in_payload,
             "sensitive_metadata_in_payload": sensitive_metadata_in_payload,
+            "remote_embedding_blocked": remote_embedding_blocked,
             "fake_requests": opener.request_count,
             "network_calls": 0,
         },
@@ -230,6 +234,16 @@ def _benchmark_dot(left: Any, right: Any) -> float:
     if not isinstance(left, list) or not isinstance(right, list):
         return 0.0
     return float(sum(float(a) * float(b) for a, b in zip(left, right)))
+
+
+def _account_memory_remote_embedding_blocked() -> bool:
+    try:
+        build_account_memory_embedding_provider(
+            EmbeddingConfig(provider="hf", model_name="intfloat/multilingual-e5-small", dimensions=384)
+        )
+    except ValueError as exc:
+        return "local endpoint" in str(exc)
+    return False
 
 
 def _timed_ms(func: Callable[[], Any]) -> float:
