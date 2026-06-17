@@ -86,6 +86,7 @@ def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch,
     monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_FREE_TIER_CACHE", str(tmp_path / "gemini-limits.json"))
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
@@ -103,6 +104,7 @@ def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch,
         assert f"\n{section}\n" in captured.out
     lines = captured.out.splitlines()
     assert any(line.startswith("llm=Demo/telegram:1 ") for line in lines)
+    assert any(line.startswith("gemini_free_tier_limits status=never ") for line in lines)
     assert any(line.startswith("telegram_slot=Demo/telegram:1 ") for line in lines)
 
 
@@ -252,15 +254,19 @@ def test_runtime_qdrant_status_url_reports_conflicting_active_qdrant_urls() -> N
 def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
+    refresh_calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
     assert bot.main([]) == 0
 
+    assert refresh_calls
     assert calls
+    assert refresh_calls[0] is calls[0]
     assert calls[0].instances[0].instance_name == "Demo"
     assert calls[0].instances[0].accounts[0].label == "telegram:1"
 

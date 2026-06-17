@@ -537,6 +537,9 @@ TEEBOTUS_GEMINI_FREE_TIER_RPM=5
 TEEBOTUS_GEMINI_FREE_TIER_TPM=250000
 TEEBOTUS_GEMINI_FREE_TIER_RPD=20
 TEEBOTUS_GEMINI_FREE_TIER_RESERVE_TOKENS=2048
+TEEBOTUS_GEMINI_FREE_TIER_REFRESH_ENABLED=true
+TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS=86400
+TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL=https://ai.google.dev/gemini-api/docs/rate-limits
 ```
 
 Der Guard zaehlt pro Projekt-Key Requests/min, geschaetzte Input-Tokens/min und
@@ -545,12 +548,28 @@ wird der Provider-Aufruf uebersprungen und beim Keyring der naechste Projekt-Key
 versucht. Sind alle Projekt-Keys lokal erschoepft, bricht der LLM-Aufruf sauber
 ab, statt absichtlich in einen Google-429 zu laufen. Die konkreten Free-Tier-
 Werte koennen sich je Modell und Projekt aendern; die Werte sollten deshalb aus
-AI Studio/Projektquoten uebernommen werden. Instanzspezifisch funktionieren
+AI Studio/Projektquoten uebernommen werden.
+
+Beim Bot-Start laeuft fuer Gemini/Vertex-Konfigurationen ein Hintergrundjob,
+der hoechstens einmal pro Tag (`TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS`,
+Default `86400`) eine Limit-Quelle abruft und unter
+`TEEBOTUS_GEMINI_FREE_TIER_CACHE` oder
+`~/.cache/teebotus/gemini_free_tier_limits.json` speichert. Die Default-Quelle
+ist die offizielle Gemini-Rate-Limit-Seite. Google weist dort darauf hin, dass
+aktive Limits projekt- und tierabhaengig in AI Studio sichtbar sind und
+veroeffentlichte Werte nicht garantiert sind; deshalb ueberschreibt TeeBotus den
+Cache nur, wenn die Quelle eine parsebare Free-Tier-Tabelle oder JSON mit
+`rpm`/`tpm`/`rpd` pro Modell liefert. Ein eigener AI-Studio-/Quota-Export kann
+ueber `TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL` angebunden werden. Effektive
+Prioritaet: explizite Env-Werte > frisch gecachte Werte > konservative Defaults.
+
+Instanzspezifisch funktionieren
 `TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine einzelne
 Dimension, `TEEBOTUS_GEMINI_FREE_TIER_ENABLED=false` schaltet den Guard ab.
-`--runtime-status` meldet Google-Routen als `google_mode=stateless` und zeigt
-die wirksamen Guard-Werte als `free_tier_guard=...`.
+`--runtime-status` meldet Google-Routen als `google_mode=stateless`, zeigt die
+wirksamen Guard-Werte als `free_tier_guard=...` und gibt den Cachezustand als
+`gemini_free_tier_limits status=...` aus.
 
 Das ist die normale Gemini-Text-API ueber LiteLLM. Die Gemini/Vertex Live API
 ist ein separater, stateful WebSocket-/GenAI-SDK-Pfad fuer Echtzeit-Audio,

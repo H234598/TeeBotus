@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from TeeBotus.llm.gemini_limits_refresh import cached_gemini_free_tier_limit_values
+
 
 DEFAULT_GEMINI_FREE_TIER_RPM = 5
 DEFAULT_GEMINI_FREE_TIER_TPM = 250_000
@@ -149,24 +151,29 @@ def resolve_gemini_free_tier_limits(
         return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
     source = os.environ if env is None else env
     token = _env_token(instance_name)
+    cached = cached_gemini_free_tier_limit_values(source, model=str(model or ""))
+    default_rpm = _cached_int(cached, "rpm", DEFAULT_GEMINI_FREE_TIER_RPM)
+    default_tpm = _cached_int(cached, "tpm", DEFAULT_GEMINI_FREE_TIER_TPM)
+    default_rpd = _cached_int(cached, "rpd", DEFAULT_GEMINI_FREE_TIER_RPD)
+    default_reserve = _cached_int(cached, "reserve_tokens", DEFAULT_GEMINI_FREE_TIER_RESERVE_TOKENS)
     enabled = _parse_bool_env(_first_env(source, token=token, suffix="ENABLED"), default=True)
     return GeminiFreeTierLimits(
         enabled=enabled,
         requests_per_minute=_parse_optional_nonnegative_int(
             _first_env(source, token=token, suffix="RPM"),
-            default=DEFAULT_GEMINI_FREE_TIER_RPM,
+            default=default_rpm,
         ),
         input_tokens_per_minute=_parse_optional_nonnegative_int(
             _first_env(source, token=token, suffix="TPM"),
-            default=DEFAULT_GEMINI_FREE_TIER_TPM,
+            default=default_tpm,
         ),
         requests_per_day=_parse_optional_nonnegative_int(
             _first_env(source, token=token, suffix="RPD"),
-            default=DEFAULT_GEMINI_FREE_TIER_RPD,
+            default=default_rpd,
         ),
         reserve_input_tokens=_parse_nonnegative_int(
             _first_env(source, token=token, suffix="RESERVE_TOKENS"),
-            default=DEFAULT_GEMINI_FREE_TIER_RESERVE_TOKENS,
+            default=default_reserve,
         ),
     )
 
@@ -269,6 +276,11 @@ def _parse_nonnegative_int(value: str, *, default: int) -> int:
     except ValueError:
         return default
     return parsed if parsed >= 0 else default
+
+
+def _cached_int(values: Mapping[str, int | None], key: str, default: int) -> int:
+    value = values.get(key)
+    return value if isinstance(value, int) and value >= 0 else default
 
 
 def _pacific_day(now: datetime) -> str:

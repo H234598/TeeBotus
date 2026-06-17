@@ -988,6 +988,9 @@ TEEBOTUS_GEMINI_FREE_TIER_RPM=5
 TEEBOTUS_GEMINI_FREE_TIER_TPM=250000
 TEEBOTUS_GEMINI_FREE_TIER_RPD=20
 TEEBOTUS_GEMINI_FREE_TIER_RESERVE_TOKENS=2048
+TEEBOTUS_GEMINI_FREE_TIER_REFRESH_ENABLED=true
+TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS=86400
+TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL=https://ai.google.dev/gemini-api/docs/rate-limits
 ```
 
 Der Guard zaehlt pro Projekt-Key Requests/min, geschaetzte Input-Tokens/min und
@@ -995,9 +998,23 @@ Requests/Tag. Wenn ein Request die Reserve kurz vor dem Free-Tier-Limit
 verletzen wuerde, wird der Provider-Aufruf uebersprungen und der naechste
 Projekt-Key versucht. Sind alle Projekt-Keys lokal erschoepft, bricht der
 LLM-Aufruf sauber ab. Die konkreten Quoten muessen aus AI Studio/Projektquoten
-uebernommen werden; instanzspezifisch funktionieren
+uebernommen werden.
+
+Zusaetzlich holt TeeBotus beim Bot-Start fuer Gemini/Vertex-Konfigurationen
+maximal einmal pro Tag (`TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS`,
+Default `86400`) eine Limit-Quelle und cached parsebare Modellwerte. Die
+Default-Quelle ist die offizielle Gemini-Rate-Limit-Seite; fuer wirklich
+projektaktive AI-Studio-/Quota-Werte kann `TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL`
+auf einen eigenen JSON-Export zeigen. Eine Quelle wird nur uebernommen, wenn sie
+Free-Tier-RPM/TPM/RPD pro Modell parsebar liefert; Batch-Tabellen oder
+nichtnumerische Doku ueberschreiben den letzten guten Cache nicht. Effektive
+Prioritaet: explizite Env-Werte > Cache > konservative Defaults.
+
+Instanzspezifisch funktionieren
 `TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine Dimension.
+`--runtime-status` zeigt die aktiven Guard-Werte und den Cache-/Refreshzustand
+als `gemini_free_tier_limits status=...`.
 
 `hf_pool` bleibt im Runtime-Pfad explizit non-fatal: Unit-Tests injizieren den
 `HFPoolMockExecutor` bewusst, aber der echte Provider nutzt ohne Schalter keinen

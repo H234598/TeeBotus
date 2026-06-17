@@ -1,10 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
+
 from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
     GeminiFreeTierLimits,
     reset_gemini_free_tier_budget_state,
     resolve_gemini_free_tier_limits,
+)
+from TeeBotus.llm.gemini_limits_refresh import (
+    cached_gemini_free_tier_limit_values,
+    gemini_free_tier_limit_status_line,
+    parse_gemini_free_tier_limits_payload,
+    refresh_gemini_free_tier_limits_if_due,
 )
 from TeeBotus.llm.keyring import RotatingAPIKeyRing, interleave_key_buckets, resolve_gemini_api_key_ring
 
@@ -81,6 +90,117 @@ def test_resolve_gemini_free_tier_limits_uses_instance_override() -> None:
     assert limits.requests_per_day == 33
     assert limits.reserve_input_tokens == 4096
     assert limits.status_summary() == "on(rpm=7,tpm=250000,rpd=33,reserve=4096)"
+
+
+def test_parse_gemini_free_tier_limits_from_json_payload() -> None:
+    payload = json.dumps(
+        {
+            "limits": [
+                {
+                    "model": "gemini/gemini-2.5-flash",
+                    "tier": "free",
+                    "rpm": 10,
+                    "input_tokens_per_minute": "250,000",
+                    "requests_per_day": 250,
+                },
+                {"model": "gemini/gemini-2.5-pro", "tier": "tier_1", "rpm": 1000, "tpm": 1_000_000, "rpd": 10_000},
+            ]
+        }
+    )
+
+    parsed = parse_gemini_free_tier_limits_payload(payload)
+
+    assert parsed == {"gemini/gemini-2.5-flash": {"rpm": 10, "tpm": 250_000, "rpd": 250}}
+
+
+def test_parse_gemini_free_tier_limits_from_html_table() -> None:
+    payload = """
+    <table>
+      <tr><th>Tier</th><th>Model</th><th>RPM</th><th>TPM</th><th>RPD</th></tr>
+      <tr><td>Free</td><td>Gemini 2.5 Flash</td><td>10</td><td>250,000</td><td>250</td></tr>
+    </table>
+    """
+
+    parsed = parse_gemini_free_tier_limits_payload(payload)
+
+    assert parsed == {"Gemini 2.5 Flash": {"rpm": 10, "tpm": 250_000, "rpd": 250}}
+
+
+def test_refresh_gemini_free_tier_limits_caches_parseable_source(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    env = {"TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path), "TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL": "https://limits.example/free.json"}
+
+    result = refresh_gemini_free_tier_limits_if_due(
+        env,
+        force=True,
+        now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc),
+        fetcher=lambda _url, _timeout: '{"models":{"gemini-2.5-flash":{"rpm":9,"tpm":240000,"rpd":120}}}',
+    )
+
+    assert result.status == "ok"
+    assert result.models == 1
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash") == {
+        "rpm": 9,
+        "tpm": 240_000,
+        "rpd": 120,
+    }
+
+
+def test_refresh_gemini_free_tier_limits_preserves_cache_when_source_has_no_table(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "fetched_at": "2026-06-16T00:00:00Z",
+                "last_refresh_attempt_at": "2026-06-16T00:00:00Z",
+                "last_refresh_status": "ok",
+                "models": {"gemini-2.5-flash": {"rpm": 9, "tpm": 240000, "rpd": 120}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {"TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path), "TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL": "https://limits.example/docs"}
+
+    result = refresh_gemini_free_tier_limits_if_due(
+        env,
+        force=True,
+        now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc),
+        fetcher=lambda _url, _timeout: "<html><td>Gemini 2.5 Flash</td><td>3,000,000</td></html>",
+    )
+
+    assert result.status == "no_limits_found"
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash") == {
+        "rpm": 9,
+        "tpm": 240_000,
+        "rpd": 120,
+    }
+    status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc))
+    assert "gemini_free_tier_limits status=no_limits_found" in status
+    assert "models=1" in status
+
+
+def test_resolve_gemini_free_tier_limits_uses_cached_defaults_and_keeps_env_override(tmp_path) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "fetched_at": "2026-06-17T00:00:00Z",
+                "last_refresh_attempt_at": "2026-06-17T00:00:00Z",
+                "last_refresh_status": "ok",
+                "models": {"gemini-2.5-flash": {"rpm": 10, "tpm": 250000, "rpd": 250}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {"TEEBOTUS_GEMINI_FREE_TIER_CACHE": str(cache_path), "TEEBOTUS_GEMINI_FREE_TIER_RPD": "200"}
+
+    limits = resolve_gemini_free_tier_limits(env, provider="litellm", model="gemini/gemini-2.5-flash")
+
+    assert limits.requests_per_minute == 10
+    assert limits.input_tokens_per_minute == 250_000
+    assert limits.requests_per_day == 200
 
 
 def test_gemini_free_tier_guard_blocks_before_limit() -> None:

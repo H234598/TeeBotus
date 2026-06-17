@@ -99,6 +99,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.core.status import account_memory_index_health_lines, mcp_tool_runtime_status_line
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
+        from TeeBotus.llm.gemini_limits_refresh import gemini_free_tier_limit_status_line
         from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
         from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
@@ -161,6 +162,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
             llm_backend_lines.append(_sanitize_status_text(line))
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional hf_pool.
         llm_backend_lines.append(f"hf_pool=default status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
+    llm_backend_lines.append(_sanitize_status_text(gemini_free_tier_limit_status_line()))
     route_instance_names = tuple(instance.instance_name for instance in config.instances)
     for purpose in _runtime_status_route_purposes():
         llm_backend_lines.append(_runtime_status_decision_line(purpose, instance_names=route_instance_names))
@@ -1331,6 +1333,19 @@ def _run_telegram_runtime(config: Any) -> int:
         return 2
 
 
+def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
+    try:
+        from TeeBotus.llm.gemini_limits_refresh import start_gemini_free_tier_limit_refresh_background
+    except Exception as exc:  # pragma: no cover - defensive only
+        print(f"TeeBotus Gemini free-tier refresh unavailable: {exc}", file=sys.stderr)
+        return
+    try:
+        instance_names = tuple(str(instance.instance_name) for instance in getattr(config, "instances", ()))
+        start_gemini_free_tier_limit_refresh_background(instance_names=instance_names)
+    except Exception as exc:  # noqa: BLE001 - refresh must not block bot startup.
+        print(f"TeeBotus Gemini free-tier refresh start failed: {type(exc).__name__}: {_sanitize_status_text(str(exc))}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     original = dict(os.environ)
     try:
@@ -1363,8 +1378,10 @@ def _main_impl(argv: list[str] | None = None) -> int:
         print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
         return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
+        _start_gemini_free_tier_limit_refresh(config)
         return _run_matrix_runtime(config)
     if _channel_requested_without_telegram(config, "signal") and "matrix" not in config.channels:
+        _start_gemini_free_tier_limit_refresh(config)
         return _run_signal_runtime(config)
     if "matrix" in config.channels and _runtime_has_matrix_accounts(config):
         status = _start_matrix_runtime_background(config)
@@ -1378,6 +1395,7 @@ def _main_impl(argv: list[str] | None = None) -> int:
         print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
         return 2
 
+    _start_gemini_free_tier_limit_refresh(config)
     if "telegram" in config.channels:
         return _run_telegram_runtime(config)
     return 2
