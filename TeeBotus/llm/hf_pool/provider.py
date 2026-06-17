@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Mapping
 
@@ -8,8 +9,9 @@ from TeeBotus.llm.base import LLMResponse
 from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
-from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, HFPoolMockExecutor
+from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, OpenAICompatibleHFPoolExecutor
 from TeeBotus.llm.hf_pool.scheduler import select_target
+from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 from TeeBotus.llm.profiles import normalize_llm_purpose
 
 
@@ -33,7 +35,7 @@ class HFPoolProvider:
         self.model_selector = _format_pool_selector(self.pool_name, self.purpose)
         self.config_path = Path(config_path)
         self.env = env
-        self.executor = executor or HFPoolMockExecutor()
+        self.executor = executor or _executor_from_env(env)
         self.fallback_client = fallback_client
 
     def create_reply(
@@ -45,6 +47,8 @@ class HFPoolProvider:
         try:
             config = load_hf_pool_config(self.config_path)
             scheduled = select_target(config, pool_name=self.pool_name, purpose=self.purpose, env=self.env)
+            if self.executor is None:
+                raise HFPoolUnavailable("hf_pool live executor is not enabled")
             return self.executor.create_reply(scheduled, user_text, instructions)
         except HFPoolUnavailable as exc:
             return self._fallback_or_raise(user_text, instructions, previous_response_id, exc)
@@ -107,3 +111,23 @@ def _format_pool_selector(pool_name: str, purpose: str) -> str:
     normalized_pool = _normalize_pool_name(pool_name)
     normalized_purpose = normalize_llm_purpose(purpose)
     return f"pool:{normalized_pool}#{normalized_purpose}"
+
+
+def _executor_from_env(env: Mapping[str, str] | None) -> HFPoolExecutor | None:
+    source = os.environ if env is None else env
+    mode = str(source.get("TEEBOTUS_HF_POOL_EXECUTOR", "") or "").strip().casefold()
+    live_enabled = _parse_bool(source.get("TEEBOTUS_HF_POOL_LIVE", "")) or mode in {
+        "live",
+        "openai",
+        "openai_compatible",
+        "openai-compatible",
+    }
+    if not live_enabled:
+        return None
+    state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
+    state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
+    return OpenAICompatibleHFPoolExecutor(state_store=SQLiteHFPoolRuntimeStateStore(state_path))
+
+
+def _parse_bool(value: object) -> bool:
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "ja", "on", "enabled", "live"}

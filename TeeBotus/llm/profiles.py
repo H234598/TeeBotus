@@ -183,6 +183,7 @@ def build_profiled_text_llm_client(
         api_base=route.base_url,
         purpose=route.purpose,
         use_instruction_fallback_models=False,
+        env=source,
     )
 
 

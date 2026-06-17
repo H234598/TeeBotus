@@ -53,6 +53,7 @@ def build_text_llm_client(
     max_tokens: int | str | None = None,
     use_instruction_fallback_models: bool = True,
     gemini_free_tier_limits: GeminiFreeTierLimits | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> object | None:
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
@@ -63,6 +64,7 @@ def build_text_llm_client(
         return HFPoolProvider(
             pool_name=model or "default",
             purpose=purpose or "normal_chat",
+            env=env,
             fallback_client=_build_hf_pool_fallback_client(
                 instructions=instructions,
                 fallback_models=fallback_models,

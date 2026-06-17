@@ -123,6 +123,7 @@ def build_runtime_text_llm_client(
         temperature=temperature,
         max_tokens=max_tokens,
         use_instruction_fallback_models=False,
+        env=env,
     )
 
 
@@ -256,6 +257,7 @@ def _build_route_client(
         temperature=temperature,
         max_tokens=max_tokens,
         use_instruction_fallback_models=False,
+        env=source,
     )
 
 
@@ -320,6 +322,7 @@ def _build_profile_client(
         temperature=temperature,
         max_tokens=max_tokens,
         use_instruction_fallback_models=False,
+        env=source,
     )
 
 

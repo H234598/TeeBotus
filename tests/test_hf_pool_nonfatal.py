@@ -53,7 +53,78 @@ def test_hf_pool_provider_missing_target_key_is_unavailable_not_crash(tmp_path):
         provider.create_reply("ping", BotInstructions())
 
 
+def test_hf_pool_provider_configured_target_without_executor_is_unavailable_not_mock(tmp_path):
+    path = _enabled_config(tmp_path)
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"})
+
+    with pytest.raises(HFPoolUnavailable, match="live executor is not enabled"):
+        provider.create_reply("ping", BotInstructions())
+
+
+def test_hf_pool_provider_live_executor_requires_explicit_env(monkeypatch, tmp_path):
+    path = _enabled_config(tmp_path)
+    calls: list[dict[str, object]] = []
+
+    def fake_urlopen(request, *, timeout):
+        calls.append(
+            {
+                "url": request.full_url,
+                "timeout": timeout,
+                "authorization": request.get_header("Authorization"),
+                "body": json.loads(request.data.decode("utf-8")),
+            }
+        )
+        return _Response(
+            {
+                "id": "hf-live-test",
+                "choices": [{"message": {"content": "live ok"}}],
+                "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+            }
+        )
+
+    monkeypatch.setattr("TeeBotus.llm.hf_pool.executor.urlopen", fake_urlopen)
+    provider = HFPoolProvider(
+        config_path=path,
+        env={
+            "HF_TOKEN_MAIN": "hf-secret",
+            "TEEBOTUS_HF_POOL_LIVE": "1",
+            "TEEBOTUS_HF_POOL_STATE_DB": str(tmp_path / "hf_pool_state.sqlite3"),
+        },
+    )
+
+    response = provider.create_reply("ping", BotInstructions(openai_system_prompt="System."))
+
+    assert response.text == "live ok"
+    assert response.response_id == "hf-live-test"
+    assert response.usage == {"prompt_tokens": 2, "completion_tokens": 1}
+    assert calls[0]["authorization"] == "Bearer hf-secret"
+    assert calls[0]["body"]["messages"][-1] == {"role": "user", "content": "ping"}
+
+
 def test_hf_pool_provider_uses_mock_executor_for_configured_target(tmp_path):
+    path = _enabled_config(tmp_path)
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=HFPoolMockExecutor("mock ok"))
+
+    response = provider.create_reply("ping", BotInstructions())
+
+    assert response.text == "mock ok"
+    assert response.provider == "hf_pool"
+    assert response.model == "Qwen/Qwen3-4B-Instruct-2507"
+
+
+class _Response:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self.payload = payload
+        self.status = 200
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+    def close(self) -> None:
+        return None
+
+
+def _enabled_config(tmp_path):
     path = tmp_path / "hf_pool.yaml"
     path.write_text(
         json.dumps(
@@ -75,10 +146,4 @@ def test_hf_pool_provider_uses_mock_executor_for_configured_target(tmp_path):
         ),
         encoding="utf-8",
     )
-    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=HFPoolMockExecutor("mock ok"))
-
-    response = provider.create_reply("ping", BotInstructions())
-
-    assert response.text == "mock ok"
-    assert response.provider == "hf_pool"
-    assert response.model == "Qwen/Qwen3-4B-Instruct-2507"
+    return path

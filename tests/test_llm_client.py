@@ -13,6 +13,7 @@ from TeeBotus.llm.free_tier import (
     quota_owner_id,
     reset_gemini_free_tier_budget_state,
 )
+from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
@@ -374,6 +375,21 @@ def test_build_text_llm_client_uses_runtime_provider_override() -> None:
     assert client.model == "meta-llama/Llama-3.1-8B-Instruct"
     assert client.fallback_models == ("Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3")
     assert client.api_key == "hf-key"
+
+
+def test_build_text_llm_client_passes_env_to_hf_pool_provider() -> None:
+    env = {"HF_TOKEN_MAIN": "hf-secret", "TEEBOTUS_HF_POOL_LIVE": "0"}
+
+    client = build_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        provider="hf_pool",
+        model="pool:default#normal_chat",
+        env=env,
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert client.env is env
 
 
 def test_litellm_text_client_requires_installed_litellm(monkeypatch: pytest.MonkeyPatch) -> None:

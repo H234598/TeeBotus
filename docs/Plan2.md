@@ -999,6 +999,15 @@ uebernommen werden; instanzspezifisch funktionieren
 `TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine Dimension.
 
+`hf_pool` bleibt im Runtime-Pfad explizit non-fatal: Unit-Tests injizieren den
+`HFPoolMockExecutor` bewusst, aber der echte Provider nutzt ohne Schalter keinen
+Mock fuer konfigurierte Targets. Wenn kein Live-Executor aktiviert ist, liefert
+`provider=hf_pool` kontrolliert `HFPoolUnavailable` und ein explizit erlaubter
+Fallback kann uebernehmen. Echte HF-Chat-Completions laufen nur mit
+`TEEBOTUS_HF_POOL_LIVE=1` oder `TEEBOTUS_HF_POOL_EXECUTOR=live`; optional setzt
+`TEEBOTUS_HF_POOL_STATE_DB=/pfad/hf_pool_state.sqlite3` den persistenten
+Cooldown-/Usage-State.
+
 ### 11.2 Routing-Datei
 
 `config/llm_routing.yaml`:
