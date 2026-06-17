@@ -239,6 +239,46 @@ def test_hf_pool_models_validation_marks_missing_model_unavailable(tmp_path):
     assert "hf_TESTSECRET123" not in lines
 
 
+def test_hf_pool_models_validation_requires_known_context_length(tmp_path):
+    path = _enabled_config(tmp_path, required={"context_length": 16384})
+
+    def models_opener(_request, *, timeout):
+        return _ModelsResponse({"data": [{"id": "Qwen/Qwen3-4B-Instruct-2507"}]})
+
+    health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        validate_models=True,
+        models_opener=models_opener,
+    )
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert health.status == "unavailable"
+    assert health.targets[0].status == "unavailable"
+    assert "models_feed_missing_context_length:required=16384" in lines
+    assert "hf_TESTSECRET123" not in lines
+
+
+def test_hf_pool_models_validation_rejects_too_small_context_length(tmp_path):
+    path = _enabled_config(tmp_path, required={"context_length": 32768})
+
+    def models_opener(_request, *, timeout):
+        return _ModelsResponse({"data": [{"id": "Qwen/Qwen3-4B-Instruct-2507", "context_length": 8192}]})
+
+    health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        validate_models=True,
+        models_opener=models_opener,
+    )
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert health.status == "unavailable"
+    assert health.targets[0].status == "unavailable"
+    assert "models_feed_context_length_too_small:required=32768:found=8192" in lines
+    assert "hf_TESTSECRET123" not in lines
+
+
 def test_hf_pool_doctor_cli_can_validate_models(monkeypatch, capsys, tmp_path):
     path = _enabled_config(tmp_path)
 

@@ -270,8 +270,11 @@ def _model_requirement_error(target: HFPoolTarget, model_info: HFPoolModelInfo) 
         errors.append("models_feed_missing_tools")
     if required.supports_structured_output and not model_info.supports_structured_output:
         errors.append("models_feed_missing_structured_output")
-    if required.context_length and model_info.context_length and model_info.context_length < required.context_length:
-        errors.append(f"models_feed_context_length_too_small:required={required.context_length}:found={model_info.context_length}")
+    if required.context_length:
+        if model_info.context_length is None:
+            errors.append(f"models_feed_missing_context_length:required={required.context_length}")
+        elif model_info.context_length < required.context_length:
+            errors.append(f"models_feed_context_length_too_small:required={required.context_length}:found={model_info.context_length}")
     return "; ".join(errors)
 
 
