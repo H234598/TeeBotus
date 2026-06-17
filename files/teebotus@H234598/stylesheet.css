@@ -1,0 +1,19 @@
+.teebotus-status-label {
+  min-width: 28em;
+}
+
+.teebotus-muted {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.teebotus-ok {
+  color: #8fd8a8;
+}
+
+.teebotus-warn {
+  color: #f1c96b;
+}
+
+.teebotus-error {
+  color: #f08b8b;
+}

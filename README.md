@@ -96,6 +96,45 @@ python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix
 
 `--channels telegram` startet nur Telegram-Slots. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten Signal und Matrix im Hintergrund und danach den Telegram-Runtime-Slot mit Long-Polling-Transport.
 
+## Cinnamon-Applet
+
+Das Repo enthaelt ein lokales Cinnamon-Panel-Applet unter
+`files/teebotus@H234598`. Es orientiert sich an der Applet-Struktur von
+Speed of Cinnamon: `metadata.json`, `settings-schema.json`, `applet.js`,
+`stylesheet.css` und ein eigenes Icon liegen direkt im Applet-Ordner.
+
+Das Hauptmenue ist als Operator-Oberflaeche gedacht:
+
+- Status & Diagnose: Runtime-Status aktualisieren, Status JSON kopieren,
+  Runtime-Status im Terminal oeffnen und Applet-Einstellungen oeffnen.
+- Runtime Details, Messenger, LLM & Dienste, Memory & Speicher: gruppierte
+  Auszuege aus `python3 -m TeeBotus --runtime-status`.
+- Bibliothekar: Status, Bibliotheksordner und Bibliothekar-Hilfe.
+- Proaktiv: manuellen Proaktiv-Lauf, Timerstatus und Logs.
+- Bot-Steuerung: `systemctl --user start|restart|stop <Unit>` mit optionaler
+  `zenity`-Rueckfrage.
+- Schnellbefehle: haeufige Chat-Kommandos wie `/status`, `/info`, `/help`,
+  `/voicemodel`, `/mimic_voice`, `/register`, `/memory_reset` in die
+  Zwischenablage kopieren.
+- Projekt: Repo-Ordner, GitHub und Commits oeffnen.
+
+Die Einstellungen steuern Repo-Pfad, Python-Binary, Runtime-Channels,
+systemd-Unit, Refreshintervall, Panel-Label, sichtbare Menuesektionen,
+Terminalprogramm, Bibliothekar-/Proaktiv-Instanz und Projektlinks. Die Applet-
+Statusabfrage laeuft ueber den festen Helfer:
+
+```bash
+python3 -m TeeBotus.cinnamon_applet status --repo-root "$PWD" --channels telegram,signal --unit teebotus-runtime.service
+```
+
+Zum lokalen Testen installiert der Helfer den Applet-Ordner nach
+`~/.local/share/cinnamon/applets/teebotus@H234598`; danach kann er in den
+Cinnamon-Applet-Einstellungen aktiviert werden:
+
+```bash
+python3 scripts/install_cinnamon_applet.py
+```
+
 Der Hauptbot kann ebenfalls als User-systemd-Service reproduzierbar erzeugt werden. Der Renderer startet keine Bot-Loops im Print-Modus und erzeugt eine gehaertete Unit mit `NoNewPrivileges=true`, `PrivateTmp=true`, `.env` als optionalem EnvironmentFile und `python -m TeeBotus --all --channels telegram,signal,matrix`:
 
 ```bash

@@ -1,0 +1,280 @@
+{
+  "layout": {
+    "type": "layout",
+    "pages": [
+      "main-page",
+      "actions-page",
+      "about-page"
+    ],
+    "main-page": {
+      "type": "page",
+      "title": "TeeBotus",
+      "sections": [
+        "menu-map-section",
+        "runtime-section",
+        "display-section",
+        "sections-section"
+      ]
+    },
+    "actions-page": {
+      "type": "page",
+      "title": "Actions",
+      "sections": [
+        "service-actions-section",
+        "tools-section",
+        "links-section"
+      ]
+    },
+    "about-page": {
+      "type": "page",
+      "title": "About",
+      "sections": [
+        "about-section"
+      ]
+    },
+    "menu-map-section": {
+      "type": "section",
+      "title": "Main menu map",
+      "keys": [
+        "main-menu-map"
+      ]
+    },
+    "runtime-section": {
+      "type": "section",
+      "title": "Runtime status",
+      "keys": [
+        "repo-path",
+        "python-command",
+        "channels",
+        "runtime-unit",
+        "default-instance",
+        "status-refresh-seconds",
+        "status-timeout-seconds"
+      ]
+    },
+    "display-section": {
+      "type": "section",
+      "title": "Panel display",
+      "keys": [
+        "show-panel-label",
+        "panel-label-mode",
+        "auto-refresh"
+      ]
+    },
+    "sections-section": {
+      "type": "section",
+      "title": "Visible menu sections",
+      "keys": [
+        "show-messenger-section",
+        "show-llm-section",
+        "show-memory-section",
+        "show-bibliothekar-section",
+        "show-proactive-section",
+        "show-actions-section",
+        "show-quick-commands-section",
+        "show-project-section"
+      ]
+    },
+    "service-actions-section": {
+      "type": "section",
+      "title": "Bot service actions",
+      "keys": [
+        "enable-service-actions",
+        "confirm-service-actions",
+        "terminal-command"
+      ]
+    },
+    "tools-section": {
+      "type": "section",
+      "title": "Tool actions",
+      "keys": [
+        "bibliothekar-instance",
+        "library-path",
+        "proactive-instance",
+        "proactive-command"
+      ]
+    },
+    "links-section": {
+      "type": "section",
+      "title": "Project links",
+      "keys": [
+        "github-url",
+        "commits-url"
+      ]
+    },
+    "about-section": {
+      "type": "section",
+      "title": "TeeBotus Applet",
+      "keys": [
+        "about-text"
+      ]
+    }
+  },
+  "main-menu-map": {
+    "type": "label",
+    "description": "The panel menu shows a compact runtime card first, then optional sections for Messenger, LLM routes, memory, Bibliothekar, proactive agent, bot service actions, quick chat commands, and project links. Runtime status is read through the fixed TeeBotus helper command; service actions call the configured user-systemd unit."
+  },
+  "repo-path": {
+    "type": "entry",
+    "description": "TeeBotus repository path",
+    "tooltip": "Used as working directory for python -m TeeBotus and git status.",
+    "default": "/home/teladi/TeeBotus"
+  },
+  "python-command": {
+    "type": "entry",
+    "description": "Python executable",
+    "tooltip": "Use an absolute path where possible. Default matches the local system Python used for the bot runtime.",
+    "default": "/usr/bin/python3"
+  },
+  "channels": {
+    "type": "combobox",
+    "description": "Runtime-status channels",
+    "options": {
+      "Telegram + Signal": "telegram,signal",
+      "Telegram + Signal + Matrix": "telegram,signal,matrix",
+      "Telegram only": "telegram",
+      "Signal only": "signal",
+      "Matrix only": "matrix"
+    },
+    "default": "telegram,signal"
+  },
+  "runtime-unit": {
+    "type": "entry",
+    "description": "User-systemd bot unit",
+    "default": "teebotus-runtime.service"
+  },
+  "default-instance": {
+    "type": "entry",
+    "description": "Default instance for helper actions",
+    "default": "Depressionsbot"
+  },
+  "status-refresh-seconds": {
+    "type": "spinbutton",
+    "description": "Automatic refresh interval in seconds",
+    "min": 15,
+    "max": 3600,
+    "step": 5,
+    "default": 60
+  },
+  "status-timeout-seconds": {
+    "type": "spinbutton",
+    "description": "Status command timeout in seconds",
+    "min": 5,
+    "max": 120,
+    "step": 5,
+    "default": 30
+  },
+  "show-panel-label": {
+    "type": "switch",
+    "description": "Show text in panel",
+    "default": true
+  },
+  "panel-label-mode": {
+    "type": "combobox",
+    "description": "Panel label content",
+    "options": {
+      "Short health": "health",
+      "Instance count": "instances",
+      "Version": "version",
+      "Icon only": "icon"
+    },
+    "default": "health"
+  },
+  "auto-refresh": {
+    "type": "switch",
+    "description": "Refresh status automatically",
+    "default": true
+  },
+  "show-messenger-section": {
+    "type": "switch",
+    "description": "Show Messenger section",
+    "default": true
+  },
+  "show-llm-section": {
+    "type": "switch",
+    "description": "Show LLM and provider section",
+    "default": true
+  },
+  "show-memory-section": {
+    "type": "switch",
+    "description": "Show memory and storage section",
+    "default": true
+  },
+  "show-bibliothekar-section": {
+    "type": "switch",
+    "description": "Show Bibliothekar section",
+    "default": true
+  },
+  "show-proactive-section": {
+    "type": "switch",
+    "description": "Show proactive agent section",
+    "default": true
+  },
+  "show-actions-section": {
+    "type": "switch",
+    "description": "Show bot service actions",
+    "default": true
+  },
+  "show-quick-commands-section": {
+    "type": "switch",
+    "description": "Show quick chat commands",
+    "default": true
+  },
+  "show-project-section": {
+    "type": "switch",
+    "description": "Show project links",
+    "default": true
+  },
+  "enable-service-actions": {
+    "type": "switch",
+    "description": "Enable start/restart/stop menu items",
+    "tooltip": "The menu items call systemctl --user for the configured unit. Disable this if the applet should be read-only.",
+    "default": true
+  },
+  "confirm-service-actions": {
+    "type": "switch",
+    "description": "Ask before start/restart/stop",
+    "tooltip": "Uses zenity when available; if zenity is missing, the action is blocked instead of running silently.",
+    "default": true
+  },
+  "terminal-command": {
+    "type": "entry",
+    "description": "Preferred terminal command",
+    "tooltip": "Leave empty for auto-detection among gnome-terminal, x-terminal-emulator, kgx, konsole, and xterm.",
+    "default": ""
+  },
+  "bibliothekar-instance": {
+    "type": "entry",
+    "description": "Bibliothekar instance",
+    "default": "Depressionsbot"
+  },
+  "library-path": {
+    "type": "entry",
+    "description": "Library folder",
+    "default": "/home/teladi/TeeBotus/instances/Depressionsbot/data/Bibliothek"
+  },
+  "proactive-instance": {
+    "type": "entry",
+    "description": "Proactive-agent instance",
+    "default": "Depressionsbot"
+  },
+  "proactive-command": {
+    "type": "entry",
+    "description": "Manual proactive command",
+    "default": "/usr/bin/python3 -m TeeBotus.proactive --instance Depressionsbot --dispatch --plan --tool-plan"
+  },
+  "github-url": {
+    "type": "entry",
+    "description": "GitHub repository URL",
+    "default": "https://github.com/H234598/TeeBotus"
+  },
+  "commits-url": {
+    "type": "entry",
+    "description": "Commit history URL",
+    "default": "https://github.com/H234598/TeeBotus/commits/main"
+  },
+  "about-text": {
+    "type": "label",
+    "description": "TeeBotus Cinnamon applet\\nPanel diagnostics, bot runtime controls, quick chat commands, Bibliothekar and proactive-agent launchers."
+  }
+}

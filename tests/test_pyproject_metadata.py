@@ -56,3 +56,4 @@ def test_pyproject_declares_operator_scripts() -> None:
     assert scripts["teebotus-bibliothekar"] == "TeeBotus.bibliothekar.cli:main"
     assert scripts["teebotus-qdrant-systemd"] == "TeeBotus.qdrant_systemd:main"
     assert scripts["teebotus-embedding"] == "TeeBotus.embedding.cli:main"
+    assert scripts["teebotus-cinnamon-applet"] == "TeeBotus.cinnamon_applet:main"
