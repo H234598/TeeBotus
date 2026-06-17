@@ -369,7 +369,12 @@ python3 -m TeeBotus.admin accounts report --instances-dir instances
 
 Der Report liest den AccountStore read-only und erzeugt keine neuen Secrets.
 
-Wenn `/status` oder `--runtime-status` nicht entschluesselbare Account-Memory-Payloads meldet, kann vor jeder Reparatur ein read-only Recovery-Report erzeugt werden:
+Wenn `/status` oder `--runtime-status` nicht entschluesselbare
+Account-Memory-Payloads oder `account_memory_metadata=... status=broken`
+meldet, kann vor jeder Reparatur ein read-only Recovery-Report erzeugt
+werden. Metadata-Fehler betreffen Account-Index, Identity-Mapping,
+Account-Secrets oder Account-Profile; sie sind keine normalen leeren Memories
+und brauchen denselben Recovery-/Quarantaene-Pfad wie kaputte Payloads.
 
 ```bash
 python3 -m TeeBotus.admin memory-recovery --instances-dir instances

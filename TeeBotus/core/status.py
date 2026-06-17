@@ -15,6 +15,10 @@ from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_ur
 from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
+    ACCOUNT_IDENTITIES_FILENAME,
+    ACCOUNT_INDEX_FILENAME,
+    ACCOUNT_PROFILE_FILENAME,
+    ACCOUNT_SECRETS_FILENAME,
     TOKEN_HEX_RE,
     AccountStore,
     AccountStoreError,
@@ -544,6 +548,11 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         return [f"account_memory={instance_name} status=broken error={type(exc).__name__}: {exc}"]
     lines: list[str] = []
     has_broken_memory = False
+    has_broken_metadata = False
+    metadata_lines = _account_metadata_health_lines(store, account_dirs, instance_name=instance_name)
+    if metadata_lines:
+        lines.extend(metadata_lines)
+        has_broken_metadata = True
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_warning = ""
@@ -555,12 +564,14 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 has_broken_memory = True
                 continue
             profile_warning = f" warning=profile_unreadable:{exc}"
+            has_broken_metadata = True
         except OSError as exc:
             if store.account_memory_backend is None:
                 lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
                 has_broken_memory = True
                 continue
             profile_warning = f" warning=profile_unreadable:{exc}"
+            has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
                 health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
@@ -580,7 +591,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}{fallback_warning}"
             )
             has_broken_memory = True
-    if has_broken_memory:
+    if has_broken_memory or has_broken_metadata:
         instances_dir = project_root / "instances"
         recovery_command = shlex.join(
             [
@@ -640,6 +651,60 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 f'command="{legacy_command}" apply_command="{legacy_apply_command}"'
             )
     return lines
+
+
+def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path], *, instance_name: str) -> list[str]:
+    root = getattr(store, "root", None)
+    vault = getattr(store, "vault", None)
+    if not isinstance(root, Path) or vault is None or not hasattr(vault, "read_json"):
+        return []
+    checks = (
+        ("account_index", root / ACCOUNT_INDEX_FILENAME),
+        ("identity_mapping", root / ACCOUNT_IDENTITIES_FILENAME),
+        ("account_secrets", root / ACCOUNT_SECRETS_FILENAME),
+    )
+    lines: list[str] = []
+    for kind, path in checks:
+        if not path.exists():
+            continue
+        try:
+            vault.read_json(path, {})
+        except (AccountStoreError, OSError) as exc:
+            lines.append(_account_metadata_broken_line(instance_name=instance_name, kind=kind, path=path, error=str(exc)))
+
+    unreadable_profiles: list[str] = []
+    profile_errors: list[str] = []
+    for account_dir in account_dirs:
+        profile_path = account_dir / ACCOUNT_PROFILE_FILENAME
+        if not profile_path.exists():
+            continue
+        try:
+            vault.read_json(profile_path, {})
+        except (AccountStoreError, OSError) as exc:
+            unreadable_profiles.append(account_dir.name)
+            profile_errors.append(str(exc))
+    if unreadable_profiles:
+        accounts = ",".join(account_id[:12] for account_id in unreadable_profiles[:5])
+        if len(unreadable_profiles) > 5:
+            accounts += f",+{len(unreadable_profiles) - 5}"
+        error = profile_errors[0] if profile_errors else "unreadable account profile"
+        lines.append(
+            _account_metadata_broken_line(
+                instance_name=instance_name,
+                kind="accounts_dir",
+                path=store.accounts_dir,
+                error=error,
+                extra=f" accounts={accounts}",
+            )
+        )
+    return lines
+
+
+def _account_metadata_broken_line(*, instance_name: str, kind: str, path: Path, error: str, extra: str = "") -> str:
+    return (
+        f"account_memory_metadata={instance_name} status=broken item={kind} "
+        f"path={path}{extra} error={redact_status_text(error)}"
+    )
 
 
 def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> str:

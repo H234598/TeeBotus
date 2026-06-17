@@ -253,8 +253,30 @@ def test_account_memory_index_health_uses_database_when_profile_envelope_is_stal
     lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
 
     assert lines == [
-        f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed"
+        f"account_memory_metadata=Demo status=broken item=accounts_dir path={tmp_path / 'instances' / 'Demo' / 'data' / 'accounts' / 'accounts'} accounts={account_id[:12]} error=encrypted envelope authentication failed",
+        f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed",
+        f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"',
     ]
+
+
+def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda: StaticSecretProvider(b"x" * 32))
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Demo", secret_provider=StaticSecretProvider(b"y" * 32))
+    account_id = bad_store.resolve_or_create_account("telegram:user:111", display_label="Stale")
+    bad_store.vault.write_json(accounts_root / "Account_Secrets.json", {"schema_version": 1, "secrets": {}})
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert any("account_memory_metadata=Demo status=broken item=account_index" in line for line in lines)
+    assert any("account_memory_metadata=Demo status=broken item=identity_mapping" in line for line in lines)
+    assert any("account_memory_metadata=Demo status=broken item=account_secrets" in line for line in lines)
+    assert any(f"account_memory_metadata=Demo status=broken item=accounts_dir" in line and f"accounts={account_id[:12]}" in line for line in lines)
+    assert any(line == f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed" for line in lines)
+    assert lines[-1] == (
+        f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"'
+    )
 
 
 def test_account_memory_index_health_suppresses_expected_database_decryption_logs(tmp_path: Path, monkeypatch, caplog) -> None:
