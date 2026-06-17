@@ -1316,10 +1316,38 @@ def _markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"benchmark markdown artifact is empty: {path}")
     if "# TeeBotus Benchmarks" not in text:
         errors.append(f"benchmark markdown artifact lacks heading: {path}")
+    for marker in (
+        "- python:",
+        "- platform:",
+        "- machine:",
+        "- cpu_count:",
+        "- quick: True",
+        "- include_live: False",
+    ):
+        if marker not in text:
+            errors.append(f"benchmark markdown artifact lacks context marker {marker!r}: {path}")
+    if "## Dependencies" not in text:
+        errors.append(f"benchmark markdown artifact lacks dependencies section: {path}")
+    if "| package | version | status |" not in text:
+        errors.append(f"benchmark markdown artifact lacks dependencies table: {path}")
     if "## Results" not in text:
         errors.append(f"benchmark markdown artifact lacks results section: {path}")
+    if "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" not in text:
+        errors.append(f"benchmark markdown artifact lacks results table: {path}")
+    if "## Stable Backend Rankings" not in text:
+        errors.append(f"benchmark markdown artifact lacks stable backend rankings section: {path}")
+    if "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" not in text:
+        errors.append(f"benchmark markdown artifact lacks stable backend rankings table: {path}")
+    if "## Quality Gate" not in text:
+        errors.append(f"benchmark markdown artifact lacks quality gate section: {path}")
+    if "- status: ok" not in text:
+        errors.append(f"benchmark markdown artifact lacks ok quality/regression status: {path}")
     if "## Regression Check" not in text:
         errors.append(f"benchmark markdown artifact lacks regression section: {path}")
+    if "Die Rangliste dokumentiert Messwerte nur" not in text:
+        errors.append(f"benchmark markdown artifact lacks no-auto-switching note: {path}")
+    if "Standard-Benchmarks nutzen keine echten Provider-Calls und keine Netzsendung." not in text:
+        errors.append(f"benchmark markdown artifact lacks no-live-calls note: {path}")
     if _artifact_text_contains_secret(text):
         errors.append(f"benchmark markdown artifact contains secret-looking content: {path}")
     return errors

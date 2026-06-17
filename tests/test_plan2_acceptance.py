@@ -836,14 +836,12 @@ def test_plan2_acceptance_runner_validates_benchmark_artifacts(tmp_path: Path, m
 
     def fake_run(argv, cwd, check, **kwargs):  # noqa: ANN001, ARG001
         calls.append(tuple(argv))
-        markdown_path.write_text(
-            "# TeeBotus Benchmarks\n\n## Results\n\nok\n\n## Regression Check\n\n- status: not_configured\n",
-            encoding="utf-8",
-        )
-        json_path.write_text(
-            json.dumps(_valid_benchmark_payload()),
-            encoding="utf-8",
-        )
+        payload = _valid_benchmark_payload()
+        payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+        from TeeBotus.benchmarks.reporting import render_markdown
+
+        markdown_path.write_text(render_markdown(payload), encoding="utf-8")
+        json_path.write_text(json.dumps(payload), encoding="utf-8")
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setattr(check_plan2_acceptance.subprocess, "run", fake_run)
@@ -2311,6 +2309,36 @@ def test_benchmark_artifact_validation_rejects_secret_leaks(tmp_path: Path) -> N
 
     assert any("benchmark markdown artifact contains secret-looking content" in error for error in markdown_errors)
     assert any("benchmark JSON artifact contains secret-looking content" in error for error in json_errors)
+
+
+def test_benchmark_markdown_artifact_validation_accepts_rendered_report(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+    from TeeBotus.benchmarks.suite import run_benchmarks
+
+    markdown_path = tmp_path / "bench.md"
+    suite = run_benchmarks(entries=1, iterations=1, quick=True)
+    markdown_path.write_text(render_markdown(suite), encoding="utf-8")
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert errors == []
+
+
+def test_benchmark_markdown_artifact_validation_requires_complete_report_sections(tmp_path: Path) -> None:
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(
+        "# TeeBotus Benchmarks\n\n## Results\n\n## Regression Check\n",
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert any("lacks context marker '- python:'" in error for error in errors)
+    assert any("lacks dependencies section" in error for error in errors)
+    assert any("lacks results table" in error for error in errors)
+    assert any("lacks stable backend rankings section" in error for error in errors)
+    assert any("lacks quality gate section" in error for error in errors)
+    assert any("lacks no-live-calls note" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_secret_lists_in_json(tmp_path: Path) -> None:
