@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import uuid
@@ -23,7 +24,7 @@ from TeeBotus.runtime.qdrant import (
 
 
 QDRANT_MEMORY_PAYLOAD_SCHEMA = "teebotus_qdrant_memory_v1"
-QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 2
+QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -112,7 +113,10 @@ class QdrantMemoryIndex:
             memory_id = str(payload.get("memory_id") or "").strip()
             if not memory_id:
                 continue
-            if payload.get("account_id") != account or payload.get("instance_name") != instance:
+            if (
+                payload.get("account_scope") != _account_scope(instance_name=instance, account_id=account)
+                or payload.get("instance_name") != instance
+            ):
                 continue
             try:
                 score = float(item.get("score", 0.0))
@@ -138,6 +142,11 @@ class QdrantMemoryIndex:
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
             {"filter": _qdrant_scope_filter(instance_name=instance, account_id=account)},
+        )
+        self._request_json(
+            "POST",
+            f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
+            {"filter": _qdrant_legacy_account_filter(instance_name=instance, account_id=account)},
         )
 
     def rebuild(self, *, account_store: AccountStore, instance_name: str, account_id: str) -> tuple[str, ...]:
@@ -205,7 +214,7 @@ def _memory_payload(
         "schema": QDRANT_MEMORY_PAYLOAD_SCHEMA,
         "schema_version": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION,
         "instance_name": instance_name,
-        "account_id": account_id,
+        "account_scope": _account_scope(instance_name=instance_name, account_id=account_id),
         "memory_id": memory_id,
         "embedding_model": str(embedding_model or ""),
         "embedding_dimensions": int(embedding_dimensions),
@@ -247,7 +256,10 @@ def _qdrant_scope_filter(
 ) -> dict[str, Any]:
     must = [
         {"key": "instance_name", "match": {"value": instance_name}},
-        {"key": "account_id", "match": {"value": account_id}},
+        {
+            "key": "account_scope",
+            "match": {"value": _account_scope(instance_name=instance_name, account_id=account_id)},
+        },
     ]
     if schema_version is not None:
         try:
@@ -268,11 +280,27 @@ def _qdrant_scope_filter(
     return {"must": must}
 
 
+def _qdrant_legacy_account_filter(*, instance_name: str, account_id: str) -> dict[str, Any]:
+    return {
+        "must": [
+            {"key": "instance_name", "match": {"value": instance_name}},
+            {"key": "account_id", "match": {"value": account_id}},
+        ]
+    }
+
+
 def _memory_id(entry: dict[str, Any]) -> str:
     memory_id = str(entry.get("id") or "").strip()
     if not memory_id:
         raise ValueError("memory entry must contain id")
     return memory_id
+
+
+def _account_scope(*, instance_name: str, account_id: str) -> str:
+    instance = _validate_instance_name(instance_name)
+    account = validate_sha512_token(account_id, field_name="account_id")
+    source = f"teebotus-qdrant-account-scope:v1:{instance}:{account}"
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 def _validate_instance_name(value: str) -> str:

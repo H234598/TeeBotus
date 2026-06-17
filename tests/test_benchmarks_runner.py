@@ -276,6 +276,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert qdrant_memory["details"]["schema_versions"] == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
     assert qdrant_memory["details"]["cleartext_in_payload"] is False
     assert qdrant_memory["details"]["messenger_identity_in_payload"] is False
+    assert qdrant_memory["details"]["account_id_in_payload"] is False
     assert qdrant_memory["details"]["content_hash_in_payload"] is False
     assert qdrant_memory["details"]["sensitive_metadata_in_payload"] is False
     assert qdrant_memory["details"]["network_calls"] == 0

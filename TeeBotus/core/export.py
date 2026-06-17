@@ -23,7 +23,7 @@ SEMANTIC_INDEX_EXPORT_NOTE = {
         "role": "optional rebuildable semantic search cache for account memory",
         "truth_store": "AccountStore",
         "exported_truth": "This export contains the AccountStore memory data, not Qdrant vectors.",
-        "qdrant_payload": "Qdrant stores memory IDs, vectors, scope/cache metadata, and schema_version only; no plaintext, clinical categories, timestamps, or content hashes.",
+        "qdrant_payload": "Qdrant stores memory IDs, vectors, instance scope, derived account_scope, embedding metadata, and schema_version only; no raw account_id, plaintext, clinical categories, timestamps, or content hashes.",
         "plaintext_policy": "Usermemory cleartext must stay in AccountStore and must not be stored in Qdrant.",
         "reset_behavior": "/reset_memorys deletes the account Qdrant cache first when semantic Qdrant search is active.",
         "rebuild_command": "teebotus-embedding --instances-dir <instances> --instance <instance> memory-rebuild",
