@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from TeeBotus.core.status import account_memory_index_health_lines
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 
 
 def test_package_entrypoint_exists_and_delegates_to_bot_main() -> None:
@@ -113,13 +114,20 @@ def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> Non
         user_memory_enabled=True,
         memory_search_semantic_enabled=True,
         memory_search_semantic_backend="qdrant",
+        memory_search_embedding_provider="hash",
+        memory_search_embedding_model=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
+        memory_search_embedding_dimensions=USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
     )
 
     assert bot._runtime_status_memory_index_line("Demo", instructions, qdrant_ok=False) == (
-        "memory_index=Demo backend=keyword status=ready semantic=unavailable"
+        "memory_index=Demo backend=keyword status=ready semantic=unavailable "
+        f"embedding_provider=hash embedding_model={USER_MEMORY_QDRANT_EMBEDDING_MODEL} "
+        f"embedding_dimensions={USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS}"
     )
     assert bot._runtime_status_memory_index_line("Demo", instructions, qdrant_ok=True) == (
-        "memory_index=Demo backend=keyword status=ready semantic=ready"
+        "memory_index=Demo backend=keyword status=ready semantic=ready "
+        f"embedding_provider=hash embedding_model={USER_MEMORY_QDRANT_EMBEDDING_MODEL} "
+        f"embedding_dimensions={USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS}"
     )
 
 

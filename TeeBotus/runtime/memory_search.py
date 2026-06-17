@@ -121,7 +121,7 @@ class MemorySearchService:
                     limit=self.config.semantic_limit,
                     exclude_ids=excluded,
                 )
-            except (QdrantError, ValueError) as exc:
+            except (QdrantError, ValueError, RuntimeError) as exc:
                 semantic_error = str(exc)
                 semantic_candidates = ()
         merged = merge_memory_candidates(

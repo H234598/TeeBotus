@@ -297,6 +297,11 @@ class InstructionTests(unittest.TestCase):
             - local_limit: 3
             - semantic_limit: 5
             - qdrant_url: http://localhost:6334
+            - embedding_provider: tei
+            - embedding_model: intfloat/multilingual-e5-small
+            - embedding_dimensions: 384
+            - embedding_endpoint: http://127.0.0.1:8080/embeddings
+            - embedding_api_key_env: HF_TOKEN
             """
         )
 
@@ -305,6 +310,11 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.memory_search_local_limit, 3)
         self.assertEqual(instructions.memory_search_semantic_limit, 5)
         self.assertEqual(instructions.memory_search_qdrant_url, "http://localhost:6334")
+        self.assertEqual(instructions.memory_search_embedding_provider, "tei")
+        self.assertEqual(instructions.memory_search_embedding_model, "intfloat/multilingual-e5-small")
+        self.assertEqual(instructions.memory_search_embedding_dimensions, 384)
+        self.assertEqual(instructions.memory_search_embedding_endpoint, "http://127.0.0.1:8080/embeddings")
+        self.assertEqual(instructions.memory_search_embedding_api_key_env, "HF_TOKEN")
 
     def test_memory_search_settings_accept_prefixed_settings_keys(self) -> None:
         instructions = parse_instructions(
@@ -312,11 +322,15 @@ class InstructionTests(unittest.TestCase):
             ## Einstellungen
             - memory_search_semantic_enabled: true
             - memory_search_semantic_backend: qdrant
+            - memory_search_embedding_provider: local-hash
+            - memory_search_embedding_model: demo-model
             """
         )
 
         self.assertTrue(instructions.memory_search_semantic_enabled)
         self.assertEqual(instructions.memory_search_semantic_backend, "qdrant")
+        self.assertEqual(instructions.memory_search_embedding_provider, "local_hash")
+        self.assertEqual(instructions.memory_search_embedding_model, "demo-model")
 
     def test_render_template_uses_safe_placeholders(self) -> None:
         rendered = render_template(

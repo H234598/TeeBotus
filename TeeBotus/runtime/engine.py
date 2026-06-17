@@ -22,6 +22,7 @@ from TeeBotus.core.youtube import (
     _record_youtube_parser_miss,
     transcribe_youtube_video,
 )
+from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
@@ -1496,32 +1497,39 @@ def _select_account_memory(
         return AccountMemorySelection("", ())
     try:
         if _semantic_memory_search_enabled(instructions):
-            config = MemorySearchConfig(
-                semantic_enabled=True,
-                semantic_backend=instructions.memory_search_semantic_backend,
-                local_limit=max(1, instructions.memory_search_local_limit),
-                semantic_limit=max(1, instructions.memory_search_semantic_limit),
-            )
-            service = MemorySearchService(
-                account_store=account_store,
-                instance_name=account_store.instance_name,
-                config=config,
-                qdrant_index=QdrantMemoryIndex(url=instructions.memory_search_qdrant_url),
-            )
-            search_result = service.search(
-                account_id,
-                query_text,
-                limit=config.local_limit + config.semantic_limit,
-                exclude_ids=exclude_ids,
-            )
-            return account_store.select_structured_memory_by_ids(
-                account_id,
-                [candidate.memory_id for candidate in search_result.candidates],
-                max_prompt_chars=max_prompt_chars if max_prompt_chars is not None else instructions.user_memory_max_prompt_chars,
-                max_entry_chars=instructions.user_memory_max_entry_chars,
-                exclude_ids=exclude_ids,
-                mark_accessed=False,
-            )
+            try:
+                config = MemorySearchConfig(
+                    semantic_enabled=True,
+                    semantic_backend=instructions.memory_search_semantic_backend,
+                    local_limit=max(1, instructions.memory_search_local_limit),
+                    semantic_limit=max(1, instructions.memory_search_semantic_limit),
+                )
+                service = MemorySearchService(
+                    account_store=account_store,
+                    instance_name=account_store.instance_name,
+                    config=config,
+                    qdrant_index=QdrantMemoryIndex(
+                        url=instructions.memory_search_qdrant_url,
+                        embedding_provider=_memory_search_embedding_provider(instructions),
+                    ),
+                )
+                search_result = service.search(
+                    account_id,
+                    query_text,
+                    limit=config.local_limit + config.semantic_limit,
+                    exclude_ids=exclude_ids,
+                )
+            except (QdrantError, ValueError, RuntimeError):
+                search_result = None
+            if search_result is not None:
+                return account_store.select_structured_memory_by_ids(
+                    account_id,
+                    [candidate.memory_id for candidate in search_result.candidates],
+                    max_prompt_chars=max_prompt_chars if max_prompt_chars is not None else instructions.user_memory_max_prompt_chars,
+                    max_entry_chars=instructions.user_memory_max_entry_chars,
+                    exclude_ids=exclude_ids,
+                    mark_accessed=False,
+                )
         return account_store.select_structured_memory(
             account_id,
             query_text=query_text,
@@ -1535,6 +1543,17 @@ def _select_account_memory(
 
 def _semantic_memory_search_enabled(instructions: BotInstructions) -> bool:
     return bool(instructions.memory_search_semantic_enabled and instructions.memory_search_semantic_backend == "qdrant")
+
+
+def _memory_search_embedding_provider(instructions: BotInstructions):
+    config = EmbeddingConfig(
+        provider=instructions.memory_search_embedding_provider,
+        model_name=instructions.memory_search_embedding_model,
+        dimensions=instructions.memory_search_embedding_dimensions,
+        endpoint=instructions.memory_search_embedding_endpoint,
+        api_key_env=instructions.memory_search_embedding_api_key_env,
+    )
+    return build_embedding_provider(config)
 
 
 def _delete_semantic_memory_index(account_store: AccountStore, account_id: str, instructions: BotInstructions) -> None:
@@ -1697,12 +1716,15 @@ def _maybe_index_semantic_memory_entry(
         entries = account_store.read_memory_entries_by_ids(account_id, [memory_id])
         if not entries:
             return
-        QdrantMemoryIndex(url=instructions.memory_search_qdrant_url).index_memory(
+        QdrantMemoryIndex(
+            url=instructions.memory_search_qdrant_url,
+            embedding_provider=_memory_search_embedding_provider(instructions),
+        ).index_memory(
             instance_name=account_store.instance_name,
             account_id=account_id,
             entry=entries[0],
         )
-    except (AccountStoreError, OSError, QdrantError, ValueError):
+    except (AccountStoreError, OSError, QdrantError, ValueError, RuntimeError):
         return
 
 

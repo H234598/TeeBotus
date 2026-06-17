@@ -8,7 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
+from TeeBotus.runtime.qdrant import (
+    QDRANT_BIBLIOTHEKAR_COLLECTION,
+    USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    USER_MEMORY_QDRANT_EMBEDDING_MODEL,
+)
 
 LOGGER = logging.getLogger("TeeBotus.instructions")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -184,6 +188,11 @@ class BotInstructions:
     memory_search_local_limit: int = 8
     memory_search_semantic_limit: int = 8
     memory_search_qdrant_url: str = "http://127.0.0.1:6333"
+    memory_search_embedding_provider: str = "hash"
+    memory_search_embedding_model: str = USER_MEMORY_QDRANT_EMBEDDING_MODEL
+    memory_search_embedding_dimensions: int = USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
+    memory_search_embedding_endpoint: str = ""
+    memory_search_embedding_api_key_env: str = ""
     bibliothekar_enabled: bool = True
     bibliothekar_backend: str = "local"
     bibliothekar_collection: str = QDRANT_BIBLIOTHEKAR_COLLECTION
@@ -866,6 +875,19 @@ def _apply_memory_search_setting(instructions: BotInstructions, key: str, value:
         instructions.memory_search_semantic_limit = _parse_required_int(value, default=instructions.memory_search_semantic_limit)
     elif normalized in {"qdrant_url", "url", "base_url"}:
         instructions.memory_search_qdrant_url = value.strip() or instructions.memory_search_qdrant_url
+    elif normalized in {"embedding_provider", "provider", "embedding_backend"}:
+        instructions.memory_search_embedding_provider = _normalize_key(value) or instructions.memory_search_embedding_provider
+    elif normalized in {"embedding_model", "model", "model_name"}:
+        instructions.memory_search_embedding_model = value.strip() or instructions.memory_search_embedding_model
+    elif normalized in {"embedding_dimensions", "dimensions", "vector_size"}:
+        instructions.memory_search_embedding_dimensions = _parse_required_int(
+            value,
+            default=instructions.memory_search_embedding_dimensions,
+        )
+    elif normalized in {"embedding_endpoint", "endpoint", "embedding_url"}:
+        instructions.memory_search_embedding_endpoint = value.strip()
+    elif normalized in {"embedding_api_key_env", "api_key_env", "embedding_token_env"}:
+        instructions.memory_search_embedding_api_key_env = value.strip()
 
 
 def _apply_codex_setting(instructions: BotInstructions, key: str, value: str) -> None:

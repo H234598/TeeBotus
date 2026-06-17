@@ -364,7 +364,13 @@ def _runtime_status_memory_index_line(instance_name: str, instructions: Any | No
         semantic = "ready" if qdrant_ok else "unavailable"
     else:
         semantic = "unsupported"
-    return f"memory_index={instance} backend=keyword status={status} semantic={semantic}"
+    detail = f"memory_index={instance} backend=keyword status={status} semantic={semantic}"
+    if semantic_enabled and semantic_backend == "qdrant":
+        provider = str(getattr(instructions, "memory_search_embedding_provider", "") or "").strip() or "unknown"
+        model = str(getattr(instructions, "memory_search_embedding_model", "") or "").strip() or "unknown"
+        dimensions = str(getattr(instructions, "memory_search_embedding_dimensions", "") or "").strip() or "unknown"
+        detail += f" embedding_provider={provider} embedding_model={model} embedding_dimensions={dimensions}"
+    return detail
 
 
 def _runtime_status_missing_channel_slot_lines(channels: Sequence[str], instance: Any) -> tuple[str, ...]:

@@ -204,6 +204,23 @@ def test_memory_search_service_falls_back_to_local_when_qdrant_fails(tmp_path) -
     assert result.candidates[0].sources == ("local",)
 
 
+def test_memory_search_service_falls_back_to_local_when_embedding_provider_fails(tmp_path) -> None:
+    store, account_id = _store_with_entries(tmp_path)
+    service = MemorySearchService(
+        account_store=store,
+        instance_name="Depressionsbot",
+        config=MemorySearchConfig(semantic_enabled=True, semantic_backend="qdrant"),
+        qdrant_index=_FailingRuntimeSemanticIndex(),
+    )
+
+    result = service.search(account_id, "Schlaf", limit=2)
+
+    assert result.semantic_used is True
+    assert "embedding endpoint down" in result.semantic_error
+    assert result.entries[0]["id"] == "mem_sleep"
+    assert result.candidates[0].sources == ("local",)
+
+
 def test_account_store_read_memory_entries_by_ids_preserves_requested_order(tmp_path) -> None:
     store, account_id = _store_with_entries(tmp_path)
 
@@ -225,6 +242,11 @@ class _FakeSemanticIndex:
 class _FailingSemanticIndex:
     def search(self, **_kwargs):
         raise QdrantError("qdrant down")
+
+
+class _FailingRuntimeSemanticIndex:
+    def search(self, **_kwargs):
+        raise RuntimeError("embedding endpoint down")
 
 
 def _store_with_entries(tmp_path) -> tuple[AccountStore, str]:

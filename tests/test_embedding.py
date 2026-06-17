@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from TeeBotus.embedding import FakeEmbeddingProvider, HFEmbeddingProvider, KeywordRerankerProvider, check_embedding_provider
-from TeeBotus.embedding.config import EmbeddingConfig
+from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
 from TeeBotus.embedding.qdrant_bibliothekar import QdrantBibliothekarIndex
 from TeeBotus.embedding.qdrant_memory import QdrantMemoryIndex
 
@@ -94,3 +96,37 @@ def test_embedding_config_and_qdrant_wrapper_imports() -> None:
     assert config.dimensions == 384
     assert QdrantMemoryIndex.__name__ == "QdrantMemoryIndex"
     assert QdrantBibliothekarIndex.__name__ == "QdrantBibliothekarIndex"
+
+
+def test_build_embedding_provider_keeps_local_hash_provider_offline() -> None:
+    provider = build_embedding_provider(
+        EmbeddingConfig(provider="local-hash", model_name="teebotus-account-memory-hash", dimensions=16)
+    )
+
+    assert isinstance(provider, FakeEmbeddingProvider)
+    assert provider.model_name == "teebotus-account-memory-hash"
+    assert len(provider.embed_text("Schlafroutine")) == 16
+
+
+def test_build_embedding_provider_builds_hf_provider_from_config_env() -> None:
+    provider = build_embedding_provider(
+        EmbeddingConfig(
+            provider="tei",
+            model_name="intfloat/multilingual-e5-small",
+            dimensions=384,
+            endpoint="http://127.0.0.1:8080/embeddings",
+            api_key_env="HF_TOKEN",
+        ),
+        env={"HF_TOKEN": "hf_TEST123456"},
+    )
+
+    assert isinstance(provider, HFEmbeddingProvider)
+    assert provider.model_name == "intfloat/multilingual-e5-small"
+    assert provider.dimensions == 384
+    assert provider.endpoint == "http://127.0.0.1:8080/embeddings"
+    assert provider.api_key == "hf_TEST123456"
+
+
+def test_build_embedding_provider_rejects_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="Unsupported embedding provider"):
+        build_embedding_provider(EmbeddingConfig(provider="cloud_magic"))

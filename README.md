@@ -665,6 +665,24 @@ lokale Suche Standard; semantische Qdrant-Suche ist nur mit
 - semantic_backend: qdrant
 - local_limit: 8
 - semantic_limit: 8
+- embedding_provider: hash
+- embedding_model: teebotus-account-memory-hash
+- embedding_dimensions: 64
+```
+
+`embedding_provider: hash` bleibt komplett lokal und ist der sichere Default.
+Fuer echte lokale semantische Embeddings kann derselbe Pfad explizit auf einen
+lokalen HF-/TEI-kompatiblen Endpoint zeigen:
+
+```markdown
+## Memory Search
+- semantic_enabled: true
+- semantic_backend: qdrant
+- embedding_provider: tei
+- embedding_model: intfloat/multilingual-e5-small
+- embedding_dimensions: 384
+- embedding_endpoint: http://127.0.0.1:8080/embeddings
+- embedding_api_key_env: HF_TOKEN
 ```
 
 Qdrant liefert dabei nur Memory-IDs. Entschluesselung, Rechtepruefung,
@@ -676,7 +694,8 @@ ist, bleibt der verschluesselte AccountStore-Eintrag trotzdem die Wahrheit.
 Qdrant-Cache fuer den Account und danach den lokalen AccountStore; wenn der
 Cache nicht geloescht werden kann, wird kein erfolgreicher Reset gemeldet.
 `--runtime-status` meldet den Pfad als `memory_index=<Instanz> backend=keyword
-status=... semantic=...`.
+status=... semantic=... embedding_provider=... embedding_model=...
+embedding_dimensions=...`.
 Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt:
 
 ```bash
