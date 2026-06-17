@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -15,6 +16,14 @@ from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+_BENCHMARK_CORE_SPEC = importlib.util.spec_from_file_location(
+    "teebotus_benchmark_core_for_plan2_acceptance",
+    REPO_ROOT / "TeeBotus" / "benchmarks" / "core.py",
+)
+if _BENCHMARK_CORE_SPEC is None or _BENCHMARK_CORE_SPEC.loader is None:
+    raise RuntimeError("Unable to load TeeBotus benchmark core constants.")
+_BENCHMARK_CORE = importlib.util.module_from_spec(_BENCHMARK_CORE_SPEC)
+_BENCHMARK_CORE_SPEC.loader.exec_module(_BENCHMARK_CORE)
 DEFAULT_BENCHMARK_MD = Path.home() / "Downloads" / "teebotus-benchmarks-latest.md"
 DEFAULT_BENCHMARK_JSON = Path.home() / "Downloads" / "teebotus-benchmarks-latest.json"
 DEFAULT_MEMORY_RECOVERY_JSON = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.json"
@@ -26,36 +35,13 @@ DEFAULT_LEGACY_REHEARSAL_MD = Path.home() / "Downloads" / "teebotus-legacy-impor
 DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehearsal")
 ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{128}")
 LEGACY_IMPORT_REPORT_MODES = frozenset({"dry-run", "apply", "rehearsal-apply", "apply-blocked"})
-REQUIRED_BENCHMARK_CATEGORIES = frozenset(
-    {
-        "account_memory",
-        "bibliothekar",
-        "database_fallback",
-        "gemini_free_tier",
-        "hf_pool",
-        "langgraph_flows",
-        "llm_router",
-        "mcp_tools",
-        "messenger_adapters",
-        "proactive_agent",
-        "pydantic_ai",
-        "qdrant",
-        "retrieval",
-        "source_harvester",
-        "status_doctor",
-        "transcription_youtube",
-    }
-)
-REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
-    {
-        "account_memory",
-        "bibliothekar",
-        "langgraph_flows",
-        "retrieval",
-        "transcription_youtube",
-    }
-)
-REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
+REQUIRED_BENCHMARK_CATEGORIES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_CATEGORIES
+REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES
+REQUIRED_BENCHMARK_NAME_CATEGORIES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_NAME_CATEGORIES
+REQUIRED_BENCHMARK_NAMES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_NAMES
+REQUIRED_BENCHMARK_RANKING_CATEGORIES = _BENCHMARK_CORE.REQUIRED_BENCHMARK_RANKING_CATEGORIES
+STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = _BENCHMARK_CORE.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS
+build_benchmark_quality_gate = _BENCHMARK_CORE.build_quality_gate
 REQUIRED_BIBLIOTHEKAR_BENCHMARK_NAMES = frozenset(
     {
         "bibliothekar_local_query",
@@ -106,7 +92,6 @@ REQUIRED_PYDANTIC_DECISION_SCHEMAS = frozenset(
         "YouTubeOptionsDecision",
     }
 )
-STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset({"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"})
 REQUIRED_BENCHMARK_CONTEXT_KEYS = frozenset({"python", "platform", "machine", "cpu_count", "dependencies"})
 RUNTIME_STATUS_SECRET_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
@@ -1458,6 +1443,11 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
                 errors.append(f"{prefix}benchmark rankings missing required categories: {', '.join(missing_rankings)}")
             successful_results = _successful_benchmark_results_by_name(results)
             errors.extend(_benchmark_ranking_errors(rankings, successful_results=successful_results, prefix=prefix))
+    if isinstance(results, list) and isinstance(comparisons, dict):
+        computed_quality_gate = build_benchmark_quality_gate(results, comparisons=comparisons, quick=True, include_live=False)
+        if computed_quality_gate.get("ok") is not True:
+            for error in computed_quality_gate.get("errors", []):
+                errors.append(f"{prefix}computed quality_gate: {error}")
     regression = payload.get("regression")
     if not isinstance(regression, dict):
         errors.append(f"{prefix}regression must be an object")

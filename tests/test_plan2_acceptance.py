@@ -275,6 +275,31 @@ def _valid_benchmark_payload() -> dict:
             },
         }
     )
+    existing_names = {str(result.get("name") or "") for result in payload["results"]}
+    for name, category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_NAME_CATEGORIES.items()):
+        if name in existing_names:
+            continue
+        payload["results"].append(
+            {
+                "name": name,
+                "category": category,
+                "ok": True,
+                "mode": "local",
+                "iterations": 1,
+                "total_ms": 1.0,
+                "throughput_ops_s": 100.0,
+                "errors": 0,
+                "payload_bytes": 1,
+                "index_bytes": 1,
+                "details": {
+                    "network_calls": 0,
+                    "openai_calls": 0,
+                    "provider_calls": 0,
+                    "remote_calls": 0,
+                    "llm_calls": 0,
+                },
+            }
+        )
     payload["quality_gate"]["checked_results"] = len(payload["results"])
     required_fields = sorted(check_plan2_acceptance.REQUIRED_BIBLIOTHEKAR_CITATION_FIELDS)
     for result in payload["results"]:
@@ -520,6 +545,16 @@ def test_plan2_acceptance_with_legacy_opt_in_covers_all_repo_unit_tests() -> Non
     ]
 
     assert missing == []
+
+
+def test_plan2_acceptance_benchmark_constants_follow_core() -> None:
+    from TeeBotus.benchmarks import core as benchmark_core
+
+    assert check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_CATEGORIES
+    assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAME_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_NAME_CATEGORIES
+    assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAMES == benchmark_core.REQUIRED_BENCHMARK_NAMES
+    assert check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_RANKING_CATEGORIES
+    assert check_plan2_acceptance.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS == benchmark_core.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS
 
 
 def test_plan2_acceptance_can_skip_live_optional_checks(tmp_path: Path) -> None:
@@ -2412,6 +2447,16 @@ def test_benchmark_artifact_validation_requires_plan2_ranking_categories() -> No
 
     assert any("benchmark rankings missing required categories" in error for error in errors)
     assert any("bibliothekar" in error and "langgraph_flows" in error and "retrieval" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_rejects_required_name_with_wrong_category() -> None:
+    payload = _valid_benchmark_payload()
+    result = next(item for item in payload["results"] if item["name"] == "memory_jsonl")
+    result["category"] = "qdrant"
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("computed quality_gate: memory_jsonl category must be account_memory" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:

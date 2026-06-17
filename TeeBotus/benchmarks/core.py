@@ -25,42 +25,41 @@ REQUIRED_BENCHMARK_CATEGORIES = frozenset(
         "transcription_youtube",
     }
 )
-REQUIRED_BENCHMARK_NAMES = frozenset(
-    {
-        "memory_migration_jsonl_to_sqlite",
-        "memory_jsonl",
-        "memory_sqlite_projection",
-        "bibliothekar_local_query",
-        "bibliothekar_llamaindex_fake_query",
-        "bibliothekar_haystack_fake_query",
-        "hf_pool_quick_health",
-        "hf_pool_eval_matrix",
-        "qdrant_health_quick",
-        "qdrant_memory_index_quick",
-        "retrieval_embedding_reranker_matrix",
-        "retrieval_backend_haystack_fake",
-        "retrieval_backend_llamaindex_fake",
-        "retrieval_backend_local",
-        "source_harvester_quality_gate",
-        "source_harvester_promote_index_flow",
-        "llm_router_structured_decision",
-        "decision_fake_model",
-        "pydantic_structured_decisions",
-        "proactive_tool_plan_due_dispatch_gates",
-        "messenger_adapter_runtime_contracts",
-        "youtube_parser_local",
-        "youtube_local_job_queue_no_llm",
-        "youtube_local_pipeline_cache_no_openai",
-        "status_doctor_runtime_dependency_health",
-        "database_fallback_policy",
-        "gemini_free_tier_guard_cache_rotation",
-        "langgraph_bibliothekar_deep_query",
-        "langgraph_bibliothekar_linear",
-        "langgraph_bibliothekar_fake_installed",
-        "langgraph_source_harvester_workflow",
-        "mcp_readonly_bibliothekar_and_memory_search",
-    }
-)
+REQUIRED_BENCHMARK_NAME_CATEGORIES = {
+    "memory_migration_jsonl_to_sqlite": "account_memory",
+    "memory_jsonl": "account_memory",
+    "memory_sqlite_projection": "account_memory",
+    "bibliothekar_local_query": "bibliothekar",
+    "bibliothekar_llamaindex_fake_query": "bibliothekar",
+    "bibliothekar_haystack_fake_query": "bibliothekar",
+    "hf_pool_quick_health": "hf_pool",
+    "hf_pool_eval_matrix": "hf_pool",
+    "qdrant_health_quick": "qdrant",
+    "qdrant_memory_index_quick": "qdrant",
+    "retrieval_embedding_reranker_matrix": "retrieval",
+    "retrieval_backend_haystack_fake": "retrieval",
+    "retrieval_backend_llamaindex_fake": "retrieval",
+    "retrieval_backend_local": "retrieval",
+    "source_harvester_quality_gate": "source_harvester",
+    "source_harvester_promote_index_flow": "source_harvester",
+    "llm_router_structured_decision": "llm_router",
+    "decision_fake_model": "pydantic_ai",
+    "pydantic_structured_decisions": "pydantic_ai",
+    "proactive_tool_plan_due_dispatch_gates": "proactive_agent",
+    "messenger_adapter_runtime_contracts": "messenger_adapters",
+    "youtube_parser_local": "transcription_youtube",
+    "youtube_local_job_queue_no_llm": "transcription_youtube",
+    "youtube_local_pipeline_cache_no_openai": "transcription_youtube",
+    "status_doctor_runtime_dependency_health": "status_doctor",
+    "database_fallback_policy": "database_fallback",
+    "gemini_free_tier_guard_cache_rotation": "gemini_free_tier",
+    "langgraph_bibliothekar_deep_query": "langgraph_flows",
+    "langgraph_bibliothekar_linear": "langgraph_flows",
+    "langgraph_bibliothekar_fake_installed": "langgraph_flows",
+    "langgraph_source_harvester_workflow": "langgraph_flows",
+    "mcp_readonly_bibliothekar_and_memory_search": "mcp_tools",
+}
+REQUIRED_BENCHMARK_NAMES = frozenset(REQUIRED_BENCHMARK_NAME_CATEGORIES)
 REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -92,14 +91,19 @@ def build_quality_gate(
     missing_categories = sorted(REQUIRED_BENCHMARK_CATEGORIES - categories)
     if missing_categories:
         errors.append(f"missing required benchmark categories: {', '.join(missing_categories)}")
-    successful_names = {
-        str(item.get("name") or "")
+    successful_results = {
+        str(item.get("name") or ""): item
         for item in results
-        if isinstance(item, dict) and item.get("ok") and not item.get("skipped")
+        if isinstance(item, dict) and item.get("ok") and not item.get("skipped") and str(item.get("name") or "")
     }
+    successful_names = set(successful_results)
     missing_names = sorted(REQUIRED_BENCHMARK_NAMES - successful_names)
     if missing_names:
         errors.append(f"missing required benchmark results: {', '.join(missing_names)}")
+    for name, expected_category in sorted(REQUIRED_BENCHMARK_NAME_CATEGORIES.items()):
+        result = successful_results.get(name)
+        if result is not None and str(result.get("category") or "") != expected_category:
+            errors.append(f"{name} category must be {expected_category}")
 
     rankings = comparisons.get("stable_backend_rankings") if isinstance(comparisons, dict) else None
     ranking_categories = {
@@ -144,7 +148,9 @@ def build_quality_gate(
             errors.append(f"{name} errors must be 0 for ok standard benchmark results")
         if not _is_positive_integer(item.get("iterations")):
             errors.append(f"{name} iterations must be a positive integer")
-        if int(item.get("payload_bytes") or 0) <= 0 and int(item.get("index_bytes") or 0) <= 0:
+        has_payload_size = _is_nonnegative_number(item.get("payload_bytes")) and float(item.get("payload_bytes") or 0.0) > 0
+        has_index_size = _is_nonnegative_number(item.get("index_bytes")) and float(item.get("index_bytes") or 0.0) > 0
+        if not has_payload_size and not has_index_size:
             errors.append(f"{name} must report payload_bytes or index_bytes")
         details = item.get("details")
         if not isinstance(details, dict) or not details:
@@ -322,6 +328,7 @@ __all__ = [
     "BenchmarkResult",
     "REQUIRED_BENCHMARK_CATEGORIES",
     "REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES",
+    "REQUIRED_BENCHMARK_NAME_CATEGORIES",
     "REQUIRED_BENCHMARK_NAMES",
     "REQUIRED_BENCHMARK_RANKING_CATEGORIES",
     "STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS",

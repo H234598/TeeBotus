@@ -51,6 +51,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
     assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
+    assert benchmark_module.REQUIRED_BENCHMARK_NAME_CATEGORIES is core.REQUIRED_BENCHMARK_NAME_CATEGORIES
     assert benchmark_module._benchmark_adapter_contracts is adapters.benchmark_adapter_contracts
     assert benchmark_module._benchmark_bibliothekar is bibliothekar.benchmark_bibliothekar_local_query
     assert benchmark_module._benchmark_bibliothekar_llamaindex_fake is bibliothekar.benchmark_bibliothekar_llamaindex_fake_query
@@ -566,6 +567,45 @@ def test_benchmark_quality_gate_requires_specific_plan2_benchmark_names() -> Non
 
     assert quality_gate["ok"] is False
     assert any("missing required benchmark results: youtube_local_pipeline_cache_no_openai" == error for error in quality_gate["errors"])
+
+
+def test_benchmark_quality_gate_rejects_required_name_category_mismatch() -> None:
+    base_result = {
+        "ok": True,
+        "skipped": False,
+        "iterations": 1,
+        "total_ms": 1.0,
+        "throughput_ops_s": 1.0,
+        "errors": 0,
+        "payload_bytes": 1,
+        "index_bytes": 0,
+        "mode": "local",
+        "details": {
+            "network_calls": 0,
+            "openai_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+            "llm_calls": 0,
+        },
+    }
+    results = [
+        {
+            **base_result,
+            "name": name,
+            "category": "qdrant" if name == "memory_jsonl" else category,
+        }
+        for name, category in sorted(benchmark_module.REQUIRED_BENCHMARK_NAME_CATEGORIES.items())
+    ]
+
+    quality_gate = benchmark_module._build_quality_gate(
+        results,
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "memory_jsonl category must be account_memory" in quality_gate["errors"]
 
 
 def test_stable_backend_ranking_excludes_erroring_candidates() -> None:
