@@ -697,12 +697,13 @@ def _merge_entries(
     for entry in legacy_entries:
         normalized = dict(entry)
         memory_id = str(normalized.get("id") or "").strip()
-        legacy_key = (instance_name, legacy_user_id, memory_id)
-        if memory_id and legacy_key in existing_legacy_keys:
+        legacy_import_key = _legacy_memory_import_key(normalized, memory_id)
+        legacy_key = (instance_name, legacy_user_id, legacy_import_key)
+        if legacy_key in existing_legacy_keys:
             continue
         target_id = memory_id
         if not target_id or target_id in existing_ids:
-            target_id = _scoped_legacy_memory_id(instance_name=instance_name, legacy_user_id=legacy_user_id, memory_id=memory_id)
+            target_id = _scoped_legacy_memory_id(instance_name=instance_name, legacy_user_id=legacy_user_id, memory_id=legacy_import_key)
             if target_id in existing_ids:
                 continue
             normalized["id"] = target_id
@@ -716,6 +717,7 @@ def _merge_entries(
                 "legacy_instance": instance_name,
                 "legacy_user_id": legacy_user_id,
                 "legacy_original_id": memory_id,
+                "legacy_import_key": legacy_import_key,
             }
         else:
             normalized["source"] = {
@@ -723,6 +725,7 @@ def _merge_entries(
                 "legacy_instance": instance_name,
                 "legacy_user_id": legacy_user_id,
                 "legacy_original_id": memory_id,
+                "legacy_import_key": legacy_import_key,
             }
         new_entries.append(normalized)
         existing_ids.add(target_id)
@@ -783,10 +786,18 @@ def _existing_legacy_import_keys(entries: Iterable[dict[str, Any]]) -> set[tuple
             continue
         instance_name = str(source.get("legacy_instance") or "").strip()
         legacy_user_id = str(source.get("legacy_user_id") or "").strip()
-        original_id = str(source.get("legacy_original_id") or entry.get("id") or "").strip()
-        if instance_name and legacy_user_id and original_id:
-            keys.add((instance_name, legacy_user_id, original_id))
+        import_key = str(source.get("legacy_import_key") or source.get("legacy_original_id") or entry.get("id") or "").strip()
+        if instance_name and legacy_user_id and import_key:
+            keys.add((instance_name, legacy_user_id, import_key))
     return keys
+
+
+def _legacy_memory_import_key(entry: dict[str, Any], memory_id: str) -> str:
+    if memory_id:
+        return memory_id
+    payload = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return f"missing_id_{digest[:32]}"
 
 
 def _scoped_legacy_memory_id(*, instance_name: str, legacy_user_id: str, memory_id: str) -> str:
