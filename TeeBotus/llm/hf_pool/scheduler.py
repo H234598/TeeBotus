@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from fractions import Fraction
 from typing import Iterable, Mapping
 
 from TeeBotus.llm.hf_pool.config import HFPool, HFPoolConfig
@@ -44,7 +45,7 @@ def select_target(
         raise HFPoolUnavailable(f"pool {pool.name} has no enabled targets for purpose {purpose_name}")
     missing_key = 0
     cooldown = 0
-    for target in sorted(candidates, key=lambda item: item.weight, reverse=True):
+    for target in _ordered_weighted_candidates(candidates, state):
         api_key = source.get(target.api_key_env, "").strip() if target.api_key_env else ""
         if target.api_key_env and not api_key:
             missing_key += 1
@@ -58,6 +59,24 @@ def select_target(
     if cooldown and missing_key + cooldown == len(candidates):
         raise HFPoolUnavailable(f"pool {pool.name} has all configured targets in cooldown")
     raise HFPoolUnavailable(f"pool {pool.name} has no usable targets")
+
+
+def _ordered_weighted_candidates(candidates: list[HFPoolTarget], state: HFPoolRuntimeState | None) -> list[HFPoolTarget]:
+    indexed = list(enumerate(candidates))
+    indexed.sort(key=lambda item: _weighted_candidate_key(item[0], item[1], state))
+    return [target for _index, target in indexed]
+
+
+def _weighted_candidate_key(index: int, target: HFPoolTarget, state: HFPoolRuntimeState | None) -> tuple[Fraction, int, int]:
+    weight = max(1, _int_value(target.weight, default=1))
+    attempts = _target_attempt_count(target.name, state)
+    return Fraction(attempts + 1, weight), -weight, index
+
+
+def _target_attempt_count(target_name: str, state: HFPoolRuntimeState | None) -> int:
+    if state is None:
+        return 0
+    return max(0, _int_value(state.successes.get(target_name), default=0)) + max(0, _int_value(state.failures.get(target_name), default=0))
 
 
 def _target_in_cooldown(target: HFPoolTarget, state: HFPoolRuntimeState | None, *, now: datetime | None = None) -> bool:
@@ -76,3 +95,10 @@ def _target_in_cooldown(target: HFPoolTarget, state: HFPoolRuntimeState | None, 
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
     return parsed > current
+
+
+def _int_value(value: object, *, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default

@@ -96,6 +96,26 @@ def test_hf_pool_scheduler_skips_excluded_targets_for_retry(tmp_path) -> None:
     assert scheduled.target.name == "low"
 
 
+def test_hf_pool_scheduler_uses_weighted_runtime_attempts(tmp_path) -> None:
+    config = _weighted_two_target_config(tmp_path)
+
+    still_due_high = select_target(
+        config,
+        purpose="normal_chat",
+        env={"HF_TOKEN_MAIN": "hf_fake_token"},
+        state=HFPoolRuntimeState(successes={"high": 9}),
+    )
+    due_low = select_target(
+        config,
+        purpose="normal_chat",
+        env={"HF_TOKEN_MAIN": "hf_fake_token"},
+        state=HFPoolRuntimeState(successes={"high": 10}),
+    )
+
+    assert still_due_high.target.name == "high"
+    assert due_low.target.name == "low"
+
+
 def test_hf_pool_scheduler_reports_all_configured_targets_in_cooldown(tmp_path) -> None:
     config = _weighted_two_target_config(tmp_path)
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
