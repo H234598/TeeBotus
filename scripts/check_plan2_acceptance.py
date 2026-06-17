@@ -1517,6 +1517,9 @@ def _hf_pool_eval_benchmark_detail_errors(details: Mapping[str, Any], *, result_
     for key in sorted(required_true_flags):
         if details.get(key) is not True:
             errors.append(f"{prefix}results[{result_index}] hf_pool {key} must be true")
+    cooldown_state_key = str(details.get("cooldown_state_key") or "")
+    if "/" not in cooldown_state_key or cooldown_state_key.startswith("/") or cooldown_state_key.endswith("/"):
+        errors.append(f"{prefix}results[{result_index}] hf_pool cooldown_state_key must be pool-scoped")
     if details.get("cooldown_network_calls") not in {0, 0.0}:
         errors.append(f"{prefix}results[{result_index}] hf_pool cooldown_network_calls must be 0")
     if not _is_positive_integer(details.get("mock_executor_calls")):

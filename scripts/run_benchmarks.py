@@ -1404,9 +1404,10 @@ def _benchmark_hf_pool_eval_matrix(*, iterations: int) -> BenchmarkResult:
             raise RuntimeError("cooldown benchmark must not open a network connection")
 
         cooldown_fallback = FallbackClient("fallback during cooldown")
+        cooldown_state_key = "default/bench_normal_chat"
         cooldown_state = HFPoolRuntimeState(
             cooldowns={
-                "bench_normal_chat": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+                cooldown_state_key: (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
             }
         )
         cooldown_provider = HFPoolProvider(
@@ -1449,6 +1450,7 @@ def _benchmark_hf_pool_eval_matrix(*, iterations: int) -> BenchmarkResult:
             "summarizer_terms": summary["terms"],
             "provider_failure_fallback": fallback_ok,
             "cooldown_fallback": cooldown_ok,
+            "cooldown_state_key": cooldown_state_key,
             "cooldown_network_calls": cooldown_network_calls,
             "mock_executor_calls": len(executor.calls),
             "network_calls": 0,

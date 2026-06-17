@@ -225,6 +225,7 @@ def _valid_benchmark_payload() -> dict:
                 "summarizer_faithful": True,
                 "provider_failure_fallback": True,
                 "cooldown_fallback": True,
+                "cooldown_state_key": "default/bench_normal_chat",
                 "cooldown_network_calls": 0,
                 "mock_executor_calls": 5,
             },
@@ -2313,6 +2314,7 @@ def test_benchmark_artifact_validation_requires_hf_pool_eval_details() -> None:
     hf_eval["details"]["purposes"] = ["normal_chat"]
     hf_eval["details"]["structured_decision_json_valid"] = False
     hf_eval["details"]["bibliothekar_citation_faithful"] = False
+    hf_eval["details"]["cooldown_state_key"] = "bench_normal_chat"
     hf_eval["details"]["cooldown_network_calls"] = 1
     hf_eval["details"]["mock_executor_calls"] = 0
 
@@ -2321,6 +2323,7 @@ def test_benchmark_artifact_validation_requires_hf_pool_eval_details() -> None:
     assert any("hf_pool purposes missing required evals" in error and "structured_decision" in error for error in errors)
     assert any("hf_pool structured_decision_json_valid must be true" in error for error in errors)
     assert any("hf_pool bibliothekar_citation_faithful must be true" in error for error in errors)
+    assert any("hf_pool cooldown_state_key must be pool-scoped" in error for error in errors)
     assert any("hf_pool cooldown_network_calls must be 0" in error for error in errors)
     assert any("hf_pool mock_executor_calls must be a positive integer" in error for error in errors)
 

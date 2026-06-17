@@ -167,6 +167,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert hf_eval["details"]["summarizer_faithful"] is True
     assert hf_eval["details"]["provider_failure_fallback"] is True
     assert hf_eval["details"]["cooldown_fallback"] is True
+    assert hf_eval["details"]["cooldown_state_key"] == "default/bench_normal_chat"
     assert hf_eval["details"]["cooldown_network_calls"] == 0
     assert hf_eval["details"]["network_calls"] == 0
     qdrant_health = next(result for result in suite["results"] if result["name"] == "qdrant_health_quick")
