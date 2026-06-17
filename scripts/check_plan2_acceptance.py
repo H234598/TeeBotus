@@ -25,6 +25,7 @@ DEFAULT_LEGACY_REHEARSAL_JSON = Path.home() / "Downloads" / "teebotus-legacy-imp
 DEFAULT_LEGACY_REHEARSAL_MD = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.md"
 DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehearsal")
 ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{128}")
+LEGACY_IMPORT_REPORT_MODES = frozenset({"dry-run", "apply", "rehearsal-apply", "apply-blocked"})
 REQUIRED_BENCHMARK_CATEGORIES = frozenset(
     {
         "account_memory",
@@ -1071,9 +1072,15 @@ def _legacy_import_markdown_artifact_errors(path: Path) -> list[str]:
 def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | None = None) -> list[str]:
     prefix = f"{path}: " if path is not None else ""
     errors: list[str] = []
+    if payload.get("schema_version") != 1:
+        errors.append(f"{prefix}legacy import report schema_version must be 1")
+    mode = str(payload.get("mode") or "").strip()
+    if mode not in LEGACY_IMPORT_REPORT_MODES:
+        errors.append(f"{prefix}legacy import report mode must be one of {', '.join(sorted(LEGACY_IMPORT_REPORT_MODES))}")
     apply_safety = payload.get("apply_safety")
     if not isinstance(apply_safety, Mapping):
-        return [f"{prefix}legacy import report missing apply_safety object"]
+        errors.append(f"{prefix}legacy import report missing apply_safety object")
+        return errors
     running_count = apply_safety.get("running_bot_process_count")
     if not _is_nonnegative_integer(running_count):
         errors.append(f"{prefix}apply_safety.running_bot_process_count must be a non-negative integer")
@@ -1102,6 +1109,21 @@ def _legacy_import_payload_errors(payload: Mapping[str, Any], *, path: Path | No
     options = payload.get("options") if isinstance(payload.get("options"), Mapping) else {}
     allow_running_bot = bool(options.get("allow_running_bot"))
     rehearsal_active = bool(options.get("rehearsal_active"))
+    if rehearsal_active and mode != "rehearsal-apply":
+        errors.append(f"{prefix}legacy import report mode must be rehearsal-apply when rehearsal_active is true")
+    if mode == "rehearsal-apply" and not rehearsal_active:
+        errors.append(f"{prefix}legacy import report mode rehearsal-apply requires rehearsal_active")
+    if mode == "apply-blocked":
+        if rehearsal_active:
+            errors.append(f"{prefix}legacy import report mode apply-blocked must not be rehearsal_active")
+        if allow_running_bot:
+            errors.append(f"{prefix}legacy import report mode apply-blocked must not set allow_running_bot")
+        if int(running_count or 0) <= 0:
+            errors.append(f"{prefix}legacy import report mode apply-blocked requires detected runtime processes")
+        if apply_safety.get("apply_allowed_now") is not False:
+            errors.append(f"{prefix}apply_safety.apply_allowed_now must be false for apply-blocked reports")
+        if apply_safety.get("apply_requires_stopped_bot") is not True:
+            errors.append(f"{prefix}apply_safety.apply_requires_stopped_bot must be true for apply-blocked reports")
     if rehearsal_active:
         if apply_safety.get("apply_allowed_now") is not True:
             errors.append(f"{prefix}apply_safety.apply_allowed_now must be true for rehearsal imports")

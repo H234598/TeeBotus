@@ -295,6 +295,32 @@ def _write_valid_legacy_import_markdown(path: Path) -> None:
     )
 
 
+def _write_apply_blocked_legacy_import_markdown(path: Path) -> None:
+    path.write_text(
+        "\n".join(
+            [
+                "# TeeBotus Legacy User Memory Import",
+                "",
+                "## Apply Safety",
+                "",
+                "- apply_allowed_now: `False`",
+                "- apply_requires_stopped_bot: `True`",
+                "- running_bot_process_count: `1`",
+                "",
+                "## Totals",
+                "",
+                "- entries_imported: `1`",
+                "",
+                "## Events",
+                "",
+                "- instance=`Demo` legacy_user=`123` account=`<new>` entries=`1` imported=`1` action=`would-import`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
 def _valid_legacy_import_event(
     *,
     instance: str = "Demo",
@@ -1443,6 +1469,166 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
 
     assert any("apply_allowed_now must be false" in error for error in errors)
     assert any("apply_requires_stopped_bot must be true" in error for error in errors)
+
+
+def test_legacy_import_artifact_validation_accepts_apply_blocked_mode(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    _write_apply_blocked_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply-blocked",
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [{"pid": "123", "cmdline": "python3 -m TeeBotus --all"}],
+                    "running_bot_process_count": 1,
+                    "apply_allowed_now": False,
+                    "apply_requires_stopped_bot": True,
+                    "message": "TeeBotus runtime processes are running; stop bot/proactive jobs before using --apply.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [_valid_legacy_import_event(account_created=True)],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert errors == []
+
+
+def test_legacy_import_artifact_validation_rejects_invalid_schema_and_mode(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 99,
+                "mode": "maybe",
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 0,
+                    "imported_sources": 0,
+                    "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("schema_version must be 1" in error for error in errors)
+    assert any("mode must be one of" in error for error in errors)
+
+
+def test_legacy_import_artifact_validation_rejects_apply_blocked_without_runtime_process(tmp_path: Path) -> None:
+    json_path = tmp_path / "import.json"
+    markdown_path = tmp_path / "import.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply-blocked",
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": False,
+                    "apply_requires_stopped_bot": True,
+                    "message": "TeeBotus runtime processes are running; stop bot/proactive jobs before using --apply.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 1,
+                    "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [_valid_legacy_import_event(account_created=True)],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("apply-blocked requires detected runtime processes" in error for error in errors)
 
 
 def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(tmp_path: Path) -> None:
