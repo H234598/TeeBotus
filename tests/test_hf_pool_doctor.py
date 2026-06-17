@@ -154,6 +154,44 @@ def test_hf_pool_doctor_reports_persistent_cooldown_without_live_check(tmp_path)
     assert "hf_TESTSECRET123" not in lines
 
 
+def test_hf_pool_doctor_keeps_state_scoped_to_pool(tmp_path):
+    path = _two_pool_same_target_config(tmp_path)
+    state_store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")
+    future = "2999-01-01T00:00:00+00:00"
+    state_store.save(
+        HFPoolRuntimeState(
+            cooldowns={"secondary/live_target": future},
+            failures={"secondary/live_target": 2},
+            successes={"default/live_target": 3},
+            avg_latency_ms={"default/live_target": 44.6, "secondary/live_target": 88.1},
+        )
+    )
+
+    default_health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        state_store=state_store,
+    )
+    secondary_health = check_hf_pool(
+        pool_name="secondary",
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        state_store=state_store,
+    )
+
+    assert default_health.status == "configured"
+    assert default_health.targets[0].status == "configured"
+    assert default_health.targets[0].successes == 3
+    assert default_health.targets[0].failures == 0
+    assert default_health.targets[0].avg_latency_ms == 45
+    assert secondary_health.status == "unavailable"
+    assert secondary_health.targets[0].status == "cooldown"
+    assert secondary_health.targets[0].cooldown_until == future
+    assert secondary_health.targets[0].successes == 0
+    assert secondary_health.targets[0].failures == 2
+    assert secondary_health.targets[0].avg_latency_ms == 88
+
+
 def test_hf_pool_doctor_cli_uses_state_db_without_live_network(monkeypatch, capsys, tmp_path):
     path = _enabled_config(tmp_path)
     state_db = tmp_path / "hf_pool_state.sqlite3"
@@ -381,6 +419,35 @@ def _enabled_config(tmp_path, *, required: dict[str, object] | None = None):
                             }
                         ],
                     }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _two_pool_same_target_config(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    target = {
+        "name": "live_target",
+        "api_key_env": "HF_TOKEN_MAIN",
+        "model": "Qwen/Qwen3-4B-Instruct-2507",
+        "purposes": ["normal_chat"],
+        "enabled": True,
+    }
+    path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "targets": [target],
+                    },
+                    "secondary": {
+                        "enabled": True,
+                        "targets": [target],
+                    },
                 }
             }
         ),

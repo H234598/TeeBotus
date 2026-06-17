@@ -20,7 +20,7 @@ from TeeBotus.llm.hf_pool.models_feed import (
 )
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore, hf_pool_state_lookup
 from TeeBotus.llm.hf_pool.targets import HFPoolTarget
 
 
@@ -87,7 +87,7 @@ def check_hf_pool(
         context_length = None
         supports_tools = None
         supports_structured_output = None
-        successes, failures, avg_latency_ms = _target_runtime_metrics(runtime_state, target.name)
+        successes, failures, avg_latency_ms = _target_runtime_metrics(runtime_state, pool.name, target.name)
         if not target.enabled:
             status = "disabled"
             error = ""
@@ -96,7 +96,7 @@ def check_hf_pool(
             status = "missing_key"
             error = f"env={target.api_key_env}"
             latency_ms = None
-        elif not live and runtime_state is not None and (cooldown_until := _active_cooldown_until(runtime_state, target.name)):
+        elif not live and runtime_state is not None and (cooldown_until := _active_cooldown_until(runtime_state, pool.name, target.name)):
             status = "cooldown"
             error = ""
             latency_ms = None
@@ -207,8 +207,8 @@ def _load_state(state_store: HFPoolRuntimeStateStore | None) -> tuple[HFPoolRunt
         return None, redact_hf_secrets(f"{type(exc).__name__}: {exc}")
 
 
-def _active_cooldown_until(state: HFPoolRuntimeState, target_name: str) -> str:
-    cooldown_until = str(state.cooldowns.get(target_name) or "").strip()
+def _active_cooldown_until(state: HFPoolRuntimeState, pool_name: str, target_name: str) -> str:
+    cooldown_until = str(hf_pool_state_lookup(state.cooldowns, pool_name, target_name, "") or "").strip()
     if not cooldown_until:
         return ""
     try:
@@ -222,12 +222,12 @@ def _active_cooldown_until(state: HFPoolRuntimeState, target_name: str) -> str:
     return cooldown_until
 
 
-def _target_runtime_metrics(state: HFPoolRuntimeState | None, target_name: str) -> tuple[int, int, int | None]:
+def _target_runtime_metrics(state: HFPoolRuntimeState | None, pool_name: str, target_name: str) -> tuple[int, int, int | None]:
     if state is None:
         return 0, 0, None
-    successes = max(0, int(state.successes.get(target_name, 0) or 0))
-    failures = max(0, int(state.failures.get(target_name, 0) or 0))
-    raw_latency = state.avg_latency_ms.get(target_name)
+    successes = max(0, int(hf_pool_state_lookup(state.successes, pool_name, target_name, 0) or 0))
+    failures = max(0, int(hf_pool_state_lookup(state.failures, pool_name, target_name, 0) or 0))
+    raw_latency = hf_pool_state_lookup(state.avg_latency_ms, pool_name, target_name, None)
     if raw_latency is None:
         return successes, failures, None
     try:

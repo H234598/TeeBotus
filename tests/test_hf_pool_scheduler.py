@@ -83,6 +83,18 @@ def test_hf_pool_scheduler_skips_targets_in_active_cooldown(tmp_path) -> None:
     assert scheduled.target.name == "low"
 
 
+def test_hf_pool_scheduler_keeps_cooldowns_scoped_to_pool(tmp_path) -> None:
+    config = _two_pool_same_target_config(tmp_path)
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    state = HFPoolRuntimeState(cooldowns={"secondary/shared": future})
+
+    scheduled = select_target(config, pool_name="default", purpose="normal_chat", env={"HF_TOKEN_MAIN": "hf_fake_token"}, state=state)
+
+    assert scheduled.target.name == "shared"
+    with pytest.raises(HFPoolUnavailable, match="all configured targets in cooldown"):
+        select_target(config, pool_name="secondary", purpose="normal_chat", env={"HF_TOKEN_MAIN": "hf_fake_token"}, state=state)
+
+
 def test_hf_pool_scheduler_skips_excluded_targets_for_retry(tmp_path) -> None:
     config = _weighted_two_target_config(tmp_path)
 
@@ -153,5 +165,23 @@ def _weighted_two_target_config(tmp_path) -> HFPoolConfig:
                     ),
                 ),
             )
+        },
+    )
+
+
+def _two_pool_same_target_config(tmp_path) -> HFPoolConfig:
+    shared_target = HFPoolTarget(
+        name="shared",
+        kind="hf_router_chat",
+        base_url="https://router.huggingface.co/v1",
+        api_key_env="HF_TOKEN_MAIN",
+        model="shared-model",
+        purposes=("normal_chat",),
+    )
+    return HFPoolConfig(
+        path=tmp_path / "hf_pool.yaml",
+        pools={
+            "default": HFPool(name="default", enabled=True, targets=(shared_target,)),
+            "secondary": HFPool(name="secondary", enabled=True, targets=(shared_target,)),
         },
     )

@@ -15,7 +15,7 @@ from TeeBotus.llm.hf_pool.errors import HFPoolRateLimited, HFPoolTargetUnavailab
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore, hf_pool_state_key, hf_pool_state_lookup, hf_pool_state_pop
 
 
 class HFPoolExecutor(Protocol):
@@ -84,9 +84,10 @@ class OpenAICompatibleHFPoolExecutor:
             self._record_failure(scheduled, state, status_code)
             self._append_usage(scheduled, "empty_response", started, {"http_status": status_code}, state)
             raise HFPoolTargetUnavailable("hf_pool target returned no message content")
-        state.successes[scheduled.target.name] = state.successes.get(scheduled.target.name, 0) + 1
-        state.failures.pop(scheduled.target.name, None)
-        state.cooldowns.pop(scheduled.target.name, None)
+        state_key = hf_pool_state_key(scheduled.pool.name, scheduled.target.name)
+        state.successes[state_key] = state.successes.get(state_key, 0) + 1
+        hf_pool_state_pop(state.failures, scheduled.pool.name, scheduled.target.name)
+        hf_pool_state_pop(state.cooldowns, scheduled.pool.name, scheduled.target.name)
         usage = dict(payload.get("usage") or {}) if isinstance(payload.get("usage"), dict) else {}
         self._append_usage(scheduled, "ok", started, usage, state)
         return LLMResponse(
@@ -129,22 +130,23 @@ class OpenAICompatibleHFPoolExecutor:
         return Request(endpoint, data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), method="POST", headers=headers)
 
     def _raise_if_in_cooldown(self, scheduled: ScheduledTarget, state: HFPoolRuntimeState) -> None:
-        cooldown_until = state.cooldowns.get(scheduled.target.name)
+        cooldown_until = hf_pool_state_lookup(state.cooldowns, scheduled.pool.name, scheduled.target.name, "")
         if not cooldown_until:
             return
         try:
             parsed = datetime.fromisoformat(cooldown_until)
         except ValueError:
-            state.cooldowns.pop(scheduled.target.name, None)
+            hf_pool_state_pop(state.cooldowns, scheduled.pool.name, scheduled.target.name)
             self._persist_state(state)
             return
         if parsed > datetime.now(timezone.utc):
             raise HFPoolRateLimited(f"hf_pool target {scheduled.target.name} is in cooldown until {cooldown_until}")
-        state.cooldowns.pop(scheduled.target.name, None)
+        hf_pool_state_pop(state.cooldowns, scheduled.pool.name, scheduled.target.name)
         self._persist_state(state)
 
     def _record_failure(self, scheduled: ScheduledTarget, state: HFPoolRuntimeState, status_code: int) -> None:
-        state.failures[scheduled.target.name] = state.failures.get(scheduled.target.name, 0) + 1
+        state_key = hf_pool_state_key(scheduled.pool.name, scheduled.target.name)
+        state.failures[state_key] = state.failures.get(state_key, 0) + 1
         cooldown_seconds = 0
         if status_code == 429:
             cooldown_seconds = scheduled.pool.cooldown_seconds_on_429
@@ -153,11 +155,11 @@ class OpenAICompatibleHFPoolExecutor:
         elif status_code == 0:
             cooldown_seconds = scheduled.pool.cooldown_seconds_on_timeout
         if cooldown_seconds > 0:
-            state.cooldowns[scheduled.target.name] = (datetime.now(timezone.utc) + timedelta(seconds=cooldown_seconds)).isoformat()
+            state.cooldowns[state_key] = (datetime.now(timezone.utc) + timedelta(seconds=cooldown_seconds)).isoformat()
 
     def _append_usage(self, scheduled: ScheduledTarget, status: str, started: float, usage: dict[str, Any], state: HFPoolRuntimeState) -> None:
         latency_ms = max(0, int(round((time.monotonic() - started) * 1000)))
-        _record_average_latency(state, scheduled.target.name, latency_ms)
+        _record_average_latency(state, scheduled.pool.name, scheduled.target.name, latency_ms)
         event = HFPoolUsageEvent(
             pool=scheduled.pool.name,
             target=scheduled.target.name,
@@ -180,13 +182,14 @@ def _chat_completions_endpoint(base_url: str) -> str:
     return f"{base}/chat/completions"
 
 
-def _record_average_latency(state: HFPoolRuntimeState, target_name: str, latency_ms: int) -> None:
-    previous = float(state.avg_latency_ms.get(target_name, 0.0) or 0.0)
-    completed = max(0, state.successes.get(target_name, 0) + state.failures.get(target_name, 0) - 1)
+def _record_average_latency(state: HFPoolRuntimeState, pool_name: str, target_name: str, latency_ms: int) -> None:
+    state_key = hf_pool_state_key(pool_name, target_name)
+    previous = float(state.avg_latency_ms.get(state_key, 0.0) or 0.0)
+    completed = max(0, state.successes.get(state_key, 0) + state.failures.get(state_key, 0) - 1)
     if completed <= 0 or previous <= 0:
-        state.avg_latency_ms[target_name] = float(latency_ms)
+        state.avg_latency_ms[state_key] = float(latency_ms)
         return
-    state.avg_latency_ms[target_name] = ((previous * completed) + latency_ms) / (completed + 1)
+    state.avg_latency_ms[state_key] = ((previous * completed) + latency_ms) / (completed + 1)
 
 
 def _extract_chat_text(payload: Any) -> str:

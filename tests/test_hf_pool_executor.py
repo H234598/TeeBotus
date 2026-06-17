@@ -62,7 +62,7 @@ def test_openai_compatible_hf_executor_sends_chat_completion_and_records_usage()
     assert response.provider == "hf_pool"
     assert response.model == "Qwen/Qwen3-4B-Instruct"
     assert response.usage == {"prompt_tokens": 3, "completion_tokens": 4}
-    assert state.successes == {"target_a": 1}
+    assert state.successes == {"default/target_a": 1}
     assert state.failures == {}
     assert state.cooldowns == {}
     assert len(events) == 1
@@ -99,8 +99,8 @@ def test_openai_compatible_hf_executor_rate_limit_sets_cooldown_and_redacts_secr
 
     assert "hf_TESTSECRET123" not in str(excinfo.value)
     assert "Bearer <REDACTED>" in str(excinfo.value)
-    assert state.failures == {"target_a": 1}
-    assert "target_a" in state.cooldowns
+    assert state.failures == {"default/target_a": 1}
+    assert "default/target_a" in state.cooldowns
     assert events[-1].status == "rate_limited"
     assert events[-1].usage == {"http_status": 429}
 
@@ -115,6 +115,21 @@ def test_openai_compatible_hf_executor_skips_http_while_target_is_in_cooldown() 
 
     with pytest.raises(HFPoolRateLimited, match="cooldown"):
         executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
+
+
+def test_openai_compatible_hf_executor_keeps_cooldowns_scoped_to_pool() -> None:
+    state = HFPoolRuntimeState(cooldowns={"other/target_a": "2999-01-01T00:00:00+00:00"})
+
+    def opener(_request, *, timeout):  # noqa: ARG001
+        return _Response({"choices": [{"message": {"content": "ok"}}]})
+
+    executor = OpenAICompatibleHFPoolExecutor(opener=opener, state=state)
+
+    response = executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
+
+    assert response.text == "ok"
+    assert state.successes == {"default/target_a": 1}
+    assert "other/target_a" in state.cooldowns
 
 
 def test_sqlite_hf_pool_state_store_roundtrips_state_and_usage(tmp_path) -> None:
@@ -169,7 +184,7 @@ def test_openai_compatible_hf_executor_reuses_persistent_cooldown(tmp_path) -> N
     with pytest.raises(HFPoolRateLimited):
         executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
 
-    assert "target_a" in state_store.load().cooldowns
+    assert "default/target_a" in state_store.load().cooldowns
 
     def unexpected_http(_request, *, timeout):  # pragma: no cover - must not be called
         raise AssertionError("persistent cooldown should stop before HTTP")

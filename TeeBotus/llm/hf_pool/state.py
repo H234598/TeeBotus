@@ -17,6 +17,24 @@ def default_hf_pool_state_path() -> Path:
     return root / "teebotus" / "hf_pool_state.sqlite3"
 
 
+def hf_pool_state_key(pool_name: object, target_name: object) -> str:
+    pool = str(pool_name or "default").strip() or "default"
+    target = str(target_name or "").strip()
+    return f"{pool}/{target}" if target else pool
+
+
+def hf_pool_state_lookup(mapping: dict[str, Any], pool_name: object, target_name: object, default: Any = None) -> Any:
+    scoped_key = hf_pool_state_key(pool_name, target_name)
+    if scoped_key in mapping:
+        return mapping[scoped_key]
+    return mapping.get(str(target_name or "").strip(), default)
+
+
+def hf_pool_state_pop(mapping: dict[str, Any], pool_name: object, target_name: object) -> None:
+    mapping.pop(hf_pool_state_key(pool_name, target_name), None)
+    mapping.pop(str(target_name or "").strip(), None)
+
+
 @dataclass
 class HFPoolRuntimeState:
     cooldowns: dict[str, str] = field(default_factory=dict)

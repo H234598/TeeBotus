@@ -8,7 +8,7 @@ from typing import Iterable, Mapping
 
 from TeeBotus.llm.hf_pool.config import HFPool, HFPoolConfig
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
-from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, hf_pool_state_lookup
 from TeeBotus.llm.hf_pool.targets import HFPoolTarget
 from TeeBotus.llm.profiles import normalize_llm_purpose
 
@@ -45,12 +45,12 @@ def select_target(
         raise HFPoolUnavailable(f"pool {pool.name} has no enabled targets for purpose {purpose_name}")
     missing_key = 0
     cooldown = 0
-    for target in _ordered_weighted_candidates(candidates, state):
+    for target in _ordered_weighted_candidates(pool, candidates, state):
         api_key = source.get(target.api_key_env, "").strip() if target.api_key_env else ""
         if target.api_key_env and not api_key:
             missing_key += 1
             continue
-        if _target_in_cooldown(target, state, now=now):
+        if _target_in_cooldown(pool, target, state, now=now):
             cooldown += 1
             continue
         return ScheduledTarget(pool=pool, target=target, api_key=api_key)
@@ -61,28 +61,30 @@ def select_target(
     raise HFPoolUnavailable(f"pool {pool.name} has no usable targets")
 
 
-def _ordered_weighted_candidates(candidates: list[HFPoolTarget], state: HFPoolRuntimeState | None) -> list[HFPoolTarget]:
+def _ordered_weighted_candidates(pool: HFPool, candidates: list[HFPoolTarget], state: HFPoolRuntimeState | None) -> list[HFPoolTarget]:
     indexed = list(enumerate(candidates))
-    indexed.sort(key=lambda item: _weighted_candidate_key(item[0], item[1], state))
+    indexed.sort(key=lambda item: _weighted_candidate_key(pool, item[0], item[1], state))
     return [target for _index, target in indexed]
 
 
-def _weighted_candidate_key(index: int, target: HFPoolTarget, state: HFPoolRuntimeState | None) -> tuple[Fraction, int, int]:
+def _weighted_candidate_key(pool: HFPool, index: int, target: HFPoolTarget, state: HFPoolRuntimeState | None) -> tuple[Fraction, int, int]:
     weight = max(1, _int_value(target.weight, default=1))
-    attempts = _target_attempt_count(target.name, state)
+    attempts = _target_attempt_count(pool, target.name, state)
     return Fraction(attempts + 1, weight), -weight, index
 
 
-def _target_attempt_count(target_name: str, state: HFPoolRuntimeState | None) -> int:
+def _target_attempt_count(pool: HFPool, target_name: str, state: HFPoolRuntimeState | None) -> int:
     if state is None:
         return 0
-    return max(0, _int_value(state.successes.get(target_name), default=0)) + max(0, _int_value(state.failures.get(target_name), default=0))
+    successes = hf_pool_state_lookup(state.successes, pool.name, target_name, 0)
+    failures = hf_pool_state_lookup(state.failures, pool.name, target_name, 0)
+    return max(0, _int_value(successes, default=0)) + max(0, _int_value(failures, default=0))
 
 
-def _target_in_cooldown(target: HFPoolTarget, state: HFPoolRuntimeState | None, *, now: datetime | None = None) -> bool:
+def _target_in_cooldown(pool: HFPool, target: HFPoolTarget, state: HFPoolRuntimeState | None, *, now: datetime | None = None) -> bool:
     if state is None:
         return False
-    cooldown_until = str(state.cooldowns.get(target.name) or "").strip()
+    cooldown_until = str(hf_pool_state_lookup(state.cooldowns, pool.name, target.name, "") or "").strip()
     if not cooldown_until:
         return False
     try:
