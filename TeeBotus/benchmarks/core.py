@@ -214,8 +214,7 @@ def stable_backend_ranking(*, category: str, results: list[BenchmarkResult], nam
         and item.get("category") == category
         and item.get("ok")
         and not item.get("skipped")
-        and _is_nonnegative_integer(item.get("errors"))
-        and int(item.get("errors") or 0) == 0
+        and _is_rankable_benchmark_result(item)
     ]
     skipped = [
         {
@@ -256,6 +255,20 @@ def stable_backend_ranking(*, category: str, results: list[BenchmarkResult], nam
         ],
         "skipped": skipped,
     }
+
+
+def _is_rankable_benchmark_result(item: BenchmarkResult) -> bool:
+    if not _is_positive_integer(item.get("iterations")):
+        return False
+    if not _is_nonnegative_integer(item.get("errors")) or int(item.get("errors") or 0) != 0:
+        return False
+    if not _is_nonnegative_number(item.get("total_ms")):
+        return False
+    if not _is_nonnegative_number(item.get("throughput_ops_s")):
+        return False
+    has_payload_size = _is_nonnegative_number(item.get("payload_bytes")) and float(item.get("payload_bytes") or 0.0) > 0
+    has_index_size = _is_nonnegative_number(item.get("index_bytes")) and float(item.get("index_bytes") or 0.0) > 0
+    return has_payload_size or has_index_size
 
 
 def result(
