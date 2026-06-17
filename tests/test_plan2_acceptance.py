@@ -8,48 +8,31 @@ from pathlib import Path
 from scripts import check_plan2_acceptance
 
 
-RANKING_RESULT_NAMES = {
-    "account_memory": "account_memory_benchmark",
-    "bibliothekar": "bibliothekar_benchmark",
-    "langgraph_flows": "langgraph_flows_benchmark",
-    "transcription_youtube": "transcription_youtube_benchmark",
+RANKING_CANDIDATE_NAMES = {
+    "account_memory": ("memory_jsonl", "memory_sqlite_projection"),
+    "bibliothekar": (
+        "bibliothekar_local_query",
+        "bibliothekar_llamaindex_fake_query",
+        "bibliothekar_haystack_fake_query",
+    ),
+    "langgraph_flows": ("langgraph_bibliothekar_deep_query", "langgraph_bibliothekar_linear"),
+    "retrieval": ("retrieval_backend_haystack_fake", "retrieval_backend_llamaindex_fake", "retrieval_backend_local"),
+    "transcription_youtube": (
+        "youtube_parser_local",
+        "youtube_local_job_queue_no_llm",
+        "youtube_local_pipeline_cache_no_openai",
+    ),
 }
 
 
 def _valid_ranking(category: str) -> dict:
-    if category == "bibliothekar":
-        candidates = [
-            ("bibliothekar_local_query", 100.0, 1.0),
-            ("bibliothekar_llamaindex_fake_query", 75.0, 1.5),
-            ("bibliothekar_haystack_fake_query", 50.0, 2.0),
-        ]
-        return {
-            "category": category,
-            "fastest_stable": candidates[0][0],
-            "candidates": [
-                {
-                    "rank": rank,
-                    "name": name,
-                    "mode": "local",
-                    "throughput_ops_s": throughput,
-                    "total_ms": total_ms,
-                    "errors": 0,
-                    "payload_bytes": 1,
-                    "index_bytes": 1,
-                    "note": "",
-                }
-                for rank, (name, throughput, total_ms) in enumerate(candidates, start=1)
-            ],
-            "skipped": [],
-        }
-    name = RANKING_RESULT_NAMES.get(category, f"{category}_benchmark")
-    alternate_name = f"{name}_alternate"
+    candidates = RANKING_CANDIDATE_NAMES.get(category, (f"{category}_benchmark", f"{category}_benchmark_alternate"))
     return {
         "category": category,
-        "fastest_stable": name,
+        "fastest_stable": candidates[0],
         "candidates": [
             {
-                "rank": 1,
+                "rank": rank,
                 "name": name,
                 "mode": "local",
                 "throughput_ops_s": 100.0,
@@ -58,18 +41,8 @@ def _valid_ranking(category: str) -> dict:
                 "payload_bytes": 1,
                 "index_bytes": 1,
                 "note": "",
-            },
-            {
-                "rank": 2,
-                "name": alternate_name,
-                "mode": "local",
-                "throughput_ops_s": 50.0,
-                "total_ms": 2.0,
-                "errors": 0,
-                "payload_bytes": 1,
-                "index_bytes": 1,
-                "note": "",
             }
+            for rank, name in enumerate(candidates, start=1)
         ],
         "skipped": [],
     }
@@ -125,28 +98,6 @@ def _valid_benchmark_payload() -> dict:
         },
         "regression": {"status": "not_configured", "failed": False},
     }
-    for category in sorted(check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES):
-        payload["results"].append(
-            {
-                "name": f"{RANKING_RESULT_NAMES.get(category, f'{category}_benchmark')}_alternate",
-                "category": category,
-                "ok": True,
-                "mode": "local",
-                "iterations": 1,
-                "total_ms": 2.0,
-                "throughput_ops_s": 50.0,
-                "errors": 0,
-                "payload_bytes": 1,
-                "index_bytes": 1,
-                "details": {
-                    "network_calls": 0,
-                    "openai_calls": 0,
-                    "provider_calls": 0,
-                    "remote_calls": 0,
-                    "llm_calls": 0,
-                },
-            }
-        )
     for candidate in _valid_ranking("bibliothekar")["candidates"]:
         payload["results"].append(
             {
@@ -551,6 +502,9 @@ def test_plan2_acceptance_benchmark_constants_follow_core() -> None:
     from TeeBotus.benchmarks import core as benchmark_core
 
     assert check_plan2_acceptance.BENCHMARK_RANKING_NAME_SETS == benchmark_core.BENCHMARK_RANKING_NAME_SETS
+    assert set(RANKING_CANDIDATE_NAMES) == check_plan2_acceptance.REQUIRED_BENCHMARK_RANKING_CATEGORIES
+    for category, names in RANKING_CANDIDATE_NAMES.items():
+        assert set(names) <= check_plan2_acceptance.BENCHMARK_RANKING_NAME_SETS[category]
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_CATEGORIES
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAME_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_NAME_CATEGORIES
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAMES == benchmark_core.REQUIRED_BENCHMARK_NAMES
@@ -2388,6 +2342,7 @@ def test_benchmark_markdown_artifact_validation_requires_core_ranking_categories
     markdown = render_markdown(payload)
     markdown = markdown.replace("| retrieval | 1 |", "| retrieval_missing | 1 |")
     markdown = markdown.replace("| retrieval | 2 |", "| retrieval_missing | 2 |")
+    markdown = markdown.replace("| retrieval | 3 |", "| retrieval_missing | 3 |")
     markdown_path = tmp_path / "bench.md"
     markdown_path.write_text(markdown, encoding="utf-8")
 
@@ -2404,6 +2359,9 @@ def test_benchmark_markdown_artifact_validation_requires_core_ranking_candidate_
     markdown = render_markdown(payload).replace(
         "| retrieval | 2 |",
         "| retrieval_missing | 2 |",
+    ).replace(
+        "| retrieval | 3 |",
+        "| retrieval_missing | 3 |",
     )
     markdown_path = tmp_path / "bench.md"
     markdown_path.write_text(markdown, encoding="utf-8")
@@ -2878,6 +2836,7 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_candidates() -> N
     errors = check_plan2_acceptance._benchmark_payload_errors(payload)
 
     assert any("rankings[0].candidates[0] rank must be 1" in error for error in errors)
+    assert any("rankings[0].candidates[0] name must belong to account_memory ranking benchmark set" in error for error in errors)
     assert any("rankings[0].candidates[0] errors must be 0" in error for error in errors)
     assert any("rankings[0].candidates[0] must not use live mode" in error for error in errors)
     assert any("rankings[0].candidates[0] must report payload_bytes or index_bytes" in error for error in errors)
@@ -2890,7 +2849,7 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_skips() -> None:
     ranking = payload["comparisons"]["stable_backend_rankings"][0]
     ranking["skipped"] = [
         {"name": "", "mode": "", "reason": ""},
-        {"name": "account_memory_benchmark", "mode": "live_optional", "reason": ""},
+        {"name": "memory_jsonl", "mode": "live_optional", "reason": ""},
         {"name": "duplicate_skip", "mode": "live_optional", "reason": "missing dsn"},
         {"name": "duplicate_skip", "mode": "live_optional", "reason": "still missing dsn"},
     ]
@@ -2901,8 +2860,9 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_skips() -> None:
     assert any("rankings[0].skipped[0] mode must be non-empty" in error for error in errors)
     assert any("rankings[0].skipped[0] reason must be non-empty" in error for error in errors)
     assert any("rankings[0].skipped[1] reason must be non-empty" in error for error in errors)
-    assert any("rankings[0] skipped item must not also be a candidate: account_memory_benchmark" in error for error in errors)
+    assert any("rankings[0] skipped item must not also be a candidate: memory_jsonl" in error for error in errors)
     assert any("rankings[0] duplicate skipped name: duplicate_skip" in error for error in errors)
+    assert any("rankings[0].skipped[2] name must belong to account_memory ranking benchmark set" in error for error in errors)
 
 
 def test_benchmark_artifact_validation_rejects_ranking_skips_without_matching_results() -> None:

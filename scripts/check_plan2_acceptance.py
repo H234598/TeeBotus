@@ -1837,6 +1837,7 @@ def _benchmark_ranking_errors(
                 f"{prefix}rankings[{ranking_index}] {category} must compare at least "
                 f"{REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates"
             )
+        expected_ranking_names = BENCHMARK_RANKING_NAME_SETS.get(category, frozenset())
         candidate_names = {
             str(candidate.get("name") or "")
             for candidate in candidates
@@ -1867,6 +1868,11 @@ def _benchmark_ranking_errors(
             elif skipped_name in skipped_names:
                 errors.append(f"{prefix}rankings[{ranking_index}] duplicate skipped name: {skipped_name}")
             skipped_names.add(skipped_name)
+            if skipped_name and expected_ranking_names and skipped_name not in expected_ranking_names:
+                errors.append(
+                    f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] "
+                    f"name must belong to {category} ranking benchmark set"
+                )
             if not skipped_mode:
                 errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] mode must be non-empty")
             if not skipped_reason:
@@ -1892,6 +1898,11 @@ def _benchmark_ranking_errors(
             elif candidate_name in seen_names:
                 errors.append(f"{prefix}rankings[{ranking_index}] duplicate candidate name: {candidate_name}")
             seen_names.add(candidate_name)
+            if candidate_name and expected_ranking_names and candidate_name not in expected_ranking_names:
+                errors.append(
+                    f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] "
+                    f"name must belong to {category} ranking benchmark set"
+                )
             result = successful_results.get(candidate_name)
             if candidate_name and result is None:
                 errors.append(f"{prefix}rankings[{ranking_index}].candidates[{candidate_index - 1}] must reference a successful result")

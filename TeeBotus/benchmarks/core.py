@@ -145,12 +145,28 @@ def build_quality_gate(
             continue
         category = str(ranking.get("category") or "")
         candidates = ranking.get("candidates")
+        expected_names = BENCHMARK_RANKING_NAME_SETS.get(category, frozenset())
         if (
             category in REQUIRED_BENCHMARK_RANKING_CATEGORIES
             and isinstance(candidates, list)
             and len(candidates) < REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES
         ):
             errors.append(f"ranking {category} must compare at least {REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates")
+        if expected_names and isinstance(candidates, list):
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                candidate_name = str(candidate.get("name") or "")
+                if candidate_name and candidate_name not in expected_names:
+                    errors.append(f"ranking {category} candidate {candidate_name} is not in configured benchmark name set")
+        skipped = ranking.get("skipped")
+        if expected_names and isinstance(skipped, list):
+            for skipped_item in skipped:
+                if not isinstance(skipped_item, dict):
+                    continue
+                skipped_name = str(skipped_item.get("name") or "")
+                if skipped_name and skipped_name not in expected_names:
+                    errors.append(f"ranking {category} skipped item {skipped_name} is not in configured benchmark name set")
 
     for index, item in enumerate(results):
         if not isinstance(item, dict):

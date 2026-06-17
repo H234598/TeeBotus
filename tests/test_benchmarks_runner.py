@@ -569,6 +569,33 @@ def test_benchmark_quality_gate_rejects_single_candidate_required_rankings() -> 
     assert "ranking bibliothekar must compare at least 2 successful candidates" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_ranking_names_outside_configured_sets() -> None:
+    quality_gate = benchmark_module._build_quality_gate(
+        [],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "account_memory",
+                    "fastest_stable": "custom_memory_backend",
+                    "candidates": [
+                        {"name": "memory_jsonl"},
+                        {"name": "custom_memory_backend"},
+                    ],
+                    "skipped": [
+                        {"name": "custom_memory_backup", "mode": "live_optional", "reason": "missing dsn"},
+                    ],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "ranking account_memory candidate custom_memory_backend is not in configured benchmark name set" in quality_gate["errors"]
+    assert "ranking account_memory skipped item custom_memory_backup is not in configured benchmark name set" in quality_gate["errors"]
+
+
 def test_benchmark_quality_gate_requires_specific_plan2_benchmark_names() -> None:
     base_result = {
         "category": "account_memory",
