@@ -223,7 +223,7 @@ def stable_backend_ranking(*, category: str, results: list[BenchmarkResult], nam
             "reason": str(item.get("reason") or ""),
         }
         for item in results
-        if item.get("name") in names and item.get("skipped")
+        if item.get("name") in names and item.get("category") == category and item.get("skipped")
     ]
     if not candidates and not skipped:
         return None

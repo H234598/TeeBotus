@@ -722,6 +722,46 @@ def test_stable_backend_ranking_excludes_incomplete_measurement_candidates() -> 
     assert [candidate["name"] for candidate in ranking["candidates"]] == ["memory_sqlite_projection"]
 
 
+def test_stable_backend_ranking_excludes_wrong_category_skips() -> None:
+    ranking = benchmark_module._stable_backend_ranking(
+        category="account_memory",
+        names={"memory_jsonl", "memory_postgres"},
+        results=[
+            {
+                "name": "memory_jsonl",
+                "category": "account_memory",
+                "ok": True,
+                "skipped": False,
+                "mode": "local",
+                "iterations": 1,
+                "throughput_ops_s": 10.0,
+                "total_ms": 10.0,
+                "errors": 0,
+                "payload_bytes": 100,
+                "index_bytes": 0,
+                "note": "stable",
+            },
+            {
+                "name": "memory_postgres",
+                "category": "qdrant",
+                "ok": False,
+                "skipped": True,
+                "mode": "live_optional",
+                "reason": "missing dsn",
+                "iterations": 0,
+                "throughput_ops_s": 0.0,
+                "total_ms": 0.0,
+                "errors": 0,
+                "payload_bytes": 0,
+                "index_bytes": 0,
+            },
+        ],
+    )
+
+    assert ranking is not None
+    assert ranking["skipped"] == []
+
+
 def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     markdown_path = tmp_path / "benchmarks.md"
     json_path = tmp_path / "benchmarks.json"

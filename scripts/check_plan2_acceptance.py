@@ -1486,7 +1486,15 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
             if missing_rankings:
                 errors.append(f"{prefix}benchmark rankings missing required categories: {', '.join(missing_rankings)}")
             successful_results = _successful_benchmark_results_by_name(results)
-            errors.extend(_benchmark_ranking_errors(rankings, successful_results=successful_results, prefix=prefix))
+            skipped_results = _skipped_benchmark_results_by_name(results)
+            errors.extend(
+                _benchmark_ranking_errors(
+                    rankings,
+                    successful_results=successful_results,
+                    skipped_results=skipped_results,
+                    prefix=prefix,
+                )
+            )
     if isinstance(results, list) and isinstance(comparisons, dict):
         computed_quality_gate = build_benchmark_quality_gate(results, comparisons=comparisons, quick=True, include_live=False)
         if computed_quality_gate.get("ok") is not True:
@@ -1769,7 +1777,26 @@ def _successful_benchmark_results_by_name(results: Any) -> dict[str, Mapping[str
     return successful
 
 
-def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mapping[str, Mapping[str, Any]], prefix: str) -> list[str]:
+def _skipped_benchmark_results_by_name(results: Any) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(results, list):
+        return {}
+    skipped: dict[str, Mapping[str, Any]] = {}
+    for result in results:
+        if not isinstance(result, Mapping):
+            continue
+        name = str(result.get("name") or "")
+        if name and result.get("skipped") is True:
+            skipped[name] = result
+    return skipped
+
+
+def _benchmark_ranking_errors(
+    rankings: list[Any],
+    *,
+    successful_results: Mapping[str, Mapping[str, Any]],
+    skipped_results: Mapping[str, Mapping[str, Any]],
+    prefix: str,
+) -> list[str]:
     errors: list[str] = []
     for ranking_index, ranking in enumerate(rankings):
         if not isinstance(ranking, Mapping):
@@ -1823,6 +1850,16 @@ def _benchmark_ranking_errors(rankings: list[Any], *, successful_results: Mappin
                 errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] mode must be non-empty")
             if not skipped_reason:
                 errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] reason must be non-empty")
+            skipped_result = skipped_results.get(skipped_name)
+            if skipped_name and skipped_result is None:
+                errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] must reference a skipped result")
+            elif skipped_result is not None:
+                if category and str(skipped_result.get("category") or "") != category:
+                    errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] category must match skipped result category")
+                if skipped_mode and skipped_mode != str(skipped_result.get("mode") or ""):
+                    errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] mode must match skipped result")
+                if skipped_reason and skipped_reason != str(skipped_result.get("reason") or ""):
+                    errors.append(f"{prefix}rankings[{ranking_index}].skipped[{skipped_index}] reason must match skipped result")
         seen_names: set[str] = set()
         for candidate_index, candidate in enumerate(candidates, start=1):
             if not isinstance(candidate, Mapping):

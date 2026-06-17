@@ -2891,6 +2891,50 @@ def test_benchmark_artifact_validation_rejects_invalid_ranking_skips() -> None:
     assert any("rankings[0] duplicate skipped name: duplicate_skip" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_rejects_ranking_skips_without_matching_results() -> None:
+    payload = _valid_benchmark_payload()
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["skipped"] = [{"name": "memory_postgres", "mode": "live_optional", "reason": "missing dsn"}]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0].skipped[0] must reference a skipped result" in error for error in errors)
+
+
+def test_benchmark_artifact_validation_rejects_ranking_skips_that_do_not_match_results() -> None:
+    payload = _valid_benchmark_payload()
+    payload["results"].append(
+        {
+            "name": "memory_postgres",
+            "category": "qdrant",
+            "ok": False,
+            "skipped": True,
+            "iterations": 0,
+            "total_ms": 0.0,
+            "throughput_ops_s": 0.0,
+            "errors": 0,
+            "payload_bytes": 0,
+            "index_bytes": 0,
+            "mode": "live_optional",
+            "reason": "different reason",
+            "details": {
+                "network_calls": 0,
+                "openai_calls": 0,
+                "provider_calls": 0,
+                "remote_calls": 0,
+                "llm_calls": 0,
+            },
+        }
+    )
+    ranking = payload["comparisons"]["stable_backend_rankings"][0]
+    ranking["skipped"] = [{"name": "memory_postgres", "mode": "live_optional", "reason": "missing dsn"}]
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert any("rankings[0].skipped[0] category must match skipped result category" in error for error in errors)
+    assert any("rankings[0].skipped[0] reason must match skipped result" in error for error in errors)
+
+
 def test_benchmark_artifact_validation_rejects_rankings_without_matching_results() -> None:
     payload = _valid_benchmark_payload()
     ranking = payload["comparisons"]["stable_backend_rankings"][0]
