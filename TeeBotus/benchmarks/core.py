@@ -161,6 +161,7 @@ def build_quality_gate(
         category = str(ranking.get("category") or "")
         candidates = ranking.get("candidates")
         skipped = ranking.get("skipped", [])
+        fastest_stable = str(ranking.get("fastest_stable") or "")
         expected_names = BENCHMARK_RANKING_NAME_SETS.get(category, frozenset())
         ranking_label = f"ranking {category}" if category else f"rankings[{ranking_index}]"
         if not category:
@@ -170,17 +171,25 @@ def build_quality_gate(
         seen_ranking_categories.add(category)
         if not isinstance(candidates, list) or not candidates:
             errors.append(f"{ranking_label} candidates must be a non-empty list")
+        if not fastest_stable:
+            errors.append(f"{ranking_label} fastest_stable must be non-empty")
         if (
             category in REQUIRED_BENCHMARK_RANKING_CATEGORIES
             and isinstance(candidates, list)
             and len(candidates) < REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES
         ):
             errors.append(f"ranking {category} must compare at least {REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates")
+        candidate_names: set[str] = set()
         if expected_names and isinstance(candidates, list):
             for candidate_index, candidate in enumerate(candidates, start=1):
                 if not isinstance(candidate, dict):
                     continue
                 candidate_name = str(candidate.get("name") or "")
+                if not candidate_name:
+                    errors.append(f"{ranking_label} candidate name must be non-empty")
+                elif candidate_name in candidate_names:
+                    errors.append(f"{ranking_label} duplicate candidate name: {candidate_name}")
+                candidate_names.add(candidate_name)
                 if candidate_name and candidate_name not in expected_names:
                     errors.append(f"ranking {category} candidate {candidate_name} is not in configured benchmark name set")
                 result = successful_results.get(candidate_name)
@@ -196,11 +205,17 @@ def build_quality_gate(
                     errors.append(f"ranking {category} candidate {candidate_name or candidate_index} rank must be {candidate_index}")
         if not isinstance(skipped, list):
             errors.append(f"{ranking_label} skipped must be a list")
+        skipped_names: set[str] = set()
         if expected_names and isinstance(skipped, list):
             for skipped_item in skipped:
                 if not isinstance(skipped_item, dict):
                     continue
                 skipped_name = str(skipped_item.get("name") or "")
+                if not skipped_name:
+                    errors.append(f"{ranking_label} skipped item name must be non-empty")
+                elif skipped_name in skipped_names:
+                    errors.append(f"{ranking_label} duplicate skipped name: {skipped_name}")
+                skipped_names.add(skipped_name)
                 if skipped_name and skipped_name not in expected_names:
                     errors.append(f"ranking {category} skipped item {skipped_name} is not in configured benchmark name set")
                 result = skipped_results.get(skipped_name)
@@ -214,9 +229,13 @@ def build_quality_gate(
                             errors.append(f"ranking {category} skipped item {skipped_name} {key} must match skipped result")
         if isinstance(candidates, list) and candidates:
             first_name = str(candidates[0].get("name") or "") if isinstance(candidates[0], dict) else ""
-            fastest_stable = str(ranking.get("fastest_stable") or "")
             if fastest_stable and first_name and fastest_stable != first_name:
                 errors.append(f"ranking {category} fastest_stable must match rank 1 candidate")
+        for skipped_name in sorted(skipped_names & candidate_names):
+            if skipped_name:
+                errors.append(f"{ranking_label} skipped item must not also be a candidate: {skipped_name}")
+        if fastest_stable and fastest_stable in skipped_names:
+            errors.append(f"{ranking_label} fastest_stable must not be skipped")
 
     for index, item in enumerate(results):
         if not isinstance(item, dict):

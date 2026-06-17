@@ -606,6 +606,119 @@ def test_benchmark_quality_gate_rejects_malformed_ranking_structure() -> None:
     assert "duplicate ranking category: account_memory" in malformed_rankings["errors"]
 
 
+def test_benchmark_quality_gate_rejects_duplicate_or_empty_ranking_names() -> None:
+    memory_jsonl = benchmark_module._result(
+        name="memory_jsonl",
+        category="account_memory",
+        iterations=1,
+        total_ms=1.0,
+        ok=True,
+        errors=0,
+        payload_bytes=1,
+        index_bytes=0,
+        mode="local",
+    )
+    memory_sqlite = benchmark_module._result(
+        name="memory_sqlite_projection",
+        category="account_memory",
+        iterations=1,
+        total_ms=2.0,
+        ok=True,
+        errors=0,
+        payload_bytes=1,
+        index_bytes=0,
+        mode="local",
+    )
+
+    quality_gate = benchmark_module._build_quality_gate(
+        [memory_jsonl, memory_sqlite],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "account_memory",
+                    "fastest_stable": "",
+                    "candidates": [
+                        {"rank": 1, "name": "", "mode": "local"},
+                        {
+                            "rank": 2,
+                            "name": "memory_jsonl",
+                            "mode": memory_jsonl["mode"],
+                            "throughput_ops_s": memory_jsonl["throughput_ops_s"],
+                            "total_ms": memory_jsonl["total_ms"],
+                            "errors": memory_jsonl["errors"],
+                            "payload_bytes": memory_jsonl["payload_bytes"],
+                            "index_bytes": memory_jsonl["index_bytes"],
+                        },
+                        {
+                            "rank": 3,
+                            "name": "memory_jsonl",
+                            "mode": memory_jsonl["mode"],
+                            "throughput_ops_s": memory_jsonl["throughput_ops_s"],
+                            "total_ms": memory_jsonl["total_ms"],
+                            "errors": memory_jsonl["errors"],
+                            "payload_bytes": memory_jsonl["payload_bytes"],
+                            "index_bytes": memory_jsonl["index_bytes"],
+                        },
+                    ],
+                    "skipped": [
+                        {"name": "", "mode": "", "reason": ""},
+                        {"name": "memory_jsonl", "mode": "live_optional", "reason": "missing dsn"},
+                        {"name": "memory_postgres", "mode": "live_optional", "reason": "missing dsn"},
+                        {"name": "memory_postgres", "mode": "live_optional", "reason": "still missing dsn"},
+                    ],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+    fastest_skipped = benchmark_module._build_quality_gate(
+        [memory_jsonl, memory_sqlite],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "account_memory",
+                    "fastest_stable": "memory_jsonl",
+                    "candidates": [
+                        {
+                            "rank": 1,
+                            "name": "memory_jsonl",
+                            "mode": memory_jsonl["mode"],
+                            "throughput_ops_s": memory_jsonl["throughput_ops_s"],
+                            "total_ms": memory_jsonl["total_ms"],
+                            "errors": memory_jsonl["errors"],
+                            "payload_bytes": memory_jsonl["payload_bytes"],
+                            "index_bytes": memory_jsonl["index_bytes"],
+                        },
+                        {
+                            "rank": 2,
+                            "name": "memory_sqlite_projection",
+                            "mode": memory_sqlite["mode"],
+                            "throughput_ops_s": memory_sqlite["throughput_ops_s"],
+                            "total_ms": memory_sqlite["total_ms"],
+                            "errors": memory_sqlite["errors"],
+                            "payload_bytes": memory_sqlite["payload_bytes"],
+                            "index_bytes": memory_sqlite["index_bytes"],
+                        },
+                    ],
+                    "skipped": [{"name": "memory_jsonl", "mode": "live_optional", "reason": "missing dsn"}],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "ranking account_memory fastest_stable must be non-empty" in quality_gate["errors"]
+    assert "ranking account_memory candidate name must be non-empty" in quality_gate["errors"]
+    assert "ranking account_memory duplicate candidate name: memory_jsonl" in quality_gate["errors"]
+    assert "ranking account_memory skipped item name must be non-empty" in quality_gate["errors"]
+    assert "ranking account_memory duplicate skipped name: memory_postgres" in quality_gate["errors"]
+    assert "ranking account_memory skipped item must not also be a candidate: memory_jsonl" in quality_gate["errors"]
+    assert "ranking account_memory fastest_stable must not be skipped" in fastest_skipped["errors"]
+
+
 def test_benchmark_quality_gate_rejects_ranking_names_outside_configured_sets() -> None:
     quality_gate = benchmark_module._build_quality_gate(
         [],
