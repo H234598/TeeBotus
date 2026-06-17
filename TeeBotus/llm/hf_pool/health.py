@@ -11,6 +11,13 @@ from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, HFPool, HFP
 from TeeBotus.llm.hf_pool.errors import HFPoolRateLimited, HFPoolTargetUnavailable, HFPoolUnavailable
 from TeeBotus.llm.hf_pool.executor import HFPoolOpener, OpenAICompatibleHFPoolExecutor
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
+from TeeBotus.llm.hf_pool.models_feed import (
+    HFPoolModelInfo,
+    HFPoolModelsFeed,
+    HFPoolModelsOpener,
+    fetch_hf_pool_models,
+    model_info_by_id,
+)
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore
@@ -30,6 +37,10 @@ class HFPoolTargetHealth:
     successes: int = 0
     failures: int = 0
     avg_latency_ms: int | None = None
+    models_feed_status: str = ""
+    context_length: int | None = None
+    supports_tools: bool | None = None
+    supports_structured_output: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +65,8 @@ def check_hf_pool(
     env: Mapping[str, str] | None = None,
     live: bool = False,
     opener: HFPoolOpener | None = None,
+    validate_models: bool = False,
+    models_opener: HFPoolModelsOpener | None = None,
     state_store: HFPoolRuntimeStateStore | None = None,
 ) -> HFPoolHealth:
     config = load_hf_pool_config(config_path)
@@ -66,9 +79,14 @@ def check_hf_pool(
         return HFPoolHealth(pool=pool.name, status="disabled")
     source = os.environ if env is None else env
     runtime_state, state_error = _load_state(state_store)
+    models_cache: dict[tuple[str, str], HFPoolModelsFeed] = {}
     targets: list[HFPoolTargetHealth] = []
     for target in pool.targets:
         cooldown_until = ""
+        models_feed_status = ""
+        context_length = None
+        supports_tools = None
+        supports_structured_output = None
         successes, failures, avg_latency_ms = _target_runtime_metrics(runtime_state, target.name)
         if not target.enabled:
             status = "disabled"
@@ -94,6 +112,21 @@ def check_hf_pool(
             status = "configured"
             error = ""
             latency_ms = None
+        if validate_models and status in {"configured", "healthy"}:
+            model_info, models_feed_status, model_error = _validate_target_model(
+                target=target,
+                api_key=source.get(target.api_key_env, "").strip() if target.api_key_env else "",
+                timeout_seconds=pool.timeout_seconds,
+                opener=models_opener,
+                cache=models_cache,
+            )
+            if model_info is not None:
+                context_length = model_info.context_length
+                supports_tools = model_info.supports_tools
+                supports_structured_output = model_info.supports_structured_output
+            if model_error:
+                status = "unavailable"
+                error = model_error if not error else f"{error}; {model_error}"
         targets.append(
             HFPoolTargetHealth(
                 pool=pool.name,
@@ -107,6 +140,10 @@ def check_hf_pool(
                 successes=successes,
                 failures=failures,
                 avg_latency_ms=avg_latency_ms,
+                models_feed_status=models_feed_status,
+                context_length=context_length,
+                supports_tools=supports_tools,
+                supports_structured_output=supports_structured_output,
             )
         )
     if not targets:
@@ -147,6 +184,14 @@ def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
             line += f" failures={max(0, int(target.failures))}"
         if target.avg_latency_ms is not None:
             line += f" avg_latency_ms={max(0, int(target.avg_latency_ms))}"
+        if target.models_feed_status:
+            line += f" models_feed={_status_text(target.models_feed_status)}"
+        if target.context_length is not None:
+            line += f" context_length={max(0, int(target.context_length))}"
+        if target.supports_tools is not None:
+            line += f" tools={str(bool(target.supports_tools)).lower()}"
+        if target.supports_structured_output is not None:
+            line += f" structured_output={str(bool(target.supports_structured_output)).lower()}"
         if target.error and not target.error.startswith("env="):
             line += f" error={_status_text(target.error)}"
         lines.append(line)
@@ -190,6 +235,44 @@ def _target_runtime_metrics(state: HFPoolRuntimeState | None, target_name: str) 
     except (TypeError, ValueError):
         avg_latency_ms = None
     return successes, failures, avg_latency_ms
+
+
+def _validate_target_model(
+    *,
+    target: HFPoolTarget,
+    api_key: str,
+    timeout_seconds: int,
+    opener: HFPoolModelsOpener | None,
+    cache: dict[tuple[str, str], HFPoolModelsFeed],
+) -> tuple[HFPoolModelInfo | None, str, str]:
+    cache_key = (target.base_url, api_key)
+    feed = cache.get(cache_key)
+    if feed is None:
+        feed = fetch_hf_pool_models(target.base_url, api_key=api_key, timeout_seconds=timeout_seconds, opener=opener)
+        cache[cache_key] = feed
+    if feed.status != "ok":
+        error = f"models_feed={feed.status}"
+        if feed.error:
+            error += f": {feed.error}"
+        return None, feed.status, redact_hf_secrets(error)
+    lookup = model_info_by_id(feed.models)
+    model_info = lookup.get(target.request_model) or lookup.get(target.model)
+    if model_info is None:
+        return None, feed.status, f"models_feed_model_missing:{_status_text(target.request_model)}"
+    error = _model_requirement_error(target, model_info)
+    return model_info, feed.status, error
+
+
+def _model_requirement_error(target: HFPoolTarget, model_info: HFPoolModelInfo) -> str:
+    errors: list[str] = []
+    required = target.capabilities
+    if required.supports_tools and not model_info.supports_tools:
+        errors.append("models_feed_missing_tools")
+    if required.supports_structured_output and not model_info.supports_structured_output:
+        errors.append("models_feed_missing_structured_output")
+    if required.context_length and model_info.context_length and model_info.context_length < required.context_length:
+        errors.append(f"models_feed_context_length_too_small:required={required.context_length}:found={model_info.context_length}")
+    return "; ".join(errors)
 
 
 def _live_target_status(

@@ -23,6 +23,19 @@ class _Response:
         return None
 
 
+class _ModelsResponse:
+    status = 200
+
+    def __init__(self, payload: object) -> None:
+        self.payload = payload
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
+
+    def close(self) -> None:
+        return None
+
+
 def test_hf_pool_doctor_reports_missing_config(tmp_path):
     health = check_hf_pool(config_path=tmp_path / "missing.yaml")
     lines = format_hf_pool_status_lines(health)
@@ -162,6 +175,86 @@ def test_hf_pool_live_check_marks_configured_target_healthy_without_secret_leak(
     assert calls[0]["body"]["model"] == "Qwen/Qwen3-4B-Instruct-2507"
 
 
+def test_hf_pool_models_validation_enriches_configured_target_without_chat_live_check(tmp_path):
+    path = _enabled_config(tmp_path, required={"supports_structured_output": True, "context_length": 16384})
+    calls: list[dict[str, object]] = []
+
+    def models_opener(request, *, timeout):
+        calls.append({"url": request.full_url, "authorization": request.get_header("Authorization"), "timeout": timeout})
+        return _ModelsResponse(
+            {
+                "data": [
+                    {
+                        "id": "Qwen/Qwen3-4B-Instruct-2507",
+                        "context_length": 32768,
+                        "capabilities": {"structured_output": True, "tool_calling": True},
+                    }
+                ]
+            }
+        )
+
+    health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        validate_models=True,
+        models_opener=models_opener,
+    )
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert health.status == "configured"
+    assert health.targets[0].status == "configured"
+    assert health.targets[0].models_feed_status == "ok"
+    assert health.targets[0].context_length == 32768
+    assert health.targets[0].supports_structured_output is True
+    assert "models_feed=ok" in lines
+    assert "context_length=32768" in lines
+    assert "structured_output=true" in lines
+    assert "hf_TESTSECRET123" not in lines
+    assert calls == [
+        {
+            "url": "https://router.huggingface.co/v1/models",
+            "authorization": "Bearer hf_TESTSECRET123",
+            "timeout": 7,
+        }
+    ]
+
+
+def test_hf_pool_models_validation_marks_missing_model_unavailable(tmp_path):
+    path = _enabled_config(tmp_path)
+
+    def models_opener(_request, *, timeout):
+        return _ModelsResponse({"data": [{"id": "other-model"}]})
+
+    health = check_hf_pool(
+        config_path=path,
+        env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
+        validate_models=True,
+        models_opener=models_opener,
+    )
+    lines = "\n".join(format_hf_pool_status_lines(health))
+
+    assert health.status == "unavailable"
+    assert health.targets[0].status == "unavailable"
+    assert "models_feed_model_missing:Qwen/Qwen3-4B-Instruct-2507" in lines
+    assert "hf_TESTSECRET123" not in lines
+
+
+def test_hf_pool_doctor_cli_can_validate_models(monkeypatch, capsys, tmp_path):
+    path = _enabled_config(tmp_path)
+
+    def models_opener(_request, *, timeout):
+        return _ModelsResponse({"data": [{"id": "Qwen/Qwen3-4B-Instruct-2507", "context_length": 32768}]})
+
+    monkeypatch.setenv("HF_TOKEN_MAIN", "hf_TESTSECRET123")
+    exit_code = doctor_main(["--config", str(path), "--validate-models"], models_opener=models_opener)
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "models_feed=ok" in captured.out
+    assert "context_length=32768" in captured.out
+    assert "hf_TESTSECRET123" not in captured.out
+
+
 def test_hf_pool_live_check_reports_errors_redacted_and_nonfatal(tmp_path):
     path = _enabled_config(tmp_path)
 
@@ -202,7 +295,7 @@ def test_hf_pool_doctor_live_cli_records_usage_in_state_db(monkeypatch, capsys, 
     assert usage[0].status == "ok"
 
 
-def _enabled_config(tmp_path):
+def _enabled_config(tmp_path, *, required: dict[str, object] | None = None):
     path = tmp_path / "hf_pool.yaml"
     path.write_text(
         json.dumps(
@@ -218,6 +311,7 @@ def _enabled_config(tmp_path):
                                 "model": "Qwen/Qwen3-4B-Instruct-2507",
                                 "purposes": ["normal_chat"],
                                 "enabled": True,
+                                "required": required or {},
                             }
                         ],
                     }
