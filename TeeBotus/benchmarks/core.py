@@ -83,6 +83,8 @@ def build_quality_gate(
     include_live: bool,
 ) -> dict[str, Any]:
     errors: list[str] = []
+    for duplicate_name in _duplicate_result_names(results):
+        errors.append(f"duplicate benchmark result name: {duplicate_name}")
     categories = {
         str(item.get("category") or "")
         for item in results
@@ -269,6 +271,21 @@ def _is_rankable_benchmark_result(item: BenchmarkResult) -> bool:
     has_payload_size = _is_nonnegative_number(item.get("payload_bytes")) and float(item.get("payload_bytes") or 0.0) > 0
     has_index_size = _is_nonnegative_number(item.get("index_bytes")) and float(item.get("index_bytes") or 0.0) > 0
     return has_payload_size or has_index_size
+
+
+def _duplicate_result_names(results: list[BenchmarkResult]) -> list[str]:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "")
+        if not name:
+            continue
+        if name in seen:
+            duplicates.add(name)
+        seen.add(name)
+    return sorted(duplicates)
 
 
 def result(

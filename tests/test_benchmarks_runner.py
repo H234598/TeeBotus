@@ -640,6 +640,45 @@ def test_benchmark_quality_gate_rejects_required_name_category_mismatch() -> Non
     assert "memory_jsonl category must be account_memory" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_duplicate_result_names() -> None:
+    base_result = {
+        "name": "memory_jsonl",
+        "category": "account_memory",
+        "ok": True,
+        "skipped": False,
+        "iterations": 1,
+        "total_ms": 1.0,
+        "throughput_ops_s": 1.0,
+        "errors": 0,
+        "payload_bytes": 1,
+        "index_bytes": 0,
+        "mode": "local",
+        "details": {
+            "network_calls": 0,
+            "openai_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+            "llm_calls": 0,
+        },
+    }
+
+    quality_gate = benchmark_module._build_quality_gate(
+        [
+            base_result,
+            {
+                **base_result,
+                "category": "qdrant",
+            },
+        ],
+        comparisons={"stable_backend_rankings": []},
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "duplicate benchmark result name: memory_jsonl" in quality_gate["errors"]
+
+
 def test_stable_backend_ranking_excludes_erroring_candidates() -> None:
     ranking = benchmark_module._stable_backend_ranking(
         category="account_memory",

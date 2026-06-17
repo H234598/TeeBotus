@@ -2577,6 +2577,19 @@ def test_benchmark_artifact_validation_rejects_required_name_with_wrong_category
     assert any("computed quality_gate: memory_jsonl category must be account_memory" in error for error in errors)
 
 
+def test_benchmark_artifact_validation_rejects_duplicate_result_names() -> None:
+    payload = _valid_benchmark_payload()
+    duplicate = dict(next(item for item in payload["results"] if item["name"] == "memory_jsonl"))
+    duplicate["category"] = "qdrant"
+    payload["results"].append(duplicate)
+    payload["quality_gate"]["checked_results"] = len(payload["results"])
+
+    errors = check_plan2_acceptance._benchmark_payload_errors(payload)
+
+    assert "benchmark result names must be unique: memory_jsonl" in errors
+    assert "computed quality_gate: duplicate benchmark result name: memory_jsonl" in errors
+
+
 def test_benchmark_artifact_validation_requires_plan2_measurement_fields() -> None:
     payload = {
         "schema_version": 1,

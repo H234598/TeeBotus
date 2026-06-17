@@ -1407,6 +1407,9 @@ def _benchmark_payload_errors(payload: Any, *, path: Path | None = None) -> list
     elif not any(isinstance(result, dict) and result.get("ok") is True for result in results):
         errors.append(f"{prefix}results must contain at least one ok result")
     else:
+        duplicate_result_names = _duplicate_benchmark_result_names(results)
+        if duplicate_result_names:
+            errors.append(f"{prefix}benchmark result names must be unique: {', '.join(duplicate_result_names)}")
         categories = {
             str(result.get("category") or "")
             for result in results
@@ -1775,6 +1778,23 @@ def _successful_benchmark_results_by_name(results: Any) -> dict[str, Mapping[str
         ):
             successful[name] = result
     return successful
+
+
+def _duplicate_benchmark_result_names(results: Any) -> list[str]:
+    if not isinstance(results, list):
+        return []
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for result in results:
+        if not isinstance(result, Mapping):
+            continue
+        name = str(result.get("name") or "")
+        if not name:
+            continue
+        if name in seen:
+            duplicates.add(name)
+        seen.add(name)
+    return sorted(duplicates)
 
 
 def _skipped_benchmark_results_by_name(results: Any) -> dict[str, Mapping[str, Any]]:
