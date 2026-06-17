@@ -596,6 +596,78 @@ def test_benchmark_quality_gate_rejects_ranking_names_outside_configured_sets() 
     assert "ranking account_memory skipped item custom_memory_backup is not in configured benchmark name set" in quality_gate["errors"]
 
 
+def test_benchmark_quality_gate_rejects_rankings_that_do_not_match_results() -> None:
+    result = benchmark_module._result(
+        name="memory_jsonl",
+        category="account_memory",
+        iterations=1,
+        total_ms=10.0,
+        ok=True,
+        errors=0,
+        payload_bytes=100,
+        index_bytes=0,
+        mode="local",
+    )
+    skipped = benchmark_module._result(
+        name="memory_postgres",
+        category="account_memory",
+        iterations=0,
+        total_ms=0.0,
+        ok=False,
+        skipped=True,
+        errors=0,
+        payload_bytes=0,
+        index_bytes=0,
+        mode="live_optional",
+        reason="missing dsn",
+    )
+
+    quality_gate = benchmark_module._build_quality_gate(
+        [result, skipped],
+        comparisons={
+            "stable_backend_rankings": [
+                {
+                    "category": "account_memory",
+                    "fastest_stable": "memory_sqlite_projection",
+                    "candidates": [
+                        {
+                            "rank": 2,
+                            "name": "memory_jsonl",
+                            "mode": "mutated",
+                            "throughput_ops_s": 999.0,
+                            "total_ms": result["total_ms"],
+                            "errors": result["errors"],
+                            "payload_bytes": result["payload_bytes"],
+                            "index_bytes": result["index_bytes"],
+                        },
+                        {
+                            "rank": 2,
+                            "name": "memory_sqlite_projection",
+                            "mode": "local",
+                            "throughput_ops_s": 1.0,
+                            "total_ms": 1.0,
+                            "errors": 0,
+                            "payload_bytes": 1,
+                            "index_bytes": 0,
+                        },
+                    ],
+                    "skipped": [{"name": "memory_postgres", "mode": "live_optional", "reason": "different"}],
+                }
+            ]
+        },
+        quick=True,
+        include_live=False,
+    )
+
+    assert quality_gate["ok"] is False
+    assert "ranking account_memory candidate memory_jsonl mode must match result" in quality_gate["errors"]
+    assert "ranking account_memory candidate memory_jsonl throughput_ops_s must match result" in quality_gate["errors"]
+    assert "ranking account_memory candidate memory_jsonl rank must be 1" in quality_gate["errors"]
+    assert "ranking account_memory candidate memory_sqlite_projection must reference a successful result" in quality_gate["errors"]
+    assert "ranking account_memory skipped item memory_postgres reason must match skipped result" in quality_gate["errors"]
+    assert "ranking account_memory fastest_stable must match rank 1 candidate" in quality_gate["errors"]
+
+
 def test_benchmark_quality_gate_requires_specific_plan2_benchmark_names() -> None:
     base_result = {
         "category": "account_memory",

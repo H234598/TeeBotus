@@ -122,6 +122,11 @@ def build_quality_gate(
         for item in results
         if isinstance(item, dict) and item.get("ok") and not item.get("skipped") and str(item.get("name") or "")
     }
+    skipped_results = {
+        str(item.get("name") or ""): item
+        for item in results
+        if isinstance(item, dict) and item.get("skipped") and str(item.get("name") or "")
+    }
     successful_names = set(successful_results)
     missing_names = sorted(REQUIRED_BENCHMARK_NAMES - successful_names)
     if missing_names:
@@ -153,12 +158,23 @@ def build_quality_gate(
         ):
             errors.append(f"ranking {category} must compare at least {REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} successful candidates")
         if expected_names and isinstance(candidates, list):
-            for candidate in candidates:
+            for candidate_index, candidate in enumerate(candidates, start=1):
                 if not isinstance(candidate, dict):
                     continue
                 candidate_name = str(candidate.get("name") or "")
                 if candidate_name and candidate_name not in expected_names:
                     errors.append(f"ranking {category} candidate {candidate_name} is not in configured benchmark name set")
+                result = successful_results.get(candidate_name)
+                if candidate_name and result is None:
+                    errors.append(f"ranking {category} candidate {candidate_name} must reference a successful result")
+                elif result is not None:
+                    if str(result.get("category") or "") != category:
+                        errors.append(f"ranking {category} candidate {candidate_name} category must match result")
+                    for key in ("mode", "throughput_ops_s", "total_ms", "errors", "payload_bytes", "index_bytes"):
+                        if candidate.get(key) != result.get(key):
+                            errors.append(f"ranking {category} candidate {candidate_name} {key} must match result")
+                if candidate.get("rank") != candidate_index:
+                    errors.append(f"ranking {category} candidate {candidate_name or candidate_index} rank must be {candidate_index}")
         skipped = ranking.get("skipped")
         if expected_names and isinstance(skipped, list):
             for skipped_item in skipped:
@@ -167,6 +183,20 @@ def build_quality_gate(
                 skipped_name = str(skipped_item.get("name") or "")
                 if skipped_name and skipped_name not in expected_names:
                     errors.append(f"ranking {category} skipped item {skipped_name} is not in configured benchmark name set")
+                result = skipped_results.get(skipped_name)
+                if skipped_name and result is None:
+                    errors.append(f"ranking {category} skipped item {skipped_name} must reference a skipped result")
+                elif result is not None:
+                    if str(result.get("category") or "") != category:
+                        errors.append(f"ranking {category} skipped item {skipped_name} category must match skipped result")
+                    for key in ("mode", "reason"):
+                        if skipped_item.get(key) != result.get(key):
+                            errors.append(f"ranking {category} skipped item {skipped_name} {key} must match skipped result")
+        if isinstance(candidates, list) and candidates:
+            first_name = str(candidates[0].get("name") or "") if isinstance(candidates[0], dict) else ""
+            fastest_stable = str(ranking.get("fastest_stable") or "")
+            if fastest_stable and first_name and fastest_stable != first_name:
+                errors.append(f"ranking {category} fastest_stable must match rank 1 candidate")
 
     for index, item in enumerate(results):
         if not isinstance(item, dict):
