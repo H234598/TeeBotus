@@ -58,12 +58,15 @@ def test_default_qdrant_collection_specs_accept_usermemory_embedding_overrides()
     assert user_memory.embedding_model == "intfloat/multilingual-e5-small"
 
 
-def test_ensure_collection_sends_idempotent_put_with_vector_schema() -> None:
-    calls: list[tuple[str, str, dict[str, object]]] = []
+def test_ensure_collection_creates_missing_collection_with_vector_schema() -> None:
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
 
     def opener(request, *, timeout):
         assert timeout > 0
-        calls.append((request.get_method(), request.full_url, json.loads(request.data.decode("utf-8"))))
+        body = json.loads(request.data.decode("utf-8")) if request.data else None
+        calls.append((request.get_method(), request.full_url, body))
+        if request.get_method() == "GET":
+            return _Response(404)
         return _Response()
 
     result = ensure_collection(
@@ -77,6 +80,11 @@ def test_ensure_collection_sends_idempotent_put_with_vector_schema() -> None:
     assert result.name == "teebotus_user_memory"
     assert calls == [
         (
+            "GET",
+            "http://127.0.0.1:6333/collections/teebotus_user_memory",
+            None,
+        ),
+        (
             "PUT",
             "http://127.0.0.1:6333/collections/teebotus_user_memory",
             {"vectors": {"size": 64, "distance": "Cosine"}},
@@ -84,21 +92,46 @@ def test_ensure_collection_sends_idempotent_put_with_vector_schema() -> None:
     ]
 
 
-def test_ensure_default_collections_prepares_both_collections() -> None:
-    urls: list[str] = []
+def test_ensure_collection_skips_put_when_collection_is_ready() -> None:
+    calls: list[str] = []
 
     def opener(request, *, timeout):
         assert timeout > 0
-        urls.append(request.full_url)
+        calls.append(request.get_method())
+        if request.get_method() == "PUT":  # pragma: no cover - must not be called
+            raise AssertionError("ready collection must not be recreated")
+        return _Response(200)
+
+    result = ensure_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is True
+    assert result.status == "ready"
+    assert calls == ["GET"]
+
+
+def test_ensure_default_collections_prepares_both_collections() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def opener(request, *, timeout):
+        assert timeout > 0
+        calls.append((request.get_method(), request.full_url))
+        if request.get_method() == "GET":
+            return _Response(404)
         return _Response()
 
     results = ensure_default_collections(url="http://127.0.0.1:6333", opener=opener)
 
     assert [result.name for result in results] == [QDRANT_USER_MEMORY_COLLECTION, QDRANT_BIBLIOTHEKAR_COLLECTION]
     assert all(result.ok for result in results)
-    assert urls == [
-        "http://127.0.0.1:6333/collections/teebotus_user_memory",
-        "http://127.0.0.1:6333/collections/teebotus_bibliothekar_chunks",
+    assert calls == [
+        ("GET", "http://127.0.0.1:6333/collections/teebotus_user_memory"),
+        ("PUT", "http://127.0.0.1:6333/collections/teebotus_user_memory"),
+        ("GET", "http://127.0.0.1:6333/collections/teebotus_bibliothekar_chunks"),
+        ("PUT", "http://127.0.0.1:6333/collections/teebotus_bibliothekar_chunks"),
     ]
 
 

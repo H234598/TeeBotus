@@ -263,6 +263,9 @@ def ensure_collection(
 ) -> QdrantCollectionResult:
     target = resolve_qdrant_url(url, env=env)
     name = _validate_collection_name(spec.name)
+    current = check_collection(spec, url=target, timeout_seconds=timeout_seconds, opener=opener)
+    if current.status != "missing":
+        return current
     vector_size = _validate_vector_size(spec.vector_size)
     distance = _validate_distance(spec.distance)
     body = json.dumps({"vectors": {"size": vector_size, "distance": distance}}, separators=(",", ":")).encode("utf-8")

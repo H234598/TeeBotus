@@ -710,6 +710,9 @@ Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt. Ohne
 Embedding-Flags liest `memory-rebuild` die aktive `Bot_Verhalten.md` der
 Instanz und nutzt dieselben `## Memory Search`-Werte wie die Runtime; die Flags
 sind nur Overrides fuer Tests oder einen bewussten Modellwechsel:
+`collections-ensure` prueft vorhandene Collections zuerst und legt nur fehlende
+Collections an; bestehende Collections mit falscher Vektorgroesse werden als
+Schemafehler gemeldet, nicht ueberschrieben.
 
 ```bash
 teebotus-embedding --instances-dir instances --instance Depressionsbot collections-ensure
