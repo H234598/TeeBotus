@@ -12,6 +12,7 @@ from TeeBotus.benchmarks.core import (
     result,
     stable_backend_ranking,
 )
+from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
 
 __all__ = [
     "BenchmarkResult",
@@ -22,6 +23,8 @@ __all__ = [
     "STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS",
     "build_comparisons",
     "build_quality_gate",
+    "benchmark_gemini_free_tier_guard",
+    "benchmark_llm_router",
     "result",
     "stable_backend_ranking",
 ]

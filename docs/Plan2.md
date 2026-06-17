@@ -2252,7 +2252,7 @@ Benchmarkregeln:
 - Netzwerk/Provider nur hinter explizitem Override.
 - Fixtures muessen klein, versioniert und reproduzierbar sein.
 - Ausgabe als Markdown und JSON nach `/home/teladi/Downloads`.
-- Gemeinsame Benchmark-Invarianten, Quality-Gate und Rankinglogik liegen in `TeeBotus/benchmarks/core.py`; `scripts/run_benchmarks.py` bleibt der CLI-Orchestrator.
+- Gemeinsame Benchmark-Invarianten, Quality-Gate und Rankinglogik liegen in `TeeBotus/benchmarks/core.py`; LLM-Router-/Gemini-Free-Tier-Benchmarks in `TeeBotus/benchmarks/llm_routing.py`; `scripts/run_benchmarks.py` bleibt der CLI-Orchestrator.
 - Jeder Benchmark nennt Hardware-/Python-/Dependency-Kontext.
 - Jeder Benchmark misst mindestens Laufzeit, Durchsatz, Fehlerzahl und relevante Payload-/Indexgroessen.
 - Benchmarks duerfen nicht nur Smoke-Tests sein; sie muessen Vergleichswerte liefern.

@@ -11,14 +11,18 @@ from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
 def test_plan3_benchmark_core_lives_in_package() -> None:
     core = importlib.import_module("TeeBotus.benchmarks.core")
+    llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
     package_dir = Path(core.__file__).resolve().parent
 
     assert (package_dir / "__init__.py").exists()
     assert (package_dir / "core.py").exists()
+    assert (package_dir / "llm_routing.py").exists()
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
     assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
+    assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
+    assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
 
 
 def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
