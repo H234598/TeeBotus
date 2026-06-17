@@ -44,8 +44,8 @@ def load_hf_pool_config(path: str | Path = DEFAULT_HF_POOL_CONFIG_PATH, *, stric
     try:
         payload = _load_mapping(config_path)
         pools = _parse_pools(payload.get("pools"))
-    except HFPoolConfigError:
-        raise
+    except HFPoolConfigError as exc:
+        return _config_error(config_path, str(exc), strict=strict)
     except Exception as exc:  # noqa: BLE001 - nonfatal config surface by default.
         return _config_error(config_path, f"{type(exc).__name__}: {exc}", strict=strict)
     return HFPoolConfig(pools=pools, path=config_path, exists=True)

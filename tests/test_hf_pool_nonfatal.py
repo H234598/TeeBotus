@@ -17,6 +17,15 @@ def test_hf_pool_provider_missing_config_raises_controlled_llm_error(tmp_path):
         provider.create_reply("ping", BotInstructions())
 
 
+def test_hf_pool_provider_malformed_config_raises_controlled_llm_error(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text("[]", encoding="utf-8")
+    provider = HFPoolProvider(config_path=path)
+
+    with pytest.raises(HFPoolUnavailable, match="root must be a mapping"):
+        provider.create_reply("ping", BotInstructions())
+
+
 def test_hf_pool_provider_missing_target_key_is_unavailable_not_crash(tmp_path):
     path = tmp_path / "hf_pool.yaml"
     path.write_text(

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from TeeBotus.llm.hf_pool.errors import HFPoolConfigError
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_pool_config
 
 
@@ -11,6 +14,25 @@ def test_hf_pool_config_missing_is_nonfatal(tmp_path):
     assert config.exists is False
     assert config.pools == {}
     assert "missing" in config.error
+
+
+def test_hf_pool_config_malformed_is_nonfatal_by_default(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text("[]", encoding="utf-8")
+
+    config = load_hf_pool_config(path)
+
+    assert config.exists is True
+    assert config.pools == {}
+    assert "root must be a mapping" in config.error
+
+
+def test_hf_pool_config_malformed_can_still_fail_strict(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(HFPoolConfigError, match="root must be a mapping"):
+        load_hf_pool_config(path, strict=True)
 
 
 def test_hf_pool_config_parses_pool_and_targets(tmp_path):

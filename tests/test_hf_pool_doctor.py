@@ -31,6 +31,18 @@ def test_hf_pool_doctor_reports_missing_config(tmp_path):
     assert lines[0].startswith("hf_pool=default status=not_configured")
 
 
+def test_hf_pool_doctor_reports_malformed_config_as_broken(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text("[]", encoding="utf-8")
+
+    health = check_hf_pool(config_path=path)
+    lines = format_hf_pool_status_lines(health)
+
+    assert health.status == "broken"
+    assert lines[0].startswith("hf_pool=default status=broken")
+    assert "root must be a mapping" in lines[0]
+
+
 def test_hf_pool_doctor_reports_missing_key_without_secret_leak(tmp_path):
     path = tmp_path / "hf_pool.yaml"
     path.write_text(
