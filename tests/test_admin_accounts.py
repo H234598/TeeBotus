@@ -298,6 +298,9 @@ def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_pat
     metadata_health = report["instances"][0]["metadata_health"]
     assert metadata_health["readable"] is False
     assert metadata_health["unreadable_items"] == 3
+    assert report["totals"]["metadata_broken_instances"] == 1
+    assert report["totals"]["metadata_unreadable_items"] == 3
+    assert report["totals"]["metadata_unreadable_accounts"] == 1
     kinds = {item["kind"] for item in metadata_health["items"]}
     assert kinds == {"account_index", "identity_mapping", "accounts_dir"}
     accounts_dir_item = next(item for item in metadata_health["items"] if item["kind"] == "accounts_dir")

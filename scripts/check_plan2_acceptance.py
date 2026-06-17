@@ -823,12 +823,28 @@ def _derive_memory_recovery_totals(instances: Sequence[Any]) -> dict[str, int]:
         "sources": 0,
         "readable_sources": 0,
         "unreadable_sources": 0,
+        "metadata_broken_instances": 0,
+        "metadata_unreadable_items": 0,
+        "metadata_unreadable_accounts": 0,
         "legacy_plaintext_sources": 0,
         "legacy_plaintext_entries": 0,
     }
     for instance in instances:
         if not isinstance(instance, Mapping):
             continue
+        metadata = instance.get("metadata_health")
+        if isinstance(metadata, Mapping):
+            items = metadata.get("items") if isinstance(metadata.get("items"), list) else []
+            if metadata.get("readable") is False or items:
+                totals["metadata_broken_instances"] += 1
+            totals["metadata_unreadable_items"] += len(items)
+            unreadable_accounts: set[str] = set()
+            for item in items:
+                if not isinstance(item, Mapping):
+                    continue
+                account_ids = item.get("account_ids") if isinstance(item.get("account_ids"), list) else []
+                unreadable_accounts.update(str(account_id) for account_id in account_ids if ACCOUNT_ID_RE.fullmatch(str(account_id)))
+            totals["metadata_unreadable_accounts"] += len(unreadable_accounts)
         accounts = instance.get("accounts")
         if isinstance(accounts, list):
             for account in accounts:
