@@ -172,6 +172,27 @@ def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> Non
     )
 
 
+def test_runtime_status_memory_index_line_reports_invalid_remote_account_memory_embeddings() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instructions = SimpleNamespace(
+        user_memory_enabled=True,
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_provider="hf",
+        memory_search_embedding_model="intfloat/multilingual-e5-small",
+        memory_search_embedding_dimensions=384,
+        memory_search_embedding_endpoint="",
+    )
+
+    line = bot._runtime_status_memory_index_line("Demo", instructions, qdrant_ok=True)
+
+    assert line.startswith(
+        "memory_index=Demo backend=keyword status=ready semantic=invalid "
+        "embedding_provider=hf embedding_model=intfloat/multilingual-e5-small embedding_dimensions=384"
+    )
+    assert "Account-memory embeddings require a local endpoint" in line
+
+
 def test_runtime_qdrant_collection_specs_follow_active_semantic_memory_config() -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instructions = SimpleNamespace(
@@ -187,6 +208,24 @@ def test_runtime_qdrant_collection_specs_follow_active_semantic_memory_config() 
     assert specs[0].name == "teebotus_user_memory"
     assert specs[0].vector_size == 384
     assert specs[0].embedding_model == "intfloat/multilingual-e5-small"
+
+
+def test_runtime_qdrant_collection_specs_report_invalid_remote_memory_embedding_config() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instructions = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_provider="hf",
+        memory_search_embedding_model="intfloat/multilingual-e5-small",
+        memory_search_embedding_dimensions=384,
+        memory_search_embedding_endpoint="",
+    )
+
+    specs, error = bot._runtime_qdrant_collection_specs({"Demo": instructions})
+
+    assert specs[0].vector_size == USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
+    assert "invalid user-memory embedding config" in error
+    assert "Demo:Account-memory embeddings require a local endpoint" in error
 
 
 def test_runtime_qdrant_collection_specs_report_conflicting_semantic_memory_configs() -> None:

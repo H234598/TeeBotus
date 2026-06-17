@@ -447,10 +447,12 @@ def _runtime_status_memory_index_line(instance_name: str, instructions: Any | No
     status = "ready" if bool(getattr(instructions, "user_memory_enabled", False)) else "disabled"
     semantic_enabled = bool(getattr(instructions, "memory_search_semantic_enabled", False))
     semantic_backend = str(getattr(instructions, "memory_search_semantic_backend", "") or "").strip().casefold()
+    embedding_error = ""
     if not semantic_enabled:
         semantic = "disabled"
     elif semantic_backend == "qdrant":
-        semantic = "ready" if qdrant_ok else "unavailable"
+        embedding_error = _runtime_account_memory_embedding_config_error(instructions)
+        semantic = "invalid" if embedding_error else ("ready" if qdrant_ok else "unavailable")
     else:
         semantic = "unsupported"
     detail = f"memory_index={instance} backend=keyword status={status} semantic={semantic}"
@@ -459,6 +461,8 @@ def _runtime_status_memory_index_line(instance_name: str, instructions: Any | No
         model = str(getattr(instructions, "memory_search_embedding_model", "") or "").strip() or "unknown"
         dimensions = str(getattr(instructions, "memory_search_embedding_dimensions", "") or "").strip() or "unknown"
         detail += f" embedding_provider={provider} embedding_model={model} embedding_dimensions={dimensions}"
+        if embedding_error:
+            detail += f" error={_sanitize_status_text(embedding_error)}"
     return detail
 
 
@@ -466,6 +470,7 @@ def _runtime_qdrant_collection_specs(instructions_by_instance: Mapping[str, Any]
     from TeeBotus.runtime.qdrant import default_qdrant_collection_specs
 
     active_memory_specs: list[tuple[str, int, str]] = []
+    embedding_errors: list[tuple[str, str]] = []
     for instance_name, instructions in sorted(instructions_by_instance.items()):
         if instructions is None:
             continue
@@ -473,11 +478,18 @@ def _runtime_qdrant_collection_specs(instructions_by_instance: Mapping[str, Any]
         semantic_backend = str(getattr(instructions, "memory_search_semantic_backend", "") or "").strip().casefold()
         if not semantic_enabled or semantic_backend != "qdrant":
             continue
+        embedding_error = _runtime_account_memory_embedding_config_error(instructions)
+        if embedding_error:
+            embedding_errors.append((str(instance_name), embedding_error))
+            continue
         dimensions = _positive_status_int(getattr(instructions, "memory_search_embedding_dimensions", 0), default=0)
         model = str(getattr(instructions, "memory_search_embedding_model", "") or "").strip()
         if dimensions <= 0 or not model:
             continue
         active_memory_specs.append((str(instance_name), dimensions, model))
+    if embedding_errors:
+        errors = ", ".join(f"{instance}:{error}" for instance, error in embedding_errors)
+        return default_qdrant_collection_specs(), f"invalid user-memory embedding config: {errors}"
     if not active_memory_specs:
         return default_qdrant_collection_specs(), ""
     unique_specs = {(dimensions, model) for _instance, dimensions, model in active_memory_specs}
@@ -492,6 +504,24 @@ def _runtime_qdrant_collection_specs(instructions_by_instance: Mapping[str, Any]
         )
     conflicts = ", ".join(f"{instance}:{model}/{dimensions}" for instance, dimensions, model in active_memory_specs)
     return default_qdrant_collection_specs(), f"conflicting user-memory embedding configs: {conflicts}"
+
+
+def _runtime_account_memory_embedding_config_error(instructions: Any) -> str:
+    try:
+        from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
+
+        build_account_memory_embedding_provider(
+            EmbeddingConfig(
+                provider=str(getattr(instructions, "memory_search_embedding_provider", "") or "").strip(),
+                model_name=str(getattr(instructions, "memory_search_embedding_model", "") or "").strip(),
+                dimensions=_positive_status_int(getattr(instructions, "memory_search_embedding_dimensions", 0), default=64),
+                endpoint=str(getattr(instructions, "memory_search_embedding_endpoint", "") or "").strip(),
+                api_key_env=str(getattr(instructions, "memory_search_embedding_api_key_env", "") or "").strip(),
+            )
+        )
+    except ValueError as exc:
+        return str(exc)
+    return ""
 
 
 def _runtime_qdrant_status_url(instructions_by_instance: Mapping[str, Any]) -> tuple[str, str]:
