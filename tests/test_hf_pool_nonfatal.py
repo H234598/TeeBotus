@@ -136,6 +136,17 @@ def test_hf_pool_provider_retries_next_target_before_fallback(tmp_path):
     assert executor.selected_targets == ["high_target", "low_target"]
 
 
+def test_hf_pool_provider_respects_zero_max_retries(tmp_path):
+    path = _two_target_config(tmp_path, max_retries=0)
+    executor = _RetryExecutor()
+
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=executor)
+
+    with pytest.raises(HFPoolUnavailable, match="high target failed"):
+        provider.create_reply("ping", BotInstructions())
+    assert executor.selected_targets == ["high_target"]
+
+
 def test_hf_pool_provider_redacts_unexpected_executor_errors(tmp_path):
     path = _enabled_config(tmp_path)
     provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=_BrokenSecretExecutor())
@@ -230,31 +241,34 @@ def _enabled_config(tmp_path):
     return path
 
 
-def _two_target_config(tmp_path):
+def _two_target_config(tmp_path, *, max_retries: int | None = None):
+    pool: dict[str, object] = {
+        "enabled": True,
+        "targets": [
+            {
+                "name": "high_target",
+                "api_key_env": "HF_TOKEN_MAIN",
+                "model": "high-model",
+                "weight": 10,
+                "purposes": ["normal_chat"],
+            },
+            {
+                "name": "low_target",
+                "api_key_env": "HF_TOKEN_MAIN",
+                "model": "low-model",
+                "weight": 1,
+                "purposes": ["normal_chat"],
+            },
+        ],
+    }
+    if max_retries is not None:
+        pool["max_retries"] = max_retries
     path = tmp_path / "hf_pool.yaml"
     path.write_text(
         json.dumps(
             {
                 "pools": {
-                    "default": {
-                        "enabled": True,
-                        "targets": [
-                            {
-                                "name": "high_target",
-                                "api_key_env": "HF_TOKEN_MAIN",
-                                "model": "high-model",
-                                "weight": 10,
-                                "purposes": ["normal_chat"],
-                            },
-                            {
-                                "name": "low_target",
-                                "api_key_env": "HF_TOKEN_MAIN",
-                                "model": "low-model",
-                                "weight": 1,
-                                "purposes": ["normal_chat"],
-                            },
-                        ],
-                    }
+                    "default": pool,
                 }
             }
         ),

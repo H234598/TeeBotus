@@ -90,7 +90,7 @@ def _parse_pools(raw_pools: object) -> dict[str, HFPool]:
             name=pool_name,
             enabled=_parse_bool(raw_pool.get("enabled"), default=True),
             strategy=str(raw_pool.get("strategy") or "purpose_weighted").strip(),
-            max_retries=_parse_int(raw_pool.get("max_retries"), default=1),
+            max_retries=_parse_nonnegative_int(raw_pool.get("max_retries"), default=1),
             timeout_seconds=_parse_int(raw_pool.get("timeout_seconds"), default=60),
             cooldown_seconds_on_429=_parse_int(raw_pool.get("cooldown_seconds_on_429"), default=900),
             cooldown_seconds_on_5xx=_parse_int(raw_pool.get("cooldown_seconds_on_5xx"), default=120),
@@ -160,6 +160,14 @@ def _parse_bool(value: object, *, default: bool) -> bool:
 def _parse_int(value: object, *, default: int) -> int:
     parsed = _parse_optional_int(value)
     return parsed if parsed is not None else default
+
+
+def _parse_nonnegative_int(value: object, *, default: int) -> int:
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
 
 
 def _parse_optional_int(value: object) -> int | None:

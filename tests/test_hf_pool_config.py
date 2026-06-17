@@ -73,6 +73,36 @@ def test_hf_pool_config_parses_pool_and_targets(tmp_path):
     assert pool.targets[0].capabilities.supports_structured_output is True
 
 
+def test_hf_pool_config_allows_zero_max_retries(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "max_retries": 0,
+                        "targets": [
+                            {
+                                "name": "qwen",
+                                "api_key_env": "HF_TOKEN_MAIN",
+                                "model": "Qwen/Qwen3-4B-Instruct-2507",
+                            }
+                        ],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_hf_pool_config(path)
+    pool = config.pool("default")
+
+    assert pool is not None
+    assert pool.max_retries == 0
+
+
 def test_repository_hf_pool_config_declares_plan3_model_buckets_disabled_by_default() -> None:
     config = load_hf_pool_config(DEFAULT_HF_POOL_CONFIG_PATH)
     pool = config.pool("default")
