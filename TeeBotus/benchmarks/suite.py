@@ -12,6 +12,7 @@ from TeeBotus.benchmarks.bibliothekar import (
     benchmark_retrieval_embedding_reranker_matrix as _benchmark_retrieval_embedding_reranker_matrix,
 )
 from TeeBotus.benchmarks.core import (
+    BENCHMARK_RANKING_NAME_SETS,
     BenchmarkResult,
     REQUIRED_BENCHMARK_CATEGORIES,
     REQUIRED_BENCHMARK_NAMES,
@@ -196,6 +197,7 @@ def _retrieval_backend_results(matrix: BenchmarkResult) -> list[BenchmarkResult]
 
 
 __all__ = [
+    "BENCHMARK_RANKING_NAME_SETS",
     "BenchmarkResult",
     "REQUIRED_BENCHMARK_CATEGORIES",
     "REQUIRED_BENCHMARK_NAMES",

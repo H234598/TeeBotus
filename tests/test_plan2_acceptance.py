@@ -550,6 +550,7 @@ def test_plan2_acceptance_with_legacy_opt_in_covers_all_repo_unit_tests() -> Non
 def test_plan2_acceptance_benchmark_constants_follow_core() -> None:
     from TeeBotus.benchmarks import core as benchmark_core
 
+    assert check_plan2_acceptance.BENCHMARK_RANKING_NAME_SETS == benchmark_core.BENCHMARK_RANKING_NAME_SETS
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_CATEGORIES
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAME_CATEGORIES == benchmark_core.REQUIRED_BENCHMARK_NAME_CATEGORIES
     assert check_plan2_acceptance.REQUIRED_BENCHMARK_NAMES == benchmark_core.REQUIRED_BENCHMARK_NAMES

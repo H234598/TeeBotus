@@ -60,15 +60,39 @@ REQUIRED_BENCHMARK_NAME_CATEGORIES = {
     "mcp_readonly_bibliothekar_and_memory_search": "mcp_tools",
 }
 REQUIRED_BENCHMARK_NAMES = frozenset(REQUIRED_BENCHMARK_NAME_CATEGORIES)
-REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
-    {
-        "account_memory",
-        "bibliothekar",
-        "langgraph_flows",
-        "retrieval",
-        "transcription_youtube",
-    }
-)
+BENCHMARK_RANKING_NAME_SETS = {
+    "account_memory": frozenset({"memory_jsonl", "memory_sqlite_projection", "memory_postgres"}),
+    "bibliothekar": frozenset(
+        {
+            "bibliothekar_local_query",
+            "bibliothekar_llamaindex_fake_query",
+            "bibliothekar_haystack_fake_query",
+        }
+    ),
+    "langgraph_flows": frozenset(
+        {
+            "langgraph_bibliothekar_deep_query",
+            "langgraph_bibliothekar_linear",
+            "langgraph_bibliothekar_fake_installed",
+            "langgraph_source_harvester_workflow",
+        }
+    ),
+    "retrieval": frozenset(
+        {
+            "retrieval_backend_haystack_fake",
+            "retrieval_backend_llamaindex_fake",
+            "retrieval_backend_local",
+        }
+    ),
+    "transcription_youtube": frozenset(
+        {
+            "youtube_parser_local",
+            "youtube_local_job_queue_no_llm",
+            "youtube_local_pipeline_cache_no_openai",
+        }
+    ),
+}
+REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(BENCHMARK_RANKING_NAME_SETS)
 REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES = 2
 STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS = frozenset(
     {"network_calls", "openai_calls", "provider_calls", "remote_calls", "llm_calls"}
@@ -176,28 +200,8 @@ def build_quality_gate(
 
 
 def build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
-    categories = {
-        "account_memory": {"memory_jsonl", "memory_sqlite_projection", "memory_postgres"},
-        "bibliothekar": {"bibliothekar_local_query", "bibliothekar_llamaindex_fake_query", "bibliothekar_haystack_fake_query"},
-        "langgraph_flows": {
-            "langgraph_bibliothekar_deep_query",
-            "langgraph_bibliothekar_linear",
-            "langgraph_bibliothekar_fake_installed",
-            "langgraph_source_harvester_workflow",
-        },
-        "retrieval": {
-            "retrieval_backend_haystack_fake",
-            "retrieval_backend_llamaindex_fake",
-            "retrieval_backend_local",
-        },
-        "transcription_youtube": {
-            "youtube_parser_local",
-            "youtube_local_job_queue_no_llm",
-            "youtube_local_pipeline_cache_no_openai",
-        },
-    }
     rankings = []
-    for category, names in categories.items():
+    for category, names in BENCHMARK_RANKING_NAME_SETS.items():
         ranking = stable_backend_ranking(category=category, results=results, names=names)
         if ranking:
             rankings.append(ranking)
@@ -355,6 +359,7 @@ def _forbidden_standard_benchmark_calls(details: dict[str, Any]) -> list[tuple[s
 
 
 __all__ = [
+    "BENCHMARK_RANKING_NAME_SETS",
     "BenchmarkResult",
     "REQUIRED_BENCHMARK_CATEGORIES",
     "REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES",

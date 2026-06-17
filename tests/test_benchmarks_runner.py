@@ -50,6 +50,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._build_quality_gate is core.build_quality_gate
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
+    assert benchmark_module.BENCHMARK_RANKING_NAME_SETS is core.BENCHMARK_RANKING_NAME_SETS
     assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
     assert benchmark_module.REQUIRED_BENCHMARK_NAME_CATEGORIES is core.REQUIRED_BENCHMARK_NAME_CATEGORIES
     assert benchmark_module._benchmark_adapter_contracts is adapters.benchmark_adapter_contracts
@@ -114,7 +115,14 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["regression"]["status"] == "not_configured"
     assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
-    assert {"account_memory", "bibliothekar", "langgraph_flows", "retrieval", "transcription_youtube"}.issubset(rankings)
+    assert benchmark_module.REQUIRED_BENCHMARK_RANKING_CATEGORIES.issubset(rankings)
+    assert set(benchmark_module.BENCHMARK_RANKING_NAME_SETS) == benchmark_module.REQUIRED_BENCHMARK_RANKING_CATEGORIES
+    for category, names in benchmark_module.BENCHMARK_RANKING_NAME_SETS.items():
+        ranking = rankings[category]
+        ranked_names = {candidate["name"] for candidate in ranking["candidates"]}
+        skipped_names = {skipped["name"] for skipped in ranking["skipped"]}
+        assert ranked_names <= names
+        assert skipped_names <= names
     assert rankings["account_memory"]["fastest_stable"]
     assert rankings["account_memory"]["candidates"]
     assert [candidate["rank"] for candidate in rankings["account_memory"]["candidates"]] == list(
