@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex, qdrant_memory_point_id
 
 
@@ -115,6 +116,18 @@ def test_qdrant_memory_index_indexes_searches_and_deletes_without_cleartext() ->
     index.delete_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, memory_id="mem_sleep")
 
     assert fake_qdrant.points == {}
+
+
+def test_qdrant_memory_index_default_embedding_matches_collection_contract() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+
+    point_id = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_sleep", "user_text": "Schlaf"})
+
+    payload = fake_qdrant.points[point_id]["payload"]
+    assert payload["embedding_model"] == USER_MEMORY_QDRANT_EMBEDDING_MODEL
+    assert payload["embedding_dimensions"] == USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
+    assert len(fake_qdrant.points[point_id]["vector"]) == USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
 
 
 def test_qdrant_memory_search_is_scoped_by_instance_and_account() -> None:

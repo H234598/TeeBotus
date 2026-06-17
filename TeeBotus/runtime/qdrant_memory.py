@@ -17,6 +17,8 @@ from TeeBotus.runtime.qdrant import (
     QDRANT_USER_MEMORY_COLLECTION,
     QdrantError,
     QdrantOpener,
+    USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    USER_MEMORY_QDRANT_EMBEDDING_MODEL,
     resolve_qdrant_url,
 )
 
@@ -37,7 +39,10 @@ class QdrantMemoryResult:
 class QdrantMemoryIndex:
     url: str | None = None
     collection: str = QDRANT_USER_MEMORY_COLLECTION
-    embedding_provider: EmbeddingProvider = FakeEmbeddingProvider()
+    embedding_provider: EmbeddingProvider = FakeEmbeddingProvider(
+        model_name=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
+        dimensions=USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    )
     timeout_seconds: float = DEFAULT_QDRANT_TIMEOUT_SECONDS
     opener: QdrantOpener | None = None
 

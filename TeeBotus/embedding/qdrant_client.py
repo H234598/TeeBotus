@@ -3,6 +3,8 @@ from __future__ import annotations
 from TeeBotus.runtime.qdrant import (
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
+    USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    USER_MEMORY_QDRANT_EMBEDDING_MODEL,
     QdrantCollectionResult,
     QdrantCollectionSpec,
     QdrantError,
@@ -17,6 +19,8 @@ from TeeBotus.runtime.qdrant import (
 __all__ = [
     "QDRANT_BIBLIOTHEKAR_COLLECTION",
     "QDRANT_USER_MEMORY_COLLECTION",
+    "USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS",
+    "USER_MEMORY_QDRANT_EMBEDDING_MODEL",
     "QdrantCollectionResult",
     "QdrantCollectionSpec",
     "QdrantError",

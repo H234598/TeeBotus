@@ -15,6 +15,8 @@ QDRANT_URL_ENV = "TEEBOTUS_QDRANT_URL"
 QDRANT_USER_MEMORY_COLLECTION = "teebotus_user_memory"
 QDRANT_BIBLIOTHEKAR_COLLECTION = "teebotus_bibliothekar_chunks"
 DEFAULT_QDRANT_TIMEOUT_SECONDS = 0.35
+USER_MEMORY_QDRANT_EMBEDDING_MODEL = "teebotus-account-memory-hash"
+USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS = ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
 BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL = "BAAI/bge-m3"
 BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS = 1024
 DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS = BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS
@@ -133,14 +135,14 @@ def format_qdrant_status_line(health: QdrantHealth) -> str:
 
 def default_qdrant_collection_specs(
     *,
-    user_memory_vector_size: int = ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS,
+    user_memory_vector_size: int = USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
     bibliothekar_vector_size: int = DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
 ) -> tuple[QdrantCollectionSpec, QdrantCollectionSpec]:
     return (
         QdrantCollectionSpec(
             name=QDRANT_USER_MEMORY_COLLECTION,
             vector_size=_validate_vector_size(user_memory_vector_size),
-            embedding_model="teebotus-account-memory-hash",
+            embedding_model=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
         ),
         QdrantCollectionSpec(
             name=QDRANT_BIBLIOTHEKAR_COLLECTION,
