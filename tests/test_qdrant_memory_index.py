@@ -110,6 +110,12 @@ def test_qdrant_memory_index_indexes_searches_and_deletes_without_cleartext() ->
     assert payload["instance_name"] == "Depressionsbot"
     assert "source_sha256" not in payload
     assert "keyword_sha256" not in payload
+    assert "kind" not in payload
+    assert "memory_type" not in payload
+    assert "importance" not in payload
+    assert "salience" not in payload
+    assert "created_at" not in payload
+    assert "updated_at" not in payload
 
     results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=3)
 
@@ -215,6 +221,44 @@ def test_qdrant_memory_payload_excludes_messenger_identity_fields() -> None:
     assert "matrix" not in stored_json
     assert "signal" not in stored_json
     assert "provider-user" not in stored_json
+    assert "privater inhalt" not in stored_json
+
+
+def test_qdrant_memory_payload_excludes_clinical_and_temporal_metadata() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    point_id = index.index_memory(
+        instance_name="Depressionsbot",
+        account_id=ACCOUNT_A,
+        entry={
+            "id": "mem_sensitive_metadata",
+            "kind": "suicidal_ideation",
+            "memory_type": "risk_signal",
+            "importance": 9,
+            "salience": 10,
+            "created_at": "2026-06-16T10:00:00Z",
+            "updated_at": "2026-06-17T10:00:00Z",
+            "valid_from": "2026-06-16",
+            "valid_to": "2026-06-18",
+            "user_text": "Privater Inhalt",
+        },
+    )
+
+    payload = fake_qdrant.points[point_id]["payload"]
+    stored_json = json.dumps(payload, ensure_ascii=False).casefold()
+
+    assert set(payload) == {
+        "schema",
+        "schema_version",
+        "instance_name",
+        "account_id",
+        "memory_id",
+        "embedding_model",
+        "embedding_dimensions",
+    }
+    assert "suicidal_ideation" not in stored_json
+    assert "risk_signal" not in stored_json
+    assert "2026-06" not in stored_json
     assert "privater inhalt" not in stored_json
 
 

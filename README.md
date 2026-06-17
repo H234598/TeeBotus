@@ -788,9 +788,10 @@ Payloads verarbeiten. `KeywordRerankerProvider` und `check_embedding_provider`
 decken den lokalen Reranker-/Health-Sockel ab.
 `TeeBotus.runtime.qdrant_memory.QdrantMemoryIndex` ist ein opt-in Cache:
 AccountStore bleibt die Wahrheit, `index_memory`, `search`, `delete_memory`,
-`delete_account` und `rebuild` schreiben nur Vektoren, Scope-Metadaten und
-`schema_version` nach Qdrant, keine `user_text`-/`bot_text`-/Keyword-Klartexte,
-keine Content-/Keyword-Hashes und keine Messenger-Identitaeten.
+`delete_account` und `rebuild` schreiben nur Vektoren, Scope-/Cache-Metadaten
+und `schema_version` nach Qdrant, keine `user_text`-/`bot_text`-/Keyword-
+Klartexte, keine klinischen Kategorien, Scores, Zeitangaben,
+Content-/Keyword-Hashes oder Messenger-Identitaeten.
 `TeeBotus.runtime.memory_search.MemorySearchService` merged lokale
 Keyword-/Metadaten-Kandidaten aus `KeywordMemorySearch` mit optionalen
 Qdrant-Kandidaten aus `QdrantMemorySearch`. Ohne explizite Config bleibt die

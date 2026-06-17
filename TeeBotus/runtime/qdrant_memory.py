@@ -207,14 +207,6 @@ def _memory_payload(
         "instance_name": instance_name,
         "account_id": account_id,
         "memory_id": memory_id,
-        "kind": str(entry.get("kind") or ""),
-        "memory_type": str(entry.get("memory_type") or ""),
-        "importance": _float_or_zero(entry.get("importance")),
-        "salience": _float_or_zero(entry.get("salience")),
-        "created_at": str(entry.get("created_at") or ""),
-        "updated_at": str(entry.get("updated_at") or ""),
-        "valid_from": str(entry.get("valid_from") or ""),
-        "valid_to": str(entry.get("valid_to") or ""),
         "embedding_model": str(embedding_model or ""),
         "embedding_dimensions": int(embedding_dimensions),
     }
@@ -303,13 +295,6 @@ def _validate_vector(vector: list[float], *, expected_dimensions: int) -> None:
     for value in vector:
         if not isinstance(value, (int, float)):
             raise ValueError("Embedding vector must contain numbers only.")
-
-
-def _float_or_zero(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 def _qdrant_request_error(exc: BaseException) -> str:
