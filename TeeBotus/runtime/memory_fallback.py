@@ -210,7 +210,12 @@ class WarningFallbackAccountMemoryBackend:
         return "read diagnostic failed"
 
     def _clear_recovered_if_clean(self, operation: str) -> None:
-        if self._dirty_entries or self._dirty_indexes:
+        if (
+            self._dirty_entries
+            or self._dirty_indexes
+            or self._stale_fallback_entries
+            or self._stale_fallback_indexes
+        ):
             return
         if self._fallback_active:
             LOGGER.critical("Account-Memory primary backend recovered label=%s operation=%s. Fallback warning cleared.", self.label, operation)

@@ -926,6 +926,61 @@ def test_account_memory_fallback_recovers_primary_entry_diagnostics(caplog):
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
 
 
+def test_account_memory_fallback_keeps_warning_when_primary_repair_fails(caplog):
+    class Backend:
+        def __init__(
+            self,
+            rows: list[dict[str, str]],
+            *,
+            skipped: int = 0,
+            error: str = "",
+            fail_write: bool = False,
+        ) -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]}
+            self.last_entry_skipped = skipped
+            self.last_entry_read_error = error
+            self.last_index_read_error = ""
+            self.fail_write = fail_write
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise AccountStoreError(
+                    "existing SQLite account memory entries are not decryptable with the current key"
+                )
+            self.entries[account_id] = [dict(row) for row in rows]
+            self.last_entry_skipped = 0
+            self.last_entry_read_error = ""
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id = "a" * 128
+    primary = Backend(
+        [{"id": "mem_partial"}],
+        skipped=2,
+        error="payload could not be decrypted",
+        fail_write=True,
+    )
+    fallback = Backend([{"id": "mem_clean"}])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        entries = backend.read_entries(account_id)
+
+    assert entries == [{"id": "mem_clean"}]
+    assert primary.entries[account_id] == [{"id": "mem_partial"}]
+    assert account_id in backend.stale_fallback_entry_account_ids
+    assert "read_entries: primary repair failed" in backend.last_fallback_sync_error
+    assert "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED" in caplog.text
+    assert "primary backend recovered" not in caplog.text
+
+
 def test_account_memory_fallback_recovers_primary_index_diagnostics(caplog):
     class Backend:
         def __init__(self, index: dict[str, object], *, error: str = "") -> None:
