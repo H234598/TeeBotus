@@ -98,7 +98,7 @@ def test_openai_compatible_hf_executor_rate_limit_sets_cooldown_and_redacts_secr
         executor.create_reply(_scheduled(api_key="hf_TESTSECRET123"), "Hallo", BotInstructions())
 
     assert "hf_TESTSECRET123" not in str(excinfo.value)
-    assert "hf_<REDACTED>" in str(excinfo.value)
+    assert "Bearer <REDACTED>" in str(excinfo.value)
     assert state.failures == {"target_a": 1}
     assert "target_a" in state.cooldowns
     assert events[-1].status == "rate_limited"
@@ -152,7 +152,7 @@ def test_sqlite_hf_pool_state_store_roundtrips_state_and_usage(tmp_path) -> None
     assert len(usage) == 1
     assert usage[0].target == "target_a"
     assert usage[0].usage == {
-        "detail": "bad Bearer hf_<REDACTED>",
+        "detail": "bad Bearer <REDACTED>",
         "http_status": 429,
         "nested": {"token": "hf_<REDACTED>"},
     }

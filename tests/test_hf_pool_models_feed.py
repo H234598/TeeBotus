@@ -94,4 +94,4 @@ def test_fetch_hf_pool_models_uses_models_endpoint_and_redacts_fetch_errors() ->
     assert failed.status == "unavailable"
     assert failed.source == "https://router.huggingface.co/v1/models"
     assert "hf_TESTSECRET123" not in failed.error
-    assert "hf_<REDACTED>" in failed.error
+    assert "Bearer <REDACTED>" in failed.error
