@@ -82,30 +82,38 @@ def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, 
     instances_dir = tmp_path / "instances"
     demo_dir = instances_dir / "Demo"
     demo_dir.mkdir(parents=True)
-    (demo_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - semantic_enabled: true
+        - semantic_backend: qdrant
+        - qdrant_url: http://127.0.0.1:6334
+        """,
+        encoding="utf-8",
+    )
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
     monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(
         "TeeBotus.runtime.qdrant.check_qdrant_health",
-        lambda: QdrantHealth(target="http://127.0.0.1:6333", status="reachable", ok=True),
+        lambda url=None: QdrantHealth(target=url, status="reachable", ok=True),
     )
     monkeypatch.setattr(
         "TeeBotus.runtime.qdrant.check_default_collections",
         lambda **_kwargs: (
-            QdrantCollectionResult(QDRANT_USER_MEMORY_COLLECTION, "http://127.0.0.1:6333", "ready", True),
-            QdrantCollectionResult(QDRANT_BIBLIOTHEKAR_COLLECTION, "http://127.0.0.1:6333", "missing", False, "HTTP 404"),
+            QdrantCollectionResult(QDRANT_USER_MEMORY_COLLECTION, _kwargs["url"], "ready", True),
+            QdrantCollectionResult(QDRANT_BIBLIOTHEKAR_COLLECTION, _kwargs["url"], "missing", False, "HTTP 404"),
         ),
     )
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     captured = capsys.readouterr()
-    assert "qdrant=127.0.0.1:6333 status=reachable" in captured.out
-    assert "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready" in captured.out
-    assert "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=missing" in captured.out
-    assert "memory_index=Demo backend=keyword status=disabled semantic=disabled" in captured.out
+    assert "qdrant=127.0.0.1:6334 status=reachable" in captured.out
+    assert "qdrant_collection=teebotus_user_memory target=127.0.0.1:6334 status=ready" in captured.out
+    assert "qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6334 status=missing" in captured.out
+    assert "memory_index=Demo backend=keyword status=disabled semantic=ready" in captured.out
 
 
 def test_runtime_status_memory_index_line_reports_semantic_qdrant_state() -> None:
@@ -169,6 +177,45 @@ def test_runtime_qdrant_collection_specs_report_conflicting_semantic_memory_conf
     assert "conflicting user-memory embedding configs" in error
     assert "A:intfloat/multilingual-e5-small/384" in error
     assert "B:teebotus-account-memory-hash/64" in error
+
+
+def test_runtime_qdrant_status_url_follows_active_semantic_memory_config() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instructions = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_qdrant_url="http://localhost:6334",
+        bibliothekar_enabled=False,
+    )
+
+    url, error = bot._runtime_qdrant_status_url({"Demo": instructions})
+
+    assert url == "http://localhost:6334"
+    assert error == ""
+
+
+def test_runtime_qdrant_status_url_reports_conflicting_active_qdrant_urls() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    first = SimpleNamespace(
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_qdrant_url="http://localhost:6334",
+        bibliothekar_enabled=False,
+    )
+    second = SimpleNamespace(
+        memory_search_semantic_enabled=False,
+        memory_search_semantic_backend="",
+        bibliothekar_enabled=True,
+        bibliothekar_backend="haystack",
+        bibliothekar_qdrant_url="http://127.0.0.1:6335",
+    )
+
+    url, error = bot._runtime_qdrant_status_url({"A": first, "B": second})
+
+    assert url == "http://127.0.0.1:6333"
+    assert "conflicting qdrant urls" in error
+    assert "A/memory:http://localhost:6334" in error
+    assert "B/bibliothekar:http://127.0.0.1:6335" in error
 
 
 def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:

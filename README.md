@@ -703,6 +703,9 @@ meldet der Status `status=config_conflict`. Wenn eine erreichbare Qdrant-
 Collection mit falscher Vektorgroesse existiert, meldet der Status
 `status=schema_mismatch actual_vector_size=...`; dann muss der rebuildbare
 Cache mit konsistenter Modellkonfiguration neu angelegt werden.
+`--runtime-status` prueft Qdrant gegen die aktive Qdrant-URL aus
+`Bot_Verhalten.md`; wenn aktive Usermemory-/Bibliothekar-Qdrant-Pfade
+verschiedene URLs fordern, meldet der Status ebenfalls `config_conflict`.
 Qdrant-Suchen filtern Usermemory-Treffer zusaetzlich nach
 `embedding_model` und `embedding_dimensions`, damit alte Vektoren nach einem
 Modellwechsel nicht mit neuen Treffern vermischt werden.

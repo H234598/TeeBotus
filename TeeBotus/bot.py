@@ -162,23 +162,25 @@ def _runtime_status(argv: Sequence[str]) -> int:
         print(f"crew_pilot=all status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}")
     qdrant_ok = False
     qdrant_specs, qdrant_collection_config_error = _runtime_qdrant_collection_specs(instructions_by_instance)
+    qdrant_status_url, qdrant_url_config_error = _runtime_qdrant_status_url(instructions_by_instance)
+    qdrant_config_error = qdrant_collection_config_error or qdrant_url_config_error
     try:
-        qdrant_health = check_qdrant_health()
+        qdrant_health = check_qdrant_health(qdrant_status_url)
         qdrant_ok = qdrant_health.ok
         print(_sanitize_status_text(format_qdrant_status_line(qdrant_health)))
         collection_results = (
             check_default_collections(url=qdrant_health.target, specs=qdrant_specs)
-            if qdrant_health.ok and not qdrant_collection_config_error
+            if qdrant_health.ok and not qdrant_config_error
             else None
         )
         for line in format_qdrant_collection_status_lines(qdrant_health, collection_results=collection_results, specs=qdrant_specs):
             print(_sanitize_status_text(line))
-        if qdrant_collection_config_error:
+        if qdrant_config_error:
             print(
                 _sanitize_status_text(
                     "qdrant_collection=teebotus_user_memory "
                     f"target={qdrant_display_target(qdrant_health.target)} "
-                    f"status=config_conflict vector_size=mixed embedding_model=mixed error={qdrant_collection_config_error}"
+                    f"status=config_conflict vector_size=mixed embedding_model=mixed error={qdrant_config_error}"
                 )
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should not crash on optional Qdrant.
@@ -417,6 +419,42 @@ def _runtime_qdrant_collection_specs(instructions_by_instance: Mapping[str, Any]
         )
     conflicts = ", ".join(f"{instance}:{model}/{dimensions}" for instance, dimensions, model in active_memory_specs)
     return default_qdrant_collection_specs(), f"conflicting user-memory embedding configs: {conflicts}"
+
+
+def _runtime_qdrant_status_url(instructions_by_instance: Mapping[str, Any]) -> tuple[str, str]:
+    from TeeBotus.runtime.qdrant import DEFAULT_QDRANT_URL
+
+    active_urls: list[tuple[str, str, str]] = []
+    for instance_name, instructions in sorted(instructions_by_instance.items()):
+        if instructions is None:
+            continue
+        semantic_enabled = bool(getattr(instructions, "memory_search_semantic_enabled", False))
+        semantic_backend = str(getattr(instructions, "memory_search_semantic_backend", "") or "").strip().casefold()
+        if semantic_enabled and semantic_backend == "qdrant":
+            active_urls.append(
+                (
+                    str(instance_name),
+                    "memory",
+                    str(getattr(instructions, "memory_search_qdrant_url", "") or DEFAULT_QDRANT_URL).strip() or DEFAULT_QDRANT_URL,
+                )
+            )
+        bibliothekar_enabled = bool(getattr(instructions, "bibliothekar_enabled", True))
+        bibliothekar_backend = str(getattr(instructions, "bibliothekar_backend", "") or "").strip().casefold()
+        if bibliothekar_enabled and bibliothekar_backend in {"haystack", "qdrant"}:
+            active_urls.append(
+                (
+                    str(instance_name),
+                    "bibliothekar",
+                    str(getattr(instructions, "bibliothekar_qdrant_url", "") or DEFAULT_QDRANT_URL).strip() or DEFAULT_QDRANT_URL,
+                )
+            )
+    if not active_urls:
+        return DEFAULT_QDRANT_URL, ""
+    unique_urls = {url for _instance, _purpose, url in active_urls}
+    if len(unique_urls) == 1:
+        return active_urls[0][2], ""
+    conflicts = ", ".join(f"{instance}/{purpose}:{url}" for instance, purpose, url in active_urls)
+    return DEFAULT_QDRANT_URL, f"conflicting qdrant urls: {conflicts}"
 
 
 def _positive_status_int(value: Any, *, default: int) -> int:
