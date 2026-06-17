@@ -19,6 +19,7 @@ def main(argv: list[str] | None = None) -> int:
             qdrant_url=args.qdrant_url or None,
             embedding_overrides=_embedding_overrides_from_args(args),
             dry_run=args.dry_run,
+            include_legacy_raw_account_id_cleanup=args.include_legacy_raw_account_id_cleanup,
         )
         if args.json:
             print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
@@ -59,6 +60,11 @@ def _build_parser() -> argparse.ArgumentParser:
     memory.add_argument("--embedding-endpoint", default=None, help="Override HF/TEI/OpenAI-compatible embedding endpoint.")
     memory.add_argument("--embedding-api-key-env", default=None, help="Override environment variable containing the embedding API key.")
     memory.add_argument("--dry-run", action="store_true", help="Count AccountStore entries without writing Qdrant.")
+    memory.add_argument(
+        "--include-legacy-raw-account-id-cleanup",
+        action="store_true",
+        help="Also delete old Qdrant cache payloads scoped by raw account_id. This sends the account ID to local Qdrant for cleanup.",
+    )
     memory.set_defaults(command="memory-rebuild")
 
     collections = subparsers.add_parser("collections-ensure", help="Ensure Qdrant collections using instance Memory Search config.")

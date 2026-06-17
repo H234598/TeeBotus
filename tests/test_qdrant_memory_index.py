@@ -279,15 +279,13 @@ def test_qdrant_memory_delete_account_removes_only_matching_scope() -> None:
 
     remaining_payloads = [point["payload"] for point in fake_qdrant.points.values()]
     assert [payload["memory_id"] for payload in remaining_payloads] == ["mem_b"]
-    current_delete_body = fake_qdrant.calls[-2]["body"]
-    legacy_delete_body = fake_qdrant.calls[-1]["body"]
+    current_delete_body = fake_qdrant.calls[-1]["body"]
     assert ACCOUNT_A not in json.dumps(current_delete_body, ensure_ascii=False)
     assert {"key": "account_scope", "match": {"value": scope_a}} in current_delete_body["filter"]["must"]
     assert {"key": "account_scope", "match": {"value": scope_b}} not in current_delete_body["filter"]["must"]
-    assert {"key": "account_id", "match": {"value": ACCOUNT_A}} in legacy_delete_body["filter"]["must"]
 
 
-def test_qdrant_memory_delete_account_removes_legacy_raw_account_payloads() -> None:
+def test_qdrant_memory_delete_account_skips_legacy_raw_account_payloads_by_default() -> None:
     fake_qdrant = _FakeQdrant()
     index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
     legacy_point_id = "legacy-a"
@@ -305,7 +303,34 @@ def test_qdrant_memory_delete_account_removes_legacy_raw_account_payloads() -> N
 
     index.delete_account(instance_name="Depressionsbot", account_id=ACCOUNT_A)
 
+    assert legacy_point_id in fake_qdrant.points
+    assert ACCOUNT_A not in json.dumps(fake_qdrant.calls[-1]["body"], ensure_ascii=False)
+
+
+def test_qdrant_memory_delete_account_can_explicitly_remove_legacy_raw_account_payloads() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    legacy_point_id = "legacy-a"
+    fake_qdrant.points[legacy_point_id] = {
+        "id": legacy_point_id,
+        "vector": [0.0] * USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+        "payload": {
+            "schema": "teebotus_qdrant_memory_v1",
+            "schema_version": 2,
+            "instance_name": "Depressionsbot",
+            "account_id": ACCOUNT_A,
+            "memory_id": "legacy_mem",
+        },
+    }
+
+    index.delete_account(
+        instance_name="Depressionsbot",
+        account_id=ACCOUNT_A,
+        include_legacy_raw_account_id_cleanup=True,
+    )
+
     assert legacy_point_id not in fake_qdrant.points
+    assert {"key": "account_id", "match": {"value": ACCOUNT_A}} in fake_qdrant.calls[-1]["body"]["filter"]["must"]
 
 
 def test_qdrant_memory_rebuild_uses_account_store_as_truth(tmp_path) -> None:

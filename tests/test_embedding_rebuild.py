@@ -10,15 +10,24 @@ from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_
 
 
 def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store_truth(tmp_path):
-    calls: list[tuple[str, str, str | None, str, int]] = []
+    calls: list[tuple[str, str, str | None, str, int, bool]] = []
 
     class FakeQdrantMemoryIndex:
         def __init__(self, *, url=None, embedding_provider, **_kwargs) -> None:
             self.url = url
             self.embedding_provider = embedding_provider
 
-        def rebuild(self, *, account_store, instance_name: str, account_id: str):
-            calls.append((instance_name, account_id, self.url, self.embedding_provider.model_name, self.embedding_provider.dimensions))
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            calls.append(
+                (
+                    instance_name,
+                    account_id,
+                    self.url,
+                    self.embedding_provider.model_name,
+                    self.embedding_provider.dimensions,
+                    include_legacy_raw_account_id_cleanup,
+                )
+            )
             return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
 
     instances_dir = tmp_path / "instances"
@@ -35,7 +44,7 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
         qdrant_index_factory=FakeQdrantMemoryIndex,
     )
 
-    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "custom-memory-model", 32)]
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "custom-memory-model", 32, False)]
     assert len(results) == 1
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 2
@@ -48,15 +57,24 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
 
 def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_default(monkeypatch, tmp_path):
     monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
-    calls: list[tuple[str, str, str, str, int]] = []
+    calls: list[tuple[str, str, str, str, int, bool]] = []
 
     class FakeQdrantMemoryIndex:
         def __init__(self, *, url=None, embedding_provider, **_kwargs) -> None:
             self.url = str(url)
             self.embedding_provider = embedding_provider
 
-        def rebuild(self, *, account_store, instance_name: str, account_id: str):
-            calls.append((instance_name, account_id, self.url, self.embedding_provider.model_name, self.embedding_provider.dimensions))
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            calls.append(
+                (
+                    instance_name,
+                    account_id,
+                    self.url,
+                    self.embedding_provider.model_name,
+                    self.embedding_provider.dimensions,
+                    include_legacy_raw_account_id_cleanup,
+                )
+            )
             return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
 
     instances_dir = tmp_path / "instances"
@@ -84,7 +102,7 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
         qdrant_index_factory=FakeQdrantMemoryIndex,
     )
 
-    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "instance-memory-model", 48)]
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "instance-memory-model", 48, False)]
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 1
     assert results[0].qdrant_url == "http://localhost:6334"
@@ -117,12 +135,40 @@ def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     assert results[0].point_ids == ()
 
 
+def test_rebuild_qdrant_memory_indexes_can_explicitly_request_legacy_raw_cleanup(tmp_path):
+    calls: list[bool] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            calls.append(include_legacy_raw_account_id_cleanup)
+            return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
+
+    instances_dir = tmp_path / "instances"
+    store = AccountStore(instances_dir / "Depressionsbot" / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        include_legacy_raw_account_id_cleanup=True,
+        qdrant_index_factory=FakeQdrantMemoryIndex,
+    )
+
+    assert calls == [True]
+    assert results[0].status == "rebuilt"
+
+
 def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path):
     def fake_rebuild(**kwargs):
         assert kwargs["instances_dir"] == str(tmp_path / "instances")
         assert kwargs["instance_names"] == ["Depressionsbot"]
         assert kwargs["account_ids"] == []
         assert kwargs["dry_run"] is True
+        assert kwargs["include_legacy_raw_account_id_cleanup"] is False
         assert kwargs["embedding_overrides"] == {
             "provider": "tei",
             "model_name": "intfloat/multilingual-e5-small",
@@ -166,6 +212,30 @@ def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path
     assert payload[0]["status"] == "dry_run"
     assert payload[0]["point_count"] == 2
     assert payload[0]["embedding_model"] == ""
+
+
+def test_embedding_cli_memory_rebuild_passes_explicit_legacy_raw_cleanup(monkeypatch, capsys, tmp_path):
+    def fake_rebuild(**kwargs):
+        assert kwargs["include_legacy_raw_account_id_cleanup"] is True
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "rebuilt", point_count=1),)
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--include-legacy-raw-account-id-cleanup",
+            ]
+        )
+        == 0
+    )
+
+    assert "status=rebuilt" in capsys.readouterr().out
 
 
 def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_config(monkeypatch, tmp_path):

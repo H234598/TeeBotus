@@ -135,7 +135,7 @@ class QdrantMemoryIndex:
             {"points": [point_id]},
         )
 
-    def delete_account(self, *, instance_name: str, account_id: str) -> None:
+    def delete_account(self, *, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False) -> None:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
         self._request_json(
@@ -143,16 +143,29 @@ class QdrantMemoryIndex:
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
             {"filter": _qdrant_scope_filter(instance_name=instance, account_id=account)},
         )
+        if not include_legacy_raw_account_id_cleanup:
+            return
         self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
             {"filter": _qdrant_legacy_account_filter(instance_name=instance, account_id=account)},
         )
 
-    def rebuild(self, *, account_store: AccountStore, instance_name: str, account_id: str) -> tuple[str, ...]:
+    def rebuild(
+        self,
+        *,
+        account_store: AccountStore,
+        instance_name: str,
+        account_id: str,
+        include_legacy_raw_account_id_cleanup: bool = False,
+    ) -> tuple[str, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
-        self.delete_account(instance_name=instance, account_id=account)
+        self.delete_account(
+            instance_name=instance,
+            account_id=account,
+            include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
+        )
         point_ids: list[str] = []
         for entry in account_store.read_memory_entries(account):
             if not isinstance(entry, dict):

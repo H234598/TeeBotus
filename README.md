@@ -865,6 +865,12 @@ teebotus-embedding --instances-dir instances --instance Depressionsbot memory-re
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model intfloat/multilingual-e5-small --embedding-dimensions 384 --embedding-endpoint http://127.0.0.1:8080/embeddings
 ```
 
+Alte v2-Qdrant-Cachepunkte konnten noch rohe `account_id` im Payload tragen.
+Der normale Runtime-Reset und `memory-rebuild` senden keine rohe Account-ID an
+Qdrant. Nur fuer eine bewusste lokale Altlast-Bereinigung gibt es den expliziten
+Maintenance-Flag `--include-legacy-raw-account-id-cleanup`; dieser sendet die
+betroffene Account-ID zum Loeschen der alten lokalen Qdrant-Payloads.
+
 `TeeBotus.runtime.qdrant_bibliothekar.QdrantBibliothekarIndex` ist der
 entsprechende opt-in Sockel fuer Bibliothekar-Chunks. Er indexiert Testchunks
 mit Fake-Embeddings in Standardtests, haelt `BAAI/bge-m3` als vorbereiteten

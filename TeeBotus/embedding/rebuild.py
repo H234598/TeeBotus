@@ -50,8 +50,14 @@ def rebuild_qdrant_memory_index(
     qdrant_index: QdrantMemoryIndex,
     instance_name: str,
     account_id: str,
+    include_legacy_raw_account_id_cleanup: bool = False,
 ) -> tuple[str, ...]:
-    return qdrant_index.rebuild(account_store=account_store, instance_name=instance_name, account_id=account_id)
+    return qdrant_index.rebuild(
+        account_store=account_store,
+        instance_name=instance_name,
+        account_id=account_id,
+        include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
+    )
 
 
 def rebuild_qdrant_memory_indexes(
@@ -63,6 +69,7 @@ def rebuild_qdrant_memory_indexes(
     embedding_config: EmbeddingConfig | None = None,
     embedding_overrides: Mapping[str, Any] | None = None,
     dry_run: bool = False,
+    include_legacy_raw_account_id_cleanup: bool = False,
     secret_provider: InstanceSecretProvider | None = None,
     qdrant_index_factory: Callable[..., QdrantMemoryIndex] = QdrantMemoryIndex,
 ) -> tuple[QdrantMemoryRebuildResult, ...]:
@@ -136,6 +143,7 @@ def rebuild_qdrant_memory_indexes(
                     qdrant_index=index,
                     instance_name=instance_name,
                     account_id=account_id,
+                    include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
                 )
                 results.append(
                     _rebuild_result(
