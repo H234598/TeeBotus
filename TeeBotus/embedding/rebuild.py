@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from TeeBotus.embedding.config import EmbeddingConfig, build_embedding_provider
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, validate_sha512_token
+from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 
 
@@ -35,6 +37,7 @@ def rebuild_qdrant_memory_indexes(
     instance_names: Iterable[str] = (),
     account_ids: Iterable[str] = (),
     qdrant_url: str | None = None,
+    embedding_config: EmbeddingConfig | None = None,
     dry_run: bool = False,
     secret_provider: InstanceSecretProvider | None = None,
     qdrant_index_factory: Callable[..., QdrantMemoryIndex] = QdrantMemoryIndex,
@@ -66,7 +69,10 @@ def rebuild_qdrant_memory_indexes(
                 if dry_run:
                     results.append(QdrantMemoryRebuildResult(instance_name, account_id, "dry_run", point_count=len(entries)))
                     continue
-                index = qdrant_index_factory(url=qdrant_url)
+                index = qdrant_index_factory(
+                    url=qdrant_url,
+                    embedding_provider=build_embedding_provider(embedding_config or _default_memory_embedding_config()),
+                )
                 point_ids = rebuild_qdrant_memory_index(
                     account_store=store,
                     qdrant_index=index,
@@ -77,6 +83,14 @@ def rebuild_qdrant_memory_indexes(
             except Exception as exc:  # noqa: BLE001 - keep rebuilding other accounts.
                 results.append(QdrantMemoryRebuildResult(instance_name, account_id, "error", error=f"{type(exc).__name__}: {exc}"))
     return tuple(results)
+
+
+def _default_memory_embedding_config() -> EmbeddingConfig:
+    return EmbeddingConfig(
+        provider="hash",
+        model_name=USER_MEMORY_QDRANT_EMBEDDING_MODEL,
+        dimensions=USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
+    )
 
 
 def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:

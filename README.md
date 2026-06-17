@@ -701,6 +701,7 @@ Der rebuildbare Cache wird operatorseitig aus dem AccountStore befuellt:
 ```bash
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --dry-run
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333
+teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model intfloat/multilingual-e5-small --embedding-dimensions 384 --embedding-endpoint http://127.0.0.1:8080/embeddings
 ```
 
 `TeeBotus.runtime.qdrant_bibliothekar.QdrantBibliothekarIndex` ist der
