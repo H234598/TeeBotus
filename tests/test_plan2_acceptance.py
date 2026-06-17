@@ -2360,6 +2360,25 @@ def test_benchmark_markdown_artifact_validation_requires_core_result_names(tmp_p
     assert f"benchmark markdown artifact missing required benchmark result memory_jsonl: {markdown_path}" in errors
 
 
+def test_benchmark_markdown_artifact_validation_requires_core_result_categories(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+
+    payload = _valid_benchmark_payload()
+    payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(
+        render_markdown(payload).replace(
+            "| memory_jsonl | account_memory |",
+            "| memory_jsonl | qdrant |",
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert f"benchmark markdown artifact required result memory_jsonl category must be account_memory: {markdown_path}" in errors
+
+
 def test_benchmark_markdown_artifact_validation_requires_core_ranking_categories(tmp_path: Path) -> None:
     from TeeBotus.benchmarks.reporting import render_markdown
 
@@ -2374,6 +2393,23 @@ def test_benchmark_markdown_artifact_validation_requires_core_ranking_categories
     errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
 
     assert f"benchmark markdown artifact missing required benchmark ranking retrieval: {markdown_path}" in errors
+
+
+def test_benchmark_markdown_artifact_validation_requires_core_ranking_candidate_count(tmp_path: Path) -> None:
+    from TeeBotus.benchmarks.reporting import render_markdown
+
+    payload = _valid_benchmark_payload()
+    payload["generated_at"] = "2026-06-17T00:00:00+00:00"
+    markdown = render_markdown(payload).replace(
+        "| retrieval | 2 |",
+        "| retrieval_missing | 2 |",
+    )
+    markdown_path = tmp_path / "bench.md"
+    markdown_path.write_text(markdown, encoding="utf-8")
+
+    errors = check_plan2_acceptance._markdown_artifact_errors(markdown_path)
+
+    assert f"benchmark markdown artifact ranking retrieval must compare at least 2 candidates: {markdown_path}" in errors
 
 
 def test_benchmark_markdown_artifact_validation_requires_teebotus_dependency(tmp_path: Path) -> None:

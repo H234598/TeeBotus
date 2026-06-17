@@ -1336,16 +1336,24 @@ def _markdown_artifact_errors(path: Path) -> list[str]:
         errors.append(f"benchmark markdown artifact lacks results section: {path}")
     if "| name | category | status | mode | iterations | total_ms | throughput_ops_s | errors | payload_bytes | index_bytes | note | details |" not in text:
         errors.append(f"benchmark markdown artifact lacks results table: {path}")
-    for name in sorted(REQUIRED_BENCHMARK_NAMES):
+    for name, expected_category in sorted(REQUIRED_BENCHMARK_NAME_CATEGORIES.items()):
         if not re.search(rf"^\| {re.escape(name)} \|", text, flags=re.MULTILINE):
             errors.append(f"benchmark markdown artifact missing required benchmark result {name}: {path}")
+        elif not re.search(rf"^\| {re.escape(name)} \| {re.escape(expected_category)} \|", text, flags=re.MULTILINE):
+            errors.append(f"benchmark markdown artifact required result {name} category must be {expected_category}: {path}")
     if "## Stable Backend Rankings" not in text:
         errors.append(f"benchmark markdown artifact lacks stable backend rankings section: {path}")
     if "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" not in text:
         errors.append(f"benchmark markdown artifact lacks stable backend rankings table: {path}")
     for category in sorted(REQUIRED_BENCHMARK_RANKING_CATEGORIES):
-        if not re.search(rf"^\| {re.escape(category)} \| \d+ \|", text, flags=re.MULTILINE):
+        ranking_rows = re.findall(rf"^\| {re.escape(category)} \| \d+ \|", text, flags=re.MULTILINE)
+        if not ranking_rows:
             errors.append(f"benchmark markdown artifact missing required benchmark ranking {category}: {path}")
+        elif len(ranking_rows) < REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES:
+            errors.append(
+                f"benchmark markdown artifact ranking {category} must compare at least "
+                f"{REQUIRED_BENCHMARK_MIN_RANKING_CANDIDATES} candidates: {path}"
+            )
     if "## Quality Gate" not in text:
         errors.append(f"benchmark markdown artifact lacks quality gate section: {path}")
     if "- status: ok" not in text:
