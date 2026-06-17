@@ -21,6 +21,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     pydantic_ai = importlib.import_module("TeeBotus.benchmarks.pydantic_ai")
     proactive = importlib.import_module("TeeBotus.benchmarks.proactive")
     qdrant = importlib.import_module("TeeBotus.benchmarks.qdrant")
+    reporting = importlib.import_module("TeeBotus.benchmarks.reporting")
     runtime_health = importlib.import_module("TeeBotus.benchmarks.runtime_health")
     source_quality = importlib.import_module("TeeBotus.benchmarks.source_quality")
     youtube = importlib.import_module("TeeBotus.benchmarks.youtube")
@@ -38,6 +39,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "pydantic_ai.py").exists()
     assert (package_dir / "proactive.py").exists()
     assert (package_dir / "qdrant.py").exists()
+    assert (package_dir / "reporting.py").exists()
     assert (package_dir / "runtime_health.py").exists()
     assert (package_dir / "source_quality.py").exists()
     assert (package_dir / "youtube.py").exists()
@@ -68,6 +70,10 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_qdrant_health_quick is qdrant.benchmark_qdrant_health_quick
     assert benchmark_module._benchmark_qdrant_health_live is qdrant.benchmark_qdrant_health_live
     assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
+    assert benchmark_module._context is reporting.benchmark_context
+    assert benchmark_module._dependency_context is reporting.dependency_context
+    assert benchmark_module._build_regression_report is reporting.build_regression_report
+    assert benchmark_module.render_markdown is reporting.render_markdown
     assert benchmark_module._benchmark_status_doctor is runtime_health.benchmark_status_doctor
     assert benchmark_module._benchmark_database_fallback_policy is runtime_health.benchmark_database_fallback_policy
     assert benchmark_module._benchmark_source_harvester_quality_gate is source_quality.benchmark_source_harvester_quality_gate

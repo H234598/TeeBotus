@@ -36,6 +36,7 @@ from TeeBotus.benchmarks.qdrant import (
     benchmark_qdrant_health_quick,
     benchmark_qdrant_memory_index_quick,
 )
+from TeeBotus.benchmarks.reporting import benchmark_context, build_regression_report, dependency_context, render_markdown
 from TeeBotus.benchmarks.runtime_health import benchmark_database_fallback_policy, benchmark_status_doctor
 from TeeBotus.benchmarks.source_quality import (
     benchmark_source_harvester_promote_index_flow,
@@ -77,8 +78,12 @@ __all__ = [
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
+    "benchmark_context",
     "benchmark_database_fallback_policy",
     "benchmark_status_doctor",
+    "build_regression_report",
+    "dependency_context",
+    "render_markdown",
     "benchmark_retrieval_embedding_reranker_matrix",
     "benchmark_source_harvester_promote_index_flow",
     "benchmark_source_harvester_quality_gate",
