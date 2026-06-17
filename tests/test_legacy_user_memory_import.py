@@ -50,6 +50,13 @@ def write_empty_legacy_entries(root: Path, *, instance: str = "Depressionsbot", 
     return user_dir
 
 
+def write_raw_legacy_entries(root: Path, text: str, *, instance: str = "Depressionsbot", user_id: str = "395935293") -> Path:
+    user_dir = root / instance / "data" / "users" / user_id
+    user_dir.mkdir(parents=True)
+    (user_dir / "User_Memory_Entries.jsonl").write_text(text, encoding="utf-8")
+    return user_dir
+
+
 def write_legacy_entries_without_ids(root: Path, *, instance: str = "Depressionsbot", user_id: str = "395935293") -> Path:
     user_dir = root / instance / "data" / "users" / user_id
     user_dir.mkdir(parents=True)
@@ -140,6 +147,70 @@ def test_legacy_user_memory_import_empty_source_does_not_create_account_or_reset
             "error": "",
         }
     ]
+    assert not list(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
+
+
+def test_legacy_user_memory_import_skips_malformed_source_without_opening_store(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_raw_legacy_entries(legacy_root, '{"id": "ok"}\nnot-json\n')
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
+    bad_store.resolve_or_create_account(telegram_identity_key("already-broken"))
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        replace_unreadable_account_metadata=True,
+        provider=provider(),
+    )
+
+    assert stats.sources == 1
+    assert stats.skipped_sources == 1
+    assert stats.malformed_sources == 1
+    assert stats.encrypted_sources == 0
+    assert stats.entries_seen == 0
+    assert stats.entries_imported == 0
+    assert stats.accounts_created == 0
+    assert stats.unreadable_metadata == 0
+    assert stats.account_store_resets == 0
+    assert stats.events[0]["action"] == "skip-malformed-source"
+    assert stats.events[0]["account_id"] == "<not-created>"
+    assert stats.events[0]["error"]
+    assert not list(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
+
+
+def test_legacy_user_memory_import_skips_encrypted_source_without_opening_store(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_raw_legacy_entries(legacy_root, '{"version":1,"nonce":"n","ciphertext":"c"}\n')
+    accounts_root = target_root / "Depressionsbot" / "data" / "accounts"
+    bad_store = AccountStore(accounts_root, "Depressionsbot", secret_provider=provider(b"b" * 32))
+    bad_store.resolve_or_create_account(telegram_identity_key("already-broken"))
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        replace_unreadable_account_metadata=True,
+        provider=provider(),
+    )
+
+    assert stats.sources == 1
+    assert stats.skipped_sources == 1
+    assert stats.malformed_sources == 0
+    assert stats.encrypted_sources == 1
+    assert stats.entries_seen == 0
+    assert stats.entries_imported == 0
+    assert stats.accounts_created == 0
+    assert stats.unreadable_metadata == 0
+    assert stats.account_store_resets == 0
+    assert stats.events[0]["action"] == "skip-encrypted-source"
+    assert stats.events[0]["account_id"] == "<not-created>"
+    assert stats.events[0]["error"]
     assert not list(accounts_root.glob(".pre-legacy-user-memory-account-store-reset-*"))
 
 
@@ -555,6 +626,8 @@ def test_legacy_user_memory_import_writes_json_and_markdown_reports(tmp_path: Pa
     payload = json.loads(json_output.read_text(encoding="utf-8"))
     markdown = markdown_output.read_text(encoding="utf-8")
     assert payload["mode"] == "dry-run"
+    assert payload["totals"]["malformed_sources"] == 0
+    assert payload["totals"]["encrypted_sources"] == 0
     assert payload["totals"]["entries_imported"] == 1
     assert payload["events"][0]["identity"] == "telegram:user:395935293"
     assert payload["events"][0]["action"] == "would-import"

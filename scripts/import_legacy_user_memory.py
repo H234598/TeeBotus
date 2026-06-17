@@ -33,11 +33,19 @@ USER_MEMORY_LEGACY_ROOT = "users"
 TEEBOTUS_MODULE_RUNTIME_RE = re.compile(r"(?:^|\s)-m\s+teebotus(?:\s|$)")
 
 
+class LegacyPlaintextReadError(ValueError):
+    def __init__(self, message: str, *, source_kind: str) -> None:
+        super().__init__(message)
+        self.source_kind = source_kind
+
+
 @dataclass
 class ImportStats:
     sources: int = 0
     imported_sources: int = 0
     skipped_sources: int = 0
+    malformed_sources: int = 0
+    encrypted_sources: int = 0
     entries_seen: int = 0
     entries_imported: int = 0
     accounts_created: int = 0
@@ -143,7 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.markdown_output).write_text(_render_markdown_report(report), encoding="utf-8")
     print(
         f"legacy-user-memory-import {mode}: sources={stats.sources} imported_sources={stats.imported_sources} "
-        f"skipped_sources={stats.skipped_sources} entries_seen={stats.entries_seen} entries_imported={stats.entries_imported} "
+        f"skipped_sources={stats.skipped_sources} malformed_sources={stats.malformed_sources} "
+        f"encrypted_sources={stats.encrypted_sources} entries_seen={stats.entries_seen} entries_imported={stats.entries_imported} "
         f"accounts_existing={stats.accounts_existing} accounts_created={stats.accounts_created} "
         f"unreadable_targets={stats.unreadable_targets} unreadable_metadata={stats.unreadable_metadata} "
         f"backups_created={stats.backups_created} metadata_backups_created={stats.metadata_backups_created} "
@@ -174,11 +183,19 @@ def import_legacy_user_memory(
     selected = set(instances)
     reset_account_stores: set[Path] = set()
     user_dirs = _legacy_user_dirs(legacy_instances_dir, selected)
-    entries_by_user_dir = {
-        user_dir: _read_plaintext_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
-        for user_dir in user_dirs
-    }
-    importable_user_dirs = [user_dir for user_dir, entries in entries_by_user_dir.items() if entries]
+    entries_by_user_dir: dict[Path, list[dict[str, Any]]] = {}
+    read_errors_by_user_dir: dict[Path, LegacyPlaintextReadError] = {}
+    for user_dir in user_dirs:
+        try:
+            entries_by_user_dir[user_dir] = _read_plaintext_entries(user_dir / USER_MEMORY_ENTRIES_FILENAME)
+        except LegacyPlaintextReadError as exc:
+            entries_by_user_dir[user_dir] = []
+            read_errors_by_user_dir[user_dir] = exc
+    importable_user_dirs = [
+        user_dir
+        for user_dir, entries in entries_by_user_dir.items()
+        if entries and user_dir not in read_errors_by_user_dir
+    ]
     if apply and replace_unreadable_account_metadata:
         for instance_name in _instances_with_legacy_user_dirs(importable_user_dirs):
             target_root = target_instances_dir / instance_name / "data" / "accounts"
@@ -195,6 +212,31 @@ def import_legacy_user_memory(
     for user_dir in user_dirs:
         stats.sources += 1
         instance_name = user_dir.parents[2].name
+        read_error = read_errors_by_user_dir.get(user_dir)
+        if read_error is not None:
+            stats.skipped_sources += 1
+            if read_error.source_kind == "encrypted":
+                stats.encrypted_sources += 1
+                action = "skip-encrypted-source"
+            else:
+                stats.malformed_sources += 1
+                action = "skip-malformed-source"
+            stats.events.append(
+                _event(
+                    instance_name=instance_name,
+                    legacy_user_id=user_dir.name,
+                    account_id="<not-created>",
+                    entries=0,
+                    imported=0,
+                    action=action,
+                    error=str(read_error),
+                )
+            )
+            print(
+                f"instance={instance_name} legacy_user={user_dir.name} account=<not-created> "
+                f"entries=0 action={action} error={read_error}"
+            )
+            continue
         entries = entries_by_user_dir[user_dir]
         stats.entries_seen += len(entries)
         if not entries:
@@ -455,6 +497,8 @@ def _build_import_report(
             "sources": stats.sources,
             "imported_sources": stats.imported_sources,
             "skipped_sources": stats.skipped_sources,
+            "malformed_sources": stats.malformed_sources,
+            "encrypted_sources": stats.encrypted_sources,
             "entries_seen": stats.entries_seen,
             "entries_imported": stats.entries_imported,
             "accounts_created": stats.accounts_created,
@@ -643,7 +687,7 @@ def _resolve_legacy_instances_dir(path: Path, selected_instances: set[str]) -> P
             entries_path = user_dir / USER_MEMORY_ENTRIES_FILENAME
             try:
                 entries = _read_plaintext_entries(entries_path)
-            except SystemExit:
+            except LegacyPlaintextReadError:
                 continue
             if entries:
                 source_count += 1
@@ -670,14 +714,27 @@ def _read_plaintext_entries(path: Path) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     if not path.exists():
         return entries
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise LegacyPlaintextReadError(f"{path}: legacy memory entries could not be read: {exc}", source_kind="malformed") from exc
+    for line_number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
-        data = json.loads(line)
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise LegacyPlaintextReadError(
+                f"{path}:{line_number}: legacy memory entry is malformed JSON: {exc.msg}",
+                source_kind="malformed",
+            ) from exc
         if not isinstance(data, dict):
-            raise SystemExit(f"{path}:{line_number}: legacy memory entry is not an object")
+            raise LegacyPlaintextReadError(f"{path}:{line_number}: legacy memory entry is not an object", source_kind="malformed")
         if {"version", "nonce", "ciphertext"}.issubset(data):
-            raise SystemExit(f"{path}:{line_number}: legacy memory entry is encrypted; use a plaintext backup")
+            raise LegacyPlaintextReadError(
+                f"{path}:{line_number}: legacy memory entry is encrypted; use a plaintext backup",
+                source_kind="encrypted",
+            )
         entries.append(data)
     return entries
 

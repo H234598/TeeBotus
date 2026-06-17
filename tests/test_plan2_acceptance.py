@@ -1358,6 +1358,8 @@ def test_legacy_import_artifact_validation_requires_apply_safety(tmp_path: Path)
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 1,
                     "entries_imported": 1,
                     "accounts_created": 1,
@@ -1409,6 +1411,8 @@ def test_legacy_import_artifact_validation_rejects_running_process_without_apply
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 1,
                     "entries_imported": 1,
                     "accounts_created": 1,
@@ -1462,6 +1466,8 @@ def test_legacy_import_artifact_validation_rejects_out_of_scope_instance_events(
                     "sources": 2,
                     "imported_sources": 2,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 0,
                     "entries_imported": 0,
                     "accounts_created": 0,
@@ -1519,6 +1525,8 @@ def test_legacy_import_artifact_validation_accepts_matching_instance_scope(tmp_p
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 0,
                     "entries_imported": 0,
                     "accounts_created": 0,
@@ -1573,6 +1581,8 @@ def test_legacy_import_artifact_validation_accepts_skip_empty_without_created_ac
                     "sources": 1,
                     "imported_sources": 0,
                     "skipped_sources": 1,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 0,
                     "entries_imported": 0,
                     "accounts_created": 0,
@@ -1612,6 +1622,148 @@ def test_legacy_import_artifact_validation_accepts_skip_empty_without_created_ac
     assert errors == []
 
 
+def test_legacy_import_artifact_validation_accepts_malformed_and_encrypted_source_skips(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 2,
+                    "imported_sources": 0,
+                    "skipped_sources": 2,
+                    "malformed_sources": 1,
+                    "encrypted_sources": 1,
+                    "entries_seen": 0,
+                    "entries_imported": 0,
+                    "accounts_created": 0,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 0,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        account_id="<not-created>",
+                        action="skip-malformed-source",
+                        entries=0,
+                        imported=0,
+                        error="malformed JSON",
+                    ),
+                    _valid_legacy_import_event(
+                        legacy_user_id="124",
+                        account_id="<not-created>",
+                        action="skip-encrypted-source",
+                        entries=0,
+                        imported=0,
+                        error="encrypted",
+                    ),
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert errors == []
+
+
+def test_legacy_import_artifact_validation_rejects_inconsistent_malformed_source_skip(tmp_path: Path) -> None:
+    json_path = tmp_path / "import-demo.json"
+    markdown_path = tmp_path / "import-demo.md"
+    _write_valid_legacy_import_markdown(markdown_path)
+    json_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "mode": "apply",
+                "instances": ["Demo"],
+                "options": {"allow_running_bot": False},
+                "apply_safety": {
+                    "running_bot_processes": [],
+                    "running_bot_process_count": 0,
+                    "apply_allowed_now": True,
+                    "apply_requires_stopped_bot": False,
+                    "message": "No TeeBotus runtime process detected.",
+                },
+                "totals": {
+                    "sources": 1,
+                    "imported_sources": 0,
+                    "skipped_sources": 1,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
+                    "entries_seen": 1,
+                    "entries_imported": 1,
+                    "accounts_created": 1,
+                    "accounts_existing": 0,
+                    "unreadable_targets": 1,
+                    "unreadable_metadata": 0,
+                    "backups_created": 0,
+                    "metadata_backups_created": 0,
+                    "account_store_resets": 0,
+                },
+                "events": [
+                    _valid_legacy_import_event(
+                        action="skip-malformed-source",
+                        entries=1,
+                        imported=1,
+                        account_created=True,
+                        target_unreadable=True,
+                    )
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_plan2_acceptance._legacy_import_artifact_errors(
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--instance",
+            "Demo",
+            "--json-output",
+            str(json_path),
+            "--markdown-output",
+            str(markdown_path),
+        )
+    )
+
+    assert any("skip actions must not import entries" in error for error in errors)
+    assert any("skip-malformed-source must use account_id <not-created>" in error for error in errors)
+    assert any("skip-malformed-source must have zero entries and zero imported" in error for error in errors)
+    assert any("skip-malformed-source must not create an account" in error for error in errors)
+    assert any("skip-malformed-source must not claim unreadable target or metadata" in error for error in errors)
+    assert any("skip-malformed-source must include an error" in error for error in errors)
+    assert any("totals.malformed_sources must match events (1)" in error for error in errors)
+
+
 def test_legacy_import_artifact_validation_rejects_inconsistent_skip_events(tmp_path: Path) -> None:
     json_path = tmp_path / "import-demo.json"
     markdown_path = tmp_path / "import-demo.md"
@@ -1634,6 +1786,8 @@ def test_legacy_import_artifact_validation_rejects_inconsistent_skip_events(tmp_
                     "sources": 1,
                     "imported_sources": 0,
                     "skipped_sources": 1,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 1,
                     "entries_imported": 1,
                     "accounts_created": 1,
@@ -1700,6 +1854,8 @@ def test_legacy_import_artifact_validation_derives_existing_accounts(tmp_path: P
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 1,
                     "entries_imported": 0,
                     "accounts_created": 0,
@@ -1760,6 +1916,8 @@ def test_legacy_import_artifact_validation_rejects_inconsistent_metadata_reset_e
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 2,
                     "entries_imported": 2,
                     "accounts_created": 1,
@@ -1822,6 +1980,8 @@ def test_legacy_import_artifact_validation_rejects_malformed_markdown_report(tmp
                     "sources": 1,
                     "imported_sources": 1,
                     "skipped_sources": 0,
+                    "malformed_sources": 0,
+                    "encrypted_sources": 0,
                     "entries_seen": 0,
                     "entries_imported": 0,
                     "accounts_created": 0,

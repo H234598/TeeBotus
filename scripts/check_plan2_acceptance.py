@@ -1116,6 +1116,8 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
         "sources",
         "imported_sources",
         "skipped_sources",
+        "malformed_sources",
+        "encrypted_sources",
         "entries_seen",
         "entries_imported",
         "accounts_created",
@@ -1137,6 +1139,8 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
         "accounts_existing": 0,
         "unreadable_targets": 0,
         "unreadable_metadata": 0,
+        "malformed_sources": 0,
+        "encrypted_sources": 0,
     }
     skipped_sources = 0
     for index, event in enumerate(events):
@@ -1182,6 +1186,22 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
             errors.append(f"{prefix}{label}.imported must not exceed entries")
         if action.startswith("skip-") and imported_count not in (None, 0):
             errors.append(f"{prefix}{label}.skip actions must not import entries")
+        source_skip_actions = {"skip-empty", "skip-malformed-source", "skip-encrypted-source"}
+        if action in {"skip-malformed-source", "skip-encrypted-source"}:
+            if account_id != "<not-created>":
+                errors.append(f"{prefix}{label}.{action} must use account_id <not-created>")
+            if entries_count not in (None, 0) or imported_count not in (None, 0):
+                errors.append(f"{prefix}{label}.{action} must have zero entries and zero imported")
+            if event.get("account_created") is True:
+                errors.append(f"{prefix}{label}.{action} must not create an account")
+            if event.get("metadata_unreadable") is True or event.get("target_unreadable") is True:
+                errors.append(f"{prefix}{label}.{action} must not claim unreadable target or metadata")
+            if not str(event.get("error") or "").strip():
+                errors.append(f"{prefix}{label}.{action} must include an error")
+            if action == "skip-malformed-source":
+                derived["malformed_sources"] += 1
+            else:
+                derived["encrypted_sources"] += 1
         if action == "skip-empty":
             if account_id != "<not-created>":
                 errors.append(f"{prefix}{label}.skip-empty must use account_id <not-created>")
@@ -1191,8 +1211,8 @@ def _legacy_import_event_totals_errors(payload: Mapping[str, Any], *, prefix: st
                 errors.append(f"{prefix}{label}.skip-empty must not create an account")
             if event.get("metadata_unreadable") is True or event.get("target_unreadable") is True:
                 errors.append(f"{prefix}{label}.skip-empty must not claim unreadable target or metadata")
-        elif account_id == "<not-created>":
-            errors.append(f"{prefix}{label}.account_id <not-created> is only valid for skip-empty")
+        elif account_id == "<not-created>" and action not in source_skip_actions:
+            errors.append(f"{prefix}{label}.account_id <not-created> is only valid for source skip actions")
         if action == "skip-unreadable-account-metadata":
             if account_id != "<metadata-unreadable>":
                 errors.append(f"{prefix}{label}.skip-unreadable-account-metadata must use account_id <metadata-unreadable>")
