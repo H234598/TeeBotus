@@ -84,7 +84,14 @@ def test_hf_pool_doctor_cli_never_requires_live_hf(capsys, tmp_path):
 def test_hf_pool_doctor_reports_persistent_cooldown_without_live_check(tmp_path):
     path = _enabled_config(tmp_path)
     state_store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")
-    state_store.save(HFPoolRuntimeState(cooldowns={"live_target": "2999-01-01T00:00:00+00:00"}))
+    state_store.save(
+        HFPoolRuntimeState(
+            cooldowns={"live_target": "2999-01-01T00:00:00+00:00"},
+            failures={"live_target": 2},
+            successes={"live_target": 3},
+            avg_latency_ms={"live_target": 44.6},
+        )
+    )
 
     health = check_hf_pool(
         config_path=path,
@@ -95,9 +102,16 @@ def test_hf_pool_doctor_reports_persistent_cooldown_without_live_check(tmp_path)
 
     assert health.status == "unavailable"
     assert health.targets[0].status == "cooldown"
+    assert health.targets[0].failures == 2
+    assert health.targets[0].successes == 3
+    assert health.targets[0].avg_latency_ms == 45
     assert "error=all_configured_targets_in_cooldown" in lines
+    assert "targets=1 healthy=0 unavailable=0 cooldown=1 missing_key=0 disabled=0" in lines
     assert "target=live_target status=cooldown" in lines
     assert "until=2999-01-01T00:00:00+00:00" in lines
+    assert "successes=3" in lines
+    assert "failures=2" in lines
+    assert "avg_latency_ms=45" in lines
     assert "hf_TESTSECRET123" not in lines
 
 

@@ -127,7 +127,20 @@ def test_sqlite_hf_pool_state_store_roundtrips_state_and_usage(tmp_path) -> None
     )
 
     store.save(state)
-    store.append_usage(HFPoolUsageEvent(pool="default", target="target_a", model="Model", status="rate_limited", latency_ms=12, usage={"http_status": 429}))
+    store.append_usage(
+        HFPoolUsageEvent(
+            pool="default",
+            target="target_a",
+            model="Model",
+            status="rate_limited",
+            latency_ms=12,
+            usage={
+                "http_status": 429,
+                "detail": "bad Bearer hf_TESTSECRET123",
+                "nested": {"token": "hf_TESTSECRET456"},
+            },
+        )
+    )
 
     loaded = store.load()
     usage = store.read_usage()
@@ -138,7 +151,11 @@ def test_sqlite_hf_pool_state_store_roundtrips_state_and_usage(tmp_path) -> None
     assert loaded.avg_latency_ms == state.avg_latency_ms
     assert len(usage) == 1
     assert usage[0].target == "target_a"
-    assert usage[0].usage == {"http_status": 429}
+    assert usage[0].usage == {
+        "detail": "bad Bearer hf_<REDACTED>",
+        "http_status": 429,
+        "nested": {"token": "hf_<REDACTED>"},
+    }
 
 
 def test_openai_compatible_hf_executor_reuses_persistent_cooldown(tmp_path) -> None:

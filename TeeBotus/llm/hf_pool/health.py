@@ -27,6 +27,9 @@ class HFPoolTargetHealth:
     error: str = ""
     cooldown_until: str = ""
     latency_ms: int | None = None
+    successes: int = 0
+    failures: int = 0
+    avg_latency_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,9 @@ class HFPoolHealth:
     @property
     def healthy_count(self) -> int:
         return sum(1 for target in self.targets if target.status in {"configured", "healthy"})
+
+    def target_status_count(self, status: str) -> int:
+        return sum(1 for target in self.targets if target.status == status)
 
 
 def check_hf_pool(
@@ -63,6 +69,7 @@ def check_hf_pool(
     targets: list[HFPoolTargetHealth] = []
     for target in pool.targets:
         cooldown_until = ""
+        successes, failures, avg_latency_ms = _target_runtime_metrics(runtime_state, target.name)
         if not target.enabled:
             status = "disabled"
             error = ""
@@ -97,6 +104,9 @@ def check_hf_pool(
                 error=error,
                 cooldown_until=cooldown_until,
                 latency_ms=latency_ms,
+                successes=successes,
+                failures=failures,
+                avg_latency_ms=avg_latency_ms,
             )
         )
     if not targets:
@@ -112,7 +122,13 @@ def check_hf_pool(
 def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
     lines = [f"hf_pool={health.pool} status={health.status}"]
     if health.targets:
-        lines[0] += f" targets={len(health.targets)} healthy={health.healthy_count}"
+        lines[0] += (
+            f" targets={len(health.targets)} healthy={health.healthy_count}"
+            f" unavailable={health.target_status_count('unavailable')}"
+            f" cooldown={health.target_status_count('cooldown')}"
+            f" missing_key={health.target_status_count('missing_key')}"
+            f" disabled={health.target_status_count('disabled')}"
+        )
     if health.error:
         lines[0] += f" error={_status_text(health.error)}"
     for target in health.targets:
@@ -125,6 +141,12 @@ def format_hf_pool_status_lines(health: HFPoolHealth) -> list[str]:
             line += f" until={_status_text(target.cooldown_until)}"
         if target.latency_ms is not None:
             line += f" latency_ms={max(0, int(target.latency_ms))}"
+        if target.successes:
+            line += f" successes={max(0, int(target.successes))}"
+        if target.failures:
+            line += f" failures={max(0, int(target.failures))}"
+        if target.avg_latency_ms is not None:
+            line += f" avg_latency_ms={max(0, int(target.avg_latency_ms))}"
         if target.error and not target.error.startswith("env="):
             line += f" error={_status_text(target.error)}"
         lines.append(line)
@@ -153,6 +175,21 @@ def _active_cooldown_until(state: HFPoolRuntimeState, target_name: str) -> str:
     if parsed <= datetime.now(timezone.utc):
         return ""
     return cooldown_until
+
+
+def _target_runtime_metrics(state: HFPoolRuntimeState | None, target_name: str) -> tuple[int, int, int | None]:
+    if state is None:
+        return 0, 0, None
+    successes = max(0, int(state.successes.get(target_name, 0) or 0))
+    failures = max(0, int(state.failures.get(target_name, 0) or 0))
+    raw_latency = state.avg_latency_ms.get(target_name)
+    if raw_latency is None:
+        return successes, failures, None
+    try:
+        avg_latency_ms = max(0, int(round(float(raw_latency))))
+    except (TypeError, ValueError):
+        avg_latency_ms = None
+    return successes, failures, avg_latency_ms
 
 
 def _live_target_status(

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
+from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 
 
 def default_hf_pool_state_path() -> Path:
@@ -170,8 +171,21 @@ def _float_value(value: object) -> float:
 
 
 def _json_safe(value: Any) -> Any:
+    value = _redact_json_secrets(value)
     try:
         json.dumps(value)
     except (TypeError, ValueError):
         return {}
+    return value
+
+
+def _redact_json_secrets(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _redact_json_secrets(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_json_secrets(item) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_json_secrets(item) for item in value]
+    if isinstance(value, str):
+        return redact_hf_secrets(value)
     return value
