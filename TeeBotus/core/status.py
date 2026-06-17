@@ -77,6 +77,9 @@ def build_status_reply(
     llm_provider: str = "",
     llm_model: str = "",
     llm_fallback_models: tuple[str, ...] | list[str] | str = (),
+    llm_client: object | None = None,
+    structured_decision_runner: object | None = None,
+    bibliothekar_enabled: bool | None = None,
     mcp_tools: Mapping[str, Mapping[str, Any]] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> str:
@@ -106,6 +109,16 @@ def build_status_reply(
             f"- Version: {__version__} Wirt Commits {commit_history_url}",
             "",
             "LLM",
+            *_llm_category_status_lines(
+                llm_enabled=llm_enabled,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                llm_fallback_models=llm_fallback_models,
+                llm_client=llm_client,
+                structured_decision_runner=structured_decision_runner,
+                bibliothekar_enabled=bibliothekar_enabled,
+                env=env,
+            ),
             f"- Textantworten: {_llm_enabled_status(llm_enabled)}",
             f"- Provider: {_safe_status_value(llm_provider, default='openai')}",
             f"- Modell: {_safe_status_value(llm_model, default='openai-default')}",
@@ -126,6 +139,119 @@ def build_status_reply(
             ),
         ]
     )
+
+
+def _llm_category_status_lines(
+    *,
+    llm_enabled: bool | None,
+    llm_provider: str,
+    llm_model: str,
+    llm_fallback_models: tuple[str, ...] | list[str] | str,
+    llm_client: object | None,
+    structured_decision_runner: object | None,
+    bibliothekar_enabled: bool | None,
+    env: Mapping[str, str] | None,
+) -> list[str]:
+    chat_status = "aktiv" if llm_enabled is True else "aus" if llm_enabled is False else "unbekannt"
+    chat_label = _llm_client_status_label(
+        llm_client,
+        fallback_provider=llm_provider,
+        fallback_model=llm_model,
+    )
+    lines = [
+        f"- Chat/Textantworten: {chat_status} - {chat_label}",
+        f"- Strukturierte Entscheidungen: {_structured_decision_status_label(structured_decision_runner)}",
+        f"- Bibliothekar/Recherche: {_route_status_label('bibliothekar_answer', enabled=bibliothekar_enabled, env=env)}",
+        f"- Fallbacks: {_fallback_category_status(llm_client, llm_fallback_models)}",
+    ]
+    return [redact_status_text(line) for line in lines]
+
+
+def _llm_client_status_label(client: object | None, *, fallback_provider: str = "", fallback_model: str = "") -> str:
+    provider = _first_status_attr(client, "provider_name", "provider", "llm_provider") or fallback_provider or "openai"
+    model = (
+        _first_status_attr(client, "model", "model_name", "model_selector", "llm_model", "pydantic_ai_model_name")
+        or fallback_model
+        or "openai-default"
+    )
+    label = f"{provider} / {model}"
+    service_tier = _first_status_attr(client, "service_tier")
+    if service_tier:
+        label += f" service_tier={service_tier}"
+    return label
+
+
+def _structured_decision_status_label(runner: object | None) -> str:
+    if runner is None:
+        return "aus"
+    provider = _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
+    model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
+    label = f"aktiv - {provider}"
+    if model:
+        label += f" / {model}"
+    fallback = _first_status_attr(runner, "llm_fallback_profile", "llm_fallback_model")
+    if fallback:
+        label += f" fallback={fallback}"
+    return label
+
+
+def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str, str] | None) -> str:
+    if enabled is False:
+        return "aus"
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+        from TeeBotus.llm.service_tier import resolve_gemini_service_tier
+
+        route = select_llm_route(purpose)
+        label = f"aktiv - {route.provider} / {route.model}"
+        service_tier = resolve_gemini_service_tier(
+            env,
+            provider=route.provider,
+            model=route.model,
+            explicit_service_tier=route.service_tier,
+        )
+        if service_tier:
+            label += f" service_tier={service_tier}"
+        if route.fallback_model:
+            label += f" fallback={route.fallback_model}"
+        return label
+    except Exception as exc:  # noqa: BLE001 - status must stay diagnostic.
+        return f"unbekannt - {type(exc).__name__}: {exc}"
+
+
+def _fallback_category_status(client: object | None, configured_fallbacks: tuple[str, ...] | list[str] | str) -> str:
+    runtime_fallbacks = _sequence_status_attr(client, "fallback_models")
+    if runtime_fallbacks:
+        return ", ".join(runtime_fallbacks)
+    if hasattr(client, "fallback_client") and getattr(client, "fallback_client") is not None:
+        return _llm_client_status_label(getattr(client, "fallback_client"))
+    count = _fallback_model_count(configured_fallbacks)
+    return f"{count} konfiguriert"
+
+
+def _first_status_attr(obj: object | None, *names: str) -> str:
+    if obj is None:
+        return ""
+    for name in names:
+        value = getattr(obj, name, "")
+        if isinstance(value, (tuple, list, set)):
+            text = ",".join(str(part or "").strip() for part in value if str(part or "").strip())
+        else:
+            text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _sequence_status_attr(obj: object | None, name: str) -> list[str]:
+    if obj is None:
+        return []
+    value = getattr(obj, name, ())
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    if isinstance(value, (tuple, list, set)):
+        return [str(part or "").strip() for part in value if str(part or "").strip()]
+    return []
 
 
 def _llm_enabled_status(value: bool | None) -> str:

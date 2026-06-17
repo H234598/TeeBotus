@@ -283,6 +283,17 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
 
 
 def test_engine_status_uses_core_status_before_configured_commands(tmp_path, monkeypatch):
+    class ActiveLLMClient:
+        provider_name = "litellm"
+        model = "gemini/gemini-2.5-flash"
+        fallback_models = ("ollama_chat/llama3.1:8b",)
+        service_tier = "flex"
+
+    class ActiveStructuredRunner:
+        llm_provider = "hf_pool"
+        model_name = "pool:default#structured_decision"
+        llm_fallback_model = "ollama_chat/llama3.1:8b"
+
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     instructions = BotInstructions(
         commands={"/status": "Configured status."},
@@ -308,7 +319,13 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     )
     account_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
     account_store.append_proactive_outbox_item(account_id, {"status": "review_pending", "category": "reminder", "message_text": "Review"})
-    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, project_root=tmp_path)
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=instructions,
+        project_root=tmp_path,
+        llm_client=ActiveLLMClient(),
+        structured_decision_runner=ActiveStructuredRunner(),
+    )
 
     actions = engine.process(event(telegram_identity_key(1), "/status"))
 
@@ -323,6 +340,10 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "- Model planner: tool" in actions[0].text
     assert "LLM" in actions[0].text
+    assert "- Chat/Textantworten: aktiv - litellm / gemini/gemini-2.5-flash service_tier=flex" in actions[0].text
+    assert "- Strukturierte Entscheidungen: aktiv - hf_pool / pool:default#structured_decision fallback=ollama_chat/llama3.1:8b" in actions[0].text
+    assert "- Bibliothekar/Recherche: aktiv - litellm / gemini/gemini-2.5-flash" in actions[0].text
+    assert "- Fallbacks: ollama_chat/llama3.1:8b" in actions[0].text
     assert "- Textantworten: ja" in actions[0].text
     assert "- Provider: ollama" in actions[0].text
     assert "- Modell: llama3.1:8b" in actions[0].text

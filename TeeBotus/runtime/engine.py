@@ -236,6 +236,9 @@ class TeeBotusEngine:
                             llm_provider=instructions.llm_provider,
                             llm_model=instructions.llm_model or instructions.openai_model,
                             llm_fallback_models=instructions.llm_fallback_models,
+                            llm_client=self.llm_client,
+                            structured_decision_runner=self.structured_decision_runner,
+                            bibliothekar_enabled=instructions.bibliothekar_enabled,
                             mcp_tools=instructions.mcp_tools,
                         ),
                     )
