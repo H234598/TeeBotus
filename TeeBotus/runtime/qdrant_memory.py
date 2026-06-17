@@ -121,6 +121,7 @@ class QdrantMemoryIndex:
             if (
                 payload.get("account_scope") != _account_scope(instance_name=instance, account_id=account)
                 or payload.get("instance_name") != instance
+                or payload.get("schema") != QDRANT_MEMORY_PAYLOAD_SCHEMA
                 or payload.get("schema_version") != QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
                 or payload.get("embedding_model") != self.embedding_provider.model_name
                 or payload.get("embedding_dimensions") != int(self.embedding_provider.dimensions)
@@ -269,12 +270,17 @@ def _qdrant_scope_filter(
     *,
     instance_name: str,
     account_id: str,
+    schema: str = QDRANT_MEMORY_PAYLOAD_SCHEMA,
     schema_version: int | None = None,
     embedding_model: str = "",
     embedding_dimensions: int | None = None,
 ) -> dict[str, Any]:
     must = [
         {"key": "instance_name", "match": {"value": instance_name}},
+        {
+            "key": "schema",
+            "match": {"value": str(schema or QDRANT_MEMORY_PAYLOAD_SCHEMA).strip() or QDRANT_MEMORY_PAYLOAD_SCHEMA},
+        },
         {
             "key": "account_scope",
             "match": {"value": _account_scope(instance_name=instance_name, account_id=account_id)},
@@ -303,6 +309,7 @@ def _qdrant_legacy_account_filter(*, instance_name: str, account_id: str) -> dic
     return {
         "must": [
             {"key": "instance_name", "match": {"value": instance_name}},
+            {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}},
             {"key": "account_id", "match": {"value": account_id}},
         ]
     }

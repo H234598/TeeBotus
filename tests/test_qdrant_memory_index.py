@@ -8,7 +8,7 @@ import pytest
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
-from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex, qdrant_memory_point_id
+from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA, QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex, qdrant_memory_point_id
 
 
 ACCOUNT_A = "a" * 128
@@ -158,6 +158,7 @@ def test_qdrant_memory_search_is_scoped_by_instance_and_account() -> None:
     assert ACCOUNT_A not in json.dumps(search_body, ensure_ascii=False)
     assert search_body["filter"]["must"] == [
         {"key": "instance_name", "match": {"value": "Depressionsbot"}},
+        {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}},
         {"key": "account_scope", "match": {"value": payload["account_scope"]}},
         {"key": "schema_version", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION}},
         {"key": "embedding_model", "match": {"value": USER_MEMORY_QDRANT_EMBEDDING_MODEL}},
@@ -179,6 +180,8 @@ def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change
     )
     old_index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_old", "user_text": "Schlaf"})
     new_index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_new", "user_text": "Schlaf"})
+    wrong_schema_point = new_index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_wrong_schema", "user_text": "Schlaf"})
+    fake_qdrant.points[wrong_schema_point]["payload"]["schema"] = "other_payload_schema"
 
     results = new_index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=10)
 
@@ -305,15 +308,18 @@ def test_qdrant_memory_delete_account_removes_only_matching_scope() -> None:
     index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
     point_a = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_a", "user_text": "Schlaf"})
     point_b = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_B, entry={"id": "mem_b", "user_text": "Schlaf"})
+    point_other_schema = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_other_schema", "user_text": "Schlaf"})
+    fake_qdrant.points[point_other_schema]["payload"]["schema"] = "other_payload_schema"
     scope_a = fake_qdrant.points[point_a]["payload"]["account_scope"]
     scope_b = fake_qdrant.points[point_b]["payload"]["account_scope"]
 
     index.delete_account(instance_name="Depressionsbot", account_id=ACCOUNT_A)
 
     remaining_payloads = [point["payload"] for point in fake_qdrant.points.values()]
-    assert [payload["memory_id"] for payload in remaining_payloads] == ["mem_b"]
+    assert [payload["memory_id"] for payload in remaining_payloads] == ["mem_b", "mem_other_schema"]
     current_delete_body = fake_qdrant.calls[-1]["body"]
     assert ACCOUNT_A not in json.dumps(current_delete_body, ensure_ascii=False)
+    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} in current_delete_body["filter"]["must"]
     assert {"key": "account_scope", "match": {"value": scope_a}} in current_delete_body["filter"]["must"]
     assert {"key": "account_scope", "match": {"value": scope_b}} not in current_delete_body["filter"]["must"]
 
@@ -363,6 +369,7 @@ def test_qdrant_memory_delete_account_can_explicitly_remove_legacy_raw_account_p
     )
 
     assert legacy_point_id not in fake_qdrant.points
+    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} in fake_qdrant.calls[-1]["body"]["filter"]["must"]
     assert {"key": "account_id", "match": {"value": ACCOUNT_A}} in fake_qdrant.calls[-1]["body"]["filter"]["must"]
 
 
