@@ -10,6 +10,7 @@ from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, OpenAICompatibleHFPoolExecutor
+from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import select_target
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 from TeeBotus.llm.profiles import normalize_llm_purpose
@@ -59,7 +60,8 @@ class HFPoolProvider:
         except HFPoolUnavailable as exc:
             return self._fallback_or_raise(user_text, instructions, previous_response_id, exc)
         except Exception as exc:  # noqa: BLE001 - provider boundary normalizes executor failures.
-            return self._fallback_or_raise(user_text, instructions, previous_response_id, HFPoolUnavailable(f"hf_pool target failed: {type(exc).__name__}: {exc}"))
+            detail = redact_hf_secrets(f"{type(exc).__name__}: {exc}")
+            return self._fallback_or_raise(user_text, instructions, previous_response_id, HFPoolUnavailable(f"hf_pool target failed: {detail}"))
 
     def _fallback_or_raise(
         self,
