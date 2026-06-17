@@ -5,6 +5,7 @@ import argparse
 import json
 import re
 import shutil
+import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -1781,6 +1782,7 @@ def _runtime_status_missing_required_lines(output: str) -> list[str]:
             missing.append(f"runtime-status missing {label}: {prefix}")
     missing.extend(_runtime_status_structured_route_errors(lines))
     missing.extend(_runtime_status_bibliothekar_route_errors(lines))
+    missing.extend(_runtime_status_account_memory_recovery_legacy_errors(lines))
     return missing
 
 
@@ -1818,6 +1820,83 @@ def _runtime_status_bibliothekar_route_errors(lines: Sequence[str]) -> list[str]
     if " free_tier_guard=" not in route:
         errors.append("runtime-status bibliothekar route must show free_tier_guard")
     return errors
+
+
+def _runtime_status_account_memory_recovery_legacy_errors(lines: Sequence[str]) -> list[str]:
+    errors: list[str] = []
+    for line in lines:
+        if not line.startswith("account_memory_recovery_legacy="):
+            continue
+        fields, orphan_tokens = _runtime_status_fields(line)
+        instance_name = fields.get("account_memory_recovery_legacy") or "<unknown>"
+        if orphan_tokens:
+            errors.append(f"runtime-status account-memory legacy recovery line has unkeyed tokens for {instance_name}: {' '.join(orphan_tokens)}")
+        if fields.get("status") != "available":
+            errors.append(f"runtime-status account-memory legacy recovery must use status=available for {instance_name}")
+        for key in ("sources", "entries"):
+            value = fields.get(key)
+            if _runtime_status_positive_integer_value(value) is None:
+                errors.append(f"runtime-status account-memory legacy recovery {key} must be positive for {instance_name}")
+        if not fields.get("path"):
+            errors.append(f"runtime-status account-memory legacy recovery must include path for {instance_name}")
+        command = fields.get("command", "")
+        apply_command = fields.get("apply_command", "")
+        errors.extend(
+            _runtime_status_legacy_recovery_command_errors(
+                command,
+                instance_name=instance_name,
+                command_label="command",
+                require_apply=False,
+            )
+        )
+        errors.extend(
+            _runtime_status_legacy_recovery_command_errors(
+                apply_command,
+                instance_name=instance_name,
+                command_label="apply_command",
+                require_apply=True,
+            )
+        )
+    return errors
+
+
+def _runtime_status_legacy_recovery_command_errors(command: str, *, instance_name: str, command_label: str, require_apply: bool) -> list[str]:
+    if not command:
+        return [f"runtime-status account-memory legacy recovery missing {command_label} for {instance_name}"]
+    try:
+        argv = shlex.split(command)
+    except ValueError as exc:
+        return [f"runtime-status account-memory legacy recovery {command_label} is not shell-parseable for {instance_name}: {exc}"]
+    errors: list[str] = []
+    if "scripts/import_legacy_user_memory.py" not in argv:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} missing import script for {instance_name}")
+    if "--legacy-instances-dir" not in argv:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --legacy-instances-dir for {instance_name}")
+    if "--target-instances-dir" not in argv:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --target-instances-dir for {instance_name}")
+    if "--instance" not in argv:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --instance for {instance_name}")
+    if "--replace-unreadable-account-metadata" not in argv:
+        errors.append(f"runtime-status account-memory legacy recovery {command_label} missing metadata replacement flag for {instance_name}")
+    if require_apply:
+        if "--apply" not in argv:
+            errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --apply for {instance_name}")
+        if "--replace-unreadable" not in argv:
+            errors.append(f"runtime-status account-memory legacy recovery {command_label} missing --replace-unreadable for {instance_name}")
+    else:
+        if "--apply" in argv:
+            errors.append(f"runtime-status account-memory legacy recovery preflight command must not include --apply for {instance_name}")
+        if "--json-output" not in argv or "--markdown-output" not in argv:
+            errors.append(f"runtime-status account-memory legacy recovery preflight command must write JSON and Markdown artifacts for {instance_name}")
+    return errors
+
+
+def _runtime_status_positive_integer_value(value: str | None) -> int | None:
+    try:
+        parsed = int(str(value or "").strip())
+    except ValueError:
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _runtime_status_line_is_broken(line: str) -> bool:
@@ -1877,6 +1956,22 @@ def _runtime_status_field(line: str, key: str) -> str:
         if part.startswith(prefix):
             return part[len(prefix) :].strip()
     return ""
+
+
+def _runtime_status_fields(line: str) -> tuple[dict[str, str], list[str]]:
+    try:
+        parts = shlex.split(line)
+    except ValueError:
+        return {}, [line]
+    fields: dict[str, str] = {}
+    orphan_tokens: list[str] = []
+    for part in parts:
+        if "=" not in part:
+            orphan_tokens.append(part)
+            continue
+        key, value = part.split("=", 1)
+        fields[key] = value
+    return fields, orphan_tokens
 
 
 def _runtime_status_line_contains_secret(line: str) -> bool:

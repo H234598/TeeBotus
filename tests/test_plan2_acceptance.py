@@ -2262,6 +2262,7 @@ def test_runtime_status_broken_lines_ignores_non_broken_statuses() -> None:
             "bibliothekar=Demo backend=local store=json collection=teebotus_bibliothekar_chunks status=ready documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://127.0.0.1:6333 status=reachable documents=1 chunks=1",
             "bibliothekar=Demo backend=haystack store=qdrant collection=therapy_books target=http://localhost:6334 status=reachable documents=1 chunks=1",
+            'account_memory_recovery_legacy=Demo status=available sources=1 entries=2 path=/tmp/TeeBotus_Backups/TeeBotus.bak2/instances.bak command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable-account-metadata --json-output /tmp/import.json --markdown-output /tmp/import.md" apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable --replace-unreadable-account-metadata --apply"',
         ]
     )
 
@@ -2318,6 +2319,32 @@ def test_runtime_status_missing_required_lines_flags_malformed_structured_route(
     assert "runtime-status bibliothekar route must use model=gemini/gemini-2.5-flash" in missing
     assert "runtime-status bibliothekar route must show google_mode=stateless" in missing
     assert "runtime-status bibliothekar route must show free_tier_guard" in missing
+
+
+def test_runtime_status_missing_required_lines_validates_account_memory_legacy_recovery() -> None:
+    valid_line = (
+        'account_memory_recovery_legacy=Demo status=available sources=1 entries=2 path=/tmp/TeeBotus_Backups/TeeBotus.bak2/instances.bak '
+        'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable-account-metadata --json-output /tmp/import.json --markdown-output /tmp/import.md" '
+        'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable --replace-unreadable-account-metadata --apply"'
+    )
+
+    assert check_plan2_acceptance._runtime_status_account_memory_recovery_legacy_errors([valid_line]) == []
+
+
+def test_runtime_status_missing_required_lines_rejects_malformed_account_memory_legacy_recovery() -> None:
+    broken_line = (
+        'account_memory_recovery_legacy=Demo status=available sources=0 entries=2 path=/tmp/TeeBotus Backups/TeeBotus.bak2/instances.bak '
+        'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable-account-metadata --apply" '
+        'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /tmp/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir /tmp/TeeBotus/instances --instance Demo --replace-unreadable-account-metadata --apply"'
+    )
+
+    errors = check_plan2_acceptance._runtime_status_account_memory_recovery_legacy_errors([broken_line])
+
+    assert any("has unkeyed tokens" in error for error in errors)
+    assert any("sources must be positive" in error for error in errors)
+    assert any("preflight command must not include --apply" in error for error in errors)
+    assert any("preflight command must write JSON and Markdown artifacts" in error for error in errors)
+    assert any("apply_command missing --replace-unreadable" in error for error in errors)
 
 
 def test_runtime_status_broken_lines_flags_secret_leaks() -> None:
