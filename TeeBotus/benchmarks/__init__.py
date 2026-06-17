@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from TeeBotus.benchmarks.adapters import benchmark_adapter_contracts
 from TeeBotus.benchmarks.core import (
     BenchmarkResult,
     REQUIRED_BENCHMARK_CATEGORIES,
@@ -34,6 +35,7 @@ __all__ = [
     "STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS",
     "build_comparisons",
     "build_quality_gate",
+    "benchmark_adapter_contracts",
     "benchmark_decision_fake_model",
     "benchmark_gemini_free_tier_guard",
     "benchmark_hf_pool_eval_matrix",

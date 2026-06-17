@@ -10,6 +10,7 @@ from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 
 
 def test_plan3_benchmark_core_lives_in_package() -> None:
+    adapters = importlib.import_module("TeeBotus.benchmarks.adapters")
     core = importlib.import_module("TeeBotus.benchmarks.core")
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
     llm_routing = importlib.import_module("TeeBotus.benchmarks.llm_routing")
@@ -19,6 +20,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     package_dir = Path(core.__file__).resolve().parent
 
     assert (package_dir / "__init__.py").exists()
+    assert (package_dir / "adapters.py").exists()
     assert (package_dir / "core.py").exists()
     assert (package_dir / "hf_pool.py").exists()
     assert (package_dir / "llm_routing.py").exists()
@@ -29,6 +31,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._build_comparisons is core.build_comparisons
     assert benchmark_module._result is core.result
     assert benchmark_module.REQUIRED_BENCHMARK_NAMES is core.REQUIRED_BENCHMARK_NAMES
+    assert benchmark_module._benchmark_adapter_contracts is adapters.benchmark_adapter_contracts
     assert benchmark_module._benchmark_hf_pool_quick is hf_pool.benchmark_hf_pool_quick
     assert benchmark_module._benchmark_hf_pool_eval_matrix is hf_pool.benchmark_hf_pool_eval_matrix
     assert benchmark_module._benchmark_hf_pool_live is hf_pool.benchmark_hf_pool_live
