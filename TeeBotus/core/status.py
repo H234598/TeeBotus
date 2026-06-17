@@ -557,7 +557,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
         has_broken_metadata = True
     for account_dir in account_dirs:
         account_id = account_dir.name
-        profile_warning = ""
+        profile_error = ""
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
@@ -565,18 +565,18 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
                 lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
                 has_broken_memory = True
                 continue
-            profile_warning = f" warning=profile_unreadable:{exc}"
+            profile_error = f"profile_unreadable:{exc}"
             has_broken_metadata = True
         except OSError as exc:
             if store.account_memory_backend is None:
                 lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
                 has_broken_memory = True
                 continue
-            profile_warning = f" warning=profile_unreadable:{exc}"
+            profile_error = f"profile_unreadable:{exc}"
             has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
-                health = store.check_structured_memory_index(account_id, require_resolvable=not profile_warning)
+                health = store.check_structured_memory_index(account_id, require_resolvable=not profile_error)
         except AccountStoreError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             has_broken_memory = True
@@ -587,10 +587,17 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path)
             continue
         fallback_warning = _account_memory_fallback_warning(store, account_id)
         if health.ok:
-            lines.append(f"account_memory={instance_name}/{account_id} status=ok{profile_warning}{fallback_warning}")
+            if profile_error:
+                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={profile_error}{fallback_warning}")
+                has_broken_memory = True
+            else:
+                lines.append(f"account_memory={instance_name}/{account_id} status=ok{fallback_warning}")
         else:
+            errors = list(health.errors)
+            if profile_error:
+                errors.insert(0, profile_error)
             lines.append(
-                f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(health.errors)}{profile_warning}{fallback_warning}"
+                f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(errors)}{fallback_warning}"
             )
             has_broken_memory = True
     if has_broken_memory or has_broken_metadata:

@@ -254,7 +254,7 @@ def test_account_memory_index_health_uses_database_when_profile_envelope_is_stal
 
     assert lines == [
         f"account_memory_metadata=Demo status=broken item=accounts_dir path={tmp_path / 'instances' / 'Demo' / 'data' / 'accounts' / 'accounts'} accounts={account_id[:12]} error=encrypted envelope authentication failed",
-        f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed",
+        f"account_memory=Demo/{account_id} status=broken error=profile_unreadable:encrypted envelope authentication failed",
         f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"',
     ]
 
@@ -273,7 +273,10 @@ def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_pat
     assert any("account_memory_metadata=Demo status=broken item=identity_mapping" in line for line in lines)
     assert any("account_memory_metadata=Demo status=broken item=account_secrets" in line for line in lines)
     assert any(f"account_memory_metadata=Demo status=broken item=accounts_dir" in line and f"accounts={account_id[:12]}" in line for line in lines)
-    assert any(line == f"account_memory=Demo/{account_id} status=ok warning=profile_unreadable:encrypted envelope authentication failed" for line in lines)
+    assert any(
+        line == f"account_memory=Demo/{account_id} status=broken error=profile_unreadable:encrypted envelope authentication failed"
+        for line in lines
+    )
     assert lines[-1] == (
         f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"'
     )
