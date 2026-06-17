@@ -11,7 +11,7 @@ from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_poo
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, OpenAICompatibleHFPoolExecutor
 from TeeBotus.llm.hf_pool.scheduler import select_target
-from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 from TeeBotus.llm.profiles import normalize_llm_purpose
 
 
@@ -46,7 +46,13 @@ class HFPoolProvider:
     ) -> LLMResponse:
         try:
             config = load_hf_pool_config(self.config_path)
-            scheduled = select_target(config, pool_name=self.pool_name, purpose=self.purpose, env=self.env)
+            scheduled = select_target(
+                config,
+                pool_name=self.pool_name,
+                purpose=self.purpose,
+                env=self.env,
+                state=_scheduler_state_from_executor(self.executor),
+            )
             if self.executor is None:
                 raise HFPoolUnavailable("hf_pool live executor is not enabled")
             return self.executor.create_reply(scheduled, user_text, instructions)
@@ -127,6 +133,19 @@ def _executor_from_env(env: Mapping[str, str] | None) -> HFPoolExecutor | None:
     state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
     state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
     return OpenAICompatibleHFPoolExecutor(state_store=SQLiteHFPoolRuntimeStateStore(state_path))
+
+
+def _scheduler_state_from_executor(executor: HFPoolExecutor | None) -> HFPoolRuntimeState | None:
+    if executor is None:
+        return None
+    state_store = getattr(executor, "state_store", None)
+    if state_store is not None:
+        load = getattr(state_store, "load", None)
+        if callable(load):
+            state = load()
+            return state if isinstance(state, HFPoolRuntimeState) else None
+    state = getattr(executor, "state", None)
+    return state if isinstance(state, HFPoolRuntimeState) else None
 
 
 def _parse_bool(value: object) -> bool:

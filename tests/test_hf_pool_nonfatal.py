@@ -5,9 +5,11 @@ import json
 import pytest
 
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.base import LLMResponse
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.executor import HFPoolMockExecutor
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
+from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState
 
 
 def test_hf_pool_provider_missing_config_raises_controlled_llm_error(tmp_path):
@@ -112,6 +114,17 @@ def test_hf_pool_provider_uses_mock_executor_for_configured_target(tmp_path):
     assert response.model == "Qwen/Qwen3-4B-Instruct-2507"
 
 
+def test_hf_pool_provider_passes_executor_state_to_scheduler(tmp_path):
+    path = _two_target_config(tmp_path)
+    executor = _RecordingExecutor()
+
+    provider = HFPoolProvider(config_path=path, env={"HF_TOKEN_MAIN": "hf-secret"}, executor=executor)
+    response = provider.create_reply("ping", BotInstructions())
+
+    assert response.text == "selected low_target"
+    assert executor.selected_target == "low_target"
+
+
 class _Response:
     def __init__(self, payload: dict[str, object]) -> None:
         self.payload = payload
@@ -122,6 +135,16 @@ class _Response:
 
     def close(self) -> None:
         return None
+
+
+class _RecordingExecutor:
+    def __init__(self) -> None:
+        self.state = HFPoolRuntimeState(cooldowns={"high_target": "2999-01-01T00:00:00+00:00"})
+        self.selected_target = ""
+
+    def create_reply(self, scheduled, user_text, instructions):  # noqa: ANN001, ARG002
+        self.selected_target = scheduled.target.name
+        return LLMResponse(text=f"selected {scheduled.target.name}", provider="hf_pool", model=scheduled.target.request_model)
 
 
 def _enabled_config(tmp_path):
@@ -139,6 +162,39 @@ def _enabled_config(tmp_path):
                                 "model": "Qwen/Qwen3-4B-Instruct-2507",
                                 "purposes": ["normal_chat"],
                             }
+                        ],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _two_target_config(tmp_path):
+    path = tmp_path / "hf_pool.yaml"
+    path.write_text(
+        json.dumps(
+            {
+                "pools": {
+                    "default": {
+                        "enabled": True,
+                        "targets": [
+                            {
+                                "name": "high_target",
+                                "api_key_env": "HF_TOKEN_MAIN",
+                                "model": "high-model",
+                                "weight": 10,
+                                "purposes": ["normal_chat"],
+                            },
+                            {
+                                "name": "low_target",
+                                "api_key_env": "HF_TOKEN_MAIN",
+                                "model": "low-model",
+                                "weight": 1,
+                                "purposes": ["normal_chat"],
+                            },
                         ],
                     }
                 }
