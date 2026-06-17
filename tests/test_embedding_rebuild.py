@@ -39,6 +39,10 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 2
     assert results[0].point_ids == ("point:mem_sleep", "point:mem_plan")
+    assert results[0].qdrant_url == "http://localhost:6334"
+    assert results[0].embedding_provider == "hash"
+    assert results[0].embedding_model == "custom-memory-model"
+    assert results[0].embedding_dimensions == 32
 
 
 def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_default(monkeypatch, tmp_path):
@@ -82,6 +86,10 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
     assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "instance-memory-model", 48)]
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 1
+    assert results[0].qdrant_url == "http://localhost:6334"
+    assert results[0].embedding_provider == "hash"
+    assert results[0].embedding_model == "instance-memory-model"
+    assert results[0].embedding_dimensions == 48
 
 
 def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
@@ -156,3 +164,4 @@ def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path
     assert payload[0]["instance_name"] == "Depressionsbot"
     assert payload[0]["status"] == "dry_run"
     assert payload[0]["point_count"] == 2
+    assert payload[0]["embedding_model"] == ""

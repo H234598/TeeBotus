@@ -18,6 +18,10 @@ class QdrantMemoryRebuildResult:
     status: str
     point_count: int = 0
     point_ids: tuple[str, ...] = ()
+    qdrant_url: str = ""
+    embedding_provider: str = ""
+    embedding_model: str = ""
+    embedding_dimensions: int = 0
     error: str = ""
 
 
@@ -66,16 +70,43 @@ def rebuild_qdrant_memory_indexes(
         try:
             target_accounts = requested_accounts or store.list_account_ids()
         except Exception as exc:  # noqa: BLE001 - operator command should report every instance.
-            results.append(QdrantMemoryRebuildResult(instance_name, "", "error", error=f"{type(exc).__name__}: {exc}"))
+            results.append(
+                _rebuild_result(
+                    instance_name,
+                    "",
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    embedding_config=effective_embedding_config,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            )
             continue
         if not target_accounts:
-            results.append(QdrantMemoryRebuildResult(instance_name, "", "skipped", error="no accounts"))
+            results.append(
+                _rebuild_result(
+                    instance_name,
+                    "",
+                    "skipped",
+                    qdrant_url=effective_qdrant_url,
+                    embedding_config=effective_embedding_config,
+                    error="no accounts",
+                )
+            )
             continue
         for account_id in target_accounts:
             try:
                 entries = store.read_memory_entries(account_id)
                 if dry_run:
-                    results.append(QdrantMemoryRebuildResult(instance_name, account_id, "dry_run", point_count=len(entries)))
+                    results.append(
+                        _rebuild_result(
+                            instance_name,
+                            account_id,
+                            "dry_run",
+                            point_count=len(entries),
+                            qdrant_url=effective_qdrant_url,
+                            embedding_config=effective_embedding_config,
+                        )
+                    )
                     continue
                 index = qdrant_index_factory(
                     url=effective_qdrant_url,
@@ -87,10 +118,54 @@ def rebuild_qdrant_memory_indexes(
                     instance_name=instance_name,
                     account_id=account_id,
                 )
-                results.append(QdrantMemoryRebuildResult(instance_name, account_id, "rebuilt", point_count=len(point_ids), point_ids=tuple(point_ids)))
+                results.append(
+                    _rebuild_result(
+                        instance_name,
+                        account_id,
+                        "rebuilt",
+                        point_count=len(point_ids),
+                        point_ids=tuple(point_ids),
+                        qdrant_url=effective_qdrant_url,
+                        embedding_config=effective_embedding_config,
+                    )
+                )
             except Exception as exc:  # noqa: BLE001 - keep rebuilding other accounts.
-                results.append(QdrantMemoryRebuildResult(instance_name, account_id, "error", error=f"{type(exc).__name__}: {exc}"))
+                results.append(
+                    _rebuild_result(
+                        instance_name,
+                        account_id,
+                        "error",
+                        qdrant_url=effective_qdrant_url,
+                        embedding_config=effective_embedding_config,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
     return tuple(results)
+
+
+def _rebuild_result(
+    instance_name: str,
+    account_id: str,
+    status: str,
+    *,
+    qdrant_url: str,
+    embedding_config: EmbeddingConfig,
+    point_count: int = 0,
+    point_ids: tuple[str, ...] = (),
+    error: str = "",
+) -> QdrantMemoryRebuildResult:
+    return QdrantMemoryRebuildResult(
+        instance_name=instance_name,
+        account_id=account_id,
+        status=status,
+        point_count=point_count,
+        point_ids=point_ids,
+        qdrant_url=str(qdrant_url or ""),
+        embedding_provider=str(embedding_config.provider or ""),
+        embedding_model=str(embedding_config.model_name or ""),
+        embedding_dimensions=int(embedding_config.dimensions),
+        error=error,
+    )
 
 
 def _load_instance_memory_instructions(instances_dir: Path, instance_name: str) -> BotInstructions:

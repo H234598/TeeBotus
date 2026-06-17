@@ -70,9 +70,18 @@ def _format_memory_rebuild_result(result: object) -> str:
     account_id = str(getattr(result, "account_id", "") or "<all>")
     status = str(getattr(result, "status", "") or "unknown")
     point_count = int(getattr(result, "point_count", 0) or 0)
+    qdrant_url = str(getattr(result, "qdrant_url", "") or "")
+    embedding_provider = str(getattr(result, "embedding_provider", "") or "")
+    embedding_model = str(getattr(result, "embedding_model", "") or "")
+    embedding_dimensions = int(getattr(result, "embedding_dimensions", 0) or 0)
     error = str(getattr(result, "error", "") or "")
+    detail = ""
+    if qdrant_url:
+        detail += f" qdrant_url={qdrant_url}"
+    if embedding_model:
+        detail += f" embedding_provider={embedding_provider or 'unknown'} embedding_model={embedding_model} embedding_dimensions={embedding_dimensions}"
     suffix = f" error={error}" if error else ""
-    return f"{instance}/{account_id}: status={status} points={point_count}{suffix}"
+    return f"{instance}/{account_id}: status={status} points={point_count}{detail}{suffix}"
 
 
 if __name__ == "__main__":  # pragma: no cover
