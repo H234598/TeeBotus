@@ -89,7 +89,9 @@ def run_benchmarks(
     results.append(_benchmark_bibliothekar(iterations=iterations))
     results.append(_benchmark_bibliothekar_llamaindex_fake(iterations=iterations))
     results.append(_benchmark_bibliothekar_haystack_fake(iterations=iterations))
-    results.append(_benchmark_retrieval_embedding_reranker_matrix(iterations=iterations))
+    retrieval_matrix = _benchmark_retrieval_embedding_reranker_matrix(iterations=iterations)
+    results.append(retrieval_matrix)
+    results.extend(_retrieval_backend_results(retrieval_matrix))
     results.append(_benchmark_source_harvester_quality_gate(iterations=iterations))
     results.append(_benchmark_source_harvester_promote_index_flow(iterations=iterations))
     results.append(benchmark_llm_router(iterations=iterations))
@@ -148,6 +150,50 @@ def _memory_results(*, entries: int, select_runs: int, postgres_dsn: str) -> lis
     )
 
 
+def _retrieval_backend_results(matrix: BenchmarkResult) -> list[BenchmarkResult]:
+    details = matrix.get("details")
+    if not isinstance(details, dict):
+        return []
+    backend_total_ms = details.get("backend_total_ms")
+    backend_selected = details.get("backend_selected")
+    if not isinstance(backend_total_ms, dict) or not isinstance(backend_selected, dict):
+        return []
+    iterations = int(details.get("backend_iterations") or 1)
+    payload_bytes = int(matrix.get("payload_bytes") or 0)
+    index_bytes = int(matrix.get("index_bytes") or 0)
+    results: list[BenchmarkResult] = []
+    for backend in ("local", "llamaindex_fake", "haystack_fake"):
+        total_ms = backend_total_ms.get(backend)
+        selected = backend_selected.get(backend)
+        ok = (
+            isinstance(total_ms, (int, float))
+            and not isinstance(total_ms, bool)
+            and total_ms >= 0
+            and isinstance(selected, int)
+            and selected > 0
+        )
+        results.append(
+            _result(
+                name=f"retrieval_backend_{backend}",
+                category="retrieval",
+                iterations=iterations,
+                total_ms=float(total_ms or 0.0),
+                ok=ok,
+                errors=0 if ok else 1,
+                payload_bytes=payload_bytes,
+                index_bytes=index_bytes,
+                note="derived_from=retrieval_embedding_reranker_matrix",
+                mode=backend,
+                details={
+                    "source_benchmark": "retrieval_embedding_reranker_matrix",
+                    "backend": backend,
+                    "selected_chunks": int(selected or 0),
+                },
+            )
+        )
+    return results
+
+
 __all__ = [
     "BenchmarkResult",
     "REQUIRED_BENCHMARK_CATEGORIES",
@@ -187,6 +233,7 @@ __all__ = [
     "_context",
     "_dependency_context",
     "_memory_results",
+    "_retrieval_backend_results",
     "_result",
     "_stable_backend_ranking",
     "benchmark_gemini_free_tier_guard",

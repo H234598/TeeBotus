@@ -278,6 +278,7 @@ def benchmark_retrieval_embedding_reranker_matrix(*, iterations: int) -> Benchma
             },
             "reranked_top": with_reranker_top,
             "backend_modes": ["local", "llamaindex_fake", "haystack_fake"],
+            "backend_iterations": iterations,
             "backend_selected": backend_selected,
             "backend_total_ms": backend_timings,
             "network_calls": 0,

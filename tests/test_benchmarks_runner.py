@@ -113,12 +113,18 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["regression"]["status"] == "not_configured"
     assert suite["regression"]["failed"] is False
     rankings = {ranking["category"]: ranking for ranking in suite["comparisons"]["stable_backend_rankings"]}
-    assert {"account_memory", "bibliothekar", "langgraph_flows", "transcription_youtube"}.issubset(rankings)
+    assert {"account_memory", "bibliothekar", "langgraph_flows", "retrieval", "transcription_youtube"}.issubset(rankings)
     assert rankings["account_memory"]["fastest_stable"]
     assert rankings["account_memory"]["candidates"]
     assert [candidate["rank"] for candidate in rankings["account_memory"]["candidates"]] == list(
         range(1, len(rankings["account_memory"]["candidates"]) + 1)
     )
+    assert {candidate["name"] for candidate in rankings["retrieval"]["candidates"]} == {
+        "retrieval_backend_haystack_fake",
+        "retrieval_backend_llamaindex_fake",
+        "retrieval_backend_local",
+    }
+    assert rankings["retrieval"]["fastest_stable"].startswith("retrieval_backend_")
     assert any(skipped["name"] == "memory_postgres" for skipped in rankings["account_memory"]["skipped"])
     assert {
         "account_memory",
@@ -439,6 +445,8 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "qdrant_health_quick" in markdown
     assert "qdrant_memory_index_quick" in markdown
     assert "retrieval_embedding_reranker_matrix" in markdown
+    assert "retrieval_backend_local" in markdown
+    assert "retrieval_backend_haystack_fake" in markdown
     assert "source_harvester_quality_gate" in markdown
     assert "source_harvester_promote_index_flow" in markdown
     assert "decision_fake_model" in markdown

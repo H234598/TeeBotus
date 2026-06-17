@@ -38,6 +38,9 @@ REQUIRED_BENCHMARK_NAMES = frozenset(
         "qdrant_health_quick",
         "qdrant_memory_index_quick",
         "retrieval_embedding_reranker_matrix",
+        "retrieval_backend_haystack_fake",
+        "retrieval_backend_llamaindex_fake",
+        "retrieval_backend_local",
         "source_harvester_quality_gate",
         "source_harvester_promote_index_flow",
         "llm_router_structured_decision",
@@ -63,6 +66,7 @@ REQUIRED_BENCHMARK_RANKING_CATEGORIES = frozenset(
         "account_memory",
         "bibliothekar",
         "langgraph_flows",
+        "retrieval",
         "transcription_youtube",
     }
 )
@@ -172,6 +176,11 @@ def build_comparisons(results: list[BenchmarkResult]) -> dict[str, Any]:
             "langgraph_bibliothekar_linear",
             "langgraph_bibliothekar_fake_installed",
             "langgraph_source_harvester_workflow",
+        },
+        "retrieval": {
+            "retrieval_backend_haystack_fake",
+            "retrieval_backend_llamaindex_fake",
+            "retrieval_backend_local",
         },
         "transcription_youtube": {
             "youtube_parser_local",
