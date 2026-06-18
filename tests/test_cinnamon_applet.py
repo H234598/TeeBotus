@@ -679,10 +679,10 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     parsed = parse_runtime_status(
         f"""
         [LLM-Routen und Backends]
-        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
+        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
 
         [API Keys, Limits und Kosten]
-        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret>
+        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 private_key=-----BEGIN PRIVATE KEY----- message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret>
 
         [Messenger]
         telegram_slot=Demo/telegram:1 status=configured token=configured target=https://user:plainpass@example.test/path
@@ -698,6 +698,8 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "plain private key" not in rendered
     assert "plain-private-key" not in rendered
     assert "plain signing key" not in rendered
+    assert "plain multi word token" not in rendered
+    assert "-----BEGIN PRIVATE KEY-----" not in rendered
     assert "structured-secret" not in rendered
     assert "bracket secret value" not in rendered
     assert "curly-secret" not in rendered
@@ -710,6 +712,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "private_key=<redacted>" in rendered
     assert "service_account_private_key=<redacted>" in rendered
     assert "signing_key=<redacted>" in rendered
+    assert "refresh_token=<redacted>" in rendered
     assert "message=(client_secret=<redacted>)" in rendered
     assert "details=[api_key=<redacted>]" in rendered
     assert "meta={password=<redacted>}" in rendered
@@ -730,6 +733,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
 
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
     bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
+    bare_bearer_token = "barebearerabcdefghijklmnopqrstuvwxyz123456"
     basic_token = "QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
     api_key_header_token = "apikeyheaderabcdefghijklmnopqrstuvwxyz123456"
     token_header_token = "tokenheaderabcdefghijklmnopqrstuvwxyz123456"
@@ -744,13 +748,14 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
         api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1 authorization=Basic {basic_token}
 
         [Messenger]
-        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable error=Authorization: ApiKey {api_key_header_token}; Proxy-Authorization: Token {token_header_token}
+        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable error=Bearer {bare_bearer_token}; Authorization: ApiKey {api_key_header_token}; Proxy-Authorization: Token {token_header_token}
         """
     )
     rendered = json.dumps(parsed, sort_keys=True)
 
     assert "redis-password" not in rendered
     assert bearer_token not in rendered
+    assert bare_bearer_token not in rendered
     assert basic_token not in rendered
     assert api_key_header_token not in rendered
     assert token_header_token not in rendered
@@ -758,6 +763,7 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
     assert url_userinfo_token not in rendered
     assert "target=redis://<redacted>@example.test/0" in rendered
     assert "authorization=Bearer <redacted-secret>" in rendered
+    assert "error=Bearer <redacted-secret>; Authorization" in rendered
     assert "authorization=Basic <redacted-secret>" in rendered
     assert "authorization=Basic <redacted-secret>==" not in rendered
     assert "Authorization: ApiKey <redacted-secret>" in rendered

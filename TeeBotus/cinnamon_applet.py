@@ -39,7 +39,13 @@ URL_CREDENTIAL_RE = re.compile(
     r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@",
     re.IGNORECASE,
 )
-AUTHORIZATION_TOKEN_RE = re.compile(r"\b(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])", re.IGNORECASE)
+AUTHORIZATION_TOKEN_RE = re.compile(
+    r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
+    re.IGNORECASE,
+)
+BARE_AUTHORIZATION_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
+)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
@@ -49,14 +55,25 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
+SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
+    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+)
+SECRET_ASSIGNMENT_VALUE_PATTERN = (
+    r"<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|"
+    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)\]}>])+"
+)
+SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN = (
+    r"<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|"
+    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)&\]}>])+"
+)
 SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9_-]*)\s*([:=])\s*(<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|[^,\s)\]}>]+)",
+    rf"(?<!\S)([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"({SECRET_ASSIGNMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
-    r"([\s=;,&?(\[<{])([A-Za-z0-9_-]*(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9_-]*)\s*([:=])\s*(<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|[^,\s)&\]}>]+)",
+    rf"([\s=;,&?(\[<{{])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
@@ -547,7 +564,8 @@ def _redact(value: str) -> str:
     for pattern in SECRET_TOKEN_PATTERNS:
         text = pattern.sub("<redacted-secret>", text)
     text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
-    text = AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
+    text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
+    text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text
