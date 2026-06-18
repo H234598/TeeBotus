@@ -22,6 +22,12 @@ def _js_const_array_values(source: str, name: str) -> set[str]:
     return set(re.findall(r'"([^"]+)"', match.group(1)))
 
 
+def _js_status_label_keys(source: str) -> set[str]:
+    match = re.search(r"let labels = \{(.*?)\n    \};", source, re.DOTALL)
+    assert match is not None
+    return set(re.findall(r"\n\s*([A-Za-z_][A-Za-z0-9_]*):", match.group(1)))
+
+
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
     metadata = json.loads((APPLET_DIR / "metadata.json").read_text(encoding="utf-8"))
     schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
@@ -161,6 +167,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
         assert f'"{status}"' in source
     assert "payload.health" in source
     assert '"Health "' in source
+    assert 'broken: "defekt"' in source
     assert 'cooldown: "Cooldown"' in source
     assert 'available: "verfuegbar"' in source
     assert 'degraded: "eingeschraenkt"' in source
@@ -178,6 +185,7 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
 
     assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
     assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
+    assert set(PROBLEM_STATUSES) <= _js_status_label_keys(source)
     assert 'command: { apply_command: true }' in source
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
 

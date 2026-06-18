@@ -622,6 +622,7 @@ TeeBotusApplet.prototype = {
     let value = String(status || "unknown");
     let labels = {
       available: "verfuegbar",
+      broken: "defekt",
       configured: "konfiguriert",
       config_conflict: "Konfigurationskonflikt",
       cooldown: "Cooldown",
