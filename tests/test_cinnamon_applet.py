@@ -505,6 +505,20 @@ def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> Non
     assert parsed["summary"]["problem_statuses"] == ""
 
 
+def test_cinnamon_applet_runtime_parser_deduplicates_codex_usage_stale_status() -> None:
+    parsed = parse_runtime_status(
+        """
+        [API Keys, Limits und Kosten]
+        codex_usage=local status=stale snapshots=2 stale_hours=48
+        """
+    )
+
+    assert parsed["status_counts"]["stale"] == 1
+    assert parsed["summary"]["api_problem_status_count"] == 1
+    assert parsed["summary"]["problem_status_count"] == 1
+    assert parsed["summary"]["problem_statuses"] == "stale:1"
+
+
 def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         cinnamon_applet,

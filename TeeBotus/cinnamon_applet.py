@@ -304,7 +304,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         fields = _parse_status_fields(line)
         line_statuses = list(_line_status_values(fields))
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
-            line_statuses.append("stale")
+            _append_status_value(line_statuses, "stale")
         for status in line_statuses:
             status_counts[status] = status_counts.get(status, 0) + 1
         section_problem_key = SECTION_PROBLEM_SUMMARY_KEYS.get(current)
