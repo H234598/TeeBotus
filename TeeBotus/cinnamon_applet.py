@@ -83,6 +83,7 @@ PROBLEM_STATUSES = frozenset(
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status", "semantic"})
 SECTION_PROBLEM_SUMMARY_KEYS = {
     "Messenger": "messenger_problem_status_count",
+    "Accounts und Entscheidungen": "llm_problem_status_count",
     "LLM-Routen und Backends": "llm_problem_status_count",
     "API Keys, Limits und Kosten": "api_problem_status_count",
     "Memory und semantische Suche": "memory_problem_status_count",

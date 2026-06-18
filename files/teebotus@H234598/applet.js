@@ -276,6 +276,7 @@ TeeBotusApplet.prototype = {
       llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionProblemText(summary.llm_problem_status_count));
     }
     llmLines = llmLines.concat(this._formatLines(sections["LLM-Routen und Backends"] || [], (line) => this._formatLlmLine(line)));
+    llmLines = llmLines.concat(this._formatLines(sections["Accounts und Entscheidungen"] || [], (line) => this._formatLlmLine(line)));
     this._populateLines(this.llmMenu.menu, llmLines, this._dynamicEmptyText(_("LLM-Diagnose wird geladen.")));
 
     if (this.showApiSection) {
@@ -424,6 +425,22 @@ TeeBotusApplet.prototype = {
         }
       }
       return text + this._errorText(fields);
+    }
+    if (fields.llm) {
+      return "Account-LLM " + fields.llm + ": " + String(fields.provider || "?") + " / " + String(fields.model || "?") + " (" + this._statusWord(fields.status) + ")" + this._errorText(fields);
+    }
+    if (fields.structured_decision) {
+      let routeStatus = fields.route_status ? "; Route " + this._statusWord(fields.route_status) : "";
+      let fallbackName = fields.fallback_profile || fields.fallback || "";
+      let fallbackModel = fields.fallback_model || "";
+      let fallback = "";
+      if (fallbackName || fallbackModel) {
+        fallback = "; Ersatz " + String(fallbackName || "Fallback");
+        if (fallbackModel) {
+          fallback += " -> " + fallbackModel;
+        }
+      }
+      return "Account-Entscheider " + fields.structured_decision + ": " + this._statusWord(fields.status) + routeStatus + fallback + this._errorText(fields);
     }
     return line;
   },

@@ -79,6 +79,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "TeeBotus.proactive" in schema["proactive-command"]["default"]
     assert "_formatMessengerLine" in source
     assert "_formatLlmLine" in source
+    assert 'sections["Accounts und Entscheidungen"]' in source
     assert "_formatApiBudgetLine" in source
     assert "_formatMemoryLine" in source
     assert "_formatAccountLine" in source
@@ -100,6 +101,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'this.set_applet_label("TB")' in source
     assert '"HF-Pool " + fields.hf_pool + " / " + fields.target' in source
     assert '"HF-Pool " + fields.hf_pool + ": "' in source
+    assert '"Account-LLM " + fields.llm' in source
+    assert '"Account-Entscheider " + fields.structured_decision' in source
     assert '"; Feed " + this._statusWord(fields.models_feed)' in source
     assert '"; Kontext " + fields.context_length' in source
     assert "summary.problem_status_count" in source
@@ -238,6 +241,9 @@ def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
         gemini_free_tier_limits status=fallback_defaults
         structured_decision=Demo status=enabled route_status=unavailable
 
+        [Accounts und Entscheidungen]
+        structured_decision=Demo/telegram:1 status=enabled route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.2:3b
+
         [API Keys, Limits und Kosten]
         api_budget=hard_reasoning status=missing_key key=missing
         codex_usage=local status=ready snapshots=2 stale_hours=24
@@ -253,12 +259,12 @@ def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
     )
 
     assert parsed["summary"]["messenger_problem_status_count"] == 1
-    assert parsed["summary"]["llm_problem_status_count"] == 2
+    assert parsed["summary"]["llm_problem_status_count"] == 3
     assert parsed["summary"]["api_problem_status_count"] == 2
     assert parsed["summary"]["memory_problem_status_count"] == 4
-    assert parsed["summary"]["problem_status_count"] == 9
+    assert parsed["summary"]["problem_status_count"] == 10
     assert parsed["summary"]["problem_statuses"] == (
-        "fallback_defaults:1,missing:1,missing_key:1,needed:1,stale:1,unavailable:2,unsupported:1,warning:1"
+        "fallback_defaults:1,missing:1,missing_key:1,needed:1,stale:1,unavailable:3,unsupported:1,warning:1"
     )
 
 
