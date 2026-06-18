@@ -295,6 +295,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
         llm_fallback_model = "ollama_chat/llama3.1:8b"
 
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_FREE_TIER_ENABLED", "true")
     instructions = BotInstructions(
         commands={"/status": "Configured status."},
         openai_enabled=True,
@@ -353,10 +354,53 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "[API, Limits und Kosten]" in actions[0].text
     assert "- Chat/Text: litellm / gemini/gemini-3.5-flash; Key: GEMINI_API_KEY fehlt" in actions[0].text
     assert "- Entscheidungen/Planner: hf_pool / pool:default#structured_decision" in actions[0].text
+    assert "- Warnung (Bibliothekar/Antworten): Gemini Stateful + Free-Tier" in actions[0].text
     assert "MCP Tools" in actions[0].text
     assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
     assert "- Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_path):
+    class StatefulGeminiClient:
+        provider_name = "gemini_interactions"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=StatefulGeminiClient(),
+        bibliothekar_enabled=False,
+        env={},
+    )
+
+    assert "[API, Limits und Kosten]" in text
+    assert (
+        "- Warnung (Chat/Text): Gemini Stateful + Free-Tier: Interactions werden mit "
+        "store=true/previous_interaction_id providerseitig fortgefuehrt"
+    ) in text
+    assert "Free-Tier-Interaction-Retention" in text
+
+
+def test_status_omits_stateful_gemini_retention_warning_when_free_tier_guard_is_off(tmp_path):
+    class StatefulGeminiClient:
+        provider_name = "gemini_interactions"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=StatefulGeminiClient(),
+        bibliothekar_enabled=False,
+        env={"TEEBOTUS_GEMINI_FREE_TIER_ENABLED": "false"},
+    )
+
+    assert "Gemini Stateful + Free-Tier" not in text
+    assert "Free-Tier-Interaction-Retention" not in text
 
 
 def test_engine_help_carries_formatted_release_log_link(tmp_path):

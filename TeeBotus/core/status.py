@@ -119,6 +119,26 @@ def build_status_reply(
     encryption_status = memory_encryption_status(account_dir, account_store=account_store, account_id=resolved_account_id)
     commit_history_url = github_commit_history_url(project_root)
     status_name = _status_display_name(instance_name)
+    api_budget_lines = _llm_api_budget_status_lines(
+        llm_enabled=llm_enabled,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_fallback_models=llm_fallback_models,
+        llm_client=llm_client,
+        structured_decision_runner=structured_decision_runner,
+        bibliothekar_enabled=bibliothekar_enabled,
+        env=env,
+    )
+    api_warning_lines = _llm_api_warning_status_lines(
+        instance_name=instance_name,
+        llm_enabled=llm_enabled,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_client=llm_client,
+        structured_decision_runner=structured_decision_runner,
+        bibliothekar_enabled=bibliothekar_enabled,
+        env=env,
+    )
     return "\n".join(
         [
             f"{status_name} Status:",
@@ -140,16 +160,8 @@ def build_status_reply(
             ),
             "",
             "[API, Limits und Kosten]",
-            *_llm_api_budget_status_lines(
-                llm_enabled=llm_enabled,
-                llm_provider=llm_provider,
-                llm_model=llm_model,
-                llm_fallback_models=llm_fallback_models,
-                llm_client=llm_client,
-                structured_decision_runner=structured_decision_runner,
-                bibliothekar_enabled=bibliothekar_enabled,
-                env=env,
-            ),
+            *api_budget_lines,
+            *api_warning_lines,
             "",
             "[Daten und Memory]",
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
@@ -231,6 +243,148 @@ def _llm_api_budget_status_lines(
         redact_status_text(f"- Entscheidungen/Planner: {decision_label}"),
         redact_status_text(f"- Bibliothekar/Antworten: {bibliothekar_label}"),
     ]
+
+
+def _llm_api_warning_status_lines(
+    *,
+    instance_name: str,
+    llm_enabled: bool | None,
+    llm_provider: str,
+    llm_model: str,
+    llm_client: object | None,
+    structured_decision_runner: object | None,
+    bibliothekar_enabled: bool | None,
+    env: Mapping[str, str] | None,
+) -> list[str]:
+    values = env if env is not None else os.environ
+    warnings: list[str] = []
+    seen: set[str] = set()
+
+    chat_provider = _first_status_attr(llm_client, "provider_name", "provider", "llm_provider") or llm_provider or "openai"
+    chat_model = _first_status_attr(llm_client, "model", "model_name", "model_selector", "llm_model", "pydantic_ai_model_name") or llm_model
+    _append_gemini_stateful_free_tier_warning(
+        warnings,
+        seen,
+        label="Chat/Text",
+        provider=chat_provider,
+        model=chat_model,
+        enabled=llm_enabled,
+        env=values,
+        instance_name=instance_name,
+    )
+
+    if structured_decision_runner is not None:
+        decision_provider = _first_status_attr(
+            structured_decision_runner,
+            "llm_provider",
+            "pydantic_ai_provider",
+            "provider_name",
+            "provider",
+        )
+        decision_model = _first_status_attr(
+            structured_decision_runner,
+            "model_name",
+            "pydantic_ai_model_name",
+            "hf_pool_request_model",
+            "llm_model",
+        )
+        _append_gemini_stateful_free_tier_warning(
+            warnings,
+            seen,
+            label="Entscheidungen/Planner",
+            provider=decision_provider,
+            model=decision_model,
+            enabled=True,
+            env=values,
+            instance_name=instance_name,
+        )
+
+    _append_gemini_stateful_free_tier_route_warning(
+        warnings,
+        seen,
+        label="Bibliothekar/Antworten",
+        purpose="bibliothekar_answer",
+        enabled=bibliothekar_enabled,
+        env=values,
+        instance_name=instance_name,
+    )
+    return [redact_status_text(line) for line in warnings]
+
+
+def _append_gemini_stateful_free_tier_route_warning(
+    warnings: list[str],
+    seen: set[str],
+    *,
+    label: str,
+    purpose: str,
+    enabled: bool | None,
+    env: Mapping[str, str],
+    instance_name: str,
+) -> None:
+    if enabled is False:
+        return
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+
+        route = select_llm_route(purpose)
+    except Exception:
+        return
+    _append_gemini_stateful_free_tier_warning(
+        warnings,
+        seen,
+        label=label,
+        provider=route.provider,
+        model=route.model,
+        enabled=True,
+        env=env,
+        instance_name=instance_name,
+    )
+
+
+def _append_gemini_stateful_free_tier_warning(
+    warnings: list[str],
+    seen: set[str],
+    *,
+    label: str,
+    provider: str,
+    model: str,
+    enabled: bool | None,
+    env: Mapping[str, str],
+    instance_name: str,
+) -> None:
+    if enabled is False:
+        return
+    resolved_provider = _normalize_status_provider(provider)
+    resolved_model = str(model or "").strip()
+    if resolved_provider != "gemini_interactions":
+        return
+    if not _gemini_free_tier_guard_active(provider=resolved_provider, model=resolved_model, env=env, instance_name=instance_name):
+        return
+    key = f"{resolved_provider}:{resolved_model}"
+    if key in seen:
+        return
+    seen.add(key)
+    warnings.append(
+        f"- Warnung ({label}): Gemini Stateful + Free-Tier: "
+        "Interactions werden mit store=true/previous_interaction_id providerseitig fortgefuehrt "
+        "und koennen unter Googles Free-Tier-Interaction-Retention fallen. "
+        "Keine sensiblen Inhalte darueber schicken, wenn diese Retention nicht akzeptabel ist."
+    )
+
+
+def _gemini_free_tier_guard_active(*, provider: str, model: str, env: Mapping[str, str], instance_name: str) -> bool:
+    try:
+        from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits
+
+        limits = resolve_gemini_free_tier_limits(
+            env,
+            instance_name=instance_name,
+            provider=provider,
+            model=model,
+        )
+    except Exception:
+        return True
+    return bool(getattr(limits, "active", False))
 
 
 def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str]) -> str:
