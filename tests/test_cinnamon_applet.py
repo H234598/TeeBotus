@@ -471,6 +471,26 @@ def test_cinnamon_applet_runtime_parser_counts_secondary_status_after_free_text_
     assert parsed["status_counts"]["unavailable"] == 3
 
 
+def test_cinnamon_applet_runtime_parser_deduplicates_same_problem_status_per_line() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=demo status=enabled route_status=warning warning=fallback
+        hf_pool=default status=configured models_feed=warning warning=fallback
+        llm_route=demo status=broken route_status=unavailable warning=fallback
+
+        [Memory und semantische Suche]
+        memory_index=demo status=ready semantic=warning warning=fallback
+        """
+    )
+
+    assert parsed["status_counts"]["warning"] == 4
+    assert parsed["status_counts"]["broken"] == 1
+    assert parsed["status_counts"]["unavailable"] == 1
+    assert parsed["summary"]["problem_status_count"] == 6
+    assert parsed["summary"]["problem_statuses"] == "broken:1,unavailable:1,warning:4"
+
+
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:
     parsed = parse_runtime_status(
         """

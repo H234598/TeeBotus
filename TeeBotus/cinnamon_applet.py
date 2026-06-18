@@ -357,18 +357,23 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
     values: list[str] = []
     primary = fields.get("status", "")
     if primary:
-        values.append(primary)
+        _append_status_value(values, primary)
     for key in sorted(SECONDARY_PROBLEM_STATUS_FIELDS):
         secondary = fields.get(key, "")
-        if secondary and secondary in PROBLEM_STATUSES and secondary != primary:
-            values.append(secondary)
+        if secondary and secondary in PROBLEM_STATUSES:
+            _append_status_value(values, secondary)
     for key in sorted(FLAG_PROBLEM_STATUS_FIELDS):
-        if fields.get(key) and primary != "warning":
-            values.append("warning")
+        if fields.get(key):
+            _append_status_value(values, "warning")
     for key, status in sorted(FORCED_PROBLEM_STATUS_FIELDS.items()):
-        if fields.get(key) and status != primary and status not in values:
-            values.append(status)
+        if fields.get(key):
+            _append_status_value(values, status)
     return tuple(values)
+
+
+def _append_status_value(values: list[str], status: str) -> None:
+    if status and status not in values:
+        values.append(status)
 
 
 def _codex_usage_is_stale(fields: dict[str, str]) -> bool:
