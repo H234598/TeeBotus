@@ -734,6 +734,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
     bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
     bare_bearer_token = "barebearerabcdefghijklmnopqrstuvwxyz123456"
+    lowercase_bearer_token = "lowerbearerabcdefghijklmnopqrstuvwxyz123456"
+    lowercase_basic_token = "lowerbasicabcdefghijklmnopqrstuvwxyz123456"
+    lowercase_apikey_token = "lowerapikeyabcdefghijklmnopqrstuvwxyz123456"
     basic_token = "QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
     api_key_header_token = "apikeyheaderabcdefghijklmnopqrstuvwxyz123456"
     token_header_token = "tokenheaderabcdefghijklmnopqrstuvwxyz123456"
@@ -748,7 +751,7 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
         api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1 authorization=Basic {basic_token}
 
         [Messenger]
-        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable error=Bearer {bare_bearer_token}; Authorization: ApiKey {api_key_header_token}; Proxy-Authorization: Token {token_header_token}
+        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable error=Bearer {bare_bearer_token}; bearer {lowercase_bearer_token}; basic {lowercase_basic_token}; apikey {lowercase_apikey_token}; token GEMINI_API_KEY api_key_ring=3; Authorization: ApiKey {api_key_header_token}; Proxy-Authorization: Token {token_header_token}
         """
     )
     rendered = json.dumps(parsed, sort_keys=True)
@@ -756,6 +759,9 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
     assert "redis-password" not in rendered
     assert bearer_token not in rendered
     assert bare_bearer_token not in rendered
+    assert lowercase_bearer_token not in rendered
+    assert lowercase_basic_token not in rendered
+    assert lowercase_apikey_token not in rendered
     assert basic_token not in rendered
     assert api_key_header_token not in rendered
     assert token_header_token not in rendered
@@ -763,7 +769,7 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
     assert url_userinfo_token not in rendered
     assert "target=redis://<redacted>@example.test/0" in rendered
     assert "authorization=Bearer <redacted-secret>" in rendered
-    assert "error=Bearer <redacted-secret>; Authorization" in rendered
+    assert "error=Bearer <redacted-secret>; bearer <redacted-secret>; basic <redacted-secret>; apikey <redacted-secret>; token GEMINI_API_KEY api_key_ring=3; Authorization" in rendered
     assert "authorization=Basic <redacted-secret>" in rendered
     assert "authorization=Basic <redacted-secret>==" not in rendered
     assert "Authorization: ApiKey <redacted-secret>" in rendered

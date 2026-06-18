@@ -44,7 +44,8 @@ AUTHORIZATION_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 BARE_AUTHORIZATION_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
+    r"(?<![A-Za-z0-9_-])([Bb][Ee][Aa][Rr][Ee][Rr]|[Bb][Aa][Ss][Ii][Cc]|[Aa][Pp][Ii][Kk]ey|Token)"
+    r"\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
 )
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
