@@ -1610,6 +1610,13 @@ def _sanitize_status_text(value: object) -> str:
         text,
         flags=re.IGNORECASE,
     )
+    text = re.sub(
+        r"([\s=;,])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+        r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+        _status_secret_assignment_fragment_replacement,
+        text,
+        flags=re.IGNORECASE,
+    )
     return text.replace("\r", " ").replace("\n", " ")
 
 
@@ -1626,18 +1633,31 @@ def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
     key = str(match.group(1) or "")
     separator = str(match.group(2) or "=")
     value = str(match.group(3) or "")
+    return _status_secret_assignment_text(key, separator, value, original=match.group(0))
+
+
+def _status_secret_assignment_fragment_replacement(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key = str(match.group(2) or "")
+    separator = str(match.group(3) or "=")
+    value = str(match.group(4) or "")
+    original = match.group(0)[len(prefix) :]
+    return prefix + _status_secret_assignment_text(key, separator, value, original=original)
+
+
+def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
     key_token = key.strip().casefold().replace("-", "_").replace(" ", "_")
     normalized_value = value.strip().strip("\"'`").casefold()
-    if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>"}:
-        return match.group(0)
+    if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"}:
+        return original
     if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value.strip()):
-        return match.group(0)
+        return original
     if key_token in {"api_key_ring", "gemini_api_key_ring"} and value.strip().isdigit():
-        return match.group(0)
+        return original
     if key_token == "api_key_instances" and re.fullmatch(r"\d+/\d+", value.strip()):
-        return match.group(0)
+        return original
     if key_token in {"tokens", "token_usage", "costs", "limits", "free_tier_guard", "max_output_tokens"}:
-        return match.group(0)
+        return original
     return f"{key}{separator}<redacted>"
 
 

@@ -112,6 +112,11 @@ RUNTIME_STATUS_SECRET_ASSIGNMENT_RE = re.compile(
     r"[A-Za-z0-9_-]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
 )
+RUNTIME_STATUS_SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
+    r"([\s=;,])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
 SECRET_FIELD_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[A-Za-z0-9_-]*)\s*[:=]\s*([^,\s)]+)",
     re.IGNORECASE,
@@ -2666,6 +2671,9 @@ def _runtime_status_line_contains_secret(line: str) -> bool:
     for match in RUNTIME_STATUS_SECRET_ASSIGNMENT_RE.finditer(line):
         if _secret_assignment_value_is_unsafe(match.group(1), match.group(2)):
             return True
+    for match in RUNTIME_STATUS_SECRET_ASSIGNMENT_FRAGMENT_RE.finditer(line):
+        if _secret_assignment_value_is_unsafe(match.group(2), match.group(4)):
+            return True
     return False
 
 
@@ -2711,6 +2719,7 @@ def _redact_console_text(value: object) -> str:
         text = pattern.sub("<redacted-secret>", text)
     text = RUNTIME_STATUS_URL_CREDENTIAL_RE.sub(_redact_console_url_credentials, text)
     text = RUNTIME_STATUS_SECRET_ASSIGNMENT_RE.sub(_redact_console_secret_assignment, text)
+    text = RUNTIME_STATUS_SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_console_secret_assignment_fragment, text)
     text = SECRET_FIELD_ASSIGNMENT_RE.sub(_redact_console_secret_assignment, text)
     return ARTIFACT_SECRET_JSON_FIELD_RE.sub(_redact_console_json_secret_field, text)
 
@@ -2729,6 +2738,12 @@ def _redact_console_secret_assignment(match: re.Match[str]) -> str:
         return match.group(0)
     prefix = match.group(0)[: match.start(2) - match.start(0)]
     return f"{prefix}<redacted>"
+
+
+def _redact_console_secret_assignment_fragment(match: re.Match[str]) -> str:
+    if not _secret_assignment_value_is_unsafe(match.group(2), match.group(4)):
+        return match.group(0)
+    return f"{match.group(1)}{match.group(2)}{match.group(3)}<redacted>"
 
 
 def _redact_console_json_secret_field(match: re.Match[str]) -> str:

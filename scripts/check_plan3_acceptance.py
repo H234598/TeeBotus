@@ -183,9 +183,9 @@ def run_acceptance_commands(commands: Sequence[Plan3Command]) -> int:
         result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=capture_output)
         if capture_output:
             if result.stdout:
-                print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+                check_plan2_acceptance._print_console_text(result.stdout)
             if result.stderr:
-                print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
+                check_plan2_acceptance._print_console_text(result.stderr, file=sys.stderr)
         if result.returncode and not command.nonfatal:
             print(f"\nPlan3 acceptance failed at {command.label} with exit code {result.returncode}.", file=sys.stderr)
             return result.returncode
@@ -197,20 +197,20 @@ def run_acceptance_commands(commands: Sequence[Plan3Command]) -> int:
             if broken_lines and not command.nonfatal:
                 print(f"\nPlan3 acceptance failed at {command.label}: runtime-status reports broken state.", file=sys.stderr)
                 for line in broken_lines:
-                    print(f"  {line}", file=sys.stderr)
+                    print(f"  {check_plan2_acceptance._redact_console_text(line)}", file=sys.stderr)
                 return 1
             missing_lines = check_plan2_acceptance._runtime_status_missing_required_lines(output)
             if missing_lines and not command.nonfatal:
                 print(f"\nPlan3 acceptance failed at {command.label}: runtime-status is missing required Plan3 lines.", file=sys.stderr)
                 for line in missing_lines:
-                    print(f"  {line}", file=sys.stderr)
+                    print(f"  {check_plan2_acceptance._redact_console_text(line)}", file=sys.stderr)
                 return 1
         if command.validate_benchmark_artifacts:
             artifact_errors = check_plan2_acceptance._benchmark_artifact_errors(command.argv)
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan3 acceptance failed at {command.label}: benchmark artifacts are invalid.", file=sys.stderr)
                 for error in artifact_errors:
-                    print(f"  {error}", file=sys.stderr)
+                    print(f"  {check_plan2_acceptance._redact_console_text(error)}", file=sys.stderr)
                 return 1
     print("\nPlan3 acceptance checks passed.")
     return 0

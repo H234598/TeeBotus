@@ -165,3 +165,38 @@ def test_plan3_acceptance_runtime_status_validation_fails_on_broken_line(monkeyp
     assert result == 1
     assert calls == [("python-test", "-m", "TeeBotus", "--runtime-status")]
     assert "runtime-status reports broken state" in capsys.readouterr().err
+
+
+def test_plan3_acceptance_redacts_captured_runtime_status_output(monkeypatch, capsys) -> None:
+    leaked_token = "ghp_" + "1234567890ABCDEFGHIJK"
+    leaked_password = "plain-password"
+
+    def fake_run(argv, **_kwargs):
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=f"llm=Demo status=broken api_key={leaked_token} error=password:{leaked_password}\n",
+            stderr=f"debug token={leaked_token}\n",
+        )
+
+    monkeypatch.setattr(check_plan3_acceptance.subprocess, "run", fake_run)
+
+    result = check_plan3_acceptance.run_acceptance_commands(
+        [
+            check_plan3_acceptance.Plan3Command(
+                "runtime-status",
+                ("python-test", "-m", "TeeBotus", "--runtime-status"),
+                validate_runtime_status=True,
+            ),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert leaked_token not in captured.out
+    assert leaked_token not in captured.err
+    assert leaked_password not in captured.out
+    assert leaked_password not in captured.err
+    assert "api_key=<redacted-secret>" in captured.out
+    assert "password:<redacted>" in captured.out
+    assert "token=<redacted-secret>" in captured.err
