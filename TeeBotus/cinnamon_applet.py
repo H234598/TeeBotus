@@ -66,6 +66,7 @@ PROBLEM_STATUSES = frozenset(
         "never",
         "no_limits_found",
         "schema_mismatch",
+        "unknown",
         "unavailable",
         "unreachable",
         "warning",

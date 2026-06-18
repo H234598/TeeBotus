@@ -101,6 +101,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'no_limits_found: "keine Limits gefunden"' in source
     assert 'never: "noch nie aktualisiert"' in source
     assert 'schema_mismatch: "Schema passt nicht"' in source
+    assert 'unknown: "unbekannt"' in source
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -213,13 +214,14 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         structured_decision=demo status=not_applicable
         hf_pool=default status=disabled
         qdrant_collection=ok status=ready
+        account_identity=Demo status=unknown error=doctor_unavailable
         """
     )
 
-    assert parsed["summary"]["problem_status_count"] == 11
+    assert parsed["summary"]["problem_status_count"] == 12
     assert parsed["summary"]["problem_statuses"] == (
         "broken:1,config_conflict:1,degraded:1,fallback_defaults:1,invalid:1,"
-        "missing_key:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:1,warning:1"
+        "missing_key:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:1,unknown:1,warning:1"
     )
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1

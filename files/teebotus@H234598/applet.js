@@ -32,6 +32,7 @@ const PROBLEM_STATUSES = [
   "never",
   "no_limits_found",
   "schema_mismatch",
+  "unknown",
   "unavailable",
   "unreachable",
   "warning"
@@ -452,6 +453,7 @@ TeeBotusApplet.prototype = {
       ready: "bereit",
       registered: "registriert",
       schema_mismatch: "Schema passt nicht",
+      unknown: "unbekannt",
       unavailable: "nicht verfuegbar",
       unreachable: "nicht erreichbar",
       warning: "Warnung"
