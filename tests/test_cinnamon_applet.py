@@ -80,6 +80,10 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "/status" in source
     assert "/voicemodel" in source
     assert 'this.set_applet_label("TB")' in source
+    assert "summary.problem_status_count" in source
+    assert "_problemStatusCount: function(counts)" in source
+    assert 'degraded: "eingeschraenkt"' in source
+    assert 'schema_mismatch: "Schema passt nicht"' in source
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -171,6 +175,36 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["status_counts"]["configured"] == 3
     assert parsed["status_counts"]["ready"] == 4
     assert "Messenger" in parsed["sections"]
+
+
+def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Diagnose]
+        identity=Demo status=warning
+        llm_route=demo status=degraded
+        qdrant=local status=invalid
+        qdrant_collection=demo status=schema_mismatch
+        memory_index=demo status=config_conflict
+        api_budget=demo status=missing_key
+        service=demo status=unavailable
+        account_memory=demo/abc status=broken
+        runtime_slot=demo status=not_configured
+        structured_decision=demo status=not_applicable
+        hf_pool=default status=disabled
+        qdrant_collection=ok status=ready
+        """
+    )
+
+    assert parsed["summary"]["problem_status_count"] == 8
+    assert parsed["summary"]["problem_statuses"] == (
+        "broken:1,config_conflict:1,degraded:1,invalid:1,missing_key:1,"
+        "schema_mismatch:1,unavailable:1,warning:1"
+    )
+    assert parsed["status_counts"]["not_configured"] == 1
+    assert parsed["status_counts"]["not_applicable"] == 1
+    assert parsed["status_counts"]["disabled"] == 1
+    assert parsed["status_counts"]["ready"] == 1
 
 
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:

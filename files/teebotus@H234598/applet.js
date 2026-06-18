@@ -413,15 +413,24 @@ TeeBotusApplet.prototype = {
     let value = String(status || "unknown");
     let labels = {
       configured: "konfiguriert",
+      config_conflict: "Konfigurationskonflikt",
+      degraded: "eingeschraenkt",
       disabled: "deaktiviert",
       enabled: "aktiv",
+      error: "Fehler",
+      failed: "fehlgeschlagen",
       fallback_defaults: "konservative Ersatzwerte",
+      invalid: "ungueltig",
       missing_key: "Key fehlt",
+      missing: "fehlt",
+      not_applicable: "nicht anwendbar",
+      not_configured: "nicht konfiguriert",
       ok: "ok",
       planned: "geplant",
       reachable: "erreichbar",
       ready: "bereit",
       registered: "registriert",
+      schema_mismatch: "Schema passt nicht",
       unavailable: "nicht verfuegbar",
       unreachable: "nicht erreichbar",
       warning: "Warnung"
@@ -521,7 +530,10 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
-    let bad = (counts.broken || 0) + (counts.unavailable || 0) + (counts.unreachable || 0) + (counts.missing || 0) + (counts.missing_key || 0);
+    let bad = parseInt(summary.problem_status_count, 10);
+    if (!(bad >= 0)) {
+      bad = this._problemStatusCount(counts);
+    }
     let state = String(unit.active_state || "unknown");
     let instances = String(summary.instances || "?");
     let channels = String(summary.channels || this.channels || DEFAULT_CHANNELS);
@@ -529,6 +541,28 @@ TeeBotusApplet.prototype = {
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     return "Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad);
+  },
+
+  _problemStatusCount: function(counts) {
+    let problemStatuses = [
+      "broken",
+      "config_conflict",
+      "degraded",
+      "error",
+      "failed",
+      "invalid",
+      "missing",
+      "missing_key",
+      "schema_mismatch",
+      "unavailable",
+      "unreachable",
+      "warning"
+    ];
+    let total = 0;
+    for (let status of problemStatuses) {
+      total += parseInt((counts || {})[status] || 0, 10) || 0;
+    }
+    return total;
   },
 
   _updateHeader: function() {

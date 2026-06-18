@@ -52,6 +52,22 @@ SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
 SAFE_SECRET_NUMERIC_METADATA = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens"})
 SAFE_SECRET_TEXT_METADATA = frozenset({"tokens", "token_usage", "costs", "limits", "free_tier_guard"})
+PROBLEM_STATUSES = frozenset(
+    {
+        "broken",
+        "config_conflict",
+        "degraded",
+        "error",
+        "failed",
+        "invalid",
+        "missing",
+        "missing_key",
+        "schema_mismatch",
+        "unavailable",
+        "unreachable",
+        "warning",
+    }
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -142,6 +158,8 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "qdrant_ready_collections": 0,
         "memory_semantic_ready": 0,
         "hf_pool": "",
+        "problem_status_count": 0,
+        "problem_statuses": "",
     }
     for raw_line in str(output or "").splitlines():
         line = _redact(raw_line.strip())
@@ -188,6 +206,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool="):
             summary["hf_pool"] = line
+    problem_counts = {status: count for status, count in sorted(status_counts.items()) if status in PROBLEM_STATUSES}
+    summary["problem_status_count"] = sum(problem_counts.values())
+    summary["problem_statuses"] = ",".join(f"{status}:{count}" for status, count in problem_counts.items())
     sections = {key: value for key, value in sections.items() if value}
     return {"sections": sections, "summary": summary, "status_counts": status_counts}
 
