@@ -99,6 +99,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_problemBreakdownText: function(value)" in source
     assert "_commandProblemBreakdownText: function(health)" in source
     assert "_qdrantProblemBreakdownText: function(health)" in source
+    assert "qdrant_runtime_problem_count" in source
+    assert '"Runtime:" + String(runtimeCount)' in source
     assert '" | Probleme "' in source
     assert '" | Kommando:"' in source
     assert '" | Qdrant "' in source

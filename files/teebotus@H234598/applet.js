@@ -635,12 +635,16 @@ TeeBotusApplet.prototype = {
   },
 
   _qdrantProblemBreakdownText: function(health) {
+    let runtimeCount = parseInt((health || {}).qdrant_runtime_problem_count || 0, 10) || 0;
     let probeCount = parseInt((health || {}).qdrant_probe_problem_count || 0, 10) || 0;
     let unitCount = parseInt((health || {}).qdrant_unit_problem_count || 0, 10) || 0;
-    if (probeCount <= 0 && unitCount <= 0) {
+    if (runtimeCount <= 0 && probeCount <= 0 && unitCount <= 0) {
       return "";
     }
     let parts = [];
+    if (runtimeCount > 0) {
+      parts.push("Runtime:" + String(runtimeCount));
+    }
     if (probeCount > 0) {
       parts.push("Probe:" + String(probeCount));
     }
