@@ -104,6 +104,8 @@ PROBLEM_STATUSES = frozenset(
         "warning",
     }
 )
+SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
+STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
     {
         "available",
@@ -122,7 +124,6 @@ STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
         "registered",
     }
 )
-SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 SECTION_PROBLEM_SUMMARY_KEYS = {
     "Messenger": "messenger_problem_status_count",
     "Accounts und Entscheidungen": "llm_problem_status_count",
@@ -571,7 +572,7 @@ def _status_field_value_end(text: str, matches: list[re.Match[str]], index: int,
 
 def _status_match_is_structured_boundary(text: str, matches: list[re.Match[str]], index: int) -> bool:
     match = matches[index]
-    if str(match.group(1) or "") != "status":
+    if str(match.group(1) or "") not in STATUS_FIELD_BOUNDARY_KEYS:
         return False
     value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
     value = text[match.end() : value_end].strip()

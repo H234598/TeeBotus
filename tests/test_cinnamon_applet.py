@@ -422,6 +422,39 @@ def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() ->
     assert "ok" not in parsed["status_counts"]
 
 
+def test_cinnamon_applet_runtime_parser_counts_secondary_status_after_free_text_error() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=demo status=enabled error=provider down route_status=unavailable fallback=local
+        hf_pool=default status=configured error=models feed down models_feed=unavailable
+
+        [Memory und semantische Suche]
+        memory_index=demo status=ready error=qdrant down semantic=unavailable
+        """
+    )
+
+    route_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][0])
+    hf_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][1])
+    memory_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Memory und semantische Suche"][0])
+
+    assert route_fields["error"] == "provider down"
+    assert route_fields["route_status"] == "unavailable"
+    assert route_fields["fallback"] == "local"
+    assert hf_fields["error"] == "models feed down"
+    assert hf_fields["models_feed"] == "unavailable"
+    assert memory_fields["error"] == "qdrant down"
+    assert memory_fields["semantic"] == "unavailable"
+    assert parsed["summary"]["llm_problem_status_count"] == 2
+    assert parsed["summary"]["memory_problem_status_count"] == 1
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "unavailable:3"
+    assert parsed["status_counts"]["enabled"] == 1
+    assert parsed["status_counts"]["configured"] == 1
+    assert parsed["status_counts"]["ready"] == 1
+    assert parsed["status_counts"]["unavailable"] == 3
+
+
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:
     parsed = parse_runtime_status(
         """
