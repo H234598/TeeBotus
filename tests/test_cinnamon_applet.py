@@ -81,6 +81,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatLlmLine" in source
     assert "_formatApiBudgetLine" in source
     assert "_formatMemoryLine" in source
+    assert "_formatAccountLine" in source
+    assert "_accountStatusLines" in source
+    assert 'sections["Tools und Account-Memory"]' in source
     assert "_errorText: function(fields)" in source
     assert '"; Fehler " + value' in source
     assert "this._errorText(fields)" in source
@@ -242,15 +245,21 @@ def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
         [Memory und semantische Suche]
         qdrant_collection=demo status=unavailable
         memory_index=Demo backend=keyword status=ready semantic=unsupported
+
+        [Tools und Account-Memory]
+        account_identity=Demo status=warning identity_warnings=1
+        account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery"
         """
     )
 
     assert parsed["summary"]["messenger_problem_status_count"] == 1
     assert parsed["summary"]["llm_problem_status_count"] == 2
     assert parsed["summary"]["api_problem_status_count"] == 2
-    assert parsed["summary"]["memory_problem_status_count"] == 2
-    assert parsed["summary"]["problem_status_count"] == 7
-    assert parsed["summary"]["problem_statuses"] == "fallback_defaults:1,missing:1,missing_key:1,stale:1,unavailable:2,unsupported:1"
+    assert parsed["summary"]["memory_problem_status_count"] == 4
+    assert parsed["summary"]["problem_status_count"] == 9
+    assert parsed["summary"]["problem_statuses"] == (
+        "fallback_defaults:1,missing:1,missing_key:1,needed:1,stale:1,unavailable:2,unsupported:1,warning:1"
+    )
 
 
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:

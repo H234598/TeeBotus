@@ -311,6 +311,7 @@ TeeBotusApplet.prototype = {
     if (bibliothekarPoints > 0) {
       memoryLines.push("Bibliothekar-Vektoren: " + String(bibliothekarPoints));
     }
+    memoryLines = memoryLines.concat(this._formatLines(this._accountStatusLines(sections["Tools und Account-Memory"] || []), (line) => this._formatAccountLine(line)));
     memoryLines = memoryLines.concat(this._formatLines(sections["Memory und semantische Suche"] || [], (line) => this._formatMemoryLine(line)));
     this._populateLines(this.memoryMenu.menu, memoryLines, this._dynamicEmptyText(_("Memory-Diagnose wird geladen.")));
     this._appendQdrantActions();
@@ -473,6 +474,58 @@ TeeBotusApplet.prototype = {
     }
     if (fields.memory_index) {
       return "Memory Index " + fields.memory_index + ": " + this._statusWord(fields.status) + "; Backend " + String(fields.backend || "?") + "; Semantik " + String(fields.semantic || "?") + this._errorText(fields);
+    }
+    return line;
+  },
+
+  _accountStatusLines: function(lines) {
+    let problem = [];
+    let normal = [];
+    for (let line of lines || []) {
+      let fields = this._parseFields(line);
+      if (fields.account_identity_warning || this._lineHasProblemStatus(fields)) {
+        problem.push(line);
+      } else {
+        normal.push(line);
+      }
+    }
+    return problem.concat(normal);
+  },
+
+  _lineHasProblemStatus: function(fields) {
+    for (let status of PROBLEM_STATUSES) {
+      if ((fields || {}).status === status || (fields || {}).route_status === status || (fields || {}).semantic === status) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  _formatAccountLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.account_identity_warning) {
+      let message = fields.message ? "; " + fields.message : "";
+      let action = fields.action ? "; Aktion " + fields.action : "";
+      return "Account-Identitaet " + fields.account_identity_warning + ": Warnung" + message + action;
+    }
+    if (fields.account_identity) {
+      return "Account-Identitaet " + fields.account_identity + ": " + this._statusWord(fields.status) + "; Runtime " + String(fields.runtime_slots || "?") + "; Identitaeten " + String(fields.identities || "?") + this._errorText(fields);
+    }
+    if (fields.account_memory_recovery) {
+      let command = fields.command ? "; Kommando " + fields.command : "";
+      return "Account-Memory-Recovery " + fields.account_memory_recovery + ": " + this._statusWord(fields.status) + command + this._errorText(fields);
+    }
+    if (fields.account_memory) {
+      return "Account-Memory " + fields.account_memory + ": " + this._statusWord(fields.status) + this._errorText(fields);
+    }
+    if (fields.account_crypto) {
+      return "Account-Crypto " + fields.account_crypto + ": " + this._statusWord(fields.status) + "; Mapping " + String(fields.mapping || "?") + "; Memory " + String(fields.memory || "?") + "; Keyring " + String(fields.keyring || "?") + this._errorText(fields);
+    }
+    if (fields.account_storage_preflight) {
+      return "Account-Storage: " + this._statusWord(fields.status) + this._errorText(fields);
+    }
+    if (fields.mcp_tools) {
+      return "MCP-Tools " + fields.mcp_tools;
     }
     return line;
   },

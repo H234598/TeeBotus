@@ -86,6 +86,7 @@ SECTION_PROBLEM_SUMMARY_KEYS = {
     "LLM-Routen und Backends": "llm_problem_status_count",
     "API Keys, Limits und Kosten": "api_problem_status_count",
     "Memory und semantische Suche": "memory_problem_status_count",
+    "Tools und Account-Memory": "memory_problem_status_count",
 }
 
 
