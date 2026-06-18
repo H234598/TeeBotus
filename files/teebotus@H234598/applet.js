@@ -62,6 +62,9 @@ const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
 const FLAG_PROBLEM_STATUS_FIELDS = [
   "warning"
 ];
+const FORCED_PROBLEM_STATUS_FIELDS = {
+  account_identity_warning: "warning"
+};
 const QUICK_COMMANDS = [
   "/status",
   "/info",
@@ -326,7 +329,7 @@ TeeBotusApplet.prototype = {
     if (bibliothekarPoints > 0) {
       memoryLines.push("Bibliothekar-Vektoren: " + String(bibliothekarPoints));
     }
-    let accountStatusGroups = this._splitProblemStatusLines(sections["Tools und Account-Memory"] || [], (fields) => fields.account_identity_warning);
+    let accountStatusGroups = this._splitProblemStatusLines(sections["Tools und Account-Memory"] || []);
     let memoryStatusLines = this._problemStatusLines(sections["Memory und semantische Suche"] || []);
     memoryLines = memoryLines.concat(this._formatLines(accountStatusGroups.problem, (line) => this._formatAccountLine(line)));
     memoryLines = memoryLines.concat(this._formatLines(memoryStatusLines, (line) => this._formatMemoryLine(line)));
@@ -545,7 +548,7 @@ TeeBotusApplet.prototype = {
   },
 
   _accountStatusLines: function(lines) {
-    return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);
+    return this._problemStatusLines(lines);
   },
 
   _lineHasProblemStatus: function(fields) {
@@ -562,6 +565,11 @@ TeeBotusApplet.prototype = {
       }
     }
     for (let key of FLAG_PROBLEM_STATUS_FIELDS) {
+      if (values[key]) {
+        return true;
+      }
+    }
+    for (let key in FORCED_PROBLEM_STATUS_FIELDS) {
       if (values[key]) {
         return true;
       }

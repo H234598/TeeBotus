@@ -48,6 +48,7 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
     "message": frozenset({"action"}),
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
+FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
@@ -326,6 +327,9 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
     for key in sorted(FLAG_PROBLEM_STATUS_FIELDS):
         if fields.get(key) and primary != "warning":
             values.append("warning")
+    for key, status in sorted(FORCED_PROBLEM_STATUS_FIELDS.items()):
+        if fields.get(key) and status != primary and status not in values:
+            values.append(status)
     return tuple(values)
 
 

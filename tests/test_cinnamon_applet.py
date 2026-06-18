@@ -8,6 +8,7 @@ from pathlib import Path
 import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
 from TeeBotus.cinnamon_applet import FLAG_PROBLEM_STATUS_FIELDS
+from TeeBotus.cinnamon_applet import FORCED_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
 from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
@@ -119,8 +120,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert '"Account-Memory-Legacy-Recovery " + fields.account_memory_recovery_legacy' in source
     assert "_problemStatusLines: function(lines, isForcedProblem)" in source
     assert "_splitProblemStatusLines: function(lines, isForcedProblem)" in source
-    assert "return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);" in source
+    assert "return this._problemStatusLines(lines);" in source
     assert "let accountStatusGroups = this._splitProblemStatusLines" in source
+    assert 'let accountStatusGroups = this._splitProblemStatusLines(sections["Tools und Account-Memory"] || []);' in source
     assert 'let memoryStatusLines = this._problemStatusLines(sections["Memory und semantische Suche"] || []);' in source
     assert "accountStatusGroups.problem" in source
     assert "accountStatusGroups.normal" in source
@@ -188,6 +190,9 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
     assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
     assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
+    assert "const FORCED_PROBLEM_STATUS_FIELDS = {" in source
+    for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():
+        assert f"{field}: \"{status}\"" in source
     assert set(PROBLEM_STATUSES) <= _js_status_label_keys(source)
     assert 'command: { apply_command: true }' in source
     assert 'error: { warning: true }' in source
@@ -778,6 +783,20 @@ def test_cinnamon_applet_runtime_parser_counts_warning_field_after_error() -> No
     assert parsed["summary"]["memory_problem_status_count"] == 3
     assert parsed["summary"]["problem_status_count"] == 3
     assert parsed["summary"]["problem_statuses"] == "broken:1,warning:2"
+
+
+def test_cinnamon_applet_runtime_parser_counts_account_identity_warning_lines() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_identity_warning=Demo code=runtime_channel_without_identity message=signal runtime is configured action=run login
+        """
+    )
+
+    assert parsed["status_counts"]["warning"] == 1
+    assert parsed["summary"]["memory_problem_status_count"] == 1
+    assert parsed["summary"]["problem_status_count"] == 1
+    assert parsed["summary"]["problem_statuses"] == "warning:1"
 
 
 def test_cinnamon_applet_runtime_parser_splits_legacy_recovery_commands() -> None:
