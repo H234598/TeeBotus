@@ -453,6 +453,51 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
     ]
 
 
+def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    keys: list[str] = []
+
+    class Interaction:
+        output_text = "  Hallo vom zweiten Key  "
+        id = "interaction-2"
+        usage = {"input_tokens": 4, "output_tokens": 3}
+
+    class Interactions:
+        def __init__(self, api_key: str) -> None:
+            self.api_key = api_key
+
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            if self.api_key == "gemini-a":
+                raise RuntimeError("quota exceeded")
+            return Interaction()
+
+    class Client:
+        def __init__(self, *, api_key):
+            keys.append(api_key)
+            self.interactions = Interactions(api_key)
+
+    import google.genai as genai
+
+    monkeypatch.setattr(genai, "Client", Client)
+    reset_gemini_free_tier_budget_state()
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key_ring=("gemini-a", "gemini-b"),
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), "prev-from-gemini-a")
+
+    assert response.text == "Hallo vom zweiten Key"
+    assert response.response_id == "interaction-2"
+    assert keys == ["gemini-a", "gemini-b"]
+    assert calls[0]["previous_interaction_id"] == "prev-from-gemini-a"
+    assert "previous_interaction_id" not in calls[1]
+
+
 def test_build_text_llm_client_passes_env_to_hf_pool_provider() -> None:
     env = {"HF_TOKEN_MAIN": "hf-secret", "TEEBOTUS_HF_POOL_LIVE": "0"}
 

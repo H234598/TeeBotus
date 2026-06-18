@@ -75,7 +75,7 @@ class GeminiInteractionsClient:
             raise LLMAPIError("Gemini Interactions API key is missing")
 
         errors: list[str] = []
-        for api_key in key_attempts:
+        for attempt_index, api_key in enumerate(key_attempts):
             reservation = self._reserve_google_free_tier_budget(
                 api_key=api_key,
                 user_text=user_text,
@@ -98,7 +98,8 @@ class GeminiInteractionsClient:
                     "response_modalities": ["text"],
                     "timeout": self.timeout,
                 }
-                if previous := str(previous_response_id or "").strip():
+                previous = str(previous_response_id or "").strip()
+                if previous and attempt_index == 0:
                     request["previous_interaction_id"] = previous
                 if self.service_tier:
                     request["service_tier"] = self.service_tier
