@@ -267,8 +267,8 @@ def test_cinnamon_applet_payload_health_reports_command_and_qdrant_failures(monk
     assert payload["command_ok"] is False
     assert payload["ok"] is False
     assert payload["health"]["status"] == "broken"
-    assert payload["health"]["qdrant_problem_count"] == 2
-    assert payload["health"]["total_problem_count"] == 2
+    assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["total_problem_count"] == 1
 
 
 def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypatch, tmp_path) -> None:
@@ -283,6 +283,28 @@ def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypat
             "error": "",
         },
     )
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["command_ok"] is True
+    assert payload["ok"] is False
+    assert payload["health"]["status"] == "warning"
+    assert payload["health"]["problem_status_count"] == 0
+    assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["total_problem_count"] == 1
+
+
+def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "https://qdrant.example", "collections": {}, "error": "invalid local qdrant url"})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
     payload = build_status_payload(
