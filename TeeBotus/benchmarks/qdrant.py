@@ -18,6 +18,10 @@ _QDRANT_QUANTIZATION_PROFILES = {
     "scalar_int8": 1.0,
     "binary": 0.125,
 }
+_QDRANT_USERMEMORY_BASELINE_DIMENSIONS = 64
+_QDRANT_USERMEMORY_BASELINE_MODEL = "teebotus-account-memory-hash"
+_QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS = 384
+_QDRANT_USERMEMORY_SIDE_INDEX_MODEL = "intfloat/multilingual-e5-small"
 
 
 def benchmark_qdrant_health_quick(*, iterations: int) -> BenchmarkResult:
@@ -246,6 +250,135 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
     )
 
 
+def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> BenchmarkResult:
+    repetitions = max(1, int(iterations))
+    entries = _benchmark_usermemory_side_index_entries()
+    queries = _benchmark_usermemory_side_index_queries()
+    account_id = "b" * 128
+    primary_opener = _BenchmarkQdrantOpener()
+    side_opener = _BenchmarkQdrantOpener()
+    primary_index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=primary_opener,
+        embedding_provider=FakeEmbeddingProvider(
+            model_name=_QDRANT_USERMEMORY_BASELINE_MODEL,
+            dimensions=_QDRANT_USERMEMORY_BASELINE_DIMENSIONS,
+        ),
+    )
+    side_index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=side_opener,
+        embedding_provider=FakeEmbeddingProvider(
+            model_name=_QDRANT_USERMEMORY_SIDE_INDEX_MODEL,
+            dimensions=_QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS,
+        ),
+    )
+    timings = {
+        "primary_index_ms": 0.0,
+        "side_index_ms": 0.0,
+        "primary_search_ms": 0.0,
+        "side_search_ms": 0.0,
+    }
+    primary_results: list[dict[str, Any]] = []
+    side_results: list[dict[str, Any]] = []
+    for _ in range(repetitions):
+        timings["primary_index_ms"] += _timed_ms(
+            lambda: _benchmark_index_entries(primary_index, account_id=account_id, entries=entries)
+        )
+        timings["side_index_ms"] += _timed_ms(
+            lambda: _benchmark_index_entries(side_index, account_id=account_id, entries=entries)
+        )
+        latest_primary: list[dict[str, Any]] = []
+        latest_side: list[dict[str, Any]] = []
+        timings["primary_search_ms"] += _timed_ms(
+            lambda: latest_primary.extend(
+                _benchmark_search_queries(primary_index, account_id=account_id, queries=queries)
+            )
+        )
+        timings["side_search_ms"] += _timed_ms(
+            lambda: latest_side.extend(_benchmark_search_queries(side_index, account_id=account_id, queries=queries))
+        )
+        primary_results = latest_primary
+        side_results = latest_side
+    primary_hits = _benchmark_top3_hits(primary_results)
+    side_hits = _benchmark_top3_hits(side_results)
+    combined_points = {"primary": primary_opener.points, "side": side_opener.points}
+    stored_payloads = [
+        point.get("payload", {})
+        for points in (primary_opener.points, side_opener.points)
+        for point in points.values()
+    ]
+    privacy_flags = _benchmark_qdrant_payload_privacy_flags(combined_points, account_id=account_id)
+    embedding_dimensions = sorted(
+        {
+            payload.get("embedding_dimensions")
+            for payload in stored_payloads
+            if isinstance(payload, dict) and payload.get("embedding_dimensions")
+        }
+    )
+    schema_versions = sorted({payload.get("schema_version") for payload in stored_payloads if isinstance(payload, dict)})
+    primary_bytes = _QDRANT_USERMEMORY_BASELINE_DIMENSIONS * int(_QDRANT_QUANTIZATION_PROFILES["float32"])
+    side_bytes = _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * int(_QDRANT_QUANTIZATION_PROFILES["float32"])
+    storage_ratio = side_bytes / primary_bytes
+    ok = (
+        len(primary_opener.points) == len(entries)
+        and len(side_opener.points) == len(entries)
+        and embedding_dimensions == [_QDRANT_USERMEMORY_BASELINE_DIMENSIONS, _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS]
+        and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
+        and primary_hits == len(queries)
+        and side_hits == len(queries)
+        and side_hits >= primary_hits
+        and storage_ratio == 6.0
+        and not any(privacy_flags.values())
+    )
+    return result(
+        name="qdrant_usermemory_384d_side_index_quick",
+        category="qdrant",
+        iterations=repetitions * max(1, len(entries) + len(queries)),
+        total_ms=sum(timings.values()),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len(json.dumps(stored_payloads, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(json.dumps(combined_points, ensure_ascii=False).encode("utf-8")),
+        note="fake_qdrant_384d_usermemory_side_index_no_server",
+        mode="local_fake",
+        details={
+            "baseline_model": _QDRANT_USERMEMORY_BASELINE_MODEL,
+            "baseline_dimensions": _QDRANT_USERMEMORY_BASELINE_DIMENSIONS,
+            "side_index_model": _QDRANT_USERMEMORY_SIDE_INDEX_MODEL,
+            "side_index_dimensions": _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS,
+            "side_index_optional": True,
+            "side_index_rebuildable": True,
+            "embedding_provider": "FakeEmbeddingProvider",
+            "fake_embedding_proxy": True,
+            "entries": len(entries),
+            "queries": len(queries),
+            "primary_points": len(primary_opener.points),
+            "side_points": len(side_opener.points),
+            "primary_top3_hits": primary_hits,
+            "side_top3_hits": side_hits,
+            "primary_results": primary_results,
+            "side_results": side_results,
+            "storage_ratio_384d_vs_64d": storage_ratio,
+            "primary_float32_bytes_per_vector": primary_bytes,
+            "side_float32_bytes_per_vector": side_bytes,
+            "side_scalar_int8_bytes_per_vector": int(
+                _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * _QDRANT_QUANTIZATION_PROFILES["scalar_int8"]
+            ),
+            "side_binary_bytes_per_vector": int(
+                _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * _QDRANT_QUANTIZATION_PROFILES["binary"]
+            ),
+            "timings": {key: round(value, 6) for key, value in timings.items()},
+            "embedding_dimensions": embedding_dimensions,
+            "schema_versions": schema_versions,
+            **privacy_flags,
+            "network_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+        },
+    )
+
+
 class _BenchmarkQdrantResponse:
     def __init__(self, payload: dict[str, Any] | None = None, status: int = 200) -> None:
         self.payload = {} if payload is None else payload
@@ -322,6 +455,138 @@ def _benchmark_payload_matches(payload: dict[str, Any], must: list[Any]) -> bool
     return True
 
 
+def _benchmark_usermemory_side_index_entries() -> tuple[dict[str, Any], ...]:
+    return (
+        {
+            "id": "mem_sleep_structure",
+            "kind": "therapy_goal",
+            "memory_type": "semantic",
+            "user_text": "Schlaf Tagesstruktur Abendroutine helfen gegen Erschoepfung.",
+            "bot_text": "Der Bot soll Schlaf und Tagesstruktur priorisieren.",
+            "importance": 8,
+            "salience": 9,
+            "keywords": ["schlaf", "tagesstruktur", "abendroutine"],
+        },
+        {
+            "id": "mem_activation_walk",
+            "kind": "coping_strategy",
+            "memory_type": "procedural",
+            "user_text": "Bewegung Spaziergang Aktivierung hilft bei Antriebslosigkeit.",
+            "bot_text": "Kurze Spaziergaenge koennen als Aktivierungsplan helfen.",
+            "importance": 7,
+            "salience": 8,
+            "keywords": ["bewegung", "spaziergang", "aktivierung"],
+        },
+        {
+            "id": "mem_family_trigger",
+            "kind": "trigger",
+            "memory_type": "semantic",
+            "user_text": "Familienstreit Kritik Konflikt ist ein wiederkehrender Trigger.",
+            "bot_text": "Bei Konflikten soll der Bot vorsichtig und stabilisierend reagieren.",
+            "importance": 9,
+            "salience": 9,
+            "keywords": ["familienstreit", "kritik", "trigger"],
+        },
+        {
+            "id": "mem_breathing_panic",
+            "kind": "coping_strategy",
+            "memory_type": "procedural",
+            "user_text": "Atemuebung Panik Anspannung langsam ausatmen beruhigt.",
+            "bot_text": "Bei Panik soll eine einfache Atemuebung vorgeschlagen werden.",
+            "importance": 8,
+            "salience": 8,
+            "keywords": ["atemuebung", "panik", "anspannung"],
+        },
+        {
+            "id": "mem_medication_routine",
+            "kind": "task",
+            "memory_type": "episodic",
+            "user_text": "Medikamente Einnahme morgens Erinnerung Termin Apotheke.",
+            "bot_text": "Der Bot darf an Medikamentenroutine und Apotheke erinnern.",
+            "importance": 8,
+            "salience": 7,
+            "keywords": ["medikamente", "einnahme", "apotheke"],
+        },
+    )
+
+
+def _benchmark_usermemory_side_index_queries() -> tuple[tuple[str, str], ...]:
+    return (
+        ("schlaf tagesstruktur abendroutine", "mem_sleep_structure"),
+        ("bewegung spaziergang aktivierung", "mem_activation_walk"),
+        ("familienstreit kritik trigger", "mem_family_trigger"),
+        ("atemuebung panik anspannung", "mem_breathing_panic"),
+        ("medikamente einnahme apotheke", "mem_medication_routine"),
+    )
+
+
+def _benchmark_index_entries(index: QdrantMemoryIndex, *, account_id: str, entries: tuple[dict[str, Any], ...]) -> list[str]:
+    point_ids: list[str] = []
+    for entry in entries:
+        point_ids.append(index.index_memory(instance_name="Bench", account_id=account_id, entry=entry))
+    return point_ids
+
+
+def _benchmark_search_queries(
+    index: QdrantMemoryIndex,
+    *,
+    account_id: str,
+    queries: tuple[tuple[str, str], ...],
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for query, expected_id in queries:
+        matches = index.search(instance_name="Bench", account_id=account_id, query=query, limit=3)
+        top_ids = [match.memory_id for match in matches]
+        rows.append(
+            {
+                "query": query,
+                "expected": expected_id,
+                "top3": top_ids,
+                "top1_hit": bool(top_ids) and top_ids[0] == expected_id,
+                "top3_hit": expected_id in top_ids,
+                "top_score": round(matches[0].score, 6) if matches else 0.0,
+            }
+        )
+    return rows
+
+
+def _benchmark_top3_hits(rows: list[dict[str, Any]]) -> int:
+    return sum(1 for row in rows if row.get("top3_hit") is True)
+
+
+def _benchmark_qdrant_payload_privacy_flags(points: Any, *, account_id: str) -> dict[str, bool]:
+    serialized = json.dumps(points, ensure_ascii=False).casefold()
+    return {
+        "cleartext_in_payload": any(
+            marker in serialized
+            for marker in (
+                "schlaf tagesstruktur",
+                "bewegung spaziergang",
+                "familienstreit kritik",
+                "atemuebung panik",
+                "medikamente einnahme",
+                "user_text",
+                "bot_text",
+            )
+        ),
+        "messenger_identity_in_payload": any(
+            marker in serialized for marker in ("telegram", "matrix", "signal_source", "bench-source")
+        ),
+        "account_id_in_payload": account_id in serialized,
+        "content_hash_in_payload": "source_sha256" in serialized or "keyword_sha256" in serialized,
+        "sensitive_metadata_in_payload": any(
+            marker in serialized
+            for marker in (
+                "suicidal_ideation",
+                "risk_signal",
+                "therapy_goal",
+                "coping_strategy",
+                "familienstreit",
+            )
+        ),
+    }
+
+
 def _benchmark_dot(left: Any, right: Any) -> float:
     if not isinstance(left, list) or not isinstance(right, list):
         return 0.0
@@ -348,5 +613,6 @@ __all__ = [
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
+    "benchmark_qdrant_usermemory_384d_side_index_quick",
     "benchmark_qdrant_vector_dimensions_quantization_quick",
 ]

@@ -42,6 +42,7 @@ from TeeBotus.benchmarks.suite import (  # noqa: E402,F401
     _benchmark_qdrant_health_live,
     _benchmark_qdrant_health_quick,
     _benchmark_qdrant_memory_index_quick,
+    _benchmark_qdrant_usermemory_384d_side_index_quick,
     _benchmark_qdrant_vector_dimensions_quantization_quick,
     _benchmark_retrieval_embedding_reranker_matrix,
     _benchmark_source_harvester_promote_index_flow,

@@ -51,6 +51,7 @@ REQUIRED_BENCHMARK_NAME_CATEGORIES = {
     "hf_pool_eval_matrix": "hf_pool",
     "qdrant_health_quick": "qdrant",
     "qdrant_memory_index_quick": "qdrant",
+    "qdrant_usermemory_384d_side_index_quick": "qdrant",
     "qdrant_vector_dimensions_quantization_quick": "qdrant",
     "retrieval_embedding_reranker_matrix": "retrieval",
     "retrieval_backend_haystack_fake": "retrieval",

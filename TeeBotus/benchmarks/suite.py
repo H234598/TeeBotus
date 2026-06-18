@@ -60,6 +60,7 @@ from TeeBotus.benchmarks.qdrant import (
     benchmark_qdrant_health_live as _benchmark_qdrant_health_live,
     benchmark_qdrant_health_quick as _benchmark_qdrant_health_quick,
     benchmark_qdrant_memory_index_quick as _benchmark_qdrant_memory_index_quick,
+    benchmark_qdrant_usermemory_384d_side_index_quick,
     benchmark_qdrant_vector_dimensions_quantization_quick,
 )
 from TeeBotus.benchmarks.reporting import (
@@ -83,6 +84,9 @@ from TeeBotus.benchmarks.youtube import (
 
 _benchmark_qdrant_vector_dimensions_quantization_quick = (
     benchmark_qdrant_vector_dimensions_quantization_quick
+)
+_benchmark_qdrant_usermemory_384d_side_index_quick = (
+    benchmark_qdrant_usermemory_384d_side_index_quick
 )
 
 
@@ -125,6 +129,7 @@ def run_benchmarks(
         results.append(benchmark_live_llm_message_latency_paths(iterations=iterations, max_calls=live_llm_max_calls))
     results.append(_benchmark_qdrant_memory_index_quick(iterations=iterations))
     results.append(_benchmark_qdrant_vector_dimensions_quantization_quick(iterations=iterations))
+    results.append(_benchmark_qdrant_usermemory_384d_side_index_quick(iterations=iterations))
     results.append(_benchmark_decision_fake_model(iterations=iterations))
     results.append(_benchmark_pydantic_structured_decisions(iterations=iterations))
     results.append(_benchmark_proactive(iterations=iterations))
@@ -245,6 +250,7 @@ __all__ = [
     "_benchmark_qdrant_health_live",
     "_benchmark_qdrant_health_quick",
     "_benchmark_qdrant_memory_index_quick",
+    "_benchmark_qdrant_usermemory_384d_side_index_quick",
     "_benchmark_qdrant_vector_dimensions_quantization_quick",
     "_benchmark_retrieval_embedding_reranker_matrix",
     "_benchmark_source_harvester_promote_index_flow",

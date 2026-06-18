@@ -81,6 +81,10 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_qdrant_health_live is qdrant.benchmark_qdrant_health_live
     assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
     assert (
+        benchmark_module._benchmark_qdrant_usermemory_384d_side_index_quick
+        is qdrant.benchmark_qdrant_usermemory_384d_side_index_quick
+    )
+    assert (
         benchmark_module._benchmark_qdrant_vector_dimensions_quantization_quick
         is qdrant.benchmark_qdrant_vector_dimensions_quantization_quick
     )
@@ -370,6 +374,27 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert qdrant_quant["details"]["network_calls"] == 0
     assert qdrant_quant["details"]["provider_calls"] == 0
     assert qdrant_quant["details"]["remote_calls"] == 0
+    qdrant_384d = next(
+        result
+        for result in suite["results"]
+        if result["name"] == "qdrant_usermemory_384d_side_index_quick"
+    )
+    assert qdrant_384d["ok"] is True
+    assert qdrant_384d["category"] == "qdrant"
+    assert qdrant_384d["details"]["baseline_dimensions"] == 64
+    assert qdrant_384d["details"]["side_index_dimensions"] == 384
+    assert qdrant_384d["details"]["side_index_optional"] is True
+    assert qdrant_384d["details"]["side_index_rebuildable"] is True
+    assert qdrant_384d["details"]["storage_ratio_384d_vs_64d"] == 6.0
+    assert qdrant_384d["details"]["primary_top3_hits"] == qdrant_384d["details"]["queries"]
+    assert qdrant_384d["details"]["side_top3_hits"] == qdrant_384d["details"]["queries"]
+    assert qdrant_384d["details"]["embedding_dimensions"] == [64, 384]
+    assert qdrant_384d["details"]["cleartext_in_payload"] is False
+    assert qdrant_384d["details"]["messenger_identity_in_payload"] is False
+    assert qdrant_384d["details"]["account_id_in_payload"] is False
+    assert qdrant_384d["details"]["network_calls"] == 0
+    assert qdrant_384d["details"]["provider_calls"] == 0
+    assert qdrant_384d["details"]["remote_calls"] == 0
     retrieval = next(result for result in suite["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
     assert retrieval["ok"] is True
     assert retrieval["category"] == "retrieval"
@@ -544,6 +569,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "qdrant_health_quick" in markdown
     assert "qdrant_memory_index_quick" in markdown
     assert "qdrant_vector_dimensions_quantization_quick" in markdown
+    assert "qdrant_usermemory_384d_side_index_quick" in markdown
     assert "retrieval_embedding_reranker_matrix" in markdown
     assert "retrieval_backend_local" in markdown
     assert "retrieval_backend_haystack_fake" in markdown
