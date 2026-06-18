@@ -8,13 +8,19 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlparse
+from urllib.request import Request, urlopen
 
 from TeeBotus import __version__
+from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION
 
 
 DEFAULT_REPO_ROOT = Path.home() / "TeeBotus"
 DEFAULT_CHANNELS = "telegram,signal"
 DEFAULT_UNIT_NAME = "teebotus.service"
+DEFAULT_QDRANT_UNIT_NAME = "teebotus-qdrant.service"
+DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
@@ -27,6 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     status_parser.add_argument("--repo-root", default=str(DEFAULT_REPO_ROOT))
     status_parser.add_argument("--channels", default=DEFAULT_CHANNELS)
     status_parser.add_argument("--unit", default=DEFAULT_UNIT_NAME)
+    status_parser.add_argument("--qdrant-unit", default=DEFAULT_QDRANT_UNIT_NAME)
+    status_parser.add_argument("--qdrant-url", default=DEFAULT_QDRANT_URL)
     status_parser.add_argument("--python", default=sys.executable)
     status_parser.add_argument("--timeout", type=int, default=DEFAULT_STATUS_TIMEOUT_SECONDS)
     args = parser.parse_args(argv)
@@ -35,6 +43,8 @@ def main(argv: list[str] | None = None) -> int:
             repo_root=Path(args.repo_root),
             channels=str(args.channels),
             unit_name=str(args.unit),
+            qdrant_unit_name=str(args.qdrant_unit),
+            qdrant_url=str(args.qdrant_url),
             python_executable=str(args.python),
             timeout_seconds=max(1, int(args.timeout)),
         )
@@ -51,11 +61,15 @@ def build_status_payload(
     unit_name: str,
     python_executable: str,
     timeout_seconds: int,
+    qdrant_unit_name: str = DEFAULT_QDRANT_UNIT_NAME,
+    qdrant_url: str = DEFAULT_QDRANT_URL,
 ) -> dict[str, Any]:
     root = repo_root.expanduser().resolve()
     runtime = _runtime_status(root, channels=channels, python_executable=python_executable, timeout_seconds=timeout_seconds)
     parsed_runtime = parse_runtime_status(runtime["stdout"])
     unit = _systemd_unit_status(unit_name)
+    qdrant_unit = _systemd_unit_status(qdrant_unit_name)
+    qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
     ok = runtime["returncode"] == 0 and unit.get("active_state") in {"active", "unknown"}
     return {
@@ -63,6 +77,12 @@ def build_status_payload(
         "version": __version__,
         "repo": repo,
         "unit": unit,
+        "qdrant": {
+            "unit": qdrant_unit,
+            "url": qdrant.get("url", qdrant_url),
+            "collections": qdrant.get("collections", {}),
+            "error": qdrant.get("error", ""),
+        },
         "runtime": {
             "returncode": runtime["returncode"],
             "stderr": runtime["stderr"],
@@ -90,6 +110,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "codex_usage_accounts": 0,
         "gemini_free_tier": "",
         "qdrant": "",
+        "qdrant_collections": 0,
+        "qdrant_ready_collections": 0,
+        "memory_semantic_ready": 0,
         "hf_pool": "",
     }
     for raw_line in str(output or "").splitlines():
@@ -129,6 +152,12 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):
             summary["qdrant"] = line
+        elif line.startswith("qdrant_collection="):
+            summary["qdrant_collections"] += 1
+            if fields.get("status") == "ready":
+                summary["qdrant_ready_collections"] += 1
+        elif line.startswith("memory_index=") and fields.get("semantic") == "ready":
+            summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool="):
             summary["hf_pool"] = line
     sections = {key: value for key, value in sections.items() if value}
@@ -166,6 +195,78 @@ def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
         "returncode": result["returncode"],
         "stderr": result["stderr"],
     }
+
+
+def _qdrant_status(url: str) -> dict[str, Any]:
+    target = _safe_local_qdrant_url(url)
+    if not target:
+        return {"url": str(url or ""), "collections": {}, "error": "invalid local qdrant url"}
+    collections: dict[str, Any] = {}
+    errors: list[str] = []
+    for collection in (QDRANT_USER_MEMORY_COLLECTION, QDRANT_BIBLIOTHEKAR_COLLECTION):
+        result = _qdrant_point_count(target, collection)
+        collections[collection] = result
+        if result.get("error"):
+            errors.append(f"{collection}: {result['error']}")
+    return {"url": target, "collections": collections, "error": "; ".join(errors)}
+
+
+def _safe_local_qdrant_url(value: str) -> str:
+    raw = str(value or DEFAULT_QDRANT_URL).strip() or DEFAULT_QDRANT_URL
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return ""
+    if parsed.scheme not in {"http", "https"}:
+        return ""
+    if (parsed.hostname or "").casefold() not in {"127.0.0.1", "localhost", "::1"}:
+        return ""
+    try:
+        if parsed.port is None:
+            return ""
+    except ValueError:
+        return ""
+    if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
+        return ""
+    return raw.rstrip("/")
+
+
+def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
+    name = str(collection or "").strip()
+    if not name:
+        return {"status": "invalid", "count": 0, "error": "missing collection name"}
+    request = Request(
+        f"{url}/collections/{quote(name, safe='')}/points/count",
+        data=b'{"exact":true}',
+        method="POST",
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+    )
+    try:
+        response = urlopen(request, timeout=2)
+        status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+        raw = response.read()
+        close = getattr(response, "close", None)
+        if callable(close):
+            close()
+    except HTTPError as exc:
+        return {"status": "unreachable", "count": 0, "error": f"HTTP {exc.code}"}
+    except (URLError, TimeoutError, OSError) as exc:
+        return {"status": "unreachable", "count": 0, "error": _redact(str(getattr(exc, "reason", exc)))}
+    except Exception as exc:  # noqa: BLE001 - applet status should stay JSON even if Qdrant is broken.
+        return {"status": "unreachable", "count": 0, "error": _redact(f"{type(exc).__name__}: {exc}")}
+    if not 200 <= status_code < 300:
+        return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return {"status": "broken", "count": 0, "error": f"invalid JSON: {type(exc).__name__}"}
+    result = payload.get("result") if isinstance(payload, dict) else {}
+    count = result.get("count") if isinstance(result, dict) else 0
+    try:
+        parsed_count = max(0, int(count))
+    except (TypeError, ValueError):
+        parsed_count = 0
+    return {"status": "ready", "count": parsed_count, "error": ""}
 
 
 def _repo_status(repo_root: Path) -> dict[str, Any]:

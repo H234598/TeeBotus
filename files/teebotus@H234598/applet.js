@@ -11,6 +11,8 @@ const DEFAULT_REPO_PATH = GLib.build_filenamev([GLib.get_home_dir(), "TeeBotus"]
 const DEFAULT_PYTHON = "/usr/bin/python3";
 const DEFAULT_UNIT = "teebotus.service";
 const DEFAULT_CHANNELS = "telegram,signal";
+const DEFAULT_QDRANT_UNIT = "teebotus-qdrant.service";
+const DEFAULT_QDRANT_URL = "http://127.0.0.1:6333";
 const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
 const STATUS_REFRESH_MIN_SECONDS = 15;
@@ -46,6 +48,8 @@ TeeBotusApplet.prototype = {
     this.pythonCommand = DEFAULT_PYTHON;
     this.channels = DEFAULT_CHANNELS;
     this.runtimeUnit = DEFAULT_UNIT;
+    this.qdrantUnit = DEFAULT_QDRANT_UNIT;
+    this.qdrantUrl = DEFAULT_QDRANT_URL;
     this.defaultInstance = "Depressionsbot";
     this.statusRefreshSeconds = 60;
     this.statusTimeoutSeconds = 20;
@@ -98,6 +102,8 @@ TeeBotusApplet.prototype = {
     this.settings.bindProperty(Settings.BindingDirection.IN, "python-command", "pythonCommand", this._onSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "channels", "channels", this._onSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "runtime-unit", "runtimeUnit", this._onSettingsChanged, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "qdrant-unit", "qdrantUnit", this._onSettingsChanged, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "qdrant-url", "qdrantUrl", this._onSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "default-instance", "defaultInstance", this._onSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "status-refresh-seconds", "statusRefreshSeconds", this._onRefreshSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "status-timeout-seconds", "statusTimeoutSeconds", this._onSettingsChanged, null);
@@ -168,6 +174,7 @@ TeeBotusApplet.prototype = {
     this.statusMenu.menu.removeAll();
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Status aktualisieren"), () => this._refreshStatus()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Runtime-Status im Terminal"), () => this._openRuntimeStatusTerminal()));
+    this.statusMenu.menu.addMenuItem(this._actionItem(_("Qdrant-Status im Terminal"), () => this._openQdrantStatusTerminal()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Status JSON kopieren"), () => this._copyStatusJson()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Applet-Einstellungen"), () => this._openAppletSettings()));
 
@@ -243,11 +250,26 @@ TeeBotusApplet.prototype = {
     }
 
     let memoryLines = [];
-    if (summary.memory_accounts || summary.qdrant) {
-      memoryLines.push("Uebersicht: Account-Memorys " + String(summary.memory_accounts || 0));
+    let qdrant = payload.qdrant || {};
+    let qdrantCollections = qdrant.collections || {};
+    let userMemoryPoints = this._qdrantCollectionCount(qdrantCollections, "teebotus_user_memory");
+    let bibliothekarPoints = this._qdrantCollectionCount(qdrantCollections, "teebotus_bibliothekar_chunks");
+    if (summary.memory_accounts || summary.qdrant || summary.qdrant_collections) {
+      memoryLines.push(
+        "Uebersicht: Account-Memorys " + String(summary.memory_accounts || 0)
+        + " | Qdrant-Collections " + String(summary.qdrant_ready_collections || 0) + "/" + String(summary.qdrant_collections || 0)
+        + " | Usermemory-Vektoren " + String(userMemoryPoints)
+      );
+    }
+    if (qdrant.unit) {
+      memoryLines.push("Qdrant-Service " + String(qdrant.unit.name || this.qdrantUnit || DEFAULT_QDRANT_UNIT) + ": " + this._statusWord(qdrant.unit.active_state || "unknown") + " / " + String(qdrant.unit.sub_state || "unknown"));
+    }
+    if (bibliothekarPoints > 0) {
+      memoryLines.push("Bibliothekar-Vektoren: " + String(bibliothekarPoints));
     }
     memoryLines = memoryLines.concat(this._formatLines(sections["Memory und semantische Suche"] || [], (line) => this._formatMemoryLine(line)));
     this._populateLines(this.memoryMenu.menu, memoryLines, this._dynamicEmptyText(_("Memory-Diagnose wird geladen.")));
+    this._appendQdrantActions();
     if (this.showBibliothekarSection) {
       this.bibliothekarMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.bibliothekarMenu.menu, this._filterLines(sections["Lokale Dienste"] || [], ["bibliothekar="]), _("Keine Bibliothekar-Statuszeilen."));
@@ -483,6 +505,10 @@ TeeBotusApplet.prototype = {
       String(this.channels || DEFAULT_CHANNELS),
       "--unit",
       String(this.runtimeUnit || DEFAULT_UNIT),
+      "--qdrant-unit",
+      String(this.qdrantUnit || DEFAULT_QDRANT_UNIT),
+      "--qdrant-url",
+      String(this.qdrantUrl || DEFAULT_QDRANT_URL),
       "--python",
       this._pythonPath(),
       "--timeout",
@@ -499,7 +525,10 @@ TeeBotusApplet.prototype = {
     let state = String(unit.active_state || "unknown");
     let instances = String(summary.instances || "?");
     let channels = String(summary.channels || this.channels || DEFAULT_CHANNELS);
-    return "Unit " + state + " | " + instances + " | " + channels + " | Warnungen " + String(bad);
+    let qdrant = payload.qdrant || {};
+    let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
+    let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
+    return "Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad);
   },
 
   _updateHeader: function() {
@@ -592,6 +621,18 @@ TeeBotusApplet.prototype = {
 
   _openRuntimeStatusTerminal: function() {
     this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus", "--runtime-status", "--channels", String(this.channels || DEFAULT_CHANNELS)]));
+  },
+
+  _openQdrantStatusTerminal: function() {
+    this._openTerminalForCommand(this._repoPath(), ["systemctl", "--user", "status", String(this.qdrantUnit || DEFAULT_QDRANT_UNIT), "--no-pager"]);
+  },
+
+  _appendQdrantActions: function() {
+    this.memoryMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this.memoryMenu.menu.addMenuItem(this._actionItem(_("Qdrant-Status"), () => this._openQdrantStatusTerminal()));
+    this.memoryMenu.menu.addMenuItem(this._actionItem(_("Qdrant-Collections JSON"), () => this._openTerminalForCommand(this._repoPath(), ["curl", "-fsS", this._qdrantUrl() + "/collections"])));
+    this.memoryMenu.menu.addMenuItem(this._actionItem(_("Usermemory-Vektoranzahl"), () => this._openTerminalForCommand(this._repoPath(), ["curl", "-fsS", "-X", "POST", this._qdrantUrl() + "/collections/teebotus_user_memory/points/count", "-H", "Content-Type: application/json", "-d", "{\"exact\":true}"])));
+    this.memoryMenu.menu.addMenuItem(this._actionItem(_("Usermemory-Vektoren rebuilden"), () => this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus.embedding", "memory-rebuild"]))));
   },
 
   _openCodexUsage: function(args) {
@@ -716,6 +757,19 @@ TeeBotusApplet.prototype = {
 
   _codexUsageCommand: function() {
     return String(this.codexUsageCommand || DEFAULT_CODEX_USAGE_COMMAND).trim() || DEFAULT_CODEX_USAGE_COMMAND;
+  },
+
+  _qdrantUrl: function() {
+    return String(this.qdrantUrl || DEFAULT_QDRANT_URL).trim().replace(/\/+$/, "") || DEFAULT_QDRANT_URL;
+  },
+
+  _qdrantCollectionCount: function(collections, name) {
+    let item = collections ? collections[name] : null;
+    if (!item) {
+      return 0;
+    }
+    let parsed = parseInt(item.count, 10);
+    return parsed > 0 ? parsed : 0;
   },
 
   _positiveInt: function(value, fallback) {

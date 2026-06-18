@@ -55,6 +55,8 @@
         "python-command",
         "channels",
         "runtime-unit",
+        "qdrant-unit",
+        "qdrant-url",
         "default-instance",
         "status-refresh-seconds",
         "status-timeout-seconds"
@@ -161,6 +163,18 @@
     "type": "entry",
     "description": "User-systemd bot unit",
     "default": "teebotus.service"
+  },
+  "qdrant-unit": {
+    "type": "entry",
+    "description": "User-systemd Qdrant unit",
+    "tooltip": "Used for Qdrant status actions and service diagnostics in the memory menu.",
+    "default": "teebotus-qdrant.service"
+  },
+  "qdrant-url": {
+    "type": "entry",
+    "description": "Local Qdrant URL",
+    "tooltip": "Must stay local. Used for vector counts and Qdrant collection actions.",
+    "default": "http://127.0.0.1:6333"
   },
   "default-instance": {
     "type": "entry",

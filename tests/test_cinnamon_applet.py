@@ -37,6 +37,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert schema["repo-path"]["default"] == "/home/teladi/TeeBotus"
     assert schema["channels"]["default"] == "telegram,signal"
     assert schema["runtime-unit"]["default"] == "teebotus.service"
+    assert schema["qdrant-unit"]["default"] == "teebotus-qdrant.service"
+    assert schema["qdrant-url"]["default"] == "http://127.0.0.1:6333"
     assert schema["status-timeout-seconds"]["default"] == 30
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
@@ -72,6 +74,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatMemoryLine" in source
     assert "Ersatz bei Modell-/Key-/Limitfehlern" in source
     assert "codex-usage latest" in source
+    assert "Qdrant-Status" in source
+    assert "Usermemory-Vektoranzahl" in source
+    assert "TeeBotus.embedding" in source
     assert "/status" in source
     assert "/voicemodel" in source
     assert 'this.set_applet_label("TB")' in source
@@ -114,6 +119,12 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
         gemini_free_tier_limits status=no_limits_found source=ai.google.dev/gemini-api/docs/rate-limits
         llm_route=bibliothekar_answer status=configured
 
+        [Memory und semantische Suche]
+        qdrant=127.0.0.1:6333 status=reachable
+        qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready vector_size=64 embedding_model=teebotus-account-memory-hash
+        qdrant_collection=teebotus_bibliothekar_chunks target=127.0.0.1:6333 status=ready vector_size=1024 embedding_model=BAAI/bge-m3
+        memory_index=Depressionsbot backend=keyword status=ready semantic=ready
+
         [API Keys, Limits und Kosten]
         api_budget=bibliothekar_answer status=configured key=configured
         codex_usage=local status=ready snapshots=2
@@ -138,7 +149,12 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["summary"]["codex_usage"].startswith("codex_usage=local")
     assert parsed["summary"]["codex_usage_accounts"] == 1
     assert parsed["summary"]["gemini_free_tier"].startswith("gemini_free_tier_limits")
+    assert parsed["summary"]["qdrant"].startswith("qdrant=127.0.0.1:6333")
+    assert parsed["summary"]["qdrant_collections"] == 2
+    assert parsed["summary"]["qdrant_ready_collections"] == 2
+    assert parsed["summary"]["memory_semantic_ready"] == 1
     assert parsed["status_counts"]["configured"] == 3
+    assert parsed["status_counts"]["ready"] == 4
     assert "Messenger" in parsed["sections"]
 
 
