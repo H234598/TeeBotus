@@ -44,7 +44,7 @@ AUTHORIZATION_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 BARE_AUTHORIZATION_TOKEN_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])([Bb][Ee][Aa][Rr][Ee][Rr]|[Bb][Aa][Ss][Ii][Cc]|[Aa][Pp][Ii][Kk]ey|Token)"
+    r"(?<![A-Za-z0-9_-])((?i:Bearer|Basic|ApiKey)|Token)"
     r"\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
 )
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
