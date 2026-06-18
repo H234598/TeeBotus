@@ -215,14 +215,16 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         hf_pool=default status=disabled
         qdrant_collection=ok status=ready
         account_identity=Demo status=unknown error=doctor_unavailable
+        structured_decision=demo status=enabled route_status=unavailable fallback=local_ollama
         """
     )
 
-    assert parsed["summary"]["problem_status_count"] == 12
+    assert parsed["summary"]["problem_status_count"] == 13
     assert parsed["summary"]["problem_statuses"] == (
         "broken:1,config_conflict:1,degraded:1,fallback_defaults:1,invalid:1,"
-        "missing_key:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:1,unknown:1,warning:1"
+        "missing_key:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:2,unknown:1,warning:1"
     )
+    assert parsed["status_counts"]["enabled"] == 1
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1
     assert parsed["status_counts"]["disabled"] == 1

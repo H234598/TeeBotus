@@ -72,6 +72,7 @@ PROBLEM_STATUSES = frozenset(
         "warning",
     }
 )
+SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -229,8 +230,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             continue
         sections.setdefault(current, []).append(line)
         fields = _parse_status_fields(line)
-        status = fields.get("status", "")
-        if status:
+        for status in _line_status_values(fields):
             status_counts[status] = status_counts.get(status, 0) + 1
         if line.startswith("instances="):
             summary["instances"] = line.split("=", 1)[1]
@@ -269,6 +269,18 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
     summary["problem_statuses"] = ",".join(f"{status}:{count}" for status, count in problem_counts.items())
     sections = {key: value for key, value in sections.items() if value}
     return {"sections": sections, "summary": summary, "status_counts": status_counts}
+
+
+def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
+    values: list[str] = []
+    primary = fields.get("status", "")
+    if primary:
+        values.append(primary)
+    for key in sorted(SECONDARY_PROBLEM_STATUS_FIELDS):
+        secondary = fields.get(key, "")
+        if secondary and secondary in PROBLEM_STATUSES and secondary != primary:
+            values.append(secondary)
+    return tuple(values)
 
 
 def _runtime_status(repo_root: Path, *, channels: str, python_executable: str, timeout_seconds: int) -> dict[str, Any]:
