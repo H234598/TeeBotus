@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 
 from TeeBotus.embedding.cli import main as embedding_cli_main
 from TeeBotus.embedding.config import EmbeddingConfig
@@ -396,6 +397,36 @@ def test_embedding_cli_memory_rebuild_passes_explicit_legacy_raw_cleanup(monkeyp
     )
 
     assert "status=rebuilt" in capsys.readouterr().out
+
+
+def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(monkeypatch, tmp_path):
+    instances_dir = tmp_path / "instances"
+    instances_dir.mkdir()
+    (tmp_path / ".env").write_text(
+        "TEEBOTUS_ACCOUNT_MEMORY_BACKEND=sqlite\n"
+        "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH=from-dotenv.sqlite3\n"
+        "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH='quoted-fallback.sqlite3'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", "from-shell.sqlite3")
+    captured_env: dict[str, str] = {}
+
+    def fake_rebuild(**_kwargs):
+        captured_env["backend"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "")
+        captured_env["path"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", "")
+        captured_env["fallback"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", "")
+        return ()
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert embedding_cli_main(["--instances-dir", str(instances_dir), "memory-rebuild"]) == 0
+
+    assert captured_env == {
+        "backend": "sqlite",
+        "path": "from-shell.sqlite3",
+        "fallback": "quoted-fallback.sqlite3",
+    }
 
 
 def test_embedding_cli_bibliothekar_rebuild_dry_run_json(monkeypatch, capsys, tmp_path):

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 from TeeBotus.embedding.rebuild import (
@@ -15,6 +17,7 @@ from TeeBotus.embedding.rebuild import (
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _load_dotenv_for_instances_dir(args.instances_dir)
     if args.command == "memory-rebuild":
         results = rebuild_qdrant_memory_indexes(
             instances_dir=args.instances_dir,
@@ -122,6 +125,43 @@ def _embedding_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
     if args.embedding_api_key_env is not None:
         overrides["api_key_env"] = args.embedding_api_key_env
     return overrides
+
+
+def _load_dotenv_for_instances_dir(instances_dir: str | Path) -> None:
+    for key, value in _read_dotenv_values(_project_root_for_instances_dir(instances_dir) / ".env").items():
+        os.environ.setdefault(key, value)
+
+
+def _project_root_for_instances_dir(instances_dir: str | Path) -> Path:
+    path = Path(instances_dir).expanduser()
+    if path.name == "instances":
+        return path.parent if str(path.parent) else Path(".")
+    return path.parent
+
+
+def _read_dotenv_values(path: Path) -> dict[str, str]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return {}
+    values: dict[str, str] = {}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", maxsplit=1)
+        key = key.strip()
+        if not key:
+            continue
+        values[key] = _clean_dotenv_value(value)
+    return values
+
+
+def _clean_dotenv_value(value: str) -> str:
+    cleaned = str(value or "").strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
+        return cleaned[1:-1]
+    return cleaned
 
 
 def _format_memory_rebuild_result(result: object) -> str:

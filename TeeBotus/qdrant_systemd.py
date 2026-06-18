@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-DEFAULT_QDRANT_IMAGE = "qdrant/qdrant:v1.18.2"
+DEFAULT_QDRANT_IMAGE = "docker.io/qdrant/qdrant:v1.18.2"
 DEFAULT_CONTAINER_NAME = "teebotus-qdrant"
 DEFAULT_VOLUME_NAME = "teebotus-qdrant"
 DEFAULT_BIND_HOST = "127.0.0.1"
@@ -76,6 +76,9 @@ def render_qdrant_systemd_unit(
     container_q = _shell_quote(container_name)
     volume_q = _shell_quote(volume_name)
     image_q = _shell_quote(image)
+    ensure_volume_command = (
+        f"{podman_q} volume exists {volume_q} >/dev/null 2>&1 || {podman_q} volume create {volume_q}"
+    )
     service_text = "\n".join(
         [
             "[Unit]",
@@ -89,7 +92,7 @@ def render_qdrant_systemd_unit(
             "Restart=on-failure",
             "RestartSec=5s",
             f"ExecStartPre=-{podman_q} rm -f {container_q}",
-            f"ExecStartPre={podman_q} volume create {volume_q}",
+            f"ExecStartPre=/bin/sh -c {_shell_quote(ensure_volume_command)}",
             (
                 f"ExecStart={podman_q} run --rm --name {container_q} "
                 f"-p {_shell_quote(publish)} -v {volume_q}:/qdrant/storage {image_q}"

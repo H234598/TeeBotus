@@ -13,11 +13,12 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Protocol
+from typing import Any, Callable, Iterable, Protocol
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -45,6 +46,10 @@ AGENT_STATE_FILENAME = "Agent_State.json"
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 SECRET_TOOL_COMMAND = "secret-tool"
+SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
+SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS"
+DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRIES = 6
+DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS = 2.0
 INSTANCE_KEY_SIZE_BYTES = 32
 INSTANCE_SECRET_SERVICE = "TeeBotus"
 INSTANCE_PEPPER_PURPOSE = "account-secret-pepper"
@@ -374,9 +379,20 @@ class SecretToolInstanceSecretProvider:
     requested explicitly so runtime code cannot silently rotate encryption keys.
     """
 
-    def __init__(self, command: str = SECRET_TOOL_COMMAND, *, create_if_missing: bool = False) -> None:
+    def __init__(
+        self,
+        command: str = SECRET_TOOL_COMMAND,
+        *,
+        create_if_missing: bool = False,
+        lookup_retries: int = 0,
+        lookup_retry_delay_seconds: float = 0.0,
+        sleep: Callable[[float], None] | None = None,
+    ) -> None:
         self.command = command
         self.create_if_missing = create_if_missing
+        self.lookup_retries = max(0, int(lookup_retries))
+        self.lookup_retry_delay_seconds = max(0.0, float(lookup_retry_delay_seconds))
+        self._sleep = time.sleep if sleep is None else sleep
         self._cache: dict[tuple[str, str], bytes] = {}
 
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
@@ -386,7 +402,7 @@ class SecretToolInstanceSecretProvider:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
-        existing = self._lookup(instance, resolved_purpose)
+        existing = self._lookup_with_retries(instance, resolved_purpose)
         if existing is not None:
             self._cache[cache_key] = existing
             return existing
@@ -413,7 +429,7 @@ class SecretToolInstanceSecretProvider:
         cached = self._cache.get(cache_key)
         if cached is not None:
             return cached
-        existing = self._lookup(instance, resolved_purpose)
+        existing = self._lookup_with_retries(instance, resolved_purpose)
         if existing is not None:
             self._cache[cache_key] = existing
             return existing
@@ -431,7 +447,7 @@ class SecretToolInstanceSecretProvider:
         cache_key = (instance, resolved_purpose)
         if cache_key in self._cache:
             return True
-        existing = self._lookup(instance, resolved_purpose)
+        existing = self._lookup_with_retries(instance, resolved_purpose)
         if existing is None:
             return False
         self._cache[cache_key] = existing
@@ -507,6 +523,17 @@ class SecretToolInstanceSecretProvider:
             )
         return secret
 
+    def _lookup_with_retries(self, instance_name: str, purpose: str) -> bytes | None:
+        for attempt in range(self.lookup_retries + 1):
+            existing = self._lookup(instance_name, purpose)
+            if existing is not None:
+                return existing
+            if attempt >= self.lookup_retries:
+                return None
+            if self.lookup_retry_delay_seconds > 0:
+                self._sleep(self.lookup_retry_delay_seconds)
+        return None
+
     def _store(self, instance_name: str, purpose: str, secret: bytes) -> None:
         if len(secret) != INSTANCE_KEY_SIZE_BYTES:
             raise AccountStoreError("instance secret has invalid length")
@@ -552,7 +579,36 @@ def runtime_secret_provider() -> SecretToolInstanceSecretProvider:
     keys are operational errors that require recovery or an explicit setup step.
     """
 
-    return SecretToolInstanceSecretProvider(create_if_missing=False)
+    return SecretToolInstanceSecretProvider(
+        create_if_missing=False,
+        lookup_retries=_runtime_secret_tool_lookup_retries(),
+        lookup_retry_delay_seconds=_runtime_secret_tool_lookup_retry_delay_seconds(),
+    )
+
+
+def _runtime_secret_tool_lookup_retries() -> int:
+    return _nonnegative_int_env(SECRET_TOOL_LOOKUP_RETRIES_ENV, DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRIES)
+
+
+def _runtime_secret_tool_lookup_retry_delay_seconds() -> float:
+    return _nonnegative_float_env(
+        SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV,
+        DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS,
+    )
+
+
+def _nonnegative_int_env(name: str, default: int) -> int:
+    try:
+        return max(0, int(str(os.environ.get(name, "")).strip() or default))
+    except (TypeError, ValueError):
+        return max(0, int(default))
+
+
+def _nonnegative_float_env(name: str, default: float) -> float:
+    try:
+        return max(0.0, float(str(os.environ.get(name, "")).strip() or default))
+    except (TypeError, ValueError):
+        return max(0.0, float(default))
 
 
 class _KeyringManifestSecretProvider:

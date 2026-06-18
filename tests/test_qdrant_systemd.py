@@ -14,7 +14,7 @@ def test_render_qdrant_systemd_unit_pins_image_and_localhost() -> None:
     assert "-p 127.0.0.1:6333:6333" in unit.service_text
     assert "-v teebotus-qdrant:/qdrant/storage" in unit.service_text
     assert "ExecStartPre=-podman rm -f teebotus-qdrant" in unit.service_text
-    assert "ExecStartPre=podman volume create teebotus-qdrant" in unit.service_text
+    assert "ExecStartPre=/bin/sh -c 'podman volume exists teebotus-qdrant >/dev/null 2>&1 || podman volume create teebotus-qdrant'" in unit.service_text
     assert "Restart=on-failure" in unit.service_text
     assert "WantedBy=default.target" in unit.service_text
 

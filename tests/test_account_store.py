@@ -72,6 +72,7 @@ def test_secret_tool_provider_defaults_to_refuse_missing_secret(monkeypatch) -> 
 def test_runtime_secret_provider_never_autocreates_missing_secret(monkeypatch) -> None:
     provider_instance = runtime_secret_provider()
     monkeypatch.setattr(provider_instance, "_lookup", lambda _instance, _purpose: None)
+    provider_instance.lookup_retries = 0
     monkeypatch.setattr(
         provider_instance,
         "_store",
@@ -80,6 +81,68 @@ def test_runtime_secret_provider_never_autocreates_missing_secret(monkeypatch) -
 
     with pytest.raises(AccountStoreError, match="instance secret is missing"):
         provider_instance.get_secret("Demo", "account-structured-memory-key")
+
+
+def test_runtime_secret_provider_uses_secret_service_retry_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", raising=False)
+    monkeypatch.delenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", raising=False)
+
+    provider_instance = runtime_secret_provider()
+
+    assert provider_instance.lookup_retries == 6
+    assert provider_instance.lookup_retry_delay_seconds == 2.0
+
+
+def test_runtime_secret_provider_accepts_secret_service_retry_env(monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+
+    provider_instance = runtime_secret_provider()
+
+    assert provider_instance.lookup_retries == 2
+    assert provider_instance.lookup_retry_delay_seconds == 0.25
+
+
+def test_secret_tool_provider_retries_transient_missing_lookup(monkeypatch) -> None:
+    calls = 0
+    provider_instance = SecretToolInstanceSecretProvider(
+        create_if_missing=False,
+        lookup_retries=2,
+        lookup_retry_delay_seconds=0,
+    )
+
+    def lookup(_instance: str, _purpose: str) -> bytes | None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            return None
+        return b"a" * 32
+
+    monkeypatch.setattr(provider_instance, "_lookup", lookup)
+
+    assert provider_instance.get_secret("Demo", "account_memory") == b"a" * 32
+    assert calls == 3
+
+
+def test_secret_tool_provider_retries_before_refusing_required_secret(monkeypatch) -> None:
+    calls = 0
+    provider_instance = SecretToolInstanceSecretProvider(
+        create_if_missing=False,
+        lookup_retries=2,
+        lookup_retry_delay_seconds=0,
+    )
+
+    def lookup(_instance: str, _purpose: str) -> bytes | None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            return None
+        return b"a" * 32
+
+    monkeypatch.setattr(provider_instance, "_lookup", lookup)
+
+    provider_instance.require_existing_secret("Demo", "account_memory", reason="account key manifest")
+    assert calls == 3
 
 
 def test_secret_tool_provider_only_treats_empty_rc1_lookup_as_missing(monkeypatch) -> None:
