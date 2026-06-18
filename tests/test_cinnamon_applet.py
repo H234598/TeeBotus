@@ -158,6 +158,41 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert "Messenger" in parsed["sections"]
 
 
+def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
+    github_token = "ghp_" + "1234567890ABCDEFGHIJK"
+
+    parsed = parse_runtime_status(
+        f"""
+        [LLM-Routen und Backends]
+        llm_route=normal_chat status=broken api_key={github_token} api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
+
+        [API Keys, Limits und Kosten]
+        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700
+
+        [Messenger]
+        telegram_slot=Demo/telegram:1 status=configured token=configured target=https://user:plainpass@example.test/path
+        """
+    )
+    rendered = json.dumps(parsed, sort_keys=True)
+
+    assert github_token not in rendered
+    assert "nested-secret" not in rendered
+    assert "user:plainpass" not in rendered
+    assert "api_key=<redacted-secret>" in rendered
+    assert "api_key_env=GEMINI_API_KEY" in rendered
+    assert "api_key_ring=3" in rendered
+    assert "password:<redacted>" in rendered
+    assert "tokens=provider_usage_response+local_guard" in rendered
+    assert "max_output_tokens=700" in rendered
+    assert "token=configured" in rendered
+    assert "target=https://<redacted>@example.test/path" in rendered
+    assert parsed["status_counts"]["broken"] == 1
+    assert parsed["status_counts"]["configured"] == 2
+    assert parsed["summary"]["llm_routes"] == 1
+    assert parsed["summary"]["api_budgets"] == 1
+    assert parsed["summary"]["telegram_slots"] == 1
+
+
 def test_pyproject_declares_cinnamon_applet_helper_script() -> None:
     pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
+import re
 import shlex
 import subprocess
 import sys
@@ -24,6 +24,33 @@ DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
+SECRET_TOKEN_PATTERNS = (
+    re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b"),
+    re.compile(r"\bhf_[A-Za-z0-9]{8,}\b"),
+    re.compile(r"\bsyt_[A-Za-z0-9_=-]{8,}\b"),
+    re.compile(r"\bglpat-[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"\bgsk_[A-Za-z0-9]{8,}\b"),
+    re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"),
+)
+URL_CREDENTIAL_RE = re.compile(
+    r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
+    re.IGNORECASE,
+)
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
+SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
+    r"([\s=;,])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
+SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
+SAFE_SECRET_NUMERIC_METADATA = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens"})
+SAFE_SECRET_TEXT_METADATA = frozenset({"tokens", "token_usage", "costs", "limits", "free_tier_guard"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -116,7 +143,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "hf_pool": "",
     }
     for raw_line in str(output or "").splitlines():
-        line = raw_line.strip()
+        line = _redact(raw_line.strip())
         if not line:
             continue
         if line.startswith("[") and line.endswith("]"):
@@ -340,10 +367,52 @@ def _parse_key_value_lines(value: str) -> dict[str, str]:
 
 def _redact(value: str) -> str:
     text = str(value or "")
-    lowered = text.lower()
-    if any(marker in lowered for marker in ("api_key=", "token=", "password=", "secret=", "bearer ")):
-        return "<redacted>"
+    for pattern in SECRET_TOKEN_PATTERNS:
+        text = pattern.sub("<redacted-secret>", text)
+    text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
+    text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
+    text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text
+
+
+def _redact_url_credentials(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if "://" in value:
+        return value.split("://", 1)[0] + "://<redacted>@"
+    if "=" in value:
+        return value.split("=", 1)[0] + "=<redacted>@"
+    return "<redacted>@"
+
+
+def _redact_secret_assignment(match: re.Match[str]) -> str:
+    key = str(match.group(1) or "")
+    separator = str(match.group(2) or "=")
+    value = str(match.group(3) or "")
+    return _redact_secret_assignment_text(key, separator, value, original=match.group(0))
+
+
+def _redact_secret_assignment_fragment(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key = str(match.group(2) or "")
+    separator = str(match.group(3) or "=")
+    value = str(match.group(4) or "")
+    original = match.group(0)[len(prefix) :]
+    return prefix + _redact_secret_assignment_text(key, separator, value, original=original)
+
+
+def _redact_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
+    key_token = key.strip().casefold().replace("-", "_").replace(" ", "_")
+    normalized_value = value.strip().strip("\"'`").casefold()
+    raw_value = value.strip()
+    if normalized_value in SAFE_SECRET_VALUES:
+        return original
+    if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", raw_value):
+        return original
+    if key_token in SAFE_SECRET_NUMERIC_METADATA and (raw_value.isdigit() or re.fullmatch(r"\d+/\d+", raw_value)):
+        return original
+    if key_token in SAFE_SECRET_TEXT_METADATA:
+        return original
+    return f"{key}{separator}<redacted>"
 
 
 def _limit_text(value: str, limit: int) -> str:
