@@ -279,7 +279,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
                 summary["qdrant_ready_collections"] += 1
         elif line.startswith("memory_index=") and fields.get("semantic") == "ready":
             summary["memory_semantic_ready"] += 1
-        elif line.startswith("hf_pool="):
+        elif line.startswith("hf_pool=") and not fields.get("target"):
             summary["hf_pool"] = line
     problem_counts = {status: count for status, count in sorted(status_counts.items()) if status in PROBLEM_STATUSES}
     summary["problem_status_count"] = sum(problem_counts.values())

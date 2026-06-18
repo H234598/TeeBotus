@@ -350,6 +350,25 @@ TeeBotusApplet.prototype = {
   _formatLlmLine: function(line) {
     let fields = this._parseFields(line);
     if (fields.hf_pool) {
+      if (fields.target) {
+        let text = "HF-Pool " + fields.hf_pool + " / " + fields.target + ": " + this._statusWord(fields.status);
+        if (fields.model) {
+          text += "; Modell " + fields.model;
+        }
+        if (fields.models_feed) {
+          text += "; Feed " + this._statusWord(fields.models_feed);
+        }
+        if (fields.context_length) {
+          text += "; Kontext " + fields.context_length;
+        }
+        if (fields.tools) {
+          text += "; Tools " + fields.tools;
+        }
+        if (fields.structured_output) {
+          text += "; Struktur " + fields.structured_output;
+        }
+        return text;
+      }
       return "HF-Pool " + fields.hf_pool + ": " + this._statusWord(fields.status);
     }
     if (line.indexOf("gemini_free_tier_limits ") === 0 || fields.gemini_free_tier_limits !== undefined) {

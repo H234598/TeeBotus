@@ -89,6 +89,10 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "/status" in source
     assert "/voicemodel" in source
     assert 'this.set_applet_label("TB")' in source
+    assert '"HF-Pool " + fields.hf_pool + " / " + fields.target' in source
+    assert '"HF-Pool " + fields.hf_pool + ": "' in source
+    assert '"; Feed " + this._statusWord(fields.models_feed)' in source
+    assert '"; Kontext " + fields.context_length' in source
     assert "summary.problem_status_count" in source
     assert "health.total_problem_count" in source
     assert "_problemStatusCount: function(counts)" in source
@@ -162,6 +166,7 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
 
         [LLM-Routen und Backends]
         hf_pool=default status=disabled
+        hf_pool=default target=primary status=cooldown model=provider/model models_feed=ok context_length=8192 tools=true structured_output=true
         gemini_free_tier_limits status=no_limits_found source=ai.google.dev/gemini-api/docs/rate-limits
         llm_route=bibliothekar_answer status=configured
 
@@ -195,12 +200,14 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["summary"]["codex_usage"].startswith("codex_usage=local")
     assert parsed["summary"]["codex_usage_accounts"] == 1
     assert parsed["summary"]["gemini_free_tier"].startswith("gemini_free_tier_limits")
+    assert parsed["summary"]["hf_pool"] == "hf_pool=default status=disabled"
     assert parsed["summary"]["qdrant"].startswith("qdrant=127.0.0.1:6333")
     assert parsed["summary"]["qdrant_collections"] == 2
     assert parsed["summary"]["qdrant_problem_status_count"] == 0
     assert parsed["summary"]["qdrant_ready_collections"] == 2
     assert parsed["summary"]["memory_semantic_ready"] == 1
     assert parsed["status_counts"]["configured"] == 3
+    assert parsed["status_counts"]["cooldown"] == 1
     assert parsed["status_counts"]["ready"] == 4
     assert "Messenger" in parsed["sections"]
 
