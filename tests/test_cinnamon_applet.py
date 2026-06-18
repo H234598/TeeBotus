@@ -11,6 +11,8 @@ from TeeBotus.cinnamon_applet import FLAG_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import FORCED_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
 from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
+from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_KEYS
+from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_VALUES
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
 
 
@@ -22,6 +24,12 @@ def _js_const_array_values(source: str, name: str) -> set[str]:
     match = re.search(rf"const {re.escape(name)} = \[(.*?)\];", source, re.DOTALL)
     assert match is not None
     return set(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+def _js_const_object_keys(source: str, name: str) -> set[str]:
+    match = re.search(rf"const {re.escape(name)} = \{{(.*?)\n\}};", source, re.DOTALL)
+    assert match is not None
+    return set(re.findall(r"\n\s*([A-Za-z_][A-Za-z0-9_]*):", match.group(1)))
 
 
 def _js_status_label_keys(source: str) -> set[str]:
@@ -189,6 +197,10 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
 
     assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
     assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
+    assert _js_const_object_keys(source, "STATUS_FIELD_BOUNDARY_KEYS") == set(STATUS_FIELD_BOUNDARY_KEYS)
+    assert _js_const_object_keys(source, "STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES") == (
+        set(STATUS_FIELD_BOUNDARY_VALUES) - set(PROBLEM_STATUSES)
+    )
     assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
     assert "const FORCED_PROBLEM_STATUS_FIELDS = {" in source
     for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():

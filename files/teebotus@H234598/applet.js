@@ -47,6 +47,28 @@ const SECONDARY_PROBLEM_STATUS_FIELDS = [
   "route_status",
   "semantic"
 ];
+const STATUS_FIELD_BOUNDARY_KEYS = {
+  status: true,
+  models_feed: true,
+  route_status: true,
+  semantic: true
+};
+const STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES = {
+  available: true,
+  configured: true,
+  disabled: true,
+  enabled: true,
+  healthy: true,
+  installed: true,
+  not_applicable: true,
+  not_configured: true,
+  ok: true,
+  planned: true,
+  reachable: true,
+  ready: true,
+  rebuilt: true,
+  registered: true
+};
 const FREE_TEXT_STATUS_FIELDS = {
   action: true,
   command: true,
@@ -583,6 +605,10 @@ TeeBotusApplet.prototype = {
     if (!value) {
       return false;
     }
+    return this._statusValueIsProblem(value);
+  },
+
+  _statusValueIsProblem: function(value) {
     for (let status of PROBLEM_STATUSES) {
       if (value === status) {
         return true;
@@ -718,11 +744,21 @@ TeeBotusApplet.prototype = {
     }
     let boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES[key] || {};
     for (let i = index + 1; i < matches.length; i++) {
-      if (boundaries[matches[i].key]) {
+      if (boundaries[matches[i].key] || this._fieldMatchIsStructuredBoundary(text, matches, i)) {
         return matches[i].keyStart;
       }
     }
     return text.length;
+  },
+
+  _fieldMatchIsStructuredBoundary: function(text, matches, index) {
+    let match = matches[index] || {};
+    if (!STATUS_FIELD_BOUNDARY_KEYS[match.key]) {
+      return false;
+    }
+    let valueEnd = index + 1 < matches.length ? matches[index + 1].keyStart : text.length;
+    let value = text.slice(match.valueStart, valueEnd).trim();
+    return this._statusValueIsProblem(value) || Boolean(STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES[value]);
   },
 
   _populateLines: function(menu, lines, emptyText) {
