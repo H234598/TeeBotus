@@ -201,6 +201,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "groq_fast": ("litellm", "groq/"),
         "gemini_flash_stateless": ("litellm_gemini_stateless", "gemini/"),
         "gemini_flash_stateful": ("litellm_gemini_stateful", "gemini/"),
+        "gemini_flash_paid_stateless": ("litellm_gemini_paid_stateless", "gemini/"),
+        "gemini_flash_paid_stateful": ("litellm_gemini_paid_stateful", "gemini/"),
         "vertex_gemini_flash": ("litellm", "vertex_ai/"),
         "openai_premium": ("openai", ""),
     }
@@ -232,6 +234,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "groq_fast",
         "gemini_flash_stateless",
         "gemini_flash_stateful",
+        "gemini_flash_paid_stateless",
+        "gemini_flash_paid_stateful",
         "vertex_gemini_flash",
         "openai_premium",
     ):
@@ -259,7 +263,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     return True, (
         "llm profiles plan2 contract=ok "
         "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,"
-        "gemini_flash_stateless,gemini_flash_stateful,vertex_gemini_flash,openai_premium"
+        "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,gemini_flash_paid_stateful,vertex_gemini_flash,openai_premium"
     )
 
 

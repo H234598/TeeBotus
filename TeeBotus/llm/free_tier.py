@@ -17,6 +17,13 @@ DEFAULT_GEMINI_FREE_TIER_RPM = 5
 DEFAULT_GEMINI_FREE_TIER_TPM = 250_000
 DEFAULT_GEMINI_FREE_TIER_RPD = 20
 DEFAULT_GEMINI_FREE_TIER_RESERVE_TOKENS = 2_048
+PAID_GEMINI_PROVIDERS = frozenset(
+    {
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -149,6 +156,8 @@ def resolve_gemini_free_tier_limits(
 ) -> GeminiFreeTierLimits:
     if not route_uses_google_gemini(provider=provider, model=model):
         return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
+    if provider_is_paid_google_gemini(provider):
+        return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
     source = os.environ if env is None else env
     token = _env_token(instance_name)
     cached = cached_gemini_free_tier_limit_values(source, model=str(model or ""))
@@ -196,10 +205,17 @@ def route_uses_google_gemini(*, provider: str, model: object) -> bool:
         "gemini_interactions",
         "litellm_gemini_stateless",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
         "vertex_ai",
         "google_vertex",
         "google_vertex_ai",
     } or normalized_model.startswith(("gemini/", "vertex_ai/"))
+
+
+def provider_is_paid_google_gemini(provider: object) -> bool:
+    return str(provider or "").strip().casefold().replace("-", "_") in PAID_GEMINI_PROVIDERS
 
 
 def quota_owner_id(*, api_key: str, provider: str, model: str, api_base: str = "") -> str:
@@ -316,6 +332,7 @@ __all__ = [
     "GeminiFreeTierLimits",
     "estimate_litellm_input_tokens",
     "quota_owner_id",
+    "provider_is_paid_google_gemini",
     "reset_gemini_free_tier_budget_state",
     "resolve_gemini_free_tier_limits",
     "route_uses_google_gemini",

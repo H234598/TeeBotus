@@ -48,6 +48,8 @@ def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
         ("gemini-stateful", "litellm_gemini_stateful"),
         ("litellm-gemini-stateless", "litellm_gemini_stateless"),
         ("litellm-gemini-stateful", "litellm_gemini_stateful"),
+        ("litellm-gemini-paid-stateless", "litellm_gemini_paid_stateless"),
+        ("litellm-gemini-paid-statefull", "litellm_gemini_paid_stateful"),
         ("Vertex", "vertex_ai"),
         ("google-vertex-ai", "vertex_ai"),
     ],
@@ -126,6 +128,39 @@ def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: py
     assert response.provider == "litellm_gemini_stateless"
     assert response.model == "gemini/gemini-3.5-flash"
     assert response.usage["response_cost"] == 0.0042
+
+
+def test_litellm_gemini_paid_stateless_disables_free_tier_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        calls.append(str(kwargs.get("api_key") or ""))
+        return {
+            "choices": [{"message": {"content": "paid ok"}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm-gemini-paid-stateless",
+            model="gemini-3.5-flash",
+            api_key_ring=("paid-a",),
+            gemini_free_tier_limits=GeminiFreeTierLimits(
+                enabled=True,
+                requests_per_minute=0,
+                input_tokens_per_minute=0,
+                requests_per_day=0,
+            ),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "paid ok"
+    assert response.provider == "litellm_gemini_paid_stateless"
+    assert client.gemini_free_tier_limits.status_summary() == "off"
+    assert calls == ["paid-a"]
 
 
 def test_litellm_text_client_uses_default_key_when_instruction_env_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -426,6 +461,27 @@ def test_build_text_llm_client_can_build_gemini_interactions_client() -> None:
     assert client.model == "gemini/gemini-3.5-flash"
     assert client.store is True
     assert client.service_tier == "flex"
+    assert client.capabilities.previous_response_id is True
+
+
+def test_build_text_llm_client_can_build_paid_gemini_stateful_client() -> None:
+    client = build_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        provider="litellm-gemini-paid-statefull",
+        model="gemini/gemini-3.5-flash",
+        api_key="gemini-key",
+        gemini_free_tier_limits=GeminiFreeTierLimits(
+            enabled=True,
+            requests_per_minute=0,
+            input_tokens_per_minute=0,
+            requests_per_day=0,
+        ),
+    )
+
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
+    assert client.provider == "litellm_gemini_paid_stateful"
+    assert client.gemini_free_tier_limits.status_summary() == "off"
     assert client.capabilities.previous_response_id is True
 
 

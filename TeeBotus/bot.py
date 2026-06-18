@@ -425,6 +425,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         if service_tier:
             detail += f" service_tier={_sanitize_status_text(service_tier)}"
         detail += f" free_tier_guard={_status_gemini_free_tier_guard(account, provider=provider, model=model)}"
+        detail += f" google_billing={_status_google_billing(provider=provider)}"
     fallback_count = _status_effective_fallback_count(
         account,
         instructions=instructions,
@@ -759,6 +760,7 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         if service_tier:
             detail += f" service_tier={_sanitize_status_text(service_tier)}"
         detail += f" free_tier_guard={_status_gemini_free_tier_guard(types.SimpleNamespace(instance_name=''), provider=route.provider, model=route.model)}"
+        detail += f" google_billing={_status_google_billing(provider=route.provider)}"
     if route.fallback_profile_name:
         detail += f" fallback={route.fallback_profile_name} fallback_profile={route.fallback_profile_name} fallback_model={route.fallback_model}"
         if route.fallback_base_url:
@@ -830,12 +832,15 @@ def _runtime_status_api_budget_route_line(route: Any, *, instance_names: Sequenc
         configured_instances, total_instances = gemini_key_instances
         detail += f" key_instances={configured_instances}/{total_instances}"
     if _status_route_uses_google_gemini(provider=provider, model=model):
+        google_billing = _status_google_billing(provider=provider)
+        token_source = "provider_usage_response+litellm_response_cost" if google_billing == "paid" else "provider_usage_response+local_free_tier_guard"
         detail += (
             f" google_mode={_status_google_mode(provider=provider, model=model)} "
             f"store={'true' if _status_google_mode(provider=provider, model=model) == 'stateful' else 'false'} "
+            f"billing={google_billing} "
             f"limits={_status_gemini_free_tier_guard(types.SimpleNamespace(instance_name=''), provider=provider, model=model)} "
             "costs=provider_billing_not_fetched "
-            "tokens=provider_usage_response+local_free_tier_guard"
+            f"tokens={token_source}"
         )
         service_tier = _status_gemini_service_tier_for_instances(
             instance_names,
@@ -1184,6 +1189,8 @@ def _llm_key_required_for_status(
         "gemini_interactions",
         "litellm_gemini_stateless",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
         "vertex_ai",
     }:
         return True
@@ -1306,6 +1313,8 @@ def _status_fallback_model_requires_key(*, provider: str, model: object, base_ur
         "gemini_interactions",
         "litellm_gemini_stateless",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
         "vertex_ai",
     }
 
@@ -1424,7 +1433,14 @@ def _status_gemini_service_tier_for_instances(
 def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/")
+    return normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+    } or normalized_model.startswith("gemini/")
 
 
 def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
@@ -1435,15 +1451,24 @@ def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
         "gemini_interactions",
         "litellm_gemini_stateless",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
         "vertex_ai",
     } or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
 def _status_google_mode(*, provider: str, model: object) -> str:
     normalized_provider = _normalize_status_llm_provider(provider)
-    if normalized_provider in {"gemini_interactions", "litellm_gemini_stateful"}:
+    if normalized_provider in {"gemini_interactions", "litellm_gemini_stateful", "litellm_gemini_paid_stateful"}:
         return "stateful"
     return "stateless"
+
+
+def _status_google_billing(*, provider: object) -> str:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    if normalized_provider in {"litellm_gemini_paid_stateless", "litellm_gemini_paid_stateful"}:
+        return "paid"
+    return "free-tier"
 
 
 def _status_route_is_local(*, provider: str, model: object) -> bool:

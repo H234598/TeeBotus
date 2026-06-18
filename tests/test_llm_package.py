@@ -44,6 +44,8 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
         "groq_fast",
         "gemini_flash_stateless",
         "gemini_flash_stateful",
+        "gemini_flash_paid_stateless",
+        "gemini_flash_paid_stateful",
         "vertex_gemini_flash",
         "openai_premium",
     } <= set(profiles)

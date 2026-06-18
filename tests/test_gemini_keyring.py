@@ -93,6 +93,22 @@ def test_resolve_gemini_free_tier_limits_uses_instance_override() -> None:
     assert limits.status_summary() == "on(rpm=7,tpm=250000,rpd=33,reserve=4096)"
 
 
+def test_resolve_gemini_free_tier_limits_disables_paid_provider_even_with_env_limits() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_FREE_TIER_RPM": "1",
+        "TEEBOTUS_GEMINI_FREE_TIER_TPM": "2",
+        "TEEBOTUS_GEMINI_FREE_TIER_RPD": "3",
+    }
+
+    limits = resolve_gemini_free_tier_limits(
+        env,
+        provider="litellm-gemini-paid-statefull",
+        model="gemini/gemini-3.5-flash",
+    )
+
+    assert limits.status_summary() == "off"
+
+
 def test_parse_gemini_free_tier_limits_from_json_payload() -> None:
     payload = json.dumps(
         {

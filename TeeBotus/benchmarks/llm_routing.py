@@ -276,7 +276,8 @@ def benchmark_llm_message_latency_paths(*, iterations: int) -> BenchmarkResult:
             "openai_account_state_ok": _path_ok(paths, "openai_responses_stateful"),
             "gemini_account_state_ok": _path_ok(paths, "litellm_gemini_stateful"),
             "stateless_paths_ignore_state_ok": all(
-                _path_ok(paths, name) for name in ("litellm_local_stateless", "hf_pool_stateless")
+                _path_ok(paths, name)
+                for name in ("litellm_gemini_paid_stateless", "litellm_local_stateless", "hf_pool_stateless")
             ),
             "synthetic_clients_only": True,
             "network_calls": 0,
@@ -455,6 +456,20 @@ def _llm_message_path_specs() -> tuple[_LLMMessagePathSpec, ...]:
             model="gemini/gemini-3.5-flash",
             capabilities=GEMINI_INTERACTIONS_CAPABILITIES,
             stateful=True,
+        ),
+        _LLMMessagePathSpec(
+            name="litellm_gemini_paid_stateful",
+            provider="litellm_gemini_paid_stateful",
+            model="gemini/gemini-3.5-flash",
+            capabilities=GEMINI_INTERACTIONS_CAPABILITIES,
+            stateful=True,
+        ),
+        _LLMMessagePathSpec(
+            name="litellm_gemini_paid_stateless",
+            provider="litellm_gemini_paid_stateless",
+            model="gemini/gemini-3.5-flash",
+            capabilities=LITELLM_TEXT_CAPABILITIES,
+            stateful=False,
         ),
         _LLMMessagePathSpec(
             name="litellm_local_stateless",
@@ -1020,7 +1035,14 @@ def _live_llm_candidate_runnable(
         return True, ""
     if normalized_model.startswith(("ollama/", "ollama_chat/")):
         return True, ""
-    if normalized_provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/"):
+    if normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+    } or normalized_model.startswith("gemini/"):
         if (api_key_env and source.get(api_key_env, "").strip()) or resolve_gemini_api_key_ring(source):
             return True, ""
         return False, "missing Gemini API key or key ring"

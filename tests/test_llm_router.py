@@ -68,6 +68,18 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         model="gemini/gemini-3.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
+    assert profiles["gemini_flash_paid_stateless"] == LLMProfile(
+        name="gemini_flash_paid_stateless",
+        provider="litellm_gemini_paid_stateless",
+        model="gemini/gemini-3.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["gemini_flash_paid_stateful"] == LLMProfile(
+        name="gemini_flash_paid_stateful",
+        provider="litellm_gemini_paid_stateful",
+        model="gemini/gemini-3.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
     assert profiles["vertex_gemini_flash"] == LLMProfile(
         name="vertex_gemini_flash",
         provider="litellm",
@@ -114,6 +126,27 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_stateful_gemini_profile
     assert isinstance(client, LiteLLMGeminiStatefulClient)
     assert client.api_key_ring is not None
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
+
+
+def test_runtime_profile_client_uses_paid_gemini_profile_without_free_tier_guard(monkeypatch) -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash_paid_stateful",
+        env={
+            "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
+            "GEMINI_API_KEYS_ACCOUNT_2": "b1,b2",
+            "TEEBOTUS_GEMINI_FREE_TIER_RPM": "0",
+            "TEEBOTUS_GEMINI_FREE_TIER_TPM": "0",
+            "TEEBOTUS_GEMINI_FREE_TIER_RPD": "0",
+        },
+    )
+
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
+    assert client.provider == "litellm_gemini_paid_stateful"
+    assert client.api_key_ring is not None
+    assert client.api_key_ring.keys == ("a1", "b1", "a2", "b2")
+    assert client.gemini_free_tier_limits.status_summary() == "off"
 
 
 def test_runtime_profile_client_uses_gemini_service_tier_env_switch() -> None:

@@ -16,6 +16,7 @@ from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
     GeminiFreeTierLimits,
     estimate_litellm_input_tokens,
+    provider_is_paid_google_gemini,
     quota_owner_id,
     resolve_gemini_free_tier_limits,
     route_uses_google_gemini,
@@ -28,6 +29,7 @@ LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LITELLM_PROVIDER_ALIASES = {
     "litellm",
     "litellm_gemini_stateless",
+    "litellm_gemini_paid_stateless",
     "ollama",
     "huggingface",
     "hf",
@@ -117,7 +119,7 @@ class LiteLLMTextClient:
         )
         self.settings = resolved
         self.provider = normalize_llm_provider(resolved.provider)
-        self.provider_name = self.provider if self.provider == "litellm_gemini_stateless" else "litellm"
+        self.provider_name = self.provider if self.provider in {"litellm_gemini_stateless", "litellm_gemini_paid_stateless"} else "litellm"
         self.model = resolved.model.strip()
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
         self.fallback_api_keys = {
@@ -138,9 +140,10 @@ class LiteLLMTextClient:
         self.temperature = resolved.temperature
         self.max_tokens = resolved.max_tokens
         self.service_tier = _normalize_litellm_service_tier(resolved.service_tier)
-        self.gemini_free_tier_limits = resolved.gemini_free_tier_limits or resolve_gemini_free_tier_limits(
+        self.gemini_free_tier_limits = _resolve_litellm_gemini_free_tier_limits(
             provider=self.provider,
             model=self.model,
+            explicit_limits=resolved.gemini_free_tier_limits,
         )
         self.gemini_free_tier_guard = GeminiFreeTierGuard(self.gemini_free_tier_limits)
 
@@ -324,6 +327,13 @@ def normalize_llm_provider(value: str) -> str:
     if normalized in {"litellm_gemini_stateless", "litellm_gemini_text", "gemini_stateless_litellm"}:
         return "litellm_gemini_stateless"
     if normalized in {
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_state_less",
+        "litellm_gemini_paid_text",
+        "gemini_paid_stateless_litellm",
+    }:
+        return "litellm_gemini_paid_stateless"
+    if normalized in {
         "litellm_gemini_stateful",
         "litellm_gemini_statefull",
         "litellm_gemini_interactions",
@@ -334,6 +344,15 @@ def normalize_llm_provider(value: str) -> str:
         "gemini_statefull",
     }:
         return "litellm_gemini_stateful"
+    if normalized in {
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
+        "litellm_gemini_paid_interactions",
+        "gemini_paid_stateful",
+        "gemini_paid_statefull",
+        "gemini_paid_interactions",
+    }:
+        return "litellm_gemini_paid_stateful"
     if normalized in {"ollama", "local_ollama"}:
         return "ollama"
     if normalized in {"huggingface", "hugging_face", "hf"}:
@@ -390,6 +409,7 @@ def _litellm_model_name(provider: str, model: str) -> str:
         "groq": "groq/",
         "gemini": "gemini/",
         "litellm_gemini_stateless": "gemini/",
+        "litellm_gemini_paid_stateless": "gemini/",
         "vertex_ai": "vertex_ai/",
     }
     prefix = prefixes.get(provider, "")
@@ -579,8 +599,19 @@ def _litellm_response_cost(response: object) -> object | None:
 
 def _quota_owner_provider(*, provider: str, model: str) -> str:
     if route_uses_google_gemini(provider=provider, model=model):
-        return "google_gemini"
+        return "google_gemini_paid" if provider_is_paid_google_gemini(provider) else "google_gemini"
     return provider
+
+
+def _resolve_litellm_gemini_free_tier_limits(
+    *,
+    provider: str,
+    model: str,
+    explicit_limits: GeminiFreeTierLimits | None,
+) -> GeminiFreeTierLimits:
+    if provider_is_paid_google_gemini(provider):
+        return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
+    return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)
 
 
 def _response_value(response: object, key: str) -> object:

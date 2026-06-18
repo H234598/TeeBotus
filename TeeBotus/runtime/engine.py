@@ -2078,6 +2078,8 @@ def _persistable_previous_response_id(response: object) -> str | None:
         "gemini_statefull",
         "litellm_gemini_stateful",
         "litellm_gemini_statefull",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
     }
     return response_id if provider in stateful_providers else None
 

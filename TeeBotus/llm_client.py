@@ -60,7 +60,7 @@ def build_text_llm_client(
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
         return openai_client
-    if resolved_provider == "litellm_gemini_stateful":
+    if resolved_provider in {"litellm_gemini_stateful", "litellm_gemini_paid_stateful"}:
         from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 
         parsed_timeout = _parse_positive_int(timeout)
@@ -69,6 +69,7 @@ def build_text_llm_client(
         return LiteLLMGeminiStatefulClient(
             LiteLLMGeminiStatefulSettings(
                 model=model,
+                provider=resolved_provider,
                 api_key=api_key or default_api_key,
                 api_key_ring=api_key_ring,
                 timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,

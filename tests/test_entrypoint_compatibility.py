@@ -989,6 +989,32 @@ def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capsy
     ) in captured.out
 
 
+def test_runtime_status_reports_paid_gemini_profile_billing(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "gemini_flash_paid_stateful")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_FREE_TIER_RPM", "0")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm_gemini_paid_stateful model=gemini/gemini-3.5-flash "
+        "status=configured profile=gemini_flash_paid_stateful api_key=configured "
+        "google_mode=stateful"
+    ) in captured.out
+    assert "llm=Demo/telegram:1" in captured.out and "free_tier_guard=off" in captured.out
+    assert "llm=Demo/telegram:1" in captured.out and "google_billing=paid" in captured.out
+
+
 def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

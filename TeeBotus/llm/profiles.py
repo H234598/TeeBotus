@@ -24,6 +24,8 @@ REMOTE_PROVIDERS = frozenset(
         "gemini_interactions",
         "litellm_gemini_stateless",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
         "vertex_ai",
         "hf_pool",
     }
@@ -222,7 +224,14 @@ def normalize_llm_purpose(value: object) -> str:
 def _route_uses_gemini_api(provider: str, model: str) -> bool:
     normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/")
+    return normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+    } or normalized_model.startswith("gemini/")
 
 
 def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfile:

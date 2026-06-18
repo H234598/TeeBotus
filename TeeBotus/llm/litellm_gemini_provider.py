@@ -14,6 +14,7 @@ from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
     GeminiFreeTierLimits,
     estimate_litellm_input_tokens,
+    provider_is_paid_google_gemini,
     quota_owner_id,
     resolve_gemini_free_tier_limits,
 )
@@ -26,6 +27,7 @@ LOGGER = logging.getLogger("TeeBotus.llm.litellm_gemini_provider")
 @dataclass(frozen=True)
 class LiteLLMGeminiStatefulSettings:
     model: str
+    provider: str = "litellm_gemini_stateful"
     api_key: str = ""
     api_key_ring: tuple[str, ...] = ()
     timeout: int = 90
@@ -43,6 +45,8 @@ class LiteLLMGeminiStatefulClient:
 
     def __init__(self, settings: LiteLLMGeminiStatefulSettings) -> None:
         self.settings = settings
+        self.provider = _normalize_litellm_gemini_stateful_provider(settings.provider)
+        self.provider_name = self.provider
         self.model = _litellm_gemini_model_id(settings.model)
         self.api_key = str(settings.api_key or "").strip()
         self.api_key_ring = RotatingAPIKeyRing(settings.api_key_ring, name=f"{self.provider}:{self.model}") if settings.api_key_ring else None
@@ -51,9 +55,10 @@ class LiteLLMGeminiStatefulClient:
         self.max_tokens = settings.max_tokens
         self.service_tier = normalize_service_tier(settings.service_tier)
         self.store = bool(settings.store)
-        self.gemini_free_tier_limits = settings.gemini_free_tier_limits or resolve_gemini_free_tier_limits(
+        self.gemini_free_tier_limits = _resolve_litellm_gemini_free_tier_limits(
             provider=self.provider,
             model=self.model,
+            explicit_limits=settings.gemini_free_tier_limits,
         )
         self.gemini_free_tier_guard = GeminiFreeTierGuard(self.gemini_free_tier_limits)
 
@@ -213,6 +218,31 @@ def _litellm_gemini_model_id(value: object) -> str:
     return model or "gemini/gemini-3.5-flash"
 
 
+def _normalize_litellm_gemini_stateful_provider(value: object) -> str:
+    text = str(value or "").strip().casefold().replace("-", "_")
+    if text in {
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
+        "litellm_gemini_paid_interactions",
+        "gemini_paid_stateful",
+        "gemini_paid_statefull",
+        "gemini_paid_interactions",
+    }:
+        return "litellm_gemini_paid_stateful"
+    return "litellm_gemini_stateful"
+
+
+def _resolve_litellm_gemini_free_tier_limits(
+    *,
+    provider: str,
+    model: str,
+    explicit_limits: GeminiFreeTierLimits | None,
+) -> GeminiFreeTierLimits:
+    if provider_is_paid_google_gemini(provider):
+        return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
+    return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)
+
+
 def _interaction_output_text(interaction: object) -> str:
     text = getattr(interaction, "output_text", "")
     if isinstance(text, str) and text.strip():
@@ -317,7 +347,8 @@ def _litellm_response_cost(response: object) -> object | None:
 
 
 def _gemini_quota_owner(*, api_key: str, provider: str, model: str) -> str:
-    return quota_owner_id(api_key=api_key, provider="google_gemini", model=model or provider)
+    owner_provider = "google_gemini_paid" if provider_is_paid_google_gemini(provider) else "google_gemini"
+    return quota_owner_id(api_key=api_key, provider=owner_provider, model=model or provider)
 
 
 def _object_value(source: object, key: str) -> object:

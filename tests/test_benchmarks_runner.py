@@ -259,6 +259,8 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert {path["path"] for path in llm_message_latency["details"]["paths"]} == {
         "openai_responses_stateful",
         "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_stateless",
         "litellm_local_stateless",
         "hf_pool_stateless",
     }
@@ -273,11 +275,11 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert llm_matrix["category"] == "llm_router"
     assert llm_matrix["details"]["synthetic_clients_only"] is True
     assert llm_matrix["details"]["fake_qdrant_only"] is True
-    assert llm_matrix["details"]["path_count"] == 48
+    assert llm_matrix["details"]["path_count"] == 72
     assert llm_matrix["details"]["scenario_count"] == 12
-    assert llm_matrix["details"]["qdrant_path_count"] == 16
-    assert llm_matrix["details"]["decision_path_count"] == 24
-    assert llm_matrix["details"]["bibliothekar_path_count"] == 24
+    assert llm_matrix["details"]["qdrant_path_count"] == 24
+    assert llm_matrix["details"]["decision_path_count"] == 36
+    assert llm_matrix["details"]["bibliothekar_path_count"] == 36
     assert llm_matrix["details"]["qdrant_paths_ok"] is True
     assert llm_matrix["details"]["decision_paths_ok"] is True
     assert llm_matrix["details"]["bibliothekar_paths_ok"] is True

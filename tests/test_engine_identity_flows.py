@@ -403,6 +403,26 @@ def test_status_omits_stateful_gemini_retention_warning_when_free_tier_guard_is_
     assert "Free-Tier-Interaction-Retention" not in text
 
 
+def test_status_marks_paid_stateful_gemini_without_free_tier_warning(tmp_path):
+    class PaidStatefulGeminiClient:
+        provider_name = "litellm_gemini_paid_stateful"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=PaidStatefulGeminiClient(),
+        bibliothekar_enabled=False,
+        env={},
+    )
+
+    assert "Google-Billing: paid" in text
+    assert "Paid/Billing beim Provider" in text
+    assert "Gemini Stateful + Free-Tier" not in text
+
+
 def test_engine_help_carries_formatted_release_log_link(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path), project_root=tmp_path)
 
