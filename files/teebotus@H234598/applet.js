@@ -760,7 +760,32 @@ TeeBotusApplet.prototype = {
   },
 
   _qdrantUrl: function() {
-    return String(this.qdrantUrl || DEFAULT_QDRANT_URL).trim().replace(/\/+$/, "") || DEFAULT_QDRANT_URL;
+    return this._safeLocalHttpUrl(this.qdrantUrl, DEFAULT_QDRANT_URL);
+  },
+
+  _safeLocalHttpUrl: function(value, fallback) {
+    let defaultValue = String(fallback || DEFAULT_QDRANT_URL).trim() || DEFAULT_QDRANT_URL;
+    let raw = String(value || defaultValue).trim() || defaultValue;
+    let match = raw.match(/^(https?):\/\/(\[[^\]]+\]|[^/:?#]+):([0-9]+)(\/[^?#]*)?(\?[^#]*)?(#.*)?$/i);
+    if (!match) {
+      return defaultValue;
+    }
+    let host = String(match[2] || "").toLowerCase();
+    let normalizedHost = host.replace(/^\[/, "").replace(/\]$/, "");
+    if (["127.0.0.1", "localhost", "::1"].indexOf(normalizedHost) < 0) {
+      return defaultValue;
+    }
+    if ((match[4] || "") && match[4] !== "/") {
+      return defaultValue;
+    }
+    if (match[5] || match[6]) {
+      return defaultValue;
+    }
+    let port = parseInt(match[3], 10);
+    if (!(port > 0 && port <= 65535)) {
+      return defaultValue;
+    }
+    return String(match[1]).toLowerCase() + "://" + host + ":" + String(port);
   },
 
   _qdrantCollectionCount: function(collections, name) {

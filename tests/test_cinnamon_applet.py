@@ -105,6 +105,21 @@ def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
     assert schema["codex-usage-command"]["default"] == "codex-usage"
 
 
+def test_cinnamon_applet_qdrant_actions_keep_url_local_only() -> None:
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+    schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
+
+    assert schema["qdrant-url"]["default"] == "http://127.0.0.1:6333"
+    assert "Must stay local" in schema["qdrant-url"]["tooltip"]
+    assert "return this._safeLocalHttpUrl(this.qdrantUrl, DEFAULT_QDRANT_URL);" in source
+    assert "_safeLocalHttpUrl: function(value, fallback)" in source
+    assert '["127.0.0.1", "localhost", "::1"].indexOf(normalizedHost)' in source
+    assert "match[5] || match[6]" in source
+    assert "port > 0 && port <= 65535" in source
+    assert 'this._qdrantUrl() + "/collections"' in source
+    assert 'this._qdrantUrl() + "/collections/teebotus_user_memory/points/count"' in source
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """
