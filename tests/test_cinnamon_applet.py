@@ -93,7 +93,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "health.total_problem_count" in source
     assert "_problemStatusCount: function(counts)" in source
     assert "_problemBreakdownText: function(value)" in source
+    assert "_qdrantProblemBreakdownText: function(health)" in source
     assert '" | Probleme "' in source
+    assert '" | Qdrant "' in source
     assert "const PROBLEM_STATUSES = [" in source
     for status in sorted(PROBLEM_STATUSES):
         assert f'"{status}"' in source
@@ -191,6 +193,7 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["summary"]["gemini_free_tier"].startswith("gemini_free_tier_limits")
     assert parsed["summary"]["qdrant"].startswith("qdrant=127.0.0.1:6333")
     assert parsed["summary"]["qdrant_collections"] == 2
+    assert parsed["summary"]["qdrant_problem_status_count"] == 0
     assert parsed["summary"]["qdrant_ready_collections"] == 2
     assert parsed["summary"]["memory_semantic_ready"] == 1
     assert parsed["status_counts"]["configured"] == 3
@@ -229,6 +232,7 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         "missing_key:1,needed:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:2,unknown:1,warning:1"
     )
     assert parsed["status_counts"]["enabled"] == 1
+    assert parsed["summary"]["qdrant_problem_status_count"] == 2
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1
     assert parsed["status_counts"]["disabled"] == 1
@@ -261,6 +265,8 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
         "problem_status_count": 1,
         "problem_statuses": "warning:1",
         "qdrant_problem_count": 0,
+        "qdrant_probe_problem_count": 0,
+        "qdrant_runtime_problem_count": 0,
         "qdrant_unit_problem_count": 0,
         "total_problem_count": 1,
         "severe_status_count": 0,
@@ -293,6 +299,8 @@ def test_cinnamon_applet_payload_health_reports_command_and_qdrant_failures(monk
     assert payload["ok"] is False
     assert payload["health"]["status"] == "broken"
     assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["qdrant_probe_problem_count"] == 1
+    assert payload["health"]["qdrant_runtime_problem_count"] == 0
     assert payload["health"]["qdrant_unit_problem_count"] == 0
     assert payload["health"]["total_problem_count"] == 1
 
@@ -316,6 +324,8 @@ def test_cinnamon_applet_payload_counts_qdrant_unit_health(monkeypatch, tmp_path
     assert payload["health"]["status"] == "warning"
     assert payload["health"]["problem_status_count"] == 0
     assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["qdrant_probe_problem_count"] == 0
+    assert payload["health"]["qdrant_runtime_problem_count"] == 0
     assert payload["health"]["qdrant_unit_problem_count"] == 1
     assert payload["health"]["total_problem_count"] == 1
 
@@ -347,8 +357,54 @@ def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypat
     assert payload["health"]["status"] == "warning"
     assert payload["health"]["problem_status_count"] == 0
     assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["qdrant_probe_problem_count"] == 1
+    assert payload["health"]["qdrant_runtime_problem_count"] == 0
     assert payload["health"]["qdrant_unit_problem_count"] == 0
     assert payload["health"]["total_problem_count"] == 1
+
+
+def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_runtime_status",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "stdout": (
+                "[Memory und semantische Suche]\n"
+                "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search\n"
+                "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64\n"
+            ),
+            "stderr": "",
+        },
+    )
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_qdrant_status",
+        lambda _url: {
+            "url": "http://127.0.0.1:6333",
+            "collections": {"teebotus_user_memory": {"status": "unreachable", "count": 0, "error": "connection refused"}},
+            "error": "teebotus_user_memory: connection refused",
+        },
+    )
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["command_ok"] is True
+    assert payload["ok"] is False
+    assert payload["health"]["status"] == "warning"
+    assert payload["health"]["problem_status_count"] == 2
+    assert payload["health"]["qdrant_runtime_problem_count"] == 2
+    assert payload["health"]["qdrant_probe_problem_count"] == 0
+    assert payload["health"]["qdrant_problem_count"] == 0
+    assert payload["health"]["total_problem_count"] == 2
 
 
 def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
@@ -370,6 +426,8 @@ def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collectio
     assert payload["health"]["status"] == "warning"
     assert payload["health"]["problem_status_count"] == 0
     assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["qdrant_probe_problem_count"] == 1
+    assert payload["health"]["qdrant_runtime_problem_count"] == 0
     assert payload["health"]["qdrant_unit_problem_count"] == 0
     assert payload["health"]["total_problem_count"] == 1
 

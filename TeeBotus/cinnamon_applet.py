@@ -151,7 +151,9 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
     problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
-    qdrant_problem_count = _qdrant_problem_count(qdrant) + qdrant_unit_problem_count
+    qdrant_runtime_problem_count = _safe_int(runtime_summary.get("qdrant_problem_status_count", 0))
+    qdrant_probe_problem_count = 0 if qdrant_runtime_problem_count > 0 else _qdrant_problem_count(qdrant)
+    qdrant_problem_count = qdrant_probe_problem_count + qdrant_unit_problem_count
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
     total_problem_count = problem_count + qdrant_problem_count
     status = "ok"
@@ -165,6 +167,8 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
         "qdrant_problem_count": qdrant_problem_count,
+        "qdrant_probe_problem_count": qdrant_probe_problem_count,
+        "qdrant_runtime_problem_count": qdrant_runtime_problem_count,
         "qdrant_unit_problem_count": qdrant_unit_problem_count,
         "total_problem_count": total_problem_count,
         "severe_status_count": severe_count,
@@ -215,6 +219,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "gemini_free_tier": "",
         "qdrant": "",
         "qdrant_collections": 0,
+        "qdrant_problem_status_count": 0,
         "qdrant_ready_collections": 0,
         "memory_semantic_ready": 0,
         "hf_pool": "",
@@ -257,8 +262,12 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):
             summary["qdrant"] = line
+            if fields.get("status") in PROBLEM_STATUSES:
+                summary["qdrant_problem_status_count"] += 1
         elif line.startswith("qdrant_collection="):
             summary["qdrant_collections"] += 1
+            if fields.get("status") in PROBLEM_STATUSES:
+                summary["qdrant_problem_status_count"] += 1
             if fields.get("status") == "ready":
                 summary["qdrant_ready_collections"] += 1
         elif line.startswith("memory_index=") and fields.get("semantic") == "ready":

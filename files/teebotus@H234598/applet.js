@@ -571,7 +571,8 @@ TeeBotusApplet.prototype = {
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
     let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || "");
-    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown;
+    let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
+    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + qdrantBreakdown;
   },
 
   _problemBreakdownText: function(value) {
@@ -600,6 +601,22 @@ TeeBotusApplet.prototype = {
       rendered.push("+" + String(pairs.length - 4));
     }
     return " | Probleme " + rendered.join(", ");
+  },
+
+  _qdrantProblemBreakdownText: function(health) {
+    let probeCount = parseInt((health || {}).qdrant_probe_problem_count || 0, 10) || 0;
+    let unitCount = parseInt((health || {}).qdrant_unit_problem_count || 0, 10) || 0;
+    if (probeCount <= 0 && unitCount <= 0) {
+      return "";
+    }
+    let parts = [];
+    if (probeCount > 0) {
+      parts.push("Probe:" + String(probeCount));
+    }
+    if (unitCount > 0) {
+      parts.push("Service:" + String(unitCount));
+    }
+    return " | Qdrant " + parts.join(", ");
   },
 
   _problemStatusCount: function(counts) {
