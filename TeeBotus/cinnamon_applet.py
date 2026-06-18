@@ -115,9 +115,12 @@ def build_status_payload(
     qdrant_unit = _systemd_unit_status(qdrant_unit_name)
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
-    ok = runtime["returncode"] == 0 and unit.get("active_state") in {"active", "unknown"}
+    command_ok = runtime["returncode"] == 0 and unit.get("active_state") in {"active", "unknown"}
+    health = _health_summary(command_ok=command_ok, parsed_runtime=parsed_runtime, qdrant=qdrant)
     return {
-        "ok": ok,
+        "ok": health["status"] == "ok",
+        "command_ok": command_ok,
+        "health": health,
         "version": __version__,
         "repo": repo,
         "unit": unit,
@@ -135,6 +138,44 @@ def build_status_payload(
             "status_counts": parsed_runtime["status_counts"],
         },
     }
+
+
+def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant: dict[str, Any]) -> dict[str, Any]:
+    runtime_summary = parsed_runtime.get("summary", {}) if isinstance(parsed_runtime, dict) else {}
+    status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
+    problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
+    qdrant_problem_count = _qdrant_problem_count(qdrant)
+    severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
+    status = "ok"
+    if not command_ok or severe_count > 0:
+        status = "broken"
+    elif problem_count > 0 or qdrant_problem_count > 0:
+        status = "warning"
+    return {
+        "status": status,
+        "command_ok": bool(command_ok),
+        "problem_status_count": problem_count,
+        "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
+        "qdrant_problem_count": qdrant_problem_count,
+        "severe_status_count": severe_count,
+    }
+
+
+def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
+    count = 1 if str(qdrant.get("error", "") or "").strip() else 0
+    collections = qdrant.get("collections", {})
+    if isinstance(collections, dict):
+        for result in collections.values():
+            if isinstance(result, dict) and str(result.get("status", "") or "") != "ready":
+                count += 1
+    return count
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def parse_runtime_status(output: str) -> dict[str, Any]:

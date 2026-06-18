@@ -527,6 +527,7 @@ TeeBotusApplet.prototype = {
 
   _statusSummary: function(payload) {
     let unit = payload.unit || {};
+    let health = payload.health || {};
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
@@ -540,7 +541,8 @@ TeeBotusApplet.prototype = {
     let qdrant = payload.qdrant || {};
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
-    return "Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad);
+    let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
+    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad);
   },
 
   _problemStatusCount: function(counts) {
@@ -569,12 +571,13 @@ TeeBotusApplet.prototype = {
     let payload = this.statusPayload || {};
     let repo = payload.repo || {};
     let unit = payload.unit || {};
+    let health = payload.health || {};
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
-    this.versionItem.label.set_text("Unit: " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + commit + " | LLM-Routen: " + String(summary.llm_routes || 0));
+    this.versionItem.label.set_text("Health: " + this._statusWord(health.status || "unknown") + " | Unit: " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + commit + " | LLM-Routen: " + String(summary.llm_routes || 0));
   },
 
   _updatePanel: function() {

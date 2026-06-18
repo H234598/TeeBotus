@@ -4,7 +4,8 @@ import json
 import tomllib
 from pathlib import Path
 
-from TeeBotus.cinnamon_applet import parse_runtime_status
+import TeeBotus.cinnamon_applet as cinnamon_applet
+from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +83,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'this.set_applet_label("TB")' in source
     assert "summary.problem_status_count" in source
     assert "_problemStatusCount: function(counts)" in source
+    assert "payload.health" in source
+    assert '"Health "' in source
     assert 'degraded: "eingeschraenkt"' in source
     assert 'schema_mismatch: "Schema passt nicht"' in source
 
@@ -205,6 +208,64 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
     assert parsed["status_counts"]["not_applicable"] == 1
     assert parsed["status_counts"]["disabled"] == 1
     assert parsed["status_counts"]["ready"] == 1
+
+
+def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_runtime_status",
+        lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nllm_route=demo status=warning\n", "stderr": ""},
+    )
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["command_ok"] is True
+    assert payload["ok"] is False
+    assert payload["health"] == {
+        "status": "warning",
+        "command_ok": True,
+        "problem_status_count": 1,
+        "problem_statuses": "warning:1",
+        "qdrant_problem_count": 0,
+        "severe_status_count": 0,
+    }
+
+
+def test_cinnamon_applet_payload_health_reports_command_and_qdrant_failures(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 124, "stdout": "", "stderr": "timeout"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "missing", "sub_state": "dead"})
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_qdrant_status",
+        lambda _url: {
+            "url": "http://127.0.0.1:6333",
+            "collections": {"teebotus_user_memory": {"status": "unreachable", "count": 0, "error": "connection refused"}},
+            "error": "teebotus_user_memory: connection refused",
+        },
+    )
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["command_ok"] is False
+    assert payload["ok"] is False
+    assert payload["health"]["status"] == "broken"
+    assert payload["health"]["qdrant_problem_count"] == 2
 
 
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
