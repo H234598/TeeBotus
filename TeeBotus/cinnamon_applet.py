@@ -40,6 +40,7 @@ URL_CREDENTIAL_RE = re.compile(
     re.IGNORECASE,
 )
 BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
+STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
@@ -475,11 +476,15 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
 
 def _parse_status_fields(line: str) -> dict[str, str]:
     fields: dict[str, str] = {}
-    for part in str(line or "").split():
-        if "=" not in part:
+    text = str(line or "")
+    matches = list(STATUS_FIELD_RE.finditer(text))
+    for index, match in enumerate(matches):
+        key = str(match.group(1) or "").strip()
+        if not key:
             continue
-        key, value = part.split("=", 1)
-        fields[key.strip()] = value.strip()
+        value_start = match.end()
+        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        fields[key] = text[value_start:value_end].strip()
     return fields
 
 

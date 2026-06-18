@@ -513,16 +513,24 @@ TeeBotusApplet.prototype = {
 
   _parseFields: function(line) {
     let fields = {};
-    for (let part of String(line || "").split(/\s+/)) {
-      let index = part.indexOf("=");
-      if (index < 0) {
-        continue;
-      }
-      let key = part.slice(0, index).trim();
-      let value = part.slice(index + 1).trim();
+    let text = String(line || "");
+    let matches = [];
+    let pattern = /(^|\s)([A-Za-z_][A-Za-z0-9_-]*)=/g;
+    let match = null;
+    while ((match = pattern.exec(text)) !== null) {
+      let keyStart = match.index + String(match[1] || "").length;
+      let key = String(match[2] || "").trim();
       if (key) {
-        fields[key] = value;
+        matches.push({
+          key: key,
+          keyStart: keyStart,
+          valueStart: keyStart + key.length + 1
+        });
       }
+    }
+    for (let i = 0; i < matches.length; i++) {
+      let valueEnd = i + 1 < matches.length ? matches[i + 1].keyStart : text.length;
+      fields[matches[i].key] = text.slice(matches[i].valueStart, valueEnd).trim();
     }
     return fields;
   },

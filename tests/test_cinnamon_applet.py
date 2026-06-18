@@ -608,6 +608,26 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
     assert parsed["summary"]["api_budgets"] == 1
 
 
+def test_cinnamon_applet_runtime_parser_keeps_free_text_field_values() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        llm_route=structured_decision status=unavailable error=HFPoolUnavailable: pool default disabled
+
+        [Tools und Account-Memory]
+        account_identity_warning=Demo code=runtime_channel_without_identity message=signal runtime is configured, but no signal identities are linked. action=First run /register, then link with /login <account_id> <secret>
+        """
+    )
+
+    llm_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][0])
+    warning_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][0])
+
+    assert llm_fields["error"] == "HFPoolUnavailable: pool default disabled"
+    assert warning_fields["message"] == "signal runtime is configured, but no signal identities are linked."
+    assert warning_fields["action"] == "First run /register, then link with /login <account_id> <secret>"
+    assert parsed["status_counts"]["unavailable"] == 1
+
+
 def test_pyproject_declares_cinnamon_applet_helper_script() -> None:
     pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
