@@ -92,6 +92,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "summary.problem_status_count" in source
     assert "health.total_problem_count" in source
     assert "_problemStatusCount: function(counts)" in source
+    assert "_problemBreakdownText: function(value)" in source
+    assert '" | Probleme "' in source
     assert "const PROBLEM_STATUSES = [" in source
     for status in sorted(PROBLEM_STATUSES):
         assert f'"{status}"' in source

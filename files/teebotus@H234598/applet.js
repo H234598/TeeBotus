@@ -570,7 +570,36 @@ TeeBotusApplet.prototype = {
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
-    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad);
+    let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || "");
+    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown;
+  },
+
+  _problemBreakdownText: function(value) {
+    let pairs = [];
+    for (let part of String(value || "").split(",")) {
+      let index = part.indexOf(":");
+      if (index < 1) {
+        continue;
+      }
+      let status = part.slice(0, index).trim();
+      let count = parseInt(part.slice(index + 1), 10);
+      if (!status || !(count > 0)) {
+        continue;
+      }
+      pairs.push({ status: status, count: count });
+    }
+    if (pairs.length === 0) {
+      return "";
+    }
+    pairs.sort((left, right) => right.count - left.count || left.status.localeCompare(right.status));
+    let rendered = [];
+    for (let i = 0; i < pairs.length && i < 4; i++) {
+      rendered.push(this._statusWord(pairs[i].status) + ":" + String(pairs[i].count));
+    }
+    if (pairs.length > 4) {
+      rendered.push("+" + String(pairs.length - 4));
+    }
+    return " | Probleme " + rendered.join(", ");
   },
 
   _problemStatusCount: function(counts) {
