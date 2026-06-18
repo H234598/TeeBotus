@@ -41,6 +41,16 @@ const PROBLEM_STATUSES = [
   "unsupported",
   "warning"
 ];
+const FREE_TEXT_STATUS_FIELDS = {
+  action: true,
+  command: true,
+  error: true,
+  message: true,
+  route_error: true
+};
+const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
+  message: { action: true }
+};
 const QUICK_COMMANDS = [
   "/status",
   "/info",
@@ -534,10 +544,27 @@ TeeBotusApplet.prototype = {
       }
     }
     for (let i = 0; i < matches.length; i++) {
-      let valueEnd = i + 1 < matches.length ? matches[i + 1].keyStart : text.length;
+      let valueEnd = this._fieldValueEnd(text, matches, i);
       fields[matches[i].key] = text.slice(matches[i].valueStart, valueEnd).trim();
+      while (i + 1 < matches.length && matches[i + 1].keyStart < valueEnd) {
+        i++;
+      }
     }
     return fields;
+  },
+
+  _fieldValueEnd: function(text, matches, index) {
+    let key = String((matches[index] || {}).key || "");
+    if (!FREE_TEXT_STATUS_FIELDS[key]) {
+      return index + 1 < matches.length ? matches[index + 1].keyStart : text.length;
+    }
+    let boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES[key] || {};
+    for (let i = index + 1; i < matches.length; i++) {
+      if (boundaries[matches[i].key]) {
+        return matches[i].keyStart;
+      }
+    }
+    return text.length;
   },
 
   _populateLines: function(menu, lines, emptyText) {

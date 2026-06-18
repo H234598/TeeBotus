@@ -41,6 +41,8 @@ URL_CREDENTIAL_RE = re.compile(
 )
 BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
+FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
+FREE_TEXT_STATUS_FIELD_BOUNDARIES = {"message": frozenset({"action"})}
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
@@ -478,14 +480,30 @@ def _parse_status_fields(line: str) -> dict[str, str]:
     fields: dict[str, str] = {}
     text = str(line or "")
     matches = list(STATUS_FIELD_RE.finditer(text))
-    for index, match in enumerate(matches):
+    index = 0
+    while index < len(matches):
+        match = matches[index]
         key = str(match.group(1) or "").strip()
         if not key:
+            index += 1
             continue
         value_start = match.end()
-        value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        value_end = _status_field_value_end(text, matches, index, key)
         fields[key] = text[value_start:value_end].strip()
+        index += 1
+        while index < len(matches) and matches[index].start() < value_end:
+            index += 1
     return fields
+
+
+def _status_field_value_end(text: str, matches: list[re.Match[str]], index: int, key: str) -> int:
+    if key not in FREE_TEXT_STATUS_FIELDS:
+        return matches[index + 1].start() if index + 1 < len(matches) else len(text)
+    allowed_boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES.get(key, frozenset())
+    for next_match in matches[index + 1 :]:
+        if str(next_match.group(1) or "") in allowed_boundaries:
+            return next_match.start()
+    return len(text)
 
 
 def _parse_key_value_lines(value: str) -> dict[str, str]:
