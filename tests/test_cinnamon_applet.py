@@ -201,6 +201,8 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     assert _js_const_object_keys(source, "STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES") == (
         set(STATUS_FIELD_BOUNDARY_VALUES) - set(PROBLEM_STATUSES)
     )
+    assert "_quotedCharacterIndexes: function(text)" in source
+    assert "key && !quoted[keyStart]" in source
     assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
     assert "const FORCED_PROBLEM_STATUS_FIELDS = {" in source
     for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():
@@ -910,6 +912,43 @@ def test_cinnamon_applet_runtime_parser_keeps_free_text_field_values() -> None:
     assert warning_fields["action"] == "First run /register, then confirm status=ok manually"
     assert "foo" not in warning_fields
     assert parsed["status_counts"]["unavailable"] == 1
+
+
+def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_memory=Demo/path path="/tmp/status=broken warning=fake" status=ok
+        account_memory=Demo/message status=ok message="quoted warning=fake" warning=real
+        account_memory_recovery=Demo status=needed command="python tool.py --note status=broken warning=fake" apply_command="python tool.py --apply"
+        account_memory=Demo/single note='status=broken warning=fake' status=ok
+        account_memory=Demo/backtick note=`warning=fake` status=ok warning=real
+        """
+    )
+
+    path_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][0])
+    message_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][1])
+    recovery_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][2])
+    single_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][3])
+    backtick_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][4])
+
+    assert path_fields["path"] == '"/tmp/status=broken warning=fake"'
+    assert path_fields["status"] == "ok"
+    assert "warning" not in path_fields
+    assert message_fields["message"] == '"quoted warning=fake"'
+    assert message_fields["warning"] == "real"
+    assert recovery_fields["command"] == '"python tool.py --note status=broken warning=fake"'
+    assert recovery_fields["apply_command"] == '"python tool.py --apply"'
+    assert single_fields["note"] == "'status=broken warning=fake'"
+    assert single_fields["status"] == "ok"
+    assert backtick_fields["note"] == "`warning=fake`"
+    assert backtick_fields["warning"] == "real"
+    assert parsed["status_counts"]["ok"] == 4
+    assert parsed["status_counts"]["needed"] == 1
+    assert parsed["status_counts"]["warning"] == 2
+    assert "broken" not in parsed["status_counts"]
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "needed:1,warning:2"
 
 
 def test_cinnamon_applet_runtime_parser_counts_status_field_after_free_text_error() -> None:

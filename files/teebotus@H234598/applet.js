@@ -724,12 +724,13 @@ TeeBotusApplet.prototype = {
     let fields = {};
     let text = String(line || "");
     let matches = [];
+    let quoted = this._quotedCharacterIndexes(text);
     let pattern = /(^|\s)([A-Za-z_][A-Za-z0-9_-]*)=/g;
     let match = null;
     while ((match = pattern.exec(text)) !== null) {
       let keyStart = match.index + String(match[1] || "").length;
       let key = String(match[2] || "").trim();
-      if (key) {
+      if (key && !quoted[keyStart]) {
         matches.push({
           key: key,
           keyStart: keyStart,
@@ -745,6 +746,26 @@ TeeBotusApplet.prototype = {
       }
     }
     return fields;
+  },
+
+  _quotedCharacterIndexes: function(text) {
+    let indexes = {};
+    let quote = "";
+    for (let i = 0; i < text.length; i++) {
+      let value = text.charAt(i);
+      if (quote) {
+        indexes[i] = true;
+        if (value === quote) {
+          quote = "";
+        }
+        continue;
+      }
+      if (value === "\"" || value === "'" || value === "`") {
+        indexes[i] = true;
+        quote = value;
+      }
+    }
+    return indexes;
   },
 
   _fieldValueEnd: function(text, matches, index) {

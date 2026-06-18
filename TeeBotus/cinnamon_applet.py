@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
@@ -146,6 +146,12 @@ SECTION_PROBLEM_SUMMARY_KEYS = {
     "Memory und semantische Suche": "memory_problem_status_count",
     "Tools und Account-Memory": "memory_problem_status_count",
 }
+
+
+class _StatusFieldMatch(NamedTuple):
+    key: str
+    key_start: int
+    value_start: int
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -560,40 +566,66 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
 def _parse_status_fields(line: str) -> dict[str, str]:
     fields: dict[str, str] = {}
     text = str(line or "")
-    matches = list(STATUS_FIELD_RE.finditer(text))
+    matches = _status_field_matches(text)
     index = 0
     while index < len(matches):
         match = matches[index]
-        key = str(match.group(1) or "").strip()
+        key = match.key.strip()
         if not key:
             index += 1
             continue
-        value_start = match.end()
+        value_start = match.value_start
         value_end = _status_field_value_end(text, matches, index, key)
         fields[key] = text[value_start:value_end].strip()
         index += 1
-        while index < len(matches) and matches[index].start() < value_end:
+        while index < len(matches) and matches[index].key_start < value_end:
             index += 1
     return fields
 
 
-def _status_field_value_end(text: str, matches: list[re.Match[str]], index: int, key: str) -> int:
+def _status_field_matches(text: str) -> list[_StatusFieldMatch]:
+    quoted = _quoted_character_indexes(text)
+    matches: list[_StatusFieldMatch] = []
+    for match in STATUS_FIELD_RE.finditer(text):
+        key_start = match.start(1)
+        if key_start in quoted:
+            continue
+        matches.append(_StatusFieldMatch(key=str(match.group(1) or ""), key_start=key_start, value_start=match.end()))
+    return matches
+
+
+def _quoted_character_indexes(text: str) -> set[int]:
+    quoted: set[int] = set()
+    quote = ""
+    for index, char in enumerate(text):
+        if quote:
+            quoted.add(index)
+            if char == quote:
+                quote = ""
+            continue
+        if char in {"'", '"', "`"}:
+            quoted.add(index)
+            quote = char
+    return quoted
+
+
+def _status_field_value_end(text: str, matches: list[_StatusFieldMatch], index: int, key: str) -> int:
     if key not in FREE_TEXT_STATUS_FIELDS:
-        return matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        return matches[index + 1].key_start if index + 1 < len(matches) else len(text)
     allowed_boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES.get(key, frozenset())
     for next_index, next_match in enumerate(matches[index + 1 :], start=index + 1):
-        next_key = str(next_match.group(1) or "")
+        next_key = next_match.key
         if next_key in allowed_boundaries or _status_match_is_structured_boundary(text, matches, next_index):
-            return next_match.start()
+            return next_match.key_start
     return len(text)
 
 
-def _status_match_is_structured_boundary(text: str, matches: list[re.Match[str]], index: int) -> bool:
+def _status_match_is_structured_boundary(text: str, matches: list[_StatusFieldMatch], index: int) -> bool:
     match = matches[index]
-    if str(match.group(1) or "") not in STATUS_FIELD_BOUNDARY_KEYS:
+    if match.key not in STATUS_FIELD_BOUNDARY_KEYS:
         return False
-    value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-    value = text[match.end() : value_end].strip()
+    value_end = matches[index + 1].key_start if index + 1 < len(matches) else len(text)
+    value = text[match.value_start : value_end].strip()
     return value in STATUS_FIELD_BOUNDARY_VALUES
 
 
