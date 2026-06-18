@@ -531,7 +531,10 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
-    let bad = parseInt(summary.problem_status_count, 10);
+    let bad = parseInt(health.total_problem_count, 10);
+    if (!(bad >= 0)) {
+      bad = parseInt(summary.problem_status_count, 10);
+    }
     if (!(bad >= 0)) {
       bad = this._problemStatusCount(counts);
     }

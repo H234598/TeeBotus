@@ -146,10 +146,11 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
     qdrant_problem_count = _qdrant_problem_count(qdrant)
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
+    total_problem_count = problem_count + qdrant_problem_count
     status = "ok"
     if not command_ok or severe_count > 0:
         status = "broken"
-    elif problem_count > 0 or qdrant_problem_count > 0:
+    elif total_problem_count > 0:
         status = "warning"
     return {
         "status": status,
@@ -157,6 +158,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
         "qdrant_problem_count": qdrant_problem_count,
+        "total_problem_count": total_problem_count,
         "severe_status_count": severe_count,
     }
 

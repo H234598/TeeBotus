@@ -82,6 +82,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "/voicemodel" in source
     assert 'this.set_applet_label("TB")' in source
     assert "summary.problem_status_count" in source
+    assert "health.total_problem_count" in source
     assert "_problemStatusCount: function(counts)" in source
     assert "payload.health" in source
     assert '"Health "' in source
@@ -236,6 +237,7 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
         "problem_status_count": 1,
         "problem_statuses": "warning:1",
         "qdrant_problem_count": 0,
+        "total_problem_count": 1,
         "severe_status_count": 0,
     }
 
@@ -266,6 +268,37 @@ def test_cinnamon_applet_payload_health_reports_command_and_qdrant_failures(monk
     assert payload["ok"] is False
     assert payload["health"]["status"] == "broken"
     assert payload["health"]["qdrant_problem_count"] == 2
+    assert payload["health"]["total_problem_count"] == 2
+
+
+def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_qdrant_status",
+        lambda _url: {
+            "url": "http://127.0.0.1:6333",
+            "collections": {"teebotus_user_memory": {"status": "unreachable", "count": 0, "error": "connection refused"}},
+            "error": "",
+        },
+    )
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["command_ok"] is True
+    assert payload["ok"] is False
+    assert payload["health"]["status"] == "warning"
+    assert payload["health"]["problem_status_count"] == 0
+    assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["total_problem_count"] == 1
 
 
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
