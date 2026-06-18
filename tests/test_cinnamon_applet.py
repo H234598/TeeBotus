@@ -666,6 +666,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
 
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
     bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
+    url_userinfo_token = "plain-userinfo-token-123"
 
     parsed = parse_runtime_status(
         f"""
@@ -674,6 +675,9 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
 
         [API Keys, Limits und Kosten]
         api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1
+
+        [Messenger]
+        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable
         """
     )
     rendered = json.dumps(parsed, sort_keys=True)
@@ -681,10 +685,13 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
     assert "redis-password" not in rendered
     assert bearer_token not in rendered
     assert "plain-secret" not in rendered
+    assert url_userinfo_token not in rendered
     assert "target=redis://<redacted>@example.test/0" in rendered
     assert "authorization=Bearer <redacted-secret>" in rendered
     assert "target=https://example.test/path?api_key=<redacted>&ok=1" in rendered
+    assert "target=https://<redacted>@signal.example.test/v1" in rendered
     assert parsed["status_counts"]["broken"] == 2
+    assert parsed["status_counts"]["unreachable"] == 1
     assert parsed["summary"]["llm_routes"] == 1
     assert parsed["summary"]["api_budgets"] == 1
 

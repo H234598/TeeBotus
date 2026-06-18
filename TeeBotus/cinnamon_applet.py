@@ -36,7 +36,7 @@ SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"),
 )
 URL_CREDENTIAL_RE = re.compile(
-    r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)[^\s/@:]*:[^\s/@]*@",
+    r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@",
     re.IGNORECASE,
 )
 BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
