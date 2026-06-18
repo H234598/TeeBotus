@@ -81,6 +81,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatLlmLine" in source
     assert "_formatApiBudgetLine" in source
     assert "_formatMemoryLine" in source
+    assert "_sectionProblemText: function(value)" in source
+    assert '" | Probleme " + String(count)' in source
     assert "Ersatz bei Modell-/Key-/Limitfehlern" in source
     assert "codex-usage latest" in source
     assert "Qdrant-Status" in source
@@ -197,9 +199,13 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["summary"]["channels"] == "telegram,signal"
     assert parsed["summary"]["telegram_slots"] == 1
     assert parsed["summary"]["signal_accounts"] == 1
+    assert parsed["summary"]["messenger_problem_status_count"] == 0
     assert parsed["summary"]["memory_accounts"] == 1
+    assert parsed["summary"]["memory_problem_status_count"] == 0
     assert parsed["summary"]["llm_routes"] == 1
+    assert parsed["summary"]["llm_problem_status_count"] == 2
     assert parsed["summary"]["api_budgets"] == 1
+    assert parsed["summary"]["api_problem_status_count"] == 0
     assert parsed["summary"]["codex_usage"].startswith("codex_usage=local")
     assert parsed["summary"]["codex_usage_accounts"] == 1
     assert parsed["summary"]["gemini_free_tier"].startswith("gemini_free_tier_limits")
@@ -213,6 +219,34 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["status_counts"]["cooldown"] == 1
     assert parsed["status_counts"]["ready"] == 4
     assert "Messenger" in parsed["sections"]
+
+
+def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Messenger]
+        telegram_slot=Demo/telegram:1 status=missing
+
+        [LLM-Routen und Backends]
+        gemini_free_tier_limits status=fallback_defaults
+        structured_decision=Demo status=enabled route_status=unavailable
+
+        [API Keys, Limits und Kosten]
+        api_budget=hard_reasoning status=missing_key key=missing
+        codex_usage=local status=ready snapshots=2 stale_hours=24
+
+        [Memory und semantische Suche]
+        qdrant_collection=demo status=unavailable
+        memory_index=Demo backend=keyword status=ready semantic=unsupported
+        """
+    )
+
+    assert parsed["summary"]["messenger_problem_status_count"] == 1
+    assert parsed["summary"]["llm_problem_status_count"] == 2
+    assert parsed["summary"]["api_problem_status_count"] == 2
+    assert parsed["summary"]["memory_problem_status_count"] == 2
+    assert parsed["summary"]["problem_status_count"] == 7
+    assert parsed["summary"]["problem_statuses"] == "fallback_defaults:1,missing:1,missing_key:1,stale:1,unavailable:2,unsupported:1"
 
 
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:

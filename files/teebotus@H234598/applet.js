@@ -251,14 +251,19 @@ TeeBotusApplet.prototype = {
 
     let messengerLines = [];
     if (summary.telegram_slots || summary.signal_accounts || summary.matrix_homeservers) {
-      messengerLines.push("Uebersicht: Telegram-Slots " + String(summary.telegram_slots || 0) + " | Signal-Accounts " + String(summary.signal_accounts || 0) + " | Matrix-Homeserver " + String(summary.matrix_homeservers || 0));
+      messengerLines.push(
+        "Uebersicht: Telegram-Slots " + String(summary.telegram_slots || 0)
+        + " | Signal-Accounts " + String(summary.signal_accounts || 0)
+        + " | Matrix-Homeserver " + String(summary.matrix_homeservers || 0)
+        + this._sectionProblemText(summary.messenger_problem_status_count)
+      );
     }
     messengerLines = messengerLines.concat(this._formatLines(sections["Messenger"] || [], (line) => this._formatMessengerLine(line)));
     this._populateLines(this.messengerMenu.menu, messengerLines, this._dynamicEmptyText(_("Messenger-Diagnose wird geladen.")));
 
     let llmLines = [];
     if (summary.llm_routes || summary.hf_pool || summary.gemini_free_tier) {
-      llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0));
+      llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionProblemText(summary.llm_problem_status_count));
     }
     llmLines = llmLines.concat(this._formatLines(sections["LLM-Routen und Backends"] || [], (line) => this._formatLlmLine(line)));
     this._populateLines(this.llmMenu.menu, llmLines, this._dynamicEmptyText(_("LLM-Diagnose wird geladen.")));
@@ -266,7 +271,11 @@ TeeBotusApplet.prototype = {
     if (this.showApiSection) {
       let apiLines = [];
       if (summary.api_budgets || summary.codex_usage_accounts) {
-        apiLines.push("Uebersicht: API-Routen " + String(summary.api_budgets || 0) + " | codex-usage Accounts " + String(summary.codex_usage_accounts || 0));
+        apiLines.push(
+          "Uebersicht: API-Routen " + String(summary.api_budgets || 0)
+          + " | codex-usage Accounts " + String(summary.codex_usage_accounts || 0)
+          + this._sectionProblemText(summary.api_problem_status_count)
+        );
       }
       apiLines = apiLines.concat(this._formatLines(sections["API Keys, Limits und Kosten"] || [], (line) => this._formatApiBudgetLine(line)));
       this._populateLines(this.apiMenu.menu, apiLines, this._dynamicEmptyText(_("API-/Usage-Diagnose wird geladen.")));
@@ -283,6 +292,7 @@ TeeBotusApplet.prototype = {
         "Uebersicht: Account-Memorys " + String(summary.memory_accounts || 0)
         + " | Qdrant-Collections " + String(summary.qdrant_ready_collections || 0) + "/" + String(summary.qdrant_collections || 0)
         + " | Usermemory-Vektoren " + String(userMemoryPoints)
+        + this._sectionProblemText(summary.memory_problem_status_count)
       );
     }
     if (qdrant.unit) {
@@ -317,6 +327,11 @@ TeeBotusApplet.prototype = {
       return loadingText;
     }
     return _("Keine passenden Statuszeilen im Runtime-Status.");
+  },
+
+  _sectionProblemText: function(value) {
+    let count = parseInt(value || 0, 10) || 0;
+    return count > 0 ? " | Probleme " + String(count) : "";
   },
 
   _formatRuntimeLine: function(line) {

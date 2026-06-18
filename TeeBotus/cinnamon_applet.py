@@ -78,6 +78,12 @@ PROBLEM_STATUSES = frozenset(
     }
 )
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status", "semantic"})
+SECTION_PROBLEM_SUMMARY_KEYS = {
+    "Messenger": "messenger_problem_status_count",
+    "LLM-Routen und Backends": "llm_problem_status_count",
+    "API Keys, Limits und Kosten": "api_problem_status_count",
+    "Memory und semantische Suche": "memory_problem_status_count",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -217,9 +223,13 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "telegram_slots": 0,
         "signal_accounts": 0,
         "matrix_homeservers": 0,
+        "messenger_problem_status_count": 0,
         "memory_accounts": 0,
+        "memory_problem_status_count": 0,
         "llm_routes": 0,
+        "llm_problem_status_count": 0,
         "api_budgets": 0,
+        "api_problem_status_count": 0,
         "codex_usage": "",
         "codex_usage_accounts": 0,
         "gemini_free_tier": "",
@@ -242,8 +252,14 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             continue
         sections.setdefault(current, []).append(line)
         fields = _parse_status_fields(line)
-        for status in _line_status_values(fields):
+        line_statuses = list(_line_status_values(fields))
+        if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
+            line_statuses.append("stale")
+        for status in line_statuses:
             status_counts[status] = status_counts.get(status, 0) + 1
+        section_problem_key = SECTION_PROBLEM_SUMMARY_KEYS.get(current)
+        if section_problem_key:
+            summary[section_problem_key] += sum(1 for status in line_statuses if status in PROBLEM_STATUSES)
         if line.startswith("instances="):
             summary["instances"] = line.split("=", 1)[1]
         elif line.startswith("channels="):
@@ -262,8 +278,6 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["api_budgets"] += 1
         elif line.startswith("codex_usage="):
             summary["codex_usage"] = line
-            if _codex_usage_is_stale(fields):
-                status_counts["stale"] = status_counts.get("stale", 0) + 1
         elif line.startswith("codex_usage_account="):
             summary["codex_usage_accounts"] += 1
         elif line.startswith("gemini_free_tier_limits "):
