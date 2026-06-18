@@ -73,10 +73,11 @@ PROBLEM_STATUSES = frozenset(
         "unknown",
         "unavailable",
         "unreachable",
+        "unsupported",
         "warning",
     }
 )
-SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status"})
+SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status", "semantic"})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -277,7 +278,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
                 summary["qdrant_problem_status_count"] += 1
             if fields.get("status") == "ready":
                 summary["qdrant_ready_collections"] += 1
-        elif line.startswith("memory_index=") and fields.get("semantic") == "ready":
+        elif line.startswith("memory_index=") and fields.get("status") == "ready" and fields.get("semantic") == "ready":
             summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool=") and not fields.get("target"):
             summary["hf_pool"] = line

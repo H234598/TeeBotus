@@ -115,6 +115,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'schema_mismatch: "Schema passt nicht"' in source
     assert 'stale: "veraltet"' in source
     assert 'unknown: "unbekannt"' in source
+    assert 'unsupported: "nicht unterstuetzt"' in source
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -236,21 +237,43 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery"
         hf_pool=default target=secondary status=cooldown until=2999-01-01T00:00:00+00:00
         codex_usage=local status=ready snapshots=2 stale_hours=48
+        memory_index=semantic_down backend=keyword status=ready semantic=unavailable
+        memory_index=semantic_bad_backend backend=keyword status=ready semantic=unsupported
         """
     )
 
-    assert parsed["summary"]["problem_status_count"] == 16
+    assert parsed["summary"]["problem_status_count"] == 18
     assert parsed["summary"]["problem_statuses"] == (
         "broken:1,config_conflict:1,cooldown:1,degraded:1,fallback_defaults:1,invalid:1,"
-        "missing_key:1,needed:1,never:1,no_limits_found:1,schema_mismatch:1,stale:1,unavailable:2,"
-        "unknown:1,warning:1"
+        "missing_key:1,needed:1,never:1,no_limits_found:1,schema_mismatch:1,stale:1,unavailable:3,"
+        "unknown:1,unsupported:1,warning:1"
     )
     assert parsed["status_counts"]["enabled"] == 1
     assert parsed["summary"]["qdrant_problem_status_count"] == 2
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1
     assert parsed["status_counts"]["disabled"] == 1
-    assert parsed["status_counts"]["ready"] == 2
+    assert parsed["status_counts"]["ready"] == 4
+
+
+def test_cinnamon_applet_runtime_parser_counts_semantic_secondary_status() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Memory und semantische Suche]
+        memory_index=missing_vector backend=keyword status=ready semantic=unavailable
+        memory_index=unsupported_backend backend=keyword status=ready semantic=unsupported
+        memory_index=disabled_profile backend=keyword status=disabled semantic=ready
+        memory_index=healthy_profile backend=keyword status=ready semantic=ready
+        """
+    )
+
+    assert parsed["summary"]["memory_semantic_ready"] == 1
+    assert parsed["summary"]["problem_status_count"] == 2
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1,unsupported:1"
+    assert parsed["status_counts"]["ready"] == 3
+    assert parsed["status_counts"]["disabled"] == 1
+    assert parsed["status_counts"]["unavailable"] == 1
+    assert parsed["status_counts"]["unsupported"] == 1
 
 
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:

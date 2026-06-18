@@ -38,6 +38,7 @@ const PROBLEM_STATUSES = [
   "unknown",
   "unavailable",
   "unreachable",
+  "unsupported",
   "warning"
 ];
 const QUICK_COMMANDS = [
@@ -481,6 +482,7 @@ TeeBotusApplet.prototype = {
       unknown: "unbekannt",
       unavailable: "nicht verfuegbar",
       unreachable: "nicht erreichbar",
+      unsupported: "nicht unterstuetzt",
       warning: "Warnung"
     };
     return labels[value] || value;
