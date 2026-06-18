@@ -35,17 +35,18 @@ SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"),
 )
 URL_CREDENTIAL_RE = re.compile(
-    r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
+    r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)[^\s/@:]*:[^\s/@]*@",
     re.IGNORECASE,
 )
+BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
-    r"([\s=;,])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+    r"([\s=;,&?])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)&]+)",
     re.IGNORECASE,
 )
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
@@ -370,6 +371,7 @@ def _redact(value: str) -> str:
     for pattern in SECRET_TOKEN_PATTERNS:
         text = pattern.sub("<redacted-secret>", text)
     text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
+    text = BEARER_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text

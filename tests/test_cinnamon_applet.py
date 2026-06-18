@@ -193,6 +193,31 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert parsed["summary"]["telegram_slots"] == 1
 
 
+def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
+    bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
+
+    parsed = parse_runtime_status(
+        f"""
+        [LLM-Routen und Backends]
+        llm_route=normal_chat status=broken target=redis://:redis-password@example.test/0 authorization=Bearer {bearer_token}
+
+        [API Keys, Limits und Kosten]
+        api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1
+        """
+    )
+    rendered = json.dumps(parsed, sort_keys=True)
+
+    assert "redis-password" not in rendered
+    assert bearer_token not in rendered
+    assert "plain-secret" not in rendered
+    assert "target=redis://<redacted>@example.test/0" in rendered
+    assert "authorization=Bearer <redacted-secret>" in rendered
+    assert "target=https://example.test/path?api_key=<redacted>&ok=1" in rendered
+    assert parsed["status_counts"]["broken"] == 2
+    assert parsed["summary"]["llm_routes"] == 1
+    assert parsed["summary"]["api_budgets"] == 1
+
+
 def test_pyproject_declares_cinnamon_applet_helper_script() -> None:
     pyproject = tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
