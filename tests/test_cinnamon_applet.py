@@ -682,7 +682,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
         llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
 
         [API Keys, Limits und Kosten]
-        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700
+        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret>
 
         [Messenger]
         telegram_slot=Demo/telegram:1 status=configured token=configured target=https://user:plainpass@example.test/path
@@ -695,11 +695,19 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "plain secret value" not in rendered
     assert "another secret phrase" not in rendered
     assert "third secret value" not in rendered
+    assert "structured-secret" not in rendered
+    assert "bracket secret value" not in rendered
+    assert "curly-secret" not in rendered
+    assert "angle-secret" not in rendered
     assert "user:plainpass" not in rendered
     assert "api_key=<redacted-secret>" in rendered
     assert "client_secret=<redacted>" in rendered
     assert "password=<redacted>" in rendered
     assert "bearer_token=<redacted>" in rendered
+    assert "message=(client_secret=<redacted>)" in rendered
+    assert "details=[api_key=<redacted>]" in rendered
+    assert "meta={password=<redacted>}" in rendered
+    assert "hint=<token=<redacted>>" in rendered
     assert "api_key_env=GEMINI_API_KEY" in rendered
     assert "api_key_ring=3" in rendered
     assert "password:<redacted>" in rendered
