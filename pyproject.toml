@@ -16,8 +16,8 @@ dev = [
     "pip-audit",
 ]
 llm = [
-    "litellm==1.83.7",
-    "python-dotenv==1.0.1",
+    "litellm==1.84.0",
+    "python-dotenv==1.2.2",
     "openai==2.30.0",
     "ollama==0.6.2",
 ]
@@ -36,7 +36,7 @@ rag = [
     "llama-index-core==0.14.22",
 ]
 tools = [
-    "fastmcp==2.0.0",
+    "fastmcp==3.2.0",
 ]
 
 [project.scripts]

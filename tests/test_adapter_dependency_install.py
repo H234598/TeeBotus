@@ -20,7 +20,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "blurhash-python==1.2.2",
                 "h11==0.16.0",
                 "faster-whisper==1.2.1",
-                "litellm==1.83.7",
+                "litellm==1.84.0",
             ]
         )
         + "\n",
@@ -29,13 +29,14 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
 
     commands = build_python_install_commands(read_pins(lockfile), python="python3", user=True)
 
-    assert len(commands) == 2
+    assert len(commands) == 3
     assert "matrix-nio==0.25.0" in commands[0]
-    assert "h11==0.16.0" in commands[0]
+    assert "h11==0.16.0" not in commands[0]
     assert "faster-whisper==1.2.1" in commands[0]
-    assert "litellm==1.83.7" in commands[0]
+    assert "litellm==1.84.0" not in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
-    assert commands[1][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
+    assert commands[1][-2:] == ["h11==0.16.0", "litellm==1.84.0"]
+    assert commands[2][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
 
 def test_signal_cli_release_url_uses_pinned_github_release() -> None:
@@ -54,7 +55,7 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert result == 0
     output = capsys.readouterr().out
     assert "signalbot==1.2.2" in output
-    assert "litellm==1.83.7" in output
+    assert "litellm==1.84.0" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
@@ -125,10 +126,10 @@ def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_
 
         [project.optional-dependencies]
         dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
-        llm = ["litellm==1.83.7", "python-dotenv==1.0.1", "openai==2.30.0", "ollama==0.6.2", "surprise-llm"]
+        llm = ["litellm==1.84.0", "python-dotenv==1.2.2", "openai==2.30.0", "ollama==0.6.2", "surprise-llm"]
         rag = ["haystack-ai==2.30.1", "qdrant-haystack==10.3.0", "sentence-transformers==5.5.1", "pypdf==6.13.2", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.14.3", "llama-index-core==0.14.22"]
         agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.5"]
-        tools = ["fastmcp==2.0.0"]
+        tools = ["fastmcp==3.2.0"]
 
         [project.scripts]
         teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
@@ -193,12 +194,19 @@ def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:
     assert "blocked" in message
 
 
+def test_litellm_supply_chain_guard_blocks_below_security_minimum() -> None:
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.83.7")
+
+    assert not ok
+    assert "below security minimum 1.84.0" in message
+
+
 def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "litellm_init.pth").write_text("bad", encoding="utf-8")
-    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda _name: "1.83.7")
+    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda _name: "1.84.0")
     monkeypatch.setattr(check_adapter_deps.sys, "path", [str(tmp_path)])
 
-    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.83.7")
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.84.0")
 
     assert not ok
     assert "suspicious_pth_files" in message

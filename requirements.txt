@@ -7,4 +7,4 @@
 # nio-bot 1.0.2.post1 declares matrix-nio==0.20.*, while TeeBotus'
 # verified runtime contract uses matrix-nio==0.25.0 plus h11==0.16.0.
 psycopg[binary]==3.3.4
-litellm==1.83.7
+litellm==1.84.0

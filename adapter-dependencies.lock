@@ -6,4 +6,4 @@ matrix-nio==0.25.0
 blurhash-python==1.2.2
 h11==0.16.0
 faster-whisper==1.2.1
-litellm==1.83.7
+litellm==1.84.0

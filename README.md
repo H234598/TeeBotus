@@ -1028,7 +1028,7 @@ FastMCP ist optional. Ohne installiertes `fastmcp` bleibt TeeBotus importierbar;
 python3 -m pip install '.[tools]'
 ```
 
-Plan2-Extras sind absichtlich gepinnt. `litellm==1.83.7` verlangt `python-dotenv==1.0.1`; deshalb nutzt TeeBotus fuer strukturierte Pydantic-AI-Subtasks `pydantic-ai-slim==1.107.0` und fuer Tools `fastmcp==2.0.0`, statt die Full-Meta-Pakete zu installieren, die aktuell `python-dotenv>=1.1.0` ziehen.
+Plan2-Extras sind absichtlich gepinnt. `litellm==1.84.0`, `python-dotenv==1.2.2` und `fastmcp==3.2.0` sind die aktuellen Security-Mindeststaende fuer die GitHub-Dependabot-Warnungen; TeeBotus prueft diese Pins in `scripts/check_adapter_deps.py` und `scripts/check_plan2_optional_extras.py`.
 
 OpenAI-Flex-Processing wird ueber `service_tier: flex` im `## OpenAI`-Block der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Gemini/Vertex-Flex laeuft getrennt ueber `service_tier: flex` im `## LLM`-Block oder die oben genannten `TEEBOTUS_GEMINI_*`-/`TEEBOTUS_LLM_SERVICE_TIER*`-Schalter. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 

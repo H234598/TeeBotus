@@ -71,12 +71,15 @@ def build_python_install_commands(pins: dict[str, str], *, python: str, user: bo
             f"signalbot=={pins['signalbot']}",
             f"matrix-nio=={pins['matrix-nio']}",
             f"blurhash-python=={pins['blurhash-python']}",
-            f"h11=={pins['h11']}",
             f"faster-whisper=={pins['faster-whisper']}",
-            f"litellm=={pins['litellm']}",
             "marko==2.*",
             "python-magic>=0.4.27",
             "aiofiles>=23.1.0",
+        ],
+        [
+            *pip_base,
+            f"h11=={pins['h11']}",
+            f"litellm=={pins['litellm']}",
         ],
         [
             *pip_base,

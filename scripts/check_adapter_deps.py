@@ -20,6 +20,7 @@ from urllib.request import urlopen
 LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
+MIN_SAFE_LITELLM_VERSION = "1.84.0"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -104,12 +105,16 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
 def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
     if expected in BAD_LITELLM_VERSIONS:
         return False, f"litellm pin={expected} is blocked due to known compromised PyPI releases"
+    if _version_tuple(expected) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
+        return False, f"litellm pin={expected} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
     try:
         installed = importlib.metadata.version("litellm")
     except importlib.metadata.PackageNotFoundError:
         return False, f"litellm missing, expected {expected}"
     if installed in BAD_LITELLM_VERSIONS:
         return False, f"litellm installed={installed} is blocked due to known compromised PyPI releases"
+    if _version_tuple(installed) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
+        return False, f"litellm installed={installed} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
     suspicious_pth = _litellm_pth_files()
     if suspicious_pth:
         return False, "litellm suspicious_pth_files=" + ",".join(str(path) for path in suspicious_pth)
@@ -133,7 +138,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
         optional = {}
     expected_extras = {
         "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"},
-        "llm": {"litellm==1.83.7", "python-dotenv==1.0.1", "openai==2.30.0", "ollama==0.6.2"},
+        "llm": {"litellm==1.84.0", "python-dotenv==1.2.2", "openai==2.30.0", "ollama==0.6.2"},
         "rag": {
             "haystack-ai==2.30.1",
             "qdrant-haystack==10.3.0",
@@ -145,7 +150,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
             "llama-index-core==0.14.22",
         },
         "agents": {"pydantic-ai-slim==1.107.0", "langgraph==1.2.5"},
-        "tools": {"fastmcp==2.0.0"},
+        "tools": {"fastmcp==3.2.0"},
     }
     for extra, expected in expected_extras.items():
         found = set(optional.get(extra, [])) if isinstance(optional.get(extra), list) else set()
@@ -178,6 +183,15 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     if errors:
         return False, "pyproject plan2 contract failed: " + "; ".join(errors)
     return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.11"
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for chunk in str(value or "").replace("-", ".").split("."):
+        if not chunk.isdigit():
+            break
+        parts.append(int(chunk))
+    return tuple(parts or [0])
 
 
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:

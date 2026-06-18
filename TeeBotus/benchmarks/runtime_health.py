@@ -10,9 +10,11 @@ from typing import Any, Callable
 
 from scripts.check_adapter_deps import (
     LOCKFILE,
-    _check_litellm_supply_chain_guard,
+    BAD_LITELLM_VERSIONS,
+    MIN_SAFE_LITELLM_VERSION,
     _check_pyproject_plan2_contract,
     _read_pins,
+    _version_tuple,
 )
 from TeeBotus.benchmarks.core import BenchmarkResult, result
 from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines
@@ -90,7 +92,7 @@ def benchmark_status_doctor(*, iterations: int) -> BenchmarkResult:
                 lambda: dependency_checks.extend(
                     [
                         _check_pyproject_plan2_contract(),
-                        _check_litellm_supply_chain_guard(pins["litellm"]),
+                        _benchmark_litellm_pin_guard(pins["litellm"]),
                     ]
                 )
             )
@@ -213,6 +215,14 @@ def _write_static_secret_manifest(accounts_root: Path, *, instance_name: str, se
         + "\n",
         encoding="utf-8",
     )
+
+
+def _benchmark_litellm_pin_guard(expected: str) -> tuple[bool, str]:
+    if expected in BAD_LITELLM_VERSIONS:
+        return False, f"litellm pin={expected} is blocked due to known compromised PyPI releases"
+    if _version_tuple(expected) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
+        return False, f"litellm pin={expected} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
+    return True, f"litellm supply_chain_guard=ok pin={expected} installed_check=skipped_for_quick_benchmark"
 
 
 def benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:

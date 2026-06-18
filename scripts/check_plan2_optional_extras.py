@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLAN2_OPTIONAL_EXTRAS = ("llm", "rag", "agents", "tools")
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
+MIN_SAFE_LITELLM_VERSION = "1.84.0"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,6 +60,8 @@ def build_optional_extras_report(*, require_installed: bool = False, pyproject_p
                 errors.append(f"{extra} {package} must be exactly pinned for Plan2")
             if package == "litellm" and expected_version in BAD_LITELLM_VERSIONS:
                 errors.append(f"llm litellm pin {expected_version} is blocked due to known compromised PyPI releases")
+            if package == "litellm" and expected_version and _version_tuple(expected_version) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
+                errors.append(f"llm litellm pin {expected_version} is below security minimum {MIN_SAFE_LITELLM_VERSION}")
             try:
                 version = importlib.metadata.version(package)
             except importlib.metadata.PackageNotFoundError:
@@ -69,6 +72,8 @@ def build_optional_extras_report(*, require_installed: bool = False, pyproject_p
                     version_mismatches.append({"name": package, "expected": expected_version, "installed": version})
                 if package == "litellm" and version in BAD_LITELLM_VERSIONS:
                     errors.append(f"llm litellm installed {version} is blocked due to known compromised PyPI releases")
+                if package == "litellm" and _version_tuple(version) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
+                    errors.append(f"llm litellm installed {version} is below security minimum {MIN_SAFE_LITELLM_VERSION}")
         if require_installed and missing:
             errors.append(f"{extra} missing installed packages: {', '.join(missing)}")
         if require_installed and version_mismatches:
@@ -105,6 +110,15 @@ def _exact_pinned_version(requirement: str) -> str:
     head = requirement.split(";", 1)[0].strip()
     match = re.match(r"^[A-Za-z0-9_.-]+\s*==\s*([A-Za-z0-9_.!+-]+)\s*$", head)
     return match.group(1) if match else ""
+
+
+def _version_tuple(value: str) -> tuple[int, ...]:
+    parts: list[int] = []
+    for chunk in str(value or "").replace("-", ".").split("."):
+        if not chunk.isdigit():
+            break
+        parts.append(int(chunk))
+    return tuple(parts or [0])
 
 
 def _print_text_report(report: dict[str, Any]) -> None:
