@@ -56,8 +56,12 @@ const FREE_TEXT_STATUS_FIELDS = {
 };
 const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
   command: { apply_command: true },
+  error: { warning: true },
   message: { action: true }
 };
+const FLAG_PROBLEM_STATUS_FIELDS = [
+  "warning"
+];
 const QUICK_COMMANDS = [
   "/status",
   "/info",
@@ -557,6 +561,11 @@ TeeBotusApplet.prototype = {
         return true;
       }
     }
+    for (let key of FLAG_PROBLEM_STATUS_FIELDS) {
+      if (values[key]) {
+        return true;
+      }
+    }
     return false;
   },
 
@@ -615,7 +624,9 @@ TeeBotusApplet.prototype = {
 
   _errorText: function(fields) {
     let value = String((fields || {}).error || (fields || {}).route_error || "").trim();
-    return value ? "; Fehler " + value : "";
+    let warning = String((fields || {}).warning || "").trim();
+    let text = value ? "; Fehler " + value : "";
+    return warning ? text + "; Warnung " + warning : text;
   },
 
   _statusWord: function(status) {

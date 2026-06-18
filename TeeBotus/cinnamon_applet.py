@@ -44,8 +44,10 @@ STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
     "command": frozenset({"apply_command"}),
+    "error": frozenset({"warning"}),
     "message": frozenset({"action"}),
 }
+FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
@@ -321,6 +323,9 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
         secondary = fields.get(key, "")
         if secondary and secondary in PROBLEM_STATUSES and secondary != primary:
             values.append(secondary)
+    for key in sorted(FLAG_PROBLEM_STATUS_FIELDS):
+        if fields.get(key) and primary != "warning":
+            values.append("warning")
     return tuple(values)
 
 

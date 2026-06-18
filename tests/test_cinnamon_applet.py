@@ -7,6 +7,7 @@ from pathlib import Path
 
 import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
+from TeeBotus.cinnamon_applet import FLAG_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
 from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
@@ -126,6 +127,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'sections["Tools und Account-Memory"]' in source
     assert "_errorText: function(fields)" in source
     assert '"; Fehler " + value' in source
+    assert '"; Warnung " + warning' in source
     assert "this._errorText(fields)" in source
     assert "_fieldValueEnd: function(text, matches, index)" in source
     assert "_sectionProblemText: function(value)" in source
@@ -185,9 +187,12 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
 
     assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
     assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
+    assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
     assert set(PROBLEM_STATUSES) <= _js_status_label_keys(source)
     assert 'command: { apply_command: true }' in source
+    assert 'error: { warning: true }' in source
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["error"] == frozenset({"warning"})
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -750,6 +755,29 @@ def test_cinnamon_applet_runtime_parser_keeps_free_text_field_values() -> None:
     assert warning_fields["action"] == "First run /register, then confirm status=ok manually"
     assert "foo" not in warning_fields
     assert parsed["status_counts"]["unavailable"] == 1
+
+
+def test_cinnamon_applet_runtime_parser_counts_warning_field_after_error() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_memory=Demo/ok status=ok warning=fallback_sync_stale:entries
+        account_memory=Demo/broken status=broken error=index mismatch warning=fallback_sync_stale:index
+        """
+    )
+
+    ok_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][0])
+    broken_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][1])
+
+    assert ok_fields["warning"] == "fallback_sync_stale:entries"
+    assert broken_fields["error"] == "index mismatch"
+    assert broken_fields["warning"] == "fallback_sync_stale:index"
+    assert parsed["status_counts"]["ok"] == 1
+    assert parsed["status_counts"]["broken"] == 1
+    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["summary"]["memory_problem_status_count"] == 3
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "broken:1,warning:2"
 
 
 def test_cinnamon_applet_runtime_parser_splits_legacy_recovery_commands() -> None:
