@@ -56,6 +56,7 @@ PROBLEM_STATUSES = frozenset(
     {
         "broken",
         "config_conflict",
+        "cooldown",
         "degraded",
         "error",
         "failed",

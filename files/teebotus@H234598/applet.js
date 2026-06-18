@@ -22,6 +22,7 @@ const MENU_LINE_LIMIT = 14;
 const PROBLEM_STATUSES = [
   "broken",
   "config_conflict",
+  "cooldown",
   "degraded",
   "error",
   "failed",
@@ -435,6 +436,7 @@ TeeBotusApplet.prototype = {
     let labels = {
       configured: "konfiguriert",
       config_conflict: "Konfigurationskonflikt",
+      cooldown: "Cooldown",
       degraded: "eingeschraenkt",
       disabled: "deaktiviert",
       enabled: "aktiv",
