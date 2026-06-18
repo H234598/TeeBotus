@@ -1176,7 +1176,16 @@ def _llm_key_required_for_status(
         return False
     if _status_model_uses_ollama(model):
         return False
-    if normalized_provider in {"huggingface", "hf", "groq", "gemini", "gemini_interactions", "vertex_ai"}:
+    if normalized_provider in {
+        "huggingface",
+        "hf",
+        "groq",
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "vertex_ai",
+    }:
         return True
     if normalized_provider == "litellm":
         if route_api_key_env:
@@ -1288,7 +1297,17 @@ def _status_fallback_model_requires_key(*, provider: str, model: object, base_ur
         return True
     if normalized_provider == "litellm":
         return not _status_base_url_is_loopback(base_url)
-    return normalized_provider in {"openai", "huggingface", "hf", "groq", "gemini", "vertex_ai"}
+    return normalized_provider in {
+        "openai",
+        "huggingface",
+        "hf",
+        "groq",
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "vertex_ai",
+    }
 
 
 def _status_gemini_key_ring_count(*, instance_name: object, provider: str, model: object) -> int:
@@ -1405,18 +1424,24 @@ def _status_gemini_service_tier_for_instances(
 def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/")
+    return normalized_provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/")
 
 
 def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "gemini_interactions", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
+    return normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "vertex_ai",
+    } or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
 def _status_google_mode(*, provider: str, model: object) -> str:
     normalized_provider = _normalize_status_llm_provider(provider)
-    if normalized_provider == "gemini_interactions":
+    if normalized_provider in {"gemini_interactions", "litellm_gemini_stateful"}:
         return "stateful"
     return "stateless"
 

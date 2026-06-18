@@ -27,6 +27,7 @@ LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 LITELLM_PROVIDER_ALIASES = {
     "litellm",
+    "litellm_gemini_stateless",
     "ollama",
     "huggingface",
     "hf",
@@ -116,6 +117,7 @@ class LiteLLMTextClient:
         )
         self.settings = resolved
         self.provider = normalize_llm_provider(resolved.provider)
+        self.provider_name = self.provider if self.provider == "litellm_gemini_stateless" else "litellm"
         self.model = resolved.model.strip()
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
         self.fallback_api_keys = {
@@ -176,7 +178,7 @@ class LiteLLMTextClient:
                 kwargs = self._completion_kwargs_for_model(base_kwargs, model)
                 quota_owner = quota_owner_id(
                     api_key=str(kwargs.get("api_key") or ""),
-                    provider=self.provider,
+                    provider=_quota_owner_provider(provider=self.provider, model=model),
                     model=model,
                     api_base=str(kwargs.get("api_base") or ""),
                 )
@@ -217,6 +219,7 @@ class LiteLLMTextClient:
                     LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
                     continue
                 usage = _extract_usage(response)
+                _add_litellm_response_cost(usage, response)
                 if reservation is not None:
                     actual_input_tokens = _extract_input_tokens(usage)
                     if actual_input_tokens is not None:
@@ -231,7 +234,7 @@ class LiteLLMTextClient:
                 return LLMResponse(
                     text=text,
                     response_id=None,
-                    provider="litellm",
+                    provider=self.provider_name,
                     model=model,
                     usage=usage,
                 )
@@ -318,6 +321,19 @@ def normalize_llm_provider(value: str) -> str:
         return "openai"
     if normalized in {"litellm", "lite_llm", "llm"}:
         return "litellm"
+    if normalized in {"litellm_gemini_stateless", "litellm_gemini_text", "gemini_stateless_litellm"}:
+        return "litellm_gemini_stateless"
+    if normalized in {
+        "litellm_gemini_stateful",
+        "litellm_gemini_statefull",
+        "litellm_gemini_interactions",
+        "gemini_interactions",
+        "google_interactions",
+        "interactions",
+        "gemini_stateful",
+        "gemini_statefull",
+    }:
+        return "litellm_gemini_stateful"
     if normalized in {"ollama", "local_ollama"}:
         return "ollama"
     if normalized in {"huggingface", "hugging_face", "hf"}:
@@ -328,8 +344,6 @@ def normalize_llm_provider(value: str) -> str:
         return "groq"
     if normalized in {"gemini", "google", "google_ai"}:
         return "gemini"
-    if normalized in {"gemini_interactions", "google_interactions", "interactions", "gemini_stateful"}:
-        return "gemini_interactions"
     if normalized in {"vertex", "vertex_ai", "google_vertex", "google_vertex_ai"}:
         return "vertex_ai"
     return normalized
@@ -375,6 +389,7 @@ def _litellm_model_name(provider: str, model: str) -> str:
         "huggingface": "huggingface/",
         "groq": "groq/",
         "gemini": "gemini/",
+        "litellm_gemini_stateless": "gemini/",
         "vertex_ai": "vertex_ai/",
     }
     prefix = prefixes.get(provider, "")
@@ -537,7 +552,7 @@ def _extract_usage(response: object) -> dict[str, Any]:
 
 
 def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
-    for key in ("prompt_tokens", "input_tokens", "input_token_count"):
+    for key in ("prompt_tokens", "input_tokens", "input_token_count", "total_input_tokens"):
         value = usage.get(key)
         try:
             parsed = int(value)
@@ -546,6 +561,26 @@ def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
         if parsed >= 0:
             return parsed
     return None
+
+
+def _add_litellm_response_cost(usage: dict[str, Any], response: object) -> None:
+    cost = _litellm_response_cost(response)
+    if cost is not None:
+        usage.setdefault("response_cost", cost)
+
+
+def _litellm_response_cost(response: object) -> object | None:
+    hidden = _response_value(response, "_hidden_params")
+    value = _response_value(hidden, "response_cost") if hidden is not None else None
+    if value is None:
+        value = _response_value(response, "response_cost")
+    return value
+
+
+def _quota_owner_provider(*, provider: str, model: str) -> str:
+    if route_uses_google_gemini(provider=provider, model=model):
+        return "google_gemini"
+    return provider
 
 
 def _response_value(response: object, key: str) -> object:

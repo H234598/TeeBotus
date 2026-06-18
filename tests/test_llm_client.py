@@ -15,6 +15,7 @@ from TeeBotus.llm.free_tier import (
 )
 from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
+from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
@@ -44,7 +45,9 @@ def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
         ("ollama", "ollama"),
         ("hf", "huggingface"),
         ("Google", "gemini"),
-        ("gemini-stateful", "gemini_interactions"),
+        ("gemini-stateful", "litellm_gemini_stateful"),
+        ("litellm-gemini-stateless", "litellm_gemini_stateless"),
+        ("litellm-gemini-stateful", "litellm_gemini_stateful"),
         ("Vertex", "vertex_ai"),
         ("google-vertex-ai", "vertex_ai"),
     ],
@@ -95,6 +98,34 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
             "api_key": "hf-secret",
         }
     ]
+
+
+def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response(dict):
+        _hidden_params = {"response_cost": 0.0042}
+
+    def completion(**kwargs):
+        return Response(
+            {
+                "choices": [{"message": {"content": f"ok:{kwargs['model']}"}}],
+                "usage": {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+            }
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm-gemini-stateless",
+            model="gemini-3.5-flash",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.provider == "litellm_gemini_stateless"
+    assert response.model == "gemini/gemini-3.5-flash"
+    assert response.usage["response_cost"] == 0.0042
 
 
 def test_litellm_text_client_uses_default_key_when_instruction_env_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -194,7 +225,7 @@ def test_litellm_text_client_rotates_gemini_key_ring_before_free_tier_limit(monk
     guard = GeminiFreeTierGuard(limits)
     owner = quota_owner_id(
         api_key="gemini-budget-a",
-        provider="gemini",
+        provider="google_gemini",
         model="gemini/gemini-2.5-flash",
     )
     assert guard.reserve(
@@ -390,9 +421,9 @@ def test_build_text_llm_client_can_build_gemini_interactions_client() -> None:
         gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
     )
 
-    assert isinstance(client, GeminiInteractionsClient)
-    assert client.provider == "gemini_interactions"
-    assert client.model == "gemini-3.5-flash"
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
+    assert client.provider == "litellm_gemini_stateful"
+    assert client.model == "gemini/gemini-3.5-flash"
     assert client.store is True
     assert client.service_tier == "flex"
     assert client.capabilities.previous_response_id is True
@@ -406,20 +437,14 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
         output_text = "  Hallo Gemini  "
         id = "interaction-1"
         usage = {"input_tokens": 3, "output_tokens": 2}
+        _hidden_params = {"response_cost": 0.0009}
 
-    class Interactions:
-        def create(self, **kwargs):
-            calls.append(kwargs)
-            return Interaction()
+    def create_interaction(**kwargs):
+        keys.append(kwargs.get("api_key"))
+        calls.append(kwargs)
+        return Interaction()
 
-    class Client:
-        def __init__(self, *, api_key):
-            keys.append(api_key)
-            self.interactions = Interactions()
-
-    import google.genai as genai
-
-    monkeypatch.setattr(genai, "Client", Client)
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
     client = GeminiInteractionsClient(
         GeminiInteractionsSettings(
             model="gemini/gemini-3.5-flash",
@@ -433,19 +458,19 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
 
     assert response.text == "Hallo Gemini"
     assert response.response_id == "interaction-1"
-    assert response.provider == "gemini_interactions"
+    assert response.provider == "litellm_gemini_stateful"
     assert response.model == "gemini/gemini-3.5-flash"
     assert response.service_tier == "flex"
-    assert response.usage == {"input_tokens": 3, "output_tokens": 2}
+    assert response.usage == {"input_tokens": 3, "output_tokens": 2, "response_cost": 0.0009}
     assert keys == ["gemini-key"]
     assert calls == [
         {
             "input": "Ping",
-            "model": "gemini-3.5-flash",
+            "model": "gemini/gemini-3.5-flash",
             "store": True,
             "system_instruction": "System.",
             "generation_config": {"max_output_tokens": 77},
-            "response_modalities": ["text"],
+            "api_key": "gemini-key",
             "timeout": 90,
             "previous_interaction_id": "prev-1",
             "service_tier": "flex",
@@ -462,24 +487,15 @@ def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(m
         id = "interaction-2"
         usage = {"input_tokens": 4, "output_tokens": 3}
 
-    class Interactions:
-        def __init__(self, api_key: str) -> None:
-            self.api_key = api_key
+    def create_interaction(**kwargs):
+        api_key = str(kwargs.get("api_key") or "")
+        keys.append(api_key)
+        calls.append(kwargs)
+        if api_key == "gemini-a":
+            raise RuntimeError("quota exceeded")
+        return Interaction()
 
-        def create(self, **kwargs):
-            calls.append(kwargs)
-            if self.api_key == "gemini-a":
-                raise RuntimeError("quota exceeded")
-            return Interaction()
-
-    class Client:
-        def __init__(self, *, api_key):
-            keys.append(api_key)
-            self.interactions = Interactions(api_key)
-
-    import google.genai as genai
-
-    monkeypatch.setattr(genai, "Client", Client)
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
     reset_gemini_free_tier_budget_state()
     client = GeminiInteractionsClient(
         GeminiInteractionsSettings(

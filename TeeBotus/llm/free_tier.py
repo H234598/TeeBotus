@@ -191,9 +191,15 @@ def estimate_litellm_input_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
 def route_uses_google_gemini(*, provider: str, model: object) -> bool:
     normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "gemini_interactions", "vertex_ai", "google_vertex", "google_vertex_ai"} or normalized_model.startswith(
-        ("gemini/", "vertex_ai/")
-    )
+    return normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "vertex_ai",
+        "google_vertex",
+        "google_vertex_ai",
+    } or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
 def quota_owner_id(*, api_key: str, provider: str, model: str, api_base: str = "") -> str:

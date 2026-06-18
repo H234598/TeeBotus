@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from TeeBotus.llm.base import BaseLLMClient, LLMAPIError, LLMError, LLMImage, LLMResponse, LLMVoice
+from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 from TeeBotus.llm.litellm_provider import LiteLLMSettings, LiteLLMTextClient
 from TeeBotus.llm.openai_provider import OpenAIProvider
 
@@ -22,6 +23,8 @@ __all__ = [
     "LLMResponse",
     "LLMVoice",
     "LiteLLMSettings",
+    "LiteLLMGeminiStatefulClient",
+    "LiteLLMGeminiStatefulSettings",
     "LiteLLMTextClient",
     "LLMProfile",
     "LLMRoute",

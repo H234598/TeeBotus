@@ -356,7 +356,7 @@ def _append_gemini_stateful_free_tier_warning(
         return
     resolved_provider = _normalize_status_provider(provider)
     resolved_model = str(model or "").strip()
-    if resolved_provider != "gemini_interactions":
+    if not _provider_is_stateful_gemini(resolved_provider):
         return
     if not _gemini_free_tier_guard_active(provider=resolved_provider, model=resolved_model, env=env, instance_name=instance_name):
         return
@@ -439,7 +439,7 @@ def _api_budget_label(
     usage_label = _api_usage_label(provider=resolved_provider, model=resolved_model)
     mode = ""
     if _model_uses_google(resolved_provider, resolved_model):
-        mode = "; Google-State: " + ("stateful" if resolved_provider == "gemini_interactions" else "stateless")
+        mode = "; Google-State: " + ("stateful" if _provider_is_stateful_gemini(resolved_provider) else "stateless")
     if service_tier:
         mode += f"; service_tier={service_tier}"
     return f"{resolved_provider} / {resolved_model or 'openai-default'}; Key: {key_label}; {usage_label}{mode}"
@@ -473,7 +473,7 @@ def _default_api_key_env(provider: str, model: str) -> str:
         return "GROQ_API_KEY"
     if provider in {"huggingface", "hf"} or normalized_model.startswith("huggingface/"):
         return "HUGGINGFACE_API_KEY"
-    if provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/"):
+    if provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/"):
         return "GEMINI_API_KEY"
     if provider == "vertex_ai" or normalized_model.startswith("vertex_ai/"):
         return "GOOGLE_APPLICATION_CREDENTIALS"
@@ -487,7 +487,9 @@ def _normalize_status_provider(value: object) -> str:
         "google_ai": "gemini",
         "google_interactions": "gemini_interactions",
         "gemini_stateful": "gemini_interactions",
+        "gemini_statefull": "gemini_interactions",
         "interactions": "gemini_interactions",
+        "litellm_gemini_statefull": "litellm_gemini_stateful",
         "vertex": "vertex_ai",
         "google_vertex": "vertex_ai",
         "google_vertex_ai": "vertex_ai",
@@ -502,7 +504,17 @@ def _model_is_local(provider: str, model: str) -> bool:
 
 def _model_uses_google(provider: str, model: str) -> bool:
     normalized_model = str(model or "").strip().casefold()
-    return provider in {"gemini", "gemini_interactions", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
+    return provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "vertex_ai",
+    } or normalized_model.startswith(("gemini/", "vertex_ai/"))
+
+
+def _provider_is_stateful_gemini(provider: str) -> bool:
+    return provider in {"gemini_interactions", "litellm_gemini_stateful"}
 
 
 def _llm_client_status_label(client: object | None, *, fallback_provider: str = "", fallback_model: str = "") -> str:

@@ -274,7 +274,7 @@ def benchmark_llm_message_latency_paths(*, iterations: int) -> BenchmarkResult:
             "path_count": len(path_specs),
             "message_count_per_path": message_count,
             "openai_account_state_ok": _path_ok(paths, "openai_responses_stateful"),
-            "gemini_account_state_ok": _path_ok(paths, "gemini_interactions_stateful"),
+            "gemini_account_state_ok": _path_ok(paths, "litellm_gemini_stateful"),
             "stateless_paths_ignore_state_ok": all(
                 _path_ok(paths, name) for name in ("litellm_local_stateless", "hf_pool_stateless")
             ),
@@ -450,8 +450,8 @@ def _llm_message_path_specs() -> tuple[_LLMMessagePathSpec, ...]:
             stateful=True,
         ),
         _LLMMessagePathSpec(
-            name="gemini_interactions_stateful",
-            provider="gemini_interactions",
+            name="litellm_gemini_stateful",
+            provider="litellm_gemini_stateful",
             model="gemini/gemini-3.5-flash",
             capabilities=GEMINI_INTERACTIONS_CAPABILITIES,
             stateful=True,
@@ -1020,7 +1020,7 @@ def _live_llm_candidate_runnable(
         return True, ""
     if normalized_model.startswith(("ollama/", "ollama_chat/")):
         return True, ""
-    if normalized_provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/"):
+    if normalized_provider in {"gemini", "gemini_interactions", "litellm_gemini_stateless", "litellm_gemini_stateful"} or normalized_model.startswith("gemini/"):
         if (api_key_env and source.get(api_key_env, "").strip()) or resolve_gemini_api_key_ring(source):
             return True, ""
         return False, "missing Gemini API key or key ring"

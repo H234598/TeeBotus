@@ -349,7 +349,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
         "- Entscheidungen/Planner: aktiv - hf_pool / pool:default#structured_decision "
         "Ersatz bei Planner-Ausfall=ollama_chat/llama3.1:8b"
     ) in actions[0].text
-    assert "- Bibliothekar/Antworten: aktiv - gemini_interactions / gemini/gemini-3.5-flash" in actions[0].text
+    assert "- Bibliothekar/Antworten: aktiv - litellm_gemini_stateful / gemini/gemini-3.5-flash" in actions[0].text
     assert "- Ersatzmodelle: aktiv fuer Chat/Textantworten: ollama_chat/llama3.1:8b" in actions[0].text
     assert "[API, Limits und Kosten]" in actions[0].text
     assert "- Chat/Text: litellm / gemini/gemini-3.5-flash; Key: GEMINI_API_KEY fehlt" in actions[0].text
@@ -363,7 +363,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
 
 def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_path):
     class StatefulGeminiClient:
-        provider_name = "gemini_interactions"
+        provider_name = "litellm_gemini_stateful"
         model = "gemini/gemini-3.5-flash"
 
     text = build_status_reply(
@@ -386,7 +386,7 @@ def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_pa
 
 def test_status_omits_stateful_gemini_retention_warning_when_free_tier_guard_is_off(tmp_path):
     class StatefulGeminiClient:
-        provider_name = "gemini_interactions"
+        provider_name = "litellm_gemini_stateful"
         model = "gemini/gemini-3.5-flash"
 
     text = build_status_reply(
@@ -950,11 +950,11 @@ def test_engine_passes_previous_gemini_interaction_id_per_account_and_persists(t
             self.previous_ids.append(previous_response_id)
             response_id = f"{self.prefix}-{len(self.previous_ids)}"
             self.response_ids.append(response_id)
-            return LLMResponse("Antwort.", response_id, provider="gemini_interactions", model="gemini/gemini-3.5-flash")
+            return LLMResponse("Antwort.", response_id, provider="litellm_gemini_stateful", model="gemini/gemini-3.5-flash")
 
     provider = StaticSecretProvider(b"e" * 32)
     data_dir = tmp_path / "Depressionsbot" / "data"
-    instructions = BotInstructions(openai_enabled=True, llm_provider="gemini_interactions", llm_model="gemini/gemini-3.5-flash")
+    instructions = BotInstructions(openai_enabled=True, llm_provider="litellm_gemini_stateful", llm_model="gemini/gemini-3.5-flash")
     first_client = FakeGeminiClient("gemini")
     first_account_store = AccountStore(data_dir / "accounts", "Depressionsbot", provider)
     first_state = RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider)

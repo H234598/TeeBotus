@@ -8,7 +8,7 @@ import pytest
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
-from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient
+from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.profiles import (
     LLMProfile,
@@ -58,13 +58,13 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert profiles["groq_fast"].model.startswith("groq/")
     assert profiles["gemini_flash_stateless"] == LLMProfile(
         name="gemini_flash_stateless",
-        provider="litellm",
+        provider="litellm_gemini_stateless",
         model="gemini/gemini-3.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
     assert profiles["gemini_flash_stateful"] == LLMProfile(
         name="gemini_flash_stateful",
-        provider="gemini_interactions",
+        provider="litellm_gemini_stateful",
         model="gemini/gemini-3.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
@@ -111,7 +111,7 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_stateful_gemini_profile
         },
     )
 
-    assert isinstance(client, GeminiInteractionsClient)
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
     assert client.api_key_ring is not None
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
 
@@ -143,7 +143,7 @@ def test_runtime_profile_client_prefers_instance_gemini_flex_flag() -> None:
         instance_name="Demo",
     )
 
-    assert isinstance(client, GeminiInteractionsClient)
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
     assert client.service_tier == "flex"
 
 
@@ -160,7 +160,7 @@ def test_runtime_profile_client_instance_service_tier_off_overrides_global_flex(
         instance_name="Demo",
     )
 
-    assert isinstance(client, GeminiInteractionsClient)
+    assert isinstance(client, LiteLLMGeminiStatefulClient)
     assert client.service_tier == ""
 
 

@@ -8,6 +8,7 @@ from TeeBotus.llm import (
     LLMImage,
     LLMResponse,
     LLMVoice,
+    LiteLLMGeminiStatefulClient,
     LiteLLMTextClient,
     OpenAIProvider,
     build_text_llm_client,
@@ -22,6 +23,7 @@ def test_plan1_llm_package_exports_existing_router_and_litellm_adapter() -> None
     assert normalize_llm_provider("lite-llm") == "litellm"
     assert build_text_llm_client(instructions=BotInstructions(), openai_client="openai-client") == "openai-client"
     assert LiteLLMTextClient.__name__ == "LiteLLMTextClient"
+    assert LiteLLMGeminiStatefulClient.__name__ == "LiteLLMGeminiStatefulClient"
     assert LITELLM_TEXT_CAPABILITIES.text is True
     assert LITELLM_TEXT_CAPABILITIES.voice is False
     assert HF_POOL_TEXT_CAPABILITIES.text is True

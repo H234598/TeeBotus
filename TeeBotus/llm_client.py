@@ -12,6 +12,7 @@ from TeeBotus.llm.litellm_provider import (
     normalize_llm_provider,
     parse_fallback_models,
 )
+from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 
 
 class BaseLLMClient(Protocol):
@@ -59,14 +60,14 @@ def build_text_llm_client(
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
         return openai_client
-    if resolved_provider == "gemini_interactions":
-        from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
+    if resolved_provider == "litellm_gemini_stateful":
+        from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 
         parsed_timeout = _parse_positive_int(timeout)
         parsed_temperature = _parse_optional_float(temperature)
         parsed_max_tokens = _parse_positive_int(max_tokens)
-        return GeminiInteractionsClient(
-            GeminiInteractionsSettings(
+        return LiteLLMGeminiStatefulClient(
+            LiteLLMGeminiStatefulSettings(
                 model=model,
                 api_key=api_key or default_api_key,
                 api_key_ring=api_key_ring,
@@ -194,6 +195,8 @@ __all__ = [
     "LLMResponse",
     "LLMVoice",
     "LiteLLMSettings",
+    "LiteLLMGeminiStatefulClient",
+    "LiteLLMGeminiStatefulSettings",
     "LiteLLMTextClient",
     "VoiceLLMClient",
     "build_text_llm_client",

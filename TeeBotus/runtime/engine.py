@@ -2068,7 +2068,17 @@ def _persistable_previous_response_id(response: object) -> str | None:
     provider = str(getattr(response, "provider", "") or "").strip().casefold()
     if not provider:
         return response_id
-    stateful_providers = {"openai", "responses", "openai_responses", "gemini_interactions", "google_interactions", "gemini_stateful"}
+    stateful_providers = {
+        "openai",
+        "responses",
+        "openai_responses",
+        "gemini_interactions",
+        "google_interactions",
+        "gemini_stateful",
+        "gemini_statefull",
+        "litellm_gemini_stateful",
+        "litellm_gemini_statefull",
+    }
     return response_id if provider in stateful_providers else None
 
 

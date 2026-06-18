@@ -1,0 +1,347 @@
+from __future__ import annotations
+
+import logging
+import os
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.base import LLMAPIError, LLMResponse
+from TeeBotus.llm.capabilities import GEMINI_INTERACTIONS_CAPABILITIES
+from TeeBotus.llm.free_tier import (
+    GeminiBudgetReservation,
+    GeminiFreeTierGuard,
+    GeminiFreeTierLimits,
+    estimate_litellm_input_tokens,
+    quota_owner_id,
+    resolve_gemini_free_tier_limits,
+)
+from TeeBotus.llm.keyring import RotatingAPIKeyRing
+from TeeBotus.llm.service_tier import normalize_service_tier
+
+LOGGER = logging.getLogger("TeeBotus.llm.litellm_gemini_provider")
+
+
+@dataclass(frozen=True)
+class LiteLLMGeminiStatefulSettings:
+    model: str
+    api_key: str = ""
+    api_key_ring: tuple[str, ...] = ()
+    timeout: int = 90
+    temperature: float | None = None
+    max_tokens: int | None = None
+    service_tier: str = ""
+    store: bool = True
+    gemini_free_tier_limits: GeminiFreeTierLimits | None = None
+
+
+class LiteLLMGeminiStatefulClient:
+    provider_name = "litellm_gemini_stateful"
+    provider = "litellm_gemini_stateful"
+    capabilities = GEMINI_INTERACTIONS_CAPABILITIES
+
+    def __init__(self, settings: LiteLLMGeminiStatefulSettings) -> None:
+        self.settings = settings
+        self.model = _litellm_gemini_model_id(settings.model)
+        self.api_key = str(settings.api_key or "").strip()
+        self.api_key_ring = RotatingAPIKeyRing(settings.api_key_ring, name=f"{self.provider}:{self.model}") if settings.api_key_ring else None
+        self.timeout = max(1, int(settings.timeout or 90))
+        self.temperature = settings.temperature
+        self.max_tokens = settings.max_tokens
+        self.service_tier = normalize_service_tier(settings.service_tier)
+        self.store = bool(settings.store)
+        self.gemini_free_tier_limits = settings.gemini_free_tier_limits or resolve_gemini_free_tier_limits(
+            provider=self.provider,
+            model=self.model,
+        )
+        self.gemini_free_tier_guard = GeminiFreeTierGuard(self.gemini_free_tier_limits)
+
+    def create_reply(
+        self,
+        user_text: str,
+        instructions: BotInstructions,
+        previous_response_id: str | None = None,
+    ) -> LLMResponse:
+        create_interaction = _load_litellm_create_interaction()
+        key_attempts = self.api_key_ring.ordered_keys() if self.api_key_ring else (self.api_key or os.environ.get("GEMINI_API_KEY", "").strip(),)
+        key_attempts = tuple(key for key in key_attempts if str(key or "").strip())
+        if not key_attempts:
+            raise LLMAPIError("LiteLLM Gemini Stateful API key is missing")
+
+        errors: list[str] = []
+        for attempt_index, api_key in enumerate(key_attempts):
+            reservation = self._reserve_google_free_tier_budget(
+                api_key=api_key,
+                user_text=user_text,
+                instructions=instructions,
+            )
+            if reservation is not None and not reservation.allowed:
+                errors.append(f"provider={self.provider} model={self.model}: {reservation.reason}")
+                if self.api_key_ring:
+                    self.api_key_ring.mark_limited(api_key)
+                    continue
+                break
+            request = self._interaction_kwargs(
+                user_text=user_text,
+                instructions=instructions,
+                api_key=api_key,
+                previous_response_id=previous_response_id if attempt_index == 0 else None,
+            )
+            try:
+                interaction = create_interaction(**request)
+            except Exception as exc:  # noqa: BLE001 - provider boundary normalizes SDK failures.
+                detail = _redact_litellm_gemini_error(exc, request)
+                errors.append(f"provider={self.provider} model={self.model}: {type(exc).__name__}: {detail}")
+                LOGGER.warning("LiteLLM Gemini Stateful interaction failed for model=%s: %s", self.model, detail)
+                if self.api_key_ring and _is_usage_limit_error(exc, detail):
+                    self.api_key_ring.mark_limited(api_key)
+                    continue
+                continue
+            text = _interaction_output_text(interaction)
+            if not text:
+                errors.append(f"provider={self.provider} model={self.model}: empty text")
+                continue
+            usage = _interaction_usage(interaction)
+            _add_litellm_response_cost(usage, interaction)
+            if reservation is not None:
+                actual_input_tokens = _extract_input_tokens(usage)
+                if actual_input_tokens is not None:
+                    self.gemini_free_tier_guard.adjust_reserved_tokens(
+                        quota_owner=_gemini_quota_owner(api_key=api_key, provider=self.provider, model=self.model),
+                        model=self.model,
+                        reserved_input_tokens=reservation.input_tokens,
+                        actual_input_tokens=actual_input_tokens,
+                    )
+            if self.api_key_ring:
+                self.api_key_ring.mark_success(api_key)
+            return LLMResponse(
+                text=text,
+                response_id=_interaction_id(interaction),
+                provider=self.provider,
+                model=self.model,
+                service_tier=self.service_tier or None,
+                usage=usage,
+            )
+        detail = "; ".join(errors) if errors else "no keys attempted"
+        raise LLMAPIError(f"LiteLLM Gemini Stateful interaction failed for all configured keys: {detail}")
+
+    def _interaction_kwargs(
+        self,
+        *,
+        user_text: str,
+        instructions: BotInstructions,
+        api_key: str,
+        previous_response_id: str | None,
+    ) -> dict[str, object]:
+        kwargs: dict[str, object] = {
+            "model": self.model,
+            "input": str(user_text or ""),
+            "system_instruction": instructions.openai_instructions_text(),
+            "generation_config": _generation_config(self, instructions),
+            "api_key": api_key,
+            "timeout": self.timeout,
+            "store": self.store,
+        }
+        previous = str(previous_response_id or "").strip()
+        if previous:
+            kwargs["previous_interaction_id"] = previous
+        if self.service_tier:
+            kwargs["service_tier"] = self.service_tier
+        return kwargs
+
+    def _reserve_google_free_tier_budget(
+        self,
+        *,
+        api_key: str,
+        user_text: str,
+        instructions: BotInstructions,
+    ) -> GeminiBudgetReservation | None:
+        messages = (
+            {"role": "system", "content": instructions.openai_instructions_text()},
+            {"role": "user", "content": user_text},
+        )
+        estimated_input_tokens = estimate_litellm_input_tokens(messages)
+        reservation = self.gemini_free_tier_guard.reserve(
+            quota_owner=_gemini_quota_owner(api_key=api_key, provider=self.provider, model=self.model),
+            model=self.model,
+            estimated_input_tokens=estimated_input_tokens,
+        )
+        if not reservation.allowed and self.api_key_ring:
+            return GeminiBudgetReservation(
+                allowed=False,
+                input_tokens=reservation.input_tokens,
+                reason=f"{reservation.reason}; trying next configured project key",
+            )
+        return reservation
+
+
+def _load_litellm_create_interaction() -> Any:
+    try:
+        import litellm
+    except ImportError as exc:
+        raise LLMAPIError("LiteLLM is not installed") from exc
+    create_interaction = getattr(litellm, "create_interaction", None)
+    if callable(create_interaction):
+        return create_interaction
+    interactions = getattr(litellm, "interactions", None)
+    create = getattr(interactions, "create", None)
+    if callable(create):
+        return create
+    raise LLMAPIError("Installed LiteLLM does not expose create_interaction/interactions.create")
+
+
+def _generation_config(client: LiteLLMGeminiStatefulClient, instructions: BotInstructions) -> dict[str, object]:
+    config: dict[str, object] = {}
+    temperature = client.temperature if client.temperature is not None else instructions.llm_temperature
+    if temperature is not None:
+        config["temperature"] = float(temperature)
+    max_tokens = client.max_tokens if client.max_tokens is not None else instructions.llm_max_output_tokens
+    if max_tokens is None:
+        max_tokens = instructions.openai_max_output_tokens
+    if max_tokens is not None:
+        config["max_output_tokens"] = int(max_tokens)
+    return config
+
+
+def _litellm_gemini_model_id(value: object) -> str:
+    model = str(value or "").strip()
+    if model.startswith("models/"):
+        model = model[len("models/") :]
+    if model and not model.startswith("gemini/"):
+        model = f"gemini/{model}"
+    return model or "gemini/gemini-3.5-flash"
+
+
+def _interaction_output_text(interaction: object) -> str:
+    text = getattr(interaction, "output_text", "")
+    if isinstance(text, str) and text.strip():
+        return text.strip()
+    outputs = _object_value(interaction, "outputs")
+    if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes, bytearray)):
+        parts: list[str] = []
+        for item in outputs:
+            item_text = _object_value(item, "text")
+            if isinstance(item_text, str) and item_text.strip():
+                parts.append(item_text.strip())
+        if parts:
+            return "\n".join(parts).strip()
+    choices = _object_value(interaction, "choices")
+    if isinstance(choices, Sequence) and not isinstance(choices, (str, bytes, bytearray)):
+        parts = []
+        for choice in choices:
+            message = _object_value(choice, "message")
+            content = _object_value(message, "content") if message is not None else ""
+            if isinstance(content, str) and content.strip():
+                parts.append(content.strip())
+        if parts:
+            return "\n".join(parts).strip()
+    steps = _object_value(interaction, "steps")
+    if isinstance(steps, Sequence) and not isinstance(steps, (str, bytes, bytearray)):
+        parts = []
+        for step in steps:
+            for attr in ("text", "content", "output_text"):
+                value = _object_value(step, attr)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+            output = _object_value(step, "output")
+            if isinstance(output, Sequence) and not isinstance(output, (str, bytes, bytearray)):
+                for item in output:
+                    item_text = _object_value(item, "text")
+                    if isinstance(item_text, str) and item_text.strip():
+                        parts.append(item_text.strip())
+        if parts:
+            return "\n".join(parts).strip()
+    return ""
+
+
+def _interaction_id(interaction: object) -> str | None:
+    value = _object_value(interaction, "id")
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _interaction_usage(interaction: object) -> dict[str, Any]:
+    usage = _object_value(interaction, "usage")
+    if usage is None:
+        return {}
+    if isinstance(usage, Mapping):
+        return dict(usage)
+    if hasattr(usage, "model_dump"):
+        try:
+            payload = usage.model_dump()
+        except Exception:
+            payload = {}
+        return payload if isinstance(payload, dict) else {}
+    result: dict[str, Any] = {}
+    for name in (
+        "prompt_tokens",
+        "completion_tokens",
+        "input_tokens",
+        "output_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_tokens",
+        "cached_tokens",
+        "total_cached_tokens",
+    ):
+        value = getattr(usage, name, None)
+        if value is not None:
+            result[name] = value
+    return result
+
+
+def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
+    for key in ("prompt_tokens", "input_tokens", "input_token_count", "total_input_tokens"):
+        value = usage.get(key)
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed >= 0:
+            return parsed
+    return None
+
+
+def _add_litellm_response_cost(usage: dict[str, Any], response: object) -> None:
+    cost = _litellm_response_cost(response)
+    if cost is not None:
+        usage.setdefault("response_cost", cost)
+
+
+def _litellm_response_cost(response: object) -> object | None:
+    hidden = _object_value(response, "_hidden_params")
+    value = _object_value(hidden, "response_cost") if hidden is not None else None
+    if value is None:
+        value = _object_value(response, "response_cost")
+    return value
+
+
+def _gemini_quota_owner(*, api_key: str, provider: str, model: str) -> str:
+    return quota_owner_id(api_key=api_key, provider="google_gemini", model=model or provider)
+
+
+def _object_value(source: object, key: str) -> object:
+    if source is None:
+        return None
+    try:
+        return source[key]  # type: ignore[index]
+    except (KeyError, TypeError):
+        return getattr(source, key, None)
+
+
+def _redact_litellm_gemini_error(exc: Exception, kwargs: Mapping[str, object]) -> str:
+    from TeeBotus.llm.litellm_provider import _redact_litellm_error
+
+    return _redact_litellm_error(exc, dict(kwargs))
+
+
+def _is_usage_limit_error(exc: Exception, redacted_detail: str) -> bool:
+    from TeeBotus.llm.litellm_provider import _is_usage_limit_error as litellm_is_usage_limit_error
+
+    return litellm_is_usage_limit_error(exc, redacted_detail)
+
+
+__all__ = [
+    "LiteLLMGeminiStatefulClient",
+    "LiteLLMGeminiStatefulSettings",
+]

@@ -958,7 +958,7 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=gemini_interactions model=gemini/gemini-3.5-flash "
+        "llm=Demo/telegram:1 provider=litellm_gemini_stateful model=gemini/gemini-3.5-flash "
         "status=configured profile=gemini_flash_stateful api_key=configured api_key_ring=6 "
         "google_mode=stateful service_tier=flex"
     ) in captured.out
@@ -983,7 +983,7 @@ def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capsy
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=gemini/gemini-3.5-flash "
+        "llm=Demo/telegram:1 provider=litellm_gemini_stateless model=gemini/gemini-3.5-flash "
         "status=configured profile=gemini_flash_stateless api_key=configured "
         "google_mode=stateless service_tier=flex"
     ) in captured.out
@@ -1013,7 +1013,7 @@ def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, 
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=litellm_gemini_stateful "
         "model=gemini/gemini-3.5-flash status=configured api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/1"
     ) in captured.out
@@ -1046,7 +1046,7 @@ def test_runtime_status_route_reports_degraded_instance_scoped_gemini_keys(monke
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=litellm_gemini_stateful "
         "model=gemini/gemini-3.5-flash status=degraded api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/2"
     ) in captured.out
@@ -1084,7 +1084,7 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
         "fallback_model=ollama_chat/llama3.2:3b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=litellm_gemini_stateful "
         "model=gemini/gemini-3.5-flash "
     ) in captured.out
     assert "llm_route=bibliothekar_answer" in captured.out and " google_mode=stateful" in captured.out

@@ -199,8 +199,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "hf_pool_quality": ("hf_pool", "pool:"),
         "hf_pool_bibliothekar": ("hf_pool", "pool:"),
         "groq_fast": ("litellm", "groq/"),
-        "gemini_flash_stateless": ("litellm", "gemini/"),
-        "gemini_flash_stateful": ("gemini_interactions", "gemini/"),
+        "gemini_flash_stateless": ("litellm_gemini_stateless", "gemini/"),
+        "gemini_flash_stateful": ("litellm_gemini_stateful", "gemini/"),
         "vertex_gemini_flash": ("litellm", "vertex_ai/"),
         "openai_premium": ("openai", ""),
     }

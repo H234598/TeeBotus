@@ -36,12 +36,12 @@ profiles:
     api_key_env: GROQ_API_KEY
 
   gemini_flash_stateless:
-    provider: litellm
+    provider: litellm_gemini_stateless
     model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY
 
   gemini_flash_stateful:
-    provider: gemini_interactions
+    provider: litellm_gemini_stateful
     model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY
 

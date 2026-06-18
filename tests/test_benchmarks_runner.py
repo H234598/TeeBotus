@@ -258,7 +258,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert llm_message_latency["details"]["stateless_paths_ignore_state_ok"] is True
     assert {path["path"] for path in llm_message_latency["details"]["paths"]} == {
         "openai_responses_stateful",
-        "gemini_interactions_stateful",
+        "litellm_gemini_stateful",
         "litellm_local_stateless",
         "hf_pool_stateless",
     }
