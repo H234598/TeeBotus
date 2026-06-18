@@ -39,7 +39,7 @@ URL_CREDENTIAL_RE = re.compile(
     r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@",
     re.IGNORECASE,
 )
-BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
+AUTHORIZATION_TOKEN_RE = re.compile(r"\b(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])", re.IGNORECASE)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
@@ -547,7 +547,7 @@ def _redact(value: str) -> str:
     for pattern in SECRET_TOKEN_PATTERNS:
         text = pattern.sub("<redacted-secret>", text)
     text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
-    text = BEARER_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
+    text = AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text

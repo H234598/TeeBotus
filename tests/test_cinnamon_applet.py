@@ -724,6 +724,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
 
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
     bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
+    basic_token = "QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
+    api_key_header_token = "apikeyheaderabcdefghijklmnopqrstuvwxyz123456"
+    token_header_token = "tokenheaderabcdefghijklmnopqrstuvwxyz123456"
     url_userinfo_token = "plain-userinfo-token-123"
 
     parsed = parse_runtime_status(
@@ -732,20 +735,27 @@ def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> N
         llm_route=normal_chat status=broken target=redis://:redis-password@example.test/0 authorization=Bearer {bearer_token}
 
         [API Keys, Limits und Kosten]
-        api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1
+        api_budget=normal_chat status=broken target=https://example.test/path?api_key=plain-secret&ok=1 authorization=Basic {basic_token}
 
         [Messenger]
-        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable
+        signal_service=Demo target=https://{url_userinfo_token}@signal.example.test/v1 status=unreachable error=Authorization: ApiKey {api_key_header_token}; Proxy-Authorization: Token {token_header_token}
         """
     )
     rendered = json.dumps(parsed, sort_keys=True)
 
     assert "redis-password" not in rendered
     assert bearer_token not in rendered
+    assert basic_token not in rendered
+    assert api_key_header_token not in rendered
+    assert token_header_token not in rendered
     assert "plain-secret" not in rendered
     assert url_userinfo_token not in rendered
     assert "target=redis://<redacted>@example.test/0" in rendered
     assert "authorization=Bearer <redacted-secret>" in rendered
+    assert "authorization=Basic <redacted-secret>" in rendered
+    assert "authorization=Basic <redacted-secret>==" not in rendered
+    assert "Authorization: ApiKey <redacted-secret>" in rendered
+    assert "Proxy-Authorization: Token <redacted-secret>" in rendered
     assert "target=https://example.test/path?api_key=<redacted>&ok=1" in rendered
     assert "target=https://<redacted>@signal.example.test/v1" in rendered
     assert parsed["status_counts"]["broken"] == 2
