@@ -25,6 +25,7 @@ def render_markdown(suite: dict[str, Any]) -> str:
         f"- include_live: {suite.get('include_live', False)}",
         f"- live_hf: {suite.get('live_hf', False)}",
         f"- live_qdrant: {suite.get('live_qdrant', False)}",
+        f"- live_llm: {suite.get('live_llm', False)}",
         f"- profile: {suite.get('profile', '')}",
         "",
         "## Dependencies",

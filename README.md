@@ -280,7 +280,7 @@ Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JS
 python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
 ```
 
-Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, die lokale Retrieval-Matrix fuer e5-small/e5-base/bge-m3, Reranker und Local/LlamaIndex/Haystack, SourceHarvester-Quality-Gates inklusive `harvest -> promote -> index` ohne Blind-Ingest, LLM-Router, synthetische LLM-Nachrichtenpfad-Latenzen fuer OpenAI-Responses/Gemini-Interactions/LiteLLM/hf_pool ohne Provider-Calls, hf_pool-Health plus providerfreie hf_pool-Eval-Matrix, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird. Fuer Regressionen kann ein frueherer JSON-Lauf als Baseline verglichen werden:
+Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, die lokale Retrieval-Matrix fuer e5-small/e5-base/bge-m3, Reranker und Local/LlamaIndex/Haystack, SourceHarvester-Quality-Gates inklusive `harvest -> promote -> index` ohne Blind-Ingest, LLM-Router, synthetische LLM-Nachrichtenpfad-Latenzen fuer OpenAI-Responses/Gemini-Interactions/LiteLLM/hf_pool ohne Provider-Calls, die LLM-Pfadmatrix aus Engine/Decision-Layer/Bibliothekar/Keyword-Memory/Fake-Qdrant, hf_pool-Health plus providerfreie hf_pool-Eval-Matrix, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird. Fuer Regressionen kann ein frueherer JSON-Lauf als Baseline verglichen werden:
 
 ```bash
 python3 scripts/run_benchmarks.py --quick --baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json --output /home/teladi/Downloads/teebotus-benchmarks-compare.md --json-output /home/teladi/Downloads/teebotus-benchmarks-compare.json
@@ -290,6 +290,15 @@ Live-Benchmarks bleiben opt-in und erzeugen getrennte `live_*`-Ergebnisse:
 
 ```bash
 python3 scripts/run_benchmarks.py --live-hf --live-qdrant --profile hf_pool_default --output /home/teladi/Downloads/teebotus-benchmarks-live.md --json-output /home/teladi/Downloads/teebotus-benchmarks-live.json
+```
+
+Echte LLM-Provider/API-Latenzen sind ein Notfall-Benchmark und nie Teil der Standard- oder normalen Live-Laeufe. Er braucht bewusst zwei Schalter: CLI-Flag plus exakten Env-Bestaetigungswert. Fallbacks sind in diesem Benchmark zur Kostenkontrolle deaktiviert, und `--emergency-live-llm-max-calls` begrenzt die Gesamtzahl echter LLM-Calls:
+
+```bash
+TEEBOTUS_EMERGENCY_LIVE_LLM_BENCHMARK=NOTFALL_KOSTEN_AKZEPTIERT \
+python3 scripts/run_benchmarks.py --emergency-live-llm --emergency-live-llm-max-calls 3 \
+  --output /home/teladi/Downloads/teebotus-benchmarks-live-llm.md \
+  --json-output /home/teladi/Downloads/teebotus-benchmarks-live-llm.json
 ```
 
 `hf_pool_eval_matrix` laeuft dagegen immer lokal und kostenfrei. Es prueft die

@@ -68,6 +68,8 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_langgraph_source_harvester_workflow is langgraph_flows.benchmark_langgraph_source_harvester_workflow
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
     assert benchmark_module.benchmark_llm_message_latency_paths is llm_routing.benchmark_llm_message_latency_paths
+    assert benchmark_module.benchmark_llm_decision_qdrant_path_matrix is llm_routing.benchmark_llm_decision_qdrant_path_matrix
+    assert benchmark_module.benchmark_live_llm_message_latency_paths is llm_routing.benchmark_live_llm_message_latency_paths
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
     assert benchmark_module._benchmark_mcp_tools is mcp.benchmark_mcp_readonly_bibliothekar_and_memory_search
     assert benchmark_module.benchmark_memory_results is memory.memory_results
@@ -100,6 +102,7 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert suite["schema_version"] == 1
     assert suite["ok"] is True
     assert suite["include_live"] is False
+    assert suite["live_llm"] is False
     assert suite["context"]["cpu_count"] >= 1
     assert suite["context"]["dependencies"]["teebotus"] == {"version": TEEBOTUS_VERSION, "status": "worktree"}
     assert set(benchmark_module.BENCHMARK_CONTEXT_DEPENDENCIES).issubset(suite["context"]["dependencies"])
@@ -265,6 +268,25 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         assert path["p95_ms"] >= 0
     assert llm_message_latency["details"]["network_calls"] == 0
     assert llm_message_latency["details"]["provider_calls"] == 0
+    llm_matrix = next(result for result in suite["results"] if result["name"] == "llm_decision_qdrant_path_matrix")
+    assert llm_matrix["ok"] is True
+    assert llm_matrix["category"] == "llm_router"
+    assert llm_matrix["details"]["synthetic_clients_only"] is True
+    assert llm_matrix["details"]["fake_qdrant_only"] is True
+    assert llm_matrix["details"]["path_count"] == 48
+    assert llm_matrix["details"]["scenario_count"] == 12
+    assert llm_matrix["details"]["qdrant_path_count"] == 16
+    assert llm_matrix["details"]["decision_path_count"] == 24
+    assert llm_matrix["details"]["bibliothekar_path_count"] == 24
+    assert llm_matrix["details"]["qdrant_paths_ok"] is True
+    assert llm_matrix["details"]["decision_paths_ok"] is True
+    assert llm_matrix["details"]["bibliothekar_paths_ok"] is True
+    assert {path["memory_mode"] for path in llm_matrix["details"]["paths"]} == {"none", "keyword", "qdrant"}
+    assert {path["decision_layer"] for path in llm_matrix["details"]["paths"]} == {False, True}
+    assert {path["bibliothekar"] for path in llm_matrix["details"]["paths"]} == {False, True}
+    assert llm_matrix["details"]["network_calls"] == 0
+    assert llm_matrix["details"]["provider_calls"] == 0
+    assert not any(result["name"] == "live_llm_message_latency_paths" for result in suite["results"])
     gemini_free_tier = next(result for result in suite["results"] if result["name"] == "gemini_free_tier_guard_cache_rotation")
     assert gemini_free_tier["ok"] is True
     assert gemini_free_tier["category"] == "gemini_free_tier"
@@ -482,6 +504,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "## Regression Check" in markdown
     assert "status: not_configured" in markdown
     assert "include_live: False" in markdown
+    assert "live_llm: False" in markdown
     assert "| category | rank | name | mode | throughput_ops_s | total_ms | errors | note |" in markdown
     assert "Die Rangliste dokumentiert Messwerte nur" in markdown
     assert "memory_jsonl" in markdown
@@ -491,6 +514,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "pydantic_structured_decisions" in markdown
     assert "gemini_free_tier_guard_cache_rotation" in markdown
     assert "llm_message_latency_paths" in markdown
+    assert "llm_decision_qdrant_path_matrix" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "langgraph_source_harvester_workflow" in markdown
@@ -512,6 +536,19 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "primary_failure_secondary_sync_recovery_warning" in markdown
     assert "mcp_readonly_bibliothekar_and_memory_search" in markdown
     assert "keine echten Provider-Calls" in markdown
+
+
+def test_emergency_live_llm_benchmark_is_double_gated_without_provider_calls() -> None:
+    result = benchmark_module.benchmark_live_llm_message_latency_paths(iterations=1, env={})
+
+    assert result["name"] == "live_llm_message_latency_paths"
+    assert result["skipped"] is True
+    assert result["ok"] is False
+    assert result["mode"] == "live_emergency_llm"
+    assert "TEEBOTUS_EMERGENCY_LIVE_LLM_BENCHMARK" in result["reason"]
+    assert result["details"]["required_confirmation"] == "NOTFALL_KOSTEN_AKZEPTIERT"
+    for counter in benchmark_module.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS:
+        assert result["details"][counter] == 0
 
 
 def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:

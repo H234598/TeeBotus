@@ -59,6 +59,7 @@ REQUIRED_BENCHMARK_NAME_CATEGORIES = {
     "source_harvester_promote_index_flow": "source_harvester",
     "llm_router_structured_decision": "llm_router",
     "llm_message_latency_paths": "llm_router",
+    "llm_decision_qdrant_path_matrix": "llm_router",
     "decision_fake_model": "pydantic_ai",
     "pydantic_structured_decisions": "pydantic_ai",
     "proactive_tool_plan_due_dispatch_gates": "proactive_agent",

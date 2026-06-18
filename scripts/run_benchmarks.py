@@ -59,6 +59,8 @@ from TeeBotus.benchmarks.suite import (  # noqa: E402
     _result,
     _stable_backend_ranking,
     benchmark_gemini_free_tier_guard,
+    benchmark_live_llm_message_latency_paths,
+    benchmark_llm_decision_qdrant_path_matrix,
     benchmark_llm_message_latency_paths,
     benchmark_llm_router,
     benchmark_memory_results,
@@ -78,6 +80,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--include-live", action="store_true", help="Allow explicitly configured live benchmarks such as PostgreSQL.")
     parser.add_argument("--live-hf", action="store_true", help="Run one explicit live hf_pool target check when configured.")
     parser.add_argument("--live-qdrant", action="store_true", help="Run one explicit live Qdrant health check against the configured/default URL.")
+    parser.add_argument(
+        "--emergency-live-llm",
+        action="store_true",
+        help=(
+            "EMERGENCY ONLY: run real LLM provider/API latency checks. Also requires "
+            "TEEBOTUS_EMERGENCY_LIVE_LLM_BENCHMARK=NOTFALL_KOSTEN_AKZEPTIERT."
+        ),
+    )
+    parser.add_argument("--emergency-live-llm-max-calls", type=int, default=3, help="Hard cap for emergency live LLM provider calls.")
     parser.add_argument("--profile", default="", help="Optional LLM profile context for live HF benchmarks, e.g. hf_pool_default.")
     args = parser.parse_args(argv)
     if args.entries < 1:
@@ -93,6 +104,8 @@ def main(argv: list[str] | None = None) -> int:
         include_live=bool(args.include_live),
         live_hf=bool(args.live_hf),
         live_qdrant=bool(args.live_qdrant),
+        live_llm=bool(args.emergency_live_llm),
+        live_llm_max_calls=max(1, int(args.emergency_live_llm_max_calls or 1)),
         profile=str(args.profile or ""),
         baseline_json=Path(args.baseline_json) if args.baseline_json else None,
     )

@@ -36,7 +36,13 @@ from TeeBotus.benchmarks.langgraph_flows import (
     benchmark_langgraph_bibliothekar_linear as _benchmark_langgraph_linear_flow,
     benchmark_langgraph_source_harvester_workflow as _benchmark_langgraph_source_harvester_workflow,
 )
-from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_message_latency_paths, benchmark_llm_router
+from TeeBotus.benchmarks.llm_routing import (
+    benchmark_gemini_free_tier_guard,
+    benchmark_live_llm_message_latency_paths,
+    benchmark_llm_decision_qdrant_path_matrix,
+    benchmark_llm_message_latency_paths,
+    benchmark_llm_router,
+)
 from TeeBotus.benchmarks.mcp import benchmark_mcp_readonly_bibliothekar_and_memory_search as _benchmark_mcp_tools
 from TeeBotus.benchmarks.memory import (
     benchmark_jsonl_backend,
@@ -84,6 +90,8 @@ def run_benchmarks(
     include_live: bool = False,
     live_hf: bool = False,
     live_qdrant: bool = False,
+    live_llm: bool = False,
+    live_llm_max_calls: int = 3,
     profile: str = "",
     baseline_json: Path | None = None,
 ) -> dict[str, Any]:
@@ -99,6 +107,7 @@ def run_benchmarks(
     results.append(_benchmark_source_harvester_promote_index_flow(iterations=iterations))
     results.append(benchmark_llm_router(iterations=iterations))
     results.append(benchmark_llm_message_latency_paths(iterations=iterations))
+    results.append(benchmark_llm_decision_qdrant_path_matrix(iterations=iterations))
     results.append(benchmark_gemini_free_tier_guard(iterations=iterations))
     results.append(_benchmark_hf_pool_quick(iterations=iterations))
     results.append(_benchmark_hf_pool_eval_matrix(iterations=iterations))
@@ -107,6 +116,8 @@ def run_benchmarks(
     results.append(_benchmark_qdrant_health_quick(iterations=iterations))
     if live_qdrant:
         results.append(_benchmark_qdrant_health_live())
+    if live_llm:
+        results.append(benchmark_live_llm_message_latency_paths(iterations=iterations, max_calls=live_llm_max_calls))
     results.append(_benchmark_qdrant_memory_index_quick(iterations=iterations))
     results.append(_benchmark_decision_fake_model(iterations=iterations))
     results.append(_benchmark_pydantic_structured_decisions(iterations=iterations))
@@ -124,7 +135,7 @@ def run_benchmarks(
     results.append(_benchmark_mcp_tools(iterations=iterations))
     comparisons = _build_comparisons(results)
     regression = _build_regression_report(results, baseline_json=baseline_json)
-    live_requested = bool(include_live or live_hf or live_qdrant)
+    live_requested = bool(include_live or live_hf or live_qdrant or live_llm)
     quality_gate = _build_quality_gate(results, comparisons=comparisons, quick=quick, include_live=live_requested)
     return {
         "schema_version": 1,
@@ -133,6 +144,7 @@ def run_benchmarks(
         "include_live": live_requested,
         "live_hf": bool(live_hf),
         "live_qdrant": bool(live_qdrant),
+        "live_llm": bool(live_llm),
         "profile": str(profile or ""),
         "ok": all(result.get("ok", False) or result.get("skipped", False) for result in results) and quality_gate["ok"] and not regression["failed"],
         "context": _context(),
@@ -244,6 +256,8 @@ __all__ = [
     "_result",
     "_stable_backend_ranking",
     "benchmark_gemini_free_tier_guard",
+    "benchmark_live_llm_message_latency_paths",
+    "benchmark_llm_decision_qdrant_path_matrix",
     "benchmark_llm_message_latency_paths",
     "benchmark_jsonl_backend",
     "benchmark_llm_router",
