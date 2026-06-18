@@ -15,6 +15,7 @@ const DEFAULT_QDRANT_UNIT = "teebotus-qdrant.service";
 const DEFAULT_QDRANT_URL = "http://127.0.0.1:6333";
 const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
+const DEFAULT_STATUS_REFRESH_SECONDS = 60;
 const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
 const MENU_LINE_LIMIT = 14;
@@ -69,7 +70,7 @@ TeeBotusApplet.prototype = {
     this.qdrantUnit = DEFAULT_QDRANT_UNIT;
     this.qdrantUrl = DEFAULT_QDRANT_URL;
     this.defaultInstance = "Depressionsbot";
-    this.statusRefreshSeconds = 60;
+    this.statusRefreshSeconds = DEFAULT_STATUS_REFRESH_SECONDS;
     this.statusTimeoutSeconds = DEFAULT_STATUS_TIMEOUT_SECONDS;
     this.showPanelLabel = true;
     this.panelLabelMode = "health";
@@ -886,7 +887,7 @@ TeeBotusApplet.prototype = {
     if (!this.autoRefresh) {
       return;
     }
-    let seconds = Math.max(STATUS_REFRESH_MIN_SECONDS, this._positiveInt(this.statusRefreshSeconds, 60));
+    let seconds = Math.max(STATUS_REFRESH_MIN_SECONDS, this._positiveInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS));
     this.statusTimer = Mainloop.timeout_add_seconds(seconds, () => {
       this._refreshStatus();
       return Boolean(this.autoRefresh);
