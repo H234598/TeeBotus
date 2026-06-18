@@ -122,6 +122,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert '"Lokale Transkription " + fields.local_transcription' in source
     assert '"Bibliothekar " + fields.bibliothekar' in source
     assert '"; Feed " + this._statusWord(fields.models_feed)' in source
+    assert "(fields || {}).models_feed === status" in source
     assert '"; Kontext " + fields.context_length' in source
     assert "summary.problem_status_count" in source
     assert "health.total_problem_count" in source
@@ -351,6 +352,24 @@ def test_cinnamon_applet_runtime_parser_counts_semantic_secondary_status() -> No
     assert parsed["status_counts"]["disabled"] == 1
     assert parsed["status_counts"]["unavailable"] == 1
     assert parsed["status_counts"]["unsupported"] == 1
+
+
+def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        hf_pool=default target=primary status=configured model=provider/model models_feed=unavailable context_length=8192
+        hf_pool=default target=secondary status=unavailable model=provider/model models_feed=unavailable
+        hf_pool=default target=healthy status=configured model=provider/model models_feed=ok
+        """
+    )
+
+    assert parsed["summary"]["llm_problem_status_count"] == 2
+    assert parsed["summary"]["problem_status_count"] == 2
+    assert parsed["summary"]["problem_statuses"] == "unavailable:2"
+    assert parsed["status_counts"]["configured"] == 2
+    assert parsed["status_counts"]["unavailable"] == 2
+    assert "ok" not in parsed["status_counts"]
 
 
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:

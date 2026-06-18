@@ -543,7 +543,7 @@ TeeBotusApplet.prototype = {
       return true;
     }
     for (let status of PROBLEM_STATUSES) {
-      if ((fields || {}).status === status || (fields || {}).route_status === status || (fields || {}).semantic === status) {
+      if ((fields || {}).status === status || (fields || {}).route_status === status || (fields || {}).semantic === status || (fields || {}).models_feed === status) {
         return true;
       }
     }

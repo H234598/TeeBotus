@@ -80,7 +80,7 @@ PROBLEM_STATUSES = frozenset(
         "warning",
     }
 )
-SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"route_status", "semantic"})
+SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 SECTION_PROBLEM_SUMMARY_KEYS = {
     "Messenger": "messenger_problem_status_count",
     "Accounts und Entscheidungen": "llm_problem_status_count",
