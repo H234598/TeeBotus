@@ -104,6 +104,24 @@ PROBLEM_STATUSES = frozenset(
         "warning",
     }
 )
+STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
+    {
+        "available",
+        "configured",
+        "disabled",
+        "enabled",
+        "healthy",
+        "installed",
+        "not_applicable",
+        "not_configured",
+        "ok",
+        "planned",
+        "reachable",
+        "ready",
+        "rebuilt",
+        "registered",
+    }
+)
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 SECTION_PROBLEM_SUMMARY_KEYS = {
     "Messenger": "messenger_problem_status_count",
@@ -544,10 +562,20 @@ def _status_field_value_end(text: str, matches: list[re.Match[str]], index: int,
     if key not in FREE_TEXT_STATUS_FIELDS:
         return matches[index + 1].start() if index + 1 < len(matches) else len(text)
     allowed_boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES.get(key, frozenset())
-    for next_match in matches[index + 1 :]:
-        if str(next_match.group(1) or "") in allowed_boundaries:
+    for next_index, next_match in enumerate(matches[index + 1 :], start=index + 1):
+        next_key = str(next_match.group(1) or "")
+        if next_key in allowed_boundaries or _status_match_is_structured_boundary(text, matches, next_index):
             return next_match.start()
     return len(text)
+
+
+def _status_match_is_structured_boundary(text: str, matches: list[re.Match[str]], index: int) -> bool:
+    match = matches[index]
+    if str(match.group(1) or "") != "status":
+        return False
+    value_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+    value = text[match.end() : value_end].strip()
+    return value in STATUS_FIELD_BOUNDARY_VALUES
 
 
 def _parse_key_value_lines(value: str) -> dict[str, str]:

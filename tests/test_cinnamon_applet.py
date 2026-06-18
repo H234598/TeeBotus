@@ -804,6 +804,30 @@ def test_cinnamon_applet_runtime_parser_keeps_free_text_field_values() -> None:
     assert parsed["status_counts"]["unavailable"] == 1
 
 
+def test_cinnamon_applet_runtime_parser_counts_status_field_after_free_text_error() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Lokale Dienste]
+        service=demo error=network down status=unreachable warning=retry
+        service=http status=unavailable error=provider returned status=500 and retry_after=30
+        """
+    )
+
+    late_status_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Lokale Dienste"][0])
+    embedded_status_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Lokale Dienste"][1])
+
+    assert late_status_fields["error"] == "network down"
+    assert late_status_fields["status"] == "unreachable"
+    assert late_status_fields["warning"] == "retry"
+    assert embedded_status_fields["error"] == "provider returned status=500 and retry_after=30"
+    assert parsed["status_counts"]["unreachable"] == 1
+    assert parsed["status_counts"]["unavailable"] == 1
+    assert parsed["status_counts"]["warning"] == 1
+    assert parsed["summary"]["llm_problem_status_count"] == 3
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1,unreachable:1,warning:1"
+
+
 def test_cinnamon_applet_runtime_parser_counts_warning_field_after_error() -> None:
     parsed = parse_runtime_status(
         """
