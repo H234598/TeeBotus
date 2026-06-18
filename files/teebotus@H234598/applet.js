@@ -423,6 +423,8 @@ TeeBotusApplet.prototype = {
       invalid: "ungueltig",
       missing_key: "Key fehlt",
       missing: "fehlt",
+      never: "noch nie aktualisiert",
+      no_limits_found: "keine Limits gefunden",
       not_applicable: "nicht anwendbar",
       not_configured: "nicht konfiguriert",
       ok: "ok",

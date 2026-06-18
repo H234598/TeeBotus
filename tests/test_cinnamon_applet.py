@@ -87,6 +87,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "payload.health" in source
     assert '"Health "' in source
     assert 'degraded: "eingeschraenkt"' in source
+    assert 'no_limits_found: "keine Limits gefunden"' in source
+    assert 'never: "noch nie aktualisiert"' in source
     assert 'schema_mismatch: "Schema passt nicht"' in source
 
 
@@ -193,6 +195,9 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         api_budget=demo status=missing_key
         service=demo status=unavailable
         account_memory=demo/abc status=broken
+        gemini_free_tier_limits status=fallback_defaults
+        gemini_free_tier_limits status=no_limits_found
+        gemini_free_tier_limits status=never
         runtime_slot=demo status=not_configured
         structured_decision=demo status=not_applicable
         hf_pool=default status=disabled
@@ -200,10 +205,10 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         """
     )
 
-    assert parsed["summary"]["problem_status_count"] == 8
+    assert parsed["summary"]["problem_status_count"] == 11
     assert parsed["summary"]["problem_statuses"] == (
-        "broken:1,config_conflict:1,degraded:1,invalid:1,missing_key:1,"
-        "schema_mismatch:1,unavailable:1,warning:1"
+        "broken:1,config_conflict:1,degraded:1,fallback_defaults:1,invalid:1,"
+        "missing_key:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:1,warning:1"
     )
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1
