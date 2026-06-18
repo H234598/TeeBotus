@@ -22,6 +22,7 @@ DEFAULT_UNIT_NAME = "teebotus.service"
 DEFAULT_QDRANT_UNIT_NAME = "teebotus-qdrant.service"
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
+CODEX_USAGE_STALE_WARNING_HOURS = 24
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
 SECRET_TOKEN_PATTERNS = (
@@ -68,6 +69,7 @@ PROBLEM_STATUSES = frozenset(
         "needed",
         "no_limits_found",
         "schema_mismatch",
+        "stale",
         "unknown",
         "unavailable",
         "unreachable",
@@ -259,6 +261,8 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["api_budgets"] += 1
         elif line.startswith("codex_usage="):
             summary["codex_usage"] = line
+            if _codex_usage_is_stale(fields):
+                status_counts["stale"] = status_counts.get("stale", 0) + 1
         elif line.startswith("codex_usage_account="):
             summary["codex_usage_accounts"] += 1
         elif line.startswith("gemini_free_tier_limits "):
@@ -294,6 +298,10 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
         if secondary and secondary in PROBLEM_STATUSES and secondary != primary:
             values.append(secondary)
     return tuple(values)
+
+
+def _codex_usage_is_stale(fields: dict[str, str]) -> bool:
+    return _safe_int(fields.get("stale_hours"), -1) >= CODEX_USAGE_STALE_WARNING_HOURS
 
 
 def _runtime_status(repo_root: Path, *, channels: str, python_executable: str, timeout_seconds: int) -> dict[str, Any]:

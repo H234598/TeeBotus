@@ -109,6 +109,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'never: "noch nie aktualisiert"' in source
     assert 'needed: "benoetigt"' in source
     assert 'schema_mismatch: "Schema passt nicht"' in source
+    assert 'stale: "veraltet"' in source
     assert 'unknown: "unbekannt"' in source
 
 
@@ -227,20 +228,36 @@ def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
         structured_decision=demo status=enabled route_status=unavailable fallback=local_ollama
         account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery"
         hf_pool=default target=secondary status=cooldown until=2999-01-01T00:00:00+00:00
+        codex_usage=local status=ready snapshots=2 stale_hours=48
         """
     )
 
-    assert parsed["summary"]["problem_status_count"] == 15
+    assert parsed["summary"]["problem_status_count"] == 16
     assert parsed["summary"]["problem_statuses"] == (
         "broken:1,config_conflict:1,cooldown:1,degraded:1,fallback_defaults:1,invalid:1,"
-        "missing_key:1,needed:1,never:1,no_limits_found:1,schema_mismatch:1,unavailable:2,unknown:1,warning:1"
+        "missing_key:1,needed:1,never:1,no_limits_found:1,schema_mismatch:1,stale:1,unavailable:2,"
+        "unknown:1,warning:1"
     )
     assert parsed["status_counts"]["enabled"] == 1
     assert parsed["summary"]["qdrant_problem_status_count"] == 2
     assert parsed["status_counts"]["not_configured"] == 1
     assert parsed["status_counts"]["not_applicable"] == 1
     assert parsed["status_counts"]["disabled"] == 1
+    assert parsed["status_counts"]["ready"] == 2
+
+
+def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:
+    parsed = parse_runtime_status(
+        """
+        [API Keys, Limits und Kosten]
+        codex_usage=local status=ready snapshots=2 stale_hours=23
+        """
+    )
+
     assert parsed["status_counts"]["ready"] == 1
+    assert "stale" not in parsed["status_counts"]
+    assert parsed["summary"]["problem_status_count"] == 0
+    assert parsed["summary"]["problem_statuses"] == ""
 
 
 def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_path) -> None:
