@@ -571,8 +571,9 @@ TeeBotusApplet.prototype = {
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
     let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || "");
+    let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
-    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + qdrantBreakdown;
+    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown;
   },
 
   _problemBreakdownText: function(value) {
@@ -601,6 +602,11 @@ TeeBotusApplet.prototype = {
       rendered.push("+" + String(pairs.length - 4));
     }
     return " | Probleme " + rendered.join(", ");
+  },
+
+  _commandProblemBreakdownText: function(health) {
+    let count = parseInt((health || {}).command_problem_count || 0, 10) || 0;
+    return count > 0 ? " | Kommando:" + String(count) : "";
   },
 
   _qdrantProblemBreakdownText: function(health) {

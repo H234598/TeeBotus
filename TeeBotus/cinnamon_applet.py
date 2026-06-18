@@ -149,13 +149,14 @@ def build_status_payload(
 def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant: dict[str, Any], qdrant_unit: dict[str, Any]) -> dict[str, Any]:
     runtime_summary = parsed_runtime.get("summary", {}) if isinstance(parsed_runtime, dict) else {}
     status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
+    command_problem_count = 0 if command_ok else 1
     problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
     qdrant_runtime_problem_count = _safe_int(runtime_summary.get("qdrant_problem_status_count", 0))
     qdrant_probe_problem_count = 0 if qdrant_runtime_problem_count > 0 else _qdrant_problem_count(qdrant)
     qdrant_problem_count = qdrant_probe_problem_count + qdrant_unit_problem_count
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
-    total_problem_count = problem_count + qdrant_problem_count
+    total_problem_count = command_problem_count + problem_count + qdrant_problem_count
     status = "ok"
     if not command_ok or severe_count > 0:
         status = "broken"
@@ -164,6 +165,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     return {
         "status": status,
         "command_ok": bool(command_ok),
+        "command_problem_count": command_problem_count,
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
         "qdrant_problem_count": qdrant_problem_count,
