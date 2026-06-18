@@ -312,8 +312,11 @@ TeeBotusApplet.prototype = {
     if (bibliothekarPoints > 0) {
       memoryLines.push("Bibliothekar-Vektoren: " + String(bibliothekarPoints));
     }
-    memoryLines = memoryLines.concat(this._formatLines(this._accountStatusLines(sections["Tools und Account-Memory"] || []), (line) => this._formatAccountLine(line)));
-    memoryLines = memoryLines.concat(this._formatLines(sections["Memory und semantische Suche"] || [], (line) => this._formatMemoryLine(line)));
+    let accountStatusGroups = this._splitProblemStatusLines(sections["Tools und Account-Memory"] || [], (fields) => fields.account_identity_warning);
+    let memoryStatusLines = this._problemStatusLines(sections["Memory und semantische Suche"] || []);
+    memoryLines = memoryLines.concat(this._formatLines(accountStatusGroups.problem, (line) => this._formatAccountLine(line)));
+    memoryLines = memoryLines.concat(this._formatLines(memoryStatusLines, (line) => this._formatMemoryLine(line)));
+    memoryLines = memoryLines.concat(this._formatLines(accountStatusGroups.normal, (line) => this._formatAccountLine(line)));
     this._populateLines(this.memoryMenu.menu, memoryLines, this._dynamicEmptyText(_("Memory-Diagnose wird geladen.")));
     this._appendQdrantActions();
     if (this.showBibliothekarSection) {
@@ -335,6 +338,11 @@ TeeBotusApplet.prototype = {
   },
 
   _problemStatusLines: function(lines, isForcedProblem) {
+    let groups = this._splitProblemStatusLines(lines, isForcedProblem);
+    return groups.problem.concat(groups.normal);
+  },
+
+  _splitProblemStatusLines: function(lines, isForcedProblem) {
     let problem = [];
     let normal = [];
     for (let line of lines || []) {
@@ -345,7 +353,7 @@ TeeBotusApplet.prototype = {
         normal.push(line);
       }
     }
-    return problem.concat(normal);
+    return { problem: problem, normal: normal };
   },
 
   _dynamicEmptyText: function(loadingText) {

@@ -87,7 +87,12 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatAccountLine" in source
     assert "_accountStatusLines" in source
     assert "_problemStatusLines: function(lines, isForcedProblem)" in source
+    assert "_splitProblemStatusLines: function(lines, isForcedProblem)" in source
     assert "return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);" in source
+    assert "let accountStatusGroups = this._splitProblemStatusLines" in source
+    assert 'let memoryStatusLines = this._problemStatusLines(sections["Memory und semantische Suche"] || []);' in source
+    assert "accountStatusGroups.problem" in source
+    assert "accountStatusGroups.normal" in source
     assert 'sections["Tools und Account-Memory"]' in source
     assert "_errorText: function(fields)" in source
     assert '"; Fehler " + value' in source
