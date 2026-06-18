@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from pathlib import Path
 
 import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
+from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 APPLET_DIR = PROJECT_ROOT / "files" / "teebotus@H234598"
+
+
+def _js_const_array_values(source: str, name: str) -> set[str]:
+    match = re.search(rf"const {re.escape(name)} = \[(.*?)\];", source, re.DOTALL)
+    assert match is not None
+    return set(re.findall(r'"([^"]+)"', match.group(1)))
 
 
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
@@ -122,7 +130,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert '"Lokale Transkription " + fields.local_transcription' in source
     assert '"Bibliothekar " + fields.bibliothekar' in source
     assert '"; Feed " + this._statusWord(fields.models_feed)' in source
-    assert "(fields || {}).models_feed === status" in source
+    assert "const SECONDARY_PROBLEM_STATUS_FIELDS = [" in source
+    assert "this._statusFieldHasProblem(values, key)" in source
     assert '"; Kontext " + fields.context_length' in source
     assert "summary.problem_status_count" in source
     assert "health.total_problem_count" in source
@@ -149,6 +158,13 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'stale: "veraltet"' in source
     assert 'unknown: "unbekannt"' in source
     assert 'unsupported: "nicht unterstuetzt"' in source
+
+
+def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+
+    assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
+    assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:

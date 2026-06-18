@@ -42,6 +42,11 @@ const PROBLEM_STATUSES = [
   "unsupported",
   "warning"
 ];
+const SECONDARY_PROBLEM_STATUS_FIELDS = [
+  "models_feed",
+  "route_status",
+  "semantic"
+];
 const FREE_TEXT_STATUS_FIELDS = {
   action: true,
   command: true,
@@ -539,11 +544,28 @@ TeeBotusApplet.prototype = {
   },
 
   _lineHasProblemStatus: function(fields) {
-    if (this._codexUsageIsStale(fields || {})) {
+    let values = fields || {};
+    if (this._codexUsageIsStale(values)) {
       return true;
     }
+    if (this._statusFieldHasProblem(values, "status")) {
+      return true;
+    }
+    for (let key of SECONDARY_PROBLEM_STATUS_FIELDS) {
+      if (this._statusFieldHasProblem(values, key)) {
+        return true;
+      }
+    }
+    return false;
+  },
+
+  _statusFieldHasProblem: function(fields, key) {
+    let value = (fields || {})[key];
+    if (!value) {
+      return false;
+    }
     for (let status of PROBLEM_STATUSES) {
-      if ((fields || {}).status === status || (fields || {}).route_status === status || (fields || {}).semantic === status || (fields || {}).models_feed === status) {
+      if (value === status) {
         return true;
       }
     }
