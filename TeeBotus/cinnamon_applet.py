@@ -50,9 +50,10 @@ BARE_AUTHORIZATION_TOKEN_RE = re.compile(
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
+    "action": frozenset({"warning"}),
     "command": frozenset({"apply_command"}),
     "error": frozenset({"warning"}),
-    "message": frozenset({"action"}),
+    "message": frozenset({"action", "warning"}),
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}

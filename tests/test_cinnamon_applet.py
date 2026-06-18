@@ -194,10 +194,14 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():
         assert f"{field}: \"{status}\"" in source
     assert set(PROBLEM_STATUSES) <= _js_status_label_keys(source)
+    assert 'action: { warning: true }' in source
     assert 'command: { apply_command: true }' in source
     assert 'error: { warning: true }' in source
-    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
+    assert 'message: { action: true, warning: true }' in source
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["action"] == frozenset({"warning"})
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["error"] == frozenset({"warning"})
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["message"] == frozenset({"action", "warning"})
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -867,21 +871,29 @@ def test_cinnamon_applet_runtime_parser_counts_warning_field_after_error() -> No
         [Tools und Account-Memory]
         account_memory=Demo/ok status=ok warning=fallback_sync_stale:entries
         account_memory=Demo/broken status=broken error=index mismatch warning=fallback_sync_stale:index
+        account_memory=Demo/message status=ok message=loaded warning=fallback_sync_stale:message
+        account_memory=Demo/action status=ok action=review memory warning=fallback_sync_stale:action
         """
     )
 
     ok_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][0])
     broken_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][1])
+    message_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][2])
+    action_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][3])
 
     assert ok_fields["warning"] == "fallback_sync_stale:entries"
     assert broken_fields["error"] == "index mismatch"
     assert broken_fields["warning"] == "fallback_sync_stale:index"
-    assert parsed["status_counts"]["ok"] == 1
+    assert message_fields["message"] == "loaded"
+    assert message_fields["warning"] == "fallback_sync_stale:message"
+    assert action_fields["action"] == "review memory"
+    assert action_fields["warning"] == "fallback_sync_stale:action"
+    assert parsed["status_counts"]["ok"] == 3
     assert parsed["status_counts"]["broken"] == 1
-    assert parsed["status_counts"]["warning"] == 2
-    assert parsed["summary"]["memory_problem_status_count"] == 3
-    assert parsed["summary"]["problem_status_count"] == 3
-    assert parsed["summary"]["problem_statuses"] == "broken:1,warning:2"
+    assert parsed["status_counts"]["warning"] == 4
+    assert parsed["summary"]["memory_problem_status_count"] == 5
+    assert parsed["summary"]["problem_status_count"] == 5
+    assert parsed["summary"]["problem_statuses"] == "broken:1,warning:4"
 
 
 def test_cinnamon_applet_runtime_parser_counts_account_identity_warning_lines() -> None:

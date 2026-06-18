@@ -55,9 +55,10 @@ const FREE_TEXT_STATUS_FIELDS = {
   route_error: true
 };
 const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
+  action: { warning: true },
   command: { apply_command: true },
   error: { warning: true },
-  message: { action: true }
+  message: { action: true, warning: true }
 };
 const FLAG_PROBLEM_STATUS_FIELDS = [
   "warning"
