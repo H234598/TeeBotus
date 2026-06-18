@@ -276,8 +276,11 @@ TeeBotusApplet.prototype = {
     if (summary.llm_routes || summary.hf_pool || summary.gemini_free_tier) {
       llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionProblemText(summary.llm_problem_status_count));
     }
-    let llmStatusLines = (sections["LLM-Routen und Backends"] || []).concat(sections["Accounts und Entscheidungen"] || []);
-    llmLines = llmLines.concat(this._formatLines(this._problemStatusLines(llmStatusLines), (line) => this._formatLlmLine(line)));
+    let llmStatusGroups = this._splitProblemStatusLines((sections["LLM-Routen und Backends"] || []).concat(sections["Accounts und Entscheidungen"] || []));
+    let localServiceLines = this._problemStatusLines(sections["Lokale Dienste"] || []);
+    llmLines = llmLines.concat(this._formatLines(llmStatusGroups.problem, (line) => this._formatLlmLine(line)));
+    llmLines = llmLines.concat(this._formatLines(localServiceLines, (line) => this._formatLlmLine(line)));
+    llmLines = llmLines.concat(this._formatLines(llmStatusGroups.normal, (line) => this._formatLlmLine(line)));
     this._populateLines(this.llmMenu.menu, llmLines, this._dynamicEmptyText(_("LLM-Diagnose wird geladen.")));
 
     if (this.showApiSection) {
@@ -464,6 +467,18 @@ TeeBotusApplet.prototype = {
         }
       }
       return "Account-Entscheider " + fields.structured_decision + ": " + this._statusWord(fields.status) + routeStatus + fallback + this._errorText(fields);
+    }
+    if (fields.local_transcription) {
+      let backend = fields.backend ? "; Backend " + fields.backend : "";
+      let model = fields.model ? "; Modell " + fields.model : "";
+      let engine = fields.engine ? "; Engine " + fields.engine : "";
+      return "Lokale Transkription " + fields.local_transcription + ": " + this._statusWord(fields.status) + backend + model + engine + this._errorText(fields);
+    }
+    if (fields.bibliothekar) {
+      let backend = fields.backend ? "; Backend " + fields.backend : "";
+      let store = fields.store ? "; Speicher " + fields.store : "";
+      let collection = fields.collection ? "; Collection " + fields.collection : "";
+      return "Bibliothekar " + fields.bibliothekar + ": " + this._statusWord(fields.status) + backend + store + collection + this._errorText(fields);
     }
     return line;
   },
