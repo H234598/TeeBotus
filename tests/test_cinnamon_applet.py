@@ -6,6 +6,7 @@ import tomllib
 from pathlib import Path
 
 import TeeBotus.cinnamon_applet as cinnamon_applet
+from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
 from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
@@ -98,6 +99,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatMemoryLine" in source
     assert "_formatAccountLine" in source
     assert "_accountStatusLines" in source
+    assert '"Account-Memory-Legacy-Recovery " + fields.account_memory_recovery_legacy' in source
     assert "_problemStatusLines: function(lines, isForcedProblem)" in source
     assert "_splitProblemStatusLines: function(lines, isForcedProblem)" in source
     assert "return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);" in source
@@ -150,6 +152,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "payload.health" in source
     assert '"Health "' in source
     assert 'cooldown: "Cooldown"' in source
+    assert 'available: "verfuegbar"' in source
     assert 'degraded: "eingeschraenkt"' in source
     assert 'no_limits_found: "keine Limits gefunden"' in source
     assert 'never: "noch nie aktualisiert"' in source
@@ -165,6 +168,8 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
 
     assert _js_const_array_values(source, "PROBLEM_STATUSES") == set(PROBLEM_STATUSES)
     assert _js_const_array_values(source, "SECONDARY_PROBLEM_STATUS_FIELDS") == set(SECONDARY_PROBLEM_STATUS_FIELDS)
+    assert 'command: { apply_command: true }' in source
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -704,6 +709,27 @@ def test_cinnamon_applet_runtime_parser_keeps_free_text_field_values() -> None:
     assert warning_fields["action"] == "First run /register, then confirm status=ok manually"
     assert "foo" not in warning_fields
     assert parsed["status_counts"]["unavailable"] == 1
+
+
+def test_cinnamon_applet_runtime_parser_splits_legacy_recovery_commands() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_memory_recovery_legacy=Demo status=available sources=1 entries=2 path=/tmp/TeeBotus_Backups/TeeBotus.bak2/instances.bak command="python3 scripts/import_legacy_user_memory.py --json-output /tmp/import.json --markdown-output /tmp/import.md" apply_command="python3 scripts/import_legacy_user_memory.py --apply"
+        """
+    )
+
+    line = parsed["sections"]["Tools und Account-Memory"][0]
+    fields = cinnamon_applet._parse_status_fields(line)
+
+    assert fields["account_memory_recovery_legacy"] == "Demo"
+    assert fields["status"] == "available"
+    assert fields["sources"] == "1"
+    assert fields["entries"] == "2"
+    assert fields["command"] == '"python3 scripts/import_legacy_user_memory.py --json-output /tmp/import.json --markdown-output /tmp/import.md"'
+    assert fields["apply_command"] == '"python3 scripts/import_legacy_user_memory.py --apply"'
+    assert parsed["status_counts"]["available"] == 1
+    assert parsed["summary"]["problem_status_count"] == 0
 
 
 def test_pyproject_declares_cinnamon_applet_helper_script() -> None:

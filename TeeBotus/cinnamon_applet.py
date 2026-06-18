@@ -42,7 +42,10 @@ URL_CREDENTIAL_RE = re.compile(
 BEARER_TOKEN_RE = re.compile(r"\b(Bearer)\s+([A-Za-z0-9._~+/=-]{8,})\b", re.IGNORECASE)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
-FREE_TEXT_STATUS_FIELD_BOUNDARIES = {"message": frozenset({"action"})}
+FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
+    "command": frozenset({"apply_command"}),
+    "message": frozenset({"action"}),
+}
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",

@@ -55,6 +55,7 @@ const FREE_TEXT_STATUS_FIELDS = {
   route_error: true
 };
 const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
+  command: { apply_command: true },
   message: { action: true }
 };
 const QUICK_COMMANDS = [
@@ -590,6 +591,13 @@ TeeBotusApplet.prototype = {
       let command = fields.command ? "; Kommando " + fields.command : "";
       return "Account-Memory-Recovery " + fields.account_memory_recovery + ": " + this._statusWord(fields.status) + command + this._errorText(fields);
     }
+    if (fields.account_memory_recovery_legacy) {
+      let command = fields.command ? "; Preflight " + fields.command : "";
+      let applyCommand = fields.apply_command ? "; Import " + fields.apply_command : "";
+      let sourceCount = fields.sources ? "; Quellen " + fields.sources : "";
+      let entryCount = fields.entries ? "; Eintraege " + fields.entries : "";
+      return "Account-Memory-Legacy-Recovery " + fields.account_memory_recovery_legacy + ": " + this._statusWord(fields.status) + sourceCount + entryCount + command + applyCommand + this._errorText(fields);
+    }
     if (fields.account_memory) {
       return "Account-Memory " + fields.account_memory + ": " + this._statusWord(fields.status) + this._errorText(fields);
     }
@@ -613,6 +621,7 @@ TeeBotusApplet.prototype = {
   _statusWord: function(status) {
     let value = String(status || "unknown");
     let labels = {
+      available: "verfuegbar",
       configured: "konfiguriert",
       config_conflict: "Konfigurationskonflikt",
       cooldown: "Cooldown",
