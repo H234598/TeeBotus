@@ -54,6 +54,18 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
     "command": frozenset({"apply_command"}),
     "error": frozenset({"warning"}),
     "message": frozenset({"action", "warning"}),
+    "route_error": frozenset(
+        {
+            "fallback",
+            "fallback_api_key",
+            "fallback_base_url",
+            "fallback_model",
+            "fallback_models",
+            "fallback_profile",
+            "remote_fallback",
+            "warning",
+        }
+    ),
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}

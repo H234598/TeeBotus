@@ -80,7 +80,17 @@ const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
   action: { warning: true },
   command: { apply_command: true },
   error: { warning: true },
-  message: { action: true, warning: true }
+  message: { action: true, warning: true },
+  route_error: {
+    fallback: true,
+    fallback_api_key: true,
+    fallback_base_url: true,
+    fallback_model: true,
+    fallback_models: true,
+    fallback_profile: true,
+    remote_fallback: true,
+    warning: true
+  }
 };
 const FLAG_PROBLEM_STATUS_FIELDS = [
   "warning"

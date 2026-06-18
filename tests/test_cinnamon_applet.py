@@ -210,9 +210,24 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     assert 'command: { apply_command: true }' in source
     assert 'error: { warning: true }' in source
     assert 'message: { action: true, warning: true }' in source
+    assert "route_error: {" in source
+    assert "fallback_base_url: true" in source
+    assert "remote_fallback: true" in source
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["action"] == frozenset({"warning"})
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["error"] == frozenset({"warning"})
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["message"] == frozenset({"action", "warning"})
+    assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["route_error"] == frozenset(
+        {
+            "fallback",
+            "fallback_api_key",
+            "fallback_base_url",
+            "fallback_model",
+            "fallback_models",
+            "fallback_profile",
+            "remote_fallback",
+            "warning",
+        }
+    )
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
 
 
@@ -444,6 +459,7 @@ def test_cinnamon_applet_runtime_parser_counts_secondary_status_after_free_text_
         [LLM-Routen und Backends]
         structured_decision=demo status=enabled error=provider down route_status=unavailable fallback=local
         hf_pool=default status=configured error=models feed down models_feed=unavailable
+        structured_decision=demo/telegram status=enabled route_status=unavailable route_error=provider status=500 fallback=local_ollama fallback_model=llama3 remote_fallback=enabled warning=retry
 
         [Memory und semantische Suche]
         memory_index=demo status=ready error=qdrant down semantic=unavailable
@@ -452,6 +468,7 @@ def test_cinnamon_applet_runtime_parser_counts_secondary_status_after_free_text_
 
     route_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][0])
     hf_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][1])
+    route_error_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["LLM-Routen und Backends"][2])
     memory_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Memory und semantische Suche"][0])
 
     assert route_fields["error"] == "provider down"
@@ -459,16 +476,22 @@ def test_cinnamon_applet_runtime_parser_counts_secondary_status_after_free_text_
     assert route_fields["fallback"] == "local"
     assert hf_fields["error"] == "models feed down"
     assert hf_fields["models_feed"] == "unavailable"
+    assert route_error_fields["route_error"] == "provider status=500"
+    assert route_error_fields["fallback"] == "local_ollama"
+    assert route_error_fields["fallback_model"] == "llama3"
+    assert route_error_fields["remote_fallback"] == "enabled"
+    assert route_error_fields["warning"] == "retry"
     assert memory_fields["error"] == "qdrant down"
     assert memory_fields["semantic"] == "unavailable"
-    assert parsed["summary"]["llm_problem_status_count"] == 2
+    assert parsed["summary"]["llm_problem_status_count"] == 4
     assert parsed["summary"]["memory_problem_status_count"] == 1
-    assert parsed["summary"]["problem_status_count"] == 3
-    assert parsed["summary"]["problem_statuses"] == "unavailable:3"
-    assert parsed["status_counts"]["enabled"] == 1
+    assert parsed["summary"]["problem_status_count"] == 5
+    assert parsed["summary"]["problem_statuses"] == "unavailable:4,warning:1"
+    assert parsed["status_counts"]["enabled"] == 2
     assert parsed["status_counts"]["configured"] == 1
     assert parsed["status_counts"]["ready"] == 1
-    assert parsed["status_counts"]["unavailable"] == 3
+    assert parsed["status_counts"]["unavailable"] == 4
+    assert parsed["status_counts"]["warning"] == 1
 
 
 def test_cinnamon_applet_runtime_parser_deduplicates_same_problem_status_per_line() -> None:
