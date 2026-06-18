@@ -960,7 +960,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openCodexUsage: function(args) {
-    this._openTerminalForCommand(this._codexUsagePath(), [this._codexUsageCommand()].concat(args || []));
+    this._openTerminalForCommand(this._codexUsagePath(), this._codexUsageArgs().concat(args || []));
   },
 
   _openLogsTerminal: function() {
@@ -977,7 +977,7 @@ TeeBotusApplet.prototype = {
   _runProactiveOnce: function() {
     let command = String(this.proactiveCommand || "").trim();
     if (!command) {
-      command = this._pythonPath() + " -m TeeBotus.proactive --instance " + this._safeShellWord(this.proactiveInstance || "Depressionsbot") + " --dispatch --plan --tool-plan";
+      command = this._pythonArgs().map((part) => this._safeShellWord(part)).join(" ") + " -m TeeBotus.proactive --instance " + this._safeShellWord(this.proactiveInstance || "Depressionsbot") + " --dispatch --plan --tool-plan";
     }
     this._openTerminalShell(this._repoPath(), command);
   },
@@ -1001,7 +1001,8 @@ TeeBotusApplet.prototype = {
   _terminalArgs: function() {
     let configured = String(this.terminalCommand || "").trim();
     if (configured) {
-      return [configured, "--"];
+      let parsed = this._commandArgs(configured, []);
+      return parsed.length > 0 ? parsed.concat(["--"]) : null;
     }
     for (let candidate of TERMINAL_CANDIDATES) {
       if (!GLib.find_program_in_path(candidate)) {
@@ -1064,7 +1065,7 @@ TeeBotusApplet.prototype = {
   },
 
   _pythonArgs: function() {
-    return [this._pythonPath()];
+    return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);
   },
 
   _pythonPath: function() {
@@ -1081,6 +1082,26 @@ TeeBotusApplet.prototype = {
 
   _codexUsageCommand: function() {
     return String(this.codexUsageCommand || DEFAULT_CODEX_USAGE_COMMAND).trim() || DEFAULT_CODEX_USAGE_COMMAND;
+  },
+
+  _codexUsageArgs: function() {
+    return this._commandArgs(this.codexUsageCommand, [DEFAULT_CODEX_USAGE_COMMAND]);
+  },
+
+  _commandArgs: function(value, fallback) {
+    let raw = String(value || "").trim();
+    if (!raw) {
+      return (fallback || []).slice();
+    }
+    try {
+      let [, argv] = GLib.shell_parse_argv(raw);
+      if (argv && argv.length > 0) {
+        return argv.map((part) => String(part));
+      }
+    } catch (err) {
+      return (fallback || []).slice();
+    }
+    return (fallback || []).slice();
   },
 
   _qdrantUrl: function() {

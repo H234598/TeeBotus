@@ -329,8 +329,19 @@ def _codex_usage_is_stale(fields: dict[str, str]) -> bool:
 
 
 def _runtime_status(repo_root: Path, *, channels: str, python_executable: str, timeout_seconds: int) -> dict[str, Any]:
-    argv = [python_executable, "-m", "TeeBotus", "--runtime-status", "--channels", channels]
+    argv = [*_python_command_argv(python_executable), "-m", "TeeBotus", "--runtime-status", "--channels", channels]
     return _run(argv, cwd=repo_root, timeout_seconds=timeout_seconds)
+
+
+def _python_command_argv(value: str) -> list[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return [sys.executable]
+    try:
+        parsed = shlex.split(raw)
+    except ValueError:
+        return [raw]
+    return parsed or [sys.executable]
 
 
 def _systemd_unit_status(unit_name: str) -> dict[str, Any]:

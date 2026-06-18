@@ -65,6 +65,11 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "Gio.SubprocessLauncher.new" in source
     assert "}, this._repoPath());" in source
     assert "launcher.set_cwd(String(cwd))" in source
+    assert "_commandArgs: function(value, fallback)" in source
+    assert "GLib.shell_parse_argv(raw)" in source
+    assert "return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
+    assert "this._codexUsageArgs().concat(args || [])" in source
+    assert "this._commandArgs(configured, [])" in source
     assert (PROJECT_ROOT / "scripts" / "install_cinnamon_applet.py").is_file()
 
 
@@ -496,6 +501,21 @@ def test_cinnamon_applet_payload_counts_command_failure_without_other_problems(m
     assert payload["health"]["problem_status_count"] == 0
     assert payload["health"]["qdrant_problem_count"] == 0
     assert payload["health"]["total_problem_count"] == 1
+
+
+def test_cinnamon_applet_runtime_status_splits_python_command(monkeypatch, tmp_path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(argv: list[str], **_kwargs: object) -> dict[str, object]:
+        calls.append(argv)
+        return {"returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(cinnamon_applet, "_run", fake_run)
+
+    result = cinnamon_applet._runtime_status(tmp_path, channels="telegram,signal", python_executable="/usr/bin/python3 -B", timeout_seconds=1)
+
+    assert result["returncode"] == 0
+    assert calls == [["/usr/bin/python3", "-B", "-m", "TeeBotus", "--runtime-status", "--channels", "telegram,signal"]]
 
 
 def test_cinnamon_applet_payload_counts_qdrant_unit_health(monkeypatch, tmp_path) -> None:
