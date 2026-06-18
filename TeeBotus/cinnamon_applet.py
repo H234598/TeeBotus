@@ -64,6 +64,7 @@ PROBLEM_STATUSES = frozenset(
         "missing",
         "missing_key",
         "never",
+        "needed",
         "no_limits_found",
         "schema_mismatch",
         "unknown",
