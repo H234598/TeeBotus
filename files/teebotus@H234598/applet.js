@@ -17,6 +17,23 @@ const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "cod
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
 const STATUS_REFRESH_MIN_SECONDS = 15;
 const MENU_LINE_LIMIT = 14;
+const PROBLEM_STATUSES = [
+  "broken",
+  "config_conflict",
+  "degraded",
+  "error",
+  "failed",
+  "fallback_defaults",
+  "invalid",
+  "missing",
+  "missing_key",
+  "never",
+  "no_limits_found",
+  "schema_mismatch",
+  "unavailable",
+  "unreachable",
+  "warning"
+];
 const QUICK_COMMANDS = [
   "/status",
   "/info",
@@ -551,22 +568,8 @@ TeeBotusApplet.prototype = {
   },
 
   _problemStatusCount: function(counts) {
-    let problemStatuses = [
-      "broken",
-      "config_conflict",
-      "degraded",
-      "error",
-      "failed",
-      "invalid",
-      "missing",
-      "missing_key",
-      "schema_mismatch",
-      "unavailable",
-      "unreachable",
-      "warning"
-    ];
     let total = 0;
-    for (let status of problemStatuses) {
+    for (let status of PROBLEM_STATUSES) {
       total += parseInt((counts || {})[status] || 0, 10) || 0;
     }
     return total;
