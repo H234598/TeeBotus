@@ -119,7 +119,7 @@ def build_status_payload(
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
     command_ok = runtime["returncode"] == 0 and unit.get("active_state") in {"active", "unknown"}
-    health = _health_summary(command_ok=command_ok, parsed_runtime=parsed_runtime, qdrant=qdrant)
+    health = _health_summary(command_ok=command_ok, parsed_runtime=parsed_runtime, qdrant=qdrant, qdrant_unit=qdrant_unit)
     return {
         "ok": health["status"] == "ok",
         "command_ok": command_ok,
@@ -143,11 +143,12 @@ def build_status_payload(
     }
 
 
-def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant: dict[str, Any]) -> dict[str, Any]:
+def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant: dict[str, Any], qdrant_unit: dict[str, Any]) -> dict[str, Any]:
     runtime_summary = parsed_runtime.get("summary", {}) if isinstance(parsed_runtime, dict) else {}
     status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
     problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
-    qdrant_problem_count = _qdrant_problem_count(qdrant)
+    qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
+    qdrant_problem_count = _qdrant_problem_count(qdrant) + qdrant_unit_problem_count
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
     total_problem_count = problem_count + qdrant_problem_count
     status = "ok"
@@ -161,9 +162,17 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
         "qdrant_problem_count": qdrant_problem_count,
+        "qdrant_unit_problem_count": qdrant_unit_problem_count,
         "total_problem_count": total_problem_count,
         "severe_status_count": severe_count,
     }
+
+
+def _unit_problem_count(unit: dict[str, Any]) -> int:
+    active_state = str(unit.get("active_state", "") or "").strip()
+    if not active_state or active_state in {"active", "unknown"}:
+        return 0
+    return 1
 
 
 def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
