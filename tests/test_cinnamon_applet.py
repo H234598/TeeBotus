@@ -42,6 +42,9 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert schema["qdrant-unit"]["default"] == "teebotus-qdrant.service"
     assert schema["qdrant-url"]["default"] == "http://127.0.0.1:6333"
     assert schema["status-timeout-seconds"]["default"] == 30
+    assert "const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;" in source
+    assert "this.statusTimeoutSeconds = DEFAULT_STATUS_TIMEOUT_SECONDS;" in source
+    assert "this._positiveInt(this.statusTimeoutSeconds, DEFAULT_STATUS_TIMEOUT_SECONDS)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
     assert "this.menuManager.addMenu(this.menu)" in source
