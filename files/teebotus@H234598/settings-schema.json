@@ -278,7 +278,7 @@
   "terminal-command": {
     "type": "entry",
     "description": "Preferred terminal command",
-    "tooltip": "Leave empty for auto-detection among gnome-terminal, x-terminal-emulator, kgx, konsole, and xterm.",
+    "tooltip": "Leave empty for auto-detection among gnome-terminal, x-terminal-emulator, kgx, konsole, and xterm. Arguments are allowed; xterm and konsole use -e, other terminals use -- unless already specified.",
     "default": ""
   },
   "bibliothekar-instance": {

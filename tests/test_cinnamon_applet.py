@@ -70,6 +70,11 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._commandArgs(configured, [])" in source
+    assert "_terminalCommandArgs: function(parsed)" in source
+    assert 'if (last === "--" || last === "-e")' in source
+    assert 'if (binary === "xterm" || binary === "konsole")' in source
+    assert 'return argv.concat(["-e"]);' in source
+    assert 'return argv.concat(["--"]);' in source
     assert (PROJECT_ROOT / "scripts" / "install_cinnamon_applet.py").is_file()
 
 
@@ -196,6 +201,7 @@ def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
     assert schema["enable-service-actions"]["default"] is True
     assert schema["terminal-command"]["default"] == ""
     assert "gnome-terminal" in schema["terminal-command"]["tooltip"]
+    assert "xterm and konsole use -e" in schema["terminal-command"]["tooltip"]
     assert schema["codex-usage-path"]["default"] == "/home/teladi/codex-usage"
     assert schema["codex-usage-command"]["default"] == "codex-usage"
 

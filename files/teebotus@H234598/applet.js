@@ -1002,7 +1002,7 @@ TeeBotusApplet.prototype = {
     let configured = String(this.terminalCommand || "").trim();
     if (configured) {
       let parsed = this._commandArgs(configured, []);
-      return parsed.length > 0 ? parsed.concat(["--"]) : null;
+      return this._terminalCommandArgs(parsed);
     }
     for (let candidate of TERMINAL_CANDIDATES) {
       if (!GLib.find_program_in_path(candidate)) {
@@ -1017,6 +1017,22 @@ TeeBotusApplet.prototype = {
       return [candidate, "--"];
     }
     return null;
+  },
+
+  _terminalCommandArgs: function(parsed) {
+    let argv = (parsed || []).slice();
+    if (argv.length === 0) {
+      return null;
+    }
+    let last = String(argv[argv.length - 1] || "");
+    if (last === "--" || last === "-e") {
+      return argv;
+    }
+    let binary = String(argv[0] || "").split("/").pop();
+    if (binary === "xterm" || binary === "konsole") {
+      return argv.concat(["-e"]);
+    }
+    return argv.concat(["--"]);
   },
 
   _copyStatusJson: function() {
