@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import secrets
 import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from TeeBotus.llm.gemini_limits_refresh import cached_gemini_free_tier_limit_values
 
 
+_QUOTA_OWNER_FINGERPRINT_KEY = secrets.token_bytes(32)
 DEFAULT_GEMINI_FREE_TIER_RPM = 5
 DEFAULT_GEMINI_FREE_TIER_TPM = 250_000
 DEFAULT_GEMINI_FREE_TIER_RPD = 20
@@ -220,7 +222,11 @@ def provider_is_paid_google_gemini(provider: object) -> bool:
 
 def quota_owner_id(*, api_key: str, provider: str, model: str, api_base: str = "") -> str:
     owner = str(api_key or "").strip() or str(api_base or "").strip() or f"{provider}:{model}"
-    digest = hashlib.sha256(owner.encode("utf-8", errors="replace")).hexdigest()[:16]
+    digest = hashlib.blake2b(
+        owner.encode("utf-8", errors="replace"),
+        digest_size=8,
+        key=_QUOTA_OWNER_FINGERPRINT_KEY,
+    ).hexdigest()
     return f"{provider}:{model}:{digest}"
 
 

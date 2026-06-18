@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
+from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 
 
@@ -30,7 +31,7 @@ def main(argv: Sequence[str] | None = None, *, opener: Any | None = None, models
         kwargs["models_opener"] = models_opener
     health = check_hf_pool(**kwargs)
     for line in format_hf_pool_status_lines(health):
-        print(line)
+        print(redact_hf_secrets(line))
     return 0
 
 

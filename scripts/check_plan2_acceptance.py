@@ -128,8 +128,13 @@ ARTIFACT_SECRET_JSON_FIELD_RE = re.compile(
     r'"([^"]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)[^"]*)"\s*:\s*"([^"]*)"',
     re.IGNORECASE,
 )
-SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset({"configured", "none", "<redacted>", "redacted", "missing"})
-SAFE_RUNTIME_STATUS_SECRET_METADATA_KEYS = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances"})
+SAFE_RUNTIME_STATUS_SECRET_PLACEHOLDERS = frozenset(
+    {"configured", "none", "<redacted>", "<redacted-secret>", "redacted", "missing"}
+)
+SAFE_RUNTIME_STATUS_SECRET_METADATA_KEYS = frozenset(
+    {"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens"}
+)
+SAFE_RUNTIME_STATUS_SECRET_TEXT_KEYS = frozenset({"tokens", "token_usage", "costs", "limits", "free_tier_guard"})
 LOCAL_RUNTIME_TARGET_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -615,9 +620,9 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
         result = subprocess.run(command.argv, cwd=REPO_ROOT, check=False, text=True, capture_output=capture_output)
         if capture_output:
             if result.stdout:
-                print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+                _print_console_text(result.stdout)
             if result.stderr:
-                print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
+                _print_console_text(result.stderr, file=sys.stderr)
         if result.returncode and not command.nonfatal:
             print(f"\nPlan2 acceptance failed at {command.label} with exit code {result.returncode}.", file=sys.stderr)
             return result.returncode
@@ -628,20 +633,20 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
             if broken_lines and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: runtime-status reports broken state.", file=sys.stderr)
                 for line in broken_lines:
-                    print(f"  {line}", file=sys.stderr)
+                    print(f"  {_redact_console_text(line)}", file=sys.stderr)
                 return 1
             missing_lines = _runtime_status_missing_required_lines("\n".join(part for part in (result.stdout, result.stderr) if part))
             if missing_lines and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: runtime-status is missing required Plan3 lines.", file=sys.stderr)
                 for line in missing_lines:
-                    print(f"  {line}", file=sys.stderr)
+                    print(f"  {_redact_console_text(line)}", file=sys.stderr)
                 return 1
         if command.validate_benchmark_artifacts:
             artifact_errors = _benchmark_artifact_errors(command.argv)
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: benchmark artifacts are invalid.", file=sys.stderr)
                 for error in artifact_errors:
-                    print(f"  {error}", file=sys.stderr)
+                    print(f"  {_redact_console_text(error)}", file=sys.stderr)
                 return 1
         if command.validate_secret_artifacts:
             artifact_errors = _secret_artifact_errors(command.argv)
@@ -654,14 +659,14 @@ def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
             if artifact_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: output artifacts contain secret-looking content.", file=sys.stderr)
                 for error in artifact_errors:
-                    print(f"  {error}", file=sys.stderr)
+                    print(f"  {_redact_console_text(error)}", file=sys.stderr)
                 return 1
         if command.validate_systemd_unit:
             unit_errors = _systemd_unit_errors(command.label, result.stdout or "")
             if unit_errors and not command.nonfatal:
                 print(f"\nPlan2 acceptance failed at {command.label}: systemd unit is unsafe.", file=sys.stderr)
                 for error in unit_errors:
-                    print(f"  {error}", file=sys.stderr)
+                    print(f"  {_redact_console_text(error)}", file=sys.stderr)
                 return 1
     print("\nPlan2 acceptance checks passed.")
     return 0
@@ -2695,6 +2700,47 @@ def _artifact_text_contains_secret(text: str) -> bool:
     return False
 
 
+def _print_console_text(value: object, *, file: Any | None = None) -> None:
+    text = _redact_console_text(value)
+    print(text, end="" if text.endswith("\n") else "\n", file=sys.stdout if file is None else file)
+
+
+def _redact_console_text(value: object) -> str:
+    text = str(value or "")
+    for pattern in RUNTIME_STATUS_SECRET_PATTERNS:
+        text = pattern.sub("<redacted-secret>", text)
+    text = RUNTIME_STATUS_URL_CREDENTIAL_RE.sub(_redact_console_url_credentials, text)
+    text = RUNTIME_STATUS_SECRET_ASSIGNMENT_RE.sub(_redact_console_secret_assignment, text)
+    text = SECRET_FIELD_ASSIGNMENT_RE.sub(_redact_console_secret_assignment, text)
+    return ARTIFACT_SECRET_JSON_FIELD_RE.sub(_redact_console_json_secret_field, text)
+
+
+def _redact_console_url_credentials(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if "://" in value:
+        return value.split("://", 1)[0] + "://<redacted>@"
+    if "=" in value:
+        return value.split("=", 1)[0] + "=<redacted>@"
+    return "<redacted>@"
+
+
+def _redact_console_secret_assignment(match: re.Match[str]) -> str:
+    if not _secret_assignment_value_is_unsafe(match.group(1), match.group(2)):
+        return match.group(0)
+    prefix = match.group(0)[: match.start(2) - match.start(0)]
+    return f"{prefix}<redacted>"
+
+
+def _redact_console_json_secret_field(match: re.Match[str]) -> str:
+    key = str(match.group(1) or "")
+    value = str(match.group(2) or "")
+    if not _secret_assignment_value_is_unsafe(key, value, allow_status_text_keys=False):
+        return match.group(0)
+    prefix = match.group(0)[: match.start(2) - match.start(0)]
+    suffix = match.group(0)[match.end(2) - match.start(0) :]
+    return f"{prefix}<redacted>{suffix}"
+
+
 def _json_payload_contains_secret(value: Any, *, key_hint: str = "") -> bool:
     if isinstance(value, Mapping):
         for key, nested_value in value.items():
@@ -2710,11 +2756,11 @@ def _json_payload_contains_secret(value: Any, *, key_hint: str = "") -> bool:
         if RUNTIME_STATUS_URL_CREDENTIAL_RE.search(value):
             return True
         if SECRET_FIELD_NAME_RE.search(key_hint):
-            return _secret_assignment_value_is_unsafe(key_hint, value)
+            return _secret_assignment_value_is_unsafe(key_hint, value, allow_status_text_keys=False)
     return False
 
 
-def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
+def _secret_assignment_value_is_unsafe(key: object, value: object, *, allow_status_text_keys: bool = True) -> bool:
     key_text = str(key or "").strip().casefold().replace("-", "_").replace(" ", "_")
     value_text = str(value or "").strip().strip("\"'`")
     if not value_text:
@@ -2727,6 +2773,8 @@ def _secret_assignment_value_is_unsafe(key: object, value: object) -> bool:
     if key_text in SAFE_RUNTIME_STATUS_SECRET_METADATA_KEYS and (
         value_text.isdigit() or re.fullmatch(r"\d+/\d+", value_text) is not None
     ):
+        return False
+    if allow_status_text_keys and key_text in SAFE_RUNTIME_STATUS_SECRET_TEXT_KEYS:
         return False
     if key_text == "account_secrets" and _secret_field_value_is_account_secrets_path(value_text):
         return False

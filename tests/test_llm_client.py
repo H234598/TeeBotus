@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sys
 import types
 import builtins
@@ -246,6 +247,19 @@ def test_litellm_text_client_rotates_gemini_key_ring_on_usage_limit(monkeypatch:
 
     assert response.text == "ok:gemini-b1"
     assert calls == ["gemini-a1", "gemini-b1"]
+
+
+def test_quota_owner_id_does_not_use_plain_sha256_api_key_fingerprint() -> None:
+    api_key = "gemini-budget-secret-key"
+
+    owner = quota_owner_id(api_key=api_key, provider="google_gemini", model="gemini/gemini-2.5-flash")
+    repeated = quota_owner_id(api_key=api_key, provider="google_gemini", model="gemini/gemini-2.5-flash")
+    plain_sha256_prefix = hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
+
+    assert owner == repeated
+    assert owner.startswith("google_gemini:gemini/gemini-2.5-flash:")
+    assert api_key not in owner
+    assert plain_sha256_prefix not in owner
 
 
 def test_litellm_text_client_rotates_gemini_key_ring_before_free_tier_limit(monkeypatch: pytest.MonkeyPatch) -> None:

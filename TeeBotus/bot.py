@@ -311,7 +311,11 @@ def _runtime_status(argv: Sequence[str]) -> int:
 
 
 def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
-    entries = tuple(str(line or "").strip() for line in lines if str(line or "").strip())
+    entries = tuple(
+        sanitized
+        for line in lines
+        if (sanitized := _sanitize_status_text(line)).strip()
+    )
     if not entries:
         return
     print()
@@ -1594,6 +1598,12 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
     text = re.sub(
+        r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
+        _status_url_credential_replacement,
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
         r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
         r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
         _status_secret_assignment_replacement,
@@ -1601,6 +1611,15 @@ def _sanitize_status_text(value: object) -> str:
         flags=re.IGNORECASE,
     )
     return text.replace("\r", " ").replace("\n", " ")
+
+
+def _status_url_credential_replacement(match: re.Match[str]) -> str:
+    value = match.group(0)
+    if "://" in value:
+        return value.split("://", 1)[0] + "://<redacted>@"
+    if "=" in value:
+        return value.split("=", 1)[0] + "=<redacted>@"
+    return "<redacted>@"
 
 
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
@@ -1617,7 +1636,7 @@ def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
         return match.group(0)
     if key_token == "api_key_instances" and re.fullmatch(r"\d+/\d+", value.strip()):
         return match.group(0)
-    if key_token in {"tokens", "token_usage", "costs", "limits", "free_tier_guard"}:
+    if key_token in {"tokens", "token_usage", "costs", "limits", "free_tier_guard", "max_output_tokens"}:
         return match.group(0)
     return f"{key}{separator}<redacted>"
 

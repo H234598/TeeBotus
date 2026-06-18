@@ -120,6 +120,24 @@ def test_hf_pool_doctor_cli_never_requires_live_hf(capsys, tmp_path):
     assert "hf_pool=default status=not_configured" in captured.out
 
 
+def test_hf_pool_doctor_cli_redacts_at_print_sink(capsys, monkeypatch, tmp_path):
+    leaked_token = "hf_TESTSECRET123"
+    leaked_password = "plain-password"
+    monkeypatch.setattr(
+        "TeeBotus.llm.hf_pool.doctor.format_hf_pool_status_lines",
+        lambda _health: [f"hf_pool=default status=broken token={leaked_token} password={leaked_password}"],
+    )
+
+    exit_code = doctor_main(["--config", str(tmp_path / "missing.yaml")])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert leaked_token not in captured.out
+    assert leaked_password not in captured.out
+    assert "token=<REDACTED>" in captured.out
+    assert "password=<REDACTED>" in captured.out
+
+
 def test_hf_pool_doctor_reports_persistent_cooldown_without_live_check(tmp_path):
     path = _enabled_config(tmp_path)
     state_store = SQLiteHFPoolRuntimeStateStore(tmp_path / "hf_pool_state.sqlite3")

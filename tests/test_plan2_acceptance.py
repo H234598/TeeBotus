@@ -1596,6 +1596,25 @@ def test_secret_artifact_validation_allows_yaml_style_placeholders_and_env_names
     assert errors == []
 
 
+def test_plan2_acceptance_console_redaction_removes_command_output_secrets() -> None:
+    github_token = "ghp_" + "1234567890ABCDEFGHIJK"
+    text = check_plan2_acceptance._redact_console_text(
+        f"stderr token={github_token} password: hunter2 "
+        "target=https://user:plainpass@example.test/path "
+        '{"api_key": "plain-json-secret", "api_key_env": "GROQ_API_KEY"}'
+    )
+
+    assert github_token not in text
+    assert "hunter2" not in text
+    assert "user:plainpass" not in text
+    assert "plain-json-secret" not in text
+    assert "token=<redacted-secret>" in text
+    assert "password: <redacted>" in text
+    assert "target=https://<redacted>@example.test/path" in text
+    assert '"api_key": "<redacted>"' in text
+    assert '"api_key_env": "GROQ_API_KEY"' in text
+
+
 def test_secret_artifact_validation_rejects_uppercase_secret_values_without_env_key(tmp_path: Path) -> None:
     markdown_path = tmp_path / "import.md"
     markdown_path.write_text(
@@ -3813,11 +3832,12 @@ def test_runtime_status_broken_lines_allow_safe_key_metadata() -> None:
     output = "\n".join(
         [
             "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=litellm_gemini_stateful model=gemini/gemini-3.5-flash status=configured api_key_env=GEMINI_API_KEY api_key_ring=3 fallback_api_key=missing",
+            "api_budget=normal_chat profile=local provider=litellm model=ollama status=configured tokens=provider_usage_response+local_guard costs=local limits=local free_tier_guard=rpm=5,tpm=250000",
             "llm_route=cheap_fast profile=groq_fast provider=litellm model=groq/x status=missing_key api_key=plain-secret",
         ]
     )
 
-    assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[1]]
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[2]]
 
 
 def test_runtime_status_broken_lines_flags_url_credentials() -> None:

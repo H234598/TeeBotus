@@ -634,6 +634,26 @@ def test_runtime_status_text_redacts_generic_secret_assignments() -> None:
     assert "xyz" not in text
 
 
+def test_runtime_status_section_redacts_at_print_sink(capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    bot._print_runtime_status_section(
+        "Secrets",
+        (
+            "llm=Demo status=broken api_key=plain-secret password:hunter2 "
+            "target=https://user:pass@example.test/path",
+        ),
+    )
+    captured = capsys.readouterr()
+
+    assert "plain-secret" not in captured.out
+    assert "hunter2" not in captured.out
+    assert "user:pass" not in captured.out
+    assert "api_key=<redacted>" in captured.out
+    assert "password:<redacted>" in captured.out
+    assert "target=https://<redacted>@example.test/path" in captured.out
+
+
 def test_runtime_status_text_keeps_secret_named_paths_visible() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
