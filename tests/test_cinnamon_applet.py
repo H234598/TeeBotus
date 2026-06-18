@@ -81,6 +81,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatLlmLine" in source
     assert "_formatApiBudgetLine" in source
     assert "_formatMemoryLine" in source
+    assert "_errorText: function(fields)" in source
+    assert '"; Fehler " + value' in source
+    assert "this._errorText(fields)" in source
     assert "_sectionProblemText: function(value)" in source
     assert '" | Probleme " + String(count)' in source
     assert "Ersatz bei Modell-/Key-/Limitfehlern" in source

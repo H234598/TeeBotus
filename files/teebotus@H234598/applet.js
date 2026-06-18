@@ -348,17 +348,17 @@ TeeBotusApplet.prototype = {
   _formatMessengerLine: function(line) {
     let fields = this._parseFields(line);
     if (fields.telegram_slot) {
-      return "Telegram " + fields.telegram_slot + ": " + this._statusWord(fields.status) + "; Token " + String(fields.token || "unbekannt");
+      return "Telegram " + fields.telegram_slot + ": " + this._statusWord(fields.status) + "; Token " + String(fields.token || "unbekannt") + this._errorText(fields);
     }
     if (fields.signal_account) {
       let phone = fields.phone ? "; Telefon " + fields.phone : "";
-      return "Signal " + fields.signal_account + ": " + this._statusWord(fields.status) + phone + "; REST " + String(fields.target || "unbekannt");
+      return "Signal " + fields.signal_account + ": " + this._statusWord(fields.status) + phone + "; REST " + String(fields.target || "unbekannt") + this._errorText(fields);
     }
     if (fields.signal_service) {
-      return "Signal-REST " + fields.signal_service + ": " + this._statusWord(fields.status) + " auf " + String(fields.target || "unbekannt");
+      return "Signal-REST " + fields.signal_service + ": " + this._statusWord(fields.status) + " auf " + String(fields.target || "unbekannt") + this._errorText(fields);
     }
     if (fields.matrix_homeserver) {
-      return "Matrix " + fields.matrix_homeserver + ": " + this._statusWord(fields.status) + "; " + String(fields.target || "");
+      return "Matrix " + fields.matrix_homeserver + ": " + this._statusWord(fields.status) + "; " + String(fields.target || "") + this._errorText(fields);
     }
     return line;
   },
@@ -383,14 +383,14 @@ TeeBotusApplet.prototype = {
         if (fields.structured_output) {
           text += "; Struktur " + fields.structured_output;
         }
-        return text;
+        return text + this._errorText(fields);
       }
-      return "HF-Pool " + fields.hf_pool + ": " + this._statusWord(fields.status);
+      return "HF-Pool " + fields.hf_pool + ": " + this._statusWord(fields.status) + this._errorText(fields);
     }
     if (line.indexOf("gemini_free_tier_limits ") === 0 || fields.gemini_free_tier_limits !== undefined) {
       let source = fields.source ? "; Quelle " + fields.source : "";
       let models = fields.models ? "; Modelle " + fields.models : "";
-      return "Gemini Free-Tier-Limits: " + this._statusWord(fields.status) + models + source;
+      return "Gemini Free-Tier-Limits: " + this._statusWord(fields.status) + models + source + this._errorText(fields);
     }
     if (fields.llm_route) {
       let primary = String(fields.provider || "provider?") + " / " + String(fields.model || "model?");
@@ -412,7 +412,7 @@ TeeBotusApplet.prototype = {
           text += " -> " + fallbackModel;
         }
       }
-      return text;
+      return text + this._errorText(fields);
     }
     return line;
   },
@@ -440,7 +440,7 @@ TeeBotusApplet.prototype = {
       if (fields.costs) {
         text += "; Kosten " + fields.costs;
       }
-      return text;
+      return text + this._errorText(fields);
     }
     if (fields.codex_usage) {
       let stale = fields.stale_hours ? "; Alter " + fields.stale_hours + "h" : "";
@@ -456,15 +456,20 @@ TeeBotusApplet.prototype = {
     let fields = this._parseFields(line);
     if (fields.qdrant) {
       let fallback = fields.fallback ? "; Ersatzsuche: " + fields.fallback : "";
-      return "Semantischer Index " + fields.qdrant + ": " + this._statusWord(fields.status) + fallback;
+      return "Semantischer Index " + fields.qdrant + ": " + this._statusWord(fields.status) + fallback + this._errorText(fields);
     }
     if (fields.qdrant_collection) {
-      return "Qdrant Collection " + fields.qdrant_collection + ": " + this._statusWord(fields.status) + "; Vektor " + String(fields.vector_size || "?") + "; Embedding " + String(fields.embedding_model || "?");
+      return "Qdrant Collection " + fields.qdrant_collection + ": " + this._statusWord(fields.status) + "; Vektor " + String(fields.vector_size || "?") + "; Embedding " + String(fields.embedding_model || "?") + this._errorText(fields);
     }
     if (fields.memory_index) {
-      return "Memory Index " + fields.memory_index + ": " + this._statusWord(fields.status) + "; Backend " + String(fields.backend || "?") + "; Semantik " + String(fields.semantic || "?");
+      return "Memory Index " + fields.memory_index + ": " + this._statusWord(fields.status) + "; Backend " + String(fields.backend || "?") + "; Semantik " + String(fields.semantic || "?") + this._errorText(fields);
     }
     return line;
+  },
+
+  _errorText: function(fields) {
+    let value = String((fields || {}).error || (fields || {}).route_error || "").trim();
+    return value ? "; Fehler " + value : "";
   },
 
   _statusWord: function(status) {
