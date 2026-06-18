@@ -51,12 +51,12 @@ FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*(\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|[^,\s)]+)",
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
     r"([\s=;,&?])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)&]+)",
+    r"[A-Za-z0-9_-]*)\s*([:=])\s*(\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|[^,\s)&]+)",
     re.IGNORECASE,
 )
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
