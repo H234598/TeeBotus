@@ -59,6 +59,7 @@ from TeeBotus.benchmarks.suite import (  # noqa: E402
     _result,
     _stable_backend_ranking,
     benchmark_gemini_free_tier_guard,
+    benchmark_llm_message_latency_paths,
     benchmark_llm_router,
     benchmark_memory_results,
     run_benchmarks,

@@ -36,7 +36,7 @@ from TeeBotus.benchmarks.langgraph_flows import (
     benchmark_langgraph_bibliothekar_linear as _benchmark_langgraph_linear_flow,
     benchmark_langgraph_source_harvester_workflow as _benchmark_langgraph_source_harvester_workflow,
 )
-from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_router
+from TeeBotus.benchmarks.llm_routing import benchmark_gemini_free_tier_guard, benchmark_llm_message_latency_paths, benchmark_llm_router
 from TeeBotus.benchmarks.mcp import benchmark_mcp_readonly_bibliothekar_and_memory_search as _benchmark_mcp_tools
 from TeeBotus.benchmarks.memory import (
     benchmark_jsonl_backend,
@@ -98,6 +98,7 @@ def run_benchmarks(
     results.append(_benchmark_source_harvester_quality_gate(iterations=iterations))
     results.append(_benchmark_source_harvester_promote_index_flow(iterations=iterations))
     results.append(benchmark_llm_router(iterations=iterations))
+    results.append(benchmark_llm_message_latency_paths(iterations=iterations))
     results.append(benchmark_gemini_free_tier_guard(iterations=iterations))
     results.append(_benchmark_hf_pool_quick(iterations=iterations))
     results.append(_benchmark_hf_pool_eval_matrix(iterations=iterations))
@@ -243,6 +244,7 @@ __all__ = [
     "_result",
     "_stable_backend_ranking",
     "benchmark_gemini_free_tier_guard",
+    "benchmark_llm_message_latency_paths",
     "benchmark_jsonl_backend",
     "benchmark_llm_router",
     "benchmark_memory_results",

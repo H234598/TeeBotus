@@ -11,11 +11,23 @@ from typing import Any, Callable
 from TeeBotus.benchmarks.core import BenchmarkResult, result
 from TeeBotus.decisions import parse_bibliothekar_query_decision, parse_memory_candidate
 from TeeBotus.instructions import BotInstructions
+from TeeBotus.llm.base import LLMResponse
+from TeeBotus.llm.capabilities import (
+    GEMINI_INTERACTIONS_CAPABILITIES,
+    HF_POOL_TEXT_CAPABILITIES,
+    LITELLM_TEXT_CAPABILITIES,
+    OPENAI_CAPABILITIES,
+    LLMCapabilities,
+)
 from TeeBotus.llm.free_tier import GeminiFreeTierGuard, reset_gemini_free_tier_budget_state, resolve_gemini_free_tier_limits
 from TeeBotus.llm.gemini_limits_refresh import cached_gemini_free_tier_limit_values, refresh_gemini_free_tier_limits_if_due
 from TeeBotus.llm.keyring import RotatingAPIKeyRing, resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.engine import TeeBotusEngine
+from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.state import RuntimeStateStore
 
 
 def benchmark_llm_router(*, iterations: int) -> BenchmarkResult:
@@ -231,6 +243,70 @@ def benchmark_gemini_free_tier_guard(*, iterations: int) -> BenchmarkResult:
         )
 
 
+def benchmark_llm_message_latency_paths(*, iterations: int) -> BenchmarkResult:
+    message_count = max(4, int(iterations or 1))
+    path_specs = (
+        _LLMMessagePathSpec(
+            name="openai_responses_stateful",
+            provider="openai",
+            model="gpt-4.1-mini",
+            capabilities=OPENAI_CAPABILITIES,
+            stateful=True,
+        ),
+        _LLMMessagePathSpec(
+            name="gemini_interactions_stateful",
+            provider="gemini_interactions",
+            model="gemini/gemini-3.5-flash",
+            capabilities=GEMINI_INTERACTIONS_CAPABILITIES,
+            stateful=True,
+        ),
+        _LLMMessagePathSpec(
+            name="litellm_local_stateless",
+            provider="litellm",
+            model="ollama_chat/qwen2.5:7b",
+            capabilities=LITELLM_TEXT_CAPABILITIES,
+            stateful=False,
+        ),
+        _LLMMessagePathSpec(
+            name="hf_pool_stateless",
+            provider="hf_pool",
+            model="pool:default#normal_chat",
+            capabilities=HF_POOL_TEXT_CAPABILITIES,
+            stateful=False,
+        ),
+    )
+    paths = [_measure_engine_message_path(spec, message_count=message_count) for spec in path_specs]
+    total_ms = sum(float(path["total_ms"]) for path in paths)
+    all_ok = all(bool(path["ok"]) for path in paths)
+    payload = {"paths": paths, "message_count_per_path": message_count}
+    return result(
+        name="llm_message_latency_paths",
+        category="llm_router",
+        iterations=message_count * len(path_specs),
+        total_ms=total_ms,
+        ok=all_ok,
+        errors=0 if all_ok else 1,
+        payload_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+        note="engine message latency by llm path, synthetic clients only",
+        details={
+            "paths": paths,
+            "path_count": len(path_specs),
+            "message_count_per_path": message_count,
+            "openai_account_state_ok": _path_ok(paths, "openai_responses_stateful"),
+            "gemini_account_state_ok": _path_ok(paths, "gemini_interactions_stateful"),
+            "stateless_paths_ignore_state_ok": all(
+                _path_ok(paths, name) for name in ("litellm_local_stateless", "hf_pool_stateless")
+            ),
+            "synthetic_clients_only": True,
+            "network_calls": 0,
+            "provider_calls": 0,
+            "remote_calls": 0,
+            "llm_calls": 0,
+            "openai_calls": 0,
+        },
+    )
+
+
 def _benchmark_client_provider(client: object | None) -> str:
     if client is None:
         return ""
@@ -256,7 +332,165 @@ def _timed_ms(func: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
+class _LLMMessagePathSpec:
+    def __init__(
+        self,
+        *,
+        name: str,
+        provider: str,
+        model: str,
+        capabilities: LLMCapabilities,
+        stateful: bool,
+    ) -> None:
+        self.name = name
+        self.provider = provider
+        self.model = model
+        self.capabilities = capabilities
+        self.stateful = stateful
+
+
+class _SyntheticLLMClient:
+    def __init__(self, spec: _LLMMessagePathSpec) -> None:
+        self.spec = spec
+        self.provider = spec.provider
+        self.provider_name = spec.provider
+        self.model = spec.model
+        self.capabilities = spec.capabilities
+        self.previous_ids: list[str | None] = []
+        self.response_ids: list[str] = []
+
+    def create_reply(
+        self,
+        _user_text: str,
+        _instructions: BotInstructions,
+        previous_response_id: str | None = None,
+    ) -> LLMResponse:
+        self.previous_ids.append(previous_response_id)
+        response_id = f"{self.spec.name}-resp-{len(self.previous_ids)}"
+        self.response_ids.append(response_id)
+        return LLMResponse(
+            text=f"{self.spec.name} synthetic reply {len(self.previous_ids)}",
+            response_id=response_id,
+            provider=self.spec.provider,
+            model=self.spec.model,
+        )
+
+
+def _measure_engine_message_path(spec: _LLMMessagePathSpec, *, message_count: int) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix=f"teebotus-llm-message-{spec.name}-") as tmp:
+        provider = StaticSecretProvider(b"b" * 32)
+        data_dir = Path(tmp) / "Bench" / "data"
+        account_store = AccountStore(data_dir / "accounts", "Bench", provider)
+        state = RuntimeStateStore(data_dir, instance_name="Bench", secret_provider=provider)
+        client = _SyntheticLLMClient(spec)
+        instructions = BotInstructions(
+            openai_enabled=True,
+            llm_provider=spec.provider,
+            llm_model=spec.model,
+            user_memory_enabled=False,
+        )
+        engine = TeeBotusEngine(
+            account_store=account_store,
+            state=state,
+            instructions=instructions,
+            llm_client=client,
+        )
+        identity_a = telegram_identity_key(91001)
+        identity_b = telegram_identity_key(91002)
+        pattern = (identity_a, identity_a, identity_b, identity_a)
+        identities = [pattern[index % len(pattern)] for index in range(message_count)]
+        latencies = [
+            _timed_ms(lambda index=index, identity=identity: engine.process(_benchmark_message_event(identity, index)))
+            for index, identity in enumerate(identities)
+        ]
+        account_a = account_store.get_account_for_identity(identity_a)
+        account_b = account_store.get_account_for_identity(identity_b)
+        first_a_prev = client.previous_ids[0] if len(client.previous_ids) > 0 else "__missing__"
+        second_a_prev = client.previous_ids[1] if len(client.previous_ids) > 1 else "__missing__"
+        first_b_prev = client.previous_ids[2] if len(client.previous_ids) > 2 else "__missing__"
+        third_a_prev = client.previous_ids[3] if len(client.previous_ids) > 3 else "__missing__"
+        response_0 = client.response_ids[0] if len(client.response_ids) > 0 else "__missing__"
+        response_1 = client.response_ids[1] if len(client.response_ids) > 1 else "__missing__"
+        state_a = state.get_previous_response_id("Bench", account_a) if account_a else None
+        state_b = state.get_previous_response_id("Bench", account_b) if account_b else None
+        latest_a_response = _latest_response_for_identity(client.response_ids, identities, identity_a)
+        latest_b_response = _latest_response_for_identity(client.response_ids, identities, identity_b)
+        expected_stateful_ok = (
+            first_a_prev is None
+            and second_a_prev == response_0
+            and first_b_prev is None
+            and third_a_prev == response_1
+            and state_a == latest_a_response
+            and state_b == latest_b_response
+        )
+        expected_stateless_ok = all(previous_id is None for previous_id in client.previous_ids) and state_a is None and state_b is None
+        ok = expected_stateful_ok if spec.stateful else expected_stateless_ok
+        return {
+            "path": spec.name,
+            "provider": spec.provider,
+            "model": spec.model,
+            "stateful": spec.stateful,
+            "ok": bool(ok),
+            "message_count": message_count,
+            "total_ms": sum(latencies),
+            "mean_ms": statistics.fmean(latencies) if latencies else 0.0,
+            "median_ms": statistics.median(latencies) if latencies else 0.0,
+            "p95_ms": _percentile(latencies, 95),
+            "min_ms": min(latencies) if latencies else 0.0,
+            "max_ms": max(latencies) if latencies else 0.0,
+            "local_client_calls": len(client.previous_ids),
+            "first_a_previous_id": first_a_prev,
+            "second_a_previous_id": second_a_prev,
+            "first_b_previous_id": first_b_prev,
+            "third_a_previous_id": third_a_prev,
+            "account_a_stateful": bool(state_a),
+            "account_b_stateful": bool(state_b),
+        }
+
+
+def _benchmark_message_event(identity_key: str, index: int) -> IncomingEvent:
+    return IncomingEvent(
+        event_id=f"telegram:bench:{index}",
+        instance="Bench",
+        channel="telegram",
+        adapter_slot=1,
+        account_id="",
+        identity_key=identity_key,
+        chat_id=f"bench-chat-{identity_key}",
+        chat_type="private",
+        sender_id=identity_key,
+        sender_name=identity_key,
+        text=f"Benchmark message {index}",
+        message_ref=str(index),
+    )
+
+
+def _latest_response_for_identity(response_ids: list[str], identities: list[str], identity: str) -> str | None:
+    for index in range(min(len(response_ids), len(identities)) - 1, -1, -1):
+        if identities[index] == identity:
+            return response_ids[index]
+    return None
+
+
+def _percentile(values: list[float], percentile: int) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = round((max(0, min(100, percentile)) / 100) * (len(ordered) - 1))
+    return ordered[int(rank)]
+
+
+def _path_ok(paths: list[dict[str, Any]], name: str) -> bool:
+    for path in paths:
+        if path.get("path") == name:
+            return bool(path.get("ok"))
+    return False
+
+
 __all__ = [
     "benchmark_gemini_free_tier_guard",
+    "benchmark_llm_message_latency_paths",
     "benchmark_llm_router",
 ]

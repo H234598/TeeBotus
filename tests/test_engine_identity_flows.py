@@ -9,7 +9,7 @@ from TeeBotus.core.status import build_status_reply
 from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
-from TeeBotus.llm.capabilities import LITELLM_TEXT_CAPABILITIES
+from TeeBotus.llm.capabilities import GEMINI_INTERACTIONS_CAPABILITIES, LITELLM_TEXT_CAPABILITIES
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
@@ -891,6 +891,61 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     engine.process(event(identity, "Noch mal"))
 
     assert client.previous_ids == [None, "resp-1"]
+
+
+def test_engine_passes_previous_gemini_interaction_id_per_account_and_persists(tmp_path):
+    class FakeGeminiClient:
+        capabilities = GEMINI_INTERACTIONS_CAPABILITIES
+
+        def __init__(self, prefix: str) -> None:
+            self.prefix = prefix
+            self.previous_ids: list[str | None] = []
+            self.response_ids: list[str] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            response_id = f"{self.prefix}-{len(self.previous_ids)}"
+            self.response_ids.append(response_id)
+            return LLMResponse("Antwort.", response_id, provider="gemini_interactions", model="gemini/gemini-3.5-flash")
+
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    instructions = BotInstructions(openai_enabled=True, llm_provider="gemini_interactions", llm_model="gemini/gemini-3.5-flash")
+    first_client = FakeGeminiClient("gemini")
+    first_account_store = AccountStore(data_dir / "accounts", "Depressionsbot", provider)
+    first_state = RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider)
+    first_engine = TeeBotusEngine(
+        account_store=first_account_store,
+        state=first_state,
+        instructions=instructions,
+        llm_client=first_client,
+    )
+    identity_a = telegram_identity_key(1)
+    identity_b = telegram_identity_key(2)
+
+    first_engine.process(event(identity_a, "Hallo A"))
+    first_engine.process(event(identity_a, "Noch mal A"))
+    first_engine.process(event(identity_b, "Hallo B"))
+    first_engine.process(event(identity_a, "Dritter Satz A"))
+    account_a = first_account_store.get_account_for_identity(identity_a)
+    account_b = first_account_store.get_account_for_identity(identity_b)
+
+    assert first_client.previous_ids == [None, "gemini-1", None, "gemini-2"]
+    assert account_a is not None
+    assert account_b is not None
+    assert first_state.get_previous_response_id("Depressionsbot", account_a) == "gemini-4"
+    assert first_state.get_previous_response_id("Depressionsbot", account_b) == "gemini-3"
+
+    second_client = FakeGeminiClient("gemini-reloaded")
+    second_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=instructions,
+        llm_client=second_client,
+    )
+    second_engine.process(event(identity_a, "Nach Reload"))
+
+    assert second_client.previous_ids == ["gemini-4"]
 
 
 def test_engine_does_not_store_litellm_response_id_as_openai_previous_response(tmp_path):

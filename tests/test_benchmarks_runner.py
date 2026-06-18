@@ -67,6 +67,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_langgraph_fake_installed_flow is langgraph_flows.benchmark_langgraph_bibliothekar_fake_installed
     assert benchmark_module._benchmark_langgraph_source_harvester_workflow is langgraph_flows.benchmark_langgraph_source_harvester_workflow
     assert benchmark_module.benchmark_llm_router is llm_routing.benchmark_llm_router
+    assert benchmark_module.benchmark_llm_message_latency_paths is llm_routing.benchmark_llm_message_latency_paths
     assert benchmark_module.benchmark_gemini_free_tier_guard is llm_routing.benchmark_gemini_free_tier_guard
     assert benchmark_module._benchmark_mcp_tools is mcp.benchmark_mcp_readonly_bibliothekar_and_memory_search
     assert benchmark_module.benchmark_memory_results is memory.memory_results
@@ -229,13 +230,13 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert llm_router["details"]["runtime_provider"] == "hf_pool"
     assert llm_router["details"]["runtime_model"] == "pool:default#structured_decision"
     assert llm_router["details"]["runtime_fallback_client"] == "LiteLLMTextClient"
-    assert llm_router["details"]["runtime_fallback_model"] == "ollama_chat/llama3.1:8b"
+    assert llm_router["details"]["runtime_fallback_model"] == "ollama_chat/llama3.2:3b"
     assert llm_router["details"]["memory_candidate_kind"] == "therapy_goal"
     assert llm_router["details"]["remote_fallback_default_enabled"] is True
-    assert llm_router["details"]["default_fallback_models"] == ["ollama_chat/llama3.1:8b"]
+    assert llm_router["details"]["default_fallback_models"] == ["ollama_chat/llama3.2:3b"]
     assert llm_router["details"]["default_fallback_profile"] == "local_ollama"
     assert llm_router["details"]["explicit_remote_fallback_enabled"] is True
-    assert llm_router["details"]["explicit_remote_fallback_models"] == ["ollama_chat/llama3.1:8b"]
+    assert llm_router["details"]["explicit_remote_fallback_models"] == ["ollama_chat/llama3.2:3b"]
     assert llm_router["details"]["explicit_remote_fallback_api_key_env"] == ""
     assert llm_router["details"]["explicit_remote_fallback_api_key_mapped"] is False
     assert "benchmark-groq-key" not in json.dumps(suite, ensure_ascii=False)
@@ -245,6 +246,25 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
         "ollama_chat/qwen2.5:7b",
     ]
     assert llm_router["details"]["network_calls"] == 0
+    llm_message_latency = next(result for result in suite["results"] if result["name"] == "llm_message_latency_paths")
+    assert llm_message_latency["ok"] is True
+    assert llm_message_latency["category"] == "llm_router"
+    assert llm_message_latency["details"]["synthetic_clients_only"] is True
+    assert llm_message_latency["details"]["openai_account_state_ok"] is True
+    assert llm_message_latency["details"]["gemini_account_state_ok"] is True
+    assert llm_message_latency["details"]["stateless_paths_ignore_state_ok"] is True
+    assert {path["path"] for path in llm_message_latency["details"]["paths"]} == {
+        "openai_responses_stateful",
+        "gemini_interactions_stateful",
+        "litellm_local_stateless",
+        "hf_pool_stateless",
+    }
+    for path in llm_message_latency["details"]["paths"]:
+        assert path["local_client_calls"] == llm_message_latency["details"]["message_count_per_path"]
+        assert path["mean_ms"] >= 0
+        assert path["p95_ms"] >= 0
+    assert llm_message_latency["details"]["network_calls"] == 0
+    assert llm_message_latency["details"]["provider_calls"] == 0
     gemini_free_tier = next(result for result in suite["results"] if result["name"] == "gemini_free_tier_guard_cache_rotation")
     assert gemini_free_tier["ok"] is True
     assert gemini_free_tier["category"] == "gemini_free_tier"
@@ -470,6 +490,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "bibliothekar_haystack_fake_query" in markdown
     assert "pydantic_structured_decisions" in markdown
     assert "gemini_free_tier_guard_cache_rotation" in markdown
+    assert "llm_message_latency_paths" in markdown
     assert "langgraph_bibliothekar_deep_query" in markdown
     assert "langgraph_bibliothekar_fake_installed" in markdown
     assert "langgraph_source_harvester_workflow" in markdown
