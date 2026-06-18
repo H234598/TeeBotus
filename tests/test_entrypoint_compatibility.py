@@ -947,7 +947,7 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
     monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
-    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "gemini_flash")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "gemini_flash_stateful")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_1", "a1,a2")
     monkeypatch.setenv("GEMINI_API_KEYS_ACCOUNT_2", "b1,b2")
@@ -959,10 +959,34 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
     captured = capsys.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=gemini_interactions model=gemini/gemini-3.5-flash "
-        "status=configured profile=gemini_flash api_key=configured api_key_ring=6 "
+        "status=configured profile=gemini_flash_stateful api_key=configured api_key_ring=6 "
         "google_mode=stateful service_tier=flex"
     ) in captured.out
     assert "a1" not in captured.out
+
+
+def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PROFILE_DEMO", "gemini_flash_stateless")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("TEEBOTUS_GEMINI_SERVICE_TIER_DEMO", "flex")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "llm=Demo/telegram:1 provider=litellm model=gemini/gemini-3.5-flash "
+        "status=configured profile=gemini_flash_stateless api_key=configured "
+        "google_mode=stateless service_tier=flex"
+    ) in captured.out
 
 
 def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, capsys, tmp_path) -> None:
@@ -989,7 +1013,7 @@ def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, 
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
         "model=gemini/gemini-3.5-flash status=configured api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/1"
     ) in captured.out
@@ -1022,7 +1046,7 @@ def test_runtime_status_route_reports_degraded_instance_scoped_gemini_keys(monke
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
         "model=gemini/gemini-3.5-flash status=degraded api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/2"
     ) in captured.out
@@ -1060,7 +1084,7 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
         "fallback_model=ollama_chat/llama3.2:3b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "llm_route=bibliothekar_answer profile=gemini_flash_stateful provider=gemini_interactions "
         "model=gemini/gemini-3.5-flash "
     ) in captured.out
     assert "llm_route=bibliothekar_answer" in captured.out and " google_mode=stateful" in captured.out

@@ -569,12 +569,13 @@ TEEBOTUS_LLM_BASE_URL=http://127.0.0.1:11434 \
 python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
-Remote-Profile werden genauso per Profil geschaltet. `gemini_flash` erwartet
-`GEMINI_API_KEY`; `vertex_gemini_flash` erwartet
-`GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale Vertex/Google-Credentials.
-`gemini_flash` nutzt den Gemini-Interactions-Provider mit `store=true` und
-`previous_interaction_id`, damit normale Gemini-Chatantworten stateful laufen.
-Vertex-Gemini ueber LiteLLM bleibt stateless; TeeBotus sendet dort den
+Remote-Profile werden genauso per Profil geschaltet. `gemini_flash_stateless`
+und `gemini_flash_stateful` erwarten `GEMINI_API_KEY`; `vertex_gemini_flash`
+erwartet `GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale
+Vertex/Google-Credentials. `gemini_flash_stateful` nutzt den
+Gemini-Interactions-Provider mit `store=true` und `previous_interaction_id`,
+damit normale Gemini-Chatantworten stateful laufen. `gemini_flash_stateless`
+und Vertex-Gemini ueber LiteLLM bleiben stateless; TeeBotus sendet dort den
 benoetigten lokalen Kontext selbst und verlaesst sich nicht auf serverseitige
 Google-Conversation-State.
 
@@ -596,7 +597,7 @@ Provider-Call geschrieben. In `Bot_Verhalten.md` kann derselbe Schalter im
 Gemini-Keyrotation:
 
 ```bash
-TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT=gemini_flash
+TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT=gemini_flash_stateful
 GEMINI_API_KEYS_ACCOUNT_1=acc1_key1,acc1_key2,acc1_key3
 GEMINI_API_KEYS_ACCOUNT_2=acc2_key1,acc2_key2,acc2_key3
 GEMINI_API_KEYS_ACCOUNT_3=acc3_key1,acc3_key2,acc3_key3

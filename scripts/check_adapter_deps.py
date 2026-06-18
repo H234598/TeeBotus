@@ -199,7 +199,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "hf_pool_quality": ("hf_pool", "pool:"),
         "hf_pool_bibliothekar": ("hf_pool", "pool:"),
         "groq_fast": ("litellm", "groq/"),
-        "gemini_flash": ("gemini_interactions", "gemini/"),
+        "gemini_flash_stateless": ("litellm", "gemini/"),
+        "gemini_flash_stateful": ("gemini_interactions", "gemini/"),
         "vertex_gemini_flash": ("litellm", "vertex_ai/"),
         "openai_premium": ("openai", ""),
     }
@@ -226,7 +227,14 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         profile = profiles.get(name)
         if profile is not None and profile.model != expected_model:
             errors.append(f"profile {name} model={profile.model or '<empty>'} expected={expected_model}")
-    for name in ("hf_mistral", "groq_fast", "gemini_flash", "vertex_gemini_flash", "openai_premium"):
+    for name in (
+        "hf_mistral",
+        "groq_fast",
+        "gemini_flash_stateless",
+        "gemini_flash_stateful",
+        "vertex_gemini_flash",
+        "openai_premium",
+    ):
         profile = profiles.get(name)
         if profile is not None and not profile.api_key_env:
             errors.append(f"profile {name} missing api_key_env")
@@ -248,7 +256,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         errors.append("routing structured_decision must be hf_pool_structured with local_ollama fallback")
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
-    return True, "llm profiles plan2 contract=ok profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,gemini_flash,vertex_gemini_flash,openai_premium"
+    return True, (
+        "llm profiles plan2 contract=ok "
+        "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,"
+        "gemini_flash_stateless,gemini_flash_stateful,vertex_gemini_flash,openai_premium"
+    )
 
 
 def _check_local_secret_file_permissions(root: Path = REPO_ROOT) -> tuple[bool, str]:

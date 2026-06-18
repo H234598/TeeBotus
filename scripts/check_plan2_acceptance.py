@@ -2385,8 +2385,8 @@ def _runtime_status_bibliothekar_route_errors(lines: Sequence[str]) -> list[str]
     if not route:
         return []
     errors: list[str] = []
-    if " profile=gemini_flash" not in route:
-        errors.append("runtime-status bibliothekar route must use profile=gemini_flash")
+    if " profile=gemini_flash_stateful" not in route:
+        errors.append("runtime-status bibliothekar route must use profile=gemini_flash_stateful")
     if " provider=gemini_interactions" not in route:
         errors.append("runtime-status bibliothekar route must use provider=gemini_interactions")
     if " model=gemini/gemini-3.5-flash" not in route:

@@ -36,7 +36,15 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
     default_profile, routing = load_llm_routing()
 
     assert default_profile == "local_ollama"
-    assert {"local_ollama", "hf_mistral", "groq_fast", "gemini_flash", "vertex_gemini_flash", "openai_premium"} <= set(profiles)
+    assert {
+        "local_ollama",
+        "hf_mistral",
+        "groq_fast",
+        "gemini_flash_stateless",
+        "gemini_flash_stateful",
+        "vertex_gemini_flash",
+        "openai_premium",
+    } <= set(profiles)
     assert {"normal_chat", "structured_decision", "bibliothekar_answer"} <= set(routing)
 
     normal = select_llm_route("normal chat", profiles=profiles, default_profile=default_profile, routing=routing)
@@ -55,7 +63,7 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
     assert structured.provider == "hf_pool"
     assert structured.model == "pool:default#structured_decision"
     assert structured.fallback_profile_name == "local_ollama"
-    assert structured.fallback_models == ("ollama_chat/llama3.1:8b",)
+    assert structured.fallback_models == ("ollama_chat/llama3.2:3b",)
     assert structured.fallback_base_url == "http://127.0.0.1:11434"
 
 

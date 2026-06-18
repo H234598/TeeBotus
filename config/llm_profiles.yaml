@@ -35,7 +35,12 @@ profiles:
     model: groq/llama-3.1-8b-instant
     api_key_env: GROQ_API_KEY
 
-  gemini_flash:
+  gemini_flash_stateless:
+    provider: litellm
+    model: gemini/gemini-3.5-flash
+    api_key_env: GEMINI_API_KEY
+
+  gemini_flash_stateful:
     provider: gemini_interactions
     model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY

@@ -949,14 +949,19 @@ profiles:
     model: groq/llama-3.1-8b-instant
     api_key_env: GROQ_API_KEY
 
-  gemini_flash:
+  gemini_flash_stateless:
+    provider: litellm
+    model: gemini/gemini-3.5-flash
+    api_key_env: GEMINI_API_KEY
+
+  gemini_flash_stateful:
     provider: gemini_interactions
     model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY
 
   vertex_gemini_flash:
     provider: litellm
-    model: vertex_ai/gemini-2.5-flash
+    model: vertex_ai/gemini-3.5-flash
     api_key_env: GOOGLE_APPLICATION_CREDENTIALS
 
   openai_premium:
@@ -965,7 +970,8 @@ profiles:
     api_key_env: OPENAI_API_KEY
 ```
 
-Gemini-Keyrotation ist fuer `gemini_flash` zusaetzlich ueber
+Gemini-Keyrotation ist fuer `gemini_flash_stateless` und
+`gemini_flash_stateful` zusaetzlich ueber
 `GEMINI_API_KEYS_ACCOUNT_N` oder instanzspezifisch
 `TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` verfuegbar. Die Buckets werden
 spaltenweise sortiert, also Account 1 Projekt-Key 1, Account 2 Projekt-Key 1,
@@ -1039,7 +1045,7 @@ purposes:
 
   hard_reasoning:
     profile: openai_premium
-    fallback: gemini_flash
+    fallback: gemini_flash_stateful
 
   cheap_fast:
     profile: groq_fast
@@ -1050,7 +1056,7 @@ purposes:
     fallback: null
 
   bibliothekar_answer:
-    profile: gemini_flash
+    profile: gemini_flash_stateful
     fallback: local_ollama
 
   structured_decision:

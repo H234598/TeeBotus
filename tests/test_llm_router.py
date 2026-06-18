@@ -8,6 +8,7 @@ import pytest
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
+from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.profiles import (
     LLMProfile,
@@ -30,7 +31,7 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert profiles["local_ollama"] == LLMProfile(
         name="local_ollama",
         provider="litellm",
-        model="ollama_chat/llama3.1:8b",
+        model="ollama_chat/llama3.2:3b",
         base_url="http://127.0.0.1:11434",
         api_key_env="",
     )
@@ -55,16 +56,22 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert profiles["groq_fast"].api_key_env == "GROQ_API_KEY"
     assert profiles["groq_fast"].provider == "litellm"
     assert profiles["groq_fast"].model.startswith("groq/")
-    assert profiles["gemini_flash"] == LLMProfile(
-        name="gemini_flash",
+    assert profiles["gemini_flash_stateless"] == LLMProfile(
+        name="gemini_flash_stateless",
         provider="litellm",
-        model="gemini/gemini-2.5-flash",
+        model="gemini/gemini-3.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["gemini_flash_stateful"] == LLMProfile(
+        name="gemini_flash_stateful",
+        provider="gemini_interactions",
+        model="gemini/gemini-3.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
     assert profiles["vertex_gemini_flash"] == LLMProfile(
         name="vertex_gemini_flash",
         provider="litellm",
-        model="vertex_ai/gemini-2.5-flash",
+        model="vertex_ai/gemini-3.5-flash",
         api_key_env="GOOGLE_APPLICATION_CREDENTIALS",
     )
     assert profiles["openai_premium"].provider == "openai"
@@ -72,14 +79,14 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
     assert routing["structured_decision"].profile == "hf_pool_structured"
     assert routing["structured_decision"].fallback == "local_ollama"
     assert routing["hard_reasoning"].profile == "openai_premium"
-    assert routing["hard_reasoning"].fallback == "gemini_flash"
+    assert routing["hard_reasoning"].fallback == "gemini_flash_stateful"
 
 
-def test_runtime_profile_client_uses_gemini_key_ring_for_gemini_profile(monkeypatch) -> None:
+def test_runtime_profile_client_uses_gemini_key_ring_for_stateless_gemini_profile(monkeypatch) -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
-        profile="gemini_flash",
+        profile="gemini_flash_stateless",
         env={
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1,b2",
@@ -92,11 +99,28 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_gemini_profile(monkeypa
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
 
 
+def test_runtime_profile_client_uses_gemini_key_ring_for_stateful_gemini_profile(monkeypatch) -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="gemini_flash_stateful",
+        env={
+            "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
+            "GEMINI_API_KEYS_ACCOUNT_2": "b1,b2",
+            "GEMINI_API_KEYS_ACCOUNT_3": "c1,c2",
+        },
+    )
+
+    assert isinstance(client, GeminiInteractionsClient)
+    assert client.api_key_ring is not None
+    assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
+
+
 def test_runtime_profile_client_uses_gemini_service_tier_env_switch() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
-        profile="gemini_flash",
+        profile="gemini_flash_stateless",
         env={
             "GEMINI_API_KEY": "gemini-key",
             "TEEBOTUS_GEMINI_SERVICE_TIER": "Flex",
@@ -111,7 +135,7 @@ def test_runtime_profile_client_prefers_instance_gemini_flex_flag() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
-        profile="gemini_flash",
+        profile="gemini_flash_stateful",
         env={
             "GEMINI_API_KEY": "gemini-key",
             "TEEBOTUS_GEMINI_FLEX_SERVICE_TIER_DEMO": "yes",
@@ -119,7 +143,7 @@ def test_runtime_profile_client_prefers_instance_gemini_flex_flag() -> None:
         instance_name="Demo",
     )
 
-    assert isinstance(client, LiteLLMTextClient)
+    assert isinstance(client, GeminiInteractionsClient)
     assert client.service_tier == "flex"
 
 
@@ -127,7 +151,7 @@ def test_runtime_profile_client_instance_service_tier_off_overrides_global_flex(
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
         openai_client=None,
-        profile="gemini_flash",
+        profile="gemini_flash_stateful",
         env={
             "GEMINI_API_KEY": "gemini-key",
             "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
@@ -136,7 +160,7 @@ def test_runtime_profile_client_instance_service_tier_off_overrides_global_flex(
         instance_name="Demo",
     )
 
-    assert isinstance(client, LiteLLMTextClient)
+    assert isinstance(client, GeminiInteractionsClient)
     assert client.service_tier == ""
 
 
@@ -359,7 +383,7 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
 
     assert isinstance(client, LiteLLMTextClient)
     assert client.provider == "litellm"
-    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.model == "ollama_chat/llama3.2:3b"
     assert client.api_base == "http://127.0.0.1:11434"
     assert client.fallback_models == ("ollama_chat/qwen2.5:7b",)
     assert client.api_key == "runtime-key"
@@ -377,7 +401,7 @@ def test_runtime_text_client_profile_uses_runtime_base_url_override() -> None:
     )
 
     assert isinstance(client, LiteLLMTextClient)
-    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.model == "ollama_chat/llama3.2:3b"
     assert client.api_base == "http://127.0.0.1:11555/api"
 
 
@@ -436,7 +460,7 @@ def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
     assert client.model_selector == "pool:default#structured_decision"
     assert isinstance(client.fallback_client, LiteLLMTextClient)
     assert client.fallback_client.provider == "litellm"
-    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert client.fallback_client.model == "ollama_chat/llama3.2:3b"
 
 
 def test_runtime_text_client_call_uses_runtime_generation_overrides(monkeypatch) -> None:
@@ -532,7 +556,7 @@ def test_runtime_text_client_runtime_enabled_overrides_instruction_llm_disabled(
     )
 
     assert isinstance(client, LiteLLMTextClient)
-    assert client.model == "ollama_chat/llama3.1:8b"
+    assert client.model == "ollama_chat/llama3.2:3b"
 
 
 def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider() -> None:
@@ -547,7 +571,7 @@ def test_runtime_text_client_uses_purpose_router_when_no_direct_runtime_provider
     assert client.purpose == "structured_decision"
     assert isinstance(client.fallback_client, LiteLLMTextClient)
     assert client.fallback_client.provider == "litellm"
-    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert client.fallback_client.model == "ollama_chat/llama3.2:3b"
     assert client.fallback_client.api_base == "http://127.0.0.1:11434"
     assert client.fallback_client.fallback_models == ()
 
@@ -567,10 +591,10 @@ def test_runtime_text_client_purpose_router_uses_local_fallback_by_default() -> 
 
     assert isinstance(blocked, HFPoolProvider)
     assert isinstance(blocked.fallback_client, LiteLLMTextClient)
-    assert blocked.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert blocked.fallback_client.model == "ollama_chat/llama3.2:3b"
     assert isinstance(allowed, HFPoolProvider)
     assert isinstance(allowed.fallback_client, LiteLLMTextClient)
-    assert allowed.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert allowed.fallback_client.model == "ollama_chat/llama3.2:3b"
 
 
 def test_runtime_text_client_purpose_route_uses_runtime_base_url_override() -> None:
@@ -583,7 +607,7 @@ def test_runtime_text_client_purpose_route_uses_runtime_base_url_override() -> N
 
     assert isinstance(client, HFPoolProvider)
     assert isinstance(client.fallback_client, LiteLLMTextClient)
-    assert client.fallback_client.model == "ollama_chat/llama3.1:8b"
+    assert client.fallback_client.model == "ollama_chat/llama3.2:3b"
     assert client.fallback_client.api_base == "http://127.0.0.1:11556/api"
 
 
@@ -639,7 +663,7 @@ def test_runtime_text_client_purpose_router_uses_local_fallback_when_hf_pool_una
     response = client.create_reply("Ping", BotInstructions(), None)
 
     assert response.text == "Fallback Antwort"
-    assert calls == [("ollama_chat/llama3.1:8b", "")]
+    assert calls == [("ollama_chat/llama3.2:3b", "")]
 
 
 def test_runtime_text_client_route_passes_fallback_profile_base_url(monkeypatch) -> None:

@@ -7,7 +7,7 @@ purposes:
 
   hard_reasoning:
     profile: openai_premium
-    fallback: gemini_flash
+    fallback: gemini_flash_stateful
 
   cheap_fast:
     profile: groq_fast
@@ -18,7 +18,7 @@ purposes:
     fallback: null
 
   bibliothekar_answer:
-    profile: gemini_flash
+    profile: gemini_flash_stateful
     fallback: local_ollama
 
   structured_decision:
