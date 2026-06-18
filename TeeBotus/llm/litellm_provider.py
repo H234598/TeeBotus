@@ -328,6 +328,8 @@ def normalize_llm_provider(value: str) -> str:
         return "groq"
     if normalized in {"gemini", "google", "google_ai"}:
         return "gemini"
+    if normalized in {"gemini_interactions", "google_interactions", "interactions", "gemini_stateful"}:
+        return "gemini_interactions"
     if normalized in {"vertex", "vertex_ai", "google_vertex", "google_vertex_ai"}:
         return "vertex_ai"
     return normalized

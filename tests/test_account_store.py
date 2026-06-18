@@ -360,6 +360,32 @@ def test_account_store_can_create_pepper_when_encrypted_account_secrets_are_empt
     assert second.verify_secret(account_id, account_secret)
 
 
+def test_account_store_bootstraps_runtime_pepper_for_first_secret_only(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    stored: dict[tuple[str, str], bytes] = {("Bote_der_Wahrheit", INSTANCE_MAPPING_KEY_PURPOSE): b"a" * 32}
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=False)
+
+    def lookup(instance: str, purpose: str) -> bytes | None:
+        return stored.get((instance, purpose))
+
+    def store_secret(instance: str, purpose: str, secret: bytes) -> None:
+        assert purpose == INSTANCE_PEPPER_PURPOSE
+        stored[(instance, purpose)] = secret
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(secret_provider, "_store", store_secret)
+    store = AccountStore(root, "Bote_der_Wahrheit", secret_provider)
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+
+    returned_account_id, account_secret = store.register_account(account_id)
+
+    assert returned_account_id == account_id
+    assert ("Bote_der_Wahrheit", INSTANCE_PEPPER_PURPOSE) in stored
+    assert store.verify_secret(account_id, account_secret)
+    manifest = json.loads((root / ACCOUNT_KEYRING_FILENAME).read_text(encoding="utf-8"))
+    assert INSTANCE_PEPPER_PURPOSE in manifest["purposes"]
+
+
 def test_account_store_records_required_pepper_manifest_for_existing_verifier(tmp_path, monkeypatch) -> None:
     root = tmp_path / "accounts"
     first = AccountStore(root, "Depressionsbot", provider())

@@ -1,10 +1,10 @@
 {
   "uuid": "teebotus@H234598",
-  "name": "TeeBotus",
+  "name": "TB",
   "version": "0.1.0",
   "description": "Panel control and diagnostics applet for the local TeeBotus runtime.",
   "comments": "Connects to python -m TeeBotus and the local user-systemd runtime.",
-  "icon": "teebotus-symbolic",
+  "icon": "teebotus",
   "author": "H234598",
   "max-instances": 1,
   "last-edited": 1781654400

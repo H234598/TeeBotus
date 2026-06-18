@@ -8,8 +8,9 @@
     ],
     "main-page": {
       "type": "page",
-      "title": "TeeBotus",
+      "title": "TB",
       "sections": [
+        "settings-logo-header-section",
         "menu-map-section",
         "runtime-section",
         "display-section",
@@ -30,6 +31,13 @@
       "title": "About",
       "sections": [
         "about-section"
+      ]
+    },
+    "settings-logo-header-section": {
+      "type": "section",
+      "title": "",
+      "keys": [
+        "settings-logo-header"
       ]
     },
     "menu-map-section": {
@@ -67,6 +75,7 @@
       "keys": [
         "show-messenger-section",
         "show-llm-section",
+        "show-api-section",
         "show-memory-section",
         "show-bibliothekar-section",
         "show-proactive-section",
@@ -91,7 +100,9 @@
         "bibliothekar-instance",
         "library-path",
         "proactive-instance",
-        "proactive-command"
+        "proactive-command",
+        "codex-usage-path",
+        "codex-usage-command"
       ]
     },
     "links-section": {
@@ -106,13 +117,21 @@
       "type": "section",
       "title": "TeeBotus Applet",
       "keys": [
+        "about-logo",
         "about-text"
       ]
     }
   },
   "main-menu-map": {
     "type": "label",
-    "description": "The panel menu shows a compact runtime card first, then optional sections for Messenger, LLM routes, memory, Bibliothekar, proactive agent, bot service actions, quick chat commands, and project links. Runtime status is read through the fixed TeeBotus helper command; service actions call the configured user-systemd unit."
+    "description": "The panel menu shows a compact runtime card first, then optional sections for Messenger, LLM routes, API keys and usage, memory, Bibliothekar, proactive agent, bot service actions, quick chat commands, and project links. Runtime status is read through the fixed TeeBotus helper command; service actions call the configured user-systemd unit."
+  },
+  "settings-logo-header": {
+    "type": "custom",
+    "file": "SettingsLogo.py",
+    "widget": "HeaderLogo",
+    "description": "TeeBotus settings header logo",
+    "default": ""
   },
   "repo-path": {
     "type": "entry",
@@ -166,12 +185,12 @@
   },
   "show-panel-label": {
     "type": "switch",
-    "description": "Show text in panel",
+    "description": "Panel text is fixed to TB",
     "default": true
   },
   "panel-label-mode": {
     "type": "combobox",
-    "description": "Panel label content",
+    "description": "Legacy panel mode (panel still shows TB)",
     "options": {
       "Short health": "health",
       "Instance count": "instances",
@@ -193,6 +212,11 @@
   "show-llm-section": {
     "type": "switch",
     "description": "Show LLM and provider section",
+    "default": true
+  },
+  "show-api-section": {
+    "type": "switch",
+    "description": "Show API keys and usage section",
     "default": true
   },
   "show-memory-section": {
@@ -263,6 +287,18 @@
     "description": "Manual proactive command",
     "default": "/usr/bin/python3 -m TeeBotus.proactive --instance Depressionsbot --dispatch --plan --tool-plan"
   },
+  "codex-usage-path": {
+    "type": "entry",
+    "description": "codex-usage repository path",
+    "tooltip": "Used by API usage menu actions. The runtime status also reads local codex-usage snapshots when present.",
+    "default": "/home/teladi/codex-usage"
+  },
+  "codex-usage-command": {
+    "type": "entry",
+    "description": "codex-usage command",
+    "tooltip": "Command used for codex-usage terminal actions; leave as codex-usage when it is on PATH.",
+    "default": "codex-usage"
+  },
   "github-url": {
     "type": "entry",
     "description": "GitHub repository URL",
@@ -272,6 +308,13 @@
     "type": "entry",
     "description": "Commit history URL",
     "default": "https://github.com/H234598/TeeBotus/commits/main"
+  },
+  "about-logo": {
+    "type": "custom",
+    "file": "SettingsLogo.py",
+    "widget": "AboutLogo",
+    "description": "TeeBotus about logo",
+    "default": ""
   },
   "about-text": {
     "type": "label",

@@ -13,6 +13,7 @@ from TeeBotus.llm.free_tier import (
     quota_owner_id,
     reset_gemini_free_tier_budget_state,
 )
+from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
@@ -43,6 +44,7 @@ def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
         ("ollama", "ollama"),
         ("hf", "huggingface"),
         ("Google", "gemini"),
+        ("gemini-stateful", "gemini_interactions"),
         ("Vertex", "vertex_ai"),
         ("google-vertex-ai", "vertex_ai"),
     ],
@@ -375,6 +377,80 @@ def test_build_text_llm_client_uses_runtime_provider_override() -> None:
     assert client.model == "meta-llama/Llama-3.1-8B-Instruct"
     assert client.fallback_models == ("Qwen/Qwen2.5-7B-Instruct", "mistralai/Mistral-7B-Instruct-v0.3")
     assert client.api_key == "hf-key"
+
+
+def test_build_text_llm_client_can_build_gemini_interactions_client() -> None:
+    client = build_text_llm_client(
+        instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
+        openai_client=None,
+        provider="gemini_interactions",
+        model="gemini/gemini-3.5-flash",
+        api_key="gemini-key",
+        service_tier="flex",
+        gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+    )
+
+    assert isinstance(client, GeminiInteractionsClient)
+    assert client.provider == "gemini_interactions"
+    assert client.model == "gemini-3.5-flash"
+    assert client.store is True
+    assert client.service_tier == "flex"
+    assert client.capabilities.previous_response_id is True
+
+
+def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    keys: list[str] = []
+
+    class Interaction:
+        output_text = "  Hallo Gemini  "
+        id = "interaction-1"
+        usage = {"input_tokens": 3, "output_tokens": 2}
+
+    class Interactions:
+        def create(self, **kwargs):
+            calls.append(kwargs)
+            return Interaction()
+
+    class Client:
+        def __init__(self, *, api_key):
+            keys.append(api_key)
+            self.interactions = Interactions()
+
+    import google.genai as genai
+
+    monkeypatch.setattr(genai, "Client", Client)
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            service_tier="flex",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System.", openai_max_output_tokens=77), "prev-1")
+
+    assert response.text == "Hallo Gemini"
+    assert response.response_id == "interaction-1"
+    assert response.provider == "gemini_interactions"
+    assert response.model == "gemini/gemini-3.5-flash"
+    assert response.service_tier == "flex"
+    assert response.usage == {"input_tokens": 3, "output_tokens": 2}
+    assert keys == ["gemini-key"]
+    assert calls == [
+        {
+            "input": "Ping",
+            "model": "gemini-3.5-flash",
+            "store": True,
+            "system_instruction": "System.",
+            "generation_config": {"max_output_tokens": 77},
+            "response_modalities": ["text"],
+            "timeout": 90,
+            "previous_interaction_id": "prev-1",
+            "service_tier": "flex",
+        }
+    ]
 
 
 def test_build_text_llm_client_passes_env_to_hf_pool_provider() -> None:

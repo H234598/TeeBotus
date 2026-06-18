@@ -17,16 +17,33 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
 
     assert metadata["uuid"] == "teebotus@H234598"
-    assert metadata["name"] == "TeeBotus"
+    assert metadata["name"] == "TB"
+    assert metadata["icon"] == "teebotus"
     assert (APPLET_DIR / "icon.svg").is_file()
+    assert (APPLET_DIR / "SettingsLogo.py").is_file()
+    assert (APPLET_DIR / "assets" / "teebotus.svg").is_file()
+    assert (APPLET_DIR / "assets" / "settings-header-logo.svg").is_file()
+    assert (APPLET_DIR / "assets" / "settings-about-logo.svg").is_file()
     assert (APPLET_DIR / "stylesheet.css").is_file()
     assert "new Settings.AppletSettings(this, UUID, instanceId)" in source
     assert "main-page" in schema["layout"]["pages"]
     assert "actions-page" in schema["layout"]["pages"]
+    assert "settings-logo-header-section" in schema["layout"]["main-page"]["sections"]
+    assert schema["settings-logo-header"]["type"] == "custom"
+    assert schema["settings-logo-header"]["file"] == "SettingsLogo.py"
+    assert schema["settings-logo-header"]["widget"] == "HeaderLogo"
+    assert schema["about-logo"]["type"] == "custom"
+    assert schema["about-logo"]["widget"] == "AboutLogo"
     assert schema["repo-path"]["default"] == "/home/teladi/TeeBotus"
     assert schema["channels"]["default"] == "telegram,signal"
     assert schema["runtime-unit"]["default"] == "teebotus.service"
     assert schema["status-timeout-seconds"]["default"] == 30
+    assert "new PopupMenu.PopupMenuManager(this)" in source
+    assert "new Applet.AppletPopupMenu(this, orientation)" in source
+    assert "this.menuManager.addMenu(this.menu)" in source
+    assert "Gio.SubprocessLauncher.new" in source
+    assert "}, this._repoPath());" in source
+    assert "launcher.set_cwd(String(cwd))" in source
     assert (PROJECT_ROOT / "scripts" / "install_cinnamon_applet.py").is_file()
 
 
@@ -39,6 +56,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'this.statusMenu = new PopupMenu.PopupSubMenuMenuItem(_("Status & Diagnose"))' in source
     assert 'this.messengerMenu = new PopupMenu.PopupSubMenuMenuItem(_("Messenger"))' in source
     assert 'this.llmMenu = new PopupMenu.PopupSubMenuMenuItem(_("LLM & Dienste"))' in source
+    assert 'this.apiMenu = new PopupMenu.PopupSubMenuMenuItem(_("API Keys & Usage"))' in source
     assert 'this.memoryMenu = new PopupMenu.PopupSubMenuMenuItem(_("Memory & Speicher"))' in source
     assert 'this.bibliothekarMenu = new PopupMenu.PopupSubMenuMenuItem(_("Bibliothekar"))' in source
     assert 'this.proactiveMenu = new PopupMenu.PopupSubMenuMenuItem(_("Proaktiv"))' in source
@@ -48,8 +66,15 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "journalctl" in source
     assert "TeeBotus.bibliothekar" in source
     assert "TeeBotus.proactive" in schema["proactive-command"]["default"]
+    assert "_formatMessengerLine" in source
+    assert "_formatLlmLine" in source
+    assert "_formatApiBudgetLine" in source
+    assert "_formatMemoryLine" in source
+    assert "Ersatz bei Modell-/Key-/Limitfehlern" in source
+    assert "codex-usage latest" in source
     assert "/status" in source
     assert "/voicemodel" in source
+    assert 'this.set_applet_label("TB")' in source
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -58,6 +83,7 @@ def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
     assert schema["layout"]["sections-section"]["keys"] == [
         "show-messenger-section",
         "show-llm-section",
+        "show-api-section",
         "show-memory-section",
         "show-bibliothekar-section",
         "show-proactive-section",
@@ -70,6 +96,8 @@ def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
     assert schema["enable-service-actions"]["default"] is True
     assert schema["terminal-command"]["default"] == ""
     assert "gnome-terminal" in schema["terminal-command"]["tooltip"]
+    assert schema["codex-usage-path"]["default"] == "/home/teladi/codex-usage"
+    assert schema["codex-usage-command"]["default"] == "codex-usage"
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
@@ -86,6 +114,11 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
         gemini_free_tier_limits status=no_limits_found source=ai.google.dev/gemini-api/docs/rate-limits
         llm_route=bibliothekar_answer status=configured
 
+        [API Keys, Limits und Kosten]
+        api_budget=bibliothekar_answer status=configured key=configured
+        codex_usage=local status=ready snapshots=2
+        codex_usage_account=BW_Work status=ok five_hour=1/100 weekly=5/100
+
         [Messenger]
         telegram_slot=Depressionsbot/telegram:1 status=configured token=configured
         signal_account=Depressionsbot/signal:1 status=registered
@@ -101,8 +134,11 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert parsed["summary"]["signal_accounts"] == 1
     assert parsed["summary"]["memory_accounts"] == 1
     assert parsed["summary"]["llm_routes"] == 1
+    assert parsed["summary"]["api_budgets"] == 1
+    assert parsed["summary"]["codex_usage"].startswith("codex_usage=local")
+    assert parsed["summary"]["codex_usage_accounts"] == 1
     assert parsed["summary"]["gemini_free_tier"].startswith("gemini_free_tier_limits")
-    assert parsed["status_counts"]["configured"] == 2
+    assert parsed["status_counts"]["configured"] == 3
     assert "Messenger" in parsed["sections"]
 
 
@@ -116,6 +152,10 @@ def test_cinnamon_applet_install_script_targets_user_applet_dir() -> None:
     source = (PROJECT_ROOT / "scripts" / "install_cinnamon_applet.py").read_text(encoding="utf-8")
 
     assert 'APPLET_UUID = "teebotus@H234598"' in source
+    assert 'SETTINGS_ICON_NAME = "teebotus.svg"' in source
     assert '".local" / "share" / "cinnamon" / "applets"' in source
+    assert '".local" / "share" / "icons" / "hicolor" / "scalable" / "apps"' in source
     assert "shutil.copytree(source, target)" in source
     assert "shutil.rmtree(target)" in source
+    assert "shutil.copy2(icon_source, icon_target)" in source
+    assert "gtk-update-icon-cache" in source

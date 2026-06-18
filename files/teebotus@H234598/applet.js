@@ -11,6 +11,8 @@ const DEFAULT_REPO_PATH = GLib.build_filenamev([GLib.get_home_dir(), "TeeBotus"]
 const DEFAULT_PYTHON = "/usr/bin/python3";
 const DEFAULT_UNIT = "teebotus.service";
 const DEFAULT_CHANNELS = "telegram,signal";
+const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
+const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
 const STATUS_REFRESH_MIN_SECONDS = 15;
 const MENU_LINE_LIMIT = 14;
 const QUICK_COMMANDS = [
@@ -52,6 +54,7 @@ TeeBotusApplet.prototype = {
     this.autoRefresh = true;
     this.showMessengerSection = true;
     this.showLlmSection = true;
+    this.showApiSection = true;
     this.showMemorySection = true;
     this.showBibliothekarSection = true;
     this.showProactiveSection = true;
@@ -67,6 +70,8 @@ TeeBotusApplet.prototype = {
     this.proactiveCommand = DEFAULT_PYTHON + " -m TeeBotus.proactive --instance Depressionsbot --dispatch --plan --tool-plan";
     this.githubUrl = "https://github.com/H234598/TeeBotus";
     this.commitsUrl = "https://github.com/H234598/TeeBotus/commits/main";
+    this.codexUsagePath = DEFAULT_CODEX_USAGE_PATH;
+    this.codexUsageCommand = DEFAULT_CODEX_USAGE_COMMAND;
     this.clipboard = St.Clipboard.get_default();
     this.statusPayload = null;
     this.statusText = "";
@@ -75,8 +80,11 @@ TeeBotusApplet.prototype = {
     this.lastError = "";
 
     this.set_applet_icon_path(this.metadata.path + "/icon.svg");
-    this.set_applet_tooltip(_("TeeBotus"));
-    this.set_applet_label("");
+    this.set_applet_tooltip(_("TB"));
+    this.set_applet_label("TB");
+    this.menuManager = new PopupMenu.PopupMenuManager(this);
+    this.menu = new Applet.AppletPopupMenu(this, orientation);
+    this.menuManager.addMenu(this.menu);
 
     this.settings = new Settings.AppletSettings(this, UUID, instanceId);
     this._bindSettings();
@@ -98,6 +106,7 @@ TeeBotusApplet.prototype = {
     this.settings.bindProperty(Settings.BindingDirection.IN, "auto-refresh", "autoRefresh", this._onRefreshSettingsChanged, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "show-messenger-section", "showMessengerSection", this._rebuildFromSettings, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "show-llm-section", "showLlmSection", this._rebuildFromSettings, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "show-api-section", "showApiSection", this._rebuildFromSettings, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "show-memory-section", "showMemorySection", this._rebuildFromSettings, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "show-bibliothekar-section", "showBibliothekarSection", this._rebuildFromSettings, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "show-proactive-section", "showProactiveSection", this._rebuildFromSettings, null);
@@ -113,11 +122,13 @@ TeeBotusApplet.prototype = {
     this.settings.bindProperty(Settings.BindingDirection.IN, "proactive-command", "proactiveCommand", null, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "github-url", "githubUrl", null, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "commits-url", "commitsUrl", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "codex-usage-path", "codexUsagePath", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "codex-usage-command", "codexUsageCommand", null, null);
   },
 
   _buildMenu: function() {
     this.menu.removeAll();
-    this.headerItem = this._menuLine(_("TeeBotus"), false);
+    this.headerItem = this._menuLine(_("TB"), false);
     this.headerItem.actor.add_style_class_name("teebotus-status-label");
     this.menu.addMenuItem(this.headerItem);
     this.summaryItem = this._menuLine(_("Status wird geladen..."), false);
@@ -132,6 +143,7 @@ TeeBotusApplet.prototype = {
     this.menu.addMenuItem(this.runtimeMenu);
     this.messengerMenu = new PopupMenu.PopupSubMenuMenuItem(_("Messenger"));
     this.llmMenu = new PopupMenu.PopupSubMenuMenuItem(_("LLM & Dienste"));
+    this.apiMenu = new PopupMenu.PopupSubMenuMenuItem(_("API Keys & Usage"));
     this.memoryMenu = new PopupMenu.PopupSubMenuMenuItem(_("Memory & Speicher"));
     this.bibliothekarMenu = new PopupMenu.PopupSubMenuMenuItem(_("Bibliothekar"));
     this.proactiveMenu = new PopupMenu.PopupSubMenuMenuItem(_("Proaktiv"));
@@ -140,6 +152,7 @@ TeeBotusApplet.prototype = {
     this.projectMenu = new PopupMenu.PopupSubMenuMenuItem(_("Projekt"));
     if (this.showMessengerSection) this.menu.addMenuItem(this.messengerMenu);
     if (this.showLlmSection) this.menu.addMenuItem(this.llmMenu);
+    if (this.showApiSection) this.menu.addMenuItem(this.apiMenu);
     if (this.showMemorySection) this.menu.addMenuItem(this.memoryMenu);
     if (this.showBibliothekarSection) this.menu.addMenuItem(this.bibliothekarMenu);
     if (this.showProactiveSection) this.menu.addMenuItem(this.proactiveMenu);
@@ -148,6 +161,7 @@ TeeBotusApplet.prototype = {
     if (this.showProjectSection) this.menu.addMenuItem(this.projectMenu);
     this._populateStaticMenus();
     this._populateDynamicMenus();
+    this._updateHeader();
   },
 
   _populateStaticMenus: function() {
@@ -196,10 +210,44 @@ TeeBotusApplet.prototype = {
     let payload = this.statusPayload || {};
     let runtime = payload.runtime || {};
     let sections = runtime.sections || {};
-    this._populateLines(this.runtimeMenu.menu, (sections["Konfiguration"] || []).concat(sections["Start"] || []), _("Keine Runtime-Konfiguration geladen."));
-    this._populateLines(this.messengerMenu.menu, sections["Messenger"] || [], _("Keine Messenger-Zeilen."));
-    this._populateLines(this.llmMenu.menu, sections["LLM-Routen und Backends"] || [], _("Keine LLM-Diagnose."));
-    this._populateLines(this.memoryMenu.menu, sections["Memory und semantische Suche"] || [], _("Keine Memory-Diagnose."));
+    let summary = runtime.summary || {};
+    let runtimeLines = [];
+    if (summary.instances || summary.channels) {
+      runtimeLines.push("Instanzen: " + String(summary.instances || "?") + " | Kanaele: " + String(summary.channels || this.channels || DEFAULT_CHANNELS));
+    }
+    runtimeLines = runtimeLines.concat(this._formatLines((sections["Konfiguration"] || []).concat(sections["Start"] || []), (line) => this._formatRuntimeLine(line)));
+    this._populateLines(this.runtimeMenu.menu, runtimeLines, this._dynamicEmptyText(_("Runtime-Konfiguration wird geladen.")));
+
+    let messengerLines = [];
+    if (summary.telegram_slots || summary.signal_accounts || summary.matrix_homeservers) {
+      messengerLines.push("Uebersicht: Telegram-Slots " + String(summary.telegram_slots || 0) + " | Signal-Accounts " + String(summary.signal_accounts || 0) + " | Matrix-Homeserver " + String(summary.matrix_homeservers || 0));
+    }
+    messengerLines = messengerLines.concat(this._formatLines(sections["Messenger"] || [], (line) => this._formatMessengerLine(line)));
+    this._populateLines(this.messengerMenu.menu, messengerLines, this._dynamicEmptyText(_("Messenger-Diagnose wird geladen.")));
+
+    let llmLines = [];
+    if (summary.llm_routes || summary.hf_pool || summary.gemini_free_tier) {
+      llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0));
+    }
+    llmLines = llmLines.concat(this._formatLines(sections["LLM-Routen und Backends"] || [], (line) => this._formatLlmLine(line)));
+    this._populateLines(this.llmMenu.menu, llmLines, this._dynamicEmptyText(_("LLM-Diagnose wird geladen.")));
+
+    if (this.showApiSection) {
+      let apiLines = [];
+      if (summary.api_budgets || summary.codex_usage_accounts) {
+        apiLines.push("Uebersicht: API-Routen " + String(summary.api_budgets || 0) + " | codex-usage Accounts " + String(summary.codex_usage_accounts || 0));
+      }
+      apiLines = apiLines.concat(this._formatLines(sections["API Keys, Limits und Kosten"] || [], (line) => this._formatApiBudgetLine(line)));
+      this._populateLines(this.apiMenu.menu, apiLines, this._dynamicEmptyText(_("API-/Usage-Diagnose wird geladen.")));
+      this._appendCodexUsageActions();
+    }
+
+    let memoryLines = [];
+    if (summary.memory_accounts || summary.qdrant) {
+      memoryLines.push("Uebersicht: Account-Memorys " + String(summary.memory_accounts || 0));
+    }
+    memoryLines = memoryLines.concat(this._formatLines(sections["Memory und semantische Suche"] || [], (line) => this._formatMemoryLine(line)));
+    this._populateLines(this.memoryMenu.menu, memoryLines, this._dynamicEmptyText(_("Memory-Diagnose wird geladen.")));
     if (this.showBibliothekarSection) {
       this.bibliothekarMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.bibliothekarMenu.menu, this._filterLines(sections["Lokale Dienste"] || [], ["bibliothekar="]), _("Keine Bibliothekar-Statuszeilen."));
@@ -208,6 +256,179 @@ TeeBotusApplet.prototype = {
       this.proactiveMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.proactiveMenu.menu, sections["Agenten-Piloten"] || [], _("Keine Agenten-Pilot-Zeilen."));
     }
+  },
+
+  _formatLines: function(lines, formatter) {
+    let result = [];
+    for (let line of lines || []) {
+      result.push(formatter(String(line || "")));
+    }
+    return result;
+  },
+
+  _dynamicEmptyText: function(loadingText) {
+    if (this.statusRunning || !this.statusPayload) {
+      return loadingText;
+    }
+    return _("Keine passenden Statuszeilen im Runtime-Status.");
+  },
+
+  _formatRuntimeLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.instances) {
+      return "Instanzen: " + fields.instances;
+    }
+    if (fields.channels) {
+      return "Kanaele: " + fields.channels;
+    }
+    return line;
+  },
+
+  _formatMessengerLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.telegram_slot) {
+      return "Telegram " + fields.telegram_slot + ": " + this._statusWord(fields.status) + "; Token " + String(fields.token || "unbekannt");
+    }
+    if (fields.signal_account) {
+      let phone = fields.phone ? "; Telefon " + fields.phone : "";
+      return "Signal " + fields.signal_account + ": " + this._statusWord(fields.status) + phone + "; REST " + String(fields.target || "unbekannt");
+    }
+    if (fields.signal_service) {
+      return "Signal-REST " + fields.signal_service + ": " + this._statusWord(fields.status) + " auf " + String(fields.target || "unbekannt");
+    }
+    if (fields.matrix_homeserver) {
+      return "Matrix " + fields.matrix_homeserver + ": " + this._statusWord(fields.status) + "; " + String(fields.target || "");
+    }
+    return line;
+  },
+
+  _formatLlmLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.hf_pool) {
+      return "HF-Pool " + fields.hf_pool + ": " + this._statusWord(fields.status);
+    }
+    if (line.indexOf("gemini_free_tier_limits ") === 0 || fields.gemini_free_tier_limits !== undefined) {
+      let source = fields.source ? "; Quelle " + fields.source : "";
+      let models = fields.models ? "; Modelle " + fields.models : "";
+      return "Gemini Free-Tier-Limits: " + this._statusWord(fields.status) + models + source;
+    }
+    if (fields.llm_route) {
+      let primary = String(fields.provider || "provider?") + " / " + String(fields.model || "model?");
+      let text = "Route " + fields.llm_route + ": " + primary + " (" + this._statusWord(fields.status) + ")";
+      if (fields.profile) {
+        text += "; Profil " + fields.profile;
+      }
+      if (fields.api_key_env && (fields.status === "missing_key" || fields.fallback_api_key === "missing")) {
+        text += "; Key fehlt: " + fields.api_key_env;
+      }
+      if (fields.free_tier_guard) {
+        text += "; Free-Tier-Waechter " + fields.free_tier_guard;
+      }
+      let fallbackName = fields.fallback_profile || fields.fallback || "";
+      let fallbackModel = fields.fallback_model || "";
+      if (fallbackName || fallbackModel) {
+        text += "; Ersatz bei Modell-/Key-/Limitfehlern: " + String(fallbackName || "Fallback");
+        if (fallbackModel) {
+          text += " -> " + fallbackModel;
+        }
+      }
+      return text;
+    }
+    return line;
+  },
+
+  _formatApiBudgetLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.api_budget) {
+      let text = "Route " + fields.api_budget + ": " + String(fields.provider || "?") + " / " + String(fields.model || "?") + " (" + this._statusWord(fields.status) + ")";
+      text += "; Key " + String(fields.key || "?");
+      if (fields.key_env) {
+        text += " via " + fields.key_env;
+      }
+      if (fields.key_ring) {
+        text += "; Ring " + fields.key_ring;
+      }
+      if (fields.key_instances) {
+        text += "; Instanzen " + fields.key_instances;
+      }
+      if (fields.google_mode) {
+        text += "; Google " + fields.google_mode;
+      }
+      if (fields.limits) {
+        text += "; Limits " + fields.limits;
+      }
+      if (fields.costs) {
+        text += "; Kosten " + fields.costs;
+      }
+      return text;
+    }
+    if (fields.codex_usage) {
+      let stale = fields.stale_hours ? "; Alter " + fields.stale_hours + "h" : "";
+      return "codex-usage: " + this._statusWord(fields.status) + "; Snapshots " + String(fields.snapshots || "0") + stale;
+    }
+    if (fields.codex_usage_account) {
+      return "codex-usage " + fields.codex_usage_account + ": " + this._statusWord(fields.status) + "; 5h " + String(fields.five_hour || "?") + "; Woche " + String(fields.weekly || "?");
+    }
+    return line;
+  },
+
+  _formatMemoryLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.qdrant) {
+      let fallback = fields.fallback ? "; Ersatzsuche: " + fields.fallback : "";
+      return "Semantischer Index " + fields.qdrant + ": " + this._statusWord(fields.status) + fallback;
+    }
+    if (fields.qdrant_collection) {
+      return "Qdrant Collection " + fields.qdrant_collection + ": " + this._statusWord(fields.status) + "; Vektor " + String(fields.vector_size || "?") + "; Embedding " + String(fields.embedding_model || "?");
+    }
+    if (fields.memory_index) {
+      return "Memory Index " + fields.memory_index + ": " + this._statusWord(fields.status) + "; Backend " + String(fields.backend || "?") + "; Semantik " + String(fields.semantic || "?");
+    }
+    return line;
+  },
+
+  _statusWord: function(status) {
+    let value = String(status || "unknown");
+    let labels = {
+      configured: "konfiguriert",
+      disabled: "deaktiviert",
+      enabled: "aktiv",
+      fallback_defaults: "konservative Ersatzwerte",
+      missing_key: "Key fehlt",
+      ok: "ok",
+      planned: "geplant",
+      reachable: "erreichbar",
+      ready: "bereit",
+      registered: "registriert",
+      unavailable: "nicht verfuegbar",
+      unreachable: "nicht erreichbar",
+      warning: "Warnung"
+    };
+    return labels[value] || value;
+  },
+
+  _appendCodexUsageActions: function() {
+    this.apiMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this.apiMenu.menu.addMenuItem(this._actionItem(_("codex-usage latest"), () => this._openCodexUsage(["latest"])));
+    this.apiMenu.menu.addMenuItem(this._actionItem(_("codex-usage latest JSON"), () => this._openCodexUsage(["latest", "--format", "json"])));
+    this.apiMenu.menu.addMenuItem(this._actionItem(_("codex-usage paths"), () => this._openCodexUsage(["paths"])));
+    this.apiMenu.menu.addMenuItem(this._actionItem(_("codex-usage Repo oeffnen"), () => this._openPath(this._codexUsagePath())));
+  },
+
+  _parseFields: function(line) {
+    let fields = {};
+    for (let part of String(line || "").split(/\s+/)) {
+      let index = part.indexOf("=");
+      if (index < 0) {
+        continue;
+      }
+      let key = part.slice(0, index).trim();
+      let value = part.slice(index + 1).trim();
+      if (key) {
+        fields[key] = value;
+      }
+    }
+    return fields;
   },
 
   _populateLines: function(menu, lines, emptyText) {
@@ -246,10 +467,9 @@ TeeBotusApplet.prototype = {
         this.lastError = "";
         this.statusText = this._statusSummary(payload);
       }
-      this._updatePanel();
-      this._updateHeader();
       this._buildMenu();
-    });
+      this._updatePanel();
+    }, this._repoPath());
   },
 
   _statusCommand: function() {
@@ -288,38 +508,24 @@ TeeBotusApplet.prototype = {
     let unit = payload.unit || {};
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
-    this.headerItem.label.set_text("TeeBotus " + String(payload.version || "?"));
+    this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
     this.versionItem.label.set_text("Unit: " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + commit + " | LLM-Routen: " + String(summary.llm_routes || 0));
   },
 
   _updatePanel: function() {
-    if (!this.showPanelLabel || this.panelLabelMode === "icon") {
-      this.set_applet_label("");
-      return;
-    }
-    let payload = this.statusPayload || {};
-    let runtime = payload.runtime || {};
-    let summary = runtime.summary || {};
-    let unit = payload.unit || {};
-    if (this.panelLabelMode === "version") {
-      this.set_applet_label("TB " + String(payload.version || "?"));
-    } else if (this.panelLabelMode === "instances") {
-      this.set_applet_label("TB " + String(summary.instances || "?"));
-    } else {
-      this.set_applet_label("TB " + String(unit.active_state || "…"));
-    }
-    this.set_applet_tooltip(this.statusText || _("TeeBotus"));
+    this.set_applet_label("TB");
+    this.set_applet_tooltip(this.statusText || _("TB"));
   },
 
   _setPanelState: function(state) {
     if (state === "refreshing") {
-      this.set_applet_label(this.showPanelLabel ? "TB …" : "");
+      this.set_applet_label("TB");
     }
   },
 
-  _spawnJson: function(argv, callback) {
+  _spawnJson: function(argv, callback, cwd) {
     this._spawn(argv, (stdout, stderr, ok) => {
       if (!ok) {
         callback(null, stderr || _("Command failed"));
@@ -330,12 +536,16 @@ TeeBotusApplet.prototype = {
       } catch (err) {
         callback(null, _("Invalid JSON from helper: ") + String(err));
       }
-    });
+    }, cwd);
   },
 
-  _spawn: function(argv, callback) {
+  _spawn: function(argv, callback, cwd) {
     try {
-      let process = Gio.Subprocess.new(argv, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+      let launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
+      if (cwd) {
+        launcher.set_cwd(String(cwd));
+      }
+      let process = launcher.spawnv(argv);
       process.communicate_utf8_async(null, null, (proc, result) => {
         try {
           let [, stdout, stderr] = proc.communicate_utf8_finish(result);
@@ -373,15 +583,19 @@ TeeBotusApplet.prototype = {
       this._updateHeader();
       return;
     }
-    this._spawn(["zenity", "--question", "--title=TeeBotus", "--text=" + action + " " + unit + "?"], (stdout, stderr, ok) => {
+    this._spawn(["zenity", "--question", "--title=TB", "--text=" + action + " " + unit + "?"], (stdout, stderr, ok) => {
       if (ok) {
         run();
       }
-    });
+    }, this._repoPath());
   },
 
   _openRuntimeStatusTerminal: function() {
     this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus", "--runtime-status", "--channels", String(this.channels || DEFAULT_CHANNELS)]));
+  },
+
+  _openCodexUsage: function(args) {
+    this._openTerminalForCommand(this._codexUsagePath(), [this._codexUsageCommand()].concat(args || []));
   },
 
   _openLogsTerminal: function() {
@@ -496,6 +710,14 @@ TeeBotusApplet.prototype = {
     return String(this.repoPath || DEFAULT_REPO_PATH).trim() || DEFAULT_REPO_PATH;
   },
 
+  _codexUsagePath: function() {
+    return String(this.codexUsagePath || DEFAULT_CODEX_USAGE_PATH).trim() || DEFAULT_CODEX_USAGE_PATH;
+  },
+
+  _codexUsageCommand: function() {
+    return String(this.codexUsageCommand || DEFAULT_CODEX_USAGE_COMMAND).trim() || DEFAULT_CODEX_USAGE_COMMAND;
+  },
+
   _positiveInt: function(value, fallback) {
     let parsed = parseInt(value, 10);
     return parsed > 0 ? parsed : fallback;
@@ -548,13 +770,19 @@ TeeBotusApplet.prototype = {
 
   on_applet_clicked: function() {
     this._refreshStatus();
-    this.menu.toggle();
+    if (this.menu) {
+      this.menu.toggle();
+    }
   },
 
   on_applet_removed_from_panel: function() {
     if (this.statusTimer) {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
+    }
+    if (this.menu) {
+      this.menu.destroy();
+      this.menu = null;
     }
   }
 };

@@ -1,7 +1,7 @@
 profiles:
   local_ollama:
     provider: litellm
-    model: ollama_chat/llama3.1:8b
+    model: ollama_chat/llama3.2:3b
     base_url: http://127.0.0.1:11434
     api_key_env: ""
 
@@ -36,13 +36,13 @@ profiles:
     api_key_env: GROQ_API_KEY
 
   gemini_flash:
-    provider: litellm
-    model: gemini/gemini-2.5-flash
+    provider: gemini_interactions
+    model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY
 
   vertex_gemini_flash:
     provider: litellm
-    model: vertex_ai/gemini-2.5-flash
+    model: vertex_ai/gemini-3.5-flash
     api_key_env: GOOGLE_APPLICATION_CREDENTIALS
 
   openai_premium:

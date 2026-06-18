@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" role="img" aria-label="TeeBotus about logo">
+  <defs>
+    <linearGradient id="badge" x1="112" y1="32" x2="267" y2="238" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#123f52"/>
+      <stop offset="0.56" stop-color="#24745f"/>
+      <stop offset="1" stop-color="#837f2c"/>
+    </linearGradient>
+    <linearGradient id="plate" x1="135" y1="92" x2="245" y2="183" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff4c7"/>
+      <stop offset="1" stop-color="#c5ecff"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="25" width="696" height="250" rx="30" fill="#122733"/>
+  <path d="M588 73c36 0 65 29 65 65 0 12-3 23-9 33l41 7-53 15c-12 7-27 11-44 11-36 0-65-29-65-65s29-66 65-66Z" fill="#ffffff" opacity=".1"/>
+  <path d="M112 54h155c26 0 47 21 47 47v60c0 26-21 47-47 47H112c-26 0-47-21-47-47v-60c0-26 21-47 47-47Z" fill="url(#badge)"/>
+  <path d="M123 96h133c19 0 35 16 35 35v21c0 19-16 35-35 35H123c-19 0-35-16-35-35v-21c0-19 16-35 35-35Z" fill="url(#plate)"/>
+  <circle cx="147" cy="142" r="12" fill="#123f52"/>
+  <circle cx="232" cy="142" r="12" fill="#123f52"/>
+  <path d="M154 166c21 15 50 15 71 0" fill="none" stroke="#123f52" stroke-width="8" stroke-linecap="round"/>
+  <path d="M143 96 122 54M236 96l21-42" fill="none" stroke="#f0c94a" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="122" cy="54" r="11" fill="#f0c94a"/>
+  <circle cx="257" cy="54" r="11" fill="#f0c94a"/>
+  <path d="M267 195c31 0 56-25 56-56s-25-56-56-56" fill="none" stroke="#c5ecff" stroke-width="8" stroke-linecap="round" opacity=".75"/>
+  <text x="358" y="124" fill="#fff7d1" font-family="Inter, Cantarell, DejaVu Sans, sans-serif" font-size="50" font-weight="800">TeeBotus</text>
+  <text x="361" y="170" fill="#d8eef0" font-family="Inter, Cantarell, DejaVu Sans, sans-serif" font-size="24" font-weight="600">Cinnamon Control Applet</text>
+  <text x="361" y="210" fill="#a9cfd1" font-family="Inter, Cantarell, DejaVu Sans, sans-serif" font-size="19">Status, lokale Dienste, Memory und Bot-Aktionen an einem Ort.</text>
+</svg>

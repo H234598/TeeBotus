@@ -7,11 +7,15 @@ Telegram transport is started through the shared runtime configuration.
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import re
+import shutil
 import sys
 import types
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
@@ -168,6 +172,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
     for purpose in _runtime_status_route_purposes():
         llm_backend_lines.append(_runtime_status_decision_line(purpose, instance_names=route_instance_names))
     _print_runtime_status_section("LLM-Routen und Backends", llm_backend_lines)
+    _print_runtime_status_section(
+        "API Keys, Limits und Kosten",
+        _runtime_status_api_budget_lines(config, route_instance_names),
+    )
 
     crew_lines: list[str] = []
     try:
@@ -407,7 +415,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
     if gemini_key_ring_count > 1:
         detail += f" api_key_ring={gemini_key_ring_count}"
     if _status_route_uses_google_gemini(provider=provider, model=model):
-        detail += " google_mode=stateless"
+        detail += f" google_mode={_status_google_mode(provider=provider, model=model)}"
         service_tier = _status_gemini_service_tier(
             account,
             provider=provider,
@@ -741,7 +749,7 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         configured_instances, total_instances = gemini_key_instances
         detail += f" api_key_instances={configured_instances}/{total_instances}"
     if _status_route_uses_google_gemini(provider=route.provider, model=route.model):
-        detail += " google_mode=stateless"
+        detail += f" google_mode={_status_google_mode(provider=route.provider, model=route.model)}"
         service_tier = _status_gemini_service_tier_for_instances(
             instance_names,
             provider=route.provider,
@@ -778,6 +786,223 @@ def _runtime_status_route_purposes() -> tuple[str, ...]:
     except Exception:
         return tuple(purposes)
     return tuple(purposes)
+
+
+def _runtime_status_api_budget_lines(config: Any, instance_names: Sequence[str]) -> tuple[str, ...]:
+    lines: list[str] = []
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+    except Exception as exc:  # pragma: no cover - defensive status path.
+        return (f"api_budget=llm status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}",)
+    for purpose in _runtime_status_route_purposes():
+        try:
+            route = select_llm_route(purpose)
+        except Exception as exc:  # noqa: BLE001 - status should diagnose bad optional routing config.
+            lines.append(
+                f"api_budget={_sanitize_status_text(purpose)} provider=<unknown> model=<unknown> "
+                f"status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}"
+            )
+            continue
+        lines.append(_runtime_status_api_budget_route_line(route, instance_names=instance_names))
+    lines.extend(_runtime_status_codex_usage_lines())
+    return tuple(lines)
+
+
+def _runtime_status_api_budget_route_line(route: Any, *, instance_names: Sequence[str]) -> str:
+    provider = _normalize_status_llm_provider(getattr(route, "provider", ""))
+    model = str(getattr(route, "model", "") or "").strip()
+    status, error = _runtime_route_status(route, instance_names=instance_names)
+    key_state = _status_api_key_state(route, provider=provider, model=model, instance_names=instance_names)
+    detail = (
+        f"api_budget={_sanitize_status_text(getattr(route, 'purpose', '') or 'normal_chat')} "
+        f"profile={_sanitize_status_text(getattr(route, 'profile_name', '') or '<direct>')} "
+        f"provider={provider} model={_sanitize_status_text(model or '<none>')} status={status} "
+        f"key={key_state}"
+    )
+    api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
+    if api_key_env:
+        detail += f" key_env={_sanitize_status_text(api_key_env)}"
+    gemini_key_ring_count = _status_gemini_key_ring_count_for_instances(instance_names, provider=provider, model=model)
+    if gemini_key_ring_count > 1:
+        detail += f" key_ring={gemini_key_ring_count}"
+    gemini_key_instances = _status_gemini_key_instance_availability(instance_names, provider=provider, model=model)
+    if gemini_key_instances is not None:
+        configured_instances, total_instances = gemini_key_instances
+        detail += f" key_instances={configured_instances}/{total_instances}"
+    if _status_route_uses_google_gemini(provider=provider, model=model):
+        detail += (
+            f" google_mode={_status_google_mode(provider=provider, model=model)} "
+            f"store={'true' if _status_google_mode(provider=provider, model=model) == 'stateful' else 'false'} "
+            f"limits={_status_gemini_free_tier_guard(types.SimpleNamespace(instance_name=''), provider=provider, model=model)} "
+            "costs=provider_billing_not_fetched "
+            "tokens=provider_usage_response+local_free_tier_guard"
+        )
+        service_tier = _status_gemini_service_tier_for_instances(
+            instance_names,
+            provider=provider,
+            model=model,
+            explicit_service_tier=str(getattr(route, "service_tier", "") or ""),
+        )
+        if service_tier:
+            detail += f" service_tier={_sanitize_status_text(service_tier)}"
+    elif _status_route_is_local(provider=provider, model=model):
+        detail += " limits=local costs=local tokens=local_model"
+    elif provider == "hf_pool":
+        detail += " limits=pool_state costs=target_provider tokens=hf_pool_usage_log"
+    else:
+        detail += " limits=provider costs=provider_billing_not_fetched tokens=response_usage_when_available"
+    fallback_model = str(getattr(route, "fallback_model", "") or "").strip()
+    if fallback_model:
+        detail += (
+            f" fallback_profile={_sanitize_status_text(getattr(route, 'fallback_profile_name', '') or '<direct>')} "
+            f"fallback_model={_sanitize_status_text(fallback_model)}"
+        )
+    if error:
+        detail += f" error={_sanitize_status_text(error)}"
+    return _sanitize_status_text(detail)
+
+
+def _status_api_key_state(route: Any, *, provider: str, model: str, instance_names: Sequence[str]) -> str:
+    if not _llm_key_required_for_status(
+        types.SimpleNamespace(llm_api_key="", openai_api_key=""),
+        provider=provider,
+        model=model,
+        base_url=str(getattr(route, "base_url", "") or ""),
+        route_api_key_env=str(getattr(route, "api_key_env", "") or ""),
+    ):
+        return "not_required"
+    gemini_key_instances = _status_gemini_key_instance_availability(instance_names, provider=provider, model=model)
+    if gemini_key_instances is not None:
+        configured_instances, total_instances = gemini_key_instances
+        if configured_instances == total_instances:
+            return "configured"
+        if configured_instances:
+            return "partial"
+        return "missing"
+    api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
+    if api_key_env and os.environ.get(api_key_env, "").strip():
+        return "configured"
+    return "missing"
+
+
+def _runtime_status_codex_usage_lines() -> tuple[str, ...]:
+    repo = Path(os.environ.get("TEEBOTUS_CODEX_USAGE_REPO", "/home/teladi/codex-usage")).expanduser()
+    snapshot_dir = Path(os.environ.get("CODEX_USAGE_STATE_ROOT", Path.home() / ".local" / "share" / "codex-usage")) / "snapshots"
+    cli = shutil.which("codex-usage") or str(Path.home() / ".local" / "bin" / "codex-usage")
+    cli_path = Path(cli)
+    snapshots = _codex_usage_snapshot_payloads(snapshot_dir)
+    status = "ready" if repo.is_dir() and cli_path.exists() else "missing"
+    latest_at = _latest_codex_usage_capture(snapshots)
+    stale_hours = _codex_usage_stale_hours(latest_at)
+    line = (
+        f"codex_usage=local status={status} repo={repo} cli={cli_path} snapshot_dir={snapshot_dir} "
+        f"snapshots={len(snapshots)}"
+    )
+    if latest_at:
+        line += f" latest_at={_status_time_token(latest_at)} stale_hours={stale_hours}"
+    lines = [_sanitize_status_text(line)]
+    for payload in snapshots[:8]:
+        account = _status_token(payload.get("account") or "<unknown>")
+        account_status = _status_token(payload.get("status") or "unknown")
+        captured_at = _status_time_token(_parse_status_datetime(payload.get("captured_at")))
+        five = _codex_usage_window_label(payload.get("five_hour"))
+        weekly = _codex_usage_window_label(payload.get("weekly"))
+        lines.append(
+            _sanitize_status_text(
+                f"codex_usage_account={account} status={account_status} captured_at={captured_at} "
+                f"five_hour={five} weekly={weekly}"
+            )
+        )
+    return tuple(lines)
+
+
+def _codex_usage_snapshot_payloads(snapshot_dir: Path) -> list[dict[str, Any]]:
+    try:
+        paths = sorted(snapshot_dir.glob("*.json"))
+    except OSError:
+        return []
+    payloads: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    payloads.sort(key=lambda item: str(item.get("captured_at") or ""), reverse=True)
+    return payloads
+
+
+def _latest_codex_usage_capture(payloads: Sequence[Mapping[str, Any]]) -> datetime | None:
+    captures = [_parse_status_datetime(payload.get("captured_at")) for payload in payloads]
+    captures = [value for value in captures if value is not None]
+    return max(captures) if captures else None
+
+
+def _codex_usage_stale_hours(value: datetime | None) -> int:
+    if value is None:
+        return -1
+    delta = datetime.now(timezone.utc) - value.astimezone(timezone.utc)
+    return max(0, int(delta.total_seconds() // 3600))
+
+
+def _codex_usage_window_label(value: object) -> str:
+    if not isinstance(value, Mapping):
+        return "none"
+    used = _status_number(value.get("used"))
+    limit = _status_number(value.get("limit"))
+    percent = _status_number(value.get("percent"))
+    remaining = _status_number(value.get("remaining"))
+    reset = _status_time_token(_parse_status_datetime(value.get("reset_at")))
+    parts: list[str] = []
+    if used != "unknown" and limit != "unknown":
+        parts.append(f"{used}/{limit}")
+    elif used != "unknown":
+        parts.append(f"used:{used}")
+    if percent != "unknown":
+        parts.append(f"percent:{percent}")
+    if remaining != "unknown":
+        parts.append(f"remaining:{remaining}")
+    if reset != "unknown":
+        parts.append(f"reset:{reset}")
+    return ",".join(parts) if parts else "unknown"
+
+
+def _status_number(value: object) -> str:
+    if value is None:
+        return "unknown"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "unknown"
+    if number.is_integer():
+        return str(int(number))
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def _parse_status_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _status_time_token(value: datetime | None) -> str:
+    if value is None:
+        return "unknown"
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _status_token(value: object) -> str:
+    return re.sub(r"\s+", "_", str(value or "").strip()) or "unknown"
 
 
 def _runtime_route_status(route: Any, *, instance_names: Sequence[str] = ()) -> tuple[str, str]:
@@ -951,7 +1176,7 @@ def _llm_key_required_for_status(
         return False
     if _status_model_uses_ollama(model):
         return False
-    if normalized_provider in {"huggingface", "hf", "groq", "gemini", "vertex_ai"}:
+    if normalized_provider in {"huggingface", "hf", "groq", "gemini", "gemini_interactions", "vertex_ai"}:
         return True
     if normalized_provider == "litellm":
         if route_api_key_env:
@@ -1180,13 +1405,28 @@ def _status_gemini_service_tier_for_instances(
 def _status_route_uses_gemini_api(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
+    return normalized_provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/")
 
 
 def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {"gemini", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
+    return normalized_provider in {"gemini", "gemini_interactions", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
+
+
+def _status_google_mode(*, provider: str, model: object) -> str:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    if normalized_provider == "gemini_interactions":
+        return "stateful"
+    return "stateless"
+
+
+def _status_route_is_local(*, provider: str, model: object) -> bool:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    if normalized_provider in {"ollama", "local_ollama"}:
+        return True
+    return normalized_model.startswith(("ollama/", "ollama_chat/"))
 
 
 def _normalize_status_llm_provider(provider: object) -> str:
@@ -1326,6 +1566,8 @@ def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
     if key_token in {"api_key_ring", "gemini_api_key_ring"} and value.strip().isdigit():
         return match.group(0)
     if key_token == "api_key_instances" and re.fullmatch(r"\d+/\d+", value.strip()):
+        return match.group(0)
+    if key_token in {"tokens", "token_usage", "costs", "limits", "free_tier_guard"}:
         return match.group(0)
     return f"{key}{separator}<redacted>"
 

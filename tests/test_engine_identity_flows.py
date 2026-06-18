@@ -285,7 +285,7 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
 def test_engine_status_uses_core_status_before_configured_commands(tmp_path, monkeypatch):
     class ActiveLLMClient:
         provider_name = "litellm"
-        model = "gemini/gemini-2.5-flash"
+        model = "gemini/gemini-3.5-flash"
         fallback_models = ("ollama_chat/llama3.1:8b",)
         service_tier = "flex"
 
@@ -331,25 +331,28 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
 
     assert len(actions) == 1
     assert "Depressionsbot Status:" in actions[0].text
-    assert f"- Version: {__version__} Wirt Commits https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
+    assert f"- Version: {__version__} Commits https://github.com/H234598/TeeBotus/commits/main" in actions[0].text
     assert actions[0].text_mode == "html"
     assert '<a href="https://github.com/H234598/TeeBotus/commits/main">Commits</a>' in actions[0].formatted_text
     assert "Commits:" not in actions[0].text
+    assert "Wirt" not in actions[0].text
     assert "Proactive Agent" in actions[0].text
     assert "- Agent enabled: ja" in actions[0].text
     assert "- Outbox queued: 1" in actions[0].text
     assert "- Review pending: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "- Model planner: tool" in actions[0].text
-    assert "LLM" in actions[0].text
-    assert "- Chat/Textantworten: aktiv - litellm / gemini/gemini-2.5-flash service_tier=flex" in actions[0].text
-    assert "- Strukturierte Entscheidungen: aktiv - hf_pool / pool:default#structured_decision fallback=ollama_chat/llama3.1:8b" in actions[0].text
-    assert "- Bibliothekar/Recherche: aktiv - litellm / gemini/gemini-2.5-flash" in actions[0].text
-    assert "- Fallbacks: ollama_chat/llama3.1:8b" in actions[0].text
-    assert "- Textantworten: ja" in actions[0].text
-    assert "- Provider: ollama" in actions[0].text
-    assert "- Modell: llama3.1:8b" in actions[0].text
-    assert "- Fallback-Modelle: 1" in actions[0].text
+    assert "[Aktive LLMs]" in actions[0].text
+    assert "- Chat/Text: aktiv - litellm / gemini/gemini-3.5-flash service_tier=flex" in actions[0].text
+    assert (
+        "- Entscheidungen/Planner: aktiv - hf_pool / pool:default#structured_decision "
+        "Ersatz bei Planner-Ausfall=ollama_chat/llama3.1:8b"
+    ) in actions[0].text
+    assert "- Bibliothekar/Antworten: aktiv - gemini_interactions / gemini/gemini-3.5-flash" in actions[0].text
+    assert "- Ersatzmodelle: aktiv fuer Chat/Textantworten: ollama_chat/llama3.1:8b" in actions[0].text
+    assert "[API, Limits und Kosten]" in actions[0].text
+    assert "- Chat/Text: litellm / gemini/gemini-3.5-flash; Key: GEMINI_API_KEY fehlt" in actions[0].text
+    assert "- Entscheidungen/Planner: hf_pool / pool:default#structured_decision" in actions[0].text
     assert "MCP Tools" in actions[0].text
     assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
     assert "- Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe" in actions[0].text
@@ -398,10 +401,11 @@ def test_engine_status_reports_unmapped_account_instead_of_zero_memory(tmp_path)
 
     assert "- Nutzermemory: Account nicht zugeordnet" in text
     assert "- Nutzermemory: 0 B" not in text
-    assert "- Textantworten: nein" in text
-    assert "- Provider: litellm" in text
-    assert "- Modell: huggingface/meta-llama/Llama-3.1-8B-Instruct" in text
-    assert "- Fallback-Modelle: 2" in text
+    assert "- Chat/Text: aus - litellm / huggingface/meta-llama/Llama-3.1-8B-Instruct" in text
+    assert (
+        "- Ersatzmodelle: nicht aktiv; bei Chat/Textantwort-Fehlern konfiguriert: "
+        "groq/llama-3.3-70b-versatile, openai/gpt-4.1-mini"
+    ) in text
 
 
 def test_status_uses_account_memory_backend_payload_size(tmp_path):

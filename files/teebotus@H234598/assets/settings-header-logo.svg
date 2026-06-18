@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="220" viewBox="0 0 900 220" role="img" aria-label="TeeBotus settings header">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="900" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#123f52"/>
+      <stop offset="0.5" stop-color="#24745f"/>
+      <stop offset="1" stop-color="#837f2c"/>
+    </linearGradient>
+    <linearGradient id="face" x1="94" y1="67" x2="196" y2="158" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff4c7"/>
+      <stop offset="1" stop-color="#c5ecff"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="900" height="220" rx="28" fill="url(#bg)"/>
+  <path d="M735 44c45 0 82 37 82 82 0 15-4 29-11 41l51 9-67 19c-15 9-34 13-55 13-45 0-82-37-82-82s37-82 82-82Z" fill="#ffffff" opacity=".12"/>
+  <path d="M75 54h136c26 0 47 21 47 47v35c0 26-21 47-47 47H75c-26 0-47-21-47-47v-35c0-26 21-47 47-47Z" fill="#0d2f3f" opacity=".65"/>
+  <path d="M83 72h120c20 0 36 16 36 36v20c0 20-16 36-36 36H83c-20 0-36-16-36-36v-20c0-20 16-36 36-36Z" fill="url(#face)"/>
+  <circle cx="105" cy="118" r="12" fill="#123f52"/>
+  <circle cx="181" cy="118" r="12" fill="#123f52"/>
+  <path d="M112 143c20 15 42 15 62 0" fill="none" stroke="#123f52" stroke-width="8" stroke-linecap="round"/>
+  <path d="M102 72 83 34M184 72l19-38" fill="none" stroke="#f0c94a" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="83" cy="34" r="11" fill="#f0c94a"/>
+  <circle cx="203" cy="34" r="11" fill="#f0c94a"/>
+  <text x="292" y="111" fill="#fff7d1" font-family="Inter, Cantarell, DejaVu Sans, sans-serif" font-size="54" font-weight="800">TeeBotus</text>
+  <text x="295" y="154" fill="#d8eef0" font-family="Inter, Cantarell, DejaVu Sans, sans-serif" font-size="24" font-weight="500">Messenger, Memory, Bibliothekar und lokale Bot-Steuerung</text>
+  <circle cx="824" cy="55" r="7" fill="#f0c94a"/>
+  <circle cx="850" cy="82" r="5" fill="#c5ecff"/>
+  <circle cx="794" cy="86" r="5" fill="#d8eef0"/>
+</svg>

@@ -709,7 +709,7 @@ def test_matrix_bridge_uses_llm_profile_for_text_client(monkeypatch, tmp_path) -
     )
 
     assert isinstance(bridge.llm_client, LiteLLMTextClient)
-    assert bridge.llm_client.model == "ollama_chat/llama3.1:8b"
+    assert bridge.llm_client.model == "ollama_chat/llama3.2:3b"
     assert bridge.engine.llm_client is bridge.llm_client
     assert bridge.engine.structured_decision_runner == "decision-runner"
     assert decision_kwargs and isinstance(decision_kwargs[0]["instructions"], BotInstructions)

@@ -890,29 +890,43 @@ def _with_telegram_reply_text(event: IncomingEvent, message: dict[str, Any]) -> 
     reply = message.get("reply_to_message")
     if not isinstance(reply, dict):
         return event
-    reply_text = str(reply.get("text") or reply.get("caption") or "").strip()
+    reply_text = _telegram_reply_text(reply)
     if not reply_text:
         return event
-    return IncomingEvent(
-        event_id=event.event_id,
-        instance=event.instance,
-        channel=event.channel,
-        adapter_slot=event.adapter_slot,
-        account_id=event.account_id,
-        identity_key=event.identity_key,
-        chat_id=event.chat_id,
-        chat_type=event.chat_type,
-        sender_id=event.sender_id,
-        sender_name=event.sender_name,
-        sender_username=event.sender_username,
-        sender_number=event.sender_number,
-        text=event.text,
-        message_ref=event.message_ref,
-        attachments=event.attachments,
-        link_previews=event.link_previews,
-        reply_to_text=reply_text,
-        raw=event.raw,
-    )
+    return event.with_reply_to_text(reply_text)
+
+
+def _telegram_reply_text(reply: dict[str, Any]) -> str:
+    direct_text = str(reply.get("text") or reply.get("caption") or "").strip()
+    if direct_text:
+        return direct_text
+    poll = reply.get("poll")
+    if isinstance(poll, dict):
+        question = str(poll.get("question") or "").strip()
+        if question:
+            return f"[Umfrage] {question}"
+    document = reply.get("document")
+    if isinstance(document, dict):
+        filename = str(document.get("file_name") or "").strip()
+        return f"[Datei] {filename}".strip()
+    audio = reply.get("audio")
+    if isinstance(audio, dict):
+        title = str(audio.get("title") or audio.get("file_name") or "").strip()
+        return f"[Audio] {title}".strip()
+    video = reply.get("video")
+    if isinstance(video, dict):
+        filename = str(video.get("file_name") or "").strip()
+        return f"[Video] {filename}".strip()
+    voice = reply.get("voice")
+    if isinstance(voice, dict):
+        return "[Sprachnachricht]"
+    if isinstance(reply.get("photo"), list):
+        return "[Foto]"
+    sticker = reply.get("sticker")
+    if isinstance(sticker, dict):
+        emoji = str(sticker.get("emoji") or "").strip()
+        return f"[Sticker] {emoji}".strip()
+    return ""
 
 
 def _with_telegram_attachments(api: TelegramAPI, event: IncomingEvent, message: dict[str, Any]) -> IncomingEvent:
@@ -3817,7 +3831,7 @@ def _extract_voice_text(message: dict[str, Any], command_text: str) -> str:
 
     reply = message.get("reply_to_message")
     if isinstance(reply, dict):
-        return str(reply.get("text") or reply.get("caption") or "").strip()
+        return _telegram_reply_text(reply)
     return ""
 
 

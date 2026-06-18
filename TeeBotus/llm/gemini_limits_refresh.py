@@ -27,6 +27,7 @@ LimitValues = dict[str, int | None]
 PayloadFetcher = Callable[[str, int], str]
 DEFAULT_GEMINI_FREE_TIER_FALLBACK_MODELS: Mapping[str, LimitValues] = {
     "gemini-2.5-flash": {"rpm": 5, "tpm": 250_000, "rpd": 20},
+    "gemini-3.5-flash": {"rpm": 5, "tpm": 250_000, "rpd": 20},
 }
 
 _REFRESH_THREAD_LOCK = threading.Lock()
@@ -433,7 +434,13 @@ def _refresh_due(cache: Mapping[str, object], *, now: datetime, interval_seconds
 
 
 def _cache_needs_default_fallback_upgrade(cache: Mapping[str, object], *, source_url: str) -> bool:
-    if _cache_models(cache):
+    models = _cache_models(cache)
+    if models:
+        if (
+            _is_default_gemini_limit_source(source_url)
+            and str(cache.get("limits_source") or "").strip().casefold() == "conservative_defaults"
+        ):
+            return bool(set(DEFAULT_GEMINI_FREE_TIER_FALLBACK_MODELS) - set(models))
         return False
     if not _is_default_gemini_limit_source(source_url):
         return False

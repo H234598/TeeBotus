@@ -59,6 +59,25 @@ def build_text_llm_client(
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     if resolved_provider == "openai":
         return openai_client
+    if resolved_provider == "gemini_interactions":
+        from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
+
+        parsed_timeout = _parse_positive_int(timeout)
+        parsed_temperature = _parse_optional_float(temperature)
+        parsed_max_tokens = _parse_positive_int(max_tokens)
+        return GeminiInteractionsClient(
+            GeminiInteractionsSettings(
+                model=model,
+                api_key=api_key or default_api_key,
+                api_key_ring=api_key_ring,
+                timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
+                temperature=parsed_temperature,
+                max_tokens=parsed_max_tokens,
+                service_tier=service_tier or instructions.llm_service_tier,
+                store=True,
+                gemini_free_tier_limits=gemini_free_tier_limits,
+            )
+        )
     if resolved_provider == "hf_pool":
         from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 

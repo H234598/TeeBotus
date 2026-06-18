@@ -950,8 +950,8 @@ profiles:
     api_key_env: GROQ_API_KEY
 
   gemini_flash:
-    provider: litellm
-    model: gemini/gemini-2.5-flash
+    provider: gemini_interactions
+    model: gemini/gemini-3.5-flash
     api_key_env: GEMINI_API_KEY
 
   vertex_gemini_flash:
@@ -975,11 +975,11 @@ den Ring. Mehrere Keys desselben Projekts erhoehen die Quote nicht. Bei
 `429`/Quota-/Usage-Limit wechselt der LiteLLM-Client auf den naechsten Key;
 sonst bleibt der aktive Key stehen.
 
-Google-Routen (`gemini/...` und `vertex_ai/...`) laufen im normalen Chatpfad
-stateless. TeeBotus sendet den notwendigen lokalen Kontext selbst; Live API,
-Interactions API, `previous_interaction_id` und serverseitige Google-Speicherung
-sind keine Defaults. `--runtime-status` zeigt diese Routen als
-`google_mode=stateless`.
+Google-Routen ueber `gemini_interactions` laufen im normalen Chatpfad stateful:
+TeeBotus nutzt `store=true` und `previous_interaction_id`. Google-Routen ueber
+LiteLLM/Vertex bleiben stateless; TeeBotus sendet dort den notwendigen lokalen
+Kontext selbst. `--runtime-status` zeigt entsprechend `google_mode=stateful`
+oder `google_mode=stateless`.
 
 Der Free-Tier-Guard ist fuer Google-Routen default-on und lokal konfigurierbar:
 

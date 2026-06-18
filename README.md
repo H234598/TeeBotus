@@ -563,11 +563,11 @@ python3 -m TeeBotus --runtime-status --channels telegram
 Remote-Profile werden genauso per Profil geschaltet. `gemini_flash` erwartet
 `GEMINI_API_KEY`; `vertex_gemini_flash` erwartet
 `GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale Vertex/Google-Credentials.
-Der normale Chatpfad nutzt dabei stateless LiteLLM/`generateContent`-Requests:
-TeeBotus sendet den benoetigten lokalen Kontext selbst und verlaesst sich nicht
-auf serverseitige Google-Conversation-State. Gemini Live API und Interactions
-API bleiben separate, stateful/gespeicherte Spezialpfade und werden hier nicht
-automatisch verwendet.
+`gemini_flash` nutzt den Gemini-Interactions-Provider mit `store=true` und
+`previous_interaction_id`, damit normale Gemini-Chatantworten stateful laufen.
+Vertex-Gemini ueber LiteLLM bleibt stateless; TeeBotus sendet dort den
+benoetigten lokalen Kontext selbst und verlaesst sich nicht auf serverseitige
+Google-Conversation-State.
 
 Gemini/Vertex-Service-Tier:
 
@@ -644,14 +644,15 @@ Instanzspezifisch funktionieren
 `TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine einzelne
 Dimension, `TEEBOTUS_GEMINI_FREE_TIER_ENABLED=false` schaltet den Guard ab.
-`--runtime-status` meldet Google-Routen als `google_mode=stateless`, zeigt bei
-aktiviertem Schalter `service_tier=flex`, die wirksamen Guard-Werte als
-`free_tier_guard=...` und gibt den Cachezustand als
-`gemini_free_tier_limits status=...` aus.
+`--runtime-status` meldet Google-Routen als `google_mode=stateful`, wenn sie
+ueber `gemini_interactions` laufen, sonst weiter als `google_mode=stateless`.
+Bei aktiviertem Schalter erscheinen `service_tier=flex`, die wirksamen
+Guard-Werte als `free_tier_guard=...` und der Cachezustand als
+`gemini_free_tier_limits status=...`.
 
-Das ist die normale Gemini-Text-API ueber LiteLLM. Die Gemini/Vertex Live API
-ist ein separater, stateful WebSocket-/GenAI-SDK-Pfad fuer Echtzeit-Audio,
-Video und Text und wird nicht automatisch fuer normale Chatantworten genutzt.
+Die Gemini/Vertex Live API ist weiterhin ein separater WebSocket-/GenAI-SDK-
+Pfad fuer Echtzeit-Audio, Video und Text. Stateful Gemini-Text laeuft hier ueber
+die Interactions API, nicht ueber Live API.
 
 `--runtime-status` nutzt dieselbe effektive LLM-Aufloesung wie der Bot-Start. Er beruecksichtigt also `Bot_Verhalten.md`, Runtime-Overrides und deaktivierte LLMs gleich wie die Runtime-Fabrik. Lokale Ollama-Targets werden nur fuer effektiv aktive Ollama-Konfigurationen geprueft und melden gefundene Modelle. Ollama ist der bevorzugte lokale Textprovider; Voice, Bilder und OpenAI-spezifische Tool-Calls bleiben beim OpenAI-Client, solange dafuer kein lokales Pendant angebunden ist.
 

@@ -847,7 +847,7 @@ def test_signal_command_uses_llm_profile_for_text_client(monkeypatch, tmp_path) 
     )
 
     assert isinstance(command.llm_client, LiteLLMTextClient)
-    assert command.llm_client.model == "ollama_chat/llama3.1:8b"
+    assert command.llm_client.model == "ollama_chat/llama3.2:3b"
     assert command.engine.llm_client is command.llm_client
     assert command.engine.structured_decision_runner == "decision-runner"
     assert decision_kwargs and isinstance(decision_kwargs[0]["instructions"], BotInstructions)

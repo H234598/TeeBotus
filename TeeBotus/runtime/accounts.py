@@ -400,6 +400,31 @@ class SecretToolInstanceSecretProvider:
         self._cache[cache_key] = key
         return key
 
+    def get_or_create_secret(self, instance_name: str, purpose: str, *, reason: str = "") -> bytes:
+        """Explicitly bootstrap a missing Secret Service key.
+
+        This is intentionally separate from get_secret() so runtime callers must
+        opt into key creation at the single callsite where fresh metadata is
+        created and no encrypted/verifier payload depends on an older key.
+        """
+        instance = _normalize_secret_token(instance_name, "instance")
+        resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        cache_key = (instance, resolved_purpose)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+        existing = self._lookup(instance, resolved_purpose)
+        if existing is not None:
+            self._cache[cache_key] = existing
+            return existing
+        key = secrets.token_bytes(INSTANCE_KEY_SIZE_BYTES)
+        self._store(instance, resolved_purpose, key)
+        confirmed = self._lookup(instance, resolved_purpose)
+        if confirmed != key:
+            raise AccountStoreError("secret-tool did not return the stored instance secret")
+        self._cache[cache_key] = key
+        return key
+
     def has_secret(self, instance_name: str, purpose: str) -> bool:
         instance = _normalize_secret_token(instance_name, "instance")
         resolved_purpose = _normalize_secret_token(purpose, "purpose")
@@ -573,6 +598,23 @@ class _KeyringManifestSecretProvider:
             self._verify_or_record(resolved_purpose, secret)
         return secret
 
+    def get_or_create_secret(self, instance_name: str, purpose: str, *, reason: str = "") -> bytes:
+        instance = _normalize_secret_token(instance_name, "instance")
+        resolved_purpose = _normalize_secret_token(purpose, "purpose")
+        if instance != self.instance_name or not self._purpose_guarded(resolved_purpose):
+            creator = getattr(self.delegate, "get_or_create_secret", None)
+            if callable(creator):
+                return creator(instance, resolved_purpose, reason=reason)
+            return self.delegate.get_secret(instance, resolved_purpose)
+        if self._manifest_has_purpose(resolved_purpose):
+            return self.get_secret(instance, resolved_purpose)
+        creator = getattr(self.delegate, "get_or_create_secret", None)
+        if not callable(creator):
+            return self.delegate.get_secret(instance, resolved_purpose)
+        secret = creator(instance, resolved_purpose, reason=reason)
+        self._verify_or_record(resolved_purpose, secret)
+        return secret
+
     def has_secret(self, instance_name: str, purpose: str) -> bool:
         has_secret = getattr(self.delegate, "has_secret", None)
         if callable(has_secret):
@@ -685,6 +727,16 @@ def _as_keyring_manifest_provider(provider: object) -> _KeyringManifestSecretPro
     if isinstance(provider, _KeyringManifestSecretProvider):
         return provider
     return None
+
+
+def _get_or_create_secret(provider: object, instance_name: str, purpose: str, *, reason: str) -> bytes:
+    creator = getattr(provider, "get_or_create_secret", None)
+    if callable(creator):
+        return creator(instance_name, purpose, reason=reason)
+    getter = getattr(provider, "get_secret", None)
+    if callable(getter):
+        return getter(instance_name, purpose)
+    raise AccountStoreError("secret provider does not support secret lookup")
 
 
 def _instance_secret_fingerprint(instance_name: str, purpose: str, secret: bytes) -> str:
@@ -2613,6 +2665,14 @@ class AccountStore:
                     reason="account secret verifiers",
                     path=verifier_path,
                 )
+            else:
+                pepper = _get_or_create_secret(
+                    self.secret_provider,
+                    self.instance_name,
+                    INSTANCE_PEPPER_PURPOSE,
+                    reason="initial account secret verifier pepper",
+                )
+                return hmac.new(pepper, secret.encode("utf-8"), hashlib.sha512).hexdigest()
         pepper = self.secret_provider.get_secret(self.instance_name, INSTANCE_PEPPER_PURPOSE)
         return hmac.new(pepper, secret.encode("utf-8"), hashlib.sha512).hexdigest()
 

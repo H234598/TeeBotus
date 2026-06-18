@@ -25,3 +25,5 @@ OPENAI_CAPABILITIES = LLMCapabilities(
 LITELLM_TEXT_CAPABILITIES = LLMCapabilities(text=True)
 
 HF_POOL_TEXT_CAPABILITIES = LLMCapabilities(text=True)
+
+GEMINI_INTERACTIONS_CAPABILITIES = LLMCapabilities(text=True, previous_response_id=True)

@@ -199,15 +199,20 @@ def test_refresh_gemini_free_tier_limits_uses_conservative_defaults_when_officia
     )
 
     assert result.status == "fallback_defaults"
-    assert result.models == 1
+    assert result.models == 2
     assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash") == {
+        "rpm": 5,
+        "tpm": 250_000,
+        "rpd": 20,
+    }
+    assert cached_gemini_free_tier_limit_values(env, model="gemini/gemini-3.5-flash") == {
         "rpm": 5,
         "tpm": 250_000,
         "rpd": 20,
     }
     status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, tzinfo=timezone.utc))
     assert "gemini_free_tier_limits status=fallback_defaults" in status
-    assert "models=1" in status
+    assert "models=2" in status
 
 
 def test_refresh_gemini_free_tier_limits_rechecks_old_empty_default_no_limits_cache_before_interval(tmp_path) -> None:
@@ -280,7 +285,7 @@ def test_refresh_gemini_free_tier_limits_keeps_default_fallback_status_on_next_o
     }
     status = gemini_free_tier_limit_status_line(env, now=lambda: datetime(2026, 6, 17, 0, 1, tzinfo=timezone.utc))
     assert "gemini_free_tier_limits status=fallback_defaults" in status
-    assert "models=1" in status
+    assert "models=2" in status
 
 
 def test_resolve_gemini_free_tier_limits_uses_cached_defaults_and_keeps_env_override(tmp_path) -> None:

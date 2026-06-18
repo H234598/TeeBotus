@@ -123,11 +123,11 @@ def build_status_reply(
         [
             f"{status_name} Status:",
             "",
-            "System",
-            "- Status: laeuft",
-            f"- Version: {__version__} Wirt Commits {commit_history_url}",
+            "[System]",
+            "- Laufzeit: laeuft",
+            f"- Version: {__version__} Commits {commit_history_url}",
             "",
-            "LLM",
+            "[Aktive LLMs]",
             *_llm_category_status_lines(
                 llm_enabled=llm_enabled,
                 llm_provider=llm_provider,
@@ -138,12 +138,20 @@ def build_status_reply(
                 bibliothekar_enabled=bibliothekar_enabled,
                 env=env,
             ),
-            f"- Textantworten: {_llm_enabled_status(llm_enabled)}",
-            f"- Provider: {_safe_status_value(llm_provider, default='openai')}",
-            f"- Modell: {_safe_status_value(llm_model, default='openai-default')}",
-            f"- Fallback-Modelle: {_fallback_model_count(llm_fallback_models)}",
             "",
-            "Deine Daten",
+            "[API, Limits und Kosten]",
+            *_llm_api_budget_status_lines(
+                llm_enabled=llm_enabled,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                llm_fallback_models=llm_fallback_models,
+                llm_client=llm_client,
+                structured_decision_runner=structured_decision_runner,
+                bibliothekar_enabled=bibliothekar_enabled,
+                env=env,
+            ),
+            "",
+            "[Daten und Memory]",
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
             "",
@@ -186,12 +194,161 @@ def _llm_category_status_lines(
         fallback_model=llm_model,
     )
     lines = [
-        f"- Chat/Textantworten: {chat_status} - {chat_label}",
-        f"- Strukturierte Entscheidungen: {_structured_decision_status_label(structured_decision_runner)}",
-        f"- Bibliothekar/Recherche: {_route_status_label('bibliothekar_answer', enabled=bibliothekar_enabled, env=env)}",
-        f"- Fallbacks: {_fallback_category_status(llm_client, llm_fallback_models)}",
+        f"- Chat/Text: {chat_status} - {chat_label}",
+        f"- Entscheidungen/Planner: {_structured_decision_status_label(structured_decision_runner)}",
+        f"- Bibliothekar/Antworten: {_route_status_label('bibliothekar_answer', enabled=bibliothekar_enabled, env=env)}",
+        f"- Ersatzmodelle: {_fallback_category_status(llm_client, llm_fallback_models)}",
     ]
     return [redact_status_text(line) for line in lines]
+
+
+def _llm_api_budget_status_lines(
+    *,
+    llm_enabled: bool | None,
+    llm_provider: str,
+    llm_model: str,
+    llm_fallback_models: tuple[str, ...] | list[str] | str,
+    llm_client: object | None,
+    structured_decision_runner: object | None,
+    bibliothekar_enabled: bool | None,
+    env: Mapping[str, str] | None,
+) -> list[str]:
+    del llm_fallback_models
+    values = env if env is not None else os.environ
+    chat_provider = _first_status_attr(llm_client, "provider_name", "provider", "llm_provider") or llm_provider or "openai"
+    chat_model = _first_status_attr(llm_client, "model", "model_name", "model_selector", "llm_model", "pydantic_ai_model_name") or llm_model or "openai-default"
+    chat_label = _api_budget_label(
+        provider=chat_provider,
+        model=chat_model,
+        env=values,
+        enabled=llm_enabled,
+        service_tier=_first_status_attr(llm_client, "service_tier"),
+    )
+    decision_label = _api_budget_label_for_runner(structured_decision_runner, env=values)
+    bibliothekar_label = _api_budget_label_for_route("bibliothekar_answer", enabled=bibliothekar_enabled, env=values)
+    return [
+        redact_status_text(f"- Chat/Text: {chat_label}"),
+        redact_status_text(f"- Entscheidungen/Planner: {decision_label}"),
+        redact_status_text(f"- Bibliothekar/Antworten: {bibliothekar_label}"),
+    ]
+
+
+def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str]) -> str:
+    if runner is None:
+        return "aus"
+    provider = _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
+    model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
+    return _api_budget_label(provider=provider, model=model, env=env, enabled=True)
+
+
+def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapping[str, str]) -> str:
+    if enabled is False:
+        return "aus"
+    try:
+        from TeeBotus.llm.profiles import select_llm_route
+        from TeeBotus.llm.service_tier import resolve_gemini_service_tier
+
+        route = select_llm_route(purpose)
+        service_tier = resolve_gemini_service_tier(
+            env,
+            provider=route.provider,
+            model=route.model,
+            explicit_service_tier=route.service_tier,
+        )
+        return _api_budget_label(
+            provider=route.provider,
+            model=route.model,
+            env=env,
+            enabled=True,
+            api_key_env=route.api_key_env,
+            service_tier=service_tier,
+        )
+    except Exception as exc:  # noqa: BLE001 - status should stay diagnostic.
+        return f"unbekannt - {type(exc).__name__}: {exc}"
+
+
+def _api_budget_label(
+    *,
+    provider: str,
+    model: str,
+    env: Mapping[str, str],
+    enabled: bool | None,
+    api_key_env: str = "",
+    service_tier: str = "",
+) -> str:
+    if enabled is False:
+        return "aus"
+    resolved_provider = _normalize_status_provider(provider)
+    resolved_model = str(model or "").strip()
+    key_env = str(api_key_env or "").strip() or _default_api_key_env(resolved_provider, resolved_model)
+    key_label = _api_key_status_label(key_env, env=env, provider=resolved_provider, model=resolved_model)
+    usage_label = _api_usage_label(provider=resolved_provider, model=resolved_model)
+    mode = ""
+    if _model_uses_google(resolved_provider, resolved_model):
+        mode = "; Google-State: " + ("stateful" if resolved_provider == "gemini_interactions" else "stateless")
+    if service_tier:
+        mode += f"; service_tier={service_tier}"
+    return f"{resolved_provider} / {resolved_model or 'openai-default'}; Key: {key_label}; {usage_label}{mode}"
+
+
+def _api_key_status_label(key_env: str, *, env: Mapping[str, str], provider: str, model: str) -> str:
+    if _model_is_local(provider, model):
+        return "nicht noetig"
+    if provider == "hf_pool":
+        return "ueber Pool/Target"
+    if not key_env:
+        return "providerabhaengig"
+    return f"{key_env} " + ("gesetzt" if str(env.get(key_env, "") or "").strip() else "fehlt")
+
+
+def _api_usage_label(*, provider: str, model: str) -> str:
+    if _model_is_local(provider, model):
+        return "Kosten/Limits: lokal; Verbrauch: lokal"
+    if _model_uses_google(provider, model):
+        return "Kosten/Limits: Free-Tier-Guard aktiv, Provider-Billing nicht abgefragt; Verbrauch: Guard-Schaetzung + Provider-Usage"
+    if provider == "hf_pool":
+        return "Kosten/Limits: Pool-Target; Verbrauch: HF-Pool-Usage-Log"
+    return "Kosten/Limits: Provider-Billing nicht abgefragt; Verbrauch: Provider-Usage wenn vorhanden"
+
+
+def _default_api_key_env(provider: str, model: str) -> str:
+    normalized_model = str(model or "").strip().casefold()
+    if provider == "openai" or normalized_model.startswith("openai/"):
+        return "OPENAI_API_KEY"
+    if provider == "groq" or normalized_model.startswith("groq/"):
+        return "GROQ_API_KEY"
+    if provider in {"huggingface", "hf"} or normalized_model.startswith("huggingface/"):
+        return "HUGGINGFACE_API_KEY"
+    if provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/"):
+        return "GEMINI_API_KEY"
+    if provider == "vertex_ai" or normalized_model.startswith("vertex_ai/"):
+        return "GOOGLE_APPLICATION_CREDENTIALS"
+    return ""
+
+
+def _normalize_status_provider(value: object) -> str:
+    text = str(value or "").strip().casefold().replace("-", "_")
+    aliases = {
+        "google": "gemini",
+        "google_ai": "gemini",
+        "google_interactions": "gemini_interactions",
+        "gemini_stateful": "gemini_interactions",
+        "interactions": "gemini_interactions",
+        "vertex": "vertex_ai",
+        "google_vertex": "vertex_ai",
+        "google_vertex_ai": "vertex_ai",
+    }
+    return aliases.get(text, text or "openai")
+
+
+def _model_is_local(provider: str, model: str) -> bool:
+    normalized_model = str(model or "").strip().casefold()
+    return provider in {"ollama", "local_ollama"} or normalized_model.startswith(("ollama/", "ollama_chat/"))
+
+
+def _model_uses_google(provider: str, model: str) -> bool:
+    normalized_model = str(model or "").strip().casefold()
+    return provider in {"gemini", "gemini_interactions", "vertex_ai"} or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
 def _llm_client_status_label(client: object | None, *, fallback_provider: str = "", fallback_model: str = "") -> str:
@@ -218,7 +375,7 @@ def _structured_decision_status_label(runner: object | None) -> str:
         label += f" / {model}"
     fallback = _first_status_attr(runner, "llm_fallback_profile", "llm_fallback_model")
     if fallback:
-        label += f" fallback={fallback}"
+        label += f" Ersatz bei Planner-Ausfall={fallback}"
     return label
 
 
@@ -240,7 +397,7 @@ def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str,
         if service_tier:
             label += f" service_tier={service_tier}"
         if route.fallback_model:
-            label += f" fallback={route.fallback_model}"
+            label += f" Ersatz bei Route-/Providerfehler={route.fallback_model}"
         return label
     except Exception as exc:  # noqa: BLE001 - status must stay diagnostic.
         return f"unbekannt - {type(exc).__name__}: {exc}"
@@ -249,11 +406,15 @@ def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str,
 def _fallback_category_status(client: object | None, configured_fallbacks: tuple[str, ...] | list[str] | str) -> str:
     runtime_fallbacks = _sequence_status_attr(client, "fallback_models")
     if runtime_fallbacks:
-        return ", ".join(runtime_fallbacks)
+        return "aktiv fuer Chat/Textantworten: " + ", ".join(redact_status_text(model) for model in runtime_fallbacks)
     if hasattr(client, "fallback_client") and getattr(client, "fallback_client") is not None:
-        return _llm_client_status_label(getattr(client, "fallback_client"))
-    count = _fallback_model_count(configured_fallbacks)
-    return f"{count} konfiguriert"
+        return "aktiv fuer Chat/Textantworten: " + _llm_client_status_label(getattr(client, "fallback_client"))
+    fallback_models = _fallback_model_list(configured_fallbacks)
+    if fallback_models:
+        return "nicht aktiv; bei Chat/Textantwort-Fehlern konfiguriert: " + ", ".join(
+            redact_status_text(model) for model in fallback_models
+        )
+    return "keine (kein aktiver Ersatz fuer Chat/Textantworten)"
 
 
 def _first_status_attr(obj: object | None, *names: str) -> str:
@@ -293,11 +454,20 @@ def _safe_status_value(value: str, *, default: str) -> str:
 
 
 def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
+    return str(len(_fallback_model_list(value)))
+
+
+def _fallback_model_list(value: tuple[str, ...] | list[str] | str) -> list[str]:
     if isinstance(value, str):
-        count = len([part for part in value.split(",") if part.strip()])
-    else:
-        count = len([part for part in value if str(part or "").strip()])
-    return str(count)
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [str(part or "").strip() for part in value if str(part or "").strip()]
+
+
+def _fallback_model_status(value: tuple[str, ...] | list[str] | str) -> str:
+    models = _fallback_model_list(value)
+    if not models:
+        return "keine (kein Ersatzmodell fuer Chat/Textantworten konfiguriert)"
+    return f"{len(models)} fuer Chat/Textantworten konfiguriert (" + ", ".join(redact_status_text(model) for model in models) + ")"
 
 
 def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:

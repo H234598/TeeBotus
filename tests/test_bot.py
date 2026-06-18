@@ -1147,17 +1147,21 @@ class BotTests(unittest.TestCase):
             self.assertEqual(len(api.sent_messages), 1)
             reply = api.sent_messages[0][1]
             self.assertIn("Depressionsbot Status:", reply)
-            self.assertIn("- Status: laeuft", reply)
-            self.assertIn(f"- Version: {__version__} Wirt Commits https://github.com/H234598/TeeBotus/commits/main", reply)
+            self.assertIn("- Laufzeit: laeuft", reply)
+            self.assertIn(f"- Version: {__version__} Commits https://github.com/H234598/TeeBotus/commits/main", reply)
             self.assertNotIn("Commits:", reply)
+            self.assertNotIn("Wirt", reply)
             self.assertIn("- Nutzermemory:", reply)
             self.assertIn("- Userfiles:", reply)
             self.assertIn("verschluesselt", reply)
-            self.assertIn("LLM", reply)
-            self.assertIn("- Textantworten: ja", reply)
-            self.assertIn("- Provider: huggingface", reply)
-            self.assertIn("- Modell: meta-llama/Llama-3.1-8B-Instruct", reply)
-            self.assertIn("- Fallback-Modelle: 2", reply)
+            self.assertIn("[Aktive LLMs]", reply)
+            self.assertIn("- Chat/Text: aktiv - huggingface / meta-llama/Llama-3.1-8B-Instruct", reply)
+            self.assertIn("[API, Limits und Kosten]", reply)
+            self.assertIn("- Chat/Text: huggingface / meta-llama/Llama-3.1-8B-Instruct", reply)
+            self.assertIn(
+                "- Ersatzmodelle: nicht aktiv; bei Chat/Textantwort-Fehlern konfiguriert: groq/llama-3.3-70b-versatile, openai/gpt-4.1-mini",
+                reply,
+            )
             self.assertIn("MCP Tools", reply)
             self.assertIn("- Read-only allowlist: bibliothekar.search, memory.search (private)", reply)
             self.assertIn("- Deaktiviert: codex.exec (nicht read-only), export.account, youtube.transcribe", reply)
@@ -3379,6 +3383,22 @@ class BotTests(unittest.TestCase):
         )
 
         self.assertEqual(openai_client.voice_texts, ["Aus Reply"])
+
+    def test_voice_command_uses_replied_poll_question_as_text(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+
+        handle_update(
+            api,
+            {"message": {"text": "/voice", "reply_to_message": {"poll": {"question": "Welche Quelle?"}}, "chat": {"id": 123}}},
+            BotInstructions(),
+            openai_client,
+            ChatState(),
+        )
+
+        self.assertEqual(openai_client.voice_texts, ["[Umfrage] Welche Quelle?"])
 
     def test_voice_command_requires_text(self) -> None:
         from TeeBotus.instructions import BotInstructions

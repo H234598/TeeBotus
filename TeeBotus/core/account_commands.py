@@ -98,7 +98,15 @@ class AccountCommandHandler:
         except AccountStoreError as exc:
             if "already linked" in str(exc) or "account_edit" in str(exc):
                 return AccountCommandResult(True, (self._reply(event.chat_id, "Dieser Kommunikationsweg ist bereits mit einem anderen Account verbunden. Sende /account_edit, wenn du wechseln möchtest."),))
-            return AccountCommandResult(True, (self._reply(event.chat_id, "ID oder Secret stimmt nicht."),))
+            return AccountCommandResult(
+                True,
+                (
+                    self._reply(
+                        event.chat_id,
+                        "ID oder Secret stimmt nicht. Account-IDs und Secrets gelten pro Bot-Instanz; nutze die Daten aus genau diesem Bot.",
+                    ),
+                ),
+            )
         if result.get("already_linked") is True:
             return AccountCommandResult(True, (self._reply(event.chat_id, "Dieser Kommunikationsweg ist bereits mit diesem TeeBotus-Account verbunden."),))
         actions: list[OutgoingAction] = [self._reply(event.chat_id, "Dieser Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden.")]

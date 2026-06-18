@@ -15,6 +15,15 @@ def test_login_command_extracts_id_and_secret():
     assert not intent.needs_followup
 
 
+def test_login_command_extracts_id_and_secret_from_wrappers_and_labels():
+    intent = parse_registration_intent(f"/login <ID: {TOKEN_A}> <Secret: {TOKEN_B}>")
+
+    assert intent.action == RegistrationAction.LOGIN
+    assert intent.account_id == TOKEN_A
+    assert intent.account_secret == TOKEN_B
+    assert not intent.needs_followup
+
+
 def test_free_text_registration_and_linking_intents():
     assert parse_registration_intent("Ich möchte mich registrieren").action == RegistrationAction.REGISTER
     link_intent = parse_registration_intent("Ich möchte meinen Account verbinden")

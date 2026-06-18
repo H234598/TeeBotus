@@ -415,7 +415,17 @@ class TeeBotusEngine:
         except AccountStoreError as exc:
             if "already linked" in str(exc) or "account_edit" in str(exc):
                 return EngineResult(current_account_id, [SendText(event.chat_id, "Dieser Kommunikationsweg ist bereits mit einem anderen Account verbunden. Sende /account_edit, wenn du wechseln möchtest.", track=False)], handled=True)
-            return EngineResult(current_account_id, [SendText(event.chat_id, "ID oder Secret stimmt nicht.", track=False)], handled=True)
+            return EngineResult(
+                current_account_id,
+                [
+                    SendText(
+                        event.chat_id,
+                        "ID oder Secret stimmt nicht. Account-IDs und Secrets gelten pro Bot-Instanz; nutze die Daten aus genau diesem Bot.",
+                        track=False,
+                    )
+                ],
+                handled=True,
+            )
         linked_account_id = str(result["account_id"])
         if result.get("already_linked") is True:
             return EngineResult(

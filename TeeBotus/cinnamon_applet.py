@@ -85,6 +85,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "matrix_homeservers": 0,
         "memory_accounts": 0,
         "llm_routes": 0,
+        "api_budgets": 0,
+        "codex_usage": "",
+        "codex_usage_accounts": 0,
         "gemini_free_tier": "",
         "qdrant": "",
         "hf_pool": "",
@@ -116,6 +119,12 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["memory_accounts"] += 1
         elif line.startswith("llm_route="):
             summary["llm_routes"] += 1
+        elif line.startswith("api_budget="):
+            summary["api_budgets"] += 1
+        elif line.startswith("codex_usage="):
+            summary["codex_usage"] = line
+        elif line.startswith("codex_usage_account="):
+            summary["codex_usage_accounts"] += 1
         elif line.startswith("gemini_free_tier_limits "):
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):

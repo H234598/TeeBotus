@@ -2387,12 +2387,12 @@ def _runtime_status_bibliothekar_route_errors(lines: Sequence[str]) -> list[str]
     errors: list[str] = []
     if " profile=gemini_flash" not in route:
         errors.append("runtime-status bibliothekar route must use profile=gemini_flash")
-    if " provider=litellm" not in route:
-        errors.append("runtime-status bibliothekar route must use provider=litellm")
-    if " model=gemini/gemini-2.5-flash" not in route:
-        errors.append("runtime-status bibliothekar route must use model=gemini/gemini-2.5-flash")
-    if " google_mode=stateless" not in route:
-        errors.append("runtime-status bibliothekar route must show google_mode=stateless")
+    if " provider=gemini_interactions" not in route:
+        errors.append("runtime-status bibliothekar route must use provider=gemini_interactions")
+    if " model=gemini/gemini-3.5-flash" not in route:
+        errors.append("runtime-status bibliothekar route must use model=gemini/gemini-3.5-flash")
+    if " google_mode=stateful" not in route:
+        errors.append("runtime-status bibliothekar route must show google_mode=stateful")
     if " free_tier_guard=" not in route:
         errors.append("runtime-status bibliothekar route must show free_tier_guard")
     return errors

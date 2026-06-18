@@ -406,7 +406,7 @@ def _gemini_service_tier_for_route(
 def _route_uses_gemini_api(*, provider: str, model: str) -> bool:
     normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
+    return normalized_provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/")
 
 
 class _OpenAITextModelOverrideClient:

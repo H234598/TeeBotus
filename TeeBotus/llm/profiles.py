@@ -15,7 +15,7 @@ from TeeBotus.llm.service_tier import resolve_gemini_service_tier
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE_PATH = PROJECT_ROOT / "config" / "llm_profiles.yaml"
 DEFAULT_ROUTING_PATH = PROJECT_ROOT / "config" / "llm_routing.yaml"
-REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini", "vertex_ai", "hf_pool"})
+REMOTE_PROVIDERS = frozenset({"openai", "huggingface", "groq", "gemini", "gemini_interactions", "vertex_ai", "hf_pool"})
 
 
 @dataclass(frozen=True)
@@ -210,7 +210,7 @@ def normalize_llm_purpose(value: object) -> str:
 def _route_uses_gemini_api(provider: str, model: str) -> bool:
     normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    return normalized_provider == "gemini" or normalized_model.startswith("gemini/")
+    return normalized_provider in {"gemini", "gemini_interactions"} or normalized_model.startswith("gemini/")
 
 
 def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfile:

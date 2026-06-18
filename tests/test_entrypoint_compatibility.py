@@ -609,7 +609,7 @@ def test_runtime_status_reports_llm_provider_without_secrets(monkeypatch, capsys
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b "
         "status=configured profile=local_ollama base_url=http://127.0.0.1:11434/api "
         "api_key=configured timeout_seconds=180 max_output_tokens=700 temperature=0.7"
     ) in captured.out
@@ -785,7 +785,7 @@ def test_runtime_status_runtime_enabled_overrides_instruction_llm_disabled(monke
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b "
         "status=configured profile=local_ollama base_url=http://127.0.0.1:11434 api_key=none"
     ) in captured.out
 
@@ -808,7 +808,7 @@ def test_runtime_status_uses_instruction_llm_profile_without_runtime_override(mo
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b "
         "status=configured profile=local_ollama base_url=http://127.0.0.1:11434 api_key=none"
     ) in captured.out
 
@@ -931,7 +931,7 @@ def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=vertex_ai/gemini-2.5-flash "
+        "llm=Demo/telegram:1 provider=litellm model=vertex_ai/gemini-3.5-flash "
         "status=configured profile=vertex_gemini_flash api_key=configured"
     ) in captured.out
     assert "/private/vertex-service-account.json" not in captured.out
@@ -958,9 +958,9 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
 
     captured = capsys.readouterr()
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=gemini/gemini-2.5-flash "
+        "llm=Demo/telegram:1 provider=gemini_interactions model=gemini/gemini-3.5-flash "
         "status=configured profile=gemini_flash api_key=configured api_key_ring=6 "
-        "google_mode=stateless service_tier=flex"
+        "google_mode=stateful service_tier=flex"
     ) in captured.out
     assert "a1" not in captured.out
 
@@ -989,8 +989,8 @@ def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, 
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
-        "model=gemini/gemini-2.5-flash status=configured api_key_env=GEMINI_API_KEY "
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "model=gemini/gemini-3.5-flash status=configured api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/1"
     ) in captured.out
     assert "demo-a1" not in captured.out
@@ -1022,8 +1022,8 @@ def test_runtime_status_route_reports_degraded_instance_scoped_gemini_keys(monke
 
     captured = capsys.readouterr()
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
-        "model=gemini/gemini-2.5-flash status=degraded api_key_env=GEMINI_API_KEY "
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "model=gemini/gemini-3.5-flash status=degraded api_key_env=GEMINI_API_KEY "
         "api_key_ring=2 api_key_instances=1/2"
     ) in captured.out
     assert "error=missing api key for 1/2 instances" in captured.out
@@ -1050,25 +1050,25 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=unavailable purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
-        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
+        "fallback_model=ollama_chat/llama3.2:3b fallback_base_url=http://127.0.0.1:11434 "
         "remote_fallback=enabled"
     ) in captured.out
     assert (
         "llm_route=structured_decision profile=hf_pool_structured provider=hf_pool "
         "model=pool:default#structured_decision status=unavailable "
         "fallback=local_ollama fallback_profile=local_ollama "
-        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434"
+        "fallback_model=ollama_chat/llama3.2:3b fallback_base_url=http://127.0.0.1:11434"
     ) in captured.out
     assert (
-        "llm_route=bibliothekar_answer profile=gemini_flash provider=litellm "
-        "model=gemini/gemini-2.5-flash "
+        "llm_route=bibliothekar_answer profile=gemini_flash provider=gemini_interactions "
+        "model=gemini/gemini-3.5-flash "
     ) in captured.out
-    assert "llm_route=bibliothekar_answer" in captured.out and " google_mode=stateless" in captured.out
+    assert "llm_route=bibliothekar_answer" in captured.out and " google_mode=stateful" in captured.out
     assert "llm_route=bibliothekar_answer" in captured.out and " free_tier_guard=" in captured.out
     assert (
         "structured_decision=Demo/telegram:1 status=enabled source=runtime_llm_configured "
         "profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision "
-        "route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.1:8b "
+        "route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.2:3b "
         "fallback_base_url=http://127.0.0.1:11434 remote_fallback=enabled"
     ) in captured.out
 
@@ -1122,7 +1122,7 @@ def test_runtime_status_reports_configured_remote_fallback_key(monkeypatch, caps
         "llm=Demo/telegram:1 provider=hf_pool model=pool:default#structured_decision "
         "status=unavailable purpose=structured_decision api_key=none "
         "fallback_models=1 fallback_profile=local_ollama "
-        "fallback_model=ollama_chat/llama3.1:8b fallback_base_url=http://127.0.0.1:11434 "
+        "fallback_model=ollama_chat/llama3.2:3b fallback_base_url=http://127.0.0.1:11434 "
         "remote_fallback=enabled"
     ) in captured.out
     assert "groq-secret" not in captured.out
@@ -1341,7 +1341,7 @@ def test_runtime_status_checks_ollama_for_local_profile(monkeypatch, capsys, tmp
 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
-    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b status=configured profile=local_ollama" in captured.out
+    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b status=configured profile=local_ollama" in captured.out
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 
@@ -1383,7 +1383,7 @@ def test_runtime_status_checks_ollama_for_instruction_local_profile(monkeypatch,
 
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11434/api/tags"]
-    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b status=configured profile=local_ollama" in captured.out
+    assert "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b status=configured profile=local_ollama" in captured.out
     assert "ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b" in captured.out
 
 
@@ -1548,7 +1548,7 @@ def test_runtime_status_profile_uses_runtime_base_url_override_for_llm_and_ollam
     captured = capsys.readouterr()
     assert calls == ["http://127.0.0.1:11555/api/tags"]
     assert (
-        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b "
+        "llm=Demo/telegram:1 provider=litellm model=ollama_chat/llama3.2:3b "
         "status=configured profile=local_ollama base_url=http://127.0.0.1:11555/api api_key=none"
     ) in captured.out
     assert "ollama=127.0.0.1:11555 status=reachable models=llama3.1:8b" in captured.out
