@@ -80,10 +80,14 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatMessengerLine" in source
     assert "_formatLlmLine" in source
     assert 'sections["Accounts und Entscheidungen"]' in source
+    assert "let llmStatusLines =" in source
+    assert "this._problemStatusLines(llmStatusLines)" in source
     assert "_formatApiBudgetLine" in source
     assert "_formatMemoryLine" in source
     assert "_formatAccountLine" in source
     assert "_accountStatusLines" in source
+    assert "_problemStatusLines: function(lines, isForcedProblem)" in source
+    assert "return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);" in source
     assert 'sections["Tools und Account-Memory"]' in source
     assert "_errorText: function(fields)" in source
     assert '"; Fehler " + value' in source

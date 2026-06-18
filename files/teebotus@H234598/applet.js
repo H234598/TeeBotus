@@ -275,8 +275,8 @@ TeeBotusApplet.prototype = {
     if (summary.llm_routes || summary.hf_pool || summary.gemini_free_tier) {
       llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionProblemText(summary.llm_problem_status_count));
     }
-    llmLines = llmLines.concat(this._formatLines(sections["LLM-Routen und Backends"] || [], (line) => this._formatLlmLine(line)));
-    llmLines = llmLines.concat(this._formatLines(sections["Accounts und Entscheidungen"] || [], (line) => this._formatLlmLine(line)));
+    let llmStatusLines = (sections["LLM-Routen und Backends"] || []).concat(sections["Accounts und Entscheidungen"] || []);
+    llmLines = llmLines.concat(this._formatLines(this._problemStatusLines(llmStatusLines), (line) => this._formatLlmLine(line)));
     this._populateLines(this.llmMenu.menu, llmLines, this._dynamicEmptyText(_("LLM-Diagnose wird geladen.")));
 
     if (this.showApiSection) {
@@ -332,6 +332,20 @@ TeeBotusApplet.prototype = {
       result.push(formatter(String(line || "")));
     }
     return result;
+  },
+
+  _problemStatusLines: function(lines, isForcedProblem) {
+    let problem = [];
+    let normal = [];
+    for (let line of lines || []) {
+      let fields = this._parseFields(line);
+      if ((isForcedProblem && isForcedProblem(fields)) || this._lineHasProblemStatus(fields)) {
+        problem.push(line);
+      } else {
+        normal.push(line);
+      }
+    }
+    return problem.concat(normal);
   },
 
   _dynamicEmptyText: function(loadingText) {
@@ -496,17 +510,7 @@ TeeBotusApplet.prototype = {
   },
 
   _accountStatusLines: function(lines) {
-    let problem = [];
-    let normal = [];
-    for (let line of lines || []) {
-      let fields = this._parseFields(line);
-      if (fields.account_identity_warning || this._lineHasProblemStatus(fields)) {
-        problem.push(line);
-      } else {
-        normal.push(line);
-      }
-    }
-    return problem.concat(normal);
+    return this._problemStatusLines(lines, (fields) => fields.account_identity_warning);
   },
 
   _lineHasProblemStatus: function(fields) {
