@@ -80,6 +80,10 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_qdrant_health_quick is qdrant.benchmark_qdrant_health_quick
     assert benchmark_module._benchmark_qdrant_health_live is qdrant.benchmark_qdrant_health_live
     assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
+    assert (
+        benchmark_module._benchmark_qdrant_vector_dimensions_quantization_quick
+        is qdrant.benchmark_qdrant_vector_dimensions_quantization_quick
+    )
     assert benchmark_module._context is reporting.benchmark_context
     assert benchmark_module._dependency_context is reporting.dependency_context
     assert benchmark_module._build_regression_report is reporting.build_regression_report
@@ -350,6 +354,22 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert qdrant_memory["details"]["sensitive_metadata_in_payload"] is False
     assert qdrant_memory["details"]["remote_embedding_blocked"] is True
     assert qdrant_memory["details"]["network_calls"] == 0
+    qdrant_quant = next(
+        result
+        for result in suite["results"]
+        if result["name"] == "qdrant_vector_dimensions_quantization_quick"
+    )
+    assert qdrant_quant["ok"] is True
+    assert qdrant_quant["category"] == "qdrant"
+    assert qdrant_quant["details"]["dimension_candidates"] == [64, 128, 256, 384, 768, 1024]
+    assert qdrant_quant["details"]["storage_ratio_1024_vs_64"] == 16.0
+    assert qdrant_quant["details"]["scalar_int8_ratio_vs_float32"] == 0.25
+    assert qdrant_quant["details"]["binary_ratio_vs_float32"] == 0.03125
+    assert qdrant_quant["details"]["dimension_cost_monotonic"] is True
+    assert qdrant_quant["details"]["estimated_only"] is True
+    assert qdrant_quant["details"]["network_calls"] == 0
+    assert qdrant_quant["details"]["provider_calls"] == 0
+    assert qdrant_quant["details"]["remote_calls"] == 0
     retrieval = next(result for result in suite["results"] if result["name"] == "retrieval_embedding_reranker_matrix")
     assert retrieval["ok"] is True
     assert retrieval["category"] == "retrieval"
@@ -523,6 +543,7 @@ def test_benchmark_markdown_contains_comparison_table() -> None:
     assert "hf_pool_quick_health" in markdown
     assert "qdrant_health_quick" in markdown
     assert "qdrant_memory_index_quick" in markdown
+    assert "qdrant_vector_dimensions_quantization_quick" in markdown
     assert "retrieval_embedding_reranker_matrix" in markdown
     assert "retrieval_backend_local" in markdown
     assert "retrieval_backend_haystack_fake" in markdown

@@ -11,7 +11,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from TeeBotus.benchmarks.reporting import render_markdown  # noqa: E402
-from TeeBotus.benchmarks.suite import (  # noqa: E402
+from TeeBotus.benchmarks.suite import (  # noqa: E402,F401
     BENCHMARK_CONTEXT_DEPENDENCIES,
     BENCHMARK_RANKING_NAME_SETS,
     BenchmarkResult,
@@ -42,6 +42,7 @@ from TeeBotus.benchmarks.suite import (  # noqa: E402
     _benchmark_qdrant_health_live,
     _benchmark_qdrant_health_quick,
     _benchmark_qdrant_memory_index_quick,
+    _benchmark_qdrant_vector_dimensions_quantization_quick,
     _benchmark_retrieval_embedding_reranker_matrix,
     _benchmark_source_harvester_promote_index_flow,
     _benchmark_source_harvester_quality_gate,

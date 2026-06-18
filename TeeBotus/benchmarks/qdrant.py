@@ -12,6 +12,13 @@ from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embe
 from TeeBotus.runtime.qdrant import check_qdrant_health, format_qdrant_status_line
 from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION, QdrantMemoryIndex
 
+_QDRANT_VECTOR_DIMENSION_CANDIDATES = (64, 128, 256, 384, 768, 1024)
+_QDRANT_QUANTIZATION_PROFILES = {
+    "float32": 4.0,
+    "scalar_int8": 1.0,
+    "binary": 0.125,
+}
+
 
 def benchmark_qdrant_health_quick(*, iterations: int) -> BenchmarkResult:
     opener = _BenchmarkQdrantOpener()
@@ -70,6 +77,91 @@ def benchmark_qdrant_health_live() -> BenchmarkResult:
             "target": target,
             "latest_status": line_holder[-1] if line_holder else "",
             "network_calls": 1,
+            "provider_calls": 0,
+            "remote_calls": 0,
+        },
+    )
+
+
+def benchmark_qdrant_vector_dimensions_quantization_quick(*, iterations: int) -> BenchmarkResult:
+    dimension_profiles: list[dict[str, Any]] = []
+    timings: list[float] = []
+    repetitions = max(1, int(iterations))
+
+    for dimensions in _QDRANT_VECTOR_DIMENSION_CANDIDATES:
+        provider = FakeEmbeddingProvider(dimensions=dimensions)
+        query_vector = provider.embed_text("Schlaf Tagesstruktur Termine Depressionsbot")
+        memory_vector = provider.embed_text("Tagesstruktur und Schlaf helfen beim Planen von Terminen.")
+
+        def run_dimension_probe() -> None:
+            for _ in range(repetitions):
+                _benchmark_dot(query_vector, memory_vector)
+
+        total_ms = _timed_ms(run_dimension_probe)
+        timings.append(total_ms)
+        float32_bytes = int(dimensions * _QDRANT_QUANTIZATION_PROFILES["float32"])
+        scalar_int8_bytes = int(dimensions * _QDRANT_QUANTIZATION_PROFILES["scalar_int8"])
+        binary_bytes = max(1, int(dimensions * _QDRANT_QUANTIZATION_PROFILES["binary"]))
+        dimension_profiles.append(
+            {
+                "dimensions": dimensions,
+                "float32_bytes_per_vector": float32_bytes,
+                "scalar_int8_bytes_per_vector": scalar_int8_bytes,
+                "binary_bytes_per_vector": binary_bytes,
+                "relative_float32_to_64d": round(float32_bytes / (64 * 4), 4),
+                "dot_ops_per_search_candidate": dimensions,
+                "probe_repetitions": repetitions,
+                "probe_total_ms": round(total_ms, 6),
+            }
+        )
+
+    float32_sizes = [profile["float32_bytes_per_vector"] for profile in dimension_profiles]
+    dimension_cost_monotonic = all(
+        next_size > current_size
+        for current_size, next_size in zip(float32_sizes, float32_sizes[1:])
+    )
+    storage_ratio_1024_vs_64 = float32_sizes[-1] / float32_sizes[0] if float32_sizes else 0.0
+    scalar_int8_ratio = (
+        _QDRANT_QUANTIZATION_PROFILES["scalar_int8"] / _QDRANT_QUANTIZATION_PROFILES["float32"]
+    )
+    binary_ratio = _QDRANT_QUANTIZATION_PROFILES["binary"] / _QDRANT_QUANTIZATION_PROFILES["float32"]
+    ok = (
+        len(dimension_profiles) == len(_QDRANT_VECTOR_DIMENSION_CANDIDATES)
+        and dimension_cost_monotonic
+        and storage_ratio_1024_vs_64 == 16.0
+        and scalar_int8_ratio == 0.25
+        and binary_ratio == 0.03125
+    )
+    return result(
+        name="qdrant_vector_dimensions_quantization_quick",
+        category="qdrant",
+        iterations=repetitions * len(_QDRANT_VECTOR_DIMENSION_CANDIDATES),
+        total_ms=sum(timings),
+        ok=ok,
+        errors=0 if ok else 1,
+        payload_bytes=len(json.dumps(dimension_profiles, ensure_ascii=False).encode("utf-8")),
+        index_bytes=len(
+            json.dumps(
+                {
+                    "dimension_candidates": _QDRANT_VECTOR_DIMENSION_CANDIDATES,
+                    "quantization_profiles": _QDRANT_QUANTIZATION_PROFILES,
+                },
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ),
+        note="fake_qdrant_dimension_quantization_no_server",
+        mode="local_fake",
+        details={
+            "dimension_candidates": list(_QDRANT_VECTOR_DIMENSION_CANDIDATES),
+            "quantization_profiles": dict(_QDRANT_QUANTIZATION_PROFILES),
+            "dimension_profiles": dimension_profiles,
+            "storage_ratio_1024_vs_64": storage_ratio_1024_vs_64,
+            "scalar_int8_ratio_vs_float32": scalar_int8_ratio,
+            "binary_ratio_vs_float32": binary_ratio,
+            "dimension_cost_monotonic": dimension_cost_monotonic,
+            "estimated_only": True,
+            "embedding_provider": "FakeEmbeddingProvider",
+            "network_calls": 0,
             "provider_calls": 0,
             "remote_calls": 0,
         },
@@ -256,4 +348,5 @@ __all__ = [
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
+    "benchmark_qdrant_vector_dimensions_quantization_quick",
 ]
