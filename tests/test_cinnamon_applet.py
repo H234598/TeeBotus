@@ -45,6 +45,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const DEFAULT_STATUS_REFRESH_SECONDS = 60;" in source
     assert "this.statusRefreshSeconds = DEFAULT_STATUS_REFRESH_SECONDS;" in source
     assert "this._positiveInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS)" in source
+    assert "const CODEX_USAGE_STALE_WARNING_HOURS = 24;" in source
     assert schema["status-timeout-seconds"]["default"] == 30
     assert "const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;" in source
     assert "this.statusTimeoutSeconds = DEFAULT_STATUS_TIMEOUT_SECONDS;" in source
@@ -100,8 +101,11 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_fieldValueEnd: function(text, matches, index)" in source
     assert "_sectionProblemText: function(value)" in source
     assert '" | Probleme " + String(count)' in source
+    assert 'this._problemStatusLines(sections["API Keys, Limits und Kosten"] || [])' in source
     assert "Ersatz bei Modell-/Key-/Limitfehlern" in source
     assert "codex-usage latest" in source
+    assert "_codexUsageIsStale: function(fields)" in source
+    assert 'let status = this._codexUsageIsStale(fields) ? "stale" : fields.status;' in source
     assert "Qdrant-Status" in source
     assert "Usermemory-Vektoranzahl" in source
     assert "TeeBotus.embedding" in source

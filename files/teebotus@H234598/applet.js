@@ -18,6 +18,7 @@ const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
 const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
+const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MENU_LINE_LIMIT = 14;
 const PROBLEM_STATUSES = [
   "broken",
@@ -288,7 +289,7 @@ TeeBotusApplet.prototype = {
           + this._sectionProblemText(summary.api_problem_status_count)
         );
       }
-      apiLines = apiLines.concat(this._formatLines(sections["API Keys, Limits und Kosten"] || [], (line) => this._formatApiBudgetLine(line)));
+      apiLines = apiLines.concat(this._formatLines(this._problemStatusLines(sections["API Keys, Limits und Kosten"] || []), (line) => this._formatApiBudgetLine(line)));
       this._populateLines(this.apiMenu.menu, apiLines, this._dynamicEmptyText(_("API-/Usage-Diagnose wird geladen.")));
       this._appendCodexUsageActions();
     }
@@ -494,7 +495,8 @@ TeeBotusApplet.prototype = {
     }
     if (fields.codex_usage) {
       let stale = fields.stale_hours ? "; Alter " + fields.stale_hours + "h" : "";
-      return "codex-usage: " + this._statusWord(fields.status) + "; Snapshots " + String(fields.snapshots || "0") + stale;
+      let status = this._codexUsageIsStale(fields) ? "stale" : fields.status;
+      return "codex-usage: " + this._statusWord(status) + "; Snapshots " + String(fields.snapshots || "0") + stale;
     }
     if (fields.codex_usage_account) {
       return "codex-usage " + fields.codex_usage_account + ": " + this._statusWord(fields.status) + "; 5h " + String(fields.five_hour || "?") + "; Woche " + String(fields.weekly || "?");
@@ -522,12 +524,19 @@ TeeBotusApplet.prototype = {
   },
 
   _lineHasProblemStatus: function(fields) {
+    if (this._codexUsageIsStale(fields || {})) {
+      return true;
+    }
     for (let status of PROBLEM_STATUSES) {
       if ((fields || {}).status === status || (fields || {}).route_status === status || (fields || {}).semantic === status) {
         return true;
       }
     }
     return false;
+  },
+
+  _codexUsageIsStale: function(fields) {
+    return Boolean((fields || {}).codex_usage) && ((parseInt((fields || {}).stale_hours || -1, 10) || 0) >= CODEX_USAGE_STALE_WARNING_HOURS);
   },
 
   _formatAccountLine: function(line) {
