@@ -2218,6 +2218,59 @@ def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> 
     assert [call[0] for call in calls] == ["signal", "telegram"]
 
 
+def test_explicit_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main(["--channels", "telegram,signal"]) == 2
+
+    captured = capsys.readouterr()
+    assert "Signal ist angefordert" in captured.err
+    assert calls == []
+
+
+def test_env_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TEEBOTUS_CHANNELS", "telegram,signal")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main([]) == 2
+
+    captured = capsys.readouterr()
+    assert "Signal ist angefordert" in captured.err
+    assert calls == []
+
+
+def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main([]) == 0
+    assert [call[0] for call in calls] == ["telegram"]
+
+
 def test_channels_matrix_without_config_fails_clearly(monkeypatch) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
@@ -2255,6 +2308,24 @@ def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> 
 
     assert bot.main(["--channels", "telegram,matrix"]) == 0
     assert [call[0] for call in calls] == ["matrix", "telegram"]
+
+
+def test_explicit_channels_telegram_matrix_without_matrix_config_fails_before_telegram(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main(["--channels", "telegram,matrix"]) == 2
+
+    captured = capsys.readouterr()
+    assert "Matrix ist angefordert" in captured.err
+    assert calls == []
 
 
 def test_channels_signal_matrix_rejects_before_starting_any_runner(monkeypatch) -> None:

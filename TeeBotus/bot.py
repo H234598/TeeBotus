@@ -1782,6 +1782,25 @@ def _runtime_has_channel_accounts(config: Any, channel: str) -> bool:
     return any(account.channel == channel for instance in config.instances for account in instance.accounts)
 
 
+def _runtime_channels_explicit(config: Any) -> bool:
+    return bool(getattr(config, "channels_explicit", False))
+
+
+def _runtime_missing_explicit_channel_errors(config: Any) -> tuple[str, ...]:
+    if not _runtime_channels_explicit(config):
+        return ()
+    messages = {
+        "telegram": "Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.",
+        "signal": "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert.",
+        "matrix": "Matrix ist angefordert, aber kein MATRIX_BOT_HOMESERVER_<INSTANCE> plus MATRIX_BOT_USER_ID_<INSTANCE> plus MATRIX_BOT_ACCESS_TOKEN_<INSTANCE> ist konfiguriert.",
+    }
+    return tuple(
+        messages[channel]
+        for channel in getattr(config, "channels", ())
+        if channel in messages and not _runtime_has_channel_accounts(config, channel)
+    )
+
+
 def _channel_requested_without_telegram(config: Any, channel: str) -> bool:
     return channel in config.channels and "telegram" not in config.channels
 
@@ -1902,6 +1921,11 @@ def _main_impl(argv: list[str] | None = None) -> int:
         print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
         return 2
     if not _run_account_storage_preflight(config):
+        return 2
+    missing_explicit_channels = _runtime_missing_explicit_channel_errors(config)
+    if missing_explicit_channels:
+        for message in missing_explicit_channels:
+            print(message, file=sys.stderr)
         return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
         _start_gemini_free_tier_limit_refresh(config)

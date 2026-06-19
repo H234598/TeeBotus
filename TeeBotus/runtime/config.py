@@ -61,6 +61,7 @@ class RuntimeConfig:
     selected_instances: tuple[str, ...]
     channels: tuple[str, ...]
     instances: tuple[InstanceRunConfig, ...]
+    channels_explicit: bool = False
 
 
 def normalize_instance_env_token(instance_name: str) -> str:
@@ -156,6 +157,12 @@ def _first_nonempty_env_value(source: Mapping[str, str], *keys: str) -> str:
         if value:
             return value
     return ""
+
+
+def _channels_were_explicitly_selected(source: Mapping[str, str], cli_channels: str | None) -> bool:
+    raw = cli_channels if cli_channels is not None else source.get("TEEBOTUS_CHANNELS", "")
+    value = str(raw or "").strip().casefold()
+    return bool(value and value not in {"auto", "all"})
 
 
 def _validate_slot_number(slot: int, *, label: str) -> int:
@@ -490,6 +497,7 @@ def build_runtime_config(
     source = os.environ if env is None else env
     instances_dir = resolve_instances_dir(source)
     channels = resolve_channels(source, cli_channels)
+    channels_explicit = _channels_were_explicitly_selected(source, cli_channels)
     selected_instances = resolve_selected_instances(instances_dir, source)
     instances = []
     for instance_name in selected_instances:
@@ -501,7 +509,7 @@ def build_runtime_config(
                 accounts=accounts,
             )
         )
-    return RuntimeConfig(instances_dir, selected_instances, channels, tuple(instances))
+    return RuntimeConfig(instances_dir, selected_instances, channels, tuple(instances), channels_explicit=channels_explicit)
 
 
 def resolve_runtime_config(
