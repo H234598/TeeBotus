@@ -59,6 +59,8 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
     text = str(value).strip()
     if "\x00" in text:
         raise ValueError(f"{operation} contains invalid control character")
+    if not text:
+        raise ValueError(f"{operation} must not be empty")
     normalized = os.path.expanduser(text).replace("\\", "/")
     is_absolute = normalized.startswith("/")
     raw_parts = normalized.split("/")
