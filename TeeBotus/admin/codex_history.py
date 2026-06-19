@@ -79,6 +79,7 @@ class CodexHistoryReportOptions:
     instances_dir: Path
     instances: tuple[str, ...] = ()
     repo: str = ""
+    summary_limit: int = 20
     provider: InstanceSecretProvider | None = None
 
 
@@ -862,12 +863,14 @@ def build_codex_history_report(
     instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
     instances: Sequence[str] = (),
     repo: str = "",
+    summary_limit: int = 20,
     provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
     options = CodexHistoryReportOptions(
         instances_dir=_safe_repo_root(Path(instances_dir), operation="instances directory"),
         instances=tuple(instances),
         repo=str(repo or "").strip(),
+        summary_limit=max(0, int(summary_limit or 0)),
         provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
     )
     selected_instances = discover_instances(options.instances_dir, options.instances)
@@ -891,6 +894,7 @@ def build_codex_history_report(
             instance_name=instance_name,
             provider=options.provider,
             repo=options.repo,
+            summary_limit=options.summary_limit,
         )
         report["instances"].append(instance_report)
         _add_totals(report["totals"], instance_report)
@@ -903,6 +907,7 @@ def build_instance_codex_history_report(
     instance_name: str,
     provider: InstanceSecretProvider,
     repo: str = "",
+    summary_limit: int = 20,
 ) -> dict[str, Any]:
     safe_instance_name = _safe_instance_name(instance_name)
     accounts_root = instances_dir / safe_instance_name / "data" / "accounts"
@@ -920,12 +925,17 @@ def build_instance_codex_history_report(
         "outbox_status_counts": {},
         "dispatch_status_counts": {},
         "latest_by_repo": [],
+        "repo_history": [],
         "errors": [],
     }
     try:
         projects = _filter_projects(store.read_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID), repo)
         outbox = _filter_outbox(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), repo)
-        dispatch_results = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+        dispatch_results = _filter_dispatch_results(
+            store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID),
+            outbox,
+            repo=repo,
+        )
     except (AccountStoreError, OSError, ValueError) as exc:
         codex_history["errors"].append(f"{type(exc).__name__}:{exc}")
         projects = []
@@ -937,6 +947,7 @@ def build_instance_codex_history_report(
     codex_history["outbox_status_counts"] = _status_counts(outbox)
     codex_history["dispatch_status_counts"] = _status_counts(dispatch_results)
     codex_history["latest_by_repo"] = _latest_by_repo(outbox)
+    codex_history["repo_history"] = _repo_history(projects, outbox, dispatch_results, summary_limit=summary_limit)
     return {
         "instance": safe_instance_name,
         "accounts_root": str(accounts_root),
@@ -976,6 +987,28 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 f"{item.get('repo_name', '')} {item.get('summary_prefix', '')} "
                 f"status={item.get('status', '')} title={item.get('title', '')}"
             )
+        repo_history = history.get("repo_history", [])
+        if isinstance(repo_history, Sequence) and not isinstance(repo_history, (str, bytes, bytearray)) and repo_history:
+            lines.append("  Repo-History:")
+            for repo_item in repo_history:
+                if not isinstance(repo_item, Mapping):
+                    continue
+                lines.append(
+                    "    "
+                    f"{repo_item.get('repo_name', '')} "
+                    f"summaries={repo_item.get('summary_count', 0)} "
+                    f"statuses={_format_status_counts(repo_item.get('outbox_status_counts', {}))} "
+                    f"dispatch={_format_status_counts(repo_item.get('dispatch_status_counts', {}))}"
+                )
+                for summary in repo_item.get("latest_summaries", []) or []:
+                    if not isinstance(summary, Mapping):
+                        continue
+                    lines.append(
+                        "      "
+                        f"{summary.get('summary_prefix', '')} "
+                        f"{summary.get('status', '')} "
+                        f"{summary.get('title', '')}"
+                    )
     return "\n".join(lines) + "\n"
 
 
@@ -1000,6 +1033,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     report_parser.add_argument("--instances", default="")
     report_parser.add_argument("--repo", default="")
+    report_parser.add_argument("--summary-limit", type=int, default=20)
     report_parser.add_argument("--format", choices=("text", "json"), default="text")
     report_parser.add_argument("--output", default="")
 
@@ -1053,6 +1087,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 instances_dir=args.instances_dir,
                 instances=parse_csv(getattr(args, "instances", None)),
                 repo=args.repo,
+                summary_limit=int(args.summary_limit or 0),
                 provider=provider,
             )
             output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
@@ -1442,19 +1477,17 @@ def _upsert_project(store: AccountStore, account_id: str, repo: Mapping[str, Any
 
 
 def _filter_projects(projects: Sequence[Mapping[str, Any]], repo: str) -> list[dict[str, Any]]:
-    needle = repo.strip().casefold()
     result = []
     for project in projects:
         if not isinstance(project, Mapping):
             continue
-        if needle and needle not in str(project.get("repo_name") or "").casefold() and needle not in str(project.get("repo_id") or "").casefold():
+        if not _project_matches_repo(project, repo):
             continue
         result.append(dict(project))
     return result
 
 
 def _filter_outbox(rows: Sequence[Mapping[str, Any]], repo: str) -> list[dict[str, Any]]:
-    needle = repo.strip().casefold()
     result = []
     for row in rows:
         if not isinstance(row, Mapping):
@@ -1462,10 +1495,48 @@ def _filter_outbox(rows: Sequence[Mapping[str, Any]], repo: str) -> list[dict[st
         project = row.get("project", {})
         if not isinstance(project, Mapping):
             project = {}
-        if needle and needle not in str(project.get("repo_name") or "").casefold() and needle not in str(project.get("repo_id") or "").casefold():
+        if not _project_matches_repo(project, repo):
             continue
         result.append(dict(row))
     return result
+
+
+def _filter_dispatch_results(
+    rows: Sequence[Mapping[str, Any]],
+    outbox: Sequence[Mapping[str, Any]],
+    *,
+    repo: str,
+) -> list[dict[str, Any]]:
+    if not str(repo or "").strip():
+        return [dict(row) for row in rows if isinstance(row, Mapping)]
+    item_ids = {str(row.get("id") or "").strip() for row in outbox if isinstance(row, Mapping)}
+    repo_ids = {
+        str(row.get("project", {}).get("repo_id") or "").strip()
+        for row in outbox
+        if isinstance(row, Mapping) and isinstance(row.get("project"), Mapping)
+    }
+    result = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        item_id = str(row.get("codex_history_item_id") or "").strip()
+        repo_id = str(row.get("repo_id") or "").strip()
+        if item_id in item_ids or (repo_id and repo_id in repo_ids):
+            result.append(dict(row))
+    return result
+
+
+def _project_matches_repo(project: Mapping[str, Any], repo: str) -> bool:
+    needle = str(repo or "").strip().casefold()
+    if not needle:
+        return True
+    fields = (
+        project.get("repo_name", ""),
+        project.get("repo_id", ""),
+        project.get("repo_root", ""),
+        project.get("remote_url", ""),
+    )
+    return any(needle in str(value or "").casefold() for value in fields)
 
 
 def _status_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
@@ -1511,6 +1582,111 @@ def _latest_by_repo(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return sorted(result, key=lambda item: (str(item.get("repo_name") or ""), str(item.get("created_at") or "")))
+
+
+def _repo_history(
+    projects: Sequence[Mapping[str, Any]],
+    outbox: Sequence[Mapping[str, Any]],
+    dispatch_results: Sequence[Mapping[str, Any]],
+    *,
+    summary_limit: int,
+) -> list[dict[str, Any]]:
+    grouped_items: dict[str, list[Mapping[str, Any]]] = {}
+    project_meta: dict[str, Mapping[str, Any]] = {}
+    for project in projects:
+        if not isinstance(project, Mapping):
+            continue
+        repo_id = str(project.get("repo_id") or "").strip()
+        if repo_id:
+            project_meta[repo_id] = project
+    for item in outbox:
+        if not isinstance(item, Mapping):
+            continue
+        project = item.get("project", {})
+        if not isinstance(project, Mapping):
+            continue
+        repo_id = str(project.get("repo_id") or "").strip()
+        if not repo_id:
+            continue
+        project_meta.setdefault(repo_id, project)
+        grouped_items.setdefault(repo_id, []).append(item)
+    dispatch_by_item_id: dict[str, list[Mapping[str, Any]]] = {}
+    for result in dispatch_results:
+        if not isinstance(result, Mapping):
+            continue
+        item_id = str(result.get("codex_history_item_id") or "").strip()
+        if item_id:
+            dispatch_by_item_id.setdefault(item_id, []).append(result)
+    history: list[dict[str, Any]] = []
+    for repo_id, project in project_meta.items():
+        items = grouped_items.get(repo_id, [])
+        item_ids = {str(item.get("id") or "").strip() for item in items if isinstance(item, Mapping)}
+        repo_dispatch_results = [
+            result
+            for item_id in item_ids
+            for result in dispatch_by_item_id.get(item_id, [])
+            if isinstance(result, Mapping)
+        ]
+        sorted_items = sorted(items, key=_summary_sort_key, reverse=True)
+        if summary_limit > 0:
+            sorted_items = sorted_items[:summary_limit]
+        history.append(
+            {
+                "repo_id": repo_id,
+                "repo_name": project.get("repo_name", ""),
+                "repo_root": project.get("repo_root", ""),
+                "remote_url": project.get("remote_url", ""),
+                "provider": project.get("provider", ""),
+                "branch": project.get("branch", ""),
+                "head_commit": project.get("head_commit", ""),
+                "summary_count": len(items),
+                "outbox_status_counts": _status_counts(items),
+                "dispatch_status_counts": _status_counts(repo_dispatch_results),
+                "latest_summaries": [_summary_report_item(item) for item in sorted_items],
+            }
+        )
+    return sorted(history, key=lambda item: str(item.get("repo_name") or "").casefold())
+
+
+def _summary_sort_key(item: Mapping[str, Any]) -> tuple[int, str, str]:
+    try:
+        number = int(item.get("summary_number") or item.get("version", {}).get("summary_number") or 0)  # type: ignore[union-attr]
+    except (AttributeError, TypeError, ValueError):
+        number = 0
+    return (number, str(item.get("created_at") or ""), str(item.get("id") or ""))
+
+
+def _summary_report_item(item: Mapping[str, Any]) -> dict[str, Any]:
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    return {
+        "id": item.get("id", ""),
+        "summary_prefix": item.get("summary_prefix") or version.get("summary_prefix", ""),
+        "summary_number": item.get("summary_number") or version.get("summary_number"),
+        "status": item.get("status", ""),
+        "title": summary.get("title", ""),
+        "created_at": item.get("created_at", ""),
+        "updated_at": item.get("updated_at", ""),
+        "changed_files": _summary_list_field(summary, "changed_files"),
+        "tests": _summary_list_field(summary, "tests"),
+    }
+
+
+def _summary_list_field(summary: Mapping[str, Any], key: str) -> list[str]:
+    value = summary.get(key, [])
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [str(item) for item in value]
+    return []
+
+
+def _format_status_counts(value: object) -> str:
+    if not isinstance(value, Mapping) or not value:
+        return "none"
+    return ", ".join(f"{key}={value[key]}" for key in sorted(value))
 
 
 def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> None:

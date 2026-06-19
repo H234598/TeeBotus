@@ -19,7 +19,7 @@ Umgesetzt:
 - Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
 - Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen; der systemd-User-Service `teebotus-codex-history.service` wird ueber `teebotus-codex-history-systemd` erzeugt und pollt restart-getrieben mit `Restart=always`/`RestartSec`, damit pro Runde alle Instanzen gescannt werden.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
-- Phase 5 Status/Applet teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`-Zeilen; das Cinnamon-Applet parst diese Zeilen und zeigt sie im Projekt-Menue.
+- Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`-Zeilen; das Cinnamon-Applet parst diese Zeilen und zeigt sie im Projekt-Menue; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
@@ -27,7 +27,7 @@ Offen:
 
 - Delivery-Receipts/`delivered` und aktive Bestaetigung/`acknowledged` sind noch nicht angebunden.
 - Filesystem-Events statt restart-getriebenem Polling sind noch nicht umgesetzt.
-- Tieferer Applet-Drilldown/Repo-History-Report, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
+- Tieferer Applet-Drilldown, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
 ## Kurzantwort
 
@@ -473,7 +473,8 @@ Stand 2026-06-19:
 - `/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letzter Summary.
 - `--runtime-status` gibt `codex_history=<Instanz> status=... queued=... failed=... total=... latest_repo=... latest_prefix=...` aus.
 - Das Cinnamon-Applet parst diese Runtime-Zeilen und zeigt sie im Projekt-Menue.
-- Offen: pro-Repo Detailansicht im Applet und ausgebauter Admin-CLI-Repo-History-Report.
+- `codex-history report` liefert `repo_history` mit pro-Repo Status-/Dispatch-Zaehlern, letzten Summaries und `--repo`/`--summary-limit`.
+- Offen: pro-Repo Detailansicht im Applet.
 
 ### Phase 6: Qdrant + Bibliothek
 * Verheirate alles mit Qdrant (64D) und dem Bibliothekar

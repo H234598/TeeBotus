@@ -234,6 +234,82 @@ def test_codex_history_cli_append_and_report_json(tmp_path: Path, capsys) -> Non
     assert payload["instances"][0]["codex_history"]["projects"][0]["repo_name"] == "teebotus-demo"
 
 
+def test_codex_history_report_builds_repo_history_and_filters_dispatch_results(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo_alpha = make_git_repo(tmp_path, "alpha-history", version="1.8.0")
+    repo_beta = make_git_repo(tmp_path, "beta-history", version="2.0.0")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    alpha_first = append_codex_history_summary(store, repo_root=repo_alpha, title="Alpha eins", bullets=["Erster Alpha-Lauf."])
+    alpha_second = append_codex_history_summary(store, repo_root=repo_alpha, title="Alpha zwei", bullets=["Zweiter Alpha-Lauf."])
+    beta_first = append_codex_history_summary(store, repo_root=repo_beta, title="Beta eins", bullets=["Fremdes Repo."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    for row in rows:
+        if row["id"] == alpha_first["id"]:
+            row["status"] = "accepted"
+        elif row["id"] == alpha_second["id"]:
+            row["status"] = "failed"
+        elif row["id"] == beta_first["id"]:
+            row["status"] = "accepted"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"codex_history_item_id": alpha_first["id"], "repo_id": alpha_first["project"]["repo_id"], "status": "accepted"},
+    )
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"codex_history_item_id": alpha_second["id"], "repo_id": alpha_second["project"]["repo_id"], "status": "failed"},
+    )
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"codex_history_item_id": beta_first["id"], "repo_id": beta_first["project"]["repo_id"], "status": "accepted"},
+    )
+
+    report = build_codex_history_report(
+        instances_dir=tmp_path,
+        instances=("Depressionsbot",),
+        repo="alpha-history",
+        provider=provider(),
+        summary_limit=1,
+    )
+    history = report["instances"][0]["codex_history"]
+
+    assert history["outbox_items"] == 2
+    assert history["dispatch_results"] == 2
+    assert history["outbox_status_counts"] == {"accepted": 1, "failed": 1}
+    assert history["dispatch_status_counts"] == {"accepted": 1, "failed": 1}
+    assert len(history["repo_history"]) == 1
+    repo_history = history["repo_history"][0]
+    assert repo_history["repo_name"] == "alpha-history"
+    assert repo_history["summary_count"] == 2
+    assert repo_history["outbox_status_counts"] == {"accepted": 1, "failed": 1}
+    assert repo_history["dispatch_status_counts"] == {"accepted": 1, "failed": 1}
+    assert [item["summary_prefix"] for item in repo_history["latest_summaries"]] == ["v1.8.0 #0002"]
+    assert repo_history["latest_summaries"][0]["title"] == "Alpha zwei"
+
+    assert (
+        codex_history_main(
+            [
+                "report",
+                "--instances-dir",
+                str(tmp_path),
+                "--instances",
+                "Depressionsbot",
+                "--repo",
+                "alpha-history",
+                "--summary-limit",
+                "1",
+            ],
+            provider=provider(),
+        )
+        == 0
+    )
+    rendered = capsys.readouterr().out
+    assert "Repo-History:" in rendered
+    assert "alpha-history summaries=2 statuses=accepted=1, failed=1 dispatch=accepted=1, failed=1" in rendered
+    assert "v1.8.0 #0002 failed Alpha zwei" in rendered
+    assert "beta-history" not in rendered
+
+
 def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "dispatch-demo", version="1.9.0")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
