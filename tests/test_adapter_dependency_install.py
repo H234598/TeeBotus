@@ -97,6 +97,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
         return _inner
 
     monkeypatch.setattr(check_adapter_deps, "_check_python_package", lambda name, _expected: (called.append(f"package:{name}") or (True, name)))
+    monkeypatch.setattr(check_adapter_deps, "_check_python_runtime_choice", ok("python_runtime_choice"))
     monkeypatch.setattr(check_adapter_deps, "_check_litellm_supply_chain_guard", ok("litellm_guard"))
     monkeypatch.setattr(check_adapter_deps, "_check_litellm_dotenv_contract", ok("litellm_dotenv"))
     monkeypatch.setattr(check_adapter_deps, "_check_local_transcription_contract", ok("local_transcription"))
@@ -116,6 +117,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "package:signalbot" in called
     assert "package:python-dotenv" in called
     assert "package:fastmcp" in called
+    assert "python_runtime_choice" in called
     assert "litellm_dotenv" in called
     assert "pyproject_contract" in called
     assert "llm_profiles_contract" in called
@@ -127,6 +129,35 @@ def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
 
     assert ok
     assert "extras=dev,llm,rag,agents,tools" in message
+
+
+def test_python_runtime_choice_prefers_python313_for_clean_llm_resolver() -> None:
+    ok, message = check_adapter_deps._check_python_runtime_choice((3, 13, 13))
+
+    assert ok
+    assert "choice=ok" in message
+    assert "recommended=3.13" in message
+    assert "resolver=clean" in message
+    assert "litellm=1.89.2" in message
+
+
+def test_python_runtime_choice_keeps_python314_as_advisory_not_failure() -> None:
+    ok, message = check_adapter_deps._check_python_runtime_choice((3, 14, 5))
+
+    assert ok
+    assert "choice=advisory" in message
+    assert "recommended=3.13" in message
+    assert "active_litellm=1.83.7" in message
+    assert "py313_litellm=1.89.2" in message
+    assert "resolver=override" in message
+
+
+def test_python_runtime_choice_rejects_unsupported_python() -> None:
+    ok, message = check_adapter_deps._check_python_runtime_choice((3, 10, 18))
+
+    assert not ok
+    assert "choice=unsupported" in message
+    assert "required=>=3.11" in message
 
 
 def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_path: Path) -> None:

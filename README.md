@@ -166,6 +166,8 @@ python3 scripts/check_adapter_deps.py
 
 `nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.2` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. Auf Python 3.14 deklariert `litellm==1.83.7` ausserdem noch `python-dotenv==1.0.1`; TeeBotus prueft stattdessen den validierten Override `python-dotenv==1.2.2`, damit die Tool-Schiene aktuell bleibt. `pip check` meldet diese beiden bekannten Upstream-Metadatenkonflikte, `scripts/check_adapter_deps.py` prueft die realen Runtime-Vertraege. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, baut `signal-cli-rest-api` aus dem gepinnten Upstream-Tag mit Go nach `~/.local/opt` und laesst danach `scripts/check_adapter_deps.py` laufen.
 
+Der Dependency-Doctor meldet zusaetzlich `python runtime choice=...`. Python 3.14 bleibt damit pruefbar, wird aber als `advisory` markiert, solange LiteLLM dort nur mit aelteren Pins laeuft. Fuer eine saubere LLM-/Tool-Resolver-Schiene ist Python 3.13 aktuell die empfohlene TeeBotus-Runtime.
+
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
 ```bash

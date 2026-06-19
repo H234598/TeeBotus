@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.native_only:
         checks.extend(
             [
+                _check_python_runtime_choice(),
                 _check_python_package("signalbot", pins["signalbot"]),
                 _check_python_package("nio-bot", pins["nio-bot"]),
                 _check_python_package("matrix-nio", pins["matrix-nio"]),
@@ -158,6 +159,35 @@ def _check_litellm_dotenv_contract(expected_litellm: str) -> tuple[bool, str]:
     if dotenv_version != "1.2.2":
         return False, f"litellm dotenv contract python-dotenv={dotenv_version} expected=1.2.2"
     return True, f"litellm dotenv contract=ok litellm={litellm_version} python-dotenv={dotenv_version}"
+
+
+def _check_python_runtime_choice(version_info: tuple[int, int, int] | None = None) -> tuple[bool, str]:
+    current = version_info or (sys.version_info.major, sys.version_info.minor, sys.version_info.micro)
+    major, minor, micro = current
+    current_label = f"{major}.{minor}.{micro}"
+    if (major, minor) < (3, 11):
+        return False, f"python runtime choice=unsupported current={current_label} required=>=3.11 recommended=3.13"
+    if (major, minor) == (3, 13):
+        return (
+            True,
+            "python runtime choice=ok current="
+            f"{current_label} recommended=3.13 litellm={PY313_LITELLM_VERSION} openai=2.43.0 "
+            "resolver=clean",
+        )
+    if (major, minor) >= (3, 14):
+        return (
+            True,
+            "python runtime choice=advisory current="
+            f"{current_label} recommended=3.13 reason=litellm_latest_excludes_python3.14 "
+            f"active_litellm={PY314_COMPATIBLE_LITELLM_VERSION} active_openai=2.30.0 "
+            f"py313_litellm={PY313_LITELLM_VERSION} py313_openai=2.43.0 resolver=override",
+        )
+    return (
+        True,
+        "python runtime choice=compatible current="
+        f"{current_label} recommended=3.13 reason=modern_llm_toolchain_pins "
+        f"target_litellm={PY313_LITELLM_VERSION} target_openai=2.43.0",
+    )
 
 
 def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -> tuple[bool, str]:
