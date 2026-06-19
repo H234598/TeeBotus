@@ -551,7 +551,7 @@ def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
 
 
 def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
-    merged = {**base, **incoming}
+    merged: dict[str, Any] = {}
     updated_at = _newest_timestamp_string(base.get("updated_at"), incoming.get("updated_at"))
     if updated_at:
         merged["updated_at"] = updated_at

@@ -979,6 +979,28 @@ def test_version_notification_state_normalization_drops_invalid_timestamps() -> 
     assert failure["chat_id"] == 111
 
 
+def test_version_notification_state_normalization_drops_unknown_version_state_fields() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": ["telegram:user:111"],
+                    "failed_identities": {},
+                    "updated_at": "2026-06-14T12:00:00+00:00",
+                    "debug": {"secret": "raw"},
+                    "notes": ["keep out"],
+                }
+            }
+        }
+    )
+
+    assert state["versions"]["1.0.3"] == {
+        "failed_identities": {},
+        "sent_identities": ["telegram:user:111"],
+        "updated_at": "2026-06-14T12:00:00+00:00",
+    }
+
+
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
     state = _normalize_state(
         {
