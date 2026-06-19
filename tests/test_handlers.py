@@ -78,6 +78,8 @@ class HandlerTests(unittest.TestCase):
         self.assertTrue(is_program_history_request("Was ist mit neuem Feature?"))
         self.assertTrue(is_program_history_request("Gibt es eine neue Funktion?"))
         self.assertTrue(is_program_history_request("Welche Github Comitts gab es?"))
+        self.assertTrue(is_program_history_request("Welche Commits gab es?"))
+        self.assertTrue(is_program_history_request("Zeig mir die letzten Comitts"))
         self.assertTrue(is_program_history_request("Gibt es Release-Notes?"))
         self.assertFalse(is_program_history_request("commit bitte"))
         self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))

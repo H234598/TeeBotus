@@ -99,6 +99,8 @@ def is_program_history_request(text: str) -> bool:
         "was wurde geandert",
         "aenderungen am bot",
         "anderungen am bot",
+        "commits",
+        "comitts",
         "github commits",
         "github comitts",
         "commit historie",
