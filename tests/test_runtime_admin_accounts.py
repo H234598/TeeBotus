@@ -217,6 +217,43 @@ def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_pat
     assert f"admin_notify=Depressionsbot status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
 
 
+def test_runtime_status_admin_notify_calls_injected_sender_factory_once_per_instance(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    telegram_identity = telegram_identity_key(123)
+    telegram_account_id = account_store.resolve_or_create_account(telegram_identity)
+    account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    signal_identity = signal_identity_key(source_uuid="signal-admin")
+    signal_account_id = account_store.resolve_or_create_account(signal_identity)
+    account_store.update_identity_route(signal_identity, channel="signal", chat_id="+49123", chat_type="private", adapter_slot=1)
+    calls: list[str] = []
+
+    def sender_factory(instance: str, _store: AccountStore):
+        calls.append(instance)
+        return {
+            "telegram": lambda _route, _action, _metadata: "telegram-ok",
+            "signal": lambda _route, _action, _metadata: "signal-ok",
+        }
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: f"{telegram_account_id},{signal_account_id}"},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=sender_factory,
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert calls == ["Depressionsbot"]
+    assert f"admin_notify=Depressionsbot status=sent account_id={telegram_account_id} channel=telegram" in lines
+    assert f"admin_notify=Depressionsbot status=sent account_id={signal_account_id} channel=signal" in lines
+
+
 def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

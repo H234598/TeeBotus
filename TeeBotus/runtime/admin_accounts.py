@@ -182,18 +182,33 @@ async def notify_runtime_status_admin_accounts(
             continue
         senders_by_channel: dict[str, ProactiveSender] = {}
         sender_errors_by_channel: dict[str, str] = {}
-        for channel in dict.fromkeys(channel for _account_id, _route, channel in candidates):
+        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel in candidates))
+        if sender_factory is not None:
             try:
-                resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source, channels=(channel,))
-                senders = resolved_sender_factory(instance_name, store)
-            except Exception as exc:  # noqa: BLE001 - one channel must not block other admin channels.
-                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
-                continue
-            sender = senders.get(channel)
-            if sender is None:
-                sender_errors_by_channel[channel] = "no_sender"
-                continue
-            senders_by_channel[channel] = sender
+                senders = sender_factory(instance_name, store)
+            except Exception as exc:  # noqa: BLE001 - injected factories have no per-channel selector.
+                for channel in candidate_channels:
+                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+            else:
+                for channel in candidate_channels:
+                    sender = senders.get(channel)
+                    if sender is None:
+                        sender_errors_by_channel[channel] = "no_sender"
+                        continue
+                    senders_by_channel[channel] = sender
+        else:
+            for channel in candidate_channels:
+                try:
+                    resolved_sender_factory = _runtime_sender_factory(instances_dir, source, channels=(channel,))
+                    senders = resolved_sender_factory(instance_name, store)
+                except Exception as exc:  # noqa: BLE001 - one runtime channel must not block other admin channels.
+                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                    continue
+                sender = senders.get(channel)
+                if sender is None:
+                    sender_errors_by_channel[channel] = "no_sender"
+                    continue
+                senders_by_channel[channel] = sender
         for account_id, route, channel in candidates:
             sender_error = sender_errors_by_channel.get(channel)
             if sender_error == "no_sender":
