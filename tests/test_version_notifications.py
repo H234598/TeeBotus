@@ -1042,6 +1042,38 @@ def test_version_notification_state_normalization_merges_failure_payload_fields(
     assert failure["reason"] == "Bad Request: chat not found"
 
 
+def test_version_notification_state_normalization_keeps_newest_failed_at() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "v1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "failed_at": "2026-06-14T12:00:00+00:00",
+                            "reason": "newer failure",
+                        }
+                    }
+                },
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "failed_at": "2026-06-14T11:00:00+00:00",
+                            "reason": "older failure",
+                        }
+                    }
+                },
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure["failed_at"] == "2026-06-14T12:00:00+00:00"
+
+
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

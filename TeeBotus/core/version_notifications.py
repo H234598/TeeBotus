@@ -580,6 +580,12 @@ def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:
         merged.update(base)
     if isinstance(incoming, dict):
         merged.update(incoming)
+    failed_at = _newest_timestamp_string(
+        base.get("failed_at") if isinstance(base, dict) else None,
+        incoming.get("failed_at") if isinstance(incoming, dict) else None,
+    )
+    if failed_at:
+        merged["failed_at"] = failed_at
     return merged
 
 
