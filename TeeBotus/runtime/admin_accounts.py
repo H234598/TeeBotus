@@ -158,13 +158,9 @@ async def notify_runtime_status_admin_accounts(
             results.append(AdminNotificationResult(instance_name, "", "failed", f"store:{type(exc).__name__}"))
             continue
         group = resolve_admin_account_group(instance_name=instance_name, env=source)
-        try:
-            senders = resolved_sender_factory(instance_name, store)
-        except Exception as exc:  # noqa: BLE001 - runtime-status notify must keep going for other instances.
-            for account_id in group.account_ids:
-                if _account_dir_exists(store, account_id):
-                    results.append(AdminNotificationResult(instance_name, account_id, "failed", f"sender_factory:{type(exc).__name__}"))
-            continue
+        for invalid_id in group.invalid_ids:
+            results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
+        candidates: list[tuple[str, dict[str, Any], str]] = []
         for account_id in group.account_ids:
             if not _account_dir_exists(store, account_id):
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
@@ -177,7 +173,20 @@ async def notify_runtime_status_admin_accounts(
             if route is None:
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_private_route"))
                 continue
-            channel = str(route.get("channel") or "").strip()
+            channel = str(route.get("channel") or "").strip().casefold()
+            if not channel:
+                results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
+                continue
+            candidates.append((account_id, route, channel))
+        if not candidates:
+            continue
+        try:
+            senders = resolved_sender_factory(instance_name, store)
+        except Exception as exc:  # noqa: BLE001 - runtime-status notify must keep going for other instances.
+            for account_id, _route, channel in candidates:
+                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"sender_factory:{type(exc).__name__}", channel=channel))
+            continue
+        for account_id, route, channel in candidates:
             sender = senders.get(channel)
             if sender is None:
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_sender", channel=channel))

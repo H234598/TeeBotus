@@ -120,3 +120,33 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert sent[0][1].chat_id == "123"
     assert "TeeBotus Runtime-Status Warnungen" in sent[0][1].text
     assert "telegram_slot=Depressionsbot/default status=broken error=bad" in sent[0][1].text
+
+
+def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    called = False
+
+    def sender_factory(_instance: str, _store: AccountStore):
+        nonlocal called
+        called = True
+        raise AssertionError("sender factory should not run without local admin routes")
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: DEFAULT_ADMIN_ACCOUNT_IDS[0]},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=sender_factory,
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert called is False
+    assert lines == (
+        f"admin_notify=Depressionsbot status=skipped account_id={DEFAULT_ADMIN_ACCOUNT_IDS[0]} reason=not_local",
+    )
