@@ -1268,6 +1268,38 @@ def test_account_store_sqlite_backend_migrates_proactive_jsonl_collections(tmp_p
     assert b"state-geheim" not in raw_db
 
 
+def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = store.account_memory_backend
+    assert backend is not None
+    backend.write_collection(
+        account_id,
+        "llm_state",
+        [
+            {
+                "previous_response_ids": ["resp-a"],
+                "profile": {"tone": "ruhig"},
+                "updated_at": "2026-06-14T11:58:00+00:00",
+            },
+            {
+                "previous_response_ids": ["resp-b"],
+                "profile": {"provider": "gemini"},
+                "updated_at": "2026-06-14T11:59:00+00:00",
+            },
+        ],
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_ids"] == ["resp-b", "resp-a"]
+    assert state["profile"] == {"tone": "ruhig", "provider": "gemini"}
+    assert state["updated_at"] == "2026-06-14T11:59:00+00:00"
+
+
 def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
     sqlite_path = tmp_path / "memory.sqlite3"
     account_id = "a" * 128

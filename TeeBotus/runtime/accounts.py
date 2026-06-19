@@ -2448,7 +2448,7 @@ class AccountStore:
         if not (callable(read_collection) and callable(write_collection)):
             return dict(default)
         rows = [row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)]
-        data = dict(rows[0]) if rows else dict(default)
+        data = _merge_json_document_rows(rows, dict(default))
         path = self.root.parent / safe_filename
         if path.exists():
             legacy_data = self._read_legacy_instance_json_state(path, dict(default))
@@ -2488,7 +2488,7 @@ class AccountStore:
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(read_collection) and callable(write_collection):
             rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
-            data = dict(rows[0]) if rows else dict(default)
+            data = _merge_json_document_rows(rows, dict(default))
             path = self.account_dir(account_id) / filename
             if path.exists():
                 legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
@@ -3446,6 +3446,14 @@ def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]
     else:
         merged = {**source_data, **target_data}
     return merged
+
+
+def _merge_json_document_rows(rows: Iterable[dict[str, Any]], default: dict[str, Any]) -> dict[str, Any]:
+    selected = dict(default)
+    for row in rows:
+        if isinstance(row, dict):
+            selected = _merge_nested_json_documents(selected, row)
+    return selected
 
 
 def _merge_nested_json_documents(source_data: dict[str, Any], target_data: dict[str, Any]) -> dict[str, Any]:

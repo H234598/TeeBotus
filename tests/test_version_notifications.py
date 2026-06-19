@@ -595,6 +595,60 @@ def test_notify_recent_telegram_users_merges_sqlite_and_legacy_sent_identities(t
     ]
 
 
+def test_notify_recent_telegram_users_merges_multiple_sqlite_state_rows(tmp_path: Path, monkeypatch) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = _store(tmp_path)
+    for sender_id in ("111", "222", "333"):
+        store.resolve_or_create_account(f"telegram:user:{sender_id}", display_label=f"User {sender_id}")
+    backend = store.account_memory_backend
+    assert backend is not None
+    backend.write_collection(
+        INSTANCE_STATE_ACCOUNT_ID,
+        "version_notifications",
+        [
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": ["telegram:user:111"],
+                        "failed_identities": {},
+                        "updated_at": "2026-06-14T11:58:00+00:00",
+                    }
+                }
+            },
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": ["telegram:user:222"],
+                        "failed_identities": {},
+                        "updated_at": "2026-06-14T11:59:00+00:00",
+                    }
+                }
+            },
+        ],
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [333]
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+    assert state["versions"]["1.0.3"]["sent_identities"] == [
+        "telegram:user:111",
+        "telegram:user:222",
+        "telegram:user:333",
+    ]
+
+
 def test_notify_recent_telegram_users_records_permanent_error_when_on_error_fails(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Broken")
