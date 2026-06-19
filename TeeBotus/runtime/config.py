@@ -110,7 +110,11 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
     explicit = source.get("TEEBOTUS_INSTANCES") or source.get("TELEGRAM_BOT_INSTANCES")
     if explicit:
         selected = parse_csv(explicit)
-        if selected and not _selected_instances_requests_discovery(selected):
+        if _selected_instances_requests_discovery(selected):
+            return _discover_selected_instances(instances_dir)
+        if _selected_instances_contains_discovery_token(selected):
+            raise RuntimeConfigError("TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES cannot combine all/auto with explicit instance names")
+        if selected:
             return selected
     single = source.get("TEEBOTUS_INSTANCE") or source.get("TELEGRAM_BOT_INSTANCE")
     if single and single.strip().casefold() not in {"", "all", "auto"}:
@@ -120,6 +124,10 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
 
 def _selected_instances_requests_discovery(selected: Sequence[str]) -> bool:
     return len(selected) == 1 and selected[0].strip().casefold() in {"all", "auto"}
+
+
+def _selected_instances_contains_discovery_token(selected: Sequence[str]) -> bool:
+    return any(value.strip().casefold() in {"all", "auto"} for value in selected)
 
 
 def _discover_selected_instances(instances_dir: Path) -> tuple[str, ...]:

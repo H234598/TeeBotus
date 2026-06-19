@@ -356,6 +356,11 @@ def test_plural_instances_all_requests_runtime_discovery(tmp_path: Path):
     assert resolve_selected_instances(tmp_path, {"TELEGRAM_BOT_INSTANCES": "auto"}) == ("Bote_der_Wahrheit", "Depressionsbot")
 
 
+def test_plural_instances_cannot_mix_discovery_token_with_explicit_names(tmp_path: Path):
+    with pytest.raises(RuntimeConfigError, match="cannot combine all/auto"):
+        resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "all,Depressionsbot"})
+
+
 def test_teebotus_instance_takes_precedence_over_telegram_bot_instance(tmp_path: Path):
     selected = resolve_selected_instances(
         tmp_path,
