@@ -174,24 +174,28 @@ def resolve_openai_key(
         f"OPENAI_API_KEYS_{instance_token}",
     ]
     if channel_token != "BACKGROUND":
-        if source.get(candidates[0]):
-            return source[candidates[0]]
+        value = _first_nonempty_env_value(source, candidates[0])
+        if value:
+            return value
         resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot, label=list_candidates[0])
         if resolved:
             return resolved
-        if source.get(candidates[1]):
-            return source[candidates[1]]
+        value = _first_nonempty_env_value(source, candidates[1])
+        if value:
+            return value
     background_key = _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
     if background_key:
         return background_key
-    if source.get(candidates[2]):
-        return source[candidates[2]]
+    value = _first_nonempty_env_value(source, candidates[2])
+    if value:
+        return value
     resolved = _resolve_indexed_secret(source.get(list_candidates[1]), slot, label=list_candidates[1])
     if resolved:
         return resolved
     for key in candidates[3:]:
-        if source.get(key):
-            return source[key]
+        value = _first_nonempty_env_value(source, key)
+        if value:
+            return value
     return ""
 
 
@@ -213,14 +217,16 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
         f"OPENAI_API_KEYS_{instance_token}_BACKGROUND_SERVICES",
     ]
     for key in slot_candidates:
-        if source.get(key):
-            return source[key]
+        value = _first_nonempty_env_value(source, key)
+        if value:
+            return value
     resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot, label=list_candidates[0])
     if resolved:
         return resolved
     for key in candidates:
-        if source.get(key):
-            return source[key]
+        value = _first_nonempty_env_value(source, key)
+        if value:
+            return value
     return ""
 
 

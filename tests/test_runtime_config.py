@@ -95,6 +95,16 @@ def test_openai_key_resolution_prefers_channel_slot_key():
     assert resolve_openai_key("Depressionsbot", "signal", 1, env) == "sk-signal"
 
 
+def test_openai_key_resolution_skips_blank_direct_key_and_strips_value():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_TELEGRAM_1": " ",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_TELEGRAM": " sk-channel ",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-channel"
+
+
 def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_SIGNAL": "sk-signal-channel",
@@ -113,6 +123,14 @@ def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
     assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-instance"
     assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
+
+
+def test_openai_key_resolution_strips_background_services_key():
+    env = {
+        "Depressionsbot_BACKGROUND_SERVICES": " sk-background ",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
 
 
 def test_openai_key_resolution_ignores_global_background_key():
