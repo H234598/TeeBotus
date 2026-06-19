@@ -8,6 +8,7 @@ import shutil
 import shlex
 import sqlite3
 import tempfile
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -697,7 +698,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             exit_code = 3
     output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
     if args.output:
-        Path(args.output).write_text(output, encoding="utf-8")
+        try:
+            Path(args.output).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"account-memory-recovery: unable to write output: {exc}", file=sys.stderr)
+            return 2
     else:
         print(output, end="")
     return exit_code

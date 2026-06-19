@@ -596,6 +596,19 @@ def test_memory_recovery_cli_writes_json_without_secret_payloads(tmp_path: Path)
     assert "telegram:user:2" not in text
 
 
+def test_memory_recovery_cli_rejects_missing_parent_directory(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    output_path = tmp_path / "missing" / "recovery" / "report.json"
+    result = recovery_main(["--instances-dir", str(tmp_path), "--format", "json", "--output", str(output_path)])
+
+    assert result == 2
+    assert "account-memory-recovery:" in capsys.readouterr().err
+    assert not output_path.exists()
+
+
 def test_memory_recovery_report_marks_unrecoverable_key_drift(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
