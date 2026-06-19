@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from TeeBotus.admin.codex_history import (
+    _codex_history_graph_mermaid_source,
     _normalize_remote_url,
     _repo_provider,
     acknowledge_codex_history_item,
@@ -515,6 +516,35 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert sent[-1].filename.endswith(".svg")
     assert sent[-1].content_type == "image/svg+xml"
     assert b"<svg" in sent[-1].data
+
+
+def test_codex_history_graph_mermaid_source_extracts_first_block(monkeypatch) -> None:
+    def fake_markdown(_items: object, *, instance_name: str, repo_filter: str) -> str:  # noqa: ARG001
+        return (
+            f"Intro: {instance_name}|{repo_filter}\n"
+            "```mermaid\n"
+            "flowchart LR\n"
+            "  A[Start] --> B[End]\n"
+            "```\n"
+            "Tail\n"
+            "```mermaid\n"
+            "flowchart LR\n"
+            "  X --> Y\n"
+            "```\n"
+        )
+
+    monkeypatch.setattr("TeeBotus.admin.codex_history._codex_history_graph_markdown", fake_markdown)
+    body = _codex_history_graph_mermaid_source([], instance_name="demo", repo_filter="alpha")
+    assert body == "flowchart LR\n  A[Start] --> B[End]\n"
+
+
+def test_codex_history_graph_mermaid_source_requires_block_end(monkeypatch) -> None:
+    def fake_markdown(_items: object, *, instance_name: str, repo_filter: str) -> str:  # noqa: ARG001
+        return f"Intro: {instance_name}|{repo_filter}\n```mermaid\nflowchart LR\n  A --> B\n"
+
+    monkeypatch.setattr("TeeBotus.admin.codex_history._codex_history_graph_markdown", fake_markdown)
+    with pytest.raises(ValueError, match="does not contain a mermaid block"):
+        _codex_history_graph_mermaid_source([], instance_name="demo", repo_filter="alpha")
 
 
 def test_codex_history_graph_export_auto_svg_engine_falls_back_to_builtin(tmp_path: Path, monkeypatch) -> None:
