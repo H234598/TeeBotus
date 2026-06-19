@@ -80,6 +80,23 @@ def test_admin_account_status_uses_account_route(tmp_path) -> None:
     assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1" in lines
 
 
+def test_admin_account_status_summarizes_not_local_accounts_without_ids(tmp_path) -> None:
+    account_store = store_for(tmp_path)
+
+    lines = admin_account_group_status_lines(
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        env={ADMIN_ACCOUNT_IDS_ENV: DEFAULT_ADMIN_ACCOUNT_IDS[0]},
+        store=account_store,
+    )
+
+    assert lines == (
+        "admin_accounts=Depressionsbot status=configured source=TEEBOTUS_ADMIN_ACCOUNT_IDS "
+        "accounts=1 local=0 not_local=1 routable=0 warnings=0 invalid=0",
+    )
+    assert DEFAULT_ADMIN_ACCOUNT_IDS[0] not in "\n".join(lines)
+
+
 def test_runtime_status_problem_lines_extracts_warnings_and_errors() -> None:
     output = "\n".join(
         [

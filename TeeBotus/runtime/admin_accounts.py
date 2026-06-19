@@ -78,11 +78,12 @@ def admin_account_group_status_lines(
     account_lines: list[str] = []
     local_count = 0
     routable_count = 0
+    not_local_count = 0
     warning_count = 0
     for account_id in group.account_ids:
         account_dir = resolved_store.account_dir(account_id)
         if not account_dir.is_dir():
-            account_lines.append(f"admin_account={instance_name}/{account_id} status=not_local")
+            not_local_count += 1
             continue
         local_count += 1
         try:
@@ -106,7 +107,7 @@ def admin_account_group_status_lines(
     status = "broken" if group.invalid_ids else "configured"
     lines = [
         f"admin_accounts={instance_name} status={status} source={group.source} accounts={len(group.account_ids)} "
-        f"local={local_count} routable={routable_count} warnings={warning_count} invalid={len(group.invalid_ids)}"
+        f"local={local_count} not_local={not_local_count} routable={routable_count} warnings={warning_count} invalid={len(group.invalid_ids)}"
     ]
     for invalid_id in group.invalid_ids:
         lines.append(f"admin_account={instance_name}/{_status_token(invalid_id)} status=broken reason=invalid_account_id")
