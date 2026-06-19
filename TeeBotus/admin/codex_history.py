@@ -39,6 +39,7 @@ CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
 
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b")
 _TELEGRAM_TOKEN_RE = re.compile(r"\b\d{7,12}:[A-Za-z0-9_\-]{25,}\b")
+_SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
 _GENERIC_SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(api[_-]?key|token|secret|password|cookie)\b\s*[:=]\s*([^\s,;]{12,})"
 )
@@ -63,16 +64,18 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
         raise ValueError(f"{operation} must not be empty")
     if "\\" in text:
         raise ValueError(f"{operation} contains invalid path separator: \\")
+    if text == "/":
+        return True, tuple()
     is_absolute = text.startswith("/")
     normalized = text[1:] if is_absolute else text
+    if not normalized:
+        raise ValueError(f"{operation} contains invalid path")
     raw_parts = normalized.split("/")
     parts: list[str] = []
     for part in raw_parts:
         if part in {"", "."}:
             continue
-        if part == "..":
-            raise ValueError(f"{operation} contains forbidden relative segment: ..")
-        if ":" in part:
+        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
             raise ValueError(f"{operation} contains invalid path segment: {part}")
         parts.append(part)
     return is_absolute, tuple(parts)
