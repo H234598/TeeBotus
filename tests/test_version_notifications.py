@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from TeeBotus.core.version_notifications import (
+    _normalize_state,
     build_version_notification_text,
     github_has_version,
     github_repo_url,
@@ -561,6 +562,29 @@ def test_notify_recent_telegram_users_drops_empty_legacy_version_keys(tmp_path: 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert list(state["versions"]) == ["1.0.3"]
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_version_notification_state_normalization_prefers_exact_version_metadata() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": ["telegram:user:111"],
+                    "failed_identities": {},
+                    "updated_at": "2026-06-14T12:00:00+00:00",
+                },
+                "v1.0.3": {
+                    "sent_identities": ["telegram:user:222"],
+                    "failed_identities": {},
+                    "updated_at": "2026-06-14T11:00:00+00:00",
+                },
+            }
+        }
+    )
+
+    assert list(state["versions"]) == ["1.0.3"]
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:user:222"]
+    assert state["versions"]["1.0.3"]["updated_at"] == "2026-06-14T12:00:00+00:00"
 
 
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:

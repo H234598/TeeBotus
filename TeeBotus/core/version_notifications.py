@@ -502,7 +502,7 @@ def _normalize_state(data: Any) -> dict[str, Any]:
         normalized["versions"] = {}
         return normalized
     normalized_versions: dict[str, Any] = {}
-    for key, value in versions.items():
+    for key, value in sorted(versions.items(), key=_version_state_normalization_order):
         if not isinstance(key, str) or not isinstance(value, dict):
             continue
         version_key = _normalize_version_key(key)
@@ -515,6 +515,11 @@ def _normalize_state(data: Any) -> dict[str, Any]:
             normalized_versions[version_key] = value
     normalized["versions"] = dict(sorted(normalized_versions.items()))
     return normalized
+
+
+def _version_state_normalization_order(item: tuple[Any, Any]) -> bool:
+    key = item[0]
+    return isinstance(key, str) and bool(_normalize_version_key(key)) and _normalize_version_key(key) == key
 
 
 def _state_has_versions(state: dict[str, Any]) -> bool:
