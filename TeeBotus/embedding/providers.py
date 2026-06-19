@@ -5,11 +5,11 @@ import json
 import math
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Callable
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from TeeBotus.embedding.base import EmbeddingProvider
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 
 
@@ -85,6 +85,55 @@ class HFEmbeddingProvider:
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         return Request(endpoint, data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), method="POST", headers=headers)
+
+
+SentenceTransformerFactory = Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class SentenceTransformerEmbeddingProvider:
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    dimensions: int = 384
+    device: str = ""
+    batch_size: int = 32
+    local_files_only: bool = True
+    model_factory: SentenceTransformerFactory | None = None
+
+    def embed_text(self, text: str) -> list[float]:
+        return self.embed_texts([text])[0]
+
+    def embed_texts(self, texts: list[str], *, purpose: str = "") -> list[list[float]]:
+        cleaned = [str(text or "") for text in texts]
+        if not cleaned:
+            return []
+        model = self._model()
+        try:
+            vectors = model.encode(
+                cleaned,
+                batch_size=max(1, int(self.batch_size)),
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - optional local provider boundary.
+            raise RuntimeError(f"SentenceTransformer embedding failed for {self.model_name}: {exc}") from exc
+        normalized = _normalize_sentence_transformer_vectors(vectors, expected_count=len(cleaned))
+        for vector in normalized:
+            _validate_embedding_vector(vector, self.dimensions)
+        return normalized
+
+    def _model(self) -> Any:
+        if self.model_factory is not None:
+            return self.model_factory(
+                self.model_name,
+                device=self.device or None,
+                local_files_only=bool(self.local_files_only),
+            )
+        return _cached_sentence_transformer_model(
+            self.model_name,
+            self.device,
+            bool(self.local_files_only),
+        )
 
 
 def _embedding_tokens(text: str) -> list[str]:
@@ -165,4 +214,36 @@ def _coerce_vector(value: Any) -> list[float]:
 def _validate_embedding_vector(vector: list[float], dimensions: int) -> None:
     expected = _validate_dimensions(dimensions)
     if len(vector) != expected:
-        raise RuntimeError(f"HF embedding vector dimensions mismatch: expected {expected}, got {len(vector)}")
+        raise RuntimeError(f"Embedding vector dimensions mismatch: expected {expected}, got {len(vector)}")
+
+
+@lru_cache(maxsize=8)
+def _cached_sentence_transformer_model(model_name: str, device: str, local_files_only: bool) -> Any:
+    try:
+        from sentence_transformers import SentenceTransformer
+    except Exception as exc:  # noqa: BLE001 - optional dependency.
+        raise RuntimeError("sentence-transformers is not installed; install TeeBotus[rag] to use this provider.") from exc
+    kwargs: dict[str, Any] = {
+        "local_files_only": bool(local_files_only),
+        "trust_remote_code": False,
+    }
+    if str(device or "").strip():
+        kwargs["device"] = str(device).strip()
+    try:
+        return SentenceTransformer(str(model_name or "").strip(), **kwargs)
+    except Exception as exc:  # noqa: BLE001 - keep provider diagnostics clear.
+        mode = "local cache" if local_files_only else "sentence-transformers"
+        raise RuntimeError(f"Could not load {mode} model {model_name}: {exc}") from exc
+
+
+def _normalize_sentence_transformer_vectors(vectors: Any, *, expected_count: int) -> list[list[float]]:
+    if hasattr(vectors, "tolist"):
+        vectors = vectors.tolist()
+    if expected_count == 1 and isinstance(vectors, list) and vectors and all(isinstance(value, (int, float)) for value in vectors):
+        return [_coerce_vector(vectors)]
+    if not isinstance(vectors, list):
+        raise RuntimeError("SentenceTransformer returned unsupported vector payload")
+    normalized = [_coerce_vector(vector) for vector in vectors if isinstance(vector, list)]
+    if len(normalized) != expected_count:
+        raise RuntimeError("SentenceTransformer returned an unexpected vector count")
+    return normalized

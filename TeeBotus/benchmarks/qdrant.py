@@ -22,6 +22,8 @@ _QDRANT_USERMEMORY_BASELINE_DIMENSIONS = 64
 _QDRANT_USERMEMORY_BASELINE_MODEL = "teebotus-account-memory-hash"
 _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS = 384
 _QDRANT_USERMEMORY_SIDE_INDEX_MODEL = "intfloat/multilingual-e5-small"
+_QDRANT_USERMEMORY_1024D_SIDE_INDEX_DIMENSIONS = 1024
+_QDRANT_USERMEMORY_1024D_SIDE_INDEX_MODEL = "BAAI/bge-m3"
 
 
 def benchmark_qdrant_health_quick(*, iterations: int) -> BenchmarkResult:
@@ -251,6 +253,36 @@ def benchmark_qdrant_memory_index_quick(*, iterations: int) -> BenchmarkResult:
 
 
 def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> BenchmarkResult:
+    return _benchmark_qdrant_usermemory_side_index_quick(
+        iterations=iterations,
+        side_dimensions=_QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS,
+        side_model=_QDRANT_USERMEMORY_SIDE_INDEX_MODEL,
+        result_name="qdrant_usermemory_384d_side_index_quick",
+        note="fake_qdrant_384d_usermemory_side_index_no_server",
+        storage_ratio_key="storage_ratio_384d_vs_64d",
+    )
+
+
+def benchmark_qdrant_usermemory_1024d_side_index_quick(*, iterations: int) -> BenchmarkResult:
+    return _benchmark_qdrant_usermemory_side_index_quick(
+        iterations=iterations,
+        side_dimensions=_QDRANT_USERMEMORY_1024D_SIDE_INDEX_DIMENSIONS,
+        side_model=_QDRANT_USERMEMORY_1024D_SIDE_INDEX_MODEL,
+        result_name="qdrant_usermemory_1024d_side_index_quick",
+        note="fake_qdrant_1024d_usermemory_side_index_no_server",
+        storage_ratio_key="storage_ratio_1024d_vs_64d",
+    )
+
+
+def _benchmark_qdrant_usermemory_side_index_quick(
+    *,
+    iterations: int,
+    side_dimensions: int,
+    side_model: str,
+    result_name: str,
+    note: str,
+    storage_ratio_key: str,
+) -> BenchmarkResult:
     repetitions = max(1, int(iterations))
     entries = _benchmark_usermemory_side_index_entries()
     queries = _benchmark_usermemory_side_index_queries()
@@ -269,8 +301,8 @@ def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> Ben
         url="http://127.0.0.1:6333",
         opener=side_opener,
         embedding_provider=FakeEmbeddingProvider(
-            model_name=_QDRANT_USERMEMORY_SIDE_INDEX_MODEL,
-            dimensions=_QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS,
+            model_name=side_model,
+            dimensions=side_dimensions,
         ),
     )
     timings = {
@@ -318,21 +350,21 @@ def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> Ben
     )
     schema_versions = sorted({payload.get("schema_version") for payload in stored_payloads if isinstance(payload, dict)})
     primary_bytes = _QDRANT_USERMEMORY_BASELINE_DIMENSIONS * int(_QDRANT_QUANTIZATION_PROFILES["float32"])
-    side_bytes = _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * int(_QDRANT_QUANTIZATION_PROFILES["float32"])
+    side_bytes = side_dimensions * int(_QDRANT_QUANTIZATION_PROFILES["float32"])
     storage_ratio = side_bytes / primary_bytes
     ok = (
         len(primary_opener.points) == len(entries)
         and len(side_opener.points) == len(entries)
-        and embedding_dimensions == [_QDRANT_USERMEMORY_BASELINE_DIMENSIONS, _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS]
+        and embedding_dimensions == [_QDRANT_USERMEMORY_BASELINE_DIMENSIONS, side_dimensions]
         and schema_versions == [QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION]
         and primary_hits == len(queries)
         and side_hits == len(queries)
         and side_hits >= primary_hits
-        and storage_ratio == 6.0
+        and storage_ratio == side_dimensions / _QDRANT_USERMEMORY_BASELINE_DIMENSIONS
         and not any(privacy_flags.values())
     )
     return result(
-        name="qdrant_usermemory_384d_side_index_quick",
+        name=result_name,
         category="qdrant",
         iterations=repetitions * max(1, len(entries) + len(queries)),
         total_ms=sum(timings.values()),
@@ -340,13 +372,13 @@ def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> Ben
         errors=0 if ok else 1,
         payload_bytes=len(json.dumps(stored_payloads, ensure_ascii=False).encode("utf-8")),
         index_bytes=len(json.dumps(combined_points, ensure_ascii=False).encode("utf-8")),
-        note="fake_qdrant_384d_usermemory_side_index_no_server",
+        note=note,
         mode="local_fake",
         details={
             "baseline_model": _QDRANT_USERMEMORY_BASELINE_MODEL,
             "baseline_dimensions": _QDRANT_USERMEMORY_BASELINE_DIMENSIONS,
-            "side_index_model": _QDRANT_USERMEMORY_SIDE_INDEX_MODEL,
-            "side_index_dimensions": _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS,
+            "side_index_model": side_model,
+            "side_index_dimensions": side_dimensions,
             "side_index_optional": True,
             "side_index_rebuildable": True,
             "embedding_provider": "FakeEmbeddingProvider",
@@ -359,14 +391,14 @@ def benchmark_qdrant_usermemory_384d_side_index_quick(*, iterations: int) -> Ben
             "side_top3_hits": side_hits,
             "primary_results": primary_results,
             "side_results": side_results,
-            "storage_ratio_384d_vs_64d": storage_ratio,
+            storage_ratio_key: storage_ratio,
             "primary_float32_bytes_per_vector": primary_bytes,
             "side_float32_bytes_per_vector": side_bytes,
             "side_scalar_int8_bytes_per_vector": int(
-                _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * _QDRANT_QUANTIZATION_PROFILES["scalar_int8"]
+                side_dimensions * _QDRANT_QUANTIZATION_PROFILES["scalar_int8"]
             ),
             "side_binary_bytes_per_vector": int(
-                _QDRANT_USERMEMORY_SIDE_INDEX_DIMENSIONS * _QDRANT_QUANTIZATION_PROFILES["binary"]
+                side_dimensions * _QDRANT_QUANTIZATION_PROFILES["binary"]
             ),
             "timings": {key: round(value, 6) for key, value in timings.items()},
             "embedding_dimensions": embedding_dimensions,
@@ -613,6 +645,7 @@ __all__ = [
     "benchmark_qdrant_health_live",
     "benchmark_qdrant_health_quick",
     "benchmark_qdrant_memory_index_quick",
+    "benchmark_qdrant_usermemory_1024d_side_index_quick",
     "benchmark_qdrant_usermemory_384d_side_index_quick",
     "benchmark_qdrant_vector_dimensions_quantization_quick",
 ]

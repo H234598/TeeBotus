@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from TeeBotus.embedding import FakeEmbeddingProvider, HFEmbeddingProvider, KeywordRerankerProvider, check_embedding_provider
+from TeeBotus.embedding import (
+    FakeEmbeddingProvider,
+    HFEmbeddingProvider,
+    KeywordRerankerProvider,
+    SentenceTransformerEmbeddingProvider,
+    check_embedding_provider,
+)
 from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider, build_embedding_provider
 from TeeBotus.embedding.qdrant_bibliothekar import QdrantBibliothekarIndex
 from TeeBotus.embedding.qdrant_memory import QdrantMemoryIndex
@@ -77,6 +83,35 @@ def test_hf_embedding_provider_normalizes_openai_and_token_vector_shapes() -> No
     assert token_provider.embed_text("eins") == [2.0, 4.0]
 
 
+def test_sentence_transformer_embedding_provider_uses_local_factory() -> None:
+    class FakeSentenceTransformer:
+        def __init__(self, model_name: str, **kwargs: object) -> None:
+            self.model_name = model_name
+            self.kwargs = kwargs
+
+        def encode(self, texts, **kwargs):  # noqa: ANN001
+            assert kwargs["normalize_embeddings"] is True
+            return [[0.1, 0.2, 0.3] for _ in texts]
+
+    calls: list[dict[str, object]] = []
+
+    def factory(model_name: str, **kwargs: object) -> FakeSentenceTransformer:
+        calls.append({"model_name": model_name, **kwargs})
+        return FakeSentenceTransformer(model_name, **kwargs)
+
+    provider = SentenceTransformerEmbeddingProvider(
+        model_name="local-384d",
+        dimensions=3,
+        device="cpu",
+        batch_size=2,
+        local_files_only=True,
+        model_factory=factory,
+    )
+
+    assert provider.embed_texts(["eins", "zwei"], purpose="memory") == [[0.1, 0.2, 0.3], [0.1, 0.2, 0.3]]
+    assert calls == [{"model_name": "local-384d", "device": "cpu", "local_files_only": True}]
+
+
 def test_embedding_health_and_keyword_reranker_are_local() -> None:
     health = check_embedding_provider(FakeEmbeddingProvider(dimensions=8))
     reranker = KeywordRerankerProvider()
@@ -127,6 +162,28 @@ def test_build_embedding_provider_builds_hf_provider_from_config_env() -> None:
     assert provider.api_key == "hf_TEST123456"
 
 
+def test_build_embedding_provider_builds_sentence_transformer_provider_from_env() -> None:
+    provider = build_embedding_provider(
+        EmbeddingConfig(
+            provider="sentence-transformers",
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            dimensions=384,
+        ),
+        env={
+            "TEEBOTUS_SENTENCE_TRANSFORMERS_DEVICE": "cpu",
+            "TEEBOTUS_SENTENCE_TRANSFORMERS_BATCH_SIZE": "7",
+            "TEEBOTUS_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY": "true",
+        },
+    )
+
+    assert isinstance(provider, SentenceTransformerEmbeddingProvider)
+    assert provider.model_name == "sentence-transformers/all-MiniLM-L6-v2"
+    assert provider.dimensions == 384
+    assert provider.device == "cpu"
+    assert provider.batch_size == 7
+    assert provider.local_files_only is True
+
+
 def test_build_account_memory_embedding_provider_keeps_hash_local() -> None:
     provider = build_account_memory_embedding_provider(
         EmbeddingConfig(provider="hash", model_name="teebotus-account-memory-hash", dimensions=16)
@@ -134,6 +191,21 @@ def test_build_account_memory_embedding_provider_keeps_hash_local() -> None:
 
     assert isinstance(provider, FakeEmbeddingProvider)
     assert provider.model_name == "teebotus-account-memory-hash"
+
+
+def test_build_account_memory_embedding_provider_allows_local_sentence_transformer() -> None:
+    provider = build_account_memory_embedding_provider(
+        EmbeddingConfig(
+            provider="local-sentence-transformers",
+            model_name="BAAI/bge-m3",
+            dimensions=1024,
+        )
+    )
+
+    assert isinstance(provider, SentenceTransformerEmbeddingProvider)
+    assert provider.model_name == "BAAI/bge-m3"
+    assert provider.dimensions == 1024
+    assert provider.local_files_only is True
 
 
 def test_build_account_memory_embedding_provider_allows_local_http_endpoint() -> None:

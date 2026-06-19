@@ -12,6 +12,7 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_bibliothekar_indexes,
     rebuild_qdrant_memory_indexes,
 )
+from TeeBotus.runtime.qdrant import QDRANT_USER_MEMORY_COLLECTION, qdrant_user_memory_side_collection
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -24,6 +25,7 @@ def main(argv: list[str] | None = None) -> int:
             instance_names=args.instance,
             account_ids=args.account_id,
             qdrant_url=args.qdrant_url or None,
+            collection_name=_memory_collection_from_args(args),
             embedding_overrides=_embedding_overrides_from_args(args),
             dry_run=args.dry_run,
             include_legacy_raw_account_id_cleanup=args.include_legacy_raw_account_id_cleanup,
@@ -40,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             instance_names=args.instance,
             qdrant_url=args.qdrant_url or None,
             embedding_overrides=_embedding_overrides_from_args(args),
+            include_memory_side_dimensions=args.include_memory_side_index,
         )
         if args.json:
             print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
@@ -76,6 +79,8 @@ def _build_parser() -> argparse.ArgumentParser:
     memory.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     memory.add_argument("--account-id", action="append", default=[], help="Limit rebuild to one or more account IDs.")
     memory.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bot_Verhalten.md Memory Search config.")
+    memory.add_argument("--collection", default="", help="Override target Qdrant collection. Defaults to teebotus_user_memory.")
+    memory.add_argument("--side-index-dimensions", type=int, default=None, help="Use the conventional optional side-index collection for this vector size, e.g. 384 or 1024.")
     memory.add_argument("--embedding-provider", default=None, help="Override embedding provider: hash/local_hash or hf/tei.")
     memory.add_argument("--embedding-model", default=None, help="Override embedding model name stored in Qdrant payload.")
     memory.add_argument("--embedding-dimensions", type=int, default=None, help="Override embedding vector dimensions.")
@@ -92,6 +97,13 @@ def _build_parser() -> argparse.ArgumentParser:
     collections = subparsers.add_parser("collections-ensure", help="Ensure Qdrant collections using instance Memory Search config.")
     collections.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
     collections.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bot_Verhalten.md Memory Search config.")
+    collections.add_argument(
+        "--include-memory-side-index",
+        type=int,
+        action="append",
+        default=[],
+        help="Also ensure an optional usermemory side-index collection for this vector size. Can be repeated, e.g. 384 and 1024.",
+    )
     collections.add_argument("--embedding-provider", default=None, help="Override usermemory embedding provider for metadata parity.")
     collections.add_argument("--embedding-model", default=None, help="Override usermemory embedding model name.")
     collections.add_argument("--embedding-dimensions", type=int, default=None, help="Override usermemory embedding vector dimensions.")
@@ -125,6 +137,12 @@ def _embedding_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
     if args.embedding_api_key_env is not None:
         overrides["api_key_env"] = args.embedding_api_key_env
     return overrides
+
+
+def _memory_collection_from_args(args: argparse.Namespace) -> str:
+    if getattr(args, "side_index_dimensions", None):
+        return qdrant_user_memory_side_collection(int(args.side_index_dimensions))
+    return str(getattr(args, "collection", "") or QDRANT_USER_MEMORY_COLLECTION).strip() or QDRANT_USER_MEMORY_COLLECTION
 
 
 def _load_dotenv_for_instances_dir(instances_dir: str | Path) -> None:
@@ -177,6 +195,9 @@ def _format_memory_rebuild_result(result: object) -> str:
     detail = ""
     if qdrant_url:
         detail += f" qdrant_url={qdrant_url}"
+    collection_name = str(getattr(result, "collection_name", "") or "")
+    if collection_name:
+        detail += f" collection={collection_name}"
     if embedding_model:
         detail += f" embedding_provider={embedding_provider or 'unknown'} embedding_model={embedding_model} embedding_dimensions={embedding_dimensions}"
     suffix = f" error={error}" if error else ""

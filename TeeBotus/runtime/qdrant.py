@@ -13,11 +13,19 @@ from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 QDRANT_URL_ENV = "TEEBOTUS_QDRANT_URL"
 QDRANT_USER_MEMORY_COLLECTION = "teebotus_user_memory"
+QDRANT_USER_MEMORY_SIDE_COLLECTIONS = {
+    384: "teebotus_user_memory_384d",
+    1024: "teebotus_user_memory_1024d",
+}
 QDRANT_BIBLIOTHEKAR_COLLECTION = "teebotus_bibliothekar_chunks"
 DEFAULT_QDRANT_TIMEOUT_SECONDS = 0.35
 MAX_QDRANT_RESPONSE_BYTES = 1_000_000
 USER_MEMORY_QDRANT_EMBEDDING_MODEL = "teebotus-account-memory-hash"
 USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS = ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
+USER_MEMORY_QDRANT_SIDE_INDEX_MODELS = {
+    384: "intfloat/multilingual-e5-small",
+    1024: "BAAI/bge-m3",
+}
 BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL = "BAAI/bge-m3"
 BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS = 1024
 DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS = BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS
@@ -181,6 +189,23 @@ def default_qdrant_collection_specs(
             vector_size=_validate_vector_size(bibliothekar_vector_size),
             embedding_model=str(bibliothekar_embedding_model or "").strip(),
         ),
+    )
+
+
+def qdrant_user_memory_side_collection(dimensions: int) -> str:
+    size = _validate_vector_size(dimensions)
+    collection = QDRANT_USER_MEMORY_SIDE_COLLECTIONS.get(size)
+    if collection:
+        return collection
+    return f"teebotus_user_memory_{size}d"
+
+
+def qdrant_user_memory_side_collection_spec(dimensions: int, *, embedding_model: str = "") -> QdrantCollectionSpec:
+    size = _validate_vector_size(dimensions)
+    return QdrantCollectionSpec(
+        name=qdrant_user_memory_side_collection(size),
+        vector_size=size,
+        embedding_model=str(embedding_model or USER_MEMORY_QDRANT_SIDE_INDEX_MODELS.get(size, "")).strip(),
     )
 
 

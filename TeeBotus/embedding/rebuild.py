@@ -17,6 +17,7 @@ from TeeBotus.runtime.qdrant import (
     QdrantCollectionSpec,
     default_qdrant_collection_specs,
     ensure_default_collections,
+    qdrant_user_memory_side_collection_spec,
 )
 from TeeBotus.runtime.qdrant_bibliothekar import QdrantBibliothekarIndex
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
@@ -30,6 +31,7 @@ class QdrantMemoryRebuildResult:
     point_count: int = 0
     point_ids: tuple[str, ...] = ()
     qdrant_url: str = ""
+    collection_name: str = QDRANT_USER_MEMORY_COLLECTION
     embedding_provider: str = ""
     embedding_model: str = ""
     embedding_dimensions: int = 0
@@ -85,6 +87,7 @@ def rebuild_qdrant_memory_indexes(
     instance_names: Iterable[str] = (),
     account_ids: Iterable[str] = (),
     qdrant_url: str | None = None,
+    collection_name: str = QDRANT_USER_MEMORY_COLLECTION,
     embedding_config: EmbeddingConfig | None = None,
     embedding_overrides: Mapping[str, Any] | None = None,
     dry_run: bool = False,
@@ -122,6 +125,7 @@ def rebuild_qdrant_memory_indexes(
                     "",
                     "error",
                     qdrant_url=effective_qdrant_url,
+                    collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                     embedding_config=effective_embedding_config,
                     error=f"{type(exc).__name__}: {exc}",
                 )
@@ -134,6 +138,7 @@ def rebuild_qdrant_memory_indexes(
                     "",
                     "skipped",
                     qdrant_url=effective_qdrant_url,
+                    collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                     embedding_config=effective_embedding_config,
                     error="no accounts",
                 )
@@ -151,12 +156,14 @@ def rebuild_qdrant_memory_indexes(
                             "dry_run",
                             point_count=len(entries),
                             qdrant_url=effective_qdrant_url,
+                            collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                             embedding_config=effective_embedding_config,
                         )
                     )
                     continue
                 index = qdrant_index_factory(
                     url=effective_qdrant_url,
+                    collection=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                     embedding_provider=embedding_provider,
                 )
                 point_ids = rebuild_qdrant_memory_index(
@@ -174,6 +181,7 @@ def rebuild_qdrant_memory_indexes(
                         point_count=len(point_ids),
                         point_ids=tuple(point_ids),
                         qdrant_url=effective_qdrant_url,
+                        collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                         embedding_config=effective_embedding_config,
                     )
                 )
@@ -184,6 +192,7 @@ def rebuild_qdrant_memory_indexes(
                         account_id,
                         "error",
                         qdrant_url=effective_qdrant_url,
+                        collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
                         embedding_config=effective_embedding_config,
                         error=f"{type(exc).__name__}: {exc}",
                     )
@@ -276,6 +285,7 @@ def ensure_qdrant_collections_for_instances(
     qdrant_url: str | None = None,
     embedding_config: EmbeddingConfig | None = None,
     embedding_overrides: Mapping[str, Any] | None = None,
+    include_memory_side_dimensions: Iterable[int] = (),
     qdrant_ensure_factory: Callable[..., tuple[QdrantCollectionResult, ...]] = ensure_default_collections,
 ) -> tuple[QdrantCollectionEnsureResult, ...]:
     root = Path(instances_dir)
@@ -306,13 +316,17 @@ def ensure_qdrant_collections_for_instances(
                 error=qdrant_error or embedding_error,
             ),
         )
-    specs = default_qdrant_collection_specs(
-        user_memory_vector_size=memory_embedding_config.dimensions,
-        user_memory_embedding_model=memory_embedding_config.model_name,
+    specs = list(
+        default_qdrant_collection_specs(
+            user_memory_vector_size=memory_embedding_config.dimensions,
+            user_memory_embedding_model=memory_embedding_config.model_name,
+        )
     )
+    for dimensions in _unique_positive_ints(include_memory_side_dimensions):
+        specs.append(qdrant_user_memory_side_collection_spec(dimensions))
     spec_by_name = {spec.name: spec for spec in specs}
     try:
-        results = qdrant_ensure_factory(url=effective_qdrant_url, specs=specs)
+        results = qdrant_ensure_factory(url=effective_qdrant_url, specs=tuple(specs))
     except Exception as exc:  # noqa: BLE001 - operator command should report controlled failures.
         return (
             QdrantCollectionEnsureResult(
@@ -343,6 +357,7 @@ def _rebuild_result(
     status: str,
     *,
     qdrant_url: str,
+    collection_name: str = QDRANT_USER_MEMORY_COLLECTION,
     embedding_config: EmbeddingConfig,
     point_count: int = 0,
     point_ids: tuple[str, ...] = (),
@@ -355,6 +370,7 @@ def _rebuild_result(
         point_count=point_count,
         point_ids=point_ids,
         qdrant_url=str(qdrant_url or ""),
+        collection_name=str(collection_name or QDRANT_USER_MEMORY_COLLECTION),
         embedding_provider=str(embedding_config.provider or ""),
         embedding_model=str(embedding_config.model_name or ""),
         embedding_dimensions=int(embedding_config.dimensions),
@@ -509,6 +525,21 @@ def _positive_int(value: Any, *, default: int) -> int:
     except (TypeError, ValueError):
         return max(1, int(default))
     return parsed if parsed > 0 else max(1, int(default))
+
+
+def _unique_positive_ints(values: Iterable[int]) -> tuple[int, ...]:
+    seen: set[int] = set()
+    dimensions: list[int] = []
+    for value in values:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            continue
+        if parsed < 1 or parsed in seen:
+            continue
+        seen.add(parsed)
+        dimensions.append(parsed)
+    return tuple(dimensions)
 
 
 def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:

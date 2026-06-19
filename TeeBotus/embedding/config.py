@@ -6,11 +6,22 @@ from typing import Any, Mapping
 from urllib.parse import urlparse
 
 from TeeBotus.embedding.base import EmbeddingProvider
-from TeeBotus.embedding.providers import FakeEmbeddingProvider, HFEmbeddingProvider
+from TeeBotus.embedding.providers import FakeEmbeddingProvider, HFEmbeddingProvider, SentenceTransformerEmbeddingProvider
 
 
 LOCAL_EMBEDDING_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 LOCAL_EMBEDDING_PROVIDERS = frozenset({"", "fake", "hash", "local", "local_hash", "deterministic"})
+SENTENCE_TRANSFORMER_EMBEDDING_PROVIDERS = frozenset(
+    {
+        "sentence_transformer",
+        "sentence_transformers",
+        "sentence-transformer",
+        "sentence-transformers",
+        "st",
+        "local_sentence_transformer",
+        "local_sentence_transformers",
+    }
+)
 HTTP_EMBEDDING_PROVIDERS = frozenset(
     {"hf", "huggingface", "hugging_face", "tei", "text_embeddings_inference", "openai_compatible", "openai_like", "http"}
 )
@@ -40,6 +51,15 @@ def build_embedding_provider(config: EmbeddingConfig, *, env: Mapping[str, str] 
     provider = str(config.provider or "").strip().casefold().replace("-", "_")
     if provider in LOCAL_EMBEDDING_PROVIDERS:
         return FakeEmbeddingProvider(model_name=config.model_name, dimensions=config.dimensions)
+    if provider in SENTENCE_TRANSFORMER_EMBEDDING_PROVIDERS:
+        source_env = os.environ if env is None else env
+        return SentenceTransformerEmbeddingProvider(
+            model_name=config.model_name,
+            dimensions=config.dimensions,
+            device=str(source_env.get("TEEBOTUS_SENTENCE_TRANSFORMERS_DEVICE", "") or ""),
+            batch_size=_positive_int(source_env.get("TEEBOTUS_SENTENCE_TRANSFORMERS_BATCH_SIZE"), default=32),
+            local_files_only=_truthy(source_env.get("TEEBOTUS_SENTENCE_TRANSFORMERS_LOCAL_FILES_ONLY"), default=True),
+        )
     if provider in HTTP_EMBEDDING_PROVIDERS:
         source_env = os.environ if env is None else env
         api_key = source_env.get(config.api_key_env, "") if config.api_key_env else ""
@@ -56,6 +76,8 @@ def build_account_memory_embedding_provider(config: EmbeddingConfig, *, env: Map
     provider = str(config.provider or "").strip().casefold().replace("-", "_")
     if provider in LOCAL_EMBEDDING_PROVIDERS:
         return build_embedding_provider(config, env=env)
+    if provider in SENTENCE_TRANSFORMER_EMBEDDING_PROVIDERS:
+        return build_embedding_provider(config, env=env)
     if provider in HTTP_EMBEDDING_PROVIDERS:
         _validate_local_account_memory_embedding_endpoint(config.endpoint)
         return build_embedding_provider(config, env=env)
@@ -68,6 +90,19 @@ def _positive_int(value: Any, *, default: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(1, parsed)
+
+
+def _truthy(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    text = str(value).strip().casefold()
+    if not text:
+        return default
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
 
 
 def _validate_local_account_memory_embedding_endpoint(endpoint: str) -> None:

@@ -81,6 +81,10 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module._benchmark_qdrant_health_live is qdrant.benchmark_qdrant_health_live
     assert benchmark_module._benchmark_qdrant_memory_index_quick is qdrant.benchmark_qdrant_memory_index_quick
     assert (
+        benchmark_module._benchmark_qdrant_usermemory_1024d_side_index_quick
+        is qdrant.benchmark_qdrant_usermemory_1024d_side_index_quick
+    )
+    assert (
         benchmark_module._benchmark_qdrant_usermemory_384d_side_index_quick
         is qdrant.benchmark_qdrant_usermemory_384d_side_index_quick
     )

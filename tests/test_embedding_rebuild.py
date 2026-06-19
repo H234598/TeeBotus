@@ -15,11 +15,12 @@ from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_
 
 
 def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store_truth(tmp_path):
-    calls: list[tuple[str, str, str | None, str, int, bool]] = []
+    calls: list[tuple[str, str, str | None, str, str, int, bool]] = []
 
     class FakeQdrantMemoryIndex:
-        def __init__(self, *, url=None, embedding_provider, **_kwargs) -> None:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
             self.url = url
+            self.collection = collection
             self.embedding_provider = embedding_provider
 
         def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
@@ -28,6 +29,7 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
                     instance_name,
                     account_id,
                     self.url,
+                    self.collection,
                     self.embedding_provider.model_name,
                     self.embedding_provider.dimensions,
                     include_legacy_raw_account_id_cleanup,
@@ -49,12 +51,13 @@ def test_rebuild_qdrant_memory_indexes_discovers_accounts_and_uses_account_store
         qdrant_index_factory=FakeQdrantMemoryIndex,
     )
 
-    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "custom-memory-model", 32, False)]
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", QDRANT_USER_MEMORY_COLLECTION, "custom-memory-model", 32, False)]
     assert len(results) == 1
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 2
     assert results[0].point_ids == ("point:mem_sleep", "point:mem_plan")
     assert results[0].qdrant_url == "http://localhost:6334"
+    assert results[0].collection_name == QDRANT_USER_MEMORY_COLLECTION
     assert results[0].embedding_provider == "hash"
     assert results[0].embedding_model == "custom-memory-model"
     assert results[0].embedding_dimensions == 32
@@ -89,11 +92,12 @@ def test_rebuild_qdrant_memory_indexes_ignores_empty_placeholder_account_dirs(tm
 
 def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_default(monkeypatch, tmp_path):
     monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
-    calls: list[tuple[str, str, str, str, int, bool]] = []
+    calls: list[tuple[str, str, str, str, str, int, bool]] = []
 
     class FakeQdrantMemoryIndex:
-        def __init__(self, *, url=None, embedding_provider, **_kwargs) -> None:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
             self.url = str(url)
+            self.collection = str(collection)
             self.embedding_provider = embedding_provider
 
         def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
@@ -102,6 +106,7 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
                     instance_name,
                     account_id,
                     self.url,
+                    self.collection,
                     self.embedding_provider.model_name,
                     self.embedding_provider.dimensions,
                     include_legacy_raw_account_id_cleanup,
@@ -134,10 +139,11 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
         qdrant_index_factory=FakeQdrantMemoryIndex,
     )
 
-    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", "instance-memory-model", 48, False)]
+    assert calls == [("Depressionsbot", account_id, "http://localhost:6334", QDRANT_USER_MEMORY_COLLECTION, "instance-memory-model", 48, False)]
     assert results[0].status == "rebuilt"
     assert results[0].point_count == 1
     assert results[0].qdrant_url == "http://localhost:6334"
+    assert results[0].collection_name == QDRANT_USER_MEMORY_COLLECTION
     assert results[0].embedding_provider == "hash"
     assert results[0].embedding_model == "instance-memory-model"
     assert results[0].embedding_dimensions == 48
@@ -328,6 +334,7 @@ def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path
         assert kwargs["instances_dir"] == str(tmp_path / "instances")
         assert kwargs["instance_names"] == ["Depressionsbot"]
         assert kwargs["account_ids"] == []
+        assert kwargs["collection_name"] == QDRANT_USER_MEMORY_COLLECTION
         assert kwargs["dry_run"] is True
         assert kwargs["include_legacy_raw_account_id_cleanup"] is False
         assert kwargs["embedding_overrides"] == {
@@ -397,6 +404,55 @@ def test_embedding_cli_memory_rebuild_passes_explicit_legacy_raw_cleanup(monkeyp
     )
 
     assert "status=rebuilt" in capsys.readouterr().out
+
+
+def test_embedding_cli_memory_rebuild_can_target_1024d_side_index(monkeypatch, capsys, tmp_path):
+    def fake_rebuild(**kwargs):
+        assert kwargs["collection_name"] == "teebotus_user_memory_1024d"
+        assert kwargs["embedding_overrides"] == {
+            "provider": "sentence-transformers",
+            "model_name": "BAAI/bge-m3",
+            "dimensions": 1024,
+        }
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (
+            QdrantMemoryRebuildResult(
+                "Depressionsbot",
+                "a" * 128,
+                "dry_run",
+                point_count=2,
+                collection_name="teebotus_user_memory_1024d",
+                embedding_provider="sentence-transformers",
+                embedding_model="BAAI/bge-m3",
+                embedding_dimensions=1024,
+            ),
+        )
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--dry-run",
+                "--side-index-dimensions",
+                "1024",
+                "--embedding-provider",
+                "sentence-transformers",
+                "--embedding-model",
+                "BAAI/bge-m3",
+                "--embedding-dimensions",
+                "1024",
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "collection=teebotus_user_memory_1024d" in output
 
 
 def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(monkeypatch, tmp_path):
@@ -605,6 +661,7 @@ def test_embedding_cli_collections_ensure_json(monkeypatch, capsys, tmp_path):
         assert kwargs["instances_dir"] == str(tmp_path / "instances")
         assert kwargs["instance_names"] == ["Depressionsbot"]
         assert kwargs["qdrant_url"] == "http://127.0.0.1:6334"
+        assert kwargs["include_memory_side_dimensions"] == [1024]
         assert kwargs["embedding_overrides"] == {
             "provider": "hash",
             "model_name": "custom-model",
@@ -637,6 +694,8 @@ def test_embedding_cli_collections_ensure_json(monkeypatch, capsys, tmp_path):
                 "collections-ensure",
                 "--qdrant-url",
                 "http://127.0.0.1:6334",
+                "--include-memory-side-index",
+                "1024",
                 "--embedding-provider",
                 "hash",
                 "--embedding-model",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from TeeBotus.embedding.base import EmbeddingProvider, RerankerProvider, RerankResult
 from TeeBotus.embedding.health import EmbeddingProviderHealth, check_embedding_provider
-from TeeBotus.embedding.providers import FakeEmbeddingProvider, HFEmbeddingProvider
+from TeeBotus.embedding.providers import FakeEmbeddingProvider, HFEmbeddingProvider, SentenceTransformerEmbeddingProvider
 from TeeBotus.embedding.reranker import KeywordRerankerProvider
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "EmbeddingProviderHealth",
     "FakeEmbeddingProvider",
     "HFEmbeddingProvider",
+    "SentenceTransformerEmbeddingProvider",
     "KeywordRerankerProvider",
     "RerankerProvider",
     "RerankResult",

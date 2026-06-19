@@ -878,11 +878,13 @@ lokalen HF-/TEI-kompatiblen Endpoint zeigen:
 - embedding_api_key_env: HF_TOKEN
 ```
 
-Fuer Account-Memory sind nur der lokale Hash-Provider oder explizit lokale
-HTTP-Embedding-Endpoints erlaubt (`127.0.0.1`, `localhost` oder `::1` mit
-Port). `hf`/`tei` ohne Endpoint faellt nicht auf die Hugging-Face-API zurueck,
-sondern wird fuer Usermemory blockiert, damit verschluesselte Erinnerungen
-nicht still als Embedding-Input an Remote-Provider gehen.
+Fuer Account-Memory sind nur der lokale Hash-Provider, lokale
+`sentence-transformers`-Modelle oder explizit lokale HTTP-Embedding-Endpoints
+erlaubt (`127.0.0.1`, `localhost` oder `::1` mit Port). `hf`/`tei` ohne
+Endpoint faellt nicht auf die Hugging-Face-API zurueck, sondern wird fuer
+Usermemory blockiert, damit verschluesselte Erinnerungen nicht still als
+Embedding-Input an Remote-Provider gehen. `sentence-transformers` laedt
+Account-Memory-Modelle standardmaessig nur aus dem lokalen Cache.
 
 Qdrant liefert dabei nur Memory-IDs. Entschluesselung, Rechtepruefung,
 Prompt-Formatierung und `last_accessed_at`/`access_count` bleiben im
@@ -916,12 +918,17 @@ sind nur Overrides fuer Tests oder einen bewussten Modellwechsel:
 `collections-ensure` prueft vorhandene Collections zuerst und legt nur fehlende
 Collections an; bestehende Collections mit falscher Vektorgroesse werden als
 Schemafehler gemeldet, nicht ueberschrieben.
+Optionale 384D-/1024D-Nebenindexes nutzen eigene Collections, weil eine
+Qdrant-Collection eine feste Vektorgroesse hat.
 
 ```bash
 teebotus-embedding --instances-dir instances --instance Depressionsbot collections-ensure
+teebotus-embedding --instances-dir instances --instance Depressionsbot collections-ensure --include-memory-side-index 384 --include-memory-side-index 1024
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --dry-run
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333
 teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model intfloat/multilingual-e5-small --embedding-dimensions 384 --embedding-endpoint http://127.0.0.1:8080/embeddings
+teebotus-embedding --instances-dir instances --instance Depressionsbot memory-rebuild --side-index-dimensions 1024 --embedding-provider sentence-transformers --embedding-model BAAI/bge-m3 --embedding-dimensions 1024
+python scripts/benchmark_semantic_memory_indexes.py --sizes 1000 10000 100000 --dimensions 64 384 1024 --output-dir ~/Downloads
 teebotus-embedding --instances-dir instances --instance Depressionsbot bibliothekar-rebuild --dry-run
 teebotus-embedding --instances-dir instances --instance Depressionsbot bibliothekar-rebuild --qdrant-url http://127.0.0.1:6333 --embedding-provider tei --embedding-model BAAI/bge-m3 --embedding-dimensions 1024 --embedding-endpoint http://127.0.0.1:8080/embeddings
 ```
