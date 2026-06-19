@@ -16,9 +16,11 @@ NOTIFICATION_STATE_COLLECTION = "version_notifications"
 ACTIVE_WINDOW_DAYS = 7
 DEFAULT_REPO_URL = "https://github.com/H234598/TeeBotus"
 SEMVER_RE = re.compile(
-    r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
-    r"(?:-(?P<prerelease>[0-9A-Za-z.-]+))?"
-    r"(?:\+[0-9A-Za-z.-]+)?$"
+    r"^(?P<major>0|[1-9]\d*)\."
+    r"(?P<minor>0|[1-9]\d*)\."
+    r"(?P<patch>0|[1-9]\d*)"
+    r"(?:-(?P<prerelease>(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 
 
