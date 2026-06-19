@@ -7,6 +7,9 @@ Telegram transport is started through the shared runtime configuration.
 from __future__ import annotations
 
 import importlib
+import asyncio
+import contextlib
+import io
 import json
 import os
 import re
@@ -111,6 +114,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
         from TeeBotus.runtime.matrix_runner import check_matrix_accounts, check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
+        from TeeBotus.runtime.admin_accounts import admin_account_group_status_lines
         from TeeBotus.runtime.qdrant import (
             check_default_collections,
             check_qdrant_health,
@@ -318,6 +322,12 @@ def _runtime_status(argv: Sequence[str]) -> int:
             project_root=config.instances_dir.parent,
             env=os.environ,
             runtime_channels=tuple(config.channels),
+        ):
+            tool_lines.append(_sanitize_status_text(line))
+        for line in admin_account_group_status_lines(
+            instance_name=instance_name,
+            project_root=config.instances_dir.parent,
+            env=os.environ,
         ):
             tool_lines.append(_sanitize_status_text(line))
     _print_runtime_status_section("Tools und Account-Memory", tool_lines)
@@ -2028,10 +2038,52 @@ def _main_impl(argv: list[str] | None = None) -> int:
 def _runtime_status_preserving_environment(argv: Sequence[str]) -> int:
     original = dict(os.environ)
     try:
-        return _runtime_status(argv)
+        notify_admins, cleaned_argv = _runtime_status_admin_notify_args(argv)
+        if not notify_admins:
+            return _runtime_status(cleaned_argv)
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = _runtime_status(cleaned_argv)
+        output = stdout.getvalue()
+        if output:
+            print(output, end="")
+        if status == 0:
+            _runtime_status_notify_admins(cleaned_argv, output)
+        return status
     finally:
         os.environ.clear()
         os.environ.update(original)
+
+
+def _runtime_status_admin_notify_args(argv: Sequence[str]) -> tuple[bool, tuple[str, ...]]:
+    notify = False
+    cleaned: list[str] = []
+    for arg in argv:
+        if arg in {"--notify-admins", "--notify-admins-on-problems", "--admin-notify"}:
+            notify = True
+            continue
+        cleaned.append(arg)
+    return notify, tuple(cleaned)
+
+
+def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> None:
+    try:
+        from TeeBotus.runtime.admin_accounts import format_admin_notification_result_lines, notify_runtime_status_admin_accounts
+        from TeeBotus.runtime.config import resolve_runtime_config
+
+        config = resolve_runtime_config(argv=list(argv))
+        results = asyncio.run(
+            notify_runtime_status_admin_accounts(
+                instances_dir=config.instances_dir,
+                selected_instances=tuple(instance.instance_name for instance in config.instances),
+                status_output=status_output,
+                env=os.environ,
+            )
+        )
+        for line in format_admin_notification_result_lines(results):
+            print(_sanitize_status_text(line))
+    except Exception as exc:  # noqa: BLE001 - notification must not hide runtime-status output.
+        print(f"admin_notify=runtime_status status=failed reason={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}", file=sys.stderr)
 
 
 __all__ = ["TelegramBotMissingError", "main"]
@@ -2045,6 +2097,8 @@ def _main_help_text() -> str:
             "Options:",
             "  --version                 Print package version and exit.",
             "  --runtime-status          Print resolved runtime health without starting bot loops.",
+            "  --runtime-status --notify-admins",
+            "                            Send detected runtime-status warnings/errors to admin accounts.",
             "  --channels CHANNELS       Select channels for runtime-status or startup.",
             "  --all                     Start all configured instances through the runtime entry point.",
             "  --help                    Show this help text and exit.",

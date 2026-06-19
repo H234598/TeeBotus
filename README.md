@@ -96,6 +96,15 @@ python3 -m TeeBotus --runtime-status --channels telegram
 python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix
 ```
 
+Mit `--notify-admins` filtert der Runtime-Status Warnungen und Fehler aus
+der Diagnoseausgabe und schickt sie an die konfigurierte Admin-Account-Gruppe.
+Die Gruppe ist account-basiert, nicht transport-basiert; verschickt wird ueber
+die gespeicherte private Route des jeweiligen Admin-Accounts:
+
+```bash
+python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix --notify-admins
+```
+
 `--channels telegram` startet nur Telegram-Slots. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten Signal und Matrix im Hintergrund und danach den Telegram-Runtime-Slot mit Long-Polling-Transport. Channel-Listen duerfen keine leeren Felder enthalten; `telegram,,signal` ist ein Konfigurationsfehler.
 
 ## Cinnamon-Applet

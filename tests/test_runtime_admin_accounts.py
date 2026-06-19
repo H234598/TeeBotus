@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timezone
+from pathlib import Path
+
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.admin_accounts import (
+    ADMIN_ACCOUNT_IDS_ENV,
+    DEFAULT_ADMIN_ACCOUNT_IDS,
+    admin_account_group_status_lines,
+    format_admin_notification_result_lines,
+    notify_runtime_status_admin_accounts,
+    resolve_admin_account_group,
+    runtime_status_problem_lines,
+)
+
+
+def store_for(root: Path, instance_name: str = "Depressionsbot") -> AccountStore:
+    return AccountStore(root / "accounts", instance_name, StaticSecretProvider(b"a" * 32))
+
+
+def test_default_admin_group_contains_configured_account_ids() -> None:
+    group = resolve_admin_account_group(env={})
+
+    assert group.account_ids == DEFAULT_ADMIN_ACCOUNT_IDS
+    assert group.invalid_ids == ()
+    assert group.source == "default"
+
+
+def test_admin_group_env_parses_ids_deduplicates_and_reports_invalid() -> None:
+    group = resolve_admin_account_group(
+        instance_name="Depressionsbot",
+        env={ADMIN_ACCOUNT_IDS_ENV: f"<{DEFAULT_ADMIN_ACCOUNT_IDS[0]}> nope {DEFAULT_ADMIN_ACCOUNT_IDS[0].upper()}"},
+    )
+
+    assert group.account_ids == (DEFAULT_ADMIN_ACCOUNT_IDS[0],)
+    assert group.invalid_ids == ("nope",)
+    assert group.source == ADMIN_ACCOUNT_IDS_ENV
+
+
+def test_admin_account_status_uses_account_route(tmp_path) -> None:
+    account_store = store_for(tmp_path)
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    lines = admin_account_group_status_lines(
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+        store=account_store,
+    )
+
+    assert lines[0].startswith("admin_accounts=Depressionsbot status=configured")
+    assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1" in lines
+
+
+def test_runtime_status_problem_lines_extracts_warnings_and_errors() -> None:
+    output = "\n".join(
+        [
+            "[Messenger]",
+            "telegram_slot=Depressionsbot/default status=configured token=configured",
+            "matrix_account=Depressionsbot/default status=broken error=missing",
+            "account_identity_warning=Depressionsbot status=warning reason=unlinked",
+            "signal_account=Depressionsbot/default status=registered warning=sync_messages_ignored",
+            "gemini_free_tier_limits status=fallback_defaults error=public_source_unavailable",
+            "structured_decision=Depressionsbot status=enabled route_status=unavailable route_error=pool_disabled",
+        ]
+    )
+
+    assert runtime_status_problem_lines(output) == (
+        "matrix_account=Depressionsbot/default status=broken error=missing",
+        "account_identity_warning=Depressionsbot status=warning reason=unlinked",
+        "signal_account=Depressionsbot/default status=registered warning=sync_messages_ignored",
+        "gemini_free_tier_limits status=fallback_defaults error=public_source_unavailable",
+        "structured_decision=Depressionsbot status=enabled route_status=unavailable route_error=pool_disabled",
+    )
+
+
+def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    sent: list[tuple[dict[str, object], SendText]] = []
+
+    def sender(route: dict[str, object], action: SendText, _metadata: dict[str, object]) -> str:
+        sent.append((route, action))
+        return "ok"
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert len(sent) == 1
+    assert sent[0][1].chat_id == "123"
+    assert "TeeBotus Runtime-Status Warnungen" in sent[0][1].text
+    assert "telegram_slot=Depressionsbot/default status=broken error=bad" in sent[0][1].text
