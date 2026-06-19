@@ -43,6 +43,34 @@ def test_program_history_uses_last_5_commits_and_3_releases_when_tags_exist(tmp_
     assert "- v1.0.2 Bugfix 02" not in reply
 
 
+def test_recent_releases_uses_semver_precedence(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for tag in ("v1.0.9", "v1.0.10-alpha.1", "v1.0.10-alpha.2", "v1.0.10-alpha.10", "v1.0.10"):
+        _commit(repo, f"Release {tag}")
+        _git(repo, "tag", tag)
+
+    releases = recent_releases(repo, limit=5)
+
+    assert [release.name for release in releases] == [
+        "v1.0.10",
+        "v1.0.10-alpha.10",
+        "v1.0.10-alpha.2",
+        "v1.0.10-alpha.1",
+        "v1.0.9",
+    ]
+
+
+def test_recent_releases_ignores_non_semver_tags(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for tag in ("latest", "release-2026-06-19", "v1.0", "v1.0.0"):
+        _commit(repo, f"Release {tag}")
+        _git(repo, "tag", tag)
+
+    releases = recent_releases(repo, limit=3)
+
+    assert [release.name for release in releases] == ["v1.0.0"]
+
+
 def test_recent_history_helpers_return_empty_lists_outside_git_repo(tmp_path: Path) -> None:
     assert recent_commits(tmp_path, limit=20) == []
     assert recent_releases(tmp_path, limit=3) == []

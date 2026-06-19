@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from TeeBotus.core.status import github_commit_history_url
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
+
+SEMVER_TAG_RE = re.compile(
+    r"^v?"
+    r"(?P<major>0|[1-9]\d*)\."
+    r"(?P<minor>0|[1-9]\d*)\."
+    r"(?P<patch>0|[1-9]\d*)"
+    r"(?:-(?P<prerelease>(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+(?P<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"$"
+)
 
 
 @dataclass(frozen=True)
@@ -17,6 +28,12 @@ class GitSummaryItem:
         if self.summary:
             return f"- {self.name} {self.summary}"
         return f"- {self.name}"
+
+
+@dataclass(frozen=True)
+class _SemVerTag:
+    item: GitSummaryItem
+    sort_key: tuple[object, ...]
 
 
 def build_program_history_reply(
@@ -54,12 +71,12 @@ def recent_releases(project_root: Path, *, limit: int) -> list[GitSummaryItem]:
     output = _run_git(
         project_root,
         "for-each-ref",
-        "--sort=-version:refname",
-        f"--count={max(1, limit)}",
         "--format=%(refname:short)%09%(subject)",
         "refs/tags",
     )
-    return _parse_items(output)
+    semver_tags = [_tag for item in _parse_items(output) if (_tag := _parse_semver_tag(item)) is not None]
+    semver_tags.sort(key=lambda tag: tag.sort_key, reverse=True)
+    return [tag.item for tag in semver_tags[: max(1, limit)]]
 
 
 def _item_lines(items: list[GitSummaryItem]) -> list[str]:
@@ -79,6 +96,33 @@ def _parse_items(output: str) -> list[GitSummaryItem]:
             summary = ""
         items.append(GitSummaryItem(name=name.strip(), summary=summary.strip()))
     return items
+
+
+def _parse_semver_tag(item: GitSummaryItem) -> _SemVerTag | None:
+    match = SEMVER_TAG_RE.fullmatch(item.name)
+    if match is None:
+        return None
+    prerelease = match.group("prerelease")
+    prerelease_key: tuple[object, ...]
+    if prerelease is None:
+        prerelease_key = (1,)
+    else:
+        prerelease_key = (0, *(_encode_prerelease_identifier(identifier) for identifier in prerelease.split(".")))
+    return _SemVerTag(
+        item=item,
+        sort_key=(
+            int(match.group("major")),
+            int(match.group("minor")),
+            int(match.group("patch")),
+            prerelease_key,
+        ),
+    )
+
+
+def _encode_prerelease_identifier(identifier: str) -> tuple[int, int, str]:
+    if identifier.isdigit():
+        return (0, int(identifier), "")
+    return (1, 0, identifier)
 
 
 def _run_git(project_root: Path, *args: str) -> str:
