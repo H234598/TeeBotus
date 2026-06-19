@@ -122,7 +122,7 @@ def recent_telegram_recipients(
             continue
         if not isinstance(payload, dict):
             continue
-        account_id = str(payload.get("account_id") or "")
+        account_id = _normalized_account_id(payload.get("account_id"))
         last_seen = _parse_datetime(str(payload.get("last_seen_at") or ""))
         if not account_id or last_seen is None or last_seen < threshold:
             continue
