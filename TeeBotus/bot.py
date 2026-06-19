@@ -1663,7 +1663,7 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
     text = re.sub(
-        r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^\s/@:=]+:[^\s/@]+@",
+        r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^/\s:@]{1,512}:[^/\s@]{1,512}@",
         _status_url_credential_replacement,
         text,
         flags=re.IGNORECASE,
@@ -1675,12 +1675,12 @@ def _sanitize_status_text(value: object) -> str:
 
 _status_secret_assignment_pattern = re.compile(
     r"(?<!\S)([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]+)",
+    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
     re.IGNORECASE,
 )
 _status_secret_assignment_fragment_pattern = re.compile(
     r"([\s=;,])([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]+)",
+    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
     re.IGNORECASE,
 )
 
@@ -1943,7 +1943,7 @@ def _run_signal_runtime(config: Any) -> int:
     try:
         return int(run_signal_accounts(config))
     except SignalRuntimeError as exc:
-        print(f"TeeBotus Signal runtime error: {exc}", file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -1956,7 +1956,7 @@ def _start_signal_runtime_background(config: Any) -> int:
     try:
         start_signal_accounts_in_background(config)
     except SignalRuntimeError as exc:
-        print(f"TeeBotus Signal runtime error: {exc}", file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
         return 2
     return 0
 
@@ -1970,7 +1970,7 @@ def _run_matrix_runtime(config: Any) -> int:
     try:
         return int(run_matrix_accounts(config))
     except MatrixRuntimeError as exc:
-        print(f"TeeBotus Matrix runtime error: {exc}", file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -1983,7 +1983,7 @@ def _start_matrix_runtime_background(config: Any) -> int:
     try:
         start_matrix_accounts_in_background(config)
     except MatrixRuntimeError as exc:
-        print(f"TeeBotus Matrix runtime error: {exc}", file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
         return 2
     return 0
 
@@ -1997,7 +1997,7 @@ def _run_telegram_runtime(config: Any) -> int:
     try:
         return int(start_telegram_accounts(config))
     except TelegramRuntimeError as exc:
-        print(f"TeeBotus Telegram runtime error: {exc}", file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(f"TeeBotus Telegram runtime error: {exc}"), file=sys.stderr)
         return 2
 
 

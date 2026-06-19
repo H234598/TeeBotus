@@ -13,8 +13,27 @@ from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 
 
 def default_hf_pool_state_path() -> Path:
-    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    root = _safe_state_root(
+        os.environ.get("XDG_STATE_HOME"),
+        fallback=Path.home() / ".local" / "state",
+    )
     return root / "teebotus" / "hf_pool_state.sqlite3"
+
+
+def _safe_state_root(value: str | None, *, fallback: Path) -> Path:
+    if not value:
+        return fallback
+    try:
+        root = Path(value).expanduser()
+        normalized = root.resolve()
+        home_root = Path.home().resolve()
+    except (OSError, TypeError, ValueError):
+        return fallback
+    try:
+        normalized.relative_to(home_root)
+    except ValueError:
+        return fallback
+    return normalized
 
 
 def hf_pool_state_key(pool_name: object, target_name: object) -> str:
