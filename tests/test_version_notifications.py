@@ -466,6 +466,73 @@ def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tm
     assert "chat not found" in failed["reason"]
 
 
+def test_notify_recent_telegram_users_normalizes_sent_identity_state(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"versions": {"1.0.3": {"sent_identities": [" telegram:user:111 "], "failed_identities": {}}}}),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_normalizes_failed_identity_keys(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            " telegram:user:111 ": {
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert list(state["versions"]["1.0.3"]["failed_identities"]) == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_stores_state_in_sqlite_when_available(tmp_path: Path, monkeypatch) -> None:
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

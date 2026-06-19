@@ -49,10 +49,8 @@ def notify_recent_telegram_users_for_version(
     state = _load_state(account_store, state_path)
     version_state = _version_state(state, version)
     sent_identities = set(_string_list(version_state.get("sent_identities")))
-    failed_identities = version_state.get("failed_identities")
-    if not isinstance(failed_identities, dict):
-        failed_identities = {}
-        version_state["failed_identities"] = failed_identities
+    failed_identities = _failed_identity_map(version_state.get("failed_identities"))
+    version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
         if recipient.identity_key in sent_identities or _failed_delivery_matches_recipient(failed_identities, recipient):
@@ -310,7 +308,26 @@ def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
-    return [str(item) for item in value if isinstance(item, str)]
+    values: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text:
+            values.append(text)
+    return values
+
+
+def _failed_identity_map(value: Any) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, object] = {}
+    for key, payload in value.items():
+        identity_key = str(key or "").strip() if isinstance(key, str) else ""
+        if not identity_key:
+            continue
+        normalized[identity_key] = payload
+    return normalized
 
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
