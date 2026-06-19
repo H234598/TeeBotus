@@ -2478,6 +2478,8 @@ def test_default_auto_channels_run_signal_blocking_when_telegram_is_unconfigured
 
     assert bot.main([]) == 0
     assert [call[0] for call in calls] == ["signal"]
+    assert calls[0][1].channels == ("signal",)
+    assert tuple(account.channel for instance in calls[0][1].instances for account in instance.accounts) == ("signal",)
 
 
 def test_default_auto_channels_run_matrix_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:
@@ -2498,6 +2500,8 @@ def test_default_auto_channels_run_matrix_blocking_when_telegram_is_unconfigured
 
     assert bot.main([]) == 0
     assert [call[0] for call in calls] == ["matrix"]
+    assert calls[0][1].channels == ("matrix",)
+    assert tuple(account.channel for instance in calls[0][1].instances for account in instance.accounts) == ("matrix",)
 
 
 def test_default_auto_channels_reject_signal_matrix_without_telegram_before_background_start(monkeypatch, capsys, tmp_path) -> None:

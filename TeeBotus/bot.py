@@ -14,6 +14,7 @@ import shutil
 import sys
 import types
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -1835,6 +1836,23 @@ def _configured_non_telegram_channels(config: Any) -> tuple[str, ...]:
     return tuple(channel for channel in ("matrix", "signal") if channel in config.channels and _runtime_has_channel_accounts(config, channel))
 
 
+def _runtime_config_for_channels(config: Any, channels: Sequence[str]) -> Any:
+    selected_channels = tuple(str(channel) for channel in channels if str(channel or "").strip())
+    selected_channel_set = set(selected_channels)
+    instances = tuple(
+        replace(
+            instance,
+            accounts=tuple(
+                account
+                for account in getattr(instance, "accounts", ())
+                if str(getattr(account, "channel", "") or "") in selected_channel_set
+            ),
+        )
+        for instance in getattr(config, "instances", ())
+    )
+    return replace(config, channels=selected_channels, instances=instances)
+
+
 def _run_signal_runtime(config: Any) -> int:
     try:
         from TeeBotus.runtime.signal_runner import SignalRuntimeError, run_signal_accounts
@@ -1961,10 +1979,11 @@ def _main_impl(argv: list[str] | None = None) -> int:
     if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
         configured_non_telegram = _configured_non_telegram_channels(config)
         if len(configured_non_telegram) == 1 and not _runtime_channels_explicit(config):
+            blocking_config = _runtime_config_for_channels(config, configured_non_telegram)
             _start_gemini_free_tier_limit_refresh(config)
             if configured_non_telegram[0] == "matrix":
-                return _run_matrix_runtime(config)
-            return _run_signal_runtime(config)
+                return _run_matrix_runtime(blocking_config)
+            return _run_signal_runtime(blocking_config)
         if configured_non_telegram:
             print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
             return 2
