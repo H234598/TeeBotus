@@ -334,8 +334,14 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert 'sections["Projekt-History"]' in source
     assert "summary.codex_history_instances" in source
     assert "summary.codex_history_repos" in source
+    assert "summary.codex_history_run_summaries" in source
+    assert "summary.codex_history_strategies" in source
+    assert "summary.codex_history_graphs" in source
     assert "summary.codex_history_problem_status_count" in source
     assert "fields.codex_history_repo" in source
+    assert "_appendProjectHistoryDrilldown" in source
+    assert "_codexHistoryRepoDetails" in source
+    assert "_codexHistoryKindLabel" in source
     assert "_formatMemoryLine" in source
     assert "_formatAccountLine" in source
     assert "_accountStatusLines" in source
@@ -1575,19 +1581,24 @@ def test_cinnamon_applet_runtime_parser_summarizes_codex_history() -> None:
     parsed = parse_runtime_status(
         """
         [Projekt-History]
-        codex_history=Depressionsbot status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003
-        codex_history_repo=Depressionsbot repo=TeeBotus status=warning queued=1 failed=1 total=3 latest_prefix=v1.8.0_#0003 latest_status=queued latest_title=Noch_offen
-        codex_history=Bote_der_Wahrheit status=ok queued=0 failed=0 total=2 latest_repo=Docs latest_prefix=v1.0.0_#0002
-        codex_history_repo=Bote_der_Wahrheit repo=Docs status=ok queued=0 failed=0 total=2 latest_prefix=v1.0.0_#0002 latest_status=accepted latest_title=Dokumentiert
+        codex_history=Depressionsbot status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003 latest_kind=codex_graph_artifact run_summaries=1 strategies=1 graphs=1 other=0
+        codex_history_repo=Depressionsbot repo=TeeBotus status=warning queued=1 failed=1 total=3 run_summaries=1 strategies=1 graphs=1 other=0 latest_prefix=v1.8.0_#0003 latest_status=queued latest_kind=codex_graph_artifact latest_title=Noch_offen
+        codex_history=Bote_der_Wahrheit status=ok queued=0 failed=0 total=2 latest_repo=Docs latest_prefix=v1.0.0_#0002 latest_kind=codex_run_summary run_summaries=2 strategies=0 graphs=0 other=0
+        codex_history_repo=Bote_der_Wahrheit repo=Docs status=ok queued=0 failed=0 total=2 run_summaries=2 strategies=0 graphs=0 other=0 latest_prefix=v1.0.0_#0002 latest_status=accepted latest_kind=codex_run_summary latest_title=Dokumentiert
         """
     )
 
     assert parsed["summary"]["codex_history_instances"] == 2
     assert parsed["summary"]["codex_history_repos"] == 2
+    assert parsed["summary"]["codex_history_run_summaries"] == 3
+    assert parsed["summary"]["codex_history_strategies"] == 1
+    assert parsed["summary"]["codex_history_graphs"] == 1
+    assert parsed["summary"]["codex_history_other"] == 0
     assert parsed["summary"]["codex_history_problem_status_count"] == 2
     assert parsed["summary"]["codex_history"] == (
         "codex_history=Depressionsbot status=warning queued=1 failed=1 total=3 "
-        "latest_repo=TeeBotus latest_prefix=v1.8.0_#0003"
+        "latest_repo=TeeBotus latest_prefix=v1.8.0_#0003 latest_kind=codex_graph_artifact "
+        "run_summaries=1 strategies=1 graphs=1 other=0"
     )
     assert parsed["status_counts"]["warning"] == 2
     assert parsed["status_counts"]["ok"] == 2

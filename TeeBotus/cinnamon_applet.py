@@ -318,6 +318,10 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "codex_history": "",
         "codex_history_instances": 0,
         "codex_history_repos": 0,
+        "codex_history_run_summaries": 0,
+        "codex_history_strategies": 0,
+        "codex_history_graphs": 0,
+        "codex_history_other": 0,
         "codex_history_problem_status_count": 0,
         "gemini_free_tier": "",
         "qdrant": "",
@@ -369,6 +373,10 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["codex_usage_accounts"] += 1
         elif line.startswith("codex_history="):
             summary["codex_history_instances"] += 1
+            summary["codex_history_run_summaries"] += _safe_int(fields.get("run_summaries", 0))
+            summary["codex_history_strategies"] += _safe_int(fields.get("strategies", 0))
+            summary["codex_history_graphs"] += _safe_int(fields.get("graphs", 0))
+            summary["codex_history_other"] += _safe_int(fields.get("other", 0))
             if fields.get("status") in PROBLEM_STATUSES and not summary["codex_history"]:
                 summary["codex_history"] = line
             elif not summary["codex_history"]:

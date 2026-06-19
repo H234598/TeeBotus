@@ -24,7 +24,7 @@ Umgesetzt:
 - Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen oder mit `--follow --event-mode auto` persistent beobachten; `auto` nutzt `watchdog`-Filesystem-Events, wenn das gepinnte `[tools]`-Extra installiert ist, und faellt sonst auf Snapshot/Poll-Warten zurueck.
 - Phase 3 systemd teilweise: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
-- Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen; das Cinnamon-Applet parst diese Zeilen und zeigt Instanz- und Repo-Details im Projekt-Menue; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
+- Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen inklusive Artefakt-Typmix; das Cinnamon-Applet parst diese Zeilen, zeigt Instanz-/Repo-Details im Projekt-Menue und bietet pro Repo einen Codex-History-Drilldown; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
 - Phase 6/7/8 teilweise: admin-only Bibliothekar-/Qdrant-Export, lokale Kategorisierung, Mermaid-Graph und queuebarer strategischer Analysebericht sind angebunden.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
@@ -34,7 +34,7 @@ Offen:
 - Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts sind angebunden, weitere echte Adapter-Event-Hooks fuer eingehende Plattform-Receipts sind noch offen.
 - Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
 - Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
-- Tieferer grafischer Applet-Drilldown, Live-Aktivierung der strategischen Analyse-Automatik und optional hochwertigeres Graph-Rendering sind noch offen.
+- Live-Aktivierung der strategischen Analyse-Automatik und optional hochwertigeres Graph-Rendering sind noch offen.
 
 ## Kurzantwort
 
@@ -498,9 +498,9 @@ Stand 2026-06-19:
 Stand 2026-06-19:
 
 - `/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letzter Summary.
-- `--runtime-status` gibt `codex_history=<Instanz> status=... queued=... failed=... total=... latest_repo=... latest_prefix=...` aus.
-- `--runtime-status` gibt zusaetzlich `codex_history_repo=<Instanz> repo=... status=... queued=... failed=... total=... latest_prefix=... latest_status=... latest_title=...` aus.
-- Das Cinnamon-Applet parst diese Runtime-Zeilen und zeigt Instanzuebersicht plus Repo-Details im Projekt-Menue.
+- `--runtime-status` gibt `codex_history=<Instanz> status=... queued=... failed=... total=... latest_repo=... latest_prefix=... latest_kind=... run_summaries=... strategies=... graphs=... other=...` aus.
+- `--runtime-status` gibt zusaetzlich `codex_history_repo=<Instanz> repo=... status=... queued=... failed=... total=... run_summaries=... strategies=... graphs=... other=... latest_prefix=... latest_status=... latest_kind=... latest_title=...` aus.
+- Das Cinnamon-Applet parst diese Runtime-Zeilen, zeigt Instanzuebersicht plus Repo-Details im Projekt-Menue und haengt einen Codex-History-Drilldown mit Status, Queue, Typmix und letztem Eintrag pro Repo an.
 - `codex-history report` liefert `repo_history` mit pro-Repo Status-/Dispatch-Zaehlern, letzten Summaries und `--repo`/`--summary-limit`.
 - `codex-history bibliothekar-export` schreibt redigierte Projekthistory-Markdowns in `data/Codex_History_Bibliothek`, absichtlich getrennt von der normalen Nutzerbibliothek `data/Bibliothek`.
 - `codex-history index` fuehrt Export und optionalen Qdrant-Rebuild in einem Admin-Lauf zusammen.
@@ -514,7 +514,7 @@ Stand 2026-06-19:
 - `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
 - `teebotus-codex-history-systemd --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch` hinzu.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
-- Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
+- Erledigt: tieferer Applet-Drilldown als Repo-Untermenues im Projekt-Menue; separate grosse Detailansicht bleibt optional, falls das Applet spaeter mehr Platz bekommt.
 
 ### Phase 6: Qdrant + Bibliothek
 * Teilweise erledigt: `codex-history bibliothekar-export` erzeugt admin-only Markdown-Dokumente aus `codex_history_outbox`.

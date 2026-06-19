@@ -1104,7 +1104,19 @@ def _load_state(account_store: AccountStore, instances_dir: Path, instance_name:
     return _read_legacy_state(account_store, instances_dir, instance_name)
 
 
-def _write_state(account_store: AccountStore, instances_dir: Path, instance_name: str, state: dict[str, Any]) -> None:
+def _write_state(
+    account_store: AccountStore,
+    instances_dir: Path,
+    instance_name: str | dict[str, Any],
+    state: dict[str, Any] | None = None,
+) -> None:
+    if state is None:
+        if not isinstance(instance_name, dict):
+            raise TypeError("state must be provided")
+        _write_legacy_state_path(Path(instances_dir), instance_name)
+        return
+    if not isinstance(instance_name, str):
+        raise TypeError("instance_name must be a string")
     normalized_state = _normalize_state(state)
     path = _notification_state_path(instances_dir, instance_name)
     if _sql_state_backend_available(account_store):
@@ -1182,11 +1194,33 @@ def _read_legacy_state(account_store: AccountStore, instances_dir: Path, instanc
             return _normalize_state(reader(path, {"versions": {}}))
         except (UnicodeDecodeError, json.JSONDecodeError, OSError):
             return {"versions": {}}
+        except AccountStoreError:
+            pass
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
         return {"versions": {}}
     return _normalize_state(data)
+
+
+def _write_legacy_state_path(path: Path, state: dict[str, Any]) -> None:
+    normalized_state = _normalize_state(state)
+    safe_path = _safe_notification_state_file_path(path)
+    if not _notification_state_has_versions(normalized_state):
+        _unlink_legacy_state_path(safe_path)
+        return
+    safe_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = safe_path.with_name(f".{safe_path.name}.tmp")
+    tmp.write_text(json.dumps(normalized_state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(safe_path)
+
+
+def _safe_notification_state_file_path(path: Path) -> Path:
+    value = Path(path)
+    if value.name != NOTIFICATION_STATE_FILENAME:
+        raise ValueError("notification state path must point to Version_Notifications.json")
+    safe_parent = _safe_repo_root(value.parent, operation="notification state directory")
+    return safe_parent / NOTIFICATION_STATE_FILENAME
 
 
 def _unlink_legacy_state_path(path: Path) -> None:

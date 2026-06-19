@@ -710,7 +710,8 @@ def codex_history_status_lines(
             return [
                 (
                     f"codex_history={_status_field_value(instance_name)} status=ok "
-                    "queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none>"
+                    "queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none> latest_kind=<none> "
+                    "run_summaries=0 strategies=0 graphs=0 other=0"
                 )
             ]
         try:
@@ -740,7 +741,10 @@ def codex_history_status_lines(
             f"codex_history={_status_field_value(instance_name)} status={summary['status']} "
             f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
             f"latest_repo={_status_field_value(summary['latest_repo'])} "
-            f"latest_prefix={_status_field_value(summary['latest_prefix'])}"
+            f"latest_prefix={_status_field_value(summary['latest_prefix'])} "
+            f"latest_kind={_status_field_value(summary['latest_kind'])} "
+            f"run_summaries={summary['run_summaries']} strategies={summary['strategies']} "
+            f"graphs={summary['graphs']} other={summary['other']}"
         )
     ]
     for repo in summary.get("repos", []):
@@ -752,8 +756,11 @@ def codex_history_status_lines(
                 f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
                 f"status={repo.get('status', 'unknown')} "
                 f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
+                f"run_summaries={repo.get('run_summaries', 0)} strategies={repo.get('strategies', 0)} "
+                f"graphs={repo.get('graphs', 0)} other={repo.get('other', 0)} "
                 f"latest_prefix={_status_field_value(repo.get('latest_prefix', '<none>'))} "
                 f"latest_status={_status_field_value(repo.get('latest_status', '<none>'))} "
+                f"latest_kind={_status_field_value(repo.get('latest_kind', '<none>'))} "
                 f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}"
             )
         )
@@ -801,6 +808,8 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     latest_prefix = redact_status_text(latest.get("summary_prefix") or "<none>") if isinstance(latest, Mapping) else "<none>"
     if not latest_prefix:
         latest_prefix = "<none>"
+    latest_kind = _codex_history_kind(latest) if isinstance(latest, Mapping) else "<none>"
+    kind_counts = _codex_history_kind_counts(valid_rows)
     return {
         "status": "warning" if queued or failed else "ok",
         "queued": queued,
@@ -808,6 +817,8 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         "total": len(valid_rows),
         "latest_repo": latest_repo,
         "latest_prefix": latest_prefix,
+        "latest_kind": latest_kind,
+        **kind_counts,
         "repos": _codex_history_repo_summaries(valid_rows),
     }
 
@@ -830,7 +841,12 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "total": 0,
                 "latest_prefix": "<none>",
                 "latest_status": "<none>",
+                "latest_kind": "<none>",
                 "latest_title": "<none>",
+                "run_summaries": 0,
+                "strategies": 0,
+                "graphs": 0,
+                "other": 0,
             },
         )
         entry["total"] += 1
@@ -841,14 +857,46 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
         summary = row.get("summary", {})
         if not isinstance(summary, Mapping):
             summary = {}
+        kind = _codex_history_kind(row)
+        if kind == "codex_run_summary":
+            entry["run_summaries"] += 1
+        elif kind == "codex_strategy_analysis":
+            entry["strategies"] += 1
+        elif kind == "codex_graph_artifact":
+            entry["graphs"] += 1
+        else:
+            entry["other"] += 1
         entry["latest_prefix"] = redact_status_text(row.get("summary_prefix") or "<none>") or "<none>"
         entry["latest_status"] = status
+        entry["latest_kind"] = kind
         entry["latest_title"] = redact_status_text(summary.get("title") or "<none>") or "<none>"
     result = []
     for entry in grouped.values():
         entry["status"] = "warning" if entry["queued"] or entry["failed"] else "ok"
         result.append(entry)
     return sorted(result, key=lambda item: str(item.get("repo_name") or "").casefold())
+
+
+def _codex_history_kind_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    counts = {"run_summaries": 0, "strategies": 0, "graphs": 0, "other": 0}
+    for row in rows:
+        kind = _codex_history_kind(row)
+        if kind == "codex_run_summary":
+            counts["run_summaries"] += 1
+        elif kind == "codex_strategy_analysis":
+            counts["strategies"] += 1
+        elif kind == "codex_graph_artifact":
+            counts["graphs"] += 1
+        else:
+            counts["other"] += 1
+    return counts
+
+
+def _codex_history_kind(row: Mapping[str, Any]) -> str:
+    kind = str(row.get("kind") or "").strip()
+    if not kind:
+        return "codex_run_summary"
+    return redact_status_text(kind).strip() or "unknown"
 
 
 def _status_field_value(value: object) -> str:

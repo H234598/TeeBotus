@@ -438,11 +438,15 @@ TeeBotusApplet.prototype = {
       projectHistoryLines.push(
         "Uebersicht: Codex-History Instanzen " + String(summary.codex_history_instances || 0)
         + " | Repos " + String(summary.codex_history_repos || 0)
+        + " | Runs " + String(summary.codex_history_run_summaries || 0)
+        + " | Strategie " + String(summary.codex_history_strategies || 0)
+        + " | Graphen " + String(summary.codex_history_graphs || 0)
         + this._sectionProblemText(summary.codex_history_problem_status_count)
       );
       projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
       this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
+      this._appendProjectHistoryDrilldown(sections["Projekt-History"] || []);
     }
 
     let memoryLines = [];
@@ -674,22 +678,120 @@ TeeBotusApplet.prototype = {
       let latestPrefix = fields.latest_prefix ? "; zuletzt " + String(fields.latest_prefix).replace(/_/g, " ") : "";
       let latestTitle = fields.latest_title ? " " + String(fields.latest_title).replace(/_/g, " ") : "";
       let latestStatus = fields.latest_status ? "; letzter Status " + this._statusWord(fields.latest_status) : "";
+      let latestKind = fields.latest_kind ? "; Typ " + this._codexHistoryKindLabel(fields.latest_kind) : "";
       return "Repo-History " + repo + " (" + fields.codex_history_repo + "): " + this._statusWord(fields.status)
         + "; offen " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
-        + latestPrefix + latestTitle + latestStatus + this._errorText(fields);
+        + this._codexHistoryMixText(fields)
+        + latestPrefix + latestTitle + latestStatus + latestKind + this._errorText(fields);
     }
     if (fields.codex_history) {
       let latestRepo = fields.latest_repo ? "; zuletzt " + fields.latest_repo : "";
       let latestPrefix = fields.latest_prefix ? " " + String(fields.latest_prefix).replace(/_/g, " ") : "";
+      let latestKind = fields.latest_kind ? "; Typ " + this._codexHistoryKindLabel(fields.latest_kind) : "";
       return "Codex-History " + fields.codex_history + ": " + this._statusWord(fields.status)
         + "; offen " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
-        + latestRepo + latestPrefix + this._errorText(fields);
+        + this._codexHistoryMixText(fields)
+        + latestRepo + latestPrefix + latestKind + this._errorText(fields);
     }
     return line;
+  },
+
+  _codexHistoryMixText: function(fields) {
+    let parts = [];
+    let runSummaries = this._nonNegativeInt((fields || {}).run_summaries, 0);
+    let strategies = this._nonNegativeInt((fields || {}).strategies, 0);
+    let graphs = this._nonNegativeInt((fields || {}).graphs, 0);
+    let other = this._nonNegativeInt((fields || {}).other, 0);
+    if (runSummaries > 0) {
+      parts.push("Runs " + String(runSummaries));
+    }
+    if (strategies > 0) {
+      parts.push("Strategie " + String(strategies));
+    }
+    if (graphs > 0) {
+      parts.push("Graphen " + String(graphs));
+    }
+    if (other > 0) {
+      parts.push("Sonstige " + String(other));
+    }
+    return parts.length > 0 ? "; " + parts.join(" / ") : "";
+  },
+
+  _codexHistoryKindLabel: function(kind) {
+    let value = String(kind || "");
+    let kindLabels = {
+      codex_run_summary: "Run-Summary",
+      codex_strategy_analysis: "Strategieanalyse",
+      codex_graph_artifact: "Graph-Artefakt"
+    };
+    return kindLabels[value] || value.replace(/_/g, " ");
+  },
+
+  _appendProjectHistoryDrilldown: function(lines) {
+    let repos = this._codexHistoryRepoDetails(lines);
+    if (repos.length === 0) {
+      return;
+    }
+    this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this.projectMenu.menu.addMenuItem(this._menuLine(_("Codex-History Drilldown"), false));
+    for (let i = 0; i < repos.length && i < MENU_LINE_LIMIT; i++) {
+      let repo = repos[i];
+      let item = new PopupMenu.PopupSubMenuMenuItem(this._shortText("Repo " + repo.repo + " (" + repo.instance + ")", 72));
+      this._styleSubmenu(item);
+      item.menu.addMenuItem(this._menuLine("Status: " + this._statusWord(repo.status), false));
+      item.menu.addMenuItem(this._menuLine("Queue: offen " + String(repo.queued) + " | fehlgeschlagen " + String(repo.failed) + " | gesamt " + String(repo.total), false));
+      item.menu.addMenuItem(this._menuLine("Typen: " + repo.mix, false));
+      item.menu.addMenuItem(this._menuLine("Letzter Eintrag: " + repo.latest, false));
+      this.projectMenu.menu.addMenuItem(item);
+    }
+    if (repos.length > MENU_LINE_LIMIT) {
+      this.projectMenu.menu.addMenuItem(this._menuLine(_("Weitere Repos: ") + String(repos.length - MENU_LINE_LIMIT), false));
+    }
+  },
+
+  _codexHistoryRepoDetails: function(lines) {
+    let repos = [];
+    for (let line of lines || []) {
+      let fields = this._parseFields(line);
+      if (!fields.codex_history_repo) {
+        continue;
+      }
+      let latestParts = [];
+      if (fields.latest_prefix) {
+        latestParts.push(String(fields.latest_prefix).replace(/_/g, " "));
+      }
+      if (fields.latest_title) {
+        latestParts.push(String(fields.latest_title).replace(/_/g, " "));
+      }
+      if (fields.latest_status) {
+        latestParts.push(this._statusWord(fields.latest_status));
+      }
+      if (fields.latest_kind) {
+        latestParts.push(this._codexHistoryKindLabel(fields.latest_kind));
+      }
+      repos.push({
+        instance: fields.codex_history_repo || "?",
+        repo: fields.repo || "?",
+        status: fields.status || "unknown",
+        queued: this._nonNegativeInt(fields.queued, 0),
+        failed: this._nonNegativeInt(fields.failed, 0),
+        total: this._nonNegativeInt(fields.total, 0),
+        mix: (this._codexHistoryMixText(fields).replace(/^; /, "") || "keine Typdaten"),
+        latest: latestParts.join(" | ") || "kein Eintrag"
+      });
+    }
+    repos.sort((left, right) => {
+      let severity = this._statusValueIsProblem(right.status) - this._statusValueIsProblem(left.status);
+      if (severity !== 0) {
+        return severity;
+      }
+      return String(left.repo).localeCompare(String(right.repo)) || String(left.instance).localeCompare(String(right.instance));
+    });
+    return repos;
   },
 
   _formatMemoryLine: function(line) {
