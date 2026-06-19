@@ -1756,7 +1756,30 @@ TeeBotusApplet.prototype = {
     if (!/^https:\/\/github\.com\/H234598\/TeeBotus(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*)?(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/.test(url)) {
       return fallbackUrl;
     }
+    if (this._projectUrlHasUnsafePathSegment(url)) {
+      return fallbackUrl;
+    }
     return url;
+  },
+
+  _projectUrlHasUnsafePathSegment: function(url) {
+    let base = "https://github.com/H234598/TeeBotus";
+    let path = String(url || "").split("?")[0].slice(base.length);
+    for (let segment of path.split("/")) {
+      if (!segment) {
+        continue;
+      }
+      let decoded = segment;
+      try {
+        decoded = decodeURIComponent(segment);
+      } catch (err) {
+        return true;
+      }
+      if (segment === "." || segment === ".." || decoded === "." || decoded === ".." || decoded.indexOf("/") >= 0 || decoded.indexOf("\\") >= 0) {
+        return true;
+      }
+    }
+    return false;
   },
 
   _safeShellWord: function(value) {

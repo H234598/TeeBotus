@@ -283,6 +283,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "_safeLocalPath: function(value, fallback)" in source
     assert "_libraryPath: function()" in source
     assert "_safeProjectUrl: function(value, fallback)" in source
+    assert "_projectUrlHasUnsafePathSegment: function(url)" in source
     assert "_githubUrl: function()" in source
     assert "_commitsUrl: function()" in source
     assert "_runtimeUnit: function()" in source
@@ -758,6 +759,10 @@ def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
           let validCommit = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/commit/abcdef", "fallback");
           let foreign = applet._safeProjectUrl("https://example.com/H234598/TeeBotus", "fallback");
           let credential = applet._safeProjectUrl("https://user@github.com/H234598/TeeBotus", "fallback");
+          let traversal = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/../../settings/profile", "fallback");
+          let encodedTraversal = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/%2e%2e/settings", "fallback");
+          let encodedSlash = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/commit%2fabcdef", "fallback");
+          let malformedPercent = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/%ZZ", "fallback");
           applet._openUri(applet._githubUrl());
           applet._openUri(applet._commitsUrl());
           return {
@@ -766,6 +771,10 @@ def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
             validCommit: validCommit,
             foreign: foreign,
             credential: credential,
+            traversal: traversal,
+            encodedTraversal: encodedTraversal,
+            encodedSlash: encodedSlash,
+            malformedPercent: malformedPercent,
             opened: opened
           };
         })()
@@ -777,6 +786,10 @@ def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
     assert result["validCommit"] == "https://github.com/H234598/TeeBotus/commit/abcdef"
     assert result["foreign"] == "fallback"
     assert result["credential"] == "fallback"
+    assert result["traversal"] == "fallback"
+    assert result["encodedTraversal"] == "fallback"
+    assert result["encodedSlash"] == "fallback"
+    assert result["malformedPercent"] == "fallback"
     opened_targets = [entry[2] for entry in result["opened"]]
     assert "--help" not in opened_targets
     assert "file:///etc/passwd" not in opened_targets
