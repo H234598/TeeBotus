@@ -107,6 +107,18 @@ def test_render_proactive_systemd_unit_rejects_instance_path_segments(tmp_path) 
             raise AssertionError(f"expected instance path segment rejection for {instance_name!r}")
 
 
+def test_render_proactive_systemd_unit_uses_assignment_for_dash_prefixed_instances(tmp_path) -> None:
+    unit = render_proactive_systemd_unit(
+        repo_root=tmp_path,
+        instances_dir="instances",
+        instance_name="-Depressionsbot",
+        interval="5min",
+    )
+
+    assert "--instance=-Depressionsbot" in unit.service_text
+    assert "--instance -Depressionsbot" not in unit.service_text
+
+
 def test_render_proactive_systemd_unit_uses_collision_resistant_unit_names(tmp_path) -> None:
     units = [
         render_proactive_systemd_unit(
@@ -167,7 +179,7 @@ def test_render_proactive_systemd_unit_escapes_systemd_percent_specifiers(tmp_pa
     assert f"WorkingDirectory={repo_root.resolve()}".replace("%", "%%") in unit.service_text
     assert "Description=TeeBotus proactive agent cycle for Depressionsbot%%h" in unit.service_text
     assert f"--instances-dir {repo_root.resolve() / 'instances%h'}".replace("%", "%%") in unit.service_text
-    assert "--instance Depressionsbot%%h" in unit.service_text
+    assert "--instance=Depressionsbot%%h" in unit.service_text
     assert "Description=Run TeeBotus proactive agent cycle for Depressionsbot%%h" in unit.timer_text
 
 

@@ -107,8 +107,7 @@ def render_proactive_systemd_unit(
         "TeeBotus.proactive",
         "--instances-dir",
         _shell_quote(instances_arg),
-        "--instance",
-        _shell_quote(instance_name),
+        _shell_quote(f"--instance={instance_name}"),
         "--dispatch",
         "--plan",
     ]
