@@ -653,7 +653,7 @@ async def run_proactive_agent_cycle(
                         message_tracker=tracker,
                         instance_name=instance_dir.name,
                     )
-                    account_report["dispatch_results"] = [
+                    dispatch_rows = [
                         {
                             "account_id": result.account_id,
                             "item_id": result.item_id,
@@ -664,6 +664,21 @@ async def run_proactive_agent_cycle(
                         }
                         for result in results
                     ]
+                    account_report["dispatch_results"] = dispatch_rows
+                    append_dispatch_results = getattr(store, "append_proactive_dispatch_results", None)
+                    if dispatch_rows and callable(append_dispatch_results):
+                        persisted_rows = [
+                            {
+                                **row,
+                                "instance": instance_dir.name,
+                                "generated_at": resolved_now.isoformat(timespec="seconds"),
+                            }
+                            for row in dispatch_rows
+                        ]
+                        try:
+                            account_report["dispatch_result_ids"] = list(append_dispatch_results(account_id, persisted_rows))
+                        except (AccountStoreError, OSError, ValueError) as exc:
+                            account_report["dispatch_persistence_error"] = f"{type(exc).__name__}: {exc}"
             except (AccountStoreError, OSError, ValueError) as exc:
                 account_report["error"] = f"{type(exc).__name__}: {exc}"
             instance_report["accounts"].append(account_report)
@@ -748,6 +763,8 @@ def _message_tracker_for_instance(instance_dir: Path, instance_name: str, factor
 def _cycle_ok(instances: list[dict[str, Any]]) -> bool:
     for instance in instances:
         for account in instance.get("accounts", []):
+            if account.get("dispatch_persistence_error"):
+                return False
             for result in account.get("dispatch_results", []):
                 if result.get("status") == "failed":
                     return False

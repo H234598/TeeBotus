@@ -41,6 +41,9 @@ Verschluesselte strukturierte Memory-Dateien:
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
 - `Proactive_Audit.jsonl`
+- `Proactive_Dispatch_Results.jsonl`
+
+Wenn das SQL-Account-Memory-Backend aktiv ist, werden strukturierte Memory-Zeilen und proactive JSONL-Collections in verschluesselten SQL-Zeilen statt als aktive JSONL-Dateien gespeichert; Exporte behalten die JSON/JSONL-Namen aus Kompatibilitaetsgruenden.
 
 Auch Account-Index, Identity-Mapping, Secret-Verifier, Profile und Tombstones werden verschluesselt gespeichert.
 

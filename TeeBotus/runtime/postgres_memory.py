@@ -55,6 +55,8 @@ class PostgresAccountMemoryBackend:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
+        self.last_collection_read_error = ""
+        self.last_collection_skipped = 0
 
     @property
     def key(self) -> bytes:
@@ -214,6 +216,79 @@ class PostgresAccountMemoryBackend:
                     (self.instance_name, account_id, nonce, ciphertext, utc_now()),
                 )
 
+    def read_collection(self, account_id: str, collection: str) -> list[dict[str, Any]]:
+        collection_name = _normalize_collection_name(collection)
+        self.last_collection_read_error = ""
+        self.last_collection_skipped = 0
+        self._ensure_schema()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT item_key, payload_nonce, payload_ciphertext
+                FROM teebotus_account_jsonl_collections
+                WHERE instance_name = %s AND account_id = %s AND collection = %s
+                ORDER BY ordinal ASC
+                """,
+                (self.instance_name, account_id, collection_name),
+            ).fetchall()
+        items: list[dict[str, Any]] = []
+        skipped = 0
+        first_skipped_id = ""
+        first_error = ""
+        for row in rows:
+            item_key = str(row[0])
+            try:
+                items.append(self._decrypt_json(account_id, _collection_payload_id(collection_name, item_key), bytes(row[1]), bytes(row[2])))
+            except AccountStoreError as exc:
+                skipped += 1
+                if not first_skipped_id:
+                    first_skipped_id = item_key
+                    first_error = str(exc)
+        if skipped:
+            self.last_collection_read_error = first_error
+            self.last_collection_skipped = skipped
+            LOGGER.critical(
+                "PostgreSQL account-memory skipped corrupt collection rows instance=%s account=%s collection=%s skipped=%s first_item=%s error=%s",
+                self.instance_name,
+                account_id,
+                collection_name,
+                skipped,
+                first_skipped_id,
+                first_error,
+            )
+        return items
+
+    def write_collection(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
+        collection_name = _normalize_collection_name(collection)
+        self._ensure_schema()
+        normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        with self._connect() as connection:
+            with connection.transaction():
+                self._guard_existing_account_payloads_decryptable(connection, account_id)
+                connection.execute(
+                    """
+                    DELETE FROM teebotus_account_jsonl_collections
+                    WHERE instance_name = %s AND account_id = %s AND collection = %s
+                    """,
+                    (self.instance_name, account_id, collection_name),
+                )
+                for ordinal, row in enumerate(normalized_rows):
+                    self._insert_collection_item(connection, account_id, collection_name, row, ordinal)
+
+    def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+        self._ensure_schema()
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT collection
+                FROM teebotus_account_jsonl_collections
+                WHERE instance_name = %s AND account_id = %s
+                ORDER BY collection ASC
+                """,
+                (self.instance_name, account_id),
+            ).fetchall()
+        return tuple(str(row[0]) for row in rows if str(row[0] or "").strip())
+
     def clear_account_unchecked(self, account_id: str) -> None:
         self._ensure_schema()
         with self._connect() as connection:
@@ -228,6 +303,10 @@ class PostgresAccountMemoryBackend:
                 )
                 connection.execute(
                     "DELETE FROM teebotus_memory_indexes WHERE instance_name = %s AND account_id = %s",
+                    (self.instance_name, account_id),
+                )
+                connection.execute(
+                    "DELETE FROM teebotus_account_jsonl_collections WHERE instance_name = %s AND account_id = %s",
                     (self.instance_name, account_id),
                 )
 
@@ -293,8 +372,25 @@ class PostgresAccountMemoryBackend:
                     )
                     """
                 )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS teebotus_account_jsonl_collections (
+                        instance_name TEXT NOT NULL,
+                        account_id TEXT NOT NULL,
+                        collection TEXT NOT NULL,
+                        ordinal INTEGER NOT NULL DEFAULT 0,
+                        item_key TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL DEFAULT '',
+                        updated_at TEXT NOT NULL DEFAULT '',
+                        payload_nonce BYTEA NOT NULL,
+                        payload_ciphertext BYTEA NOT NULL,
+                        PRIMARY KEY (instance_name, account_id, collection, ordinal)
+                    )
+                    """
+                )
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_memory_keywords_lookup ON teebotus_memory_keywords(instance_name, account_id, keyword)")
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_memory_rank ON teebotus_memory_entries(instance_name, account_id, salience, importance, access_count)")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_account_jsonl_collections_lookup ON teebotus_account_jsonl_collections(instance_name, account_id, collection, item_key)")
         self._initialized = True
 
     def _insert_entry(self, connection: Any, account_id: str, row: dict[str, Any], ordinal: int) -> None:
@@ -337,6 +433,28 @@ class PostgresAccountMemoryBackend:
                     [(self.instance_name, account_id, str(keyword), memory_id) for keyword in keywords if str(keyword or "").strip()],
                 )
 
+    def _insert_collection_item(self, connection: Any, account_id: str, collection: str, row: dict[str, Any], ordinal: int) -> None:
+        item_key = _collection_item_key(row, ordinal)
+        nonce, ciphertext = self._encrypt_json(account_id, _collection_payload_id(collection, item_key), row)
+        connection.execute(
+            """
+            INSERT INTO teebotus_account_jsonl_collections
+            (instance_name, account_id, collection, ordinal, item_key, created_at, updated_at, payload_nonce, payload_ciphertext)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                self.instance_name,
+                account_id,
+                collection,
+                ordinal,
+                item_key,
+                str(row.get("created_at") or ""),
+                str(row.get("updated_at") or ""),
+                nonce,
+                ciphertext,
+            ),
+        )
+
     def _guard_existing_account_payloads_decryptable(self, connection: Any, account_id: str) -> None:
         entry_rows = connection.execute(
             """
@@ -362,14 +480,30 @@ class PostgresAccountMemoryBackend:
             """,
             (self.instance_name, account_id),
         ).fetchone()
-        if index_row is None:
-            return
-        try:
-            self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
-        except AccountStoreError as exc:
-            raise AccountStoreError(
-                "existing PostgreSQL account memory index is not decryptable with the current key; refusing destructive write"
-            ) from exc
+        if index_row is not None:
+            try:
+                self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+            except AccountStoreError as exc:
+                raise AccountStoreError(
+                    "existing PostgreSQL account memory index is not decryptable with the current key; refusing destructive write"
+                ) from exc
+        collection_rows = connection.execute(
+            """
+            SELECT collection, item_key, payload_nonce, payload_ciphertext
+            FROM teebotus_account_jsonl_collections
+            WHERE instance_name = %s AND account_id = %s
+            """,
+            (self.instance_name, account_id),
+        ).fetchall()
+        for row in collection_rows:
+            collection = str(row[0])
+            item_key = str(row[1])
+            try:
+                self._decrypt_json(account_id, _collection_payload_id(collection, item_key), bytes(row[2]), bytes(row[3]))
+            except AccountStoreError as exc:
+                raise AccountStoreError(
+                    "existing PostgreSQL account memory collection rows are not decryptable with the current key; refusing destructive write"
+                ) from exc
 
     def _encrypt_json(self, account_id: str, memory_id: str, payload: dict[str, Any]) -> tuple[bytes, bytes]:
         import json
@@ -400,3 +534,23 @@ def _int_value(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_collection_name(collection: str) -> str:
+    value = str(collection or "").strip()
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    if not value or any(char not in allowed for char in value):
+        raise AccountStoreError("PostgreSQL account memory collection name is invalid")
+    return value
+
+
+def _collection_item_key(row: dict[str, Any], ordinal: int) -> str:
+    for key in ("id", "item_id", "event_id", "result_id"):
+        value = str(row.get(key) or "").strip()
+        if value:
+            return value[:240]
+    return f"row_{ordinal:012d}"
+
+
+def _collection_payload_id(collection: str, item_key: str) -> str:
+    return f"jsonl:{collection}:{item_key}"

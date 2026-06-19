@@ -41,6 +41,9 @@ Encrypted structured memory files:
 - `Agent_State.json`
 - `Proactive_Outbox.jsonl`
 - `Proactive_Audit.jsonl`
+- `Proactive_Dispatch_Results.jsonl`
+
+When the SQL account-memory backend is enabled, structured memory rows and proactive JSONL-style collections are stored in encrypted SQL rows instead of active JSONL files; exports keep the JSON/JSONL labels for compatibility.
 
 Encrypted account files include identity mappings, account index, account secrets/verifiers, account profiles, and tombstones.
 

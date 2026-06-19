@@ -434,6 +434,10 @@ def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> 
     assert account["dispatch_results"][0]["message_ref"] == "sent-ref"
     assert calls[0][1] == SendText("+491", "Magst du kurz berichten?", track=True)
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+    persisted_results = account_store.read_proactive_dispatch_results(account_id)
+    assert persisted_results[0]["item_id"] == account["dispatch_results"][0]["item_id"]
+    assert persisted_results[0]["message_ref"] == "sent-ref"
+    assert persisted_results[0]["instance"] == "Depressionsbot"
 
 
 def test_proactive_cycle_expires_stale_items_before_due_selection(tmp_path) -> None:

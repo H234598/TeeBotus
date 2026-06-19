@@ -99,9 +99,11 @@ def test_proactive_message_is_queued_only_after_consent_and_private_route(tmp_pa
     assert outbox[0]["intent"] == "follow_up_homework"
     assert outbox[0]["reason_memory_ids"] == ["mem_homework"]
     assert outbox[0]["route"]["channel"] == "signal"
-    raw_outbox = (account_store.account_dir(account_id) / "Proactive_Outbox.jsonl").read_text(encoding="utf-8")
-    assert "Du wolltest heute" not in raw_outbox
-    assert "TMBMAP1" in raw_outbox
+    raw_outbox_path = account_store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    if raw_outbox_path.exists():
+        raw_outbox = raw_outbox_path.read_text(encoding="utf-8")
+        assert "Du wolltest heute" not in raw_outbox
+        assert "TMBMAP1" in raw_outbox
 
 
 def test_proactive_queue_uses_supplied_now_for_initial_metadata(tmp_path) -> None:

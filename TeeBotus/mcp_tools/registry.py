@@ -42,7 +42,7 @@ PRIVATE_DATA_PATH_PATTERN = re.compile(
     r"llm_state\.json|"
     r"openai_state\.json|"
     r"agent_state\.json|"
-    r"proactive_(?:audit|outbox)\.jsonl|"
+    r"proactive_(?:audit|dispatch_results|outbox)\.jsonl|"
     r"user_habbits_and_behave\.md|"
     r"user_memory_(?:entries\.jsonl|index\.json)|"
     r"legacy_user_memory_entries\.jsonl"

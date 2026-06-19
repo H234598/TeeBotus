@@ -100,7 +100,7 @@ For the current TeeBotus target, the encrypted account store remains the source 
 
 ## Proactive Agent V1
 
-The depressionsbot instance can enable a guarded proactive-agent module per account with `/proactive on`. The current V1 is deliberately not a free-running sender. It stores explicit consent in encrypted `Agent_State.json`, evaluates a local policy guard, and queues allowed proactive intents in encrypted `Proactive_Outbox.jsonl`.
+The depressionsbot instance can enable a guarded proactive-agent module per account with `/proactive on`. The current V1 is deliberately not a free-running sender. It stores explicit consent in encrypted `Agent_State.json`, evaluates a local policy guard, and queues allowed proactive intents in encrypted `Proactive_Outbox.jsonl` or the SQL `proactive_outbox` collection when the account-memory backend is active. Dispatch audit rows are stored in `proactive_dispatch_results`.
 
 The guard requires all of the following before a proactive item can be queued:
 

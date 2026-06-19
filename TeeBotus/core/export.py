@@ -114,6 +114,7 @@ def export_account_data_from_store(account_store: Any, account_id: str, fmt: str
         "Agent_State.json": _redact_data(account_store.read_agent_state(account_id)),
         "Proactive_Outbox.jsonl": _redact_data(account_store.read_proactive_outbox(account_id)),
         "Proactive_Audit.jsonl": _redact_data(account_store.read_proactive_audit(account_id)),
+        "Proactive_Dispatch_Results.jsonl": _redact_data(account_store.read_proactive_dispatch_results(account_id)),
     }
     return _emit_payload(account_id, payload, fmt)
 
@@ -129,6 +130,7 @@ def _collect_account_payload(account_id: str, account_dir: Path, *, vault: Expor
         "Agent_State.json",
         "Proactive_Outbox.jsonl",
         "Proactive_Audit.jsonl",
+        "Proactive_Dispatch_Results.jsonl",
     ]:
         path = account_dir / filename
         if not path.exists():

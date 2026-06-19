@@ -54,6 +54,7 @@ FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS = {
     "llm_state.json",
     "openai_state.json",
     "proactive_audit.jsonl",
+    "proactive_dispatch_results.jsonl",
     "proactive_outbox.jsonl",
     "secret_verifier.json",
     "user_habbits_and_behave.md",

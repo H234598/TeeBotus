@@ -48,8 +48,14 @@ USER_HABITS_FILENAME = "User_Habbits_and_behave.md"
 LLM_STATE_FILENAME = "LLM_State.json"
 OPENAI_STATE_FILENAME = "OpenAI_State.json"
 AGENT_STATE_FILENAME = "Agent_State.json"
+LLM_STATE_COLLECTION = "llm_state"
+AGENT_STATE_COLLECTION = "agent_state"
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
+PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
+PROACTIVE_OUTBOX_COLLECTION = "proactive_outbox"
+PROACTIVE_AUDIT_COLLECTION = "proactive_audit"
+PROACTIVE_DISPATCH_RESULTS_COLLECTION = "proactive_dispatch_results"
 SECRET_TOOL_COMMAND = "secret-tool"
 SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
 SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS"
@@ -1210,6 +1216,13 @@ class AccountStore:
                         "refusing to record instance secret fingerprint because existing SQLite account "
                         f"memory index is not decryptable with the current Secret Service key ({path})"
                     )
+                for collection in backend.read_collection_names(account_id):
+                    backend.read_collection(account_id, collection)
+                    if backend.last_collection_read_error or backend.last_collection_skipped:
+                        raise AccountStoreError(
+                            "refusing to record instance secret fingerprint because existing SQLite account "
+                            f"memory collection rows are not decryptable with the current Secret Service key ({path})"
+                        )
 
     def _guard_candidate_postgres_memory_decryptable(self, secret: bytes) -> None:
         try:
@@ -1248,6 +1261,13 @@ class AccountStore:
                     "refusing to record instance secret fingerprint because existing PostgreSQL account "
                     "memory index is not decryptable with the current Secret Service key"
                 )
+            for collection in backend.read_collection_names(account_id):
+                backend.read_collection(account_id, collection)
+                if backend.last_collection_read_error or backend.last_collection_skipped:
+                    raise AccountStoreError(
+                        "refusing to record instance secret fingerprint because existing PostgreSQL account "
+                        "memory collection rows are not decryptable with the current Secret Service key"
+                    )
 
     def _secret_verifier_guard_path(self) -> Path | None:
         if self.secrets_path.exists():
@@ -1293,6 +1313,7 @@ class AccountStore:
             AGENT_STATE_FILENAME,
             PROACTIVE_OUTBOX_FILENAME,
             PROACTIVE_AUDIT_FILENAME,
+            PROACTIVE_DISPATCH_RESULTS_FILENAME,
         )
         for account_dir in self.accounts_dir.iterdir():
             if not account_dir.is_dir():
@@ -2362,6 +2383,16 @@ class AccountStore:
         account_dir = self.account_dir(account_id)
         llm_path = account_dir / LLM_STATE_FILENAME
         legacy_path = account_dir / OPENAI_STATE_FILENAME
+        if self._account_memory_collection_backend_available():
+            sql_state = self._read_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, {})
+            llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
+            legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
+            selected = _choose_newer_state(legacy_state, _choose_newer_state(llm_state, sql_state))
+            if selected != sql_state:
+                self._write_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, selected)
+            self._unlink_migrated_account_file(llm_path)
+            self._unlink_migrated_account_file(legacy_path)
+            return selected
         llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
         legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
         selected = _choose_newer_state(legacy_state, llm_state)
@@ -2371,6 +2402,10 @@ class AccountStore:
 
     def write_llm_state(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
+        if self._account_memory_collection_backend_available():
+            self._write_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, dict(data))
+            self._unlink_migrated_account_file(self.account_dir(account_id) / OPENAI_STATE_FILENAME)
+            return
         self.account_memory_vault.write_json(self.account_dir(account_id) / LLM_STATE_FILENAME, dict(data))
 
     def read_openai_state(self, account_id: str) -> dict[str, Any]:
@@ -2380,19 +2415,92 @@ class AccountStore:
         self.write_llm_state(account_id, data)
 
     def read_agent_state(self, account_id: str) -> dict[str, Any]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        if self._account_memory_collection_backend_available():
+            return self._read_account_json_document(account_id, AGENT_STATE_FILENAME, AGENT_STATE_COLLECTION, {})
         return self._read_json_with_fallback(self.account_dir(account_id) / AGENT_STATE_FILENAME, {}, vault=self.account_memory_vault)
 
     def write_agent_state(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
+        if self._account_memory_collection_backend_available():
+            self._write_account_json_document(account_id, AGENT_STATE_FILENAME, AGENT_STATE_COLLECTION, dict(data))
+            return
         self.account_memory_vault.write_json(self.account_dir(account_id) / AGENT_STATE_FILENAME, dict(data))
+
+    def _account_memory_collection_backend_available(self) -> bool:
+        backend = self.account_memory_backend
+        return callable(getattr(backend, "read_collection", None)) and callable(getattr(backend, "write_collection", None))
+
+    def _read_account_json_document(self, account_id: str, filename: str, collection: str, default: dict[str, Any]) -> dict[str, Any]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        read_collection = getattr(backend, "read_collection", None) if backend is not None else None
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if callable(read_collection) and callable(write_collection):
+            rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
+            data = dict(rows[0]) if rows else dict(default)
+            path = self.account_dir(account_id) / filename
+            if path.exists():
+                legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+                selected = _choose_newer_state(legacy_data, data)
+                if selected != data:
+                    write_collection(account_id, collection, [selected])
+                    data = selected
+                self._unlink_migrated_account_file(path)
+            return data
+        return self._read_json_with_fallback(self.account_dir(account_id) / filename, dict(default), vault=self.account_memory_vault)
+
+    def _write_account_json_document(self, account_id: str, filename: str, collection: str, data: dict[str, Any]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if callable(write_collection):
+            write_collection(account_id, collection, [dict(data)])
+            self._unlink_migrated_account_file(self.account_dir(account_id) / filename)
+            return
+        self.account_memory_vault.write_json(self.account_dir(account_id) / filename, dict(data))
+
+    def _read_account_jsonl_collection(self, account_id: str, filename: str, collection: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        path = self.account_dir(account_id) / filename
+        read_collection = getattr(backend, "read_collection", None) if backend is not None else None
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if callable(read_collection) and callable(write_collection):
+            rows = list(read_collection(account_id, collection))
+            if path.exists():
+                legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+                merged_rows = _merge_account_jsonl_rows(rows, legacy_rows)
+                if merged_rows != rows:
+                    write_collection(account_id, collection, merged_rows)
+                    rows = list(read_collection(account_id, collection))
+                self._unlink_migrated_account_file(path)
+            return rows
+        return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+
+    def _write_account_jsonl_collection(self, account_id: str, filename: str, collection: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        backend = self.account_memory_backend
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if callable(write_collection):
+            write_collection(account_id, collection, list(rows))
+            self._unlink_migrated_account_file(self.account_dir(account_id) / filename)
+            return
+        self.account_memory_vault.write_jsonl(self.account_dir(account_id) / filename, list(rows))
+
+    def _unlink_migrated_account_file(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
 
     def read_proactive_outbox(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        return self._read_jsonl_with_fallback(self.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME, vault=self.account_memory_vault)
+        return self._read_account_jsonl_collection(account_id, PROACTIVE_OUTBOX_FILENAME, PROACTIVE_OUTBOX_COLLECTION)
 
     def write_proactive_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        self.account_memory_vault.write_jsonl(self.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME, list(rows))
+        self._write_account_jsonl_collection(account_id, PROACTIVE_OUTBOX_FILENAME, PROACTIVE_OUTBOX_COLLECTION, list(rows))
 
     def append_proactive_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2415,11 +2523,11 @@ class AccountStore:
 
     def read_proactive_audit(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        return self._read_jsonl_with_fallback(self.account_dir(account_id) / PROACTIVE_AUDIT_FILENAME, vault=self.account_memory_vault)
+        return self._read_account_jsonl_collection(account_id, PROACTIVE_AUDIT_FILENAME, PROACTIVE_AUDIT_COLLECTION)
 
     def write_proactive_audit(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        self.account_memory_vault.write_jsonl(self.account_dir(account_id) / PROACTIVE_AUDIT_FILENAME, list(rows))
+        self._write_account_jsonl_collection(account_id, PROACTIVE_AUDIT_FILENAME, PROACTIVE_AUDIT_COLLECTION, list(rows))
 
     def append_proactive_audit_event(self, account_id: str, event: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2436,6 +2544,50 @@ class AccountStore:
         rows.append(normalized)
         self.write_proactive_audit(account_id, rows)
         return event_id
+
+    def read_proactive_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(
+            account_id,
+            PROACTIVE_DISPATCH_RESULTS_FILENAME,
+            PROACTIVE_DISPATCH_RESULTS_COLLECTION,
+        )
+
+    def write_proactive_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(
+            account_id,
+            PROACTIVE_DISPATCH_RESULTS_FILENAME,
+            PROACTIVE_DISPATCH_RESULTS_COLLECTION,
+            list(rows),
+        )
+
+    def append_proactive_dispatch_result(self, account_id: str, result: dict[str, Any]) -> str:
+        return self.append_proactive_dispatch_results(account_id, [result])[0]
+
+    def append_proactive_dispatch_results(self, account_id: str, results: Iterable[dict[str, Any]]) -> tuple[str, ...]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        normalized_results = [dict(result) for result in results if isinstance(result, dict)]
+        if not normalized_results:
+            return ()
+        with self.proactive_outbox_lock(account_id):
+            rows = self.read_proactive_dispatch_results(account_id)
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            timestamp = utc_now()
+            created_ids: list[str] = []
+            for result in normalized_results:
+                result_id = str(result.get("id") or f"pdisp_{uuid.uuid4().hex}").strip()
+                while not result_id or result_id in existing_ids:
+                    result_id = f"pdisp_{uuid.uuid4().hex}"
+                result["id"] = result_id
+                result.setdefault("schema_version", 1)
+                result.setdefault("created_at", timestamp)
+                result.setdefault("updated_at", result["created_at"])
+                rows.append(result)
+                existing_ids.add(result_id)
+                created_ids.append(result_id)
+            self.write_proactive_dispatch_results(account_id, rows)
+            return tuple(created_ids)
 
     def read_account_text(self, account_id: str, filename: str) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -3056,7 +3208,7 @@ def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> 
 
     try:
         with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
-            for table in ("memory_entries", "memory_indexes"):
+            for table in ("memory_entries", "memory_indexes", "account_jsonl_collections"):
                 if not _sqlite_guard_table_exists(connection, table):
                     continue
                 row = connection.execute(
@@ -3081,7 +3233,7 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
     try:
         with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
             account_ids: set[str] = set()
-            for table in ("memory_entries", "memory_indexes"):
+            for table in ("memory_entries", "memory_indexes", "account_jsonl_collections"):
                 if not _sqlite_guard_table_exists(connection, table):
                     continue
                 rows = connection.execute(
@@ -3111,7 +3263,7 @@ def _postgres_memory_has_instance_payload_rows(dsn: str, instance_name: str, con
         raise AccountStoreError("psycopg is required to inspect existing PostgreSQL account memory") from exc
     try:
         with psycopg.connect(dsn, connect_timeout=connect_timeout) as connection:
-            for table in ("teebotus_memory_entries", "teebotus_memory_indexes"):
+            for table in ("teebotus_memory_entries", "teebotus_memory_indexes", "teebotus_account_jsonl_collections"):
                 exists = connection.execute(
                     "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = %s",
                     (table,),
@@ -3139,7 +3291,7 @@ def _postgres_memory_account_ids(dsn: str, instance_name: str, connect_timeout: 
     try:
         with psycopg.connect(dsn, connect_timeout=connect_timeout) as connection:
             account_ids: set[str] = set()
-            for table in ("teebotus_memory_entries", "teebotus_memory_indexes"):
+            for table in ("teebotus_memory_entries", "teebotus_memory_indexes", "teebotus_account_jsonl_collections"):
                 exists = connection.execute(
                     "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = %s",
                     (table,),
@@ -3211,6 +3363,29 @@ def _read_jsonl_plain(path: Path) -> list[dict[str, Any]]:
             raise AccountStoreError(f"JSONL file must contain objects: {path}")
         rows.append(payload)
     return rows
+
+
+def _merge_account_jsonl_rows(primary_rows: list[dict[str, Any]], legacy_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged = [dict(row) for row in primary_rows if isinstance(row, dict)]
+    seen_ids = {str(row.get("id") or "").strip() for row in merged if str(row.get("id") or "").strip()}
+    seen_payloads = {
+        json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        for row in merged
+    }
+    for row in legacy_rows:
+        if not isinstance(row, dict):
+            continue
+        row_id = str(row.get("id") or "").strip()
+        payload_key = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if row_id and row_id in seen_ids:
+            continue
+        if payload_key in seen_payloads:
+            continue
+        merged.append(dict(row))
+        if row_id:
+            seen_ids.add(row_id)
+        seen_payloads.add(payload_key)
+    return merged
 
 
 def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]) -> dict[str, Any]:

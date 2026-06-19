@@ -953,7 +953,7 @@ def _account_secret_memory_required(root: Path, instance_name: str) -> bool:
     accounts_dir = root / ACCOUNTS_DIRNAME
     if accounts_dir.exists():
         for account_dir in _account_memory_account_dirs(accounts_dir):
-            for filename in ACCOUNT_MEMORY_FILENAMES | {"LLM_State.json", "OpenAI_State.json", "Agent_State.json", "Proactive_Outbox.jsonl", "Proactive_Audit.jsonl"}:
+            for filename in ACCOUNT_MEMORY_FILENAMES | {"LLM_State.json", "OpenAI_State.json", "Agent_State.json", "Proactive_Outbox.jsonl", "Proactive_Audit.jsonl", "Proactive_Dispatch_Results.jsonl"}:
                 if _looks_like_teebotus_encrypted_payload(account_dir / filename):
                     return True
     try:

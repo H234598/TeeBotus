@@ -146,6 +146,7 @@ def test_export_from_store_decrypts_structured_memory(tmp_path, monkeypatch):
     assert payload["files"]["Agent_State.json"] == {}
     assert payload["files"]["Proactive_Outbox.jsonl"] == []
     assert payload["files"]["Proactive_Audit.jsonl"] == []
+    assert payload["files"]["Proactive_Dispatch_Results.jsonl"] == []
     assert "User_Habbits_and_behave.md" not in payload["files"]
 
 
@@ -166,6 +167,7 @@ def test_export_from_store_decrypts_proactive_agent_files(tmp_path):
     assert payload["files"]["Agent_State.json"]["proactive"]["enabled"] is True
     assert payload["files"]["Proactive_Outbox.jsonl"][0]["message_text"] == "Erinnerung spaeter"
     assert payload["files"]["Proactive_Audit.jsonl"][0]["reason"] == "unsafe_message_text"
+    assert payload["files"]["Proactive_Dispatch_Results.jsonl"] == []
 
 
 def test_raw_export_refuses_encrypted_account_files_without_vault(tmp_path):

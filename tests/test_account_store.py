@@ -1229,6 +1229,45 @@ def test_account_store_sqlite_backend_stores_memory_outside_json_files(tmp_path,
     assert b"Mond SQLite geheim" not in raw_db
 
 
+def test_account_store_sqlite_backend_migrates_proactive_jsonl_collections(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "pro_legacy", "message_text": "SQL Migration geheim", "status": "queued"}],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [{"id": "pro_legacy", "message_text": "SQL Migration geheim", "status": "queued"}]
+    assert not legacy_path.exists()
+    assert store.read_proactive_outbox(account_id) == rows
+    store.write_proactive_audit(account_id, [{"id": "paud_1", "reason": "unsafe_message_text"}])
+    store.append_proactive_dispatch_result(
+        account_id,
+        {"item_id": "pro_legacy", "status": "sent", "channel": "telegram", "message_ref": "42"},
+    )
+    assert not (store.account_dir(account_id) / "Proactive_Audit.jsonl").exists()
+    assert not (store.account_dir(account_id) / "Proactive_Dispatch_Results.jsonl").exists()
+    assert store.read_proactive_audit(account_id)[0]["reason"] == "unsafe_message_text"
+    assert store.read_proactive_dispatch_results(account_id)[0]["message_ref"] == "42"
+    agent_path = store.account_dir(account_id) / "Agent_State.json"
+    store.account_memory_vault.write_json(agent_path, {"proactive": {"enabled": True}})
+    assert store.read_agent_state(account_id)["proactive"]["enabled"] is True
+    assert not agent_path.exists()
+    store.write_llm_state(account_id, {"provider": "local", "thread_id": "state-geheim"})
+    assert not (store.account_dir(account_id) / "LLM_State.json").exists()
+    assert store.read_llm_state(account_id)["thread_id"] == "state-geheim"
+    raw_db = sqlite_path.read_bytes()
+    assert b"SQL Migration geheim" not in raw_db
+    assert b"unsafe_message_text" not in raw_db
+    assert b"state-geheim" not in raw_db
+
+
 def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
     sqlite_path = tmp_path / "memory.sqlite3"
     account_id = "a" * 128
@@ -1350,6 +1389,51 @@ def test_account_memory_fallback_syncs_dirty_index_back_to_primary(caplog):
 
     assert index == {"index": {"entries": {"mem_fallback": {}}}}
     assert primary.indexes[account_id] == {"index": {"entries": {"mem_fallback": {}}}}
+    assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
+    assert "primary backend recovered" in caplog.text
+
+
+def test_account_memory_fallback_syncs_dirty_collection_back_to_primary(caplog):
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(sorted(collection for item_account, collection in self.collections if item_account == account_id))
+
+    primary = Backend(fail_write=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend.write_collection(account_id, "proactive_outbox", [{"id": "pro_fallback"}])
+        primary.fail_write = False
+        rows = backend.read_collection(account_id, "proactive_outbox")
+
+    assert rows == [{"id": "pro_fallback"}]
+    assert primary.collections[(account_id, "proactive_outbox")] == [{"id": "pro_fallback"}]
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
     assert "primary backend recovered" in caplog.text
 
