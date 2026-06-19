@@ -124,7 +124,16 @@ def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -
         if as_json
         else render_text_report(safe_report)
     )
-    return output
+    return _sanitize_status_auth_output(output)
+
+
+def _sanitize_status_auth_output(output: str) -> str:
+    text = str(output or "")
+    try:
+        from TeeBotus.core.status import redact_status_text
+    except Exception:  # pragma: no cover - fallback for import-time constraints.
+        return text
+    return redact_status_text(text)
 
 
 def _emit_status_auth_report(output: str, *, stream: TextIO = sys.stdout) -> None:

@@ -1655,6 +1655,15 @@ def _sanitize_status_text(value: object) -> str:
     return text.replace("\r", " ").replace("\n", " ")
 
 
+def _sanitize_admin_notify_status_line(value: object) -> str:
+    sanitized = _sanitize_status_text(value)
+    try:
+        from TeeBotus.core.status import redact_status_text
+    except Exception:  # pragma: no cover - fallback for import-time constraints.
+        return sanitized
+    return redact_status_text(sanitized)
+
+
 def _status_url_credential_replacement(match: re.Match[str]) -> str:
     value = match.group(0)
     if "://" in value:
@@ -2092,9 +2101,14 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
             )
         )
         for line in format_admin_notification_result_lines(results):
-            print(_sanitize_status_text(line))
+            print(_sanitize_admin_notify_status_line(line))
     except Exception as exc:  # noqa: BLE001 - notification must not hide runtime-status output.
-        print(f"admin_notify=runtime_status status=failed reason={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}", file=sys.stderr)
+        print(
+            _sanitize_admin_notify_status_line(
+                f"admin_notify=runtime_status status=failed reason={type(exc).__name__}: {exc}"
+            ),
+            file=sys.stderr,
+        )
 
 
 __all__ = ["TelegramBotMissingError", "main"]

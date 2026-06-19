@@ -764,6 +764,14 @@ def test_runtime_status_section_redacts_at_print_sink(capsys) -> None:
     assert "target=https://<redacted>@example.test/path" in captured.out
 
 
+def test_runtime_status_admin_notify_sanitizes_report_lines() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    sanitized = bot._sanitize_admin_notify_status_line("admin_notify=runtime_status status=failed api_key=plain-secret")
+
+    assert sanitized == "admin_notify=runtime_status status=failed api_key=<redacted>"
+
+
 def test_runtime_status_text_keeps_secret_named_paths_visible() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
