@@ -1601,7 +1601,7 @@ TeeBotusApplet.prototype = {
         return path;
       }
     }
-    if (TRUSTED_USER_LOCAL_COMMANDS[name]) {
+    if (Object.prototype.hasOwnProperty.call(TRUSTED_USER_LOCAL_COMMANDS, name)) {
       let path = GLib.build_filenamev([TRUSTED_USER_LOCAL_SPAWN_DIR, name]);
       if (GLib.file_test(path, GLib.FileTest.IS_EXECUTABLE)) {
         return path;

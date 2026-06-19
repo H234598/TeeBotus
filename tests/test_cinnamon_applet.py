@@ -74,7 +74,7 @@ const context = {{
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
-            file_test: (path, flag) => flag === 1 && ["/usr/bin/bash", "/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/systemctl", "/usr/bin/xterm", "/tmp/.local/bin/codex-usage", "/tmp/.local/bin/custom-tool"].includes(path),
+            file_test: (path, flag) => flag === 1 && ["/usr/bin/bash", "/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/systemctl", "/usr/bin/xterm", "/tmp/.local/bin/codex-usage", "/tmp/.local/bin/custom-tool", "/tmp/.local/bin/constructor"].includes(path),
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -833,6 +833,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
           let tooLargeArgError = "";
           let tooLargeCommandError = "";
           let userLocalDisallowedError = "";
+          let prototypeDisallowedError = "";
           let manyArgs = ["gnome-terminal"];
           for (let index = 0; index < 128; index++) {
             manyArgs.push("x");
@@ -871,12 +872,18 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
           } catch (err) {
             userLocalDisallowedError = String(err);
           }
+          try {
+            applet._resolveSpawnArgv(["constructor"]);
+          } catch (err) {
+            prototypeDisallowedError = String(err);
+          }
           return {
             bare: applet._resolveSpawnArgv(["gnome-terminal", "--"]),
             absolute: applet._resolveSpawnArgv(["/usr/bin/python3", "-m", "TeeBotus"]),
             trustedBare: applet._trustedExecutablePath("gnome-terminal"),
             userLocalBare: applet._trustedExecutablePath("codex-usage"),
             userLocalDisallowedBare: applet._trustedExecutablePath("custom-tool"),
+            prototypeDisallowedBare: applet._trustedExecutablePath("constructor"),
             shellBare: applet._trustedExecutablePath("bash"),
             trustedAbsolute: applet._trustedExecutablePath("/usr/bin/python3"),
             missingAbsolute: applet._trustedExecutablePath("/tmp/missing-python"),
@@ -887,7 +894,8 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             tooManyError: tooManyError,
             tooLargeArgError: tooLargeArgError,
             tooLargeCommandError: tooLargeCommandError,
-            userLocalDisallowedError: userLocalDisallowedError
+            userLocalDisallowedError: userLocalDisallowedError,
+            prototypeDisallowedError: prototypeDisallowedError
           };
         })()
         """
@@ -899,6 +907,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "trustedBare": "/usr/bin/gnome-terminal",
         "userLocalBare": "/tmp/.local/bin/codex-usage",
         "userLocalDisallowedBare": None,
+        "prototypeDisallowedBare": None,
         "shellBare": "/usr/bin/bash",
         "trustedAbsolute": "/usr/bin/python3",
         "missingAbsolute": None,
@@ -910,6 +919,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "tooLargeArgError": "Error: Command argument is too large",
         "tooLargeCommandError": "Error: Command is too large",
         "userLocalDisallowedError": "Error: Command is not in a trusted system path",
+        "prototypeDisallowedError": "Error: Command is not in a trusted system path",
     }
 
 
