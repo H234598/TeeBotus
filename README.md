@@ -69,7 +69,7 @@ Ohne `TELEGRAM_BOT_INSTANCES` erkennt der All-Start alle Ordner unter `instances
 TELEGRAM_BOT_INSTANCES=Bote_der_Wahrheit,Depressionsbot python3 -m TeeBotus --all
 ```
 
-`TELEGRAM_BOT_INSTANCES=all` beziehungsweise `TEEBOTUS_INSTANCES=all` schaltet wieder auf automatische Ordner-Erkennung, statt eine Instanz namens `all` zu starten. `all`/`auto` darf dabei nicht mit konkreten Instanznamen gemischt werden.
+`TELEGRAM_BOT_INSTANCES=all` beziehungsweise `TEEBOTUS_INSTANCES=all` schaltet wieder auf automatische Ordner-Erkennung, statt eine Instanz namens `all` zu starten. `all`/`auto` darf dabei nicht mit konkreten Instanznamen gemischt werden; leere Felder wie `Depressionsbot,,Bote_der_Wahrheit` sind Konfigurationsfehler.
 
 Alternativ geht der All-Start auch per Environment:
 

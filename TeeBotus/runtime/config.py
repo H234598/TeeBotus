@@ -69,12 +69,6 @@ def normalize_instance_env_token(instance_name: str) -> str:
     return token
 
 
-def parse_csv(value: str | None) -> tuple[str, ...]:
-    if value is None:
-        return ()
-    return tuple(part.strip() for part in value.split(",") if part.strip())
-
-
 def parse_config_list(value: str | None, *, label: str) -> tuple[str, ...]:
     if value is None or not value.strip():
         return ()
@@ -110,27 +104,24 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
 
 def resolve_instances_dir(env: Mapping[str, str] | None = None) -> Path:
     source = os.environ if env is None else env
-    for key in ("TEEBOTUS_INSTANCES_DIR", "TELEGRAM_BOT_INSTANCES_DIR"):
-        value = str(source.get(key, "") or "").strip()
-        if value:
-            return Path(value)
-    return Path(DEFAULT_INSTANCES_DIR)
+    value = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCES_DIR", "TELEGRAM_BOT_INSTANCES_DIR")
+    return Path(value or DEFAULT_INSTANCES_DIR)
 
 
 def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
     source = os.environ if env is None else env
-    explicit = source.get("TEEBOTUS_INSTANCES") or source.get("TELEGRAM_BOT_INSTANCES")
+    explicit = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCES", "TELEGRAM_BOT_INSTANCES")
     if explicit:
-        selected = parse_csv(explicit)
+        selected = parse_config_list(explicit, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
         if _selected_instances_requests_discovery(selected):
             return _discover_selected_instances(instances_dir)
         if _selected_instances_contains_discovery_token(selected):
             raise RuntimeConfigError("TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES cannot combine all/auto with explicit instance names")
         if selected:
             return selected
-    single = source.get("TEEBOTUS_INSTANCE") or source.get("TELEGRAM_BOT_INSTANCE")
-    if single and single.strip().casefold() not in {"", "all", "auto"}:
-        return (single.strip(),)
+    single = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCE", "TELEGRAM_BOT_INSTANCE")
+    if single and single.casefold() not in {"all", "auto"}:
+        return (single,)
     return _discover_selected_instances(instances_dir)
 
 
@@ -152,6 +143,14 @@ def _discover_selected_instances(instances_dir: Path) -> tuple[str, ...]:
             if path.is_dir() and (path / "Bot_Verhalten.md").exists()
         )
     )
+
+
+def _first_nonempty_env_value(source: Mapping[str, str], *keys: str) -> str:
+    for key in keys:
+        value = str(source.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def resolve_openai_key(

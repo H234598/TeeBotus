@@ -370,6 +370,22 @@ def test_plural_instances_all_requests_runtime_discovery(tmp_path: Path):
     assert resolve_selected_instances(tmp_path, {"TELEGRAM_BOT_INSTANCES": "auto"}) == ("Bote_der_Wahrheit", "Depressionsbot")
 
 
+def test_selected_instances_resolution_uses_first_nonempty_alias(tmp_path: Path):
+    assert resolve_selected_instances(
+        tmp_path,
+        {"TEEBOTUS_INSTANCES": " ", "TELEGRAM_BOT_INSTANCES": "Depressionsbot"},
+    ) == ("Depressionsbot",)
+    assert resolve_selected_instances(
+        tmp_path,
+        {"TEEBOTUS_INSTANCE": " ", "TELEGRAM_BOT_INSTANCE": "Bote_der_Wahrheit"},
+    ) == ("Bote_der_Wahrheit",)
+
+
+def test_selected_instances_reject_empty_list_items(tmp_path: Path):
+    with pytest.raises(RuntimeConfigError, match="empty value in TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES"):
+        resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "Depressionsbot,,Bote_der_Wahrheit"})
+
+
 def test_plural_instances_cannot_mix_discovery_token_with_explicit_names(tmp_path: Path):
     with pytest.raises(RuntimeConfigError, match="cannot combine all/auto"):
         resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "all,Depressionsbot"})
