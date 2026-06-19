@@ -83,12 +83,10 @@ def notify_recent_telegram_users_for_version(
                 _write_state_incrementally(account_store, state_path, state)
             continue
         matched_failure = _matched_failed_delivery(failed_identities, recipient, identities)
-        historical_failure = False
         if matched_failure is None:
             matched_failure = _matched_failed_delivery(historical_failed_identities, recipient, identities)
-            historical_failure = matched_failure is not None
         if matched_failure is not None:
-            if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure, force_record=historical_failure):
+            if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure):
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
                 _write_state_incrementally(account_store, state_path, state)
             continue
@@ -564,11 +562,9 @@ def _record_skipped_failed_delivery(
     failed_identities: dict[str, object],
     recipient: VersionNotificationRecipient,
     matched_failure: tuple[str, dict[str, object]],
-    *,
-    force_record: bool = False,
 ) -> bool:
     previous_failures = dict(failed_identities)
-    matched_identity, source_failure = matched_failure
+    _matched_identity, source_failure = matched_failure
     canonical_failure: dict[str, object] = {
         "account_id": recipient.account_id,
         "adapter_slot": recipient.adapter_slot,

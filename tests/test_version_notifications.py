@@ -23,7 +23,6 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
     INSTANCE_MAPPING_KEY_PURPOSE,
-    INSTANCE_PEPPER_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
     AccountStore,
     AccountStoreError,
@@ -5070,7 +5069,7 @@ def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_pat
     assert any("account_memory_metadata=Demo status=broken item=account_index" in line for line in lines)
     assert any("account_memory_metadata=Demo status=broken item=identity_mapping" in line for line in lines)
     assert any("account_memory_metadata=Demo status=broken item=account_secrets" in line for line in lines)
-    assert any(f"account_memory_metadata=Demo status=broken item=accounts_dir" in line and f"accounts={account_id[:12]}" in line for line in lines)
+    assert any("account_memory_metadata=Demo status=broken item=accounts_dir" in line and f"accounts={account_id[:12]}" in line for line in lines)
     assert any(
         line == f"account_memory=Demo/{account_id} status=broken error=profile_unreadable:encrypted envelope authentication failed"
         for line in lines
