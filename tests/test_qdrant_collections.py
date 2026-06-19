@@ -26,7 +26,7 @@ from TeeBotus.runtime.qdrant import (
 class _Response:
     def __init__(self, status: int = 200, payload: object | None = None) -> None:
         self.status = status
-        self.payload = payload if payload is not None else {}
+        self.payload = payload if payload is not None else {"status": "ok", "result": {}}
 
     def read(self, size: int = -1) -> bytes:
         raw = json.dumps(self.payload).encode("utf-8")
@@ -207,6 +207,38 @@ def test_check_collection_rejects_invalid_json_response() -> None:
     assert result.ok is False
     assert result.status == "unavailable"
     assert result.error == "invalid JSON: JSONDecodeError"
+
+
+def test_check_collection_rejects_unexpected_success_payload_status() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(200, {"status": "error", "result": {"count": 0}})
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "unavailable"
+    assert result.error == "unexpected Qdrant status: error"
+
+
+def test_check_collection_rejects_missing_collection_result() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(200, {"status": "ok"})
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "unavailable"
+    assert result.error == "missing Qdrant collection result"
 
 
 def test_check_collection_rejects_oversized_response() -> None:

@@ -337,6 +337,11 @@ def _collection_payload(raw: bytes) -> tuple[dict[str, Any] | None, str]:
         return None, f"invalid JSON: {type(exc).__name__}"
     if not isinstance(payload, dict):
         return None, "unexpected JSON payload"
+    api_status = str(payload.get("status", "") or "").casefold()
+    if api_status and api_status not in {"ok", "green"}:
+        return None, f"unexpected Qdrant status: {api_status}"
+    if "result" not in payload:
+        return None, "missing Qdrant collection result"
     return payload, ""
 
 
