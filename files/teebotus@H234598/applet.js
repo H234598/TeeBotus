@@ -1291,8 +1291,13 @@ TeeBotusApplet.prototype = {
       this._setStatusText(_("No terminal found."));
       return;
     }
+    let shell = this._trustedExecutablePath("bash");
+    if (!shell) {
+      this._setStatusText(_("No trusted shell found."));
+      return;
+    }
     let shellCommand = "cd " + this._safeShellWord(cwd) + " && " + command + "; printf '\\n'; read -r -p 'Enter zum Schliessen...'";
-    let argv = terminal.concat(["bash", "-lc", shellCommand]);
+    let argv = terminal.concat([shell, "-lc", shellCommand]);
     this._spawn(argv, () => {});
   },
 
