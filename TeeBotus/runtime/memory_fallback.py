@@ -195,6 +195,18 @@ class WarningFallbackAccountMemoryBackend:
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, exc)
+            if self._operation_has_unsafe_fallback(operation, account_id):
+                self.last_fallback_sync_error = (
+                    f"{operation}: read blocked because primary is unavailable and fallback may be stale or unrecoverable"
+                )
+                LOGGER.critical(
+                    "ACCOUNT MEMORY READ BLOCKED. PRIMARY DATABASE IS UNAVAILABLE AND FALLBACK MAY BE STALE OR UNRECOVERABLE. "
+                    "label=%s operation=%s account_id=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from exc
             result = callback(self.fallback)
             self._copy_diagnostics(self.fallback)
             if self._fallback_result_is_empty_after_primary_exception(operation, result, partial_result):
@@ -441,6 +453,10 @@ class WarningFallbackAccountMemoryBackend:
             or account_id in self._fallback_sync_failed_indexes
             or any(key[0] == account_id for key in self._fallback_sync_failed_collections)
         )
+
+    def _operation_has_unsafe_fallback(self, operation: str, account_id: str) -> bool:
+        stale_key = self._operation_stale_key(operation, account_id)
+        return stale_key in self._fallback_stale_set(operation) or stale_key in self._fallback_sync_failed_set(operation)
 
     def _read_diagnostic_failed(self, operation: str) -> bool:
         if operation == "read_entries":

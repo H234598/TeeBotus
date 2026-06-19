@@ -2806,6 +2806,44 @@ def test_account_memory_fallback_blocks_stale_secondary_when_primary_fails() -> 
     assert fallback.entries.get(account_id) is None
 
 
+def test_account_memory_fallback_blocks_reads_from_stale_secondary_when_primary_fails() -> None:
+    class Backend:
+        def __init__(self, *, fail_read: bool = False, fail_write: bool = False) -> None:
+            self.fail_read = fail_read
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise OSError("primary unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("fallback unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend()
+    fallback = Backend(fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    backend.write_entries(account_id, [{"id": "mem_primary"}])
+    primary.fail_read = True
+    fallback.fail_write = False
+
+    with pytest.raises(AccountStoreError, match="fallback may be stale"):
+        backend.read_entries(account_id)
+
+    assert fallback.entries.get(account_id) is None
+
+
 def test_account_memory_fallback_retries_stale_collection_secondary_when_primary_is_available() -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:
