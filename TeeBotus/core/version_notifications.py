@@ -312,15 +312,41 @@ def _delivery_error_reason(exc: Exception) -> str:
 
 
 def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
+    normalized_version = _normalize_version_key(version)
     versions = state.setdefault("versions", {})
     if not isinstance(versions, dict):
         versions = {}
         state["versions"] = versions
-    raw_version_state = versions.get(version)
-    if not isinstance(raw_version_state, dict):
-        raw_version_state = {}
-        versions[version] = raw_version_state
-    return raw_version_state
+    matching_keys = [
+        key
+        for key in list(versions)
+        if isinstance(key, str) and _normalize_version_key(key) == normalized_version
+    ]
+    if not matching_keys:
+        versions[normalized_version] = {}
+        return versions[normalized_version]
+
+    matching_keys.sort(key=lambda key: key == normalized_version)
+    merged: dict[str, Any] = {}
+    for key in matching_keys:
+        raw_version_state = versions.pop(key, None)
+        if isinstance(raw_version_state, dict):
+            merged = _merge_version_notification_state(merged, raw_version_state)
+    versions[normalized_version] = merged
+    return merged
+
+
+def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    merged = {**base, **incoming}
+    sent_identities = set(_string_list(base.get("sent_identities")))
+    sent_identities.update(_string_list(incoming.get("sent_identities")))
+    if sent_identities or "sent_identities" in base or "sent_identities" in incoming:
+        merged["sent_identities"] = sorted(sent_identities)
+    failed_identities = _failed_identity_map(base.get("failed_identities"))
+    failed_identities.update(_failed_identity_map(incoming.get("failed_identities")))
+    if failed_identities or "failed_identities" in base or "failed_identities" in incoming:
+        merged["failed_identities"] = dict(sorted(failed_identities.items()))
+    return merged
 
 
 def _string_list(value: Any) -> list[str]:
