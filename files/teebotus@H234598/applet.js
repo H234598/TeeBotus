@@ -361,7 +361,7 @@ TeeBotusApplet.prototype = {
       );
     }
     if (qdrant.unit) {
-      memoryLines.push("Qdrant-Service " + String(qdrant.unit.name || this.qdrantUnit || DEFAULT_QDRANT_UNIT) + ": " + this._statusWord(qdrant.unit.active_state || "unknown") + " / " + String(qdrant.unit.sub_state || "unknown"));
+      memoryLines.push("Qdrant-Service " + String(qdrant.unit.name || this._qdrantUnit()) + ": " + this._statusWord(qdrant.unit.active_state || "unknown") + " / " + String(qdrant.unit.sub_state || "unknown"));
     }
     if (bibliothekarPoints > 0) {
       memoryLines.push("Bibliothekar-Vektoren: " + String(bibliothekarPoints));
@@ -861,9 +861,9 @@ TeeBotusApplet.prototype = {
       "--channels",
       String(this.channels || DEFAULT_CHANNELS),
       "--unit",
-      String(this.runtimeUnit || DEFAULT_UNIT),
+      this._runtimeUnit(),
       "--qdrant-unit",
-      String(this.qdrantUnit || DEFAULT_QDRANT_UNIT),
+      this._qdrantUnit(),
       "--qdrant-url",
       String(this.qdrantUrl || DEFAULT_QDRANT_URL),
       "--python",
@@ -1030,7 +1030,7 @@ TeeBotusApplet.prototype = {
     if (!this.enableServiceActions) {
       return;
     }
-    let unit = String(this.runtimeUnit || DEFAULT_UNIT).trim();
+    let unit = this._runtimeUnit();
     if (!unit) {
       return;
     }
@@ -1104,7 +1104,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openQdrantStatusTerminal: function() {
-    this._openTerminalForCommand(this._repoPath(), ["systemctl", "--user", "status", String(this.qdrantUnit || DEFAULT_QDRANT_UNIT), "--no-pager"]);
+    this._openTerminalForCommand(this._repoPath(), ["systemctl", "--user", "status", this._qdrantUnit(), "--no-pager"]);
   },
 
   _appendQdrantActions: function() {
@@ -1120,7 +1120,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openLogsTerminal: function() {
-    this._openTerminalForCommand(this._repoPath(), ["journalctl", "--user", "-u", String(this.runtimeUnit || DEFAULT_UNIT), "-n", "120", "-f"]);
+    this._openTerminalForCommand(this._repoPath(), ["journalctl", "--user", "-u", this._runtimeUnit(), "-n", "120", "-f"]);
   },
 
   _openBibliothekarStatus: function() {
@@ -1248,6 +1248,14 @@ TeeBotusApplet.prototype = {
     return String(this.repoPath || DEFAULT_REPO_PATH).trim() || DEFAULT_REPO_PATH;
   },
 
+  _runtimeUnit: function() {
+    return this._safeSystemdUnit(this.runtimeUnit, DEFAULT_UNIT);
+  },
+
+  _qdrantUnit: function() {
+    return this._safeSystemdUnit(this.qdrantUnit, DEFAULT_QDRANT_UNIT);
+  },
+
   _codexUsagePath: function() {
     return String(this.codexUsagePath || DEFAULT_CODEX_USAGE_PATH).trim() || DEFAULT_CODEX_USAGE_PATH;
   },
@@ -1321,6 +1329,18 @@ TeeBotusApplet.prototype = {
 
   _safeUnitToken: function(value) {
     return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_.@-]+/g, "-") || "depressionsbot";
+  },
+
+  _safeSystemdUnit: function(value, fallback) {
+    let fallbackUnit = String(fallback || DEFAULT_UNIT).trim() || DEFAULT_UNIT;
+    let unit = String(value || fallbackUnit).trim() || fallbackUnit;
+    if (unit.charAt(0) === "-" || unit.indexOf("/") >= 0 || unit.length > 256) {
+      return fallbackUnit;
+    }
+    if (!/^[A-Za-z0-9_.@:-]+\.(service|timer|socket|target|path)$/.test(unit)) {
+      return fallbackUnit;
+    }
+    return unit;
   },
 
   _safeShellWord: function(value) {

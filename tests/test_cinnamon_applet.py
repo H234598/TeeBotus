@@ -42,15 +42,14 @@ def _js_status_label_keys(source: str) -> set[str]:
     return set(re.findall(r"\n\s*([A-Za-z_][A-Za-z0-9_]*):", match.group(1)))
 
 
-def _run_js_parse_fields(line: str) -> dict[str, str]:
+def _run_js_applet_expression(expression: str) -> object:
     node = shutil.which("node")
     if not node:
-        pytest.skip("node is not available for Cinnamon applet parser parity check")
+        pytest.skip("node is not available for Cinnamon applet behavior check")
     source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     script = f"""
 const vm = require("vm");
 const source = {json.dumps(source)};
-const line = {json.dumps(line)};
 const TextIconApplet = function() {{}};
 TextIconApplet.prototype = {{}};
 const context = {{
@@ -58,10 +57,12 @@ const context = {{
   imports: {{
     ui: {{
       applet: {{ TextIconApplet: TextIconApplet }},
+      modalDialog: {{}},
       popupMenu: {{}},
       settings: {{}}
     }},
     gi: {{
+      Clutter: {{}},
       St: {{}},
       Gio: {{}},
       GLib: {{
@@ -79,10 +80,19 @@ const context = {{
 vm.createContext(context);
 vm.runInContext(source + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;", context);
 const applet = Object.create(context.__TeeBotusApplet.prototype);
-console.log(JSON.stringify(applet._parseFields(line)));
+const result = (function() {{
+  return (
+    {expression}
+  );
+}})();
+console.log(JSON.stringify(result));
 """
     completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10)
     return json.loads(completed.stdout)
+
+
+def _run_js_parse_fields(line: str) -> dict[str, str]:
+    return _run_js_applet_expression(f"applet._parseFields({json.dumps(line)})")  # type: ignore[return-value]
 
 
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
@@ -142,6 +152,12 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._commandArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
+    assert "_runtimeUnit: function()" in source
+    assert "_qdrantUnit: function()" in source
+    assert "_safeSystemdUnit: function(value, fallback)" in source
+    assert 'unit.charAt(0) === "-"' in source
+    assert 'unit.indexOf("/") >= 0' in source
+    assert 'service|timer|socket|target|path' in source
     assert 'if (last === "--" || last === "-e")' in source
     assert 'if (binary === "xterm" || binary === "konsole")' in source
     assert 'return argv.concat(["-e"]);' in source
@@ -350,6 +366,45 @@ def test_cinnamon_applet_qdrant_actions_keep_url_local_only() -> None:
     assert "port > 0 && port <= 65535" in source
     assert 'this._qdrantUrl() + "/collections"' in source
     assert 'this._qdrantUrl() + "/collections/teebotus_user_memory/points/count"' in source
+
+
+def test_cinnamon_applet_sanitizes_systemd_units_from_settings() -> None:
+    result = _run_js_applet_expression(
+        """
+        [
+          applet._safeSystemdUnit("teebotus.service", "fallback.service"),
+          applet._safeSystemdUnit("teebotus-proactive-depressionsbot.timer", "fallback.service"),
+          applet._safeSystemdUnit("teebotus@Depressionsbot.service", "fallback.service"),
+          applet._safeSystemdUnit("--force", "fallback.service"),
+          applet._safeSystemdUnit("../bad.service", "fallback.service"),
+          applet._safeSystemdUnit("teebotus", "fallback.service"),
+          (function() {
+            applet.runtimeUnit = "--force";
+            applet.qdrantUnit = "../qdrant.service";
+            applet.pythonCommand = "/usr/bin/python3";
+            applet.repoPath = "/repo";
+            applet.channels = "telegram,signal";
+            applet.qdrantUrl = "http://127.0.0.1:6333";
+            applet.statusTimeoutSeconds = 30;
+            return applet._statusCommand();
+          })()
+        ]
+        """
+    )
+
+    assert result[:6] == [
+        "teebotus.service",
+        "teebotus-proactive-depressionsbot.timer",
+        "teebotus@Depressionsbot.service",
+        "fallback.service",
+        "fallback.service",
+        "fallback.service",
+    ]
+    command = result[6]
+    assert command[command.index("--unit") + 1] == "teebotus.service"
+    assert command[command.index("--qdrant-unit") + 1] == "teebotus-qdrant.service"
+    assert "--force" not in command
+    assert "../qdrant.service" not in command
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
