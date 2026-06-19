@@ -372,6 +372,20 @@ def test_recent_telegram_recipients_can_filter_by_adapter_slot(tmp_path: Path) -
     assert [(recipient.chat_id, recipient.adapter_slot) for recipient in recipients] == [(222, 2)]
 
 
+def test_recent_telegram_recipients_ignores_invalid_adapter_slot_filter(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        adapter_slot="telegram:broken",  # type: ignore[arg-type]
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert recipients == []
+
+
 def test_recent_telegram_recipients_skips_non_private_chat_routes(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Private")

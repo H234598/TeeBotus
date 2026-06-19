@@ -107,6 +107,9 @@ def recent_telegram_recipients(
 ) -> list[VersionNotificationRecipient]:
     resolved_now = now or datetime.now(timezone.utc)
     threshold = resolved_now - timedelta(days=ACTIVE_WINDOW_DAYS)
+    adapter_slot_filter = _optional_positive_int(adapter_slot) if adapter_slot is not None else None
+    if adapter_slot is not None and adapter_slot_filter is None:
+        return []
     recipients: list[VersionNotificationRecipient] = []
     try:
         identities = account_store._load_identities()
@@ -125,7 +128,7 @@ def recent_telegram_recipients(
         route_channel = str(route.get("channel") or "telegram").strip().casefold()
         route_chat_type = str(route.get("chat_type") or "").strip().casefold()
         route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
-        if adapter_slot is not None and route_slot != int(adapter_slot):
+        if adapter_slot_filter is not None and route_slot != adapter_slot_filter:
             continue
         if route_channel != "telegram":
             continue
@@ -377,6 +380,13 @@ def _optional_int(value: object) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _optional_positive_int(value: object) -> int | None:
+    resolved = _optional_int(value)
+    if resolved is None or resolved <= 0:
+        return None
+    return resolved
 
 
 def _delivery_error_reason(exc: Exception) -> str:
