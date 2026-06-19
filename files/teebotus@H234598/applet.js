@@ -1698,12 +1698,12 @@ TeeBotusApplet.prototype = {
   },
 
   _positiveInt: function(value, fallback) {
-    let parsed = parseInt(value, 10);
+    let parsed = this._strictInt(value);
     return parsed > 0 ? parsed : fallback;
   },
 
   _boundedInt: function(value, fallback, minValue, maxValue) {
-    let parsed = parseInt(value, 10);
+    let parsed = this._strictInt(value);
     if (!(parsed >= minValue)) {
       parsed = fallback;
     }
@@ -1714,6 +1714,14 @@ TeeBotusApplet.prototype = {
       parsed = maxValue;
     }
     return parsed;
+  },
+
+  _strictInt: function(value) {
+    let text = String(value === null || value === undefined ? "" : value).trim();
+    if (!/^[0-9]+$/.test(text)) {
+      return null;
+    }
+    return parseInt(text, 10);
   },
 
   _statusTimeoutSeconds: function() {

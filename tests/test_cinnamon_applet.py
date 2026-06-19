@@ -239,6 +239,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const MAX_COMMAND_CHARS = 32768;" in source
     assert "const MAX_UNIT_TOKEN_CHARS = 96;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
+    assert "_strictInt: function(value)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
     assert "this.menuManager.addMenu(this.menu)" in source
@@ -1059,6 +1060,35 @@ def test_cinnamon_applet_bounds_configured_command_arguments() -> None:
         "controlChar": ["codex-usage"],
         "newline": ["codex-usage"],
         "valid": ["codex-usage", "latest", "--format", "json"],
+    }
+
+
+def test_cinnamon_applet_rejects_partial_integer_settings() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.statusTimeoutSeconds = "30abc";
+          return {
+            positiveJunk: applet._positiveInt("12abc", 7),
+            positiveFloat: applet._positiveInt("12.9", 7),
+            positiveValid: applet._positiveInt("0012", 7),
+            boundedJunk: applet._boundedInt("30abc", 10, 1, 60),
+            boundedFloat: applet._boundedInt("30.9", 10, 1, 60),
+            boundedValid: applet._boundedInt("0030", 10, 1, 60),
+            timeoutJunk: applet._statusTimeoutSeconds()
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "positiveJunk": 7,
+        "positiveFloat": 7,
+        "positiveValid": 12,
+        "boundedJunk": 10,
+        "boundedFloat": 10,
+        "boundedValid": 30,
+        "timeoutJunk": 30,
     }
 
 
