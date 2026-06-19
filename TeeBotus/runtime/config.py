@@ -376,15 +376,24 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
 def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
-    services = parse_slot_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"), label=f"SIGNAL_BOT_SERVICES_{token}")
-    phones = parse_slot_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"), label=f"SIGNAL_BOT_PHONE_NUMBERS_{token}")
+    base_services = parse_slot_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"), label=f"SIGNAL_BOT_SERVICES_{token}")
+    base_phones = parse_slot_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"), label=f"SIGNAL_BOT_PHONE_NUMBERS_{token}")
     single_service = source.get(f"SIGNAL_BOT_SERVICE_{token}", "").strip()
     single_phone = source.get(f"SIGNAL_BOT_PHONE_NUMBER_{token}", "").strip()
     if bool(single_service) != bool(single_phone):
         raise RuntimeConfigError(f"Signal single service/phone must be configured together for instance {instance_name}")
-    if single_service and single_phone:
-        services = (*services, single_service)
-        phones = (*phones, single_phone)
+    services = _merge_numbered_values(
+        source,
+        (*base_services, single_service),
+        f"SIGNAL_BOT_SERVICE_{token}",
+        label=f"SIGNAL_BOT_SERVICE_{token}",
+    )
+    phones = _merge_numbered_values(
+        source,
+        (*base_phones, single_phone),
+        f"SIGNAL_BOT_PHONE_NUMBER_{token}",
+        label=f"SIGNAL_BOT_PHONE_NUMBER_{token}",
+    )
     if len(services) != len(phones):
         raise RuntimeConfigError(f"Signal service/phone slot mismatch for instance {instance_name}")
     pairs = tuple((service, phone) for service, phone in zip(services, phones) if service and phone)
@@ -396,14 +405,14 @@ def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = 
 def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str, str, str], ...]:
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
-    homeservers = parse_slot_csv(
+    base_homeservers = parse_slot_csv(
         source.get(f"MATRIX_BOT_HOMESERVERS_{token}"), label=f"MATRIX_BOT_HOMESERVERS_{token}"
     )
-    user_ids = parse_slot_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"), label=f"MATRIX_BOT_USER_IDS_{token}")
-    access_tokens = parse_slot_csv(
+    base_user_ids = parse_slot_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"), label=f"MATRIX_BOT_USER_IDS_{token}")
+    base_access_tokens = parse_slot_csv(
         source.get(f"MATRIX_BOT_ACCESS_TOKENS_{token}"), label=f"MATRIX_BOT_ACCESS_TOKENS_{token}"
     )
-    device_ids = parse_slot_csv(source.get(f"MATRIX_BOT_DEVICE_IDS_{token}"), label=f"MATRIX_BOT_DEVICE_IDS_{token}")
+    base_device_ids = parse_slot_csv(source.get(f"MATRIX_BOT_DEVICE_IDS_{token}"), label=f"MATRIX_BOT_DEVICE_IDS_{token}")
     single_homeserver = source.get(f"MATRIX_BOT_HOMESERVER_{token}", "").strip()
     single_user_id = source.get(f"MATRIX_BOT_USER_ID_{token}", "").strip()
     single_access_token = source.get(f"MATRIX_BOT_ACCESS_TOKEN_{token}", "").strip()
@@ -413,11 +422,30 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
         raise RuntimeConfigError(f"Matrix single homeserver/user/access_token must be configured together for instance {instance_name}")
     if single_device_id and not all(required_singles):
         raise RuntimeConfigError(f"Matrix single device_id requires homeserver/user/access_token for instance {instance_name}")
-    if single_homeserver and single_user_id and single_access_token:
-        homeservers = (*homeservers, single_homeserver)
-        user_ids = (*user_ids, single_user_id)
-        access_tokens = (*access_tokens, single_access_token)
-        device_ids = (*device_ids, single_device_id)
+    homeservers = _merge_numbered_values(
+        source,
+        (*base_homeservers, single_homeserver),
+        f"MATRIX_BOT_HOMESERVER_{token}",
+        label=f"MATRIX_BOT_HOMESERVER_{token}",
+    )
+    user_ids = _merge_numbered_values(
+        source,
+        (*base_user_ids, single_user_id),
+        f"MATRIX_BOT_USER_ID_{token}",
+        label=f"MATRIX_BOT_USER_ID_{token}",
+    )
+    access_tokens = _merge_numbered_values(
+        source,
+        (*base_access_tokens, single_access_token),
+        f"MATRIX_BOT_ACCESS_TOKEN_{token}",
+        label=f"MATRIX_BOT_ACCESS_TOKEN_{token}",
+    )
+    device_ids = _merge_numbered_values(
+        source,
+        (*base_device_ids, single_device_id),
+        f"MATRIX_BOT_DEVICE_ID_{token}",
+        label=f"MATRIX_BOT_DEVICE_ID_{token}",
+    )
     if not (len(homeservers) == len(user_ids) == len(access_tokens)):
         raise RuntimeConfigError(f"Matrix homeserver/user/access_token slot mismatch for instance {instance_name}")
     if device_ids and len(device_ids) != len(homeservers):

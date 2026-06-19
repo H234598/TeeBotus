@@ -226,41 +226,41 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
 
 def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
     env = {
-        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
-        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "sk-other-background",
-        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "key-other-background",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "key-instance",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
-    assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-instance"
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-background"
+    assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "key-instance"
     assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
 
 
 def test_openai_key_resolution_strips_background_services_key():
     env = {
-        "Depressionsbot_BACKGROUND_SERVICES": " sk-background ",
+        "Depressionsbot_BACKGROUND_SERVICES": " key-background ",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-background"
 
 
 def test_openai_key_resolution_ignores_global_background_key():
-    env = {"OPENAI_API_KEY_BACKGROUND": "sk-global-background"}
+    env = {"OPENAI_API_KEY_BACKGROUND": "key-global-background"}
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
 
 
 def test_openai_key_resolution_ignores_global_proactive_key():
-    env = {"OPENAI_API_KEY_PROACTIVE": "sk-global-proactive"}
+    env = {"OPENAI_API_KEY_PROACTIVE": "key-global-proactive"}
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
 
 
 def test_openai_key_resolution_ignores_legacy_instance_background_key():
     env = {
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_2": "sk-legacy-background-slot",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-legacy-background",
-        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "sk-legacy-background-a, sk-legacy-background-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_2": "key-legacy-background-slot",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "key-legacy-background",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "key-legacy-background-a, key-legacy-background-b",
     }
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
@@ -269,20 +269,20 @@ def test_openai_key_resolution_ignores_legacy_instance_background_key():
 
 def test_openai_key_resolution_prefers_proactive_key_before_background_key():
     env = {
-        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
-        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
-        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-proactive",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "key-instance",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-proactive"
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-proactive"
 
 
 def test_openai_key_resolution_ignores_generic_background_services_aliases():
     env = {
-        "DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-token-alias",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES_2": "sk-background-slot",
-        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-single",
+        "DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-token-alias",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES_2": "key-background-slot",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-background-a, key-background-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-background-single",
     }
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
@@ -291,16 +291,16 @@ def test_openai_key_resolution_ignores_generic_background_services_aliases():
 
 def test_openai_key_resolution_background_services_single_key_is_shared_across_slots():
     env = {
-        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
     }
 
-    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background"
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "key-background"
 
 
 def test_openai_key_resolution_background_services_is_depressionsbot_only():
     env = {
-        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
-        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "sk-other-background",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "key-other-background",
     }
 
     assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
@@ -409,6 +409,38 @@ def test_signal_account_resolution_pairs_services_and_numbers():
     assert resolve_signal_accounts("Depressionsbot", env) == (("127.0.0.1:8080", "+491"), ("127.0.0.1:8081", "+492"))
 
 
+def test_signal_account_resolution_accepts_single_plus_numbered_slots():
+    env = {
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT": "+491",
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT_2": "127.0.0.1:8081",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT_2": "+492",
+    }
+
+    assert resolve_signal_accounts("Depressionsbot", env) == (("127.0.0.1:8080", "+491"), ("127.0.0.1:8081", "+492"))
+
+
+def test_signal_account_resolution_rejects_numbered_slot_mismatch():
+    env = {
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT": "+491",
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT_2": "127.0.0.1:8081",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="Signal service/phone slot mismatch"):
+        resolve_signal_accounts("Depressionsbot", env)
+
+
+def test_signal_account_resolution_rejects_invalid_numbered_slot_suffix():
+    env = {
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT_TWO": "127.0.0.1:8081",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT_TWO": "+492",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="invalid slot suffix TWO"):
+        resolve_signal_accounts("Depressionsbot", env)
+
+
 def test_matrix_account_resolution_pairs_homeserver_user_and_token():
     env = {
         "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://matrix-a.example,https://matrix-b.example",
@@ -421,6 +453,49 @@ def test_matrix_account_resolution_pairs_homeserver_user_and_token():
         ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
         ("https://matrix-b.example", "@b:example", "token-b", "dev-b"),
     )
+
+
+def test_matrix_account_resolution_accepts_single_plus_numbered_slots():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT": "dev-a",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2": "https://matrix-b.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2": "@b:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2": "token-b",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2": "dev-b",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
+        ("https://matrix-b.example", "@b:example", "token-b", "dev-b"),
+    )
+
+
+def test_matrix_account_resolution_rejects_numbered_required_slot_mismatch():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2": "https://matrix-b.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2": "@b:example",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="Matrix homeserver/user/access_token slot mismatch"):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
+def test_matrix_account_resolution_rejects_empty_numbered_device_slot():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_1": " ",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="numbered slot 1 empty"):
+        resolve_matrix_accounts("Depressionsbot", env)
 
 
 def test_build_account_configs_for_telegram_signal_and_matrix():

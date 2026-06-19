@@ -211,6 +211,13 @@ SIGNAL_BOT_SERVICES_DEPRESSIONSBOT=http://127.0.0.1:8080,http://127.0.0.1:8081
 SIGNAL_BOT_PHONE_NUMBERS_DEPRESSIONSBOT=+49...,+49...
 ```
 
+Alternativ koennen weitere Slots nummeriert gesetzt werden:
+
+```bash
+SIGNAL_BOT_SERVICE_DEPRESSIONSBOT_2=http://127.0.0.1:8081
+SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT_2=+49...
+```
+
 In Signal erzeugt `/register` einen neuen TeeBotus-Account fuer diesen Signal-Weg. Um einen bestehenden Telegram-Account zu verbinden, zuerst im privaten Telegram-Chat `/register` oder `/rotate_secret` nutzen und danach im privaten Signal-Chat senden:
 
 ```text
@@ -233,6 +240,15 @@ MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT=https://matrix-a.example,https://matrix-b.
 MATRIX_BOT_USER_IDS_DEPRESSIONSBOT=@bot-a:example,@bot-b:example
 MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT=syt_a,syt_b
 MATRIX_BOT_DEVICE_IDS_DEPRESSIONSBOT=DEV_A,DEV_B
+```
+
+Alternativ koennen weitere Slots nummeriert gesetzt werden:
+
+```bash
+MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2=https://matrix-b.example
+MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2=@bot-b:example
+MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2=syt_b
+MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2=DEV_B
 ```
 
 Die Erreichbarkeit der konfigurierten Matrix-Homeserver pruefst du ohne Botstart:
