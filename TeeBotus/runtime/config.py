@@ -75,16 +75,25 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
-def parse_slot_csv(value: str | None, *, label: str) -> tuple[str, ...]:
+def parse_config_list(value: str | None, *, label: str) -> tuple[str, ...]:
     if value is None or not value.strip():
         return ()
     values = tuple(part.strip() for part in value.split(","))
-    empty_slots = [str(index) for index, part in enumerate(values, start=1) if not part]
-    if empty_slots:
-        raise RuntimeConfigError(
-            f"empty value in positional slot list {label}; empty slot(s): {', '.join(empty_slots)}"
-        )
+    empty_items = [str(index) for index, part in enumerate(values, start=1) if not part]
+    if empty_items:
+        raise RuntimeConfigError(f"empty value in {label}; empty item(s): {', '.join(empty_items)}")
     return values
+
+
+def parse_slot_csv(value: str | None, *, label: str) -> tuple[str, ...]:
+    if value is None or not value.strip():
+        return ()
+    try:
+        return parse_config_list(value, label=f"positional slot list {label}")
+    except RuntimeConfigError as exc:
+        raise RuntimeConfigError(
+            str(exc).replace("empty item(s)", "empty slot(s)")
+        ) from exc
 
 
 def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | None = None) -> tuple[str, ...]:
@@ -92,7 +101,7 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
     value = str(source or "auto").strip().casefold()
     if value in {"", "auto", "all"}:
         return DEFAULT_CHANNELS
-    channels = parse_csv(value)
+    channels = parse_config_list(value, label="TEEBOTUS_CHANNELS")
     invalid = [channel for channel in channels if channel not in SUPPORTED_CHANNELS]
     if invalid:
         raise RuntimeConfigError(f"unsupported channel(s): {', '.join(invalid)}")
@@ -101,8 +110,11 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
 
 def resolve_instances_dir(env: Mapping[str, str] | None = None) -> Path:
     source = os.environ if env is None else env
-    value = source.get("TEEBOTUS_INSTANCES_DIR") or source.get("TELEGRAM_BOT_INSTANCES_DIR") or DEFAULT_INSTANCES_DIR
-    return Path(value)
+    for key in ("TEEBOTUS_INSTANCES_DIR", "TELEGRAM_BOT_INSTANCES_DIR"):
+        value = str(source.get(key, "") or "").strip()
+        if value:
+            return Path(value)
+    return Path(DEFAULT_INSTANCES_DIR)
 
 
 def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | None = None) -> tuple[str, ...]:

@@ -9,6 +9,7 @@ from TeeBotus.runtime.config import (
     build_account_run_configs,
     build_runtime_config,
     resolve_channels,
+    resolve_instances_dir,
     resolve_openai_key,
     resolve_selected_instances,
     resolve_matrix_accounts,
@@ -71,6 +72,11 @@ def test_telegram_token_resolution_supports_global_plural_fallback():
 def test_duplicate_channels_raise_instead_of_starting_adapter_twice():
     with pytest.raises(RuntimeConfigError):
         resolve_channels({}, cli_channels="telegram,telegram")
+
+
+def test_channels_reject_empty_list_items_instead_of_silently_shifting_selection():
+    with pytest.raises(RuntimeConfigError, match="empty value in TEEBOTUS_CHANNELS"):
+        resolve_channels({}, cli_channels="telegram,,signal")
 
 
 def test_openai_key_resolution_allows_shared_instance_key():
@@ -345,6 +351,14 @@ def test_runtime_discovers_instances(tmp_path: Path):
 
     assert config.selected_instances == ("Depressionsbot",)
     assert config.instances[0].accounts[0].telegram_token == "token"
+
+
+def test_instances_dir_resolution_strips_whitespace_and_uses_first_nonempty_value(tmp_path: Path):
+    fallback = tmp_path / "fallback"
+    explicit = tmp_path / "explicit"
+
+    assert resolve_instances_dir({"TEEBOTUS_INSTANCES_DIR": f" {explicit} "}) == explicit
+    assert resolve_instances_dir({"TEEBOTUS_INSTANCES_DIR": " ", "TELEGRAM_BOT_INSTANCES_DIR": f" {fallback} "}) == fallback
 
 
 def test_plural_instances_all_requests_runtime_discovery(tmp_path: Path):

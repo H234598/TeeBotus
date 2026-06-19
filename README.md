@@ -96,7 +96,7 @@ python3 -m TeeBotus --runtime-status --channels telegram
 python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix
 ```
 
-`--channels telegram` startet nur Telegram-Slots. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten Signal und Matrix im Hintergrund und danach den Telegram-Runtime-Slot mit Long-Polling-Transport.
+`--channels telegram` startet nur Telegram-Slots. `--channels signal` startet nur konfigurierte Signal-Slots. `--channels matrix` startet nur konfigurierte Matrix-Slots. Kombinationen mit Telegram starten Signal und Matrix im Hintergrund und danach den Telegram-Runtime-Slot mit Long-Polling-Transport. Channel-Listen duerfen keine leeren Felder enthalten; `telegram,,signal` ist ein Konfigurationsfehler.
 
 ## Cinnamon-Applet
 
