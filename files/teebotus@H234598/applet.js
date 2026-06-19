@@ -1132,11 +1132,19 @@ TeeBotusApplet.prototype = {
   },
 
   _runProactiveOnce: function() {
-    let command = String(this.proactiveCommand || "").trim();
-    if (!command) {
-      command = this._pythonArgs().map((part) => this._safeShellWord(part)).join(" ") + " -m TeeBotus.proactive --instance " + this._safeShellWord(this.proactiveInstance || "Depressionsbot") + " --dispatch --plan --tool-plan";
+    let args = this._commandArgs(this.proactiveCommand, []);
+    if (args.length === 0) {
+      args = this._pythonArgs().concat([
+        "-m",
+        "TeeBotus.proactive",
+        "--instance",
+        String(this.proactiveInstance || "Depressionsbot"),
+        "--dispatch",
+        "--plan",
+        "--tool-plan"
+      ]);
     }
-    this._openTerminalShell(this._repoPath(), command);
+    this._openTerminalForCommand(this._repoPath(), args);
   },
 
   _openTerminalForCommand: function(cwd, argv) {

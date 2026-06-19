@@ -446,6 +446,30 @@ def test_cinnamon_applet_sanitizes_status_command_channels_and_qdrant_url() -> N
     assert result[2] == "matrix,telegram"
 
 
+def test_cinnamon_applet_proactive_command_uses_argv_quoting() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let captured = null;
+          applet._openTerminalShell = function(cwd, command) {
+            captured = {cwd: cwd, command: command};
+          };
+          applet.repoPath = "/repo";
+          applet.proactiveCommand = "/usr/bin/python3 -m TeeBotus.proactive --instance Depressionsbot ; touch /tmp/teebotus-pwned";
+          applet._runProactiveOnce();
+          return captured;
+        })()
+        """
+    )
+
+    assert result["cwd"] == "/repo"
+    assert "'/usr/bin/python3'" in result["command"]
+    assert "';'" in result["command"]
+    assert "'touch'" in result["command"]
+    assert "'/tmp/teebotus-pwned'" in result["command"]
+    assert "; touch /tmp/teebotus-pwned" not in result["command"]
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """
