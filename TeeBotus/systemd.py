@@ -68,6 +68,8 @@ def render_teebotus_systemd_unit(
     repo = repo_root.expanduser().resolve()
     python_path = _python_path(repo, python_executable)
     env_path = _env_path(repo, env_file)
+    repo_value = _systemd_unit_value(str(repo), label="repo root")
+    env_value = _systemd_unit_value(str(env_path), label="env file")
     channel_arg = _channels(channels)
     command = [_shell_quote(str(python_path)), "-m", "TeeBotus"]
     if all_instances:
@@ -83,8 +85,8 @@ def render_teebotus_systemd_unit(
             "",
             "[Service]",
             "Type=simple",
-            f"WorkingDirectory={repo}",
-            f"EnvironmentFile=-{env_path}",
+            f"WorkingDirectory={repo_value}",
+            f"EnvironmentFile=-{env_value}",
             "ExecStartPre="
             + " ".join(
                 [
@@ -152,6 +154,13 @@ def _service_name(value: str) -> str:
     return name
 
 
+def _systemd_unit_value(value: str, *, label: str) -> str:
+    text = str(value)
+    if any(ord(char) < 32 or ord(char) == 127 for char in text):
+        raise ValueError(f"systemd {label} contains invalid control characters")
+    return text
+
+
 def _channels(value: str) -> str:
     channels = ",".join(part.strip().casefold() for part in str(value or "").split(",") if part.strip())
     if not channels:
@@ -164,6 +173,7 @@ def _channels(value: str) -> str:
 
 
 def _shell_quote(value: str) -> str:
+    _systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):

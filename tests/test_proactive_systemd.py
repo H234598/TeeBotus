@@ -71,6 +71,27 @@ def test_render_proactive_systemd_unit_rejects_multiple_planners(tmp_path) -> No
         raise AssertionError("expected mutually exclusive planner options to fail")
 
 
+def test_render_proactive_systemd_unit_rejects_control_characters(tmp_path) -> None:
+    base = {
+        "repo_root": tmp_path,
+        "instances_dir": "instances",
+        "instance_name": "Depressionsbot",
+        "interval": "5min",
+    }
+    cases = [
+        {**base, "repo_root": Path("/tmp/TeeBotus\nExecStart=/bin/false")},
+        {**base, "instances_dir": "instances\nExecStart=/bin/false"},
+        {**base, "instance_name": "Depressionsbot\nExecStart=/bin/false"},
+    ]
+    for kwargs in cases:
+        try:
+            render_proactive_systemd_unit(**kwargs)
+        except ValueError as exc:
+            assert "invalid control characters" in str(exc)
+        else:
+            raise AssertionError(f"expected control character rejection for {kwargs}")
+
+
 def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     instance_dir.mkdir(parents=True)

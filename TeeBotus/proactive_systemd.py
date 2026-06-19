@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -89,11 +88,15 @@ def render_proactive_systemd_unit(
 ) -> ProactiveSystemdUnit:
     if llm_plan and tool_plan:
         raise ValueError("llm_plan and tool_plan are mutually exclusive")
+    instance_name = _systemd_unit_value(instance_name, label="instance name")
     safe_instance = _systemd_instance_token(instance_name)
     service_name = f"teebotus-proactive-{safe_instance}.service"
     timer_name = f"teebotus-proactive-{safe_instance}.timer"
     repo = repo_root.expanduser().resolve()
     instances_arg = str((repo / instances_dir).resolve()) if not Path(instances_dir).is_absolute() else str(Path(instances_dir).resolve())
+    repo_value = _systemd_unit_value(str(repo), label="repo root")
+    env_value = _systemd_unit_value(str(repo / ".env"), label="env file")
+    instances_arg = _systemd_unit_value(instances_arg, label="instances dir")
     command = [
         "python3",
         "-m",
@@ -117,8 +120,8 @@ def render_proactive_systemd_unit(
             "",
             "[Service]",
             "Type=oneshot",
-            f"WorkingDirectory={repo}",
-            f"EnvironmentFile=-{repo / '.env'}",
+            f"WorkingDirectory={repo_value}",
+            f"EnvironmentFile=-{env_value}",
             "ExecStart=" + " ".join(command),
             "",
         ]
@@ -157,7 +160,15 @@ def _systemd_interval(value: str) -> str:
     return text
 
 
+def _systemd_unit_value(value: str, *, label: str) -> str:
+    text = str(value)
+    if any(ord(char) < 32 or ord(char) == 127 for char in text):
+        raise ValueError(f"systemd {label} contains invalid control characters")
+    return text
+
+
 def _shell_quote(value: str) -> str:
+    _systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):

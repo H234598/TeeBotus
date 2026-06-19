@@ -70,6 +70,7 @@ def render_qdrant_systemd_unit(
     bind_host = _validate_bind_host(bind_host)
     port = _validate_port(port)
     podman = str(podman or "podman").strip() or "podman"
+    podman = _systemd_unit_value(podman, label="podman executable")
     service_name = f"{container_name}.service"
     publish = f"{bind_host}:{port}:{port}"
     podman_q = _shell_quote(podman)
@@ -111,6 +112,7 @@ def _validate_image(value: str) -> str:
     image = str(value or "").strip()
     if not image:
         raise ValueError("Qdrant image must not be empty")
+    _systemd_unit_value(image, label="image")
     if image in {"qdrant/qdrant", "qdrant/qdrant:latest"} or image.endswith(":latest"):
         raise ValueError("Qdrant image must use a pinned tag, not latest")
     if ":" not in image.rsplit("/", 1)[-1]:
@@ -142,7 +144,15 @@ def _systemd_token(value: str, *, label: str) -> str:
     return text
 
 
+def _systemd_unit_value(value: str, *, label: str) -> str:
+    text = str(value)
+    if any(ord(char) < 32 or ord(char) == 127 for char in text):
+        raise ValueError(f"Qdrant {label} contains invalid control characters")
+    return text
+
+
 def _shell_quote(value: str) -> str:
+    _systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):

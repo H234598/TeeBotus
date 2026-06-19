@@ -56,6 +56,21 @@ def test_render_teebotus_systemd_unit_rejects_unknown_channel(tmp_path: Path) ->
         raise AssertionError("expected unknown channel to fail")
 
 
+def test_render_teebotus_systemd_unit_rejects_control_characters(tmp_path: Path) -> None:
+    cases = [
+        {"repo_root": Path("/tmp/TeeBotus\nExecStart=/bin/false")},
+        {"repo_root": tmp_path, "env_file": ".env\nExecStart=/bin/false"},
+        {"repo_root": tmp_path, "python_executable": "python3\nExecStart=/bin/false"},
+    ]
+    for kwargs in cases:
+        try:
+            render_teebotus_systemd_unit(**kwargs)
+        except ValueError as exc:
+            assert "invalid control characters" in str(exc)
+        else:
+            raise AssertionError(f"expected control character rejection for {kwargs}")
+
+
 def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> None:
     result = main(["--repo-root", str(tmp_path), "--print"])
 

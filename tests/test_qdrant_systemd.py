@@ -38,6 +38,20 @@ def test_render_qdrant_systemd_unit_rejects_non_local_bind() -> None:
         raise AssertionError("expected public Qdrant bind to fail")
 
 
+def test_render_qdrant_systemd_unit_rejects_control_characters() -> None:
+    cases = [
+        {"image": "docker.io/qdrant/qdrant:v1.18.2\nExecStart=/bin/false"},
+        {"podman": "podman\nExecStart=/bin/false"},
+    ]
+    for kwargs in cases:
+        try:
+            render_qdrant_systemd_unit(**kwargs)
+        except ValueError as exc:
+            assert "invalid control characters" in str(exc)
+        else:
+            raise AssertionError(f"expected control character rejection for {kwargs}")
+
+
 def test_qdrant_systemd_print_mode_outputs_unit(capsys) -> None:
     result = main(["--print"])
 
