@@ -2296,6 +2296,21 @@ def test_empty_channels_equals_rejected_before_runtime_start(monkeypatch, capsys
     assert calls == []
 
 
+def test_duplicate_channels_option_rejected_before_runtime_start(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--channels", "telegram", "--channels=signal"]) == 2
+
+    captured = capsys.readouterr()
+    assert "duplicate --channels option" in captured.err
+    assert calls == []
+
+
 def test_explicit_missing_instance_rejected_before_runtime_start(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

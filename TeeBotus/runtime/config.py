@@ -607,12 +607,16 @@ def resolve_runtime_config(
     while index < len(args):
         arg = args[index]
         if arg == "--channels":
+            if cli_channels is not None:
+                raise RuntimeConfigError("duplicate --channels option; pass one comma-separated channel list")
             if index + 1 >= len(args) or args[index + 1].startswith("--"):
                 raise RuntimeConfigError("missing value for --channels")
             cli_channels = args[index + 1]
             index += 2
             continue
         if arg.startswith("--channels="):
+            if cli_channels is not None:
+                raise RuntimeConfigError("duplicate --channels option; pass one comma-separated channel list")
             cli_channels = arg.split("=", 1)[1]
             index += 1
             continue

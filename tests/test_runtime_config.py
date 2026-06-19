@@ -37,6 +37,16 @@ def test_runtime_status_channels_requires_plain_value():
             resolve_runtime_config(argv, env={})
 
 
+def test_runtime_status_rejects_duplicate_channels_option():
+    for argv in (
+        ["--channels", "telegram", "--channels", "signal"],
+        ["--channels", "telegram", "--channels=signal"],
+        ["--channels=telegram", "--channels=signal"],
+    ):
+        with pytest.raises(RuntimeConfigError, match="duplicate --channels option"):
+            resolve_runtime_config(argv, env={})
+
+
 def test_runtime_config_marks_only_concrete_channel_selection_as_explicit(tmp_path: Path):
     (tmp_path / "Depressionsbot").mkdir()
     (tmp_path / "Depressionsbot" / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
