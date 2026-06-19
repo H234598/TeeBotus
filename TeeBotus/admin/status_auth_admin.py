@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import re
 from collections import Counter
@@ -13,7 +14,7 @@ from typing import Any
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
 from TeeBotus.core.status import redact_status_text
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider, runtime_secret_provider
 from TeeBotus.runtime.proactive_agent import select_proactive_route
 
 REPORT_SCHEMA_VERSION = 1
@@ -96,11 +97,11 @@ def _sanitize_output(payload: Any) -> Any:
     return payload
 
 
-def _safe_output_path(output: str) -> Path:
+def _safe_output_path(output: str, *, base_dir: str | Path = ".") -> Path:
     is_absolute, parts = _split_safe_relative_parts(output, operation="output path")
     if is_absolute:
         raise ValueError(f"output path must be a safe relative path: {output}")
-    root = Path.cwd().resolve()
+    root = Path(base_dir).resolve()
     output_path = Path(*parts)
     target = (root / output_path).resolve()
     try:
@@ -279,6 +280,13 @@ def render_text_report(report: Mapping[str, Any]) -> str:
 
 
 def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider | None = None) -> int:
+    if provider is None:
+        try:
+            from TeeBotus.bot import _load_runtime_environment
+
+            _load_runtime_environment()
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(prog="python3 -m TeeBotus.admin status-auth")
     subparsers = parser.add_subparsers(dest="command", required=True)
     report_parser = subparsers.add_parser("report")
@@ -292,11 +300,11 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report = build_status_auth_report(
         instances_dir=args.instances_dir,
         instances=instances,
-        provider=provider,
+        provider=provider or runtime_secret_provider(),
     )
     if args.output:
         try:
-            output_path = _safe_output_path(args.output)
+            output_path = _safe_output_path(args.output, base_dir=args.instances_dir)
         except ValueError as exc:
             print(f"status-auth: {exc}", file=sys.stderr)
             return 2

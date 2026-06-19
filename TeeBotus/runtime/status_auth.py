@@ -99,12 +99,12 @@ def evaluate_status_auth_gate(
     account_id = account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
     if event.chat_id:
         account_store.update_identity_route(
-        event.identity_key,
-        channel=event.channel,
-        chat_id=event.chat_id,
-        chat_type=_normalize_chat_type(event.chat_type),
-        adapter_slot=event.adapter_slot,
-    )
+            event.identity_key,
+            channel=event.channel,
+            chat_id=event.chat_id,
+            chat_type=_normalize_chat_type(event.chat_type),
+            adapter_slot=event.adapter_slot,
+        )
     authorize_status_recipient(account_store, account_id, event, now=now)
     return StatusAuthGateResult(False, account_id, action_text=STATUS_AUTH_CONFIRMATION_TEXT, reason="authorized")
 

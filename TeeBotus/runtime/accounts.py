@@ -1025,7 +1025,7 @@ class AccountStore:
     _secret_guard_purpose_set: frozenset[str] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.root = Path(self.root)
+        self.root = Path(self.root).expanduser().resolve()
         if self.secret_guard_purposes is not None:
             normalized_purposes = tuple(
                 _normalize_secret_token(purpose, "purpose")

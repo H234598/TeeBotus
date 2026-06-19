@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -589,6 +590,31 @@ def test_first_contact_creates_account_and_encrypted_identity_mapping(tmp_path):
     assert account_id not in raw_identity_file
     assert "telegram:user:395935293" not in raw_identity_file
     assert "TMBMAP1" in raw_identity_file
+
+
+def test_relative_account_store_root_does_not_nest_vault_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    store = AccountStore(Path("instances/Depressionsbot/data/accounts"), "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+
+    expected_profile = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts" / "accounts" / account_id / "Account_Profile.json"
+    nested_profile = (
+        tmp_path
+        / "instances"
+        / "Depressionsbot"
+        / "data"
+        / "accounts"
+        / "instances"
+        / "Depressionsbot"
+        / "data"
+        / "accounts"
+        / "accounts"
+        / account_id
+        / "Account_Profile.json"
+    )
+    assert expected_profile.exists()
+    assert not nested_profile.exists()
+    assert store.get_account_for_identity("telegram:user:395935293") == account_id
 
 
 def test_account_id_convenience_lookup_and_optional_create(tmp_path):
