@@ -1047,11 +1047,14 @@ def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
 def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
     normalized_state = _normalize_state(state)
     if _sql_state_backend_available(account_store):
-        account_store.write_instance_json_state(
-            NOTIFICATION_STATE_FILENAME,
-            NOTIFICATION_STATE_COLLECTION,
-            normalized_state,
-        )
+        if _notification_state_has_versions(normalized_state):
+            account_store.write_instance_json_state(
+                NOTIFICATION_STATE_FILENAME,
+                NOTIFICATION_STATE_COLLECTION,
+                normalized_state,
+            )
+        else:
+            _clear_sql_state_collection(account_store)
         _unlink_legacy_state_path(path)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1091,6 +1094,13 @@ def _sql_state_collection_has_rows(account_store: AccountStore) -> bool:
         return bool(read_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION))
     except Exception:
         return True
+
+
+def _clear_sql_state_collection(account_store: AccountStore) -> None:
+    backend = getattr(account_store, "account_memory_backend", None)
+    write_collection = getattr(backend, "write_collection", None)
+    if callable(write_collection):
+        write_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION, [])
 
 
 def _notification_state_has_versions(state: dict[str, Any]) -> bool:
