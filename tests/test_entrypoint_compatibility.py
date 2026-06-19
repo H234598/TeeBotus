@@ -2460,6 +2460,70 @@ def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch, tm
     assert [call[0] for call in calls] == ["telegram"]
 
 
+def test_default_auto_channels_run_signal_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMO", raising=False)
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
+    monkeypatch.setattr(bot, "_start_signal_runtime_background", lambda config: calls.append(("signal-bg", config)) or 0)
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(("signal", config)) or 0)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main([]) == 0
+    assert [call[0] for call in calls] == ["signal"]
+
+
+def test_default_auto_channels_run_matrix_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_start_matrix_runtime_background", lambda config: calls.append(("matrix-bg", config)) or 0)
+    monkeypatch.setattr(bot, "_run_matrix_runtime", lambda config: calls.append(("matrix", config)) or 0)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main([]) == 0
+    assert [call[0] for call in calls] == ["matrix"]
+
+
+def test_default_auto_channels_reject_signal_matrix_without_telegram_before_background_start(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMO", raising=False)
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
+    monkeypatch.setattr(bot, "_start_signal_runtime_background", lambda config: calls.append(("signal-bg", config)) or 0)
+    monkeypatch.setattr(bot, "_start_matrix_runtime_background", lambda config: calls.append(("matrix-bg", config)) or 0)
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(("signal", config)) or 0)
+    monkeypatch.setattr(bot, "_run_matrix_runtime", lambda config: calls.append(("matrix", config)) or 0)
+
+    assert bot.main([]) == 2
+
+    captured = capsys.readouterr()
+    assert "Mehrkanal-Start ohne Telegram" in captured.err
+    assert calls == []
+
+
 def test_channels_matrix_without_config_fails_clearly(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

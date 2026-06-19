@@ -1831,6 +1831,10 @@ def _non_telegram_channels(config: Any) -> set[str]:
     return {channel for channel in config.channels if channel != "telegram"}
 
 
+def _configured_non_telegram_channels(config: Any) -> tuple[str, ...]:
+    return tuple(channel for channel in ("matrix", "signal") if channel in config.channels and _runtime_has_channel_accounts(config, channel))
+
+
 def _run_signal_runtime(config: Any) -> int:
     try:
         from TeeBotus.runtime.signal_runner import SignalRuntimeError, run_signal_accounts
@@ -1954,6 +1958,18 @@ def _main_impl(argv: list[str] | None = None) -> int:
         for message in missing_explicit_channels:
             print(message, file=sys.stderr)
         return 2
+    if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
+        configured_non_telegram = _configured_non_telegram_channels(config)
+        if len(configured_non_telegram) == 1 and not _runtime_channels_explicit(config):
+            _start_gemini_free_tier_limit_refresh(config)
+            if configured_non_telegram[0] == "matrix":
+                return _run_matrix_runtime(config)
+            return _run_signal_runtime(config)
+        if configured_non_telegram:
+            print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
+            return 2
+        print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
+        return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
         _start_gemini_free_tier_limit_refresh(config)
         return _run_matrix_runtime(config)
@@ -1968,10 +1984,6 @@ def _main_impl(argv: list[str] | None = None) -> int:
         status = _start_signal_runtime_background(config)
         if status != 0:
             return status
-    if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
-        print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
-        return 2
-
     _start_gemini_free_tier_limit_refresh(config)
     if "telegram" in config.channels:
         return _run_telegram_runtime(config)
