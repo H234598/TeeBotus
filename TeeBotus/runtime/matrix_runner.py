@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Sequence
 from urllib.parse import urlsplit
 
-from TeeBotus.admin.codex_history import record_codex_history_reply
+from TeeBotus.admin.codex_history import record_codex_history_delivery_receipt, record_codex_history_reply
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
@@ -387,6 +387,37 @@ class MatrixRuntimeBridge:
                 reply_to_ref,
             )
 
+    async def handle_receipt(self, room: Any, event: Any) -> None:
+        room_id = str(getattr(room, "room_id", "") or "").strip()
+        if not room_id:
+            return
+        own_user_id = str(self.run_config.matrix_user_id or "").strip()
+        for receipt in getattr(event, "receipts", []) or []:
+            user_id = str(getattr(receipt, "user_id", "") or "").strip()
+            if own_user_id and user_id == own_user_id:
+                continue
+            event_id = str(getattr(receipt, "event_id", "") or "").strip()
+            if not event_id:
+                continue
+            receipt_type = _matrix_codex_receipt_type(getattr(receipt, "receipt_type", ""))
+            try:
+                record_codex_history_delivery_receipt(
+                    self.account_store,
+                    instance_name=self.run_config.instance_name,
+                    channel="matrix",
+                    chat_id=room_id,
+                    message_ref=event_id,
+                    receipt_type=receipt_type,
+                )
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                LOGGER.exception(
+                    "Matrix Codex-History receipt tracking failed instance=%s room_id=%s event_id=%s user_id=%s.",
+                    self.run_config.instance_name,
+                    room_id,
+                    event_id,
+                    user_id,
+                )
+
 
 async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:
     delete_message = getattr(client, "delete_message", None)
@@ -460,6 +491,8 @@ async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir:
     bridge = MatrixRuntimeBridge(run_config=account, client=client, instances_dir=instances_dir)
     for event_class in _matrix_message_event_classes(nio):
         client.add_event_callback(bridge.handle_message, event_class)
+    for event_class in _matrix_receipt_event_classes(nio):
+        client.add_event_callback(bridge.handle_receipt, event_class)
     await client.start(access_token=account.matrix_access_token)
 
 
@@ -520,6 +553,21 @@ def _matrix_message_event_classes(nio: Any) -> tuple[Any, ...]:
         )
         if hasattr(nio, name)
     )
+
+
+def _matrix_receipt_event_classes(nio: Any) -> tuple[Any, ...]:
+    receipt_event = getattr(nio, "ReceiptEvent", None)
+    return (receipt_event,) if receipt_event is not None else ()
+
+
+def _matrix_codex_receipt_type(receipt_type: Any) -> str:
+    value = getattr(receipt_type, "value", receipt_type)
+    normalized = str(value or "").strip().casefold()
+    if normalized in {"m.read.private", "read_private", "private"}:
+        return "viewed"
+    if normalized in {"m.read", "read"}:
+        return "read"
+    return "delivered"
 
 
 def _with_matrix_reply_context(actions: list[Any], event: IncomingEvent) -> list[Any]:

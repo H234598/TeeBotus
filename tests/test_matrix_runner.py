@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from types import SimpleNamespace
 
 import pytest
 
+from TeeBotus.admin.codex_history import append_codex_history_summary
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm_client import LiteLLMTextClient
 from TeeBotus.runtime.accounts import AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider
@@ -22,7 +24,9 @@ from TeeBotus.runtime.matrix_runner import (
     _delete_matrix_message,
     _download_matrix_event_attachments,
     check_matrix_homeserver,
+    _matrix_codex_receipt_type,
     _matrix_message_event_classes,
+    _matrix_receipt_event_classes,
     run_matrix_accounts,
     start_matrix_accounts_in_background,
 )
@@ -229,6 +233,60 @@ def test_matrix_bridge_tracks_engine_result_account_id(tmp_path) -> None:
     refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=1)
     assert len(refs) == 1
     assert refs[0].account_id == target_account_id
+
+
+def test_matrix_bridge_records_codex_history_native_receipts(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    item = append_codex_history_summary(
+        bridge.account_store,
+        repo_root=tmp_path,
+        title="Matrix Receipt",
+        bullets=["Native Receipts markieren delivered."],
+    )
+    bridge.account_store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": "",
+            "instance": "Demo",
+            "status": "accepted",
+            "channel": "matrix",
+            "chat_id": "!room:example",
+            "message_ref": "$sent",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    receipt_event = SimpleNamespace(
+        receipts=[
+            SimpleNamespace(event_id="$ignored-self", user_id="@bot:example", receipt_type="m.read"),
+            SimpleNamespace(event_id="$sent", user_id="@alice:example", receipt_type="m.read.private"),
+        ]
+    )
+
+    asyncio.run(bridge.handle_receipt(FakeMatrixRoom(), receipt_event))
+
+    persisted = bridge.account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    dispatch_rows = bridge.account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered"]
+    assert dispatch_rows[-1]["reason"] == "matrix_viewed_receipt"
+    assert dispatch_rows[-1]["receipt_type"] == "viewed"
 
 
 def test_matrix_bridge_uses_instance_instructions_for_builtin_replies(tmp_path) -> None:
@@ -1827,6 +1885,17 @@ def test_matrix_runtime_registers_text_and_media_event_classes() -> None:
         Nio.RoomEncryptedVideo,
         Nio.RoomMessageUnknown,
     )
+
+
+def test_matrix_runtime_registers_receipt_event_class() -> None:
+    class Nio:
+        ReceiptEvent = object()
+
+    assert _matrix_receipt_event_classes(Nio) == (Nio.ReceiptEvent,)
+    assert _matrix_receipt_event_classes(object()) == ()
+    assert _matrix_codex_receipt_type("m.read") == "read"
+    assert _matrix_codex_receipt_type("m.read.private") == "viewed"
+    assert _matrix_codex_receipt_type("m.fully_read") == "delivered"
 
 
 def test_matrix_homeserver_health_rejects_homeserver_with_path() -> None:
