@@ -356,7 +356,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        print(line)
+        print(_sanitize_status_text(line))
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -929,9 +929,33 @@ def _status_api_key_state(route: Any, *, provider: str, model: str, instance_nam
     return "missing"
 
 
+def _status_safe_path(value: str | os.PathLike[str] | os.PathLike[bytes], *, fallback: Path, allowed_root: Path) -> Path:
+    try:
+        candidate = Path(value).expanduser()
+        resolved = candidate.resolve()
+        allowed_root = allowed_root.resolve()
+    except (OSError, TypeError, ValueError):
+        return fallback
+    try:
+        resolved.relative_to(allowed_root)
+    except ValueError:
+        return fallback
+    return resolved
+
+
 def _runtime_status_codex_usage_lines() -> tuple[str, ...]:
-    repo = Path(os.environ.get("TEEBOTUS_CODEX_USAGE_REPO", "/home/teladi/codex-usage")).expanduser()
-    snapshot_dir = Path(os.environ.get("CODEX_USAGE_STATE_ROOT", Path.home() / ".local" / "share" / "codex-usage")) / "snapshots"
+    home_root = Path.home().resolve()
+    repo = _status_safe_path(
+        os.environ.get("TEEBOTUS_CODEX_USAGE_REPO", str(home_root / "codex-usage")),
+        fallback=home_root / "codex-usage",
+        allowed_root=home_root,
+    )
+    snapshot_root = _status_safe_path(
+        os.environ.get("CODEX_USAGE_STATE_ROOT", str(home_root / ".local" / "share" / "codex-usage")),
+        fallback=home_root / ".local" / "share" / "codex-usage",
+        allowed_root=home_root,
+    )
+    snapshot_dir = (snapshot_root / "snapshots").resolve()
     cli = shutil.which("codex-usage") or str(Path.home() / ".local" / "bin" / "codex-usage")
     cli_path = Path(cli)
     snapshots = _codex_usage_snapshot_payloads(snapshot_dir)
@@ -961,8 +985,12 @@ def _runtime_status_codex_usage_lines() -> tuple[str, ...]:
 
 
 def _codex_usage_snapshot_payloads(snapshot_dir: Path) -> list[dict[str, Any]]:
+    if not snapshot_dir.is_dir():
+        return []
     try:
-        paths = sorted(snapshot_dir.glob("*.json"))
+        paths = sorted(
+            path for path in snapshot_dir.iterdir() if path.is_file() and path.suffix.lower() == ".json"
+        )
     except OSError:
         return []
     payloads: list[dict[str, Any]] = []
@@ -1053,13 +1081,14 @@ def _runtime_route_status(route: Any, *, instance_names: Sequence[str] = ()) -> 
     provider = _normalize_status_llm_provider(getattr(route, "provider", ""))
     if provider != "hf_pool":
         return _runtime_route_key_status(route, instance_names=instance_names)
+    pool_name = _hf_pool_route_pool_name(str(getattr(route, "model", "") or ""))
     try:
         from TeeBotus.llm.hf_pool.config import load_hf_pool_config
         from TeeBotus.llm.hf_pool.scheduler import select_target
 
         select_target(
             load_hf_pool_config(),
-            pool_name=_hf_pool_route_pool_name(str(getattr(route, "model", "") or "")),
+            pool_name=pool_name,
             purpose=str(getattr(route, "purpose", "") or "normal_chat"),
             state=_runtime_status_hf_pool_state(),
         )
@@ -1153,8 +1182,9 @@ def _hf_pool_route_pool_name(model: str) -> str:
     text = str(model or "").strip()
     if not text.startswith("pool:"):
         return "default"
-    selector = text.removeprefix("pool:")
-    return selector.split("#", maxsplit=1)[0].strip() or "default"
+    selector = text.removeprefix("pool:").split("#", maxsplit=1)[0].strip()
+    selector = re.sub(r"[^A-Za-z0-9._-]", "_", selector).strip("._-")
+    return selector or "default"
 
 
 def _hf_pool_route_purpose(model: str, *, fallback: str = "") -> str:
@@ -1638,21 +1668,21 @@ def _sanitize_status_text(value: object) -> str:
         text,
         flags=re.IGNORECASE,
     )
-    text = re.sub(
-        r"(?<!\S)([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-        r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
-        _status_secret_assignment_replacement,
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"([\s=;,])([A-Za-z0-9_-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-        r"[A-Za-z0-9_-]*)\s*([:=])\s*([^,\s)]+)",
-        _status_secret_assignment_fragment_replacement,
-        text,
-        flags=re.IGNORECASE,
-    )
+    text = _status_secret_assignment_pattern.sub(_status_secret_assignment_replacement, text)
+    text = _status_secret_assignment_fragment_pattern.sub(_status_secret_assignment_fragment_replacement, text)
     return text.replace("\r", " ").replace("\n", " ")
+
+
+_status_secret_assignment_pattern = re.compile(
+    r"(?<!\S)([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
+_status_secret_assignment_fragment_pattern = re.compile(
+    r"([\s=;,])([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]+)",
+    re.IGNORECASE,
+)
 
 
 def _sanitize_admin_notify_status_line(value: object) -> str:
@@ -1805,12 +1835,12 @@ def _run_account_storage_preflight(config: Any) -> bool:
             file=sys.stderr,
         )
         for line in broken_lines:
-            print(line, file=sys.stderr)
+            print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
         return True
     channels = ",".join(str(channel) for channel in getattr(config, "channels", ()) if str(channel or "").strip()) or "telegram,signal,matrix"
     print("TeeBotus account storage preflight failed; refusing to start bot loops.", file=sys.stderr)
     for line in broken_lines:
-        print(line, file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
     print(f"Diagnose: python3 -m TeeBotus --runtime-status --channels {channels}", file=sys.stderr)
     print(f"Emergency override: {ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV}=1", file=sys.stderr)
     return False
@@ -1981,7 +2011,12 @@ def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
         instance_names = tuple(str(instance.instance_name) for instance in getattr(config, "instances", ()))
         start_gemini_free_tier_limit_refresh_background(instance_names=instance_names)
     except Exception as exc:  # noqa: BLE001 - refresh must not block bot startup.
-        print(f"TeeBotus Gemini free-tier refresh start failed: {type(exc).__name__}: {_sanitize_status_text(str(exc))}", file=sys.stderr)
+        print(
+            _sanitize_admin_notify_status_line(
+                f"TeeBotus Gemini free-tier refresh start failed: {type(exc).__name__}: {exc}"
+            ),
+            file=sys.stderr,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
