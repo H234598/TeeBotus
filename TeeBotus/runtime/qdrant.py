@@ -222,7 +222,15 @@ def check_collection(
         if payload_error:
             return QdrantCollectionResult(name=name, target=target, status="unavailable", ok=False, error=payload_error)
         actual_vector_size = _collection_vector_size(payload)
-        if actual_vector_size is not None and actual_vector_size != spec.vector_size:
+        if actual_vector_size is None:
+            return QdrantCollectionResult(
+                name=name,
+                target=target,
+                status="schema_mismatch",
+                ok=False,
+                error=f"vector_size expected {spec.vector_size}, got unknown",
+            )
+        if actual_vector_size != spec.vector_size:
             return QdrantCollectionResult(
                 name=name,
                 target=target,

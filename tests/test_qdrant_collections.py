@@ -26,7 +26,7 @@ from TeeBotus.runtime.qdrant import (
 class _Response:
     def __init__(self, status: int = 200, payload: object | None = None) -> None:
         self.status = status
-        self.payload = payload if payload is not None else {"status": "ok", "result": {}}
+        self.payload = payload if payload is not None else _collection_payload(64)
 
     def read(self, size: int = -1) -> bytes:
         raw = json.dumps(self.payload).encode("utf-8")
@@ -34,6 +34,26 @@ class _Response:
 
     def close(self) -> None:
         return None
+
+
+def _collection_payload(vector_size: int) -> dict[str, object]:
+    return {
+        "status": "ok",
+        "result": {
+            "config": {
+                "params": {
+                    "vectors": {"size": vector_size, "distance": "Cosine"},
+                }
+            }
+        },
+    }
+
+
+def _expected_collection_size_from_url(url: str) -> int:
+    name = str(url).rsplit("/", 1)[-1]
+    if name == QDRANT_BIBLIOTHEKAR_COLLECTION:
+        return DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS
+    return USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
 
 
 def test_default_qdrant_collection_specs_prepare_usermemory_and_bibliothekar() -> None:
@@ -145,7 +165,7 @@ def test_ensure_default_collections_prepares_both_collections() -> None:
         calls.append((request.get_method(), request.full_url))
         if request.get_method() == "GET":
             return _Response(404)
-        return _Response()
+        return _Response(200, _collection_payload(_expected_collection_size_from_url(request.full_url)))
 
     results = ensure_default_collections(url="http://127.0.0.1:6333", opener=opener)
 
@@ -204,6 +224,23 @@ def test_check_collection_reports_vector_schema_mismatch() -> None:
     assert result.status == "schema_mismatch"
     assert result.actual_vector_size == 64
     assert result.error == "vector_size expected 384, got 64"
+
+
+def test_check_collection_reports_missing_vector_schema() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(200, {"status": "ok", "result": {}})
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "schema_mismatch"
+    assert result.actual_vector_size is None
+    assert result.error == "vector_size expected 64, got unknown"
 
 
 def test_check_collection_rejects_invalid_json_response() -> None:
@@ -299,7 +336,7 @@ def test_check_default_collections_probes_both_without_creating() -> None:
     def opener(request, *, timeout):
         assert timeout > 0
         calls.append((request.get_method(), request.full_url))
-        return _Response(200)
+        return _Response(200, _collection_payload(_expected_collection_size_from_url(request.full_url)))
 
     results = check_default_collections(url="http://127.0.0.1:6333", opener=opener)
 
