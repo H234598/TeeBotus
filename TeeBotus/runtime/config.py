@@ -97,10 +97,20 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
     source = os.environ if env is None else env
     explicit = source.get("TEEBOTUS_INSTANCES") or source.get("TELEGRAM_BOT_INSTANCES")
     if explicit:
-        return parse_csv(explicit)
+        selected = parse_csv(explicit)
+        if selected and not _selected_instances_requests_discovery(selected):
+            return selected
     single = source.get("TEEBOTUS_INSTANCE") or source.get("TELEGRAM_BOT_INSTANCE")
-    if single and single.strip().casefold() not in {"", "all"}:
+    if single and single.strip().casefold() not in {"", "all", "auto"}:
         return (single.strip(),)
+    return _discover_selected_instances(instances_dir)
+
+
+def _selected_instances_requests_discovery(selected: Sequence[str]) -> bool:
+    return len(selected) == 1 and selected[0].strip().casefold() in {"all", "auto"}
+
+
+def _discover_selected_instances(instances_dir: Path) -> tuple[str, ...]:
     if not instances_dir.exists():
         return ()
     return tuple(

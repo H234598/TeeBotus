@@ -333,6 +333,15 @@ def test_runtime_discovers_instances(tmp_path: Path):
     assert config.instances[0].accounts[0].telegram_token == "token"
 
 
+def test_plural_instances_all_requests_runtime_discovery(tmp_path: Path):
+    for name in ("Bote_der_Wahrheit", "Depressionsbot"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
+
+    assert resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "all"}) == ("Bote_der_Wahrheit", "Depressionsbot")
+    assert resolve_selected_instances(tmp_path, {"TELEGRAM_BOT_INSTANCES": "auto"}) == ("Bote_der_Wahrheit", "Depressionsbot")
+
+
 def test_teebotus_instance_takes_precedence_over_telegram_bot_instance(tmp_path: Path):
     selected = resolve_selected_instances(
         tmp_path,
