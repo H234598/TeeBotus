@@ -1302,7 +1302,11 @@ TeeBotusApplet.prototype = {
     }
     let shellCommand = "cd " + this._safeShellWord(cwd) + " && " + command + "; printf '\\n'; read -r -p 'Enter zum Schliessen...'";
     let argv = terminal.concat([shell, "-lc", shellCommand]);
-    this._spawn(argv, () => {});
+    this._spawn(argv, (stdout, stderr, ok) => {
+      if (!ok) {
+        this._setStatusText(_("Terminal launch failed: ") + (stderr || stdout || _("Command failed")));
+      }
+    });
   },
 
   _terminalArgs: function() {

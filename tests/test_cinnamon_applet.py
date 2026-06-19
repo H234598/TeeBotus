@@ -674,6 +674,32 @@ def test_cinnamon_applet_terminal_shell_uses_trusted_bash() -> None:
     assert result["statusText"] == ""
 
 
+def test_cinnamon_applet_terminal_shell_reports_spawn_failures() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let spawned = [];
+          applet._spawn = function(argv, callback) {
+            spawned.push(argv);
+            callback("", "spawn failed", false);
+          };
+          applet.terminalCommand = "gnome-terminal";
+          applet._setStatusText = function(text) {
+            this.statusText = String(text || "");
+          };
+          applet._openTerminalShell("/repo", "'/usr/bin/systemctl' '--user' 'status'");
+          return {
+            spawned: spawned,
+            statusText: applet.statusText || ""
+          };
+        })()
+        """
+    )
+
+    assert result["spawned"][0][0] == "/usr/bin/gnome-terminal"
+    assert result["statusText"] == "Terminal launch failed: spawn failed"
+
+
 def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
     result = _run_js_applet_expression(
         """
