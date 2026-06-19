@@ -76,6 +76,7 @@ class HandlerTests(unittest.TestCase):
         self.assertTrue(is_program_history_request("Welche Github Comitts gab es?"))
         self.assertTrue(is_program_history_request("Gibt es Release-Notes?"))
         self.assertFalse(is_program_history_request("commit bitte"))
+        self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))
 
     def test_uses_exact_text_reply_before_echo(self) -> None:
         instructions = BotInstructions(text_replies={"hallo": "Hallo zurueck."})

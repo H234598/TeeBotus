@@ -97,7 +97,7 @@ def is_program_history_request(text: str) -> bool:
         "releases",
         "changelog",
     )
-    return any(needle in normalized for needle in needles)
+    return any(_contains_history_phrase(normalized, needle) for needle in needles)
 
 
 def _normalize_command(text: str) -> str:
@@ -117,5 +117,9 @@ def _normalize_history_text(text: str) -> str:
     )
     spaced = re.sub(r"[^0-9a-z]+", " ", normalized).strip()
     spaced = re.sub(r"\s+", " ", spaced)
-    compact = spaced.replace(" ", "")
-    return f"{spaced} {compact}".strip()
+    return spaced
+
+
+def _contains_history_phrase(text: str, phrase: str) -> bool:
+    pattern = rf"(?:^| ){re.escape(phrase)}(?: |$)"
+    return re.search(pattern, text) is not None
