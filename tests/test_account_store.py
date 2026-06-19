@@ -1571,6 +1571,62 @@ def test_read_llm_state_refuses_corrupt_sqlite_state_without_legacy(tmp_path, mo
         store.read_llm_state(account_id)
 
 
+def test_read_agent_state_refuses_corrupt_sqlite_state_without_legacy(tmp_path, monkeypatch):
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    fallback_path = tmp_path / "memory.backup.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_agent_state(account_id, {"proactive": {"enabled": True}, "updated_at": "2026-06-14T11:59:00+00:00"})
+    for path in (sqlite_path, fallback_path):
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                """
+                UPDATE account_jsonl_collections
+                SET payload_ciphertext = ?
+                WHERE account_id = ? AND collection = ?
+                """,
+                (b"broken", account_id, "agent_state"),
+            )
+
+    with pytest.raises(AccountStoreError, match="agent_state"):
+        store.read_agent_state(account_id)
+
+
+def test_read_agent_state_uses_legacy_file_when_sql_state_is_corrupt(tmp_path, monkeypatch):
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    fallback_path = tmp_path / "memory.backup.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_agent_state(account_id, {"proactive": {"enabled": False}, "updated_at": "2026-06-14T11:59:00+00:00"})
+    legacy_path = store.account_dir(account_id) / "Agent_State.json"
+    store.account_memory_vault.write_json(legacy_path, {"proactive": {"enabled": True}})
+    for path in (sqlite_path, fallback_path):
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                """
+                UPDATE account_jsonl_collections
+                SET payload_ciphertext = ?
+                WHERE account_id = ? AND collection = ?
+                """,
+                (b"broken", account_id, "agent_state"),
+            )
+
+    state = store.read_agent_state(account_id)
+
+    assert state["proactive"]["enabled"] is True
+    assert legacy_path.exists()
+
+
 def test_account_store_sqlite_backend_keeps_valid_timestamp_over_invalid_legacy_json_document(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

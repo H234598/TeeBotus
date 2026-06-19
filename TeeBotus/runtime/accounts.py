@@ -2450,7 +2450,19 @@ class AccountStore:
     def read_agent_state(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if self._account_memory_collection_backend_available():
-            return self._read_account_json_document(account_id, AGENT_STATE_FILENAME, AGENT_STATE_COLLECTION, {})
+            path = self.account_dir(account_id) / AGENT_STATE_FILENAME
+            try:
+                return self._read_account_json_document(
+                    account_id,
+                    AGENT_STATE_FILENAME,
+                    AGENT_STATE_COLLECTION,
+                    {},
+                    fallback_to_legacy_on_read_error=False,
+                )
+            except _AccountCollectionReadError:
+                if path.exists():
+                    return self._read_json_with_fallback(path, {}, vault=self.account_memory_vault)
+                raise
         return self._read_json_with_fallback(self.account_dir(account_id) / AGENT_STATE_FILENAME, {}, vault=self.account_memory_vault)
 
     def write_agent_state(self, account_id: str, data: dict[str, Any]) -> None:
