@@ -459,6 +459,8 @@ def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, 
         existing_failure = failed_identities.get(identity_key)
         if existing_failure is not None and _failure_payload_quality(existing_failure) > _failure_payload_quality(failure):
             continue
+        if existing_failure is not None:
+            failure = _merge_failure_payload(existing_failure, failure)
         failed_identities[identity_key] = failure
     if failed_identities or "failed_identities" in base or "failed_identities" in incoming:
         merged["failed_identities"] = dict(sorted(failed_identities.items()))
@@ -495,6 +497,15 @@ def _failure_payload_quality(value: object) -> int:
         return 0
     has_route = _optional_int(value.get("chat_id")) is not None and _optional_int(value.get("adapter_slot")) is not None
     return 2 if has_route else 1
+
+
+def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:
+    merged: dict[str, object] = {}
+    if isinstance(base, dict):
+        merged.update(base)
+    if isinstance(incoming, dict):
+        merged.update(incoming)
+    return merged
 
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
