@@ -425,6 +425,40 @@ def test_codex_history_cli_bibliothekar_export_filters_repo(tmp_path: Path, caps
     assert "Beta Export" not in Path(files[0]["path"]).read_text(encoding="utf-8")
 
 
+def test_codex_history_index_cli_exports_and_dry_runs_qdrant(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "index-cli-demo", version="1.8.9")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="Index CLI", bullets=["Export und Qdrant-Dry-Run in einem Lauf."])
+
+    result = codex_history_main(
+        [
+            "index",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--qdrant",
+            "--qdrant-dry-run",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["totals"]["exported"] == 1
+    assert payload["totals"]["qdrant_points"] == 1
+    instance = payload["instances"][0]
+    assert instance["export"]["exported"] == 1
+    assert instance["qdrant"][0]["status"] == "dry_run"
+    assert instance["qdrant"][0]["point_count"] == 1
+    assert (tmp_path / "Depressionsbot" / "data" / "Codex_History_Bibliothek").exists()
+    assert not (tmp_path / "Depressionsbot" / "data" / "Bibliothek").exists()
+
+
 def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "dispatch-demo", version="1.9.0")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -888,6 +922,72 @@ def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, 
     assert latest["repo_name"] == "watch-cli-demo"
 
 
+def test_codex_history_watch_once_can_post_index_after_import(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "watch-post-index-demo", version="3.0.1")
+    sessions_root = tmp_path / "sessions"
+    write_codex_session(sessions_root / "rollout.jsonl", repo=repo, session_id="sess-watch-post-index", turn_id="turn-post-index")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--once",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--post-index",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    instance = payload["instances"][0]
+    assert instance["status_counts"] == {"imported": 1}
+    assert instance["post_index"]["ok"] is True
+    assert instance["post_index"]["export"]["exported"] == 1
+    exported_files = list((tmp_path / "Depressionsbot" / "data" / "Codex_History_Bibliothek").rglob("*.md"))
+    assert exported_files
+    assert any("watch-post-index-demo" in path.read_text(encoding="utf-8") for path in exported_files)
+
+
+def test_codex_history_watch_once_can_post_index_qdrant_dry_run(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "watch-post-qdrant-demo", version="3.0.2")
+    sessions_root = tmp_path / "sessions"
+    write_codex_session(sessions_root / "rollout.jsonl", repo=repo, session_id="sess-watch-post-qdrant", turn_id="turn-post-qdrant")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--once",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--post-index-qdrant",
+            "--post-index-qdrant-dry-run",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    post_index = payload["instances"][0]["post_index"]
+    assert post_index["export"]["exported"] == 1
+    assert post_index["qdrant"][0]["status"] == "dry_run"
+    assert post_index["qdrant"][0]["point_count"] == 1
+
+
 def test_watch_codex_session_roots_polls_and_deduplicates_between_iterations(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "watch-loop-demo", version="3.1.0")
     sessions_root = tmp_path / "sessions"
@@ -913,6 +1013,29 @@ def test_watch_codex_session_roots_polls_and_deduplicates_between_iterations(tmp
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     assert len(rows) == 2
     assert [row["summary_prefix"] for row in rows] == ["v3.1.0 #0001", "v3.1.0 #0002"]
+
+
+def test_watch_codex_session_roots_runs_post_scan_callback_per_scan(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-post-scan-callback-demo", version="3.1.2")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-post-scan-1", turn_id="turn-1")
+    status_counts: list[dict[str, int]] = []
+
+    def sleep(_seconds: float) -> None:
+        write_codex_session(sessions_root / "second.jsonl", repo=repo, session_id="sess-post-scan-2", turn_id="turn-2")
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        sleep=sleep,
+        post_scan=lambda report: status_counts.append(dict(report.get("status_counts", {}))),
+    )
+
+    assert result["iterations"] == 2
+    assert status_counts == [{"imported": 1}, {"duplicate": 1, "imported": 1}]
 
 
 def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path: Path) -> None:

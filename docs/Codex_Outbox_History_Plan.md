@@ -502,6 +502,9 @@ Stand 2026-06-19:
 - Das Cinnamon-Applet parst diese Runtime-Zeilen und zeigt Instanzuebersicht plus Repo-Details im Projekt-Menue.
 - `codex-history report` liefert `repo_history` mit pro-Repo Status-/Dispatch-Zaehlern, letzten Summaries und `--repo`/`--summary-limit`.
 - `codex-history bibliothekar-export` schreibt redigierte Projekthistory-Markdowns in `data/Codex_History_Bibliothek`, absichtlich getrennt von der normalen Nutzerbibliothek `data/Bibliothek`.
+- `codex-history index` fuehrt Export und optionalen Qdrant-Rebuild in einem Admin-Lauf zusammen.
+- `codex-history watch --post-index` aktualisiert den admin-only Bibliothekar-Export nach Watcher-Scans; `--post-index-qdrant` haengt optional den separaten Qdrant-Rebuild an.
+- `teebotus-codex-history-systemd` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -515,7 +518,11 @@ Stand 2026-06-19:
 	* `teebotus-embedding codex-history-rebuild` erzeugt Qdrant-Chunks direkt aus `codex_history_outbox`.
 	* `teebotus-embedding collections-ensure --include-codex-history` legt die optionale Collection an/prueft sie.
 	* Der Index nutzt dieselbe Qdrant-Bibliothekar-Payloadform, aber eine andere Collection als normale Nutzerbibliothek und Usermemory.
-* Offen: Automatischer periodischer Rebuild dieser separaten Collection nach Export/Watcher-Lauf.
+* Teilweise erledigt: Automatischer Rebuild/Export nach Watcher-Scans.
+	* `codex-history watch --post-index` aktualisiert die admin-only Markdown-Quelle nach jedem Scan, auch im persistenten `--follow`-Modus.
+	* `codex-history watch --post-index-qdrant` aktualisiert optional auch die separate Qdrant-Collection nach jedem Scan.
+	* `teebotus-codex-history-systemd` setzt `--post-index` standardmaessig, Qdrant bewusst nur explizit.
+* Offen: Ein separater Timer/Low-Priority-Batch fuer Qdrant-Rebuild und spaetere lokale LLM-Kategorisierung.
 * Kategorien fuer Qdrant sind eingebaut, aber noch deterministisch/statisch.
 * Ein geeignetes, Int8, lokales LLM darf die Kategorien für die Nachricht(en) festlegen.
 	* Es ist es klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.

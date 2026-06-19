@@ -47,6 +47,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS, help="Fallback wait interval for watch mode.")
     parser.add_argument("--follow", dest="follow", action="store_true", default=True, help="Run the watcher persistently in the systemd service.")
     parser.add_argument("--no-follow", dest="follow", action="store_false", help="Use the legacy bounded scan plus systemd restart loop.")
+    parser.add_argument("--post-index", dest="post_index", action="store_true", default=True, help="Export admin-only Codex-History index after scans.")
+    parser.add_argument("--no-post-index", dest="post_index", action="store_false", help="Disable post-scan Codex-History index export.")
+    parser.add_argument("--post-index-qdrant", action="store_true", help="Also rebuild the admin-only Codex-History Qdrant collection after scans.")
+    parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
+    parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
+    parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -72,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
             event_mode=args.event_mode,
             poll_interval_seconds=float(args.poll_interval),
             follow=bool(args.follow),
+            post_index=bool(args.post_index),
+            post_index_qdrant=bool(args.post_index_qdrant),
+            post_index_qdrant_url=args.post_index_qdrant_url,
+            post_index_qdrant_dry_run=bool(args.post_index_qdrant_dry_run),
+            post_index_qdrant_ensure=bool(args.post_index_qdrant_ensure),
             max_iterations=int(args.max_iterations),
             restart_sec=args.restart_sec,
         )
@@ -107,6 +118,11 @@ def render_codex_history_systemd_unit(
     event_mode: str = "auto",
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
     follow: bool = True,
+    post_index: bool = True,
+    post_index_qdrant: bool = False,
+    post_index_qdrant_url: str = "",
+    post_index_qdrant_dry_run: bool = False,
+    post_index_qdrant_ensure: bool = False,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     restart_sec: str = DEFAULT_RESTART_SEC,
 ) -> CodexHistorySystemdUnit:
@@ -122,6 +138,7 @@ def render_codex_history_systemd_unit(
     max_iterations = _positive_int(max_iterations, label="max iterations")
     event_mode = _event_mode(event_mode)
     poll_interval_seconds = _non_negative_float(poll_interval_seconds, label="poll interval")
+    post_index_qdrant_url = _optional_systemd_argument(post_index_qdrant_url, label="post-index qdrant url")
     restart_sec = _systemd_interval(restart_sec)
 
     command = [
@@ -148,6 +165,16 @@ def render_codex_history_systemd_unit(
     if instance:
         command.append(_shell_quote(f"--instance={instance}"))
     command.extend(session_args)
+    if post_index or post_index_qdrant or post_index_qdrant_ensure:
+        command.append("--post-index")
+    if post_index_qdrant:
+        command.append("--post-index-qdrant")
+    if post_index_qdrant_url:
+        command.extend(["--post-index-qdrant-url", _shell_quote(post_index_qdrant_url)])
+    if post_index_qdrant_dry_run:
+        command.append("--post-index-qdrant-dry-run")
+    if post_index_qdrant_ensure:
+        command.append("--post-index-qdrant-ensure")
 
     service_text = "\n".join(
         [
@@ -213,6 +240,10 @@ def _csv_argument(value: str, *, label: str) -> str:
     if any(part.strip() in {".", ".."} or "/" in part or "\\" in part for part in text.split(",") if part.strip()):
         raise ValueError(f"Codex history {label} must contain instance names, not paths")
     return text
+
+
+def _optional_systemd_argument(value: str, *, label: str) -> str:
+    return _validate_systemd_unit_value(str(value or "").strip(), label=label)
 
 
 def _positive_int(value: int, *, label: str) -> int:

@@ -13,7 +13,7 @@ import tomllib
 import uuid
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from inspect import isawaitable
 from pathlib import Path
@@ -547,6 +547,7 @@ def watch_codex_session_roots(
     event_mode: str = "poll",
     limit: int = 1000,
     sleep: Callable[[float], None] = time.sleep,
+    post_scan: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     iterations = 0
     if not follow and max_iterations < 1:
@@ -566,6 +567,8 @@ def watch_codex_session_roots(
             iteration_items = report.get("items", [])
             if isinstance(iteration_items, list):
                 items.extend(iteration_items)
+            if callable(post_scan):
+                post_scan(report)
         else:
             skipped_unchanged += 1
         if current_snapshot is not None:
@@ -682,6 +685,71 @@ def codex_history_bibliothekar_chunks(
     for item in items:
         chunks.append(_codex_history_bibliothekar_chunk(item, destination=destination, instance_name=safe_instance_name))
     return tuple(chunks)
+
+
+def run_codex_history_index(
+    store: AccountStore,
+    *,
+    instance_dir: str | Path,
+    instance_name: str,
+    repo: str = "",
+    limit: int = 0,
+    overwrite: bool = True,
+    qdrant: bool = False,
+    qdrant_url: str = "",
+    qdrant_dry_run: bool = False,
+    qdrant_ensure: bool = False,
+    secret_provider: InstanceSecretProvider | None = None,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
+    export_report = export_codex_history_bibliothekar_docs(
+        store,
+        instance_dir=safe_instance_dir,
+        instance_name=safe_instance_name,
+        repo=repo,
+        limit=limit,
+        overwrite=overwrite,
+    )
+    ensure_results: list[dict[str, Any]] = []
+    qdrant_results: list[dict[str, Any]] = []
+    effective_qdrant_url = str(qdrant_url or "").strip()
+    if qdrant_ensure:
+        from TeeBotus.embedding.rebuild import ensure_qdrant_collections_for_instances
+
+        ensure_results = [
+            _jsonable_result(result)
+            for result in ensure_qdrant_collections_for_instances(
+                instances_dir=safe_instance_dir.parent,
+                instance_names=(safe_instance_name,),
+                qdrant_url=effective_qdrant_url or None,
+                include_codex_history=True,
+            )
+        ]
+    if qdrant:
+        from TeeBotus.embedding.rebuild import rebuild_qdrant_codex_history_indexes
+
+        qdrant_results = [
+            _jsonable_result(result)
+            for result in rebuild_qdrant_codex_history_indexes(
+                instances_dir=safe_instance_dir.parent,
+                instance_names=(safe_instance_name,),
+                qdrant_url=effective_qdrant_url or None,
+                repo=repo,
+                limit=limit,
+                dry_run=qdrant_dry_run,
+                secret_provider=secret_provider,
+            )
+        ]
+    ensure_ok = not ensure_results or all(bool(result.get("ok")) for result in ensure_results)
+    qdrant_ok = not qdrant_results or not any(str(result.get("status") or "").casefold() == "error" for result in qdrant_results)
+    return {
+        "ok": bool(export_report.get("ok", True)) and ensure_ok and qdrant_ok,
+        "instance": safe_instance_name,
+        "export": export_report,
+        "qdrant_ensure": ensure_results,
+        "qdrant": qdrant_results,
+    }
 
 
 def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
@@ -1546,6 +1614,19 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     bibliothekar_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     bibliothekar_export_parser.add_argument("--no-overwrite", action="store_true")
 
+    index_parser = subparsers.add_parser("index")
+    index_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    index_parser.add_argument("--instances", default="")
+    index_parser.add_argument("--instance", default="")
+    index_parser.add_argument("--repo", default="")
+    index_parser.add_argument("--limit", type=int, default=0)
+    index_parser.add_argument("--format", choices=("text", "json"), default="text")
+    index_parser.add_argument("--no-overwrite", action="store_true")
+    index_parser.add_argument("--qdrant", action="store_true")
+    index_parser.add_argument("--qdrant-url", default="")
+    index_parser.add_argument("--qdrant-dry-run", action="store_true")
+    index_parser.add_argument("--qdrant-ensure", action="store_true")
+
     dispatch_parser = subparsers.add_parser("dispatch")
     dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     dispatch_parser.add_argument("--instances", default="")
@@ -1584,6 +1665,13 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--follow", action="store_true", help="Run until the process is stopped instead of exiting after max iterations.")
     watch_parser.add_argument("--format", choices=("text", "json"), default="text")
     watch_parser.add_argument("--once", action="store_true")
+    watch_parser.add_argument("--post-index", action="store_true", help="After each scan, export Codex-History docs to the admin-only Bibliothekar folder.")
+    watch_parser.add_argument("--post-index-repo", default="", help="Repo filter for post-index export/rebuild.")
+    watch_parser.add_argument("--post-index-limit", type=int, default=0, help="Limit post-index to latest N summaries after repo filtering.")
+    watch_parser.add_argument("--post-index-qdrant", action="store_true", help="Also rebuild the admin-only Codex-History Qdrant collection after scans.")
+    watch_parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
+    watch_parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
+    watch_parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "append":
@@ -1663,6 +1751,43 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0 if payload["ok"] else 1
         except (OSError, ValueError) as exc:
             print(f"bibliothekar-export failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "index":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            _ensure_explicit_instances_exist(instances_dir, selected_instances)
+            reports: list[dict[str, Any]] = []
+            for instance_name in discover_instances(instances_dir, selected_instances):
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                reports.append(
+                    run_codex_history_index(
+                        store,
+                        instance_dir=instances_dir / instance_name,
+                        instance_name=instance_name,
+                        repo=args.repo,
+                        limit=int(args.limit or 0),
+                        overwrite=not bool(args.no_overwrite),
+                        qdrant=bool(args.qdrant),
+                        qdrant_url=args.qdrant_url,
+                        qdrant_dry_run=bool(args.qdrant_dry_run),
+                        qdrant_ensure=bool(args.qdrant_ensure),
+                        secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+                    )
+                )
+            payload = {
+                "ok": not any(not report.get("ok") for report in reports),
+                "instances_dir": str(instances_dir),
+                "instances": reports,
+                "totals": _index_totals(reports),
+            }
+            output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_index_report(payload)
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"index failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "dispatch":
         try:
@@ -1755,9 +1880,13 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
                 import_report = import_codex_session_roots(store, safe_roots, limit=int(args.limit or 0))
-                instance_reports.append({"instance": instance_name, **import_report})
+                instance_report = {"instance": instance_name, **import_report}
+                post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
+                if post_index:
+                    instance_report["post_index"] = post_index
+                instance_reports.append(instance_report)
             payload = {
-                "ok": not any(not report.get("ok") for report in instance_reports),
+                "ok": _watch_payload_ok(instance_reports),
                 "mode": "once",
                 "sessions_roots": [str(root) for root in safe_roots],
                 "instances_dir": str(instances_dir),
@@ -1787,6 +1916,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             selected = discover_instances(instances_dir, selected_instances)
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
+                post_index_reports: list[dict[str, Any]] = []
                 watch_report = watch_codex_session_roots(
                     store,
                     safe_roots,
@@ -1795,10 +1925,22 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                     follow=bool(args.follow),
                     event_mode=str(args.event_mode or "poll"),
                     limit=int(args.limit or 0),
+                    post_scan=_watch_post_index_callback(
+                        store,
+                        instances_dir,
+                        instance_name,
+                        args,
+                        provider,
+                        post_index_reports,
+                    ),
                 )
-                instance_reports.append({"instance": instance_name, **watch_report})
+                instance_report = {"instance": instance_name, **watch_report}
+                if post_index_reports:
+                    instance_report["post_index"] = post_index_reports[-1]
+                    instance_report["post_index_runs"] = post_index_reports
+                instance_reports.append(instance_report)
             payload = {
-                "ok": not any(not report.get("ok") for report in instance_reports),
+                "ok": _watch_payload_ok(instance_reports),
                 "mode": "watch",
                 "follow": bool(args.follow),
                 "event_mode": str(args.event_mode or "poll"),
@@ -1878,6 +2020,90 @@ def _runtime_sender_factory(instances_dir: Path):
     return runtime_sender_factory(instances_dir)
 
 
+def _watch_post_index_callback(
+    store: AccountStore,
+    instances_dir: Path,
+    instance_name: str,
+    args: argparse.Namespace,
+    provider: InstanceSecretProvider | None,
+    reports: list[dict[str, Any]],
+) -> Callable[[Mapping[str, Any]], None] | None:
+    qdrant = bool(getattr(args, "post_index_qdrant", False))
+    qdrant_ensure = bool(getattr(args, "post_index_qdrant_ensure", False))
+    if not (bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure):
+        return None
+
+    def _callback(_scan_report: Mapping[str, Any]) -> None:
+        post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
+        if post_index:
+            reports.append(post_index)
+
+    return _callback
+
+
+def _watch_post_index_report(
+    store: AccountStore,
+    instances_dir: Path,
+    instance_name: str,
+    args: argparse.Namespace,
+    provider: InstanceSecretProvider | None,
+) -> dict[str, Any]:
+    qdrant = bool(getattr(args, "post_index_qdrant", False))
+    qdrant_ensure = bool(getattr(args, "post_index_qdrant_ensure", False))
+    if not (bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure):
+        return {}
+    return run_codex_history_index(
+        store,
+        instance_dir=instances_dir / instance_name,
+        instance_name=instance_name,
+        repo=str(getattr(args, "post_index_repo", "") or ""),
+        limit=int(getattr(args, "post_index_limit", 0) or 0),
+        qdrant=qdrant,
+        qdrant_url=str(getattr(args, "post_index_qdrant_url", "") or ""),
+        qdrant_dry_run=bool(getattr(args, "post_index_qdrant_dry_run", False)),
+        qdrant_ensure=qdrant_ensure,
+        secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+    )
+
+
+def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
+    for report in instance_reports:
+        if not isinstance(report, Mapping):
+            continue
+        if not bool(report.get("ok", True)):
+            return False
+        post_index = report.get("post_index")
+        if isinstance(post_index, Mapping) and not bool(post_index.get("ok", True)):
+            return False
+    return True
+
+
+def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
+    totals = {"exported": 0, "skipped": 0, "qdrant_points": 0, "qdrant_errors": 0}
+    for report in reports:
+        if not isinstance(report, Mapping):
+            continue
+        export = report.get("export", {})
+        if isinstance(export, Mapping):
+            totals["exported"] += int(export.get("exported") or 0)
+            totals["skipped"] += int(export.get("skipped") or 0)
+        for result in report.get("qdrant", []) or []:
+            if not isinstance(result, Mapping):
+                continue
+            totals["qdrant_points"] += int(result.get("point_count") or 0)
+            if str(result.get("status") or "").casefold() == "error":
+                totals["qdrant_errors"] += 1
+    return totals
+
+
+def _jsonable_result(value: object) -> dict[str, Any]:
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, Mapping):
+        return dict(value)
+    return {"value": str(value)}
+
+
 def _render_dispatch_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Dispatch", "", f"dry_run: {payload.get('dry_run', False)}"]
     for instance in payload.get("instances", []):
@@ -1947,6 +2173,46 @@ def _render_bibliothekar_export_report(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_index_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Index", ""]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.append(f"exported: {totals.get('exported', 0)}")
+        lines.append(f"skipped: {totals.get('skipped', 0)}")
+        lines.append(f"qdrant_points: {totals.get('qdrant_points', 0)}")
+        lines.append(f"qdrant_errors: {totals.get('qdrant_errors', 0)}")
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        export = instance.get("export", {})
+        if not isinstance(export, Mapping):
+            export = {}
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        lines.append(f"  ok: {bool(instance.get('ok', False))}")
+        lines.append(f"  destination: {export.get('destination', '')}")
+        lines.append(f"  exported: {export.get('exported', 0)}")
+        lines.append(f"  skipped: {export.get('skipped', 0)}")
+        for result in instance.get("qdrant_ensure", []) or []:
+            if isinstance(result, Mapping):
+                lines.append(
+                    "  qdrant_ensure: "
+                    f"collection={result.get('collection_name', '')} "
+                    f"status={result.get('status', '')} "
+                    f"ok={result.get('ok', '')}"
+                )
+        for result in instance.get("qdrant", []) or []:
+            if isinstance(result, Mapping):
+                lines.append(
+                    "  qdrant: "
+                    f"collection={result.get('collection_name', '')} "
+                    f"status={result.get('status', '')} "
+                    f"chunks={result.get('chunk_count', 0)} "
+                    f"points={result.get('point_count', 0)}"
+                )
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Watch", "", f"mode: {payload.get('mode', '')}"]
     roots = payload.get("sessions_roots", [])
@@ -1971,6 +2237,25 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
                 f"reason={item.get('reason', '')} "
                 f"summary={summary_prefix}"
             )
+        post_index = instance.get("post_index")
+        if isinstance(post_index, Mapping):
+            export = post_index.get("export", {})
+            if not isinstance(export, Mapping):
+                export = {}
+            lines.append(
+                "  post_index: "
+                f"ok={bool(post_index.get('ok', False))} "
+                f"exported={export.get('exported', 0)} "
+                f"skipped={export.get('skipped', 0)}"
+            )
+            for result in post_index.get("qdrant", []) or []:
+                if isinstance(result, Mapping):
+                    lines.append(
+                        "  post_index_qdrant: "
+                        f"collection={result.get('collection_name', '')} "
+                        f"status={result.get('status', '')} "
+                        f"points={result.get('point_count', 0)}"
+                    )
     return "\n".join(lines) + "\n"
 
 

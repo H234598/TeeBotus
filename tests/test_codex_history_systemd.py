@@ -20,6 +20,8 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "--poll-interval 5" in unit.service_text
     assert "--max-iterations" not in unit.service_text
     assert "--limit 1000" in unit.service_text
+    assert "--post-index" in unit.service_text
+    assert "--post-index-qdrant" not in unit.service_text
     assert "--once" not in unit.service_text
     assert "Restart=on-failure" in unit.service_text
     assert "RestartSec=5s" in unit.service_text
@@ -49,6 +51,29 @@ def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots
     assert "--poll-interval 2.5" in unit.service_text
     assert "--limit 250" in unit.service_text
     assert "RestartSec=30s" in unit.service_text
+
+
+def test_render_codex_history_systemd_unit_can_disable_post_index(tmp_path: Path) -> None:
+    unit = render_codex_history_systemd_unit(repo_root=tmp_path, post_index=False)
+
+    assert "--post-index" not in unit.service_text
+    assert "--post-index-qdrant" not in unit.service_text
+
+
+def test_render_codex_history_systemd_unit_can_enable_qdrant_post_index(tmp_path: Path) -> None:
+    unit = render_codex_history_systemd_unit(
+        repo_root=tmp_path,
+        post_index_qdrant=True,
+        post_index_qdrant_url="http://127.0.0.1:6333",
+        post_index_qdrant_dry_run=True,
+        post_index_qdrant_ensure=True,
+    )
+
+    assert "--post-index" in unit.service_text
+    assert "--post-index-qdrant" in unit.service_text
+    assert "--post-index-qdrant-url http://127.0.0.1:6333" in unit.service_text
+    assert "--post-index-qdrant-dry-run" in unit.service_text
+    assert "--post-index-qdrant-ensure" in unit.service_text
 
 
 def test_render_codex_history_systemd_unit_can_use_legacy_bounded_restart_loop(tmp_path: Path) -> None:
