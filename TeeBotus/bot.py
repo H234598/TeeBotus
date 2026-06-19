@@ -931,18 +931,24 @@ def _status_api_key_state(route: Any, *, provider: str, model: str, instance_nam
 
 def _status_safe_path(value: str | os.PathLike[str] | os.PathLike[bytes], *, fallback: Path, allowed_root: Path) -> Path:
     try:
-        candidate = Path(value).expanduser()
-        allowed_root = allowed_root.resolve()
+        raw_value = os.fspath(value).strip()
     except (OSError, TypeError, ValueError):
         return fallback
-    if not candidate.is_absolute():
-        candidate = allowed_root / candidate
-    try:
-        resolved = candidate.resolve()
-        resolved.relative_to(allowed_root)
-    except ValueError:
+    if not raw_value:
         return fallback
-    return resolved
+    allowed_root_path = os.path.abspath(str(allowed_root))
+    expanded = os.path.expanduser(raw_value)
+    if not expanded.startswith(os.sep):
+        candidate = os.path.join(allowed_root_path, expanded)
+    else:
+        candidate = expanded
+    candidate_path = os.path.abspath(candidate)
+    if os.path.commonpath([candidate_path, allowed_root_path]) != allowed_root_path:
+        return fallback
+    try:
+        return Path(candidate_path).resolve()
+    except (OSError, ValueError):
+        return fallback
 
 
 def _runtime_status_codex_usage_lines() -> tuple[str, ...]:
