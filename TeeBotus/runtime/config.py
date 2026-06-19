@@ -663,6 +663,8 @@ def _merge_optional_numbered_values(
 ) -> tuple[str, ...]:
     values = list(_nonempty(base_values))
     for index, value in _numbered_items(source, prefix):
+        if index < 1:
+            raise RuntimeConfigError(f"{label}_{index} uses invalid slot number {index}; slot numbers start at 1")
         if index <= len(values):
             existing = values[index - 1]
             if existing and existing != value:

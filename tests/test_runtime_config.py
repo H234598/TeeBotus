@@ -515,6 +515,18 @@ def test_matrix_account_resolution_rejects_empty_numbered_device_slot():
         resolve_matrix_accounts("Depressionsbot", env)
 
 
+def test_matrix_account_resolution_rejects_numbered_device_slot_zero():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_0": "dev-zero",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="invalid slot number 0"):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
 def test_matrix_account_resolution_rejects_numbered_device_slot_without_matching_account():
     env = {
         "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
