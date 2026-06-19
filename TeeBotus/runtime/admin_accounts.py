@@ -180,19 +180,29 @@ async def notify_runtime_status_admin_accounts(
             candidates.append((account_id, route, channel))
         if not candidates:
             continue
-        candidate_channels = tuple(sorted({channel for _account_id, _route, channel in candidates}))
-        try:
-            resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source, channels=candidate_channels)
-            senders = resolved_sender_factory(instance_name, store)
-        except Exception as exc:  # noqa: BLE001 - runtime-status notify must keep going for other instances.
-            for account_id, _route, channel in candidates:
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"sender_factory:{type(exc).__name__}", channel=channel))
-            continue
-        for account_id, route, channel in candidates:
+        senders_by_channel: dict[str, ProactiveSender] = {}
+        sender_errors_by_channel: dict[str, str] = {}
+        for channel in dict.fromkeys(channel for _account_id, _route, channel in candidates):
+            try:
+                resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source, channels=(channel,))
+                senders = resolved_sender_factory(instance_name, store)
+            except Exception as exc:  # noqa: BLE001 - one channel must not block other admin channels.
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                continue
             sender = senders.get(channel)
             if sender is None:
-                results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_sender", channel=channel))
+                sender_errors_by_channel[channel] = "no_sender"
                 continue
+            senders_by_channel[channel] = sender
+        for account_id, route, channel in candidates:
+            sender_error = sender_errors_by_channel.get(channel)
+            if sender_error == "no_sender":
+                results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
+                continue
+            if sender_error:
+                results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
+                continue
+            sender = senders_by_channel[channel]
             chat_id = str(route.get("chat_id") or "").strip()
             action = SendText(chat_id, message, track=False)
             try:

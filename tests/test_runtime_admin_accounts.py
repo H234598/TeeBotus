@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.admin_accounts import (
     ADMIN_ACCOUNT_IDS_ENV,
@@ -173,6 +173,48 @@ def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_pa
 
     assert requested_channels == [("telegram",)]
     assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+
+
+def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    telegram_identity = telegram_identity_key(123)
+    telegram_account_id = account_store.resolve_or_create_account(telegram_identity)
+    account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    signal_identity = signal_identity_key(source_uuid="signal-admin")
+    signal_account_id = account_store.resolve_or_create_account(signal_identity)
+    account_store.update_identity_route(signal_identity, channel="signal", chat_id="+49123", chat_type="private", adapter_slot=1)
+    requested_channels: list[tuple[str, ...]] = []
+    sent: list[SendText] = []
+
+    def fake_runtime_sender_factory(_instances_dir: Path, _env: dict[str, str], *, channels: tuple[str, ...]):
+        requested_channels.append(channels)
+        if channels == ("signal",):
+            raise RuntimeError("signal unavailable")
+        if channels != ("telegram",):
+            raise AssertionError(f"unexpected channel bundle: {channels}")
+        return lambda _instance, _store: {"telegram": lambda _route, action, _metadata: sent.append(action) or "ok"}
+
+    monkeypatch.setattr("TeeBotus.runtime.admin_accounts._runtime_sender_factory", fake_runtime_sender_factory)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: f"{telegram_account_id},{signal_account_id}"},
+            store_factory=lambda _root, _instance: account_store,
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert requested_channels == [("telegram",), ("signal",)]
+    assert len(sent) == 1
+    assert sent[0].chat_id == "123"
+    assert f"admin_notify=Depressionsbot status=sent account_id={telegram_account_id} channel=telegram" in lines
+    assert f"admin_notify=Depressionsbot status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
 
 
 def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(tmp_path) -> None:
