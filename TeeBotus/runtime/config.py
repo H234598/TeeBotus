@@ -95,6 +95,8 @@ def parse_slot_csv(value: str | None, *, label: str) -> tuple[str, ...]:
 
 def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | None = None) -> tuple[str, ...]:
     source = cli_channels if cli_channels is not None else (os.environ if env is None else env).get("TEEBOTUS_CHANNELS", "auto")
+    if cli_channels is not None and not str(source or "").strip():
+        raise RuntimeConfigError("empty --channels value; use auto, all, or a comma-separated channel list")
     value = str(source or "auto").strip().casefold()
     if value in {"", "auto", "all"}:
         return DEFAULT_CHANNELS

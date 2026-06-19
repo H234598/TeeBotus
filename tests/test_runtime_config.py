@@ -24,6 +24,12 @@ def test_channels_default_to_telegram_signal_and_matrix():
     assert resolve_channels({}, cli_channels="telegram") == ("telegram",)
 
 
+def test_channels_reject_empty_cli_value_but_allow_empty_env_default():
+    assert resolve_channels({"TEEBOTUS_CHANNELS": ""}) == ("telegram", "signal", "matrix")
+    with pytest.raises(RuntimeConfigError, match="empty --channels value"):
+        resolve_channels({}, cli_channels="")
+
+
 def test_runtime_config_marks_only_concrete_channel_selection_as_explicit(tmp_path: Path):
     (tmp_path / "Depressionsbot").mkdir()
     (tmp_path / "Depressionsbot" / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
