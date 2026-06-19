@@ -1966,6 +1966,38 @@ def test_notify_recent_telegram_users_refuses_unrecoverable_corrupt_sqlite_state
     assert sent == []
 
 
+def test_read_instance_json_state_refuses_unreadable_primary_sqlite_even_if_fallback_is_usable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    fallback_path = tmp_path / "memory.backup.sqlite3"
+    sqlite_path.mkdir()
+    fallback_backend = SQLiteAccountMemoryBackend(
+        instance_name="Demo",
+        provider=StaticSecretProvider(b"x" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=fallback_path, fallback_path=None),
+    )
+    fallback_backend.write_collection(
+        INSTANCE_STATE_ACCOUNT_ID,
+        "version_notifications",
+        [{"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}}],
+    )
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = _store(tmp_path)
+
+    with pytest.raises(Exception):
+        store.read_instance_json_state(
+            "Version_Notifications.json",
+            "version_notifications",
+            {"versions": {}},
+            fallback_to_legacy_on_read_error=False,
+        )
+
+
 def test_notify_recent_telegram_users_does_not_use_legacy_state_when_sqlite_state_is_unreadable(
     tmp_path: Path,
     monkeypatch,

@@ -2471,7 +2471,12 @@ class AccountStore:
         safe_filename = _safe_account_filename(filename)
         collection_name = _safe_collection_name(collection)
         backend = self.account_memory_backend
-        read_collection = getattr(backend, "read_collection", None) if backend is not None else None
+        read_collection_backend = backend
+        if backend is not None and not fallback_to_legacy_on_read_error:
+            primary_backend = getattr(backend, "primary", None)
+            if callable(getattr(primary_backend, "read_collection", None)) and callable(getattr(primary_backend, "write_collection", None)):
+                read_collection_backend = primary_backend
+        read_collection = getattr(read_collection_backend, "read_collection", None) if read_collection_backend is not None else None
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if not (callable(read_collection) and callable(write_collection)):
             return dict(default)
@@ -2483,10 +2488,8 @@ class AccountStore:
                 return self._read_legacy_instance_json_state(path, dict(default))
             raise
         if not fallback_to_legacy_on_read_error:
-            collection_error = str(getattr(backend, "last_collection_read_error", "") or "")
-            collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
-            if collection_error or collection_skipped:
-                detail = collection_error or f"skipped={collection_skipped}"
+            detail = self._collection_read_diagnostic_error(read_collection_backend)
+            if detail:
                 raise AccountStoreError(f"account memory SQL collection {collection_name} could not be read: {detail}")
         data = _merge_json_document_rows(rows, dict(default))
         should_compact = len(rows) > 1
@@ -2526,6 +2529,13 @@ class AccountStore:
         backend = self.account_memory_backend
         return callable(getattr(backend, "read_collection", None)) and callable(getattr(backend, "write_collection", None))
 
+    def _collection_read_diagnostic_error(self, backend: Any) -> str:
+        collection_error = str(getattr(backend, "last_collection_read_error", "") or "")
+        collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
+        if collection_error or collection_skipped:
+            return collection_error or f"skipped={collection_skipped}"
+        return ""
+
     def _read_account_json_document(
         self,
         account_id: str,
@@ -2547,6 +2557,10 @@ class AccountStore:
                 if fallback_to_legacy_on_read_error and path.exists():
                     return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 raise _AccountCollectionReadError(str(exc)) from exc
+            if not fallback_to_legacy_on_read_error:
+                detail = self._collection_read_diagnostic_error(backend)
+                if detail:
+                    raise _AccountCollectionReadError(f"account memory SQL collection {collection} could not be read: {detail}")
             data = _merge_json_document_rows(rows, dict(default))
             should_compact = len(rows) > 1
             should_unlink_legacy = False
