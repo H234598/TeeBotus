@@ -6,7 +6,7 @@ from pathlib import Path
 
 from TeeBotus import __version__
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key, telegram_identity_key
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.admin_accounts import (
     ADMIN_ACCOUNT_IDS_ENV,
     DEFAULT_ADMIN_ACCOUNT_IDS,
@@ -135,9 +135,9 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
-    sent: list[tuple[dict[str, object], SendText]] = []
+    sent: list[tuple[dict[str, object], SendAttachment]] = []
 
-    def sender(route: dict[str, object], action: SendText, _metadata: dict[str, object]) -> str:
+    def sender(route: dict[str, object], action: SendAttachment, _metadata: dict[str, object]) -> str:
         sent.append((route, action))
         return "ok"
 
@@ -157,14 +157,24 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
 
     assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
     assert len(sent) == 1
-    assert sent[0][1].chat_id == "123"
-    assert "TeeBotus Runtime-Status Warnungen" in sent[0][1].text
-    assert "telegram_slot=Depressionsbot/default status=broken error=bad" in sent[0][1].text
+    action = sent[0][1]
+    assert isinstance(action, SendAttachment)
+    assert action.chat_id == "123"
+    assert action.caption == f"Release TeeBotus {__version__}"
+    assert action.content_type == "text/markdown"
+    assert action.filename == f"TeeBotus_release_{__version__}_0001.md"
+    markdown = action.data.decode("utf-8")
+    assert markdown.startswith(f"# Release TeeBotus {__version__}\n")
+    assert f"**Summary:** `v{__version__} #0001`" in markdown
+    assert "## Probleme" in markdown
+    assert "- `telegram_slot=Depressionsbot/default status=broken error=bad`" in markdown
     outbox = account_store.read_status_outbox(account_id)
     assert outbox[0]["status"] == "sent"
     assert outbox[0]["summary_number"] == 1
     assert outbox[0]["summary_prefix"] == f"v{__version__} #0001"
-    assert outbox[0]["message_text"].startswith(f"v{__version__} #0001 TeeBotus Runtime-Status Warnungen")
+    assert outbox[0]["message_text"] == f"Release TeeBotus {__version__}"
+    assert outbox[0]["markdown_filename"] == f"TeeBotus_release_{__version__}_0001.md"
+    assert outbox[0]["markdown_document"].startswith(f"# Release TeeBotus {__version__}\n")
     assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
 
 
@@ -184,7 +194,7 @@ def test_runtime_status_admin_notify_includes_code_authenticated_status_recipien
             "source": "runtime_code",
         },
     )
-    sent: list[SendText] = []
+    sent: list[SendAttachment] = []
 
     async def run_notify() -> tuple[str, ...]:
         results = await notify_runtime_status_admin_accounts(
@@ -202,8 +212,8 @@ def test_runtime_status_admin_notify_includes_code_authenticated_status_recipien
 
     assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
     assert len(sent) == 1
-    assert sent[0].text.startswith(f"v{__version__} #0001 TeeBotus Runtime-Status Warnungen")
-    assert "signal_slot=Depressionsbot/default status=broken error=bad" in sent[0].text
+    assert sent[0].caption == f"Release TeeBotus {__version__}"
+    assert "signal_slot=Depressionsbot/default status=broken error=bad" in sent[0].data.decode("utf-8")
     assert account_store.read_status_outbox(account_id)[0]["status"] == "sent"
 
 
