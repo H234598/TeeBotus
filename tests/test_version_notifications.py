@@ -412,6 +412,27 @@ def test_recent_telegram_recipients_skips_invalid_route_adapter_slot(tmp_path: P
     assert recipients == []
 
 
+def test_recent_telegram_recipients_skips_boolean_route_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="BoolSlot")
+    identities = store._load_identities()
+    identities["telegram:user:111"]["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "111",
+        "chat_type": "private",
+        "adapter_slot": True,
+    }
+    store._save_identities(identities)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert recipients == []
+
+
 def test_recent_telegram_recipients_skips_non_private_chat_routes(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Private")

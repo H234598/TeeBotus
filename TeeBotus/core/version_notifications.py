@@ -423,6 +423,8 @@ def _failed_delivery_route_matches(failure: object, recipient: VersionNotificati
 
 
 def _optional_int(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
     try:
         return int(value)
     except (TypeError, ValueError):
