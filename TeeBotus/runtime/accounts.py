@@ -2451,15 +2451,18 @@ class AccountStore:
         data = _merge_json_document_rows(rows, dict(default))
         should_compact = len(rows) > 1
         path = self.root.parent / safe_filename
+        should_unlink_legacy = False
         if path.exists():
             legacy_data = self._read_legacy_instance_json_state(path, dict(default))
             selected = _merge_nested_json_documents(legacy_data, data)
             if selected != data:
                 data = selected
                 should_compact = True
-            self._unlink_migrated_account_file(path)
+            should_unlink_legacy = True
         if should_compact:
             write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [data])
+        if should_unlink_legacy:
+            self._unlink_migrated_account_file(path)
         return data
 
     def write_instance_json_state(self, filename: str, collection: str, data: dict[str, Any]) -> None:
@@ -2494,15 +2497,18 @@ class AccountStore:
             data = _merge_json_document_rows(rows, dict(default))
             should_compact = len(rows) > 1
             path = self.account_dir(account_id) / filename
+            should_unlink_legacy = False
             if path.exists():
                 legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 selected = _choose_newer_state(legacy_data, data)
                 if selected != data:
                     data = selected
                     should_compact = True
-                self._unlink_migrated_account_file(path)
+                should_unlink_legacy = True
             if should_compact:
                 write_collection(account_id, collection, [data])
+            if should_unlink_legacy:
+                self._unlink_migrated_account_file(path)
             return data
         return self._read_json_with_fallback(self.account_dir(account_id) / filename, dict(default), vault=self.account_memory_vault)
 
