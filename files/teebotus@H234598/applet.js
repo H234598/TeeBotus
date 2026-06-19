@@ -125,6 +125,7 @@ const QUICK_COMMANDS = [
   "/register",
   "/memory_reset"
 ];
+const MAX_UNIT_TOKEN_CHARS = 96;
 const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin"];
 const TRUSTED_USER_LOCAL_SPAWN_DIR = GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"]);
 const TRUSTED_USER_LOCAL_COMMANDS = {
@@ -1720,7 +1721,11 @@ TeeBotusApplet.prototype = {
   },
 
   _safeUnitToken: function(value) {
-    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9_.@-]+/g, "-") || "depressionsbot";
+    let token = String(value || "").trim().toLowerCase().replace(/[^a-z0-9_.@-]+/g, "-").replace(/[-.]{2,}/g, "-").replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "");
+    if (token.length > MAX_UNIT_TOKEN_CHARS) {
+      token = token.slice(0, MAX_UNIT_TOKEN_CHARS).replace(/[^a-z0-9]+$/g, "");
+    }
+    return token || "depressionsbot";
   },
 
   _safeSystemdUnit: function(value, fallback) {

@@ -237,6 +237,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const MAX_COMMAND_ARG_CHARS = 4096;" in source
     assert "const MAX_COMMAND_ARG_COUNT = 128;" in source
     assert "const MAX_COMMAND_CHARS = 32768;" in source
+    assert "const MAX_UNIT_TOKEN_CHARS = 96;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
@@ -515,6 +516,11 @@ def test_cinnamon_applet_sanitizes_systemd_units_from_settings() -> None:
           applet._safeSystemdUnit("--force", "fallback.service"),
           applet._safeSystemdUnit("../bad.service", "fallback.service"),
           applet._safeSystemdUnit("teebotus", "fallback.service"),
+          applet._safeUnitToken("---"),
+          applet._safeUnitToken(".."),
+          applet._safeUnitToken(" Mondbot!! "),
+          applet._safeUnitToken("Bot_der.Wahrheit@prod"),
+          applet._safeUnitToken("x".repeat(400)).length,
           (function() {
             applet.runtimeUnit = "--force";
             applet.qdrantUnit = "../qdrant.service";
@@ -529,15 +535,20 @@ def test_cinnamon_applet_sanitizes_systemd_units_from_settings() -> None:
         """
     )
 
-    assert result[:6] == [
+    assert result[:11] == [
         "teebotus.service",
         "teebotus-proactive-depressionsbot.timer",
         "teebotus@Depressionsbot.service",
         "fallback.service",
         "fallback.service",
         "fallback.service",
+        "depressionsbot",
+        "depressionsbot",
+        "mondbot",
+        "bot_der.wahrheit@prod",
+        96,
     ]
-    command = result[6]
+    command = result[11]
     assert command[command.index("--unit") + 1] == "teebotus.service"
     assert command[command.index("--qdrant-unit") + 1] == "teebotus-qdrant.service"
     assert "--force" not in command
