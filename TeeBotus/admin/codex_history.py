@@ -7,7 +7,9 @@ import html
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import sys
@@ -51,6 +53,7 @@ CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
 CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
+CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
 CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
@@ -743,6 +746,7 @@ def export_codex_history_graph_doc(
     overwrite: bool = True,
     svg: bool = False,
     queue_svg: bool = False,
+    svg_engine: str = "builtin",
     now: datetime | None = None,
 ) -> dict[str, Any]:
     safe_instance_name = _safe_instance_name(instance_name)
@@ -774,8 +778,15 @@ def export_codex_history_graph_doc(
     svg_skipped = 0
     svg_target = target.with_suffix(".svg")
     svg_text = ""
+    svg_engine_used = ""
+    svg_warning = ""
     if svg or queue_svg:
-        svg_text = _codex_history_graph_svg(items, instance_name=safe_instance_name, repo_filter=repo)
+        svg_text, svg_engine_used, svg_warning = _render_codex_history_graph_svg(
+            items,
+            instance_name=safe_instance_name,
+            repo_filter=repo,
+            engine=svg_engine,
+        )
     if svg:
         if svg_target.exists() and not overwrite:
             svg_skipped = 1
@@ -804,6 +815,8 @@ def export_codex_history_graph_doc(
         "reason": reason,
         "svg": bool(svg),
         "svg_path": str(svg_target) if svg else "",
+        "svg_engine": svg_engine_used,
+        "svg_warning": svg_warning,
         "svg_exported": svg_exported,
         "svg_skipped": svg_skipped,
         "queued_item": queued_item,
@@ -1275,6 +1288,7 @@ def run_codex_history_index(
     graph: bool = False,
     graph_svg: bool = False,
     graph_queue_svg: bool = False,
+    graph_svg_engine: str = "builtin",
     categorize: bool = False,
     categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
     categorize_dry_run: bool = False,
@@ -1332,6 +1346,7 @@ def run_codex_history_index(
             overwrite=overwrite,
             svg=graph_svg,
             queue_svg=graph_queue_svg,
+            svg_engine=graph_svg_engine,
         )
     ensure_results: list[dict[str, Any]] = []
     qdrant_results: list[dict[str, Any]] = []
@@ -2278,6 +2293,12 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     graph_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     graph_export_parser.add_argument("--no-overwrite", action="store_true")
     graph_export_parser.add_argument("--svg", action="store_true", help="Also export a dependency-free SVG graph image.")
+    graph_export_parser.add_argument(
+        "--svg-engine",
+        choices=sorted(CODEX_HISTORY_GRAPH_SVG_ENGINES),
+        default="builtin",
+        help="SVG renderer: builtin is dependency-free, auto uses mmdc when installed, mmdc requires Mermaid CLI.",
+    )
     graph_export_parser.add_argument("--queue-svg", action="store_true", help="Queue the SVG graph as an admin-only dispatch attachment.")
 
     strategic_analysis_parser = subparsers.add_parser("strategic-analysis")
@@ -2305,6 +2326,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--qdrant-ensure", action="store_true")
     index_parser.add_argument("--graph", action="store_true")
     index_parser.add_argument("--graph-svg", action="store_true")
+    index_parser.add_argument("--graph-svg-engine", choices=sorted(CODEX_HISTORY_GRAPH_SVG_ENGINES), default="builtin")
     index_parser.add_argument("--graph-queue-svg", action="store_true")
     index_parser.add_argument("--categorize", action="store_true")
     index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
@@ -2497,6 +2519,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         overwrite=not bool(args.no_overwrite),
                         svg=bool(args.svg),
                         queue_svg=bool(args.queue_svg),
+                        svg_engine=args.svg_engine,
                     )
                 )
             payload = {
@@ -2589,6 +2612,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         graph=bool(args.graph),
                         graph_svg=bool(args.graph_svg),
                         graph_queue_svg=bool(args.graph_queue_svg),
+                        graph_svg_engine=args.graph_svg_engine,
                         categorize=bool(args.categorize),
                         categorize_profile=args.categorize_profile,
                         categorize_dry_run=bool(args.categorize_dry_run),
@@ -3077,6 +3101,10 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"  path: {instance.get('path', '')}")
         if instance.get("svg_path"):
             lines.append(f"  svg_path: {instance.get('svg_path', '')}")
+        if instance.get("svg_engine"):
+            lines.append(f"  svg_engine: {instance.get('svg_engine', '')}")
+        if instance.get("svg_warning"):
+            lines.append(f"  svg_warning: {instance.get('svg_warning', '')}")
         lines.append(f"  exported: {instance.get('exported', 0)}")
         lines.append(f"  svg_exported: {instance.get('svg_exported', 0)}")
         queued_item = instance.get("queued_item", {})
@@ -3667,6 +3695,84 @@ def _codex_history_graph_artifact_markdown(
         "",
     ]
     return "\n".join(lines)
+
+
+def _render_codex_history_graph_svg(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    instance_name: str,
+    repo_filter: str = "",
+    engine: str = "builtin",
+) -> tuple[str, str, str]:
+    requested = _codex_history_graph_svg_engine(engine)
+    warning = ""
+    if requested in {"auto", "mmdc"}:
+        mmdc_path = shutil.which("mmdc")
+        if mmdc_path:
+            try:
+                return (
+                    _codex_history_graph_svg_mmdc(
+                        items,
+                        instance_name=instance_name,
+                        repo_filter=repo_filter,
+                        mmdc_path=mmdc_path,
+                    ),
+                    "mmdc",
+                    "",
+                )
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                message = _truncate(redact_codex_history_text(f"{type(exc).__name__}: {exc}"), 240)
+                if requested == "mmdc":
+                    raise ValueError(f"mmdc svg render failed: {message}") from exc
+                warning = f"mmdc_failed_fallback_builtin:{message}"
+        elif requested == "mmdc":
+            raise ValueError("mmdc svg render requested but Mermaid CLI executable 'mmdc' was not found")
+        else:
+            warning = "mmdc_not_found_fallback_builtin"
+    return _codex_history_graph_svg(items, instance_name=instance_name, repo_filter=repo_filter), "builtin", warning
+
+
+def _codex_history_graph_svg_engine(value: str) -> str:
+    engine = str(value or "builtin").strip().casefold()
+    if engine not in CODEX_HISTORY_GRAPH_SVG_ENGINES:
+        raise ValueError(f"unsupported codex history graph svg engine: {value}")
+    return engine
+
+
+def _codex_history_graph_svg_mmdc(
+    items: Sequence[Mapping[str, Any]],
+    *,
+    instance_name: str,
+    repo_filter: str,
+    mmdc_path: str,
+) -> str:
+    mermaid = _codex_history_graph_mermaid_source(items, instance_name=instance_name, repo_filter=repo_filter)
+    with tempfile.TemporaryDirectory(prefix="teebotus-codex-history-graph-") as tmp_dir:
+        input_path = Path(tmp_dir) / "graph.mmd"
+        output_path = Path(tmp_dir) / "graph.svg"
+        input_path.write_text(mermaid, encoding="utf-8")
+        result = subprocess.run(
+            [mmdc_path, "-i", str(input_path), "-o", str(output_path), "-b", "transparent"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0:
+            detail = _truncate((result.stderr or result.stdout or "mmdc failed").strip(), 500)
+            raise ValueError(detail)
+        svg_text = output_path.read_text(encoding="utf-8")
+        if "<svg" not in svg_text:
+            raise ValueError("mmdc did not produce an SVG document")
+        return svg_text
+
+
+def _codex_history_graph_mermaid_source(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
+    markdown = _codex_history_graph_markdown(items, instance_name=instance_name, repo_filter=repo_filter)
+    match = re.search(r"```mermaid\n(?P<body>.*?)\n```", markdown, re.DOTALL)
+    if not match:
+        raise ValueError("codex history graph markdown does not contain a mermaid block")
+    return match.group("body").strip() + "\n"
 
 
 def _codex_history_graph_svg(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
