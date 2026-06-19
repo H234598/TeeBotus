@@ -407,6 +407,28 @@ def test_recent_telegram_recipients_accepts_routed_telegram_fallback_identity(tm
     ]
 
 
+def test_recent_telegram_recipients_deduplicates_same_account_route(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    identities = store._load_identities()
+    username_payload = dict(identities["telegram:user:111"])
+    username_payload["identity_key"] = "telegram:username:ada"
+    identities["telegram:username:ada"] = username_payload
+    store._save_identities(identities)
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.identity_key, recipient.account_id, recipient.chat_id) for recipient in recipients] == [
+        ("telegram:user:111", account_id, 111)
+    ]
+
+
 def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

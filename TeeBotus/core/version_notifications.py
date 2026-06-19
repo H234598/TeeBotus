@@ -133,7 +133,7 @@ def recent_telegram_recipients(
                 adapter_slot=route_slot,
             )
         )
-    return sorted(recipients, key=lambda item: item.identity_key)
+    return _deduplicate_telegram_recipients(recipients)
 
 
 def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REPO_URL, memory_text: str = "") -> str:
@@ -257,6 +257,14 @@ def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
     except (TypeError, ValueError):
         return default
     return slot if slot > 0 else default
+
+
+def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
+    unique: dict[tuple[str, int, int], VersionNotificationRecipient] = {}
+    for recipient in sorted(recipients, key=lambda item: item.identity_key):
+        route_key = (recipient.account_id, recipient.chat_id, recipient.adapter_slot)
+        unique.setdefault(route_key, recipient)
+    return sorted(unique.values(), key=lambda item: item.identity_key)
 
 
 def _is_permanent_delivery_error(exc: Exception) -> bool:
