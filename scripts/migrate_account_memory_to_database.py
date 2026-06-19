@@ -60,8 +60,12 @@ def _migrate(*, instances_dir: Path, selected: tuple[str, ...], dry_run: bool, d
     skipped = 0
     deleted = 0
     for instance_dir in _instance_dirs(instances_dir, selected):
-        source_store = AccountStore(instance_dir / "data" / "accounts", instance_dir.name, provider)
-        target_store = AccountStore(instance_dir / "data" / "accounts", instance_dir.name, provider)
+        source_store = AccountStore(
+            instance_dir / "data" / "accounts", instance_dir.name, provider, create_dirs=False
+        )
+        target_store = AccountStore(
+            instance_dir / "data" / "accounts", instance_dir.name, provider, create_dirs=False
+        )
         for account_dir in _account_dirs(source_store.accounts_dir):
             account_id = account_dir.name
             entries_path = account_dir / USER_MEMORY_ENTRIES_FILENAME
@@ -122,7 +126,7 @@ def _restore_env(previous: dict[str, str | None]) -> None:
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
     if selected:
-        return [instances_dir / name for name in selected]
+        return [instances_dir / name for name in selected if (instances_dir / name).is_dir()]
     if not instances_dir.exists():
         return []
     return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())

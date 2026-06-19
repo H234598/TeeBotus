@@ -23,6 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="Print pip commands without executing them.")
     parser.add_argument("--python", default=sys.executable, help="Python executable used to run pip.")
     parser.add_argument("--no-user", action="store_true", help="Do not pass --user to pip.")
+    parser.add_argument(
+        "--skip-post-check",
+        action="store_true",
+        help="Skip the final check_adapter_deps.py verification after installation.",
+    )
     parser.add_argument("--python-only", action="store_true", help="Install only Python adapter dependencies.")
     parser.add_argument("--native-only", action="store_true", help="Install only native Signal adapter dependencies.")
     parser.add_argument("--bin-dir", default=str(Path.home() / ".local" / "bin"), help="User binary directory for signal-cli.")
@@ -41,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.python_only:
         install_signal_cli(pins["signal-cli"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
         install_signal_cli_rest_api(pins["signal-cli-rest-api"], bin_dir=Path(args.bin_dir), opt_dir=Path(args.opt_dir), dry_run=args.dry_run)
-    if not args.dry_run:
+    if not args.dry_run and not args.skip_post_check:
         check_command = [args.python, str(Path(__file__).with_name("check_adapter_deps.py"))]
         if args.python_only:
             check_command.append("--python-only")

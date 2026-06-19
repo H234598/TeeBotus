@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _instance_dirs(instances_dir: Path, selected: list[str]) -> list[Path]:
     if selected:
-        return [instances_dir / name for name in selected]
+        return [instances_dir / name for name in selected if (instances_dir / name).is_dir()]
     if not instances_dir.exists():
         return []
     return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())

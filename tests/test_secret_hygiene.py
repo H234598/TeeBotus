@@ -135,10 +135,26 @@ def _iter_text_files(root: Path):
     for path in root.rglob("*"):
         if not path.is_file():
             continue
-        if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
+        relative_parts = path.relative_to(root).parts
+        if any(_is_skipped_dir(part) for part in relative_parts[:-1]):
             continue
         if path.suffix in TEXT_SUFFIXES or path.name == ".env.example":
             yield path
+
+
+def test_iter_text_files_skips_venv_directories_and_not_venv_prefixed_files(tmp_path: Path) -> None:
+    (tmp_path / ".venv" / "secret.txt").parent.mkdir(parents=True)
+    (tmp_path / ".venv" / "secret.txt").write_text("venv-content-placeholder", encoding="utf-8")
+    (tmp_path / ".venv-backup.txt").write_text("non-venv-prefix-file-content", encoding="utf-8")
+
+    paths = {p.relative_to(tmp_path) for p in _iter_text_files(tmp_path)}
+
+    assert (tmp_path / ".venv" / "secret.txt").relative_to(tmp_path) not in paths
+    assert (tmp_path / ".venv-backup.txt").relative_to(tmp_path) in paths
+
+
+def _is_skipped_dir(path_part: str) -> bool:
+    return path_part in SKIP_DIRS or path_part.startswith(".venv")
 
 
 def _allowed_placeholder(token: str) -> bool:

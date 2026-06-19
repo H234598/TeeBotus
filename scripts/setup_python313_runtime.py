@@ -132,10 +132,11 @@ def _setup_commands(
             "--python-only",
             "--no-user",
         ]
+        adapter_command.append("--skip-post-check")
         if dry_run:
             adapter_command.append("--dry-run")
         commands.append(adapter_command)
-    if dry_run or not install_adapter_deps:
+    if install_adapter_deps:
         commands.append([venv_python, str(REPO_ROOT / "scripts" / "check_adapter_deps.py"), "--python-only"])
     return commands
 

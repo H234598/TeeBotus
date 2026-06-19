@@ -33,7 +33,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists():
-        shutil.rmtree(target)
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
     shutil.copytree(source, target)
     if icon_source.is_file():
         icon_target.parent.mkdir(parents=True, exist_ok=True)

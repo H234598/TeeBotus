@@ -92,6 +92,24 @@ def test_adapter_dependency_installer_passes_python_only_to_final_check(monkeypa
     assert not any("signal-cli-rest-api" in " ".join(command) for command in calls[:-1])
 
 
+def test_adapter_dependency_installer_can_skip_post_check(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, check=False, **_kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("scripts.install_adapter_deps.subprocess.run", fake_run)
+
+    result = main(["--python-only", "--python", "python3", "--no-user", "--skip-post-check"])
+
+    assert result == 0
+    assert not any(
+        len(command) > 1 and str(Path(command[1]).name) == "check_adapter_deps.py" for command in calls
+    )
+    assert any("signalbot==1.2.2" in command for command in calls)
+
+
 def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.MonkeyPatch) -> None:
     called: list[str] = []
 

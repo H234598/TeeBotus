@@ -45,7 +45,12 @@ def test_python313_runtime_setup_dry_run_prints_safe_commands(monkeypatch, capsy
     assert f"{tmp_path / 'venv' / 'bin' / 'python'} -m pip install --upgrade pip" in captured.out
     assert f"{tmp_path / 'venv' / 'bin' / 'python'} -m pip install --upgrade packaging" in captured.out
     assert f"{tmp_path / 'venv' / 'bin' / 'python'} -m pip install -r {setup_python313.REPO_ROOT / 'requirements.txt'}" in captured.out
-    assert "--python-only --no-user --dry-run" in captured.out
+    assert "--python-only" in captured.out
+    assert "--no-user" in captured.out
+    assert "--skip-post-check" in captured.out
+    assert "--dry-run" in captured.out
+    assert any("install_adapter_deps.py" in line for line in captured.out.splitlines())
+    assert any("check_adapter_deps.py" in line for line in captured.out.splitlines())
     assert "python313_runtime=ready" in captured.out
 
 
@@ -117,6 +122,7 @@ def test_python313_runtime_setup_runs_expected_commands(monkeypatch, tmp_path: P
     ]
     assert calls[5][:5] == [str(tmp_path / "venv" / "bin" / "python"), "-m", "pip", "install", "--no-deps"]
     assert calls[6][:2] == [str(tmp_path / "venv" / "bin" / "python"), str(setup_python313.REPO_ROOT / "scripts" / "install_adapter_deps.py")]
+    assert "--skip-post-check" in calls[6]
 
 
 def test_python313_runtime_setup_can_skip_requirements(monkeypatch, tmp_path: Path) -> None:
@@ -133,6 +139,49 @@ def test_python313_runtime_setup_can_skip_requirements(monkeypatch, tmp_path: Pa
 
     assert result == 0
     assert not any(str(setup_python313.REPO_ROOT / "requirements.txt") in command for command in calls)
+
+
+def test_python313_runtime_setup_skip_adapter_deps_skips_adapter_steps(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(setup_python313.shutil, "which", lambda _name: "/usr/bin/python3.13")
+    calls: list[list[str]] = []
+
+    def runner(command, **_kwargs):
+        calls.append(list(command))
+        if command[:2] == ["/usr/bin/python3.13", "-c"]:
+            return subprocess.CompletedProcess(command, 0, stdout="3.13.13\n", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    result = setup_python313.main(
+        ["--venv", str(tmp_path / "venv"), "--skip-adapter-deps"],
+        runner=runner,
+    )
+
+    assert result == 0
+    assert not any("install_adapter_deps.py" in " ".join(command) for command in calls)
+    assert not any("check_adapter_deps.py" in " ".join(command) for command in calls)
+
+
+def test_python313_runtime_setup_dry_run_skip_adapter_deps_prints_no_adapter_commands(monkeypatch, capsys, tmp_path: Path) -> None:
+    monkeypatch.setattr(setup_python313.shutil, "which", lambda _name: "/usr/bin/python3.13")
+
+    def runner(command, **_kwargs):
+        assert command[:2] == ["/usr/bin/python3.13", "-c"]
+        return subprocess.CompletedProcess(command, 0, stdout="3.13.13\n", stderr="")
+
+    result = setup_python313.main(
+        [
+            "--dry-run",
+            "--venv",
+            str(tmp_path / "venv"),
+            "--skip-adapter-deps",
+        ],
+        runner=runner,
+    )
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "install_adapter_deps.py" not in captured.out
+    assert "check_adapter_deps.py" not in captured.out
 
 
 def test_python313_runtime_setup_runs_systemd_install_after_dependency_setup(monkeypatch, tmp_path: Path) -> None:

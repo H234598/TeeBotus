@@ -117,10 +117,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    requested_target_instances_dir = Path(args.target_instances_dir)
+    requested_target_instances_dir = Path(args.target_instances_dir).expanduser()
+    requested_legacy_instances_dir = Path(args.legacy_instances_dir).expanduser()
     rehearsal_copy_dir = Path(args.rehearsal_copy_dir).expanduser() if args.rehearsal_copy_dir else None
     target_instances_dir = requested_target_instances_dir
     if rehearsal_copy_dir is not None:
+        if not _is_safe_rehearsal_copy_dir(rehearsal_copy_dir):
+            print(f"unsafe rehearsal copy dir: {rehearsal_copy_dir}", file=sys.stderr)
+            return 2
         if not args.apply:
             print("--rehearsal-copy-dir requires --apply", file=sys.stderr)
             return 2
@@ -132,7 +136,6 @@ def main(argv: list[str] | None = None) -> int:
             if args.json_output or args.markdown_output:
                 previous_env = _apply_backend(args.backend)
                 try:
-                    requested_legacy_instances_dir = Path(args.legacy_instances_dir)
                     stats = import_legacy_user_memory(
                         legacy_instances_dir=requested_legacy_instances_dir,
                         target_instances_dir=target_instances_dir,
@@ -168,7 +171,6 @@ def main(argv: list[str] | None = None) -> int:
 
     previous_env = _apply_backend(args.backend)
     try:
-        requested_legacy_instances_dir = Path(args.legacy_instances_dir)
         stats = import_legacy_user_memory(
             legacy_instances_dir=requested_legacy_instances_dir,
             target_instances_dir=target_instances_dir,
@@ -212,9 +214,13 @@ def main(argv: list[str] | None = None) -> int:
 
 def _write_import_report_artifacts(report: dict[str, Any], *, json_output: str, markdown_output: str) -> None:
     if json_output:
-        Path(json_output).write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        json_path = Path(json_output).expanduser()
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if markdown_output:
-        Path(markdown_output).write_text(_render_markdown_report(report), encoding="utf-8")
+        markdown_path = Path(markdown_output).expanduser()
+        markdown_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown_path.write_text(_render_markdown_report(report), encoding="utf-8")
 
 
 def import_legacy_user_memory(
@@ -360,7 +366,7 @@ def import_legacy_user_memory(
                         stats.metadata_backups_created += moved
                         stats.account_store_resets += 1
                         reset_account_stores.add(target_root)
-                    target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                    target_store = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
                     existing_account_id = target_store.get_account_for_identity(identity)
                 else:
                     existing_account_id = None
@@ -371,7 +377,7 @@ def import_legacy_user_memory(
             stats.accounts_existing += 1
         elif apply:
             if target_store is None:
-                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
             account_id = target_store.resolve_or_create_account(identity, display_label=f"legacy telegram {user_dir.name}")
             stats.accounts_created += 1
         else:
@@ -382,7 +388,7 @@ def import_legacy_user_memory(
         target_unreadable = False
         if existing_account_id:
             try:
-                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
                 target_entries = target_store.read_memory_entries(existing_account_id)
             except AccountStoreError:
                 target_unreadable = True
@@ -448,7 +454,7 @@ def import_legacy_user_memory(
             if target_unreadable and replace_unreadable:
                 target_store = _memory_replacement_account_store(target_root, instance_name, provider)
             else:
-                target_store = AccountStore(target_root, instance_name, secret_provider=provider)
+                target_store = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
         if backup_current:
             stats.backups_created += _backup_sqlite_files(target_root)
         if target_unreadable and replace_unreadable:
@@ -477,7 +483,7 @@ def import_legacy_user_memory(
         for target_root, instance_name in memory_keyring_repair_roots.items():
             if _drop_account_keyring_purpose(target_root, ACCOUNT_MEMORY_KEY_PURPOSE):
                 stats.memory_keyring_repairs += 1
-            strict_stores[target_root] = AccountStore(target_root, instance_name, secret_provider=provider)
+            strict_stores[target_root] = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
         for target_root, instance_name, identity, account_id, legacy_user_id in deferred_strict_verifications:
             strict_store = strict_stores[target_root]
             _verify_imported_account_identity(
@@ -704,11 +710,30 @@ def _prepare_rehearsal_target_copy(source_instances_dir: Path, rehearsal_copy_di
         raise SystemExit(f"rehearsal source target instances directory does not exist: {source}")
     if not source.is_dir():
         raise SystemExit(f"rehearsal source target instances path is not a directory: {source}")
-    if destination.exists():
-        raise SystemExit(f"rehearsal copy directory already exists: {destination}")
+    resolved_source = source.resolve(strict=False)
+    resolved_destination = destination.resolve(strict=False)
+    if resolved_destination == resolved_source:
+        raise SystemExit("rehearsal copy directory must not be the same as source instances directory")
+    if resolved_source in resolved_destination.parents:
+        raise SystemExit(f"rehearsal copy directory must not be inside source instances directory: {resolved_destination}")
+    if resolved_destination in resolved_source.parents:
+        raise SystemExit("rehearsal copy directory must not contain source instances directory")
+    if destination.exists() or destination.is_symlink():
+        if destination.is_dir() and not destination.is_symlink():
+            shutil.rmtree(destination)
+        else:
+            destination.unlink()
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(source, destination, symlinks=True)
     return destination
+
+
+def _is_safe_rehearsal_copy_dir(path: Path) -> bool:
+    resolved = path.resolve(strict=False)
+    tmp_root = Path("/tmp").resolve()
+    return resolved != tmp_root and tmp_root in resolved.parents and any(
+        "teebotus" in node.name.casefold() for node in [resolved, *resolved.parents]
+    )
 
 
 def _detect_running_teebotus_processes() -> list[dict[str, str]]:
@@ -806,6 +831,7 @@ def _account_store_with_secret_guard(
         secret_provider=guarded_provider,
         memory_backend_enabled=memory_backend_enabled,
         secret_guard_purposes=guard_purposes,
+        create_dirs=False,
     )
 
 
