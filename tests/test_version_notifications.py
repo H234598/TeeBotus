@@ -1543,6 +1543,19 @@ def test_github_repo_url_strips_ssh_remote_query_and_fragment(tmp_path: Path, mo
     assert leaked_token not in repo_url
 
 
+def test_github_repo_url_uses_default_for_local_remote_paths(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "/home/teladi/private/TeeBotus.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    repo_url = github_repo_url(tmp_path)
+
+    assert repo_url == "https://github.com/H234598/TeeBotus"
+    assert "/home/teladi" not in repo_url
+
+
 def test_version_notification_text_strips_repo_url_credentials() -> None:
     leaked_token = "github_pat_" + "A" * 24
 
