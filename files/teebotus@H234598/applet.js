@@ -1168,8 +1168,10 @@ TeeBotusApplet.prototype = {
   _terminalArgs: function() {
     let configured = String(this.terminalCommand || "").trim();
     if (configured) {
-      let parsed = this._commandArgs(configured, []);
-      return this._terminalCommandArgs(parsed);
+      let parsed = this._safeExecutableArgs(configured, []);
+      if (parsed.length > 0) {
+        return this._terminalCommandArgs(parsed);
+      }
     }
     for (let candidate of TERMINAL_CANDIDATES) {
       if (!GLib.find_program_in_path(candidate)) {
@@ -1248,11 +1250,11 @@ TeeBotusApplet.prototype = {
   },
 
   _pythonArgs: function() {
-    return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);
+    return this._safeExecutableArgs(this.pythonCommand, [DEFAULT_PYTHON]);
   },
 
   _pythonPath: function() {
-    return String(this.pythonCommand || DEFAULT_PYTHON).trim() || DEFAULT_PYTHON;
+    return this._pythonArgs().map((part) => this._safeShellWord(part)).join(" ");
   },
 
   _repoPath: function() {
@@ -1298,11 +1300,11 @@ TeeBotusApplet.prototype = {
   },
 
   _codexUsageCommand: function() {
-    return String(this.codexUsageCommand || DEFAULT_CODEX_USAGE_COMMAND).trim() || DEFAULT_CODEX_USAGE_COMMAND;
+    return this._codexUsageArgs().join(" ");
   },
 
   _codexUsageArgs: function() {
-    return this._commandArgs(this.codexUsageCommand, [DEFAULT_CODEX_USAGE_COMMAND]);
+    return this._safeExecutableArgs(this.codexUsageCommand, [DEFAULT_CODEX_USAGE_COMMAND]);
   },
 
   _commandArgs: function(value, fallback) {
@@ -1319,6 +1321,32 @@ TeeBotusApplet.prototype = {
       return (fallback || []).slice();
     }
     return (fallback || []).slice();
+  },
+
+  _safeExecutableArgs: function(value, fallback) {
+    let fallbackArgs = (fallback || []).slice();
+    let args = this._commandArgs(value, fallbackArgs);
+    if (args.length === 0 || !this._isSafeExecutable(args[0])) {
+      return fallbackArgs;
+    }
+    return args;
+  },
+
+  _isSafeExecutable: function(value) {
+    let command = String(value || "").trim();
+    if (!command || command.charAt(0) === "-" || command.indexOf("\u0000") >= 0 || command.length > 4096) {
+      return false;
+    }
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(command)) {
+      return false;
+    }
+    if (command.indexOf("/") >= 0) {
+      return command.charAt(0) === "/";
+    }
+    if (command === "." || command === "..") {
+      return false;
+    }
+    return /^[A-Za-z0-9._+-]+$/.test(command);
   },
 
   _qdrantUrl: function() {

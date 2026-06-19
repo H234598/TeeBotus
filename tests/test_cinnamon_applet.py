@@ -68,6 +68,7 @@ const context = {{
       GLib: {{
         get_home_dir: () => "/tmp",
         build_filenamev: (parts) => parts.join("/"),
+        find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -148,10 +149,12 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this.spawnGeneration += 1;" in source
     assert "_commandArgs: function(value, fallback)" in source
     assert "GLib.shell_parse_argv(raw)" in source
-    assert "return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
+    assert "return this._safeExecutableArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
     assert "this._codexUsageArgs().concat(args || [])" in source
-    assert "this._commandArgs(configured, [])" in source
+    assert "this._safeExecutableArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
+    assert "_safeExecutableArgs: function(value, fallback)" in source
+    assert "_isSafeExecutable: function(value)" in source
     assert "_safeLocalPath: function(value, fallback)" in source
     assert "_libraryPath: function()" in source
     assert "_safeProjectUrl: function(value, fallback)" in source
@@ -548,6 +551,49 @@ def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
         "https://github.com/H234598/TeeBotus",
         "https://github.com/H234598/TeeBotus/commits/main",
     ]
+
+
+def test_cinnamon_applet_sanitizes_executable_settings() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.pythonCommand = "--help";
+          applet.codexUsageCommand = "file:///tmp/tool";
+          applet.terminalCommand = "--bad-terminal";
+          let invalidStatusCommand = applet._statusCommand();
+          let invalidCodex = applet._codexUsageArgs();
+          let invalidTerminal = applet._terminalArgs();
+          applet.pythonCommand = "/usr/bin/python3 -B";
+          applet.codexUsageCommand = "codex-usage --profile daily";
+          applet.terminalCommand = "xterm -hold";
+          let validStatusCommand = applet._statusCommand();
+          return {
+            invalidStatusCommand: invalidStatusCommand,
+            invalidCodex: invalidCodex,
+            invalidTerminal: invalidTerminal,
+            validStatusCommand: validStatusCommand,
+            validCodex: applet._codexUsageArgs(),
+            validTerminal: applet._terminalArgs(),
+            unsafeChecks: [
+              applet._isSafeExecutable("--help"),
+              applet._isSafeExecutable("file:///tmp/tool"),
+              applet._isSafeExecutable("../python"),
+              applet._isSafeExecutable("python3")
+            ]
+          };
+        })()
+        """
+    )
+
+    assert result["invalidStatusCommand"][0] == "/usr/bin/python3"
+    assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/usr/bin/python3'"
+    assert result["invalidCodex"] == ["codex-usage"]
+    assert result["invalidTerminal"] == ["gnome-terminal", "--"]
+    assert result["validStatusCommand"][:2] == ["/usr/bin/python3", "-B"]
+    assert result["validStatusCommand"][result["validStatusCommand"].index("--python") + 1] == "'/usr/bin/python3' '-B'"
+    assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
+    assert result["validTerminal"] == ["xterm", "-hold", "-e"]
+    assert result["unsafeChecks"] == [False, False, False, True]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
