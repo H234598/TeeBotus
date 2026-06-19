@@ -5,6 +5,7 @@ import os
 import re
 import calendar
 from collections.abc import Iterable as IterableABC
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -26,8 +27,9 @@ PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
 PROACTIVE_DEFAULT_CATEGORIES = ("reminder", "task", "tip")
 PROACTIVE_REVIEW_STATUSES = frozenset({"review_pending"})
+PROACTIVE_IN_FLIGHT_STATUSES = frozenset({"dispatching"})
 PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled", "expired"})
-PROACTIVE_OUTBOX_STATUSES = frozenset({"queued", *PROACTIVE_REVIEW_STATUSES, *PROACTIVE_TERMINAL_STATUSES})
+PROACTIVE_OUTBOX_STATUSES = frozenset({"queued", *PROACTIVE_REVIEW_STATUSES, *PROACTIVE_IN_FLIGHT_STATUSES, *PROACTIVE_TERMINAL_STATUSES})
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
@@ -400,40 +402,41 @@ def approve_proactive_review_item(
     reason: str = "",
     now: datetime | None = None,
 ) -> ProactiveDecision:
-    rows = account_store.read_proactive_outbox(account_id)
-    target: dict[str, Any] | None = None
-    for item in rows:
-        if isinstance(item, dict) and str(item.get("id") or "").strip() == str(item_id or "").strip():
-            target = item
-            break
-    if target is None:
-        return ProactiveDecision(False, "item_not_found")
-    if str(target.get("status") or "queued").strip().casefold() != "review_pending":
-        return ProactiveDecision(False, "item_not_review_pending")
-    category = str(target.get("category") or "").strip().casefold()
-    decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
-    if not decision.allowed:
-        return decision
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
-    target["status"] = "queued"
-    target["risk_gate"] = "none"
-    target["updated_at"] = timestamp
-    target["policy_result"] = "allowed"
-    target["policy_reason"] = "human_review_approved"
-    target["route"] = decision.route or target.get("route") or {}
-    target["human_review"] = {
-        "status": "approved",
-        "reviewer": str(reviewer or "operator").strip()[:80],
-        "reason": str(reason or "").strip()[:240],
-        "reviewed_at": timestamp,
-    }
-    history = target.setdefault("status_history", [])
-    if not isinstance(history, list):
-        history = []
-        target["status_history"] = history
-    history.append({"at": timestamp, "status": "queued", "reason": "human_review_approved"})
-    account_store.write_proactive_outbox(account_id, rows)
-    return ProactiveDecision(True, f"queued:{item_id}", decision.route)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        target: dict[str, Any] | None = None
+        for item in rows:
+            if isinstance(item, dict) and str(item.get("id") or "").strip() == str(item_id or "").strip():
+                target = item
+                break
+        if target is None:
+            return ProactiveDecision(False, "item_not_found")
+        if str(target.get("status") or "queued").strip().casefold() != "review_pending":
+            return ProactiveDecision(False, "item_not_review_pending")
+        category = str(target.get("category") or "").strip().casefold()
+        decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
+        if not decision.allowed:
+            return decision
+        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        target["status"] = "queued"
+        target["risk_gate"] = "none"
+        target["updated_at"] = timestamp
+        target["policy_result"] = "allowed"
+        target["policy_reason"] = "human_review_approved"
+        target["route"] = decision.route or target.get("route") or {}
+        target["human_review"] = {
+            "status": "approved",
+            "reviewer": str(reviewer or "operator").strip()[:80],
+            "reason": str(reason or "").strip()[:240],
+            "reviewed_at": timestamp,
+        }
+        history = target.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            target["status_history"] = history
+        history.append({"at": timestamp, "status": "queued", "reason": "human_review_approved"})
+        account_store.write_proactive_outbox(account_id, rows)
+        return ProactiveDecision(True, f"queued:{item_id}", decision.route)
 
 
 def reject_proactive_review_item(
@@ -445,29 +448,30 @@ def reject_proactive_review_item(
     reason: str = "",
     now: datetime | None = None,
 ) -> ProactiveDecision:
-    rows = account_store.read_proactive_outbox(account_id)
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
-    for item in rows:
-        if not isinstance(item, dict) or str(item.get("id") or "").strip() != str(item_id or "").strip():
-            continue
-        if str(item.get("status") or "queued").strip().casefold() != "review_pending":
-            return ProactiveDecision(False, "item_not_review_pending")
-        item["status"] = "cancelled"
-        item["updated_at"] = timestamp
-        item["human_review"] = {
-            "status": "rejected",
-            "reviewer": str(reviewer or "operator").strip()[:80],
-            "reason": str(reason or "").strip()[:240],
-            "reviewed_at": timestamp,
-        }
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": "cancelled", "reason": "human_review_rejected"})
-        account_store.write_proactive_outbox(account_id, rows)
-        return ProactiveDecision(True, f"cancelled:{item_id}")
-    return ProactiveDecision(False, "item_not_found")
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "").strip() != str(item_id or "").strip():
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "review_pending":
+                return ProactiveDecision(False, "item_not_review_pending")
+            item["status"] = "cancelled"
+            item["updated_at"] = timestamp
+            item["human_review"] = {
+                "status": "rejected",
+                "reviewer": str(reviewer or "operator").strip()[:80],
+                "reason": str(reason or "").strip()[:240],
+                "reviewed_at": timestamp,
+            }
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "cancelled", "reason": "human_review_rejected"})
+            account_store.write_proactive_outbox(account_id, rows)
+            return ProactiveDecision(True, f"cancelled:{item_id}")
+        return ProactiveDecision(False, "item_not_found")
 
 
 def run_proactive_reflection_planner(
@@ -962,32 +966,40 @@ def _proactive_item_status(item: Mapping[str, Any]) -> str:
     return str(item.get("status") or "queued").strip().casefold()
 
 
+def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str):
+    lock = getattr(account_store, "proactive_outbox_lock", None)
+    if callable(lock):
+        return lock(account_id)
+    return nullcontext()
+
+
 def fail_invalid_due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
-    rows = account_store.read_proactive_outbox(account_id)
-    failed_ids: list[str] = []
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
-    for item in rows:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("status") or "queued").strip().casefold() != "queued":
-            continue
-        due_at = str(item.get("due_at") or "").strip()
-        if not due_at or _parse_proactive_datetime(due_at) is not None:
-            continue
-        item_id = str(item.get("id") or "").strip()
-        if not item_id:
-            continue
-        item["status"] = "failed"
-        item["updated_at"] = timestamp
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": "failed", "reason": "invalid_due_at"})
-        failed_ids.append(item_id)
-    if failed_ids:
-        account_store.write_proactive_outbox(account_id, rows)
-    return tuple(failed_ids)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        failed_ids: list[str] = []
+        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                continue
+            due_at = str(item.get("due_at") or "").strip()
+            if not due_at or _parse_proactive_datetime(due_at) is not None:
+                continue
+            item_id = str(item.get("id") or "").strip()
+            if not item_id:
+                continue
+            item["status"] = "failed"
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "failed", "reason": "invalid_due_at"})
+            failed_ids.append(item_id)
+        if failed_ids:
+            account_store.write_proactive_outbox(account_id, rows)
+        return tuple(failed_ids)
 
 
 def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
@@ -997,31 +1009,32 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
         return ()
     resolved_now = now or datetime.now(timezone.utc)
     cutoff = resolved_now - timedelta(days=expire_after_days)
-    rows = account_store.read_proactive_outbox(account_id)
-    expired_ids: list[str] = []
-    timestamp = resolved_now.isoformat(timespec="seconds")
-    for item in rows:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("status") or "queued").strip().casefold() != "queued":
-            continue
-        reference = _parse_proactive_datetime(str(item.get("due_at") or item.get("created_at") or item.get("updated_at") or ""))
-        if reference is None or reference > cutoff:
-            continue
-        item_id = str(item.get("id") or "").strip()
-        if not item_id:
-            continue
-        item["status"] = "expired"
-        item["updated_at"] = timestamp
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": "expired", "reason": f"queued_item_older_than_{expire_after_days}_days"})
-        expired_ids.append(item_id)
-    if expired_ids:
-        account_store.write_proactive_outbox(account_id, rows)
-    return tuple(expired_ids)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        expired_ids: list[str] = []
+        timestamp = resolved_now.isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                continue
+            reference = _parse_proactive_datetime(str(item.get("due_at") or item.get("created_at") or item.get("updated_at") or ""))
+            if reference is None or reference > cutoff:
+                continue
+            item_id = str(item.get("id") or "").strip()
+            if not item_id:
+                continue
+            item["status"] = "expired"
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "expired", "reason": f"queued_item_older_than_{expire_after_days}_days"})
+            expired_ids.append(item_id)
+        if expired_ids:
+            account_store.write_proactive_outbox(account_id, rows)
+        return tuple(expired_ids)
 
 
 def update_proactive_outbox_item_status(
@@ -1041,41 +1054,54 @@ def update_proactive_outbox_item_status(
     expected = str(expected_status or "").strip().casefold()
     if expected and expected not in PROACTIVE_OUTBOX_STATUSES:
         raise ValueError(f"unsupported proactive outbox expected status: {expected_status}")
-    rows = account_store.read_proactive_outbox(account_id)
-    changed = False
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
-    for item in rows:
-        if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
-            continue
-        current_status = str(item.get("status") or "queued").strip().casefold()
-        if expected and current_status != expected:
-            return False
-        item["status"] = normalized_status
-        item["updated_at"] = timestamp
-        if normalized_status == "sent":
-            item["sent_at"] = timestamp
-            item["last_sent_at"] = timestamp
-        if dispatch:
-            item["dispatch"] = {str(key): value for key, value in dispatch.items()}
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
-        if normalized_status == "sent":
-            next_due_at = _next_recurrence_due_at(item, timestamp)
-            if next_due_at:
-                item["status"] = "queued"
-                item["due_at"] = next_due_at
-                item["updated_at"] = timestamp
-                count = _normalize_int(item.get("recurrence_count"), default=0) + 1
-                item["recurrence_count"] = count
-                history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})
-        changed = True
-        break
-    if changed:
-        account_store.write_proactive_outbox(account_id, rows)
-    return changed
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        changed = False
+        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
+                continue
+            current_status = str(item.get("status") or "queued").strip().casefold()
+            if expected and current_status != expected:
+                return False
+            item["status"] = normalized_status
+            item["updated_at"] = timestamp
+            if normalized_status == "sent":
+                item["sent_at"] = timestamp
+                item["last_sent_at"] = timestamp
+            if dispatch:
+                item["dispatch"] = {str(key): value for key, value in dispatch.items()}
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
+            if normalized_status == "sent":
+                next_due_at = _next_recurrence_due_at(item, timestamp)
+                if next_due_at:
+                    item["status"] = "queued"
+                    item["due_at"] = next_due_at
+                    item["updated_at"] = timestamp
+                    count = _normalize_int(item.get("recurrence_count"), default=0) + 1
+                    item["recurrence_count"] = count
+                    history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})
+            changed = True
+            break
+        if changed:
+            account_store.write_proactive_outbox(account_id, rows)
+        return changed
+
+
+def claim_proactive_worker_job(account_store: AccountStore, account_id: str, item_id: str, *, now: datetime | None = None) -> bool:
+    return update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        item_id,
+        status="dispatching",
+        reason="worker_claimed",
+        now=now,
+        expected_status="queued",
+    )
 
 
 async def dispatch_due_proactive_outbox_items(
@@ -1154,6 +1180,9 @@ async def dispatch_due_proactive_outbox_items(
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="invalid_file", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
             continue
+        if not claim_proactive_worker_job(account_store, account_id, item_id, now=resolved_now):
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "worker_claim_failed", channel))
+            continue
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
@@ -1164,7 +1193,7 @@ async def dispatch_due_proactive_outbox_items(
                 status="failed",
                 reason=f"send_error:{type(exc).__name__}",
                 now=resolved_now,
-                expected_status="queued",
+                expected_status="dispatching",
             )
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", f"send_error:{type(exc).__name__}", channel))
             continue
@@ -1178,7 +1207,7 @@ async def dispatch_due_proactive_outbox_items(
             reason="sent",
             now=resolved_now,
             dispatch=dispatch_meta,
-            expected_status="queued",
+            expected_status="dispatching",
         ):
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel, message_ref))
             continue
@@ -1922,26 +1951,27 @@ def _update_proactive_outbox_item_due_at(
     reason: str,
     now: datetime,
 ) -> bool:
-    rows = account_store.read_proactive_outbox(account_id)
-    timestamp = now.isoformat(timespec="seconds")
-    changed = False
-    for item in rows:
-        if not isinstance(item, dict) or str(item.get("id") or "").strip() != item_id:
-            continue
-        if str(item.get("status") or "queued").strip().casefold() != "queued":
-            return False
-        item["due_at"] = due_at
-        item["updated_at"] = timestamp
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": "queued", "reason": str(reason or "").strip()})
-        changed = True
-        break
-    if changed:
-        account_store.write_proactive_outbox(account_id, rows)
-    return changed
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        timestamp = now.isoformat(timespec="seconds")
+        changed = False
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "").strip() != item_id:
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                return False
+            item["due_at"] = due_at
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "queued", "reason": str(reason or "").strip()})
+            changed = True
+            break
+        if changed:
+            account_store.write_proactive_outbox(account_id, rows)
+        return changed
 
 
 def _account_memory_ids(account_store: AccountStore, account_id: str) -> set[str]:

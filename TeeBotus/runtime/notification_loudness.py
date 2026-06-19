@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
@@ -279,26 +280,27 @@ def _mark_route_state_prompted(route_state: dict[str, Any], now: datetime) -> No
 
 def _cancel_queued_notification_loudness_items(account_store: AccountStore, account_id: str, event: IncomingEvent) -> None:
     route_key = _route_key(event)
-    rows = account_store.read_proactive_outbox(account_id)
-    changed = False
-    timestamp = utc_now()
-    for item in rows:
-        if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
-            continue
-        if str(item.get("route_key") or "") != route_key:
-            continue
-        if str(item.get("status") or "queued").strip().casefold() != "queued":
-            continue
-        item["status"] = "cancelled"
-        item["updated_at"] = timestamp
-        history = item.setdefault("status_history", [])
-        if not isinstance(history, list):
-            history = []
-            item["status_history"] = history
-        history.append({"at": timestamp, "status": "cancelled", "reason": "notification_loudness_decided"})
-        changed = True
-    if changed:
-        account_store.write_proactive_outbox(account_id, rows)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        changed = False
+        timestamp = utc_now()
+        for item in rows:
+            if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
+                continue
+            if str(item.get("route_key") or "") != route_key:
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                continue
+            item["status"] = "cancelled"
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "cancelled", "reason": "notification_loudness_decided"})
+            changed = True
+        if changed:
+            account_store.write_proactive_outbox(account_id, rows)
 
 
 def _has_queued_notification_loudness_item(account_store: AccountStore, account_id: str, route_key: str) -> bool:
@@ -310,6 +312,13 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
         if str(item.get("status") or "queued").strip().casefold() == "queued":
             return True
     return False
+
+
+def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str):
+    lock = getattr(account_store, "proactive_outbox_lock", None)
+    if callable(lock):
+        return lock(account_id)
+    return nullcontext()
 
 
 def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:

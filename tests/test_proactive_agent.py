@@ -2059,10 +2059,64 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert sent_item["status"] == "sent"
     assert sent_item["dispatch"]["channel"] == "signal"
     assert sent_item["dispatch"]["message_ref"] == "123456789"
+    assert [entry["status"] for entry in sent_item["status_history"]] == ["queued", "dispatching", "sent"]
     refs = tracker.list_for_chat("+491", instance_name="Depressionsbot", channel="signal")
     assert len(refs) == 1
     assert refs[0].message_ref == "123456789"
     assert refs[0].ref_kind == "signal_timestamp"
+
+
+def test_dispatch_claim_prevents_nested_worker_from_sending_same_item(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    calls: list[str] = []
+    nested_results = []
+
+    async def duplicate_sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise AssertionError("claimed proactive outbox item was sent twice")
+
+    async def sender(_route: dict, _action: SendText, item: dict) -> str:
+        calls.append(str(item.get("id")))
+        nested_results.extend(
+            await dispatch_due_proactive_outbox_items(
+                account_store,
+                account_id,
+                senders={"signal": duplicate_sender},
+                now=now,
+            )
+        )
+        return "sent-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert calls == [item_id]
+    assert nested_results == []
+    assert len(results) == 1
+    assert results[0].status == "sent"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "sent"
+    assert [entry["status"] for entry in item["status_history"]] == ["queued", "dispatching", "sent"]
 
 
 def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_path) -> None:

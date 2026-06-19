@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-import csv
+from contextlib import contextmanager
 import hashlib
 import hmac
 import json
@@ -18,10 +18,15 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Callable, Iterable, Iterator, Protocol
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 TOKEN_HEX_RE = re.compile(r"^[0-9a-f]{128}$")
 ACCOUNT_SCHEMA_VERSION = 1
@@ -1340,6 +1345,25 @@ class AccountStore:
     def account_dir(self, account_id: str) -> Path:
         return self.accounts_dir / validate_sha512_token(account_id, field_name="account_id")
 
+    @contextmanager
+    def proactive_outbox_lock(self, account_id: str) -> Iterator[None]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        account_dir = self.account_dir(account_id)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = account_dir / f".{PROACTIVE_OUTBOX_FILENAME}.lock"
+        with lock_path.open("a+b") as handle:
+            try:
+                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
@@ -2372,21 +2396,22 @@ class AccountStore:
 
     def append_proactive_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        rows = self.read_proactive_outbox(account_id)
-        normalized = dict(item)
-        item_id = str(normalized.get("id") or f"pro_{uuid.uuid4().hex}").strip()
-        existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
-        while not item_id or item_id in existing_ids:
-            item_id = f"pro_{uuid.uuid4().hex}"
-        timestamp = utc_now()
-        normalized["id"] = item_id
-        normalized.setdefault("schema_version", 1)
-        normalized.setdefault("created_at", timestamp)
-        normalized.setdefault("updated_at", normalized["created_at"])
-        normalized.setdefault("status", "queued")
-        rows.append(normalized)
-        self.write_proactive_outbox(account_id, rows)
-        return item_id
+        with self.proactive_outbox_lock(account_id):
+            rows = self.read_proactive_outbox(account_id)
+            normalized = dict(item)
+            item_id = str(normalized.get("id") or f"pro_{uuid.uuid4().hex}").strip()
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            while not item_id or item_id in existing_ids:
+                item_id = f"pro_{uuid.uuid4().hex}"
+            timestamp = utc_now()
+            normalized["id"] = item_id
+            normalized.setdefault("schema_version", 1)
+            normalized.setdefault("created_at", timestamp)
+            normalized.setdefault("updated_at", normalized["created_at"])
+            normalized.setdefault("status", "queued")
+            rows.append(normalized)
+            self.write_proactive_outbox(account_id, rows)
+            return item_id
 
     def read_proactive_audit(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
