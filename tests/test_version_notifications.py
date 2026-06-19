@@ -1047,6 +1047,35 @@ def test_version_notification_state_normalization_drops_invalid_failure_account_
     assert failure["adapter_slot"] == 1
 
 
+def test_version_notification_state_normalization_drops_invalid_failure_route_fields() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": True,
+                            "chat_id": 0,
+                            "reason": "bad route",
+                        },
+                        "telegram:user:222": {
+                            "adapter_slot": "2",
+                            "chat_id": "222",
+                            "reason": "valid route",
+                        },
+                    }
+                }
+            }
+        }
+    )
+
+    failures = state["versions"]["1.0.3"]["failed_identities"]
+    assert "adapter_slot" not in failures["telegram:user:111"]
+    assert "chat_id" not in failures["telegram:user:111"]
+    assert failures["telegram:user:222"]["adapter_slot"] == 2
+    assert failures["telegram:user:222"]["chat_id"] == 222
+
+
 def test_version_notification_state_normalization_drops_empty_telegram_identity_keys() -> None:
     state = _normalize_state(
         {

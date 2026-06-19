@@ -622,6 +622,16 @@ def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
         normalized["failed_at"] = failed_at
     else:
         normalized.pop("failed_at", None)
+    chat_id = _optional_positive_int(normalized.get("chat_id"))
+    if chat_id is not None:
+        normalized["chat_id"] = chat_id
+    else:
+        normalized.pop("chat_id", None)
+    adapter_slot = _optional_positive_int(normalized.get("adapter_slot"))
+    if adapter_slot is not None:
+        normalized["adapter_slot"] = adapter_slot
+    else:
+        normalized.pop("adapter_slot", None)
     return normalized
 
 
