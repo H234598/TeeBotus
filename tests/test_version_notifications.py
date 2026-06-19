@@ -2004,6 +2004,46 @@ def test_notify_recent_telegram_users_does_not_skip_failure_from_different_accou
     assert account_id != other_account_id
 
 
+def test_notify_recent_telegram_users_ignores_invalid_failure_account_id_for_matching_route(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "account_id": "not-a-valid-account-id",
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+
+
 def test_notify_recent_telegram_users_skips_sent_account_across_identity_alias(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Ada")

@@ -391,7 +391,7 @@ def _sent_delivery_matches_recipient(
         payload = identities.get(identity_key)
         if not isinstance(payload, dict):
             continue
-        if str(payload.get("account_id") or "") == recipient.account_id:
+        if _normalized_account_id(payload.get("account_id")) == recipient.account_id:
             return True
         if _identity_route_matches_recipient(identity_key, payload, recipient):
             return True
@@ -469,7 +469,7 @@ def _clear_resolved_failures(
             failed_identities.pop(identity_key, None)
             continue
         payload = identities.get(identity_key)
-        if isinstance(payload, dict) and str(payload.get("account_id") or "") == recipient.account_id:
+        if isinstance(payload, dict) and _normalized_account_id(payload.get("account_id")) == recipient.account_id:
             failed_identities.pop(identity_key, None)
             continue
         if _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(identity_key, failure, recipient):
@@ -479,7 +479,7 @@ def _clear_resolved_failures(
 def _failed_delivery_route_matches(failure: object, recipient: VersionNotificationRecipient) -> bool:
     if not isinstance(failure, dict):
         return False
-    failed_account_id = str(failure.get("account_id") or "").strip()
+    failed_account_id = _normalized_account_id(failure.get("account_id"))
     if failed_account_id and failed_account_id != recipient.account_id:
         return False
     failed_chat_id = _optional_positive_int(failure.get("chat_id"))
@@ -494,8 +494,15 @@ def _failed_identity_key_route_matches(identity_key: str, failure: object, recip
         return False
     if not isinstance(failure, dict):
         return False
-    failed_account_id = str(failure.get("account_id") or "").strip()
+    failed_account_id = _normalized_account_id(failure.get("account_id"))
     return not failed_account_id or failed_account_id == recipient.account_id
+
+
+def _normalized_account_id(value: object) -> str:
+    text = str(value or "").strip().lower()
+    if len(text) != 128:
+        return ""
+    return text if all(char in "0123456789abcdef" for char in text) else ""
 
 
 def _optional_int(value: object) -> int | None:
