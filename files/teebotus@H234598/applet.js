@@ -1531,7 +1531,11 @@ TeeBotusApplet.prototype = {
     let seconds = Math.max(STATUS_REFRESH_MIN_SECONDS, this._positiveInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS));
     this.statusTimer = Mainloop.timeout_add_seconds(seconds, () => {
       this._refreshStatus();
-      return Boolean(this.autoRefresh);
+      if (!this.autoRefresh) {
+        this.statusTimer = 0;
+        return false;
+      }
+      return true;
     });
   },
 

@@ -97,6 +97,66 @@ def _run_js_parse_fields(line: str) -> dict[str, str]:
     return _run_js_applet_expression(f"applet._parseFields({json.dumps(line)})")  # type: ignore[return-value]
 
 
+def test_cinnamon_applet_refresh_timer_clears_itself_when_auto_refresh_stops() -> None:
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not available for Cinnamon applet timer check")
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+    script = f"""
+const vm = require("vm");
+const source = {json.dumps(source)};
+let timerCallback = null;
+let removed = [];
+const TextIconApplet = function() {{}};
+TextIconApplet.prototype = {{}};
+const context = {{
+  imports: {{
+    ui: {{
+      applet: {{ TextIconApplet: TextIconApplet }},
+      modalDialog: {{}},
+      popupMenu: {{}},
+      settings: {{}}
+    }},
+    gi: {{
+      Clutter: {{}},
+      St: {{}},
+      Gio: {{}},
+      GLib: {{
+        get_home_dir: () => "/tmp",
+        build_filenamev: (parts) => parts.join("/"),
+        find_program_in_path: () => null,
+        shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
+      }}
+    }},
+    mainloop: {{
+      source_remove: (id) => removed.push(id),
+      timeout_add: () => 0,
+      timeout_add_seconds: (seconds, callback) => {{
+        timerCallback = callback;
+        return 42;
+      }}
+    }}
+  }}
+}};
+vm.createContext(context);
+vm.runInContext(source + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;", context);
+const applet = Object.create(context.__TeeBotusApplet.prototype);
+applet.autoRefresh = true;
+applet.statusRefreshSeconds = 15;
+applet._refreshStatus = function() {{
+  this.autoRefresh = false;
+}};
+applet._scheduleRefresh();
+const before = applet.statusTimer;
+const keepRunning = timerCallback();
+console.log(JSON.stringify({{before, after: applet.statusTimer, keepRunning, removed}}));
+"""
+    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10)
+    result = json.loads(completed.stdout)
+
+    assert result == {"before": 42, "after": 0, "keepRunning": False, "removed": []}
+
+
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
     metadata = json.loads((APPLET_DIR / "metadata.json").read_text(encoding="utf-8"))
     schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
