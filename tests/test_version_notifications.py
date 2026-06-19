@@ -1660,6 +1660,33 @@ def test_notify_recent_telegram_users_normalizes_failed_identity_keys(tmp_path: 
     assert list(state["versions"]["1.0.3"]["failed_identities"]) == ["telegram:user:111"]
 
 
+def test_notify_recent_telegram_users_persists_legacy_delivery_before_abort(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Sent")
+    store.resolve_or_create_account("telegram:user:222", display_label="Abort")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, _text: str) -> None:
+        attempts.append(chat_id)
+        if chat_id == 222:
+            raise KeyboardInterrupt("runtime stopped")
+
+    with pytest.raises(KeyboardInterrupt):
+        notify_recent_telegram_users_for_version(
+            version="1.0.3",
+            instances_dir=tmp_path / "instances",
+            instance_name="Demo",
+            account_store=store,
+            send_message=send_message,
+            now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+        )
+
+    assert attempts == [111, 222]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_stores_state_in_sqlite_when_available(tmp_path: Path, monkeypatch) -> None:
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

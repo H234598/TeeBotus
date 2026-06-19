@@ -69,13 +69,13 @@ def notify_recent_telegram_users_for_version(
             sent_identities.add(recipient.identity_key)
             if missing_sent_alias or failed_identities != previous_failures:
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_if_sql_available(account_store, state_path, state)
+                _write_state_incrementally(account_store, state_path, state)
             continue
         matched_failure = _matched_failed_delivery(failed_identities, recipient, identities)
         if matched_failure is not None:
             if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure):
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_if_sql_available(account_store, state_path, state)
+                _write_state_incrementally(account_store, state_path, state)
             continue
         message = build_version_notification_text(
             version=normalized_version,
@@ -99,12 +99,12 @@ def notify_recent_telegram_users_for_version(
                     "reason": _delivery_error_reason(exc),
                 }
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_if_sql_available(account_store, state_path, state)
+                _write_state_incrementally(account_store, state_path, state)
             continue
         _clear_resolved_failures(failed_identities, recipient, identities)
         sent_identities.add(recipient.identity_key)
         _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-        _write_state_if_sql_available(account_store, state_path, state)
+        _write_state_incrementally(account_store, state_path, state)
         sent_count += 1
     _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
     _write_state(account_store, state_path, state)
@@ -851,9 +851,8 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
     tmp.replace(path)
 
 
-def _write_state_if_sql_available(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
-    if _sql_state_backend_available(account_store):
-        _write_state(account_store, path, state)
+def _write_state_incrementally(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
+    _write_state(account_store, path, state)
 
 
 def _sync_version_delivery_state(
