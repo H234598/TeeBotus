@@ -1966,7 +1966,7 @@ def test_notify_recent_telegram_users_refuses_unrecoverable_corrupt_sqlite_state
     assert sent == []
 
 
-def test_read_instance_json_state_refuses_unreadable_primary_sqlite_even_if_fallback_is_usable(
+def test_read_instance_json_state_recovers_unreadable_primary_sqlite_from_usable_fallback(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1989,13 +1989,14 @@ def test_read_instance_json_state_refuses_unreadable_primary_sqlite_even_if_fall
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
     store = _store(tmp_path)
 
-    with pytest.raises(Exception):
-        store.read_instance_json_state(
-            "Version_Notifications.json",
-            "version_notifications",
-            {"versions": {}},
-            fallback_to_legacy_on_read_error=False,
-        )
+    state = store.read_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {"versions": {}},
+        fallback_to_legacy_on_read_error=False,
+    )
+
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
 
 
 def test_notify_recent_telegram_users_does_not_use_legacy_state_when_sqlite_state_is_unreadable(

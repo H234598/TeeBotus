@@ -2471,12 +2471,7 @@ class AccountStore:
         safe_filename = _safe_account_filename(filename)
         collection_name = _safe_collection_name(collection)
         backend = self.account_memory_backend
-        read_collection_backend = backend
-        if backend is not None and not fallback_to_legacy_on_read_error:
-            primary_backend = getattr(backend, "primary", None)
-            if callable(getattr(primary_backend, "read_collection", None)) and callable(getattr(primary_backend, "write_collection", None)):
-                read_collection_backend = primary_backend
-        read_collection = getattr(read_collection_backend, "read_collection", None) if read_collection_backend is not None else None
+        read_collection = getattr(backend, "read_collection", None) if backend is not None else None
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if not (callable(read_collection) and callable(write_collection)):
             return dict(default)
@@ -2488,7 +2483,7 @@ class AccountStore:
                 return self._read_legacy_instance_json_state(path, dict(default))
             raise
         if not fallback_to_legacy_on_read_error:
-            detail = self._collection_read_diagnostic_error(read_collection_backend)
+            detail = self._collection_read_diagnostic_error(backend)
             if detail:
                 raise AccountStoreError(f"account memory SQL collection {collection_name} could not be read: {detail}")
         data = _merge_json_document_rows(rows, dict(default))
