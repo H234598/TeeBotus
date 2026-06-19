@@ -625,7 +625,17 @@ def _historical_version_state_order_key(item: tuple[Any, Any]) -> tuple[tuple[tu
 def _version_state_updated_at(version_state: object) -> datetime | None:
     if not isinstance(version_state, dict):
         return None
-    return _parse_datetime(_valid_timestamp_string(version_state.get("updated_at")))
+    updated_at = _parse_datetime(_valid_timestamp_string(version_state.get("updated_at")))
+    if updated_at is not None:
+        return updated_at
+    failure_timestamps = [
+        timestamp
+        for failure in _failed_identity_map(version_state.get("failed_identities")).values()
+        if (timestamp := _parse_datetime(_valid_timestamp_string(failure.get("failed_at")))) is not None
+    ]
+    if failure_timestamps:
+        return max(failure_timestamps)
+    return None
 
 
 def _version_state_is_historical(
