@@ -462,16 +462,10 @@ def _failed_delivery_matches_recipient(
     recipient: VersionNotificationRecipient,
     identities: dict[str, Any],
 ) -> bool:
-    failures = [failed_identities.get(recipient.identity_key)]
-    failures.extend(
-        failure
-        for identity_key, failure in failed_identities.items()
-        if identity_key != recipient.identity_key
-    )
-    if any(_failed_delivery_route_matches(failure, recipient) for failure in failures):
+    if _failed_delivery_route_matches(failed_identities.get(recipient.identity_key), recipient):
         return True
     return any(
-        identity_key != recipient.identity_key and _failed_identity_key_route_matches(identity_key, failure, recipient, identities)
+        identity_key != recipient.identity_key and _failed_identity_matches_recipient(identity_key, failure, recipient, identities)
         for identity_key, failure in failed_identities.items()
     )
 
@@ -486,10 +480,40 @@ def _clear_resolved_failures(
             failed_identities.pop(identity_key, None)
             continue
         payload = identities.get(identity_key)
-        if isinstance(payload, dict) and _normalized_account_id(payload.get("account_id")) == recipient.account_id:
+        failed_account_id = _normalized_account_id(failure.get("account_id")) if isinstance(failure, dict) else ""
+        if (
+            isinstance(payload, dict)
+            and _normalized_account_id(payload.get("account_id")) == recipient.account_id
+        ):
+            payload_matches_slot = _identity_account_slot_matches_recipient(payload, recipient)
+            if payload_matches_slot and (not failed_account_id or failed_account_id == recipient.account_id):
+                failed_identities.pop(identity_key, None)
+                continue
+        failure_slot = _optional_positive_int(failure.get("adapter_slot")) if isinstance(failure, dict) else None
+        failure_chat_id = _optional_positive_int(failure.get("chat_id")) if isinstance(failure, dict) else None
+        if (
+            failed_account_id == recipient.account_id
+            and not _failure_payload_has_complete_route(failure)
+            and (
+                (failure_slot is not None and failure_slot == recipient.adapter_slot)
+                or (
+                    failure_slot is None
+                    and (
+                        (
+                            not isinstance(payload, dict)
+                            and (failure_chat_id is None or failure_chat_id == recipient.chat_id)
+                        )
+                        or (
+                            isinstance(payload, dict)
+                            and _identity_account_slot_matches_recipient(payload, recipient)
+                        )
+                    )
+                )
+            )
+        ):
             failed_identities.pop(identity_key, None)
             continue
-        if _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(identity_key, failure, recipient, identities):
+        if _failed_identity_matches_recipient(identity_key, failure, recipient, identities):
             failed_identities.pop(identity_key, None)
 
 
@@ -506,25 +530,58 @@ def _failed_delivery_route_matches(failure: object, recipient: VersionNotificati
     return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
 
 
-def _failed_identity_key_route_matches(
+def _failure_payload_has_complete_route(failure: object) -> bool:
+    if not isinstance(failure, dict):
+        return False
+    return _optional_positive_int(failure.get("chat_id")) is not None and _optional_positive_int(failure.get("adapter_slot")) is not None
+
+
+def _failed_identity_matches_recipient(
     identity_key: str,
     failure: object,
     recipient: VersionNotificationRecipient,
     identities: dict[str, Any],
 ) -> bool:
     payload = identities.get(identity_key)
+    if isinstance(payload, dict) and not (
+        _identity_route_matches_recipient(identity_key, payload, recipient)
+        or _identity_account_slot_matches_recipient(payload, recipient)
+    ):
+        return False
+    return _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(
+        identity_key,
+        failure,
+        recipient,
+        identities,
+    )
+
+
+def _failed_identity_key_route_matches(
+    identity_key: str,
+    failure: object,
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> bool:
+    if not isinstance(failure, dict):
+        return False
+    failure_chat_id = _optional_positive_int(failure.get("chat_id"))
+    failure_slot = _optional_positive_int(failure.get("adapter_slot"))
+    failed_account_id = _normalized_account_id(failure.get("account_id"))
+    if failure_chat_id is not None and failure_slot is None:
+        return False
+    if failure_chat_id is None and failure_slot is not None and failure_slot != recipient.adapter_slot:
+        return False
+    if failure_chat_id is not None and failure_slot is not None and not _failed_delivery_route_matches(failure, recipient):
+        return False
+    payload = identities.get(identity_key)
     if isinstance(payload, dict):
         if not (_identity_route_matches_recipient(identity_key, payload, recipient) or _identity_account_slot_matches_recipient(payload, recipient)):
             return False
-        if not isinstance(failure, dict):
-            return False
-        failed_account_id = _normalized_account_id(failure.get("account_id"))
         return not failed_account_id or failed_account_id == recipient.account_id
+    if failed_account_id and not _failure_payload_has_complete_route(failure):
+        return False
     if not _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
         return False
-    if not isinstance(failure, dict):
-        return False
-    failed_account_id = _normalized_account_id(failure.get("account_id"))
     return not failed_account_id or failed_account_id == recipient.account_id
 
 
@@ -665,8 +722,7 @@ def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
 def _failure_payload_quality(value: object) -> int:
     if not isinstance(value, dict):
         return 0
-    has_route = _optional_positive_int(value.get("chat_id")) is not None and _optional_positive_int(value.get("adapter_slot")) is not None
-    return 2 if has_route else 1
+    return 2 if _failure_payload_has_complete_route(value) else 1
 
 
 def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:

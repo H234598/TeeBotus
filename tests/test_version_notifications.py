@@ -2156,7 +2156,7 @@ def test_notify_recent_telegram_users_retries_when_failed_route_changes(tmp_path
     assert state["versions"]["1.0.3"]["failed_identities"] == {}
 
 
-def test_notify_recent_telegram_users_clears_alias_failure_after_successful_delivery(tmp_path: Path) -> None:
+def test_notify_recent_telegram_users_keeps_alias_failure_for_different_adapter_slot_after_successful_delivery(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Moved")
     identities = store._load_identities()
@@ -2203,7 +2203,13 @@ def test_notify_recent_telegram_users_clears_alias_failure_after_successful_deli
     assert count == 1
     assert sent == [222]
     state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "adapter_slot": 1,
+            "chat_id": 111,
+            "reason": "chat not found",
+        }
+    }
 
 
 def test_notify_recent_telegram_users_skips_failed_route_across_identity_alias(tmp_path: Path) -> None:
@@ -2522,6 +2528,353 @@ def test_notify_recent_telegram_users_does_not_skip_sent_account_on_different_ad
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:username:ada"]
 
 
+def test_notify_recent_telegram_users_does_not_clear_failures_for_different_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "account_id": account_id,
+                                "adapter_slot": 2,
+                                "chat_id": 222,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, _text: str) -> None:
+        attempts.append(chat_id)
+        if chat_id == 222:
+            raise RuntimeError("chat not found")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "account_id": account_id,
+            "adapter_slot": 2,
+            "chat_id": 222,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_does_not_clear_incomplete_failures_for_different_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "account_id": account_id,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    sent: list[int] = []
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        adapter_slot=1,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "account_id": account_id,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert account_id
+
+
+def test_notify_recent_telegram_users_does_not_clear_incomplete_failures_without_account_id_for_different_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {"reason": "chat not found"},
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        adapter_slot=1,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {"reason": "chat not found"},
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert account_id
+
+
+def test_notify_recent_telegram_users_clears_missing_identity_payload_incomplete_failure_with_matching_chat_id(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "account_id": account_id,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_does_not_clear_missing_identity_payload_incomplete_failure_with_different_chat_id(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "account_id": account_id,
+                                "chat_id": 222,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "account_id": account_id,
+            "chat_id": 222,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_does_not_clear_slot_only_failures_without_account_id_for_different_adapter_slot(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {"telegram:username:ada": {"adapter_slot": 2, "reason": "chat not found"}},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        adapter_slot=1,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {"telegram:username:ada": {"adapter_slot": 2, "reason": "chat not found"}}
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert account_id
+
+
+def test_notify_recent_telegram_users_does_not_clear_complete_failures_without_account_id_for_different_adapter_slot(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "chat_id": 222,
+                                "adapter_slot": 2,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "chat_id": 222,
+            "adapter_slot": 2,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_does_not_skip_sent_different_account_on_different_route(tmp_path: Path) -> None:
     store = _store(tmp_path)
     sent_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Already Sent")
@@ -2582,6 +2935,39 @@ def test_notify_recent_telegram_users_does_not_apply_encoded_sent_route_when_ide
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:username:ada"]
     assert sent_account_id != current_account_id
+
+
+def test_notify_recent_telegram_users_skips_payload_sent_route_after_identity_route_change(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    sent_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Already Sent")
+    _secret = store.register_account(sent_account_id)[1]
+    store.link_identity("telegram:user:111", sent_account_id, _secret, display_label="Current")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"versions": {"1.0.3": {"sent_identities": ["telegram:username:ada"], "failed_identities": {}}}}),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert attempts == []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert set(state["versions"]["1.0.3"]["sent_identities"]) == {"telegram:username:ada", "telegram:user:111"}
+    assert sent_account_id
 
 
 def test_notify_recent_telegram_users_skips_stale_sent_user_identity_key_by_route(tmp_path: Path) -> None:
@@ -2688,6 +3074,253 @@ def test_notify_recent_telegram_users_does_not_apply_encoded_failure_route_when_
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["versions"]["1.0.3"]["failed_identities"] == {}
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:username:ada"]
+    assert failed_account_id != current_account_id
+
+
+def test_notify_recent_telegram_users_does_not_apply_payload_failure_route_when_identity_payload_moved(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    failed_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Failed")
+    _secret = store.register_account(failed_account_id)[1]
+    store.link_identity("telegram:user:111", failed_account_id, _secret, display_label="Current")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "account_id": failed_account_id,
+                                "chat_id": 222,
+                                "adapter_slot": 1,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_retries_partial_stale_failed_identity_route_metadata(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    failed_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "account_id": failed_account_id,
+                                "adapter_slot": 1,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:username:ada"]
+
+
+def test_notify_recent_telegram_users_retries_chat_only_stale_failed_identity_route_metadata(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    failed_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "account_id": failed_account_id,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:username:ada"]
+
+
+def test_notify_recent_telegram_users_does_not_clear_unknown_account_id_failure_on_different_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Primary")
+    _secret = store.register_account(account_id)[1]
+    store.link_identity("telegram:username:ada", account_id, _secret, display_label="Slot-2")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "chat_id": 222,
+                                "adapter_slot": 2,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, _text: str) -> None:
+        attempts.append(chat_id)
+        if chat_id == 222:
+            raise RuntimeError("chat not found")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:username:ada": {
+            "chat_id": 222,
+            "adapter_slot": 2,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
+def test_notify_recent_telegram_users_does_not_apply_payload_failure_route_from_filtered_slot(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    failed_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Failed")
+    current_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Current")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "chat_id": 111,
+                                "adapter_slot": 1,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        adapter_slot=1,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {
+        "telegram:user:111": {
+            "adapter_slot": 1,
+            "chat_id": 111,
+            "reason": "chat not found",
+        }
+    }
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:username:ada"]
     assert failed_account_id != current_account_id
 
 
