@@ -33,6 +33,26 @@ def test_telegram_token_resolution_merges_plural_single_and_numbered_instance_va
     assert resolve_telegram_tokens("Depressionsbot", env) == ("token-a", "token-b", "token-c")
 
 
+def test_telegram_token_resolution_rejects_numbered_slot_conflict():
+    env = {
+        "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_2": "token-c",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="conflicts with already configured slot 2"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
+def test_telegram_token_resolution_rejects_numbered_slot_gap():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_3": "token-c",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="missing numbered slot"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
 def test_telegram_token_resolution_supports_global_plural_fallback():
     env = {
         "TELEGRAM_BOT_TOKENS": "global-a, global-b",
@@ -279,6 +299,22 @@ def test_build_account_configs_accepts_multi_telegram_with_matching_openai_key_s
         (1, "token-a", "key-a"),
         (2, "token-b", "key-b"),
         (3, "token-c", "key-c"),
+    ]
+
+
+def test_build_account_configs_accepts_base_and_numbered_telegram_slots():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_2": "token-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "key-a",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_2": "key-b",
+    }
+
+    accounts = build_account_run_configs("Depressionsbot", ("telegram",), env)
+
+    assert [(account.slot, account.telegram_token, account.openai_api_key) for account in accounts] == [
+        (1, "token-a", "key-a"),
+        (2, "token-b", "key-b"),
     ]
 
 

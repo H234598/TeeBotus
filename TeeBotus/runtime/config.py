@@ -223,8 +223,12 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
     token = normalize_instance_env_token(instance_name)
     bulk_values = _nonempty(parse_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}")))
     single = source.get(f"TELEGRAM_BOT_TOKEN_{token}", "").strip()
-    numbered = _numbered_values(source, f"TELEGRAM_BOT_TOKEN_{token}")
-    instance_values = _nonempty((*bulk_values, single, *numbered))
+    instance_values = _merge_numbered_values(
+        source,
+        (*bulk_values, single),
+        f"TELEGRAM_BOT_TOKEN_{token}",
+        label=f"TELEGRAM_BOT_TOKEN_{token}",
+    )
     if instance_values:
         return _validate_unique_values(instance_values, label=f"TELEGRAM_BOT_TOKEN_{token}")
     global_values = _nonempty((*parse_csv(source.get("TELEGRAM_BOT_TOKENS")), source.get("TELEGRAM_BOT_TOKEN", "")))
@@ -426,13 +430,44 @@ def resolve_runtime_config(
     return build_runtime_config(env=env, cli_channels=args.channels)
 
 
-def _numbered_values(source: Mapping[str, str], prefix: str) -> tuple[str, ...]:
-    values = []
-    for index in range(2, 100):
-        value = source.get(f"{prefix}_{index}", "").strip()
-        if value:
-            values.append(value)
+def _merge_numbered_values(
+    source: Mapping[str, str],
+    base_values: Sequence[str],
+    prefix: str,
+    *,
+    label: str,
+) -> tuple[str, ...]:
+    values = list(_nonempty(base_values))
+    for index, value in _numbered_items(source, prefix):
+        if index < 1:
+            continue
+        if index <= len(values):
+            existing = values[index - 1]
+            if existing == value:
+                continue
+            raise RuntimeConfigError(
+                f"{label}_{index} conflicts with already configured slot {index}; "
+                "use either the positional list value or the numbered value for that slot"
+            )
+        next_slot = len(values) + 1
+        if index > next_slot:
+            missing = ", ".join(str(slot) for slot in range(next_slot, index))
+            raise RuntimeConfigError(f"{label}_{index} leaves missing numbered slot(s): {missing}")
+        values.append(value)
     return tuple(values)
+
+
+def _numbered_items(source: Mapping[str, str], prefix: str) -> tuple[tuple[int, str], ...]:
+    key_prefix = f"{prefix}_"
+    items: list[tuple[int, str]] = []
+    for key, raw_value in source.items():
+        if not key.startswith(key_prefix):
+            continue
+        suffix = key[len(key_prefix) :]
+        value = str(raw_value or "").strip()
+        if suffix.isdigit() and value:
+            items.append((int(suffix), value))
+    return tuple(sorted(items))
 
 
 def _nonempty(values: Sequence[str]) -> tuple[str, ...]:
