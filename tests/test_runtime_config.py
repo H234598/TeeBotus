@@ -473,6 +473,23 @@ def test_matrix_account_resolution_accepts_single_plus_numbered_slots():
     )
 
 
+def test_matrix_account_resolution_allows_sparse_numbered_device_id_slots():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2": "https://matrix-b.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2": "@b:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2": "token-b",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2": "dev-b",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", ""),
+        ("https://matrix-b.example", "@b:example", "token-b", "dev-b"),
+    )
+
+
 def test_matrix_account_resolution_rejects_numbered_required_slot_mismatch():
     env = {
         "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
@@ -495,6 +512,18 @@ def test_matrix_account_resolution_rejects_empty_numbered_device_slot():
     }
 
     with pytest.raises(RuntimeConfigError, match="numbered slot 1 empty"):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
+def test_matrix_account_resolution_rejects_numbered_device_slot_without_matching_account():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2": "dev-b",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="Matrix device_id slot mismatch"):
         resolve_matrix_accounts("Depressionsbot", env)
 
 

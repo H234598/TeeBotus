@@ -440,7 +440,7 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
         f"MATRIX_BOT_ACCESS_TOKEN_{token}",
         label=f"MATRIX_BOT_ACCESS_TOKEN_{token}",
     )
-    device_ids = _merge_numbered_values(
+    device_ids = _merge_optional_numbered_values(
         source,
         (*base_device_ids, single_device_id),
         f"MATRIX_BOT_DEVICE_ID_{token}",
@@ -650,6 +650,30 @@ def _merge_numbered_values(
         if index > next_slot:
             missing = ", ".join(str(slot) for slot in range(next_slot, index))
             raise RuntimeConfigError(f"{label}_{index} leaves missing numbered slot(s): {missing}")
+        values.append(value)
+    return tuple(values)
+
+
+def _merge_optional_numbered_values(
+    source: Mapping[str, str],
+    base_values: Sequence[str],
+    prefix: str,
+    *,
+    label: str,
+) -> tuple[str, ...]:
+    values = list(_nonempty(base_values))
+    for index, value in _numbered_items(source, prefix):
+        if index <= len(values):
+            existing = values[index - 1]
+            if existing and existing != value:
+                raise RuntimeConfigError(
+                    f"{label}_{index} conflicts with already configured slot {index}; "
+                    "use either the positional list value or the numbered value for that slot"
+                )
+            values[index - 1] = value
+            continue
+        while len(values) + 1 < index:
+            values.append("")
         values.append(value)
     return tuple(values)
 

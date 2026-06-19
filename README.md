@@ -251,6 +251,8 @@ MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2=syt_b
 MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2=DEV_B
 ```
 
+`MATRIX_BOT_DEVICE_ID_*` ist optional pro Slot. Ein nummerierter Device-ID-Wert darf fruehere Slots leer lassen, muss aber zu einem existierenden Homeserver/User/Token-Slot gehoeren.
+
 Die Erreichbarkeit der konfigurierten Matrix-Homeserver pruefst du ohne Botstart:
 
 ```bash
