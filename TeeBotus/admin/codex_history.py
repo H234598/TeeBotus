@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import json
 import re
+import os
 import subprocess
 import time
 import sys
@@ -54,23 +55,46 @@ def _safe_instance_name(value: str) -> str:
     return text
 
 
+def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
+    text = str(value).strip()
+    if "\x00" in text:
+        raise ValueError(f"{operation} contains invalid control character")
+    normalized = os.path.expanduser(text).replace("\\", "/")
+    is_absolute = normalized.startswith("/")
+    raw_parts = normalized.split("/")
+    parts: list[str] = []
+    for part in raw_parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError(f"{operation} contains forbidden relative segment: ..")
+        parts.append(part)
+    return is_absolute, tuple(parts)
+
+
 def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
     text = str(value)
     if "\x00" in text:
         raise ValueError(f"{operation} contains invalid control character")
-    return Path(text).expanduser().resolve()
+    is_absolute, parts = _split_safe_relative_parts(text, operation=operation)
+    if is_absolute:
+        return Path("/").joinpath(*parts).resolve() if parts else Path("/").resolve()
+    if not parts:
+        return Path.cwd()
+    return Path.cwd().joinpath(*parts).resolve()
 
 
 def _safe_output_path(output: str) -> Path:
-    output_path = Path(output).expanduser()
+    is_absolute, parts = _split_safe_relative_parts(output, operation="output path")
+    if is_absolute or not parts:
+        raise ValueError(f"output path must be a safe relative path: {output}")
     root = Path.cwd().resolve()
+    output_path = Path(*parts)
     target = (root / output_path).resolve()
     try:
         target.relative_to(root)
     except ValueError as exc:
         raise ValueError(f"output path escapes the working directory: {output}") from exc
-    if output_path.is_absolute():
-        raise ValueError(f"output path must be relative: {output}")
     return target
 
 
