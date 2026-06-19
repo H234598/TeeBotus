@@ -1049,8 +1049,8 @@ def test_version_notification_state_normalization_keeps_newest_failed_at() -> No
                 "v1.0.3": {
                     "failed_identities": {
                         "telegram:user:111": {
-                            "adapter_slot": 1,
-                            "chat_id": 111,
+                            "adapter_slot": 2,
+                            "chat_id": 222,
                             "failed_at": "2026-06-14T12:00:00+00:00",
                             "reason": "newer failure",
                         }
@@ -1071,7 +1071,10 @@ def test_version_notification_state_normalization_keeps_newest_failed_at() -> No
     )
 
     failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure["adapter_slot"] == 2
+    assert failure["chat_id"] == 222
     assert failure["failed_at"] == "2026-06-14T12:00:00+00:00"
+    assert failure["reason"] == "newer failure"
 
 
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:

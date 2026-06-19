@@ -576,6 +576,13 @@ def _failure_payload_quality(value: object) -> int:
 
 def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:
     merged: dict[str, object] = {}
+    base_timestamp = _parse_datetime(str(base.get("failed_at") or "")) if isinstance(base, dict) else None
+    incoming_timestamp = _parse_datetime(str(incoming.get("failed_at") or "")) if isinstance(incoming, dict) else None
+    if isinstance(base, dict) and isinstance(incoming, dict) and base_timestamp is not None and incoming_timestamp is not None:
+        older, newer = (incoming, base) if base_timestamp > incoming_timestamp else (base, incoming)
+        merged.update(older)
+        merged.update(newer)
+        return merged
     if isinstance(base, dict):
         merged.update(base)
     if isinstance(incoming, dict):
