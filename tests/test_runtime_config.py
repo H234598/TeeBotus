@@ -47,6 +47,11 @@ def test_runtime_status_rejects_duplicate_channels_option():
             resolve_runtime_config(argv, env={})
 
 
+def test_runtime_config_rejects_unknown_options_with_generic_runtime_wording():
+    with pytest.raises(RuntimeConfigError, match="unsupported runtime option\\(s\\): --unknown"):
+        resolve_runtime_config(["--unknown"], env={})
+
+
 def test_runtime_config_all_option_requests_instance_discovery(tmp_path: Path):
     for name in ("DemoA", "DemoB"):
         instance_dir = tmp_path / name

@@ -2393,6 +2393,17 @@ def test_runtime_status_rejects_missing_channels_value_without_system_exit(monke
     assert "missing value for --channels" in captured.err
 
 
+def test_runtime_status_rejects_unknown_option_with_generic_runtime_wording(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+
+    assert bot.main(["--runtime-status", "--unknown"]) == 2
+
+    captured = capsys.readouterr()
+    assert "unsupported runtime option(s): --unknown" in captured.err
+    assert "runtime-status option" not in captured.err
+
+
 def test_empty_channels_equals_rejected_before_runtime_start(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

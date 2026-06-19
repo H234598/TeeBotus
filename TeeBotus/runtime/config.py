@@ -633,7 +633,7 @@ def resolve_runtime_config(
         unknown.append(arg)
         index += 1
     if unknown:
-        raise RuntimeConfigError(f"unsupported runtime-status option(s): {', '.join(unknown)}")
+        raise RuntimeConfigError(f"unsupported runtime option(s): {', '.join(unknown)}")
     return build_runtime_config(env=runtime_env if runtime_env is not None else source, cli_channels=cli_channels)
 
 
