@@ -25,6 +25,7 @@ DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 CODEX_USAGE_STALE_WARNING_HOURS = 24
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
+MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
@@ -504,7 +505,10 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
     try:
         response = urlopen(request, timeout=2)
         status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
-        raw = response.read()
+        try:
+            raw = response.read(MAX_QDRANT_COUNT_RESPONSE_BYTES + 1)
+        except TypeError:
+            raw = response.read()
         close = getattr(response, "close", None)
         if callable(close):
             close()
@@ -516,6 +520,8 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         return {"status": "unreachable", "count": 0, "error": _redact(f"{type(exc).__name__}: {exc}")}
     if not 200 <= status_code < 300:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
+    if len(raw) > MAX_QDRANT_COUNT_RESPONSE_BYTES:
+        return {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
     try:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:

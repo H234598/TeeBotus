@@ -6,6 +6,7 @@ from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
 from TeeBotus.runtime.qdrant import (
     BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
+    MAX_QDRANT_RESPONSE_BYTES,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
     USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
@@ -27,8 +28,9 @@ class _Response:
         self.status = status
         self.payload = payload if payload is not None else {}
 
-    def read(self) -> bytes:
-        return json.dumps(self.payload).encode("utf-8")
+    def read(self, size: int = -1) -> bytes:
+        raw = json.dumps(self.payload).encode("utf-8")
+        return raw if size is None or size < 0 else raw[:size]
 
     def close(self) -> None:
         return None
@@ -180,6 +182,61 @@ def test_check_collection_reports_vector_schema_mismatch() -> None:
     assert result.status == "schema_mismatch"
     assert result.actual_vector_size == 64
     assert result.error == "vector_size expected 384, got 64"
+
+
+def test_check_collection_rejects_invalid_json_response() -> None:
+    class InvalidJsonResponse:
+        status = 200
+
+        def read(self, size: int = -1) -> bytes:
+            return b"{not-json"
+
+        def close(self) -> None:
+            return None
+
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return InvalidJsonResponse()
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "unavailable"
+    assert result.error == "invalid JSON: JSONDecodeError"
+
+
+def test_check_collection_rejects_oversized_response() -> None:
+    class OversizedResponse:
+        status = 200
+        closed = False
+
+        def read(self, size: int = -1) -> bytes:
+            assert size == MAX_QDRANT_RESPONSE_BYTES + 1
+            return b"{" + (b"x" * MAX_QDRANT_RESPONSE_BYTES)
+
+        def close(self) -> None:
+            self.closed = True
+
+    response = OversizedResponse()
+
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return response
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "unreachable"
+    assert result.error == "Qdrant response too large"
+    assert response.closed is True
 
 
 def test_check_default_collections_probes_both_without_creating() -> None:

@@ -15,6 +15,7 @@ QDRANT_URL_ENV = "TEEBOTUS_QDRANT_URL"
 QDRANT_USER_MEMORY_COLLECTION = "teebotus_user_memory"
 QDRANT_BIBLIOTHEKAR_COLLECTION = "teebotus_bibliothekar_chunks"
 DEFAULT_QDRANT_TIMEOUT_SECONDS = 0.35
+MAX_QDRANT_RESPONSE_BYTES = 1_000_000
 USER_MEMORY_QDRANT_EMBEDDING_MODEL = "teebotus-account-memory-hash"
 USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS = ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
 BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL = "BAAI/bge-m3"
@@ -175,11 +176,13 @@ def check_collection(
     open_url = urlopen if opener is None else opener
     try:
         response = open_url(request, timeout=timeout_seconds)
-        status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
-        raw = response.read() if hasattr(response, "read") else b""
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
+        try:
+            status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+            raw = _read_response_body(response)
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
     except HTTPError as exc:
         if exc.code == 404:
             return QdrantCollectionResult(name=name, target=target, status="missing", ok=False, error="HTTP 404")
@@ -189,7 +192,10 @@ def check_collection(
     except Exception as exc:  # noqa: BLE001 - Qdrant remains optional and reports controlled failures.
         return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     if 200 <= status_code < 300:
-        actual_vector_size = _collection_vector_size(raw)
+        payload, payload_error = _collection_payload(raw)
+        if payload_error:
+            return QdrantCollectionResult(name=name, target=target, status="unavailable", ok=False, error=payload_error)
+        actual_vector_size = _collection_vector_size(payload)
         if actual_vector_size is not None and actual_vector_size != spec.vector_size:
             return QdrantCollectionResult(
                 name=name,
@@ -307,12 +313,35 @@ def ensure_default_collections(
     )
 
 
-def _collection_vector_size(raw: bytes) -> int | None:
+def _read_response_body(response: Any, *, max_bytes: int = MAX_QDRANT_RESPONSE_BYTES) -> bytes:
+    read = getattr(response, "read", None)
+    if not callable(read):
+        return b""
+    try:
+        raw = read(max_bytes + 1)
+    except TypeError:
+        raw = read()
+    if isinstance(raw, str):
+        raw = raw.encode("utf-8")
+    if len(raw) > max_bytes:
+        raise QdrantError("Qdrant response too large")
+    return raw
+
+
+def _collection_payload(raw: bytes) -> tuple[dict[str, Any] | None, str]:
     if not raw:
-        return None
+        return None, ""
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return None, f"invalid JSON: {type(exc).__name__}"
+    if not isinstance(payload, dict):
+        return None, "unexpected JSON payload"
+    return payload, ""
+
+
+def _collection_vector_size(payload: dict[str, Any] | None) -> int | None:
+    if not payload:
         return None
     result = payload.get("result") if isinstance(payload, dict) else None
     config = result.get("config") if isinstance(result, dict) else None

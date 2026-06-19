@@ -1480,6 +1480,32 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(
     assert non_object == {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_oversized_response(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+        closed = False
+
+        def read(self, size: int = -1) -> bytes:
+            assert size == cinnamon_applet.MAX_QDRANT_COUNT_RESPONSE_BYTES + 1
+            return b"{" + (b"x" * cinnamon_applet.MAX_QDRANT_COUNT_RESPONSE_BYTES)
+
+        def close(self) -> None:
+            self.closed = True
+
+    response = FakeResponse()
+
+    def fake_urlopen(_request: object, timeout: int) -> FakeResponse:
+        assert timeout == 2
+        return response
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", fake_urlopen)
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result == {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
+    assert response.closed is True
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
