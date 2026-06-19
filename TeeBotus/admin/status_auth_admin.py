@@ -272,7 +272,11 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         except ValueError as exc:
             print(f"status-auth: {exc}", file=sys.stderr)
             return 2
-        output_path.write_text(output, encoding="utf-8")
+        try:
+            output_path.write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"status-auth: unable to write output: {exc}", file=sys.stderr)
+            return 2
     else:
         print(output, end="")
     return 0

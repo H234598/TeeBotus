@@ -394,6 +394,31 @@ def test_status_auth_report_cli_rejects_directory_output_path(tmp_path: Path, ca
     assert "status-auth:" in capsys.readouterr().err
 
 
+def test_status_auth_report_cli_rejects_missing_parent_directory(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:4", display_label="Ada")
+    store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True})
+
+    output_path = tmp_path / "missing" / "dir" / "status-auth.json"
+    result = status_auth_admin_main(
+        [
+            "report",
+            "--instances-dir",
+            str(tmp_path),
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        ],
+        provider=provider(),
+    )
+
+    assert result == 2
+    assert "status-auth:" in capsys.readouterr().err
+    assert not output_path.exists()
+
+
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
