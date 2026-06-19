@@ -118,6 +118,26 @@ def test_telegram_token_resolution_rejects_numbered_slot_leading_zero():
         resolve_telegram_tokens("Depressionsbot", env)
 
 
+def test_telegram_token_resolution_rejects_invalid_numbered_slot_suffix():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_TWO": "token-b",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="invalid slot suffix TWO"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
+def test_telegram_token_resolution_rejects_empty_numbered_slot_value():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_2": " ",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="numbered slot 2 empty"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
 def test_telegram_token_resolution_rejects_empty_positional_token_slot():
     env = {"TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a,,token-c"}
 
