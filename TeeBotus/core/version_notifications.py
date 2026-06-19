@@ -46,7 +46,7 @@ def notify_recent_telegram_users_for_version(
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(state_path)
-    version_state = state.setdefault("versions", {}).setdefault(version, {})
+    version_state = _version_state(state, version)
     sent_identities = set(str(value) for value in version_state.get("sent_identities", []) if isinstance(value, str))
     failed_identities = version_state.get("failed_identities")
     if not isinstance(failed_identities, dict):
@@ -288,6 +288,18 @@ def _optional_int(value: object) -> int | None:
 def _delivery_error_reason(exc: Exception) -> str:
     text = " ".join(str(exc).split())
     return text[:240]
+
+
+def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
+    versions = state.setdefault("versions", {})
+    if not isinstance(versions, dict):
+        versions = {}
+        state["versions"] = versions
+    raw_version_state = versions.get(version)
+    if not isinstance(raw_version_state, dict):
+        raw_version_state = {}
+        versions[version] = raw_version_state
+    return raw_version_state
 
 
 def _load_state(path: Path) -> dict[str, Any]:
