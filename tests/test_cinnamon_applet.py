@@ -70,9 +70,11 @@ const context = {{
             WrapMode: {{ WORD_CHAR: "word_char" }}
           }},
           GLib: {{
+            FileTest: {{ IS_EXECUTABLE: 1 }},
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
+            file_test: (path, flag) => flag === 1 && path === "/usr/bin/gnome-terminal",
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -719,7 +721,7 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["invalidStatusCommand"][0] == "/usr/bin/python3"
     assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/usr/bin/python3'"
     assert result["invalidCodex"] == ["codex-usage"]
-    assert result["invalidTerminal"] == ["gnome-terminal", "--"]
+    assert result["invalidTerminal"] == ["/usr/bin/gnome-terminal", "--"]
     assert result["dangerousPythonCommand"][0] == "/usr/bin/python3"
     assert "-c" not in result["dangerousPythonCommand"]
     assert "print(1)" not in result["dangerousPythonCommand"]
@@ -730,7 +732,7 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
     assert result["validTerminal"] == ["xterm", "-hold", "-e"]
     assert result["validTerminalWithFinalMarker"] == ["xterm", "-hold", "-e"]
-    assert result["embeddedCommandTerminal"] == ["gnome-terminal", "--"]
+    assert result["embeddedCommandTerminal"] == ["/usr/bin/gnome-terminal", "--"]
     assert result["unsafeChecks"] == [False, False, False, True]
 
 

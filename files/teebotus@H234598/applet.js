@@ -1301,16 +1301,17 @@ TeeBotusApplet.prototype = {
       }
     }
     for (let candidate of TERMINAL_CANDIDATES) {
-      if (!GLib.find_program_in_path(candidate)) {
+      let resolved = this._findTrustedProgramInPath(candidate);
+      if (!resolved) {
         continue;
       }
       if (candidate === "xterm") {
-        return [candidate, "-e"];
+        return [resolved, "-e"];
       }
       if (candidate === "konsole") {
-        return [candidate, "-e"];
+        return [resolved, "-e"];
       }
-      return [candidate, "--"];
+      return [resolved, "--"];
     }
     return null;
   },
@@ -1563,13 +1564,9 @@ TeeBotusApplet.prototype = {
     if (!name || name.indexOf("/") >= 0 || this._hasCommandControlChars(name) || !/^[A-Za-z0-9._+-]+$/.test(name)) {
       return null;
     }
-    let resolved = GLib.find_program_in_path(name);
-    if (!resolved) {
-      return null;
-    }
-    let path = String(resolved || "");
     for (let directory of TRUSTED_SPAWN_DIRS) {
-      if (path === directory + "/" + name || path.indexOf(directory + "/") === 0) {
+      let path = GLib.build_filenamev([directory, name]);
+      if (GLib.file_test(path, GLib.FileTest.IS_EXECUTABLE)) {
         return path;
       }
     }
