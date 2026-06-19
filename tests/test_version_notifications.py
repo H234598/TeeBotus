@@ -1145,6 +1145,19 @@ def test_version_notification_state_normalization_drops_unknown_top_level_fields
     assert state == {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}}
 
 
+def test_version_notification_state_normalization_drops_empty_version_states() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {"debug": {"secret": "raw"}},
+                "1.0.4": {},
+            }
+        }
+    )
+
+    assert state == {"versions": {}}
+
+
 def test_version_notification_plaintext_writer_normalizes_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"

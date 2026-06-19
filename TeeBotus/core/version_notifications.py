@@ -1162,6 +1162,8 @@ def _normalize_state(data: Any) -> dict[str, Any]:
         if not version_key:
             continue
         normalized_value = _merge_version_notification_state({}, value)
+        if not normalized_value:
+            continue
         existing = normalized_versions.get(version_key)
         if isinstance(existing, dict):
             normalized_versions[version_key] = _merge_version_notification_state(existing, normalized_value)
