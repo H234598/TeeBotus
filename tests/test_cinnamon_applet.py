@@ -748,6 +748,35 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
     assert result["statusText"].startswith("Health")
 
 
+def test_cinnamon_applet_status_refresh_rejects_non_object_json() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.statusTimeoutSeconds = 30;
+          applet.repoPath = "/repo";
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawn = function(argv, callback, cwd, options) {
+            callback("null", "", true);
+          };
+          applet._refreshStatus();
+          return {
+            running: applet.statusRunning,
+            statusPayload: applet.statusPayload,
+            statusText: applet.statusText,
+            lastError: applet.lastError
+          };
+        })()
+        """
+    )
+
+    assert result["running"] is False
+    assert result["statusPayload"] is None
+    assert result["statusText"] == "Statusfehler: Invalid JSON object from helper"
+    assert result["lastError"] == "Invalid JSON object from helper"
+
+
 def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     result = _run_js_applet_expression(
         """

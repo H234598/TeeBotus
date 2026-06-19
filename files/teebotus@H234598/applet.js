@@ -129,6 +129,10 @@ const TERMINAL_CANDIDATES = [
   "xterm"
 ];
 
+function _(text) {
+  return text;
+}
+
 function TeeBotusApplet(metadata, orientation, panelHeight, instanceId) {
   this._init(metadata, orientation, panelHeight, instanceId);
 }
@@ -1077,7 +1081,12 @@ TeeBotusApplet.prototype = {
         return;
       }
       try {
-        callback(JSON.parse(stdout), null);
+        let payload = JSON.parse(stdout);
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          callback(null, _("Invalid JSON object from helper"));
+          return;
+        }
+        callback(payload, null);
       } catch (err) {
         callback(null, _("Invalid JSON from helper: ") + String(err));
       }
