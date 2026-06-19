@@ -118,7 +118,7 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
         if _selected_instances_contains_discovery_token(selected):
             raise RuntimeConfigError("TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES cannot combine all/auto with explicit instance names")
         if selected:
-            return selected
+            return _validate_unique_values(selected, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
     single = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCE", "TELEGRAM_BOT_INSTANCE")
     if single and single.casefold() not in {"all", "auto"}:
         return (single,)
@@ -546,5 +546,5 @@ def _validate_unique_values(values: Sequence[str], *, label: str) -> tuple[str, 
             duplicates.append(value)
         seen.add(value)
     if duplicates:
-        raise RuntimeConfigError(f"duplicate values in {label}; duplicate adapter tokens would corrupt slot-to-key mapping")
+        raise RuntimeConfigError(f"duplicate values in {label}; duplicates would corrupt runtime slot mapping")
     return result
