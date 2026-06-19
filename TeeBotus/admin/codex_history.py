@@ -1594,13 +1594,16 @@ def _write_or_print(output: str, output_path: str) -> None:
 def _ensure_explicit_instances_exist(instances_dir: Path, requested_instances: Sequence[str]) -> None:
     if not requested_instances:
         return
+    normalized_instances = tuple(_safe_instance_name(str(instance_name).strip()) for instance_name in requested_instances if str(instance_name).strip())
+    if not normalized_instances:
+        return
+    safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
+    available = set(discover_instances(safe_instances_dir, normalized_instances))
     missing: list[str] = []
-    for instance_name in requested_instances:
-        name = str(instance_name or "").strip()
+    for name in normalized_instances:
         if not name:
             continue
-        safe_name = _safe_instance_name(name)
-        if not (instances_dir / safe_name).is_dir():
+        if name not in available:
             missing.append(name)
     if missing:
         raise ValueError("requested instances not found: " + ", ".join(dict.fromkeys(missing)))
