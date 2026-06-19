@@ -421,7 +421,12 @@ def _failed_delivery_matches_recipient(failed_identities: dict[str, object], rec
         for identity_key, failure in failed_identities.items()
         if identity_key != recipient.identity_key
     )
-    return any(_failed_delivery_route_matches(failure, recipient) for failure in failures)
+    if any(_failed_delivery_route_matches(failure, recipient) for failure in failures):
+        return True
+    return any(
+        identity_key != recipient.identity_key and _failed_identity_key_route_matches(identity_key, failure, recipient)
+        for identity_key, failure in failed_identities.items()
+    )
 
 
 def _clear_resolved_failures(
@@ -452,6 +457,15 @@ def _failed_delivery_route_matches(failure: object, recipient: VersionNotificati
     if failed_chat_id is None or failed_slot is None:
         return False
     return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
+
+
+def _failed_identity_key_route_matches(identity_key: str, failure: object, recipient: VersionNotificationRecipient) -> bool:
+    if not _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
+        return False
+    if not isinstance(failure, dict):
+        return False
+    failed_account_id = str(failure.get("account_id") or "").strip()
+    return not failed_account_id or failed_account_id == recipient.account_id
 
 
 def _optional_int(value: object) -> int | None:
