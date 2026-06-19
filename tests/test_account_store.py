@@ -860,6 +860,19 @@ def test_link_identity_merges_legacy_openai_state_into_llm_state(tmp_path):
     assert (store.account_dir(target) / LLM_STATE_FILENAME).exists()
 
 
+def test_read_llm_state_compares_timezone_aware_updated_at_by_instant(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    store.write_llm_state(account_id, {"previous_response_id": "resp-target", "updated_at": "2026-06-01T00:30:00+00:00"})
+    store.account_memory_vault.write_json(
+        store.account_dir(account_id) / OPENAI_STATE_FILENAME,
+        {"previous_response_id": "resp-older-local-time", "updated_at": "2026-06-01T02:00:00+02:00"},
+    )
+
+    assert store.read_llm_state(account_id)["previous_response_id"] == "resp-target"
+
+
 def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

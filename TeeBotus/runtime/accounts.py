@@ -3447,11 +3447,36 @@ def _merge_account_jsonl_rows(primary_rows: list[dict[str, Any]], legacy_rows: l
 def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]) -> dict[str, Any]:
     source_updated = str(source_data.get("updated_at") or source_data.get("created_at") or "")
     target_updated = str(target_data.get("updated_at") or target_data.get("created_at") or "")
-    if source_updated and (not target_updated or source_updated > target_updated):
+    if _source_state_is_newer(source_updated, target_updated):
         merged = {**target_data, **source_data}
     else:
         merged = {**source_data, **target_data}
     return merged
+
+
+def _source_state_is_newer(source_updated: str, target_updated: str) -> bool:
+    if not source_updated:
+        return False
+    if not target_updated:
+        return True
+    source_timestamp = _parse_state_timestamp(source_updated)
+    target_timestamp = _parse_state_timestamp(target_updated)
+    if source_timestamp is not None and target_timestamp is not None:
+        return source_timestamp > target_timestamp
+    return source_updated > target_updated
+
+
+def _parse_state_timestamp(value: str) -> datetime | None:
+    normalized = str(value or "").strip().replace("Z", "+00:00")
+    if not normalized:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        return timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc)
 
 
 def _merge_json_document_rows(rows: Iterable[dict[str, Any]], default: dict[str, Any]) -> dict[str, Any]:
