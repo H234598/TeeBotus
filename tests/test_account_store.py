@@ -1730,6 +1730,51 @@ def test_account_jsonl_collection_reads_legacy_file_when_collection_read_fails(t
     assert legacy_path.exists()
 
 
+def test_account_jsonl_collection_reads_legacy_file_when_sql_diagnostics_fail(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic fallback must not rewrite collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = CorruptReadCollectionBackend()
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "pro_legacy", "message_text": "Fallback lesen", "status": "queued"}],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [{"id": "pro_legacy", "message_text": "Fallback lesen", "status": "queued"}]
+    assert legacy_path.exists()
+
+
+def test_account_jsonl_collection_refuses_sql_diagnostics_without_legacy_file(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = ""
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic failure must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = CorruptReadCollectionBackend()
+
+    with pytest.raises(AccountStoreError, match="proactive_outbox"):
+        store.read_proactive_outbox(account_id)
+
+
 def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
     sqlite_path = tmp_path / "memory.sqlite3"
     account_id = "a" * 128

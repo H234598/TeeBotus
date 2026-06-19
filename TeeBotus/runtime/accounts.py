@@ -2596,12 +2596,20 @@ class AccountStore:
                 if path.exists():
                     return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 raise
+            detail = self._collection_read_diagnostic_error(backend)
+            if detail:
+                if path.exists():
+                    return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+                raise AccountStoreError(f"account memory SQL collection {collection} could not be read: {detail}")
             if path.exists():
                 legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 merged_rows = _merge_account_jsonl_rows(rows, legacy_rows)
                 if merged_rows != rows:
                     write_collection(account_id, collection, merged_rows)
                     rows = list(read_collection(account_id, collection))
+                    detail = self._collection_read_diagnostic_error(backend)
+                    if detail:
+                        return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 self._unlink_migrated_account_file(path)
             return rows
         return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
