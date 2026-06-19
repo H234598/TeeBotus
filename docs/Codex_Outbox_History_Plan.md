@@ -14,26 +14,25 @@ Umgesetzt:
 - Summary-Nummern laufen pro Repo und verwenden `v<semver> #0001` als Praefix.
 - Repo-Metadaten enthalten `repo_id`, Name, Root, Remote, Provider, Branch, Head-Commit und Dirty-Status.
 - Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
-- CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
-- Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
-- Phase 4 Ack-Basis teilweise: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result.
-- Phase 4 Telegram-Reply-Hook teilweise: Antworten auf ein versendetes Codex-History-Markdown werden ueber `codex_history_dispatch_results.message_ref` erkannt, setzen `delivered_at`/`acknowledged_at` und schreiben append-only Dispatch-Results fuer `delivered` und `acknowledged`.
-- Phase 4 Signal-/Matrix-Reply-Hooks teilweise: Signal-Quote-Timestamps und Matrix-`m.in_reply_to.event_id` werden ebenfalls gegen `codex_history_dispatch_results.message_ref` gemappt und bestaetigen passende History-Eintraege append-only.
-- Phase 4 Native-Receipt-Basis teilweise: `record_codex_history_delivery_receipt(...)` und `codex-history receipt` markieren passende Dispatches als `delivered`, ohne `acknowledged` zu setzen oder bereits bestaetigte Items zurueckzustufen; Matrix-`ReceiptEvent`s sind an diese API angebunden.
-- Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
-- Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen oder mit `--follow --event-mode auto` persistent beobachten; `auto` nutzt `watchdog`-Filesystem-Events, wenn das gepinnte `[tools]`-Extra installiert ist, und faellt sonst auf Snapshot/Poll-Warten zurueck.
-- Phase 3 systemd teilweise: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
+- CLI Phase 2: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
+- Phase 4 Dispatcher: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
+- Phase 4 Ack-Basis: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result.
+- Phase 4 Telegram-Reply-Hook: Antworten auf ein versendetes Codex-History-Markdown werden ueber `codex_history_dispatch_results.message_ref` erkannt, setzen `delivered_at`/`acknowledged_at` und schreiben append-only Dispatch-Results fuer `delivered` und `acknowledged`.
+- Phase 4 Signal-/Matrix-Reply-Hooks: Signal-Quote-Timestamps und Matrix-`m.in_reply_to.event_id` werden ebenfalls gegen `codex_history_dispatch_results.message_ref` gemappt und bestaetigen passende History-Eintraege append-only.
+- Phase 4 Native-Receipts: `record_codex_history_delivery_receipt(...)` und `codex-history receipt` markieren passende Dispatches als `delivered`, ohne `acknowledged` zu setzen oder bereits bestaetigte Items zurueckzustufen; Matrix-`ReceiptEvent`s und Signal-Receipt-Events sind an diese API angebunden.
+- Phase 3 Watcher: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
+- Phase 3 Watcher: `codex-history watch` kann bounded pollend laufen oder mit `--follow --event-mode auto` persistent beobachten; `auto` nutzt `watchdog`-Filesystem-Events, wenn das gepinnte `[tools]`-Extra installiert ist, und faellt sonst auf Snapshot/Poll-Warten zurueck.
+- Phase 3 systemd: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
-- Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen inklusive Artefakt-Typmix; das Cinnamon-Applet parst diese Zeilen, zeigt Instanz-/Repo-Details im Projekt-Menue und bietet pro Repo einen Codex-History-Drilldown; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
-- Phase 6/7/8 teilweise: admin-only Bibliothekar-/Qdrant-Export, lokale Kategorisierung, Mermaid-Graph und queuebarer strategischer Analysebericht sind angebunden.
+- Phase 5 Status/Applet/Report: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen inklusive Artefakt-Typmix; das Cinnamon-Applet parst diese Zeilen, zeigt Instanz-/Repo-Details im Projekt-Menue und bietet pro Repo einen Codex-History-Drilldown; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
+- Phase 6/7/8: admin-only Bibliothekar-/Qdrant-Export, lokale Kategorisierung, Mermaid-Graph, SVG-Artefakte und queuebarer strategischer Analysebericht sind angebunden.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
-Offen:
+Bewusst optional / Einschraenkungen:
 
-- Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts und Signal-Read/Delivery-Receipt-Events sind angebunden. Telegram-Bot-API liefert fuer Bot-Nachrichten keine echten Delivery-/Read-Receipts, daher gibt es dort keinen nativen Hook.
-- Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden; native Plattform-Receipts sind fuer Matrix und Signal angebunden.
-- Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
+- Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts und Signal-Read/Delivery-Receipt-Events sind angebunden. Telegram-Bot-API liefert fuer Bot-Nachrichten keine echten Delivery-/Read-Receipts, daher gibt es dort bewusst keinen nativen Hook.
+- Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher bewusst ueber Snapshot/Poll-Fallback.
 - Optional hochwertigeres Graph-Rendering ist als `mmdc`/`auto`-Pfad angebunden; weitere Layout-Qualitaet bleibt optional.
 
 ## Kurzantwort
@@ -519,24 +518,24 @@ Stand 2026-06-19:
 - Erledigt: tieferer Applet-Drilldown als Repo-Untermenues im Projekt-Menue; separate grosse Detailansicht bleibt optional, falls das Applet spaeter mehr Platz bekommt.
 
 ### Phase 6: Qdrant + Bibliothek
-* Teilweise erledigt: `codex-history bibliothekar-export` erzeugt admin-only Markdown-Dokumente aus `codex_history_outbox`.
+* Erledigt: `codex-history bibliothekar-export` erzeugt admin-only Markdown-Dokumente aus `codex_history_outbox`.
 	* Zielordner: `instances/<Instanz>/data/Codex_History_Bibliothek`
 	* Der normale Runtime-Bibliothekar liest weiterhin nur `data/Bibliothek`; dadurch leakt Codex-History nicht an normale Nutzer.
 	* Die Dokumente enthalten Metadaten, Status, Version, Repo, Commit, Delivery-Felder, Summary und Kategorien.
-* Teilweise erledigt: separater Qdrant-Index fuer diese admin-only Quelle.
+* Erledigt: separater Qdrant-Index fuer diese admin-only Quelle.
 	* Collection: `teebotus_codex_history_chunks`
 	* `teebotus-embedding codex-history-rebuild` erzeugt Qdrant-Chunks direkt aus `codex_history_outbox`.
 	* `teebotus-embedding collections-ensure --include-codex-history` legt die optionale Collection an/prueft sie.
 	* Der Index nutzt dieselbe Qdrant-Bibliothekar-Payloadform, aber eine andere Collection als normale Nutzerbibliothek und Usermemory.
-* Teilweise erledigt: Automatischer Rebuild/Export nach Watcher-Scans.
+* Erledigt: Automatischer Rebuild/Export nach Watcher-Scans.
 	* `codex-history watch --post-index` aktualisiert die admin-only Markdown-Quelle nach jedem Scan, auch im persistenten `--follow`-Modus.
 	* `codex-history watch --post-index-qdrant` aktualisiert optional auch die separate Qdrant-Collection nach jedem Scan.
 	* `teebotus-codex-history-systemd` setzt `--post-index` standardmaessig, Qdrant bewusst nur explizit.
-* Teilweise erledigt: separater Timer/Low-Priority-Batch fuer Qdrant-Rebuild.
+* Erledigt: separater Timer/Low-Priority-Batch fuer Qdrant-Rebuild.
 	* `teebotus-codex-history-systemd --index-timer` erzeugt `teebotus-codex-history-index.service` und `teebotus-codex-history-index.timer`.
 	* Der Service ist `Type=oneshot` und laeuft mit `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `CPUWeight=10`, `IOWeight=10`.
 		* Default-Timer: `OnUnitActiveSec=24h`, `RandomizedDelaySec=15min`, `Persistent=true`.
-* Teilweise erledigt: lokale LLM-Kategorisierung im Low-Priority-Batch.
+* Erledigt: lokale LLM-Kategorisierung im Low-Priority-Batch.
 	* `codex-history categorize --profile local_ollama` nutzt nur lokale LLM-Profile; Remote-Profile wie OpenAI/Gemini/Groq/HF-Pool werden fuer diesen Pfad abgelehnt.
 	* `codex-history index --categorize --categorize-profile local_ollama` kategorisiert vor Markdown-Export und optionalem Qdrant-Rebuild.
 	* `teebotus-codex-history-systemd --index-timer --index-categorize` haengt die Kategorisierung an den low-priority Timer-Service.
@@ -547,7 +546,7 @@ Stand 2026-06-19:
 * User die keine Admins sind dürfen auf keinen Fall etwas von der Sammlung erfahren. 
 * Noch weniger (auf gar keinen verdammten Fall) dürfen sie Daten aus den Sammlungen erhalten.
 ### Phase 7: Grafische Aufbereitung
-* Teilweise erledigt: `codex-history graph-export` erzeugt ein admin-only Mermaid-Markdown mit Repo -> Summary -> Status/Kategorie-Kanten.
+* Erledigt: `codex-history graph-export` erzeugt ein admin-only Mermaid-Markdown mit Repo -> Summary -> Status/Kategorie-Kanten.
 	* Ziel: `instances/<Instanz>/data/Codex_History_Bibliothek/graphs/codex_history_graph.md`
 	* `codex-history index --graph` erzeugt den Graph im kombinierten Low-Priority-Indexlauf.
 	* `teebotus-codex-history-systemd --index-timer --index-graph` haengt den Graph-Export an den Timer.
@@ -556,12 +555,12 @@ Stand 2026-06-19:
 	* Optional: `--svg-engine auto` nutzt Mermaid CLI `mmdc`, wenn lokal installiert, und faellt sonst mit Report-Warnung auf builtin zurueck.
 	* Explizit: `--svg-engine mmdc` verlangt Mermaid CLI und scheitert sauber, wenn sie fehlt oder fehlschlaegt.
 * Erledigt: `--queue-svg`/`--graph-queue-svg` legt das SVG als queuebares Admin-Outbox-Attachment ab; der bestehende `codex-history dispatch` versendet es mit Dispatch-Results/Acks.
-* Teilweise erledigt: `teebotus-codex-history-systemd --index-timer --index-dispatch` kann den Versand nach dem Index per `ExecStartPost` automatisch ausloesen.
-* Teilweise erledigt: optional hochwertigeres Rendering ueber Mermaid CLI `mmdc` ist angebunden; weitere Renderer wie better-git-of-theseus bleiben optional.
+* Erledigt: `teebotus-codex-history-systemd --index-timer --index-dispatch` kann den Versand nach dem Index per `ExecStartPost` automatisch ausloesen.
+* Optional: hochwertigeres Rendering ueber Mermaid CLI `mmdc` ist angebunden; weitere Renderer wie better-git-of-theseus bleiben optional.
 * Default: 1x am Tag (`OnUnitActiveSec=24h`).
 
 ### Phase 8: Strategische Analyse
-* Teilweise erledigt: `codex-history strategic-analysis` uebergibt die letzten Codex-History-Summaries an ein LLM und erzeugt einen Markdown-Bericht mit:
+* Erledigt: `codex-history strategic-analysis` uebergibt die letzten Codex-History-Summaries an ein LLM und erzeugt einen Markdown-Bericht mit:
 	* Zukunft/Verbesserungen
 	* strategischen Zielen
 	* Fallstricken/Logikfehlern
@@ -571,7 +570,7 @@ Stand 2026-06-19:
 * `codex-history index --strategic-analysis` erzeugt den Bericht vor Export/Qdrant, damit er im selben Batch in Bibliothekar/Qdrant landen kann.
 * `teebotus-codex-history-systemd --index-timer --index-strategic-analysis` haengt die Analyse an den Low-Priority-Index-Timer.
 * Default im Timer: Aus. Remote-Profile sind nur mit `--strategic-analysis-allow-remote` bzw. `--index-strategic-analysis-allow-remote` erlaubt.
-* Teilweise erledigt: periodischer Admin-Versand ist im systemd-Index-Timer per `--index-dispatch` opt-in.
+* Erledigt: periodischer Admin-Versand ist im systemd-Index-Timer per `--index-dispatch` opt-in.
 * Erledigt: Live-Aktivierung nach expliziter Freigabe ist im Cinnamon-Applet als Terminal-Aktion angebunden; sie installiert/aktiviert den Index-Timer mit Graph-SVG, Queue-SVG, strategischer Analyse und Dispatch.
 * Erledigt: State-/Cache-Optimierung fuer strategische Analysen; Quellen-Fingerprint, Profil und Repo-Filter verhindern doppelte LLM-Laeufe bei unveraenderten Quellen. `--force` und `--index-strategic-analysis-force` umgehen den Cache bewusst.
 ## Ungenauer Ablauf:
