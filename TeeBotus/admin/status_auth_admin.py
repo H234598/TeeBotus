@@ -113,18 +113,21 @@ def _safe_output_path(output: str) -> Path:
 
 def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_json: bool) -> None:
     with output_path.open("w", encoding="utf-8") as handle:
-        _emit_status_auth_report(report, as_json=as_json, stream=handle)
+        output = _build_status_auth_report_output(report, as_json=as_json)
+        _emit_status_auth_report(output, stream=handle)
 
 
-def _emit_status_auth_report(
-    report: dict[str, Any], *, as_json: bool, stream: TextIO = sys.stdout
-) -> None:
+def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -> str:
     safe_report = _sanitize_output(report)
     output = (
         json.dumps(safe_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         if as_json
         else render_text_report(safe_report)
     )
+    return output
+
+
+def _emit_status_auth_report(output: str, *, stream: TextIO = sys.stdout) -> None:
     stream.write(output)
 
 
@@ -295,7 +298,8 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             print(f"status-auth: unable to write output: {exc}", file=sys.stderr)
             return 2
     else:
-        _emit_status_auth_report(report, as_json=(args.format == "json"))
+        output = _build_status_auth_report_output(report, as_json=(args.format == "json"))
+        _emit_status_auth_report(output)
     return 0
 
 

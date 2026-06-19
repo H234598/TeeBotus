@@ -344,12 +344,16 @@ def _openai_usage_log_path() -> Path | None:
     if configured.casefold() in {"0", "false", "off", "none", "disabled"}:
         return None
     if configured:
-        safe_state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser().resolve()
+        safe_state_home = _safe_state_home()
+        if safe_state_home is None:
+            return None
         if "\x00" in configured or "\r" in configured or "\n" in configured or "\t" in configured:
             return None
         if "\\" in configured:
             return None
-        _, parts = _split_safe_relative_parts(configured, operation="openai usage log path")
+        is_absolute, parts = _split_safe_relative_parts(configured, operation="openai usage log path")
+        if is_absolute:
+            return None
         if not parts:
             return None
         try:
@@ -363,8 +367,27 @@ def _openai_usage_log_path() -> Path | None:
         if candidate.exists() and candidate.is_dir():
             return None
         return candidate
-    state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser().resolve()
+    state_home = _safe_state_home()
+    if state_home is None:
+        return None
     return state_home / "TeeBotus" / "openai_usage.jsonl"
+
+
+def _safe_state_home() -> Path | None:
+    configured_state_home = os.environ.get("XDG_STATE_HOME", "").strip()
+    if not configured_state_home:
+        return Path.home() / ".local" / "state"
+    if "\x00" in configured_state_home or "\r" in configured_state_home or "\n" in configured_state_home or "\t" in configured_state_home:
+        return None
+    if "\\" in configured_state_home:
+        return None
+    is_absolute, parts = _split_safe_relative_parts(configured_state_home, operation="xdg state home")
+    if not parts:
+        return None
+    try:
+        return (Path("/").joinpath(*parts) if is_absolute else Path.cwd().joinpath(*parts)).resolve()
+    except OSError:
+        return None
 
 
 def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
