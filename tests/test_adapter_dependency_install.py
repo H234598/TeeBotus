@@ -111,6 +111,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     monkeypatch.setattr(check_adapter_deps, "_check_matrix_file_contract", ok("matrix_file"))
     monkeypatch.setattr(check_adapter_deps, "_check_signalbot_context_contract", ok("signalbot_context"))
     monkeypatch.setattr(check_adapter_deps, "_check_pyproject_plan2_contract", ok("pyproject_contract"))
+    monkeypatch.setattr(check_adapter_deps, "_check_adapter_lock_pyproject_contract", ok("lock_pyproject_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_requirements_runtime_contract", ok("requirements_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_llm_profiles_plan2_contract", ok("llm_profiles_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_local_secret_file_permissions", ok("secret_permissions"))
@@ -130,6 +131,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "python_runtime_choice" in called
     assert "litellm_dotenv" in called
     assert "pyproject_contract" in called
+    assert "lock_pyproject_contract" in called
     assert "requirements_contract" in called
     assert "llm_profiles_contract" in called
     assert "secret_permissions" in called
@@ -140,6 +142,60 @@ def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
 
     assert ok
     assert "extras=dev,llm,rag,agents,tools" in message
+
+
+def test_adapter_lock_pyproject_contract_accepts_current_pins() -> None:
+    ok, message = check_adapter_deps._check_adapter_lock_pyproject_contract()
+
+    assert ok
+    assert "packages=fastmcp,litellm,openai,python-dotenv" in message
+
+
+def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+        [project]
+        name = "test"
+
+        [project.optional-dependencies]
+        llm = [
+            "litellm==1.89.2; python_version < '3.14'",
+            "litellm==1.83.7; python_version >= '3.14'",
+            "openai==2.43.0; python_version < '3.14'",
+            "openai==2.30.0; python_version >= '3.14'",
+            "ollama==0.6.2",
+        ]
+        tools = [
+            "fastmcp==3.4.2",
+            "python-dotenv==1.2.2",
+        ]
+        """,
+        encoding="utf-8",
+    )
+    lockfile = tmp_path / "adapter-dependencies.lock"
+    lockfile.write_text(
+        "\n".join(
+            [
+                "litellm==1.89.2; python_version < '3.14'",
+                "litellm==1.83.7; python_version >= '3.14'",
+                "openai==2.41.0; python_version < '3.14'",
+                "openai==2.30.0; python_version >= '3.14'",
+                "python-dotenv==1.2.2",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ok, message = check_adapter_deps._check_adapter_lock_pyproject_contract(lockfile, pyproject)
+
+    assert not ok
+    assert "missing_from_lock" in message
+    assert "openai==2.43.0" in message
+    assert "fastmcp==3.4.2" in message
+    assert "unexpected_in_lock" in message
+    assert "openai==2.41.0" in message
 
 
 def test_requirements_runtime_contract_accepts_current_requirements() -> None:

@@ -64,6 +64,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_matrix_file_contract(),
                 _check_signalbot_context_contract(),
                 _check_pyproject_plan2_contract(),
+                _check_adapter_lock_pyproject_contract(),
                 _check_requirements_runtime_contract(),
                 _check_llm_profiles_plan2_contract(),
                 _check_local_secret_file_permissions(),
@@ -273,6 +274,39 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.11"
 
 
+def _check_adapter_lock_pyproject_contract(
+    lockfile_path: Path = LOCKFILE,
+    pyproject_path: Path = REPO_ROOT / "pyproject.toml",
+) -> tuple[bool, str]:
+    managed_names = {"litellm", "openai", "python-dotenv", "fastmcp"}
+    try:
+        lock_lines = _dependency_lines(lockfile_path)
+        payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return False, f"adapter lock pyproject contract unreadable: {type(exc).__name__}: {exc}"
+    project = payload.get("project")
+    optional = project.get("optional-dependencies") if isinstance(project, dict) else None
+    if not isinstance(optional, dict):
+        return False, "adapter lock pyproject contract missing pyproject optional dependencies"
+    expected: set[str] = set()
+    for extra in ("llm", "tools"):
+        raw_deps = optional.get(extra, [])
+        if not isinstance(raw_deps, list):
+            return False, f"adapter lock pyproject contract {extra} dependencies must be a list"
+        expected.update(str(dependency).strip() for dependency in raw_deps if _dependency_name(str(dependency)) in managed_names)
+    found = {line for line in lock_lines if _dependency_name(line) in managed_names}
+    missing = sorted(expected - found)
+    unexpected = sorted(found - expected)
+    errors: list[str] = []
+    if missing:
+        errors.append("missing_from_lock " + ",".join(missing))
+    if unexpected:
+        errors.append("unexpected_in_lock " + ",".join(unexpected))
+    if errors:
+        return False, "adapter lock pyproject contract failed: " + "; ".join(errors)
+    return True, "adapter lock pyproject contract=ok packages=fastmcp,litellm,openai,python-dotenv"
+
+
 def _check_requirements_runtime_contract(path: Path = REPO_ROOT / "requirements.txt") -> tuple[bool, str]:
     try:
         requirements = {
@@ -293,6 +327,19 @@ def _check_requirements_runtime_contract(path: Path = REPO_ROOT / "requirements.
     if errors:
         return False, "requirements runtime contract failed: " + "; ".join(errors)
     return True, f"requirements runtime contract=ok base={required} sequenced_deps=deferred"
+
+
+def _dependency_lines(path: Path) -> list[str]:
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+
+def _dependency_name(dependency: str) -> str:
+    name, _version = _optional_dependency_name_version(dependency)
+    return name
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:
