@@ -128,6 +128,14 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "Gio.SubprocessLauncher.new" in source
     assert "}, this._repoPath());" in source
     assert "launcher.set_cwd(String(cwd))" in source
+    assert "const ModalDialog = imports.ui.modalDialog;" in source
+    assert "const Clutter = imports.gi.Clutter;" in source
+    assert "this.appletRemoved = false;" in source
+    assert "this.spawnGeneration = 0;" in source
+    assert "let spawnGeneration = this.spawnGeneration;" in source
+    assert "if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {" in source
+    assert "this.appletRemoved = true;" in source
+    assert "this.spawnGeneration += 1;" in source
     assert "_commandArgs: function(value, fallback)" in source
     assert "GLib.shell_parse_argv(raw)" in source
     assert "return this._commandArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
@@ -297,6 +305,7 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
 
     assert schema["layout"]["sections-section"]["keys"] == [
@@ -311,7 +320,15 @@ def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
         "show-project-section",
     ]
     assert schema["confirm-service-actions"]["default"] is True
-    assert "zenity" in schema["confirm-service-actions"]["tooltip"]
+    assert "native Cinnamon confirmation dialog" in schema["confirm-service-actions"]["tooltip"]
+    assert "_confirmServiceAction: function(action, unit, completionCallback)" in source
+    assert "new ModalDialog.ModalDialog()" in source
+    assert "dialog.contentLayout.add_child(new St.Label" in source
+    assert "dialog.setButtons([" in source
+    assert "key: Clutter.KEY_Escape" in source
+    assert "if (!dialog.open()) {" in source
+    assert "Service confirmation dialog could not be opened." in source
+    assert '"zenity"' not in source
     assert schema["enable-service-actions"]["default"] is True
     assert schema["terminal-command"]["default"] == ""
     assert "gnome-terminal" in schema["terminal-command"]["tooltip"]

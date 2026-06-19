@@ -272,7 +272,7 @@
   "confirm-service-actions": {
     "type": "switch",
     "description": "Ask before start/restart/stop",
-    "tooltip": "Uses zenity when available; if zenity is missing, the action is blocked instead of running silently.",
+    "tooltip": "Uses a native Cinnamon confirmation dialog. If the dialog cannot be opened, the action is blocked instead of running silently.",
     "default": true
   },
   "terminal-command": {

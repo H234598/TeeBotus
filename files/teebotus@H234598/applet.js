@@ -1,6 +1,8 @@
 const Applet = imports.ui.applet;
+const ModalDialog = imports.ui.modalDialog;
 const PopupMenu = imports.ui.popupMenu;
 const Settings = imports.ui.settings;
+const Clutter = imports.gi.Clutter;
 const St = imports.gi.St;
 const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
@@ -163,6 +165,8 @@ TeeBotusApplet.prototype = {
     this.statusTimer = 0;
     this.statusRunning = false;
     this.lastError = "";
+    this.appletRemoved = false;
+    this.spawnGeneration = 0;
 
     this.set_applet_icon_path(this.metadata.path + "/icon.svg");
     this.set_applet_tooltip(_("TB"));
@@ -995,6 +999,14 @@ TeeBotusApplet.prototype = {
   },
 
   _spawn: function(argv, callback, cwd) {
+    let applet = this;
+    let spawnGeneration = this.spawnGeneration;
+    let finish = function(stdout, stderr, ok) {
+      if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {
+        return;
+      }
+      callback(stdout, stderr, ok);
+    };
     try {
       let launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
       if (cwd) {
@@ -1004,13 +1016,13 @@ TeeBotusApplet.prototype = {
       process.communicate_utf8_async(null, null, (proc, result) => {
         try {
           let [, stdout, stderr] = proc.communicate_utf8_finish(result);
-          callback(String(stdout || ""), String(stderr || ""), proc.get_successful());
+          finish(String(stdout || ""), String(stderr || ""), proc.get_successful());
         } catch (err) {
-          callback("", String(err), false);
+          finish("", String(err), false);
         }
       });
     } catch (err) {
-      callback("", String(err), false);
+      finish("", String(err), false);
     }
   },
 
@@ -1032,17 +1044,59 @@ TeeBotusApplet.prototype = {
       run();
       return;
     }
-    if (!GLib.find_program_in_path("zenity")) {
-      this.statusText = _("Install zenity or disable confirmation to run service actions.");
-      this._updatePanel();
-      this._updateHeader();
-      return;
-    }
-    this._spawn(["zenity", "--question", "--title=TB", "--text=" + action + " " + unit + "?"], (stdout, stderr, ok) => {
-      if (ok) {
+    this._confirmServiceAction(action, unit, (confirmed) => {
+      if (confirmed) {
         run();
       }
-    }, this._repoPath());
+    });
+  },
+
+  _confirmServiceAction: function(action, unit, completionCallback) {
+    let dialog = new ModalDialog.ModalDialog();
+    let completed = false;
+    let complete = (result) => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      if (typeof completionCallback === "function") {
+        completionCallback(result === true);
+      }
+    };
+    dialog.contentLayout.add_child(new St.Label({
+      text: _("Service action ausfuehren?"),
+      x_expand: true
+    }));
+    dialog.contentLayout.add_child(new St.Label({
+      text: String(action || "") + " " + String(unit || ""),
+      x_expand: true
+    }));
+    dialog.setButtons([
+      {
+        label: _("Abbrechen"),
+        key: Clutter.KEY_Escape,
+        action: function() {
+          dialog.close();
+          this.statusText = _("Service action cancelled.");
+          this._updatePanel();
+          this._updateHeader();
+          complete(false);
+        }.bind(this),
+      },
+      {
+        label: _("Ausfuehren"),
+        action: function() {
+          dialog.close();
+          complete(true);
+        }.bind(this),
+      }
+    ]);
+    if (!dialog.open()) {
+      this.statusText = _("Service confirmation dialog could not be opened.");
+      this._updatePanel();
+      this._updateHeader();
+      complete(false);
+    }
   },
 
   _openRuntimeStatusTerminal: function() {
@@ -1318,6 +1372,8 @@ TeeBotusApplet.prototype = {
   },
 
   on_applet_removed_from_panel: function() {
+    this.appletRemoved = true;
+    this.spawnGeneration += 1;
     if (this.statusTimer) {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
