@@ -246,6 +246,42 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
     assert {account.llm_service_tier for account in accounts} == {"flex"}
 
 
+def test_build_account_configs_rejects_multi_telegram_without_matching_openai_keys():
+    env = {
+        "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="Missing OpenAI API key.*1, 2"):
+        build_account_run_configs("Depressionsbot", ("telegram",), env)
+
+
+def test_build_account_configs_rejects_multi_telegram_shared_openai_key():
+    env = {
+        "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "shared-key",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="must not share the same OpenAI API key"):
+        build_account_run_configs("Depressionsbot", ("telegram",), env)
+
+
+def test_build_account_configs_accepts_multi_telegram_with_matching_openai_key_slots():
+    env = {
+        "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_3": "token-c",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT": "key-a, key-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_3": "key-c",
+    }
+
+    accounts = build_account_run_configs("Depressionsbot", ("telegram",), env)
+
+    assert [(account.slot, account.telegram_token, account.openai_api_key) for account in accounts] == [
+        (1, "token-a", "key-a"),
+        (2, "token-b", "key-b"),
+        (3, "token-c", "key-c"),
+    ]
+
+
 def test_runtime_discovers_instances(tmp_path: Path):
     (tmp_path / "Depressionsbot").mkdir()
     (tmp_path / "Depressionsbot" / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")

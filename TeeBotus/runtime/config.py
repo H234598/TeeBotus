@@ -291,21 +291,23 @@ def build_account_run_configs(
     env: Mapping[str, str] | None = None,
 ) -> tuple[AccountRunConfig, ...]:
     accounts: list[AccountRunConfig] = []
+    telegram_accounts: list[AccountRunConfig] = []
     if "telegram" in channels:
         for slot, token in enumerate(resolve_telegram_tokens(instance_name, env), start=1):
             openai_key = resolve_openai_key(instance_name, "telegram", slot, env)
             llm_kwargs = _resolve_llm_runtime_kwargs(instance_name, "telegram", slot, env)
-            accounts.append(
-                AccountRunConfig(
-                    instance_name=instance_name,
-                    channel="telegram",
-                    slot=slot,
-                    label=f"telegram:{slot}",
-                    telegram_token=token,
-                    openai_api_key=openai_key,
-                    **llm_kwargs,
-                )
+            account = AccountRunConfig(
+                instance_name=instance_name,
+                channel="telegram",
+                slot=slot,
+                label=f"telegram:{slot}",
+                telegram_token=token,
+                openai_api_key=openai_key,
+                **llm_kwargs,
             )
+            accounts.append(account)
+            telegram_accounts.append(account)
+        _validate_telegram_openai_key_slots(instance_name, telegram_accounts)
     if "signal" in channels:
         for slot, (service, phone) in enumerate(resolve_signal_accounts(instance_name, env), start=1):
             openai_key = resolve_openai_key(instance_name, "signal", slot, env)
@@ -341,6 +343,31 @@ def build_account_run_configs(
                 )
             )
     return tuple(accounts)
+
+
+def _validate_telegram_openai_key_slots(instance_name: str, accounts: Sequence[AccountRunConfig]) -> None:
+    if len(accounts) <= 1:
+        return
+    missing = [str(account.slot) for account in accounts if not str(account.openai_api_key or "").strip()]
+    if missing:
+        token = normalize_instance_env_token(instance_name)
+        raise RuntimeConfigError(
+            "Missing OpenAI API key for Telegram bot token slot(s): "
+            f"{', '.join(missing)}. Set matching OPENAI_API_KEY_{token}[_N] or OPENAI_API_KEYS_{token}."
+        )
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    for account in accounts:
+        previous_slot = seen.get(account.openai_api_key)
+        if previous_slot is not None:
+            duplicates.append(f"{previous_slot}/{account.slot}")
+        else:
+            seen[account.openai_api_key] = str(account.slot)
+    if duplicates:
+        raise RuntimeConfigError(
+            "Multiple Telegram bot token slots for one instance must not share the same OpenAI API key. "
+            f"Duplicate slot pairs: {', '.join(duplicates)}."
+        )
 
 
 def _resolve_llm_runtime_kwargs(
