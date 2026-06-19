@@ -371,6 +371,26 @@ def test_recent_telegram_recipients_can_filter_by_adapter_slot(tmp_path: Path) -
     assert [(recipient.chat_id, recipient.adapter_slot) for recipient in recipients] == [(222, 2)]
 
 
+def test_recent_telegram_recipients_skips_non_private_chat_routes(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Private")
+    store.resolve_or_create_account("telegram:user:222", display_label="Group")
+    store.resolve_or_create_account("telegram:user:333", display_label="Legacy")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:user:222", channel="telegram", chat_id="222", chat_type="group", adapter_slot=1)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.identity_key, recipient.chat_id) for recipient in recipients] == [
+        ("telegram:user:111", 111),
+        ("telegram:user:333", 333),
+    ]
+
+
 def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

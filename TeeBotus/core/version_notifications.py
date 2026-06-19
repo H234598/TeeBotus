@@ -111,10 +111,13 @@ def recent_telegram_recipients(
             continue
         route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
         route_channel = str(route.get("channel") or "telegram").strip().casefold()
+        route_chat_type = str(route.get("chat_type") or "").strip().casefold()
         route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
         if adapter_slot is not None and route_slot != int(adapter_slot):
             continue
         if route_channel != "telegram":
+            continue
+        if route_chat_type and route_chat_type != "private":
             continue
         chat_id_text = str(route.get("chat_id") or "").strip() or identity_key.removeprefix("telegram:user:")
         if not chat_id_text.isdigit():
