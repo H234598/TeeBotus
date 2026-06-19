@@ -115,15 +115,21 @@ def check_qdrant_health(
     open_url = urlopen if opener is None else opener
     try:
         response = open_url(request, timeout=timeout_seconds)
-        status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
+        try:
+            status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+            raw = _read_response_body(response)
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         return QdrantHealth(target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     except Exception as exc:  # noqa: BLE001 - runtime-status must stay non-fatal for optional Qdrant.
         return QdrantHealth(target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     if 200 <= status_code < 300:
+        _payload, payload_error = _collection_payload(raw)
+        if payload_error:
+            return QdrantHealth(target=target, status="unreachable", ok=False, error=payload_error)
         return QdrantHealth(target=target, status="reachable", ok=True)
     return QdrantHealth(target=target, status="unreachable", ok=False, error=f"HTTP {status_code}")
 
@@ -286,15 +292,21 @@ def ensure_collection(
     open_url = urlopen if opener is None else opener
     try:
         response = open_url(request, timeout=timeout_seconds)
-        status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
+        try:
+            status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
+            raw = _read_response_body(response)
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     except Exception as exc:  # noqa: BLE001 - Qdrant remains optional and reports controlled failures.
         return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=_qdrant_error_text(exc))
     if 200 <= status_code < 300:
+        _payload, payload_error = _collection_payload(raw)
+        if payload_error:
+            return QdrantCollectionResult(name=name, target=target, status="unavailable", ok=False, error=payload_error)
         return QdrantCollectionResult(name=name, target=target, status="ready", ok=True)
     return QdrantCollectionResult(name=name, target=target, status="unreachable", ok=False, error=f"HTTP {status_code}")
 

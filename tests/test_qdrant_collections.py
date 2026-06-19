@@ -94,6 +94,28 @@ def test_ensure_collection_creates_missing_collection_with_vector_schema() -> No
     ]
 
 
+def test_ensure_collection_rejects_failed_create_payload() -> None:
+    calls: list[str] = []
+
+    def opener(request, *, timeout):
+        assert timeout > 0
+        calls.append(request.get_method())
+        if request.get_method() == "GET":
+            return _Response(404)
+        return _Response(200, {"status": "error", "result": False})
+
+    result = ensure_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64, distance="cosine"),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "unavailable"
+    assert result.error == "unexpected Qdrant status: error"
+    assert calls == ["GET", "PUT"]
+
+
 def test_ensure_collection_skips_put_when_collection_is_ready() -> None:
     calls: list[str] = []
 
