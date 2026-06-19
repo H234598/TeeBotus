@@ -14,6 +14,7 @@ from TeeBotus.admin.codex_history import (
     dispatch_codex_history_outbox,
     import_codex_session_file,
     main as codex_history_main,
+    watch_codex_session_roots,
 )
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.accounts import (
@@ -414,6 +415,66 @@ def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, 
     assert report["totals"]["outbox_items"] == 1
     latest = report["instances"][0]["codex_history"]["latest_by_repo"][0]
     assert latest["repo_name"] == "watch-cli-demo"
+
+
+def test_watch_codex_session_roots_polls_and_deduplicates_between_iterations(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-loop-demo", version="3.1.0")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-watch-1", turn_id="turn-1")
+    sleep_calls: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+        write_codex_session(sessions_root / "second.jsonl", repo=repo, session_id="sess-watch-2", turn_id="turn-2")
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        sleep=sleep,
+    )
+
+    assert sleep_calls == [0.25]
+    assert result["iterations"] == 2
+    assert result["status_counts"] == {"duplicate": 1, "imported": 2}
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 2
+    assert [row["summary_prefix"] for row in rows] == ["v3.1.0 #0001", "v3.1.0 #0002"]
+
+
+def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "watch-loop-cli-demo", version="3.2.0")
+    sessions_root = tmp_path / "sessions"
+    write_codex_session(sessions_root / "rollout.jsonl", repo=repo, session_id="sess-loop-cli", turn_id="turn-loop-cli")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--max-iterations",
+            "1",
+            "--poll-interval",
+            "0",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["mode"] == "watch"
+    assert payload["instances"][0]["iterations"] == 1
+    assert payload["instances"][0]["status_counts"] == {"imported": 1}
 
 
 def test_normalize_and_classify_remote_urls() -> None:

@@ -6,11 +6,12 @@ import hashlib
 import json
 import re
 import subprocess
+import time
 import sys
 import tomllib
 import uuid
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from inspect import isawaitable
@@ -292,6 +293,35 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
         "ok": not any(result.get("status") == "error" for result in results),
         "items": results,
         "status_counts": _status_counts(results),
+    }
+
+
+def watch_codex_session_roots(
+    store: AccountStore,
+    roots: Sequence[str | Path],
+    *,
+    poll_interval_seconds: float = 1.0,
+    max_iterations: int = 1,
+    limit: int = 1000,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    iterations = 0
+    items: list[dict[str, Any]] = []
+    while True:
+        iterations += 1
+        report = import_codex_session_roots(store, roots, limit=limit)
+        iteration_items = report.get("items", [])
+        if isinstance(iteration_items, list):
+            items.extend(iteration_items)
+        if max_iterations > 0 and iterations >= max_iterations:
+            break
+        if poll_interval_seconds > 0:
+            sleep(float(poll_interval_seconds))
+    return {
+        "ok": not any(item.get("status") == "error" for item in items),
+        "iterations": iterations,
+        "items": items,
+        "status_counts": _status_counts(items),
     }
 
 
@@ -983,6 +1013,8 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--instance", default="")
     watch_parser.add_argument("--sessions-root", action="append", default=[])
     watch_parser.add_argument("--limit", type=int, default=1000)
+    watch_parser.add_argument("--max-iterations", type=int, default=1)
+    watch_parser.add_argument("--poll-interval", type=float, default=1.0)
     watch_parser.add_argument("--format", choices=("text", "json"), default="text")
     watch_parser.add_argument("--once", action="store_true")
 
@@ -1076,6 +1108,42 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             payload = {
                 "ok": not any(not report.get("ok") for report in instance_reports),
                 "mode": "once",
+                "sessions_roots": [str(root) for root in safe_roots],
+                "instances_dir": str(instances_dir),
+                "instances": instance_reports,
+            }
+            output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_watch_report(payload)
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"watch failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "watch":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
+            max_iterations = int(args.max_iterations or 0)
+            if max_iterations < 0:
+                max_iterations = 0
+            poll_interval_seconds = float(args.poll_interval or 0.0)
+            instance_reports: list[dict[str, Any]] = []
+            selected = discover_instances(instances_dir, selected_instances)
+            for instance_name in selected:
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                watch_report = watch_codex_session_roots(
+                    store,
+                    safe_roots,
+                    poll_interval_seconds=poll_interval_seconds,
+                    max_iterations=max_iterations,
+                    limit=int(args.limit or 0),
+                )
+                instance_reports.append({"instance": instance_name, **watch_report})
+            payload = {
+                "ok": not any(not report.get("ok") for report in instance_reports),
+                "mode": "watch",
                 "sessions_roots": [str(root) for root in safe_roots],
                 "instances_dir": str(instances_dir),
                 "instances": instance_reports,
