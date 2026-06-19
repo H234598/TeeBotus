@@ -55,8 +55,7 @@ def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
         if part in {"", "."}:
             continue
         if part == "..":
-            parts.append(part)
-            continue
+            raise ValueError(f"{operation} contains forbidden relative segment")
         if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
             raise ValueError(f"{operation} contains invalid path segment")
         parts.append(part)
