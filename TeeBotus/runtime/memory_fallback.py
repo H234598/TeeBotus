@@ -23,6 +23,12 @@ class WarningFallbackAccountMemoryBackend:
         self._stale_fallback_entries: set[str] = set()
         self._stale_fallback_indexes: set[str] = set()
         self._stale_fallback_collections: set[tuple[str, str]] = set()
+        self._fallback_sync_failed_entries: set[str] = set()
+        self._fallback_sync_failed_indexes: set[str] = set()
+        self._fallback_sync_failed_collections: set[tuple[str, str]] = set()
+        self._unrecoverable_fallback_entries: set[str] = set()
+        self._unrecoverable_fallback_indexes: set[str] = set()
+        self._unrecoverable_fallback_collections: set[tuple[str, str]] = set()
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
@@ -126,6 +132,12 @@ class WarningFallbackAccountMemoryBackend:
         self._stale_fallback_entries.discard(account_id)
         self._stale_fallback_indexes.discard(account_id)
         self._stale_fallback_collections = {key for key in self._stale_fallback_collections if key[0] != account_id}
+        self._fallback_sync_failed_entries.discard(account_id)
+        self._fallback_sync_failed_indexes.discard(account_id)
+        self._fallback_sync_failed_collections = {key for key in self._fallback_sync_failed_collections if key[0] != account_id}
+        self._unrecoverable_fallback_entries.discard(account_id)
+        self._unrecoverable_fallback_indexes.discard(account_id)
+        self._unrecoverable_fallback_collections = {key for key in self._unrecoverable_fallback_collections if key[0] != account_id}
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
@@ -182,10 +194,23 @@ class WarningFallbackAccountMemoryBackend:
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, exc)
+            if self._account_has_unsafe_fallback(account_id):
+                self.last_fallback_sync_error = (
+                    f"{operation}: write blocked because primary is unavailable and fallback may be stale or unrecoverable"
+                )
+                LOGGER.critical(
+                    "ACCOUNT MEMORY WRITE BLOCKED. PRIMARY DATABASE IS UNAVAILABLE AND FALLBACK MAY BE STALE OR UNRECOVERABLE. "
+                    "label=%s operation=%s account_id=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from exc
             callback(self.fallback)
             self._copy_diagnostics(self.fallback)
             dirty_set.add(resolved_dirty_key)
             self._fallback_stale_set(operation).discard(resolved_dirty_key)
+            self._fallback_sync_failed_set(operation).discard(resolved_dirty_key)
 
     def _sync_entries_from_fallback(self, account_id: str) -> None:
         if account_id not in self._dirty_entries:
@@ -231,7 +256,9 @@ class WarningFallbackAccountMemoryBackend:
             self.last_index_read_error = primary_index_read_error
             self.last_collection_read_error = primary_collection_read_error
             self.last_collection_skipped = primary_collection_skipped
-            self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
+            stale_key = self._operation_stale_key(operation, account_id)
+            self._fallback_stale_set(operation).add(stale_key)
+            self._unrecoverable_fallback_set(operation).add(stale_key)
             self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
             return result
         if not self._read_diagnostic_failed(operation):
@@ -240,16 +267,22 @@ class WarningFallbackAccountMemoryBackend:
                     self.primary.write_entries(account_id, result)
                     self._dirty_entries.discard(account_id)
                     self._stale_fallback_entries.discard(account_id)
+                    self._fallback_sync_failed_entries.discard(account_id)
+                    self._unrecoverable_fallback_entries.discard(account_id)
                 elif operation == "read_index":
                     self.primary.write_index(account_id, result)
                     self._dirty_indexes.discard(account_id)
                     self._stale_fallback_indexes.discard(account_id)
+                    self._fallback_sync_failed_indexes.discard(account_id)
+                    self._unrecoverable_fallback_indexes.discard(account_id)
                 elif operation.startswith("read_collection:"):
                     collection = self._operation_collection(operation)
                     key = (account_id, collection)
                     self.primary.write_collection(account_id, collection, result)
                     self._dirty_collections.discard(key)
                     self._stale_fallback_collections.discard(key)
+                    self._fallback_sync_failed_collections.discard(key)
+                    self._unrecoverable_fallback_collections.discard(key)
             except Exception as exc:  # noqa: BLE001
                 self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
                 self.last_fallback_sync_error = f"{operation}: primary repair failed: {exc}"
@@ -290,9 +323,17 @@ class WarningFallbackAccountMemoryBackend:
 
     def _account_has_unrecoverable_fallback(self, account_id: str) -> bool:
         return (
-            account_id in self._stale_fallback_entries
-            or account_id in self._stale_fallback_indexes
-            or any(key[0] == account_id for key in self._stale_fallback_collections)
+            account_id in self._unrecoverable_fallback_entries
+            or account_id in self._unrecoverable_fallback_indexes
+            or any(key[0] == account_id for key in self._unrecoverable_fallback_collections)
+        )
+
+    def _account_has_unsafe_fallback(self, account_id: str) -> bool:
+        return (
+            self._account_has_unrecoverable_fallback(account_id)
+            or account_id in self._fallback_sync_failed_entries
+            or account_id in self._fallback_sync_failed_indexes
+            or any(key[0] == account_id for key in self._fallback_sync_failed_collections)
         )
 
     def _read_diagnostic_failed(self, operation: str) -> bool:
@@ -321,6 +362,12 @@ class WarningFallbackAccountMemoryBackend:
             or self._stale_fallback_entries
             or self._stale_fallback_indexes
             or self._stale_fallback_collections
+            or self._fallback_sync_failed_entries
+            or self._fallback_sync_failed_indexes
+            or self._fallback_sync_failed_collections
+            or self._unrecoverable_fallback_entries
+            or self._unrecoverable_fallback_indexes
+            or self._unrecoverable_fallback_collections
         ):
             return
         if self._fallback_active:
@@ -329,10 +376,13 @@ class WarningFallbackAccountMemoryBackend:
 
     def _mirror_write(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> None:
         stale_set = self._fallback_stale_set(operation)
+        sync_failed_set = self._fallback_sync_failed_set(operation)
+        stale_key = self._operation_stale_key(operation, account_id)
         try:
             callback(self.fallback)
         except Exception as exc:  # noqa: BLE001
-            stale_set.add(self._operation_stale_key(operation, account_id))
+            stale_set.add(stale_key)
+            sync_failed_set.add(stale_key)
             self.last_fallback_sync_error = f"{operation}: {exc}"
             LOGGER.critical(
                 "ACCOUNT MEMORY FALLBACK DATABASE SYNC FAILED. PRIMARY DATABASE IS ACTIVE BUT FALLBACK MAY BE STALE. "
@@ -343,7 +393,8 @@ class WarningFallbackAccountMemoryBackend:
                 exc,
             )
             return
-        stale_set.discard(account_id)
+        stale_set.discard(stale_key)
+        sync_failed_set.discard(stale_key)
         if not self._stale_fallback_entries and not self._stale_fallback_indexes and not self._stale_fallback_collections:
             self.last_fallback_sync_error = ""
 
@@ -354,6 +405,24 @@ class WarningFallbackAccountMemoryBackend:
             return self._stale_fallback_indexes
         if operation.startswith("write_collection:") or operation.startswith("read_collection:"):
             return self._stale_fallback_collections
+        return set()
+
+    def _fallback_sync_failed_set(self, operation: str) -> set[Any]:
+        if operation in {"write_entries", "read_entries"}:
+            return self._fallback_sync_failed_entries
+        if operation in {"write_index", "read_index"}:
+            return self._fallback_sync_failed_indexes
+        if operation.startswith("write_collection:") or operation.startswith("read_collection:"):
+            return self._fallback_sync_failed_collections
+        return set()
+
+    def _unrecoverable_fallback_set(self, operation: str) -> set[Any]:
+        if operation in {"write_entries", "read_entries"}:
+            return self._unrecoverable_fallback_entries
+        if operation in {"write_index", "read_index"}:
+            return self._unrecoverable_fallback_indexes
+        if operation.startswith("write_collection:") or operation.startswith("read_collection:"):
+            return self._unrecoverable_fallback_collections
         return set()
 
     def _operation_collection(self, operation: str) -> str:

@@ -1770,6 +1770,120 @@ def test_account_memory_fallback_warns_when_secondary_mirror_write_fails(caplog)
     assert "FALLBACK MAY BE STALE" in caplog.text
 
 
+def test_account_memory_fallback_retries_stale_secondary_when_primary_is_available() -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("backend unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend()
+    fallback = Backend(fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    backend.write_entries(account_id, [{"id": "mem_primary_1"}])
+    fallback.fail_write = False
+    backend.write_entries(account_id, [{"id": "mem_primary_2"}])
+
+    assert primary.entries[account_id] == [{"id": "mem_primary_2"}]
+    assert fallback.entries[account_id] == [{"id": "mem_primary_2"}]
+    assert backend.stale_fallback_entry_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
+def test_account_memory_fallback_blocks_stale_secondary_when_primary_fails() -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("backend unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    primary = Backend()
+    fallback = Backend(fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    backend.write_entries(account_id, [{"id": "mem_primary"}])
+    primary.fail_write = True
+    fallback.fail_write = False
+
+    with pytest.raises(AccountStoreError, match="fallback may be stale"):
+        backend.write_entries(account_id, [{"id": "mem_blocked"}])
+
+    assert fallback.entries.get(account_id) is None
+
+
+def test_account_memory_fallback_retries_stale_collection_secondary_when_primary_is_available() -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("backend unavailable")
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(sorted(collection for item_account, collection in self.collections if item_account == account_id))
+
+    primary = Backend()
+    fallback = Backend(fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    account_id = "a" * 128
+
+    backend.write_collection(account_id, "version_notifications", [{"id": "version_state_1"}])
+    fallback.fail_write = False
+    backend.write_collection(account_id, "version_notifications", [{"id": "version_state_2"}])
+
+    assert primary.collections[(account_id, "version_notifications")] == [{"id": "version_state_2"}]
+    assert fallback.collections[(account_id, "version_notifications")] == [{"id": "version_state_2"}]
+    assert backend.stale_fallback_collection_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
 def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
