@@ -107,6 +107,63 @@ def test_sqlite_backup_sync_checks_collection_payloads(tmp_path: Path) -> None:
         )
 
 
+def test_sqlite_backup_sync_refuses_unreadable_collection_primary_without_overwriting_secondary(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    secondary = accounts_root / "Account_Memory.backup.sqlite3"
+    primary_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary, fallback_path=None),
+    )
+    secondary_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=secondary, fallback_path=None),
+    )
+    account_id = "a" * 128
+    primary_backend.write_collection(
+        account_id,
+        "proactive_outbox",
+        [{"id": "pro_1", "message_text": "Backup broken", "status": "queued"}],
+    )
+    secondary_backend.write_collection(
+        account_id,
+        "proactive_outbox",
+        [{"id": "pro_2", "message_text": "Backup old", "status": "queued"}],
+    )
+
+    with sqlite3.connect(primary) as connection:
+        connection.execute(
+            """
+            UPDATE account_jsonl_collections
+            SET payload_ciphertext = ?
+            WHERE account_id = ? AND collection = ?
+            """,
+            (b"broken", account_id, "proactive_outbox"),
+        )
+
+    with pytest.raises(RuntimeError, match="payload_not_decryptable"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=accounts_root,
+            provider=provider(b"a" * 32),
+        )
+
+    with sqlite3.connect(secondary) as connection:
+        rows = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM account_jsonl_collections
+            WHERE instance_name = ? AND account_id = ? AND collection = ?
+            """,
+            ("Depressionsbot", "a" * 128, "proactive_outbox"),
+        ).fetchone()
+    assert int(rows[0]) == 1
+    assert not list(accounts_root.glob(".pre-account-memory-backup-sync-*"))
+
+
 def test_sqlite_backup_sync_checks_collection_accounts_for_payload_count(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
     primary = accounts_root / "Account_Memory.sqlite3"
