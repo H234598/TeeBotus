@@ -770,18 +770,17 @@ def _valid_timestamp_string(value: object) -> str:
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
     if _sql_state_backend_available(account_store):
-        return _normalize_state(
+        state = _normalize_state(
             account_store.read_instance_json_state(
                 NOTIFICATION_STATE_FILENAME,
                 NOTIFICATION_STATE_COLLECTION,
                 {"versions": {}},
             )
         )
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
-        return {"versions": {}}
-    return _normalize_state(data)
+        if path.exists():
+            state = _merge_notification_states(_read_legacy_state(account_store, path), state)
+        return state
+    return _read_legacy_state(account_store, path)
 
 
 def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
@@ -792,6 +791,7 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
             NOTIFICATION_STATE_COLLECTION,
             normalized_state,
         )
+        _unlink_legacy_state_path(path)
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
@@ -802,6 +802,43 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
 def _sql_state_backend_available(account_store: AccountStore) -> bool:
     checker = getattr(account_store, "instance_json_state_backend_available", None)
     return callable(checker) and bool(checker())
+
+
+def _read_legacy_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"versions": {}}
+    reader = getattr(account_store, "_read_legacy_instance_json_state", None)
+    if callable(reader):
+        try:
+            return _normalize_state(reader(path, {"versions": {}}))
+        except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+            return {"versions": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
+        return {"versions": {}}
+    return _normalize_state(data)
+
+
+def _unlink_legacy_state_path(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def _merge_notification_states(*states: dict[str, Any]) -> dict[str, Any]:
+    versions: dict[str, Any] = {}
+    for state in states:
+        for version_key, version_state in _normalize_state(state).get("versions", {}).items():
+            if not isinstance(version_key, str) or not isinstance(version_state, dict):
+                continue
+            existing = versions.get(version_key)
+            if isinstance(existing, dict):
+                versions[version_key] = _merge_version_notification_state(existing, version_state)
+            else:
+                versions[version_key] = _merge_version_notification_state({}, version_state)
+    return {"versions": dict(sorted(versions.items()))}
 
 
 def _normalize_state(data: Any) -> dict[str, Any]:
