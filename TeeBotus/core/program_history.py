@@ -132,6 +132,7 @@ def _parse_semver_tag(item: GitSummaryItem) -> _SemVerTag | None:
             int(match.group("minor")),
             int(match.group("patch")),
             prerelease_key,
+            item.name,
         ),
     )
 

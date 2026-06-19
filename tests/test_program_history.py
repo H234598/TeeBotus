@@ -60,6 +60,17 @@ def test_recent_releases_uses_semver_precedence(tmp_path: Path) -> None:
     ]
 
 
+def test_recent_releases_breaks_equal_semver_precedence_by_tag_name(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for tag in ("v1.0.0+build.1", "v1.0.0+build.2", "v1.0.0+build.10"):
+        _commit(repo, f"Release {tag}")
+        _git(repo, "tag", tag)
+
+    releases = recent_releases(repo, limit=3)
+
+    assert [release.name for release in releases] == ["v1.0.0+build.2", "v1.0.0+build.10", "v1.0.0+build.1"]
+
+
 def test_recent_releases_ignores_non_semver_tags(tmp_path: Path) -> None:
     repo = _git_repo(tmp_path)
     for tag in ("latest", "release-2026-06-19", "v1.0", "v1.0.0"):
