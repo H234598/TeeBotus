@@ -276,6 +276,8 @@ def resolve_openai_key(
     slot = _validate_slot_number(slot, label="OpenAI key slot")
     instance_token = normalize_instance_env_token(instance_name)
     channel_token = _normalize_openai_channel_token(channel)
+    if channel_token in BACKGROUND_OPENAI_CHANNELS:
+        return _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
     candidates = [
         f"OPENAI_API_KEY_{instance_token}_{channel_token}_{slot}",
         f"OPENAI_API_KEY_{instance_token}_{channel_token}",
@@ -297,11 +299,6 @@ def resolve_openai_key(
         value = _first_nonempty_env_value(source, candidates[1])
         if value:
             return value
-    background_key = _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
-    if background_key:
-        return background_key
-    if channel_token in BACKGROUND_OPENAI_CHANNELS:
-        return ""
     value = _first_nonempty_env_value(source, candidates[2])
     if value:
         return value
@@ -320,18 +317,94 @@ def _resolve_background_openai_key(
     instance_name: str,
     instance_token: str,
     channel_token: str,
-    _slot: int,
+    slot: int,
 ) -> str:
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
-    if channel_token in PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES:
-        return _first_nonempty_env_value(
-            source,
-            *_proactive_role_services_env_keys(instance_name, instance_token, channel_token),
-        )
-    if instance_token != BACKGROUND_SERVICES_INSTANCE_TOKEN:
-        return ""
-    return _first_nonempty_env_value(source, BACKGROUND_SERVICES_ENV_KEY)
+    if channel_token in PROACTIVE_ROLE_OPENAI_CHANNELS:
+        role_key = _resolve_proactive_role_openai_key(source, instance_name, instance_token, channel_token, slot)
+        if role_key:
+            return role_key
+        proactive_key = _resolve_proactive_shared_openai_key(source, instance_token, slot)
+        if proactive_key:
+            return proactive_key
+        return _resolve_background_shared_openai_key(source, instance_name, instance_token, slot)
+    if channel_token == "PROACTIVE":
+        proactive_key = _resolve_proactive_shared_openai_key(source, instance_token, slot)
+        if proactive_key:
+            return proactive_key
+        return _resolve_background_shared_openai_key(source, instance_name, instance_token, slot)
+    if channel_token == "BACKGROUND":
+        return _resolve_background_shared_openai_key(source, instance_name, instance_token, slot)
+    return ""
+
+
+def _resolve_proactive_role_openai_key(
+    source: Mapping[str, str],
+    instance_name: str,
+    instance_token: str,
+    channel_token: str,
+    slot: int,
+) -> str:
+    slot_key = f"OPENAI_API_KEY_{instance_token}_{channel_token}_{slot}"
+    slot_services_key = f"OPENAI_API_KEY_{instance_token}_{channel_token}_SERVICES_{slot}"
+    list_key = f"OPENAI_API_KEYS_{instance_token}_{channel_token}"
+    direct_key = f"OPENAI_API_KEY_{instance_token}_{channel_token}"
+    services_key = f"OPENAI_API_KEY_{instance_token}_{channel_token}_SERVICES"
+    value = _first_nonempty_env_value(source, slot_key, slot_services_key)
+    if value:
+        return value
+    resolved = _resolve_indexed_secret(source.get(list_key), slot, label=list_key)
+    if resolved:
+        return resolved
+    return _first_nonempty_env_value(
+        source,
+        direct_key,
+        services_key,
+        *_proactive_role_services_env_keys(instance_name, instance_token, channel_token),
+    )
+
+
+def _resolve_proactive_shared_openai_key(source: Mapping[str, str], instance_token: str, slot: int) -> str:
+    instance_slot_key = f"OPENAI_API_KEY_{instance_token}_PROACTIVE_{slot}"
+    instance_services_slot_key = f"OPENAI_API_KEY_{instance_token}_PROACTIVE_SERVICES_{slot}"
+    instance_list_key = f"OPENAI_API_KEYS_{instance_token}_PROACTIVE"
+    value = _first_nonempty_env_value(source, instance_slot_key, instance_services_slot_key)
+    if value:
+        return value
+    resolved = _resolve_indexed_secret(source.get(instance_list_key), slot, label=instance_list_key)
+    if resolved:
+        return resolved
+    return _first_nonempty_env_value(
+        source,
+        f"OPENAI_API_KEY_{instance_token}_PROACTIVE",
+        f"OPENAI_API_KEY_{instance_token}_PROACTIVE_SERVICES",
+        "OPENAI_API_KEY_PROACTIVE",
+        "OPENAI_API_KEY_PROACTIVE_SERVICES",
+    )
+
+
+def _resolve_background_shared_openai_key(
+    source: Mapping[str, str],
+    instance_name: str,
+    instance_token: str,
+    slot: int,
+) -> str:
+    raw_services_key = f"{str(instance_name).strip()}_BACKGROUND_SERVICES"
+    token_services_key = f"{instance_token}_BACKGROUND_SERVICES"
+    legacy_keys = (BACKGROUND_SERVICES_ENV_KEY,) if instance_token == BACKGROUND_SERVICES_INSTANCE_TOKEN else ()
+    return _first_nonempty_env_value(
+        source,
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_{slot}",
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES_{slot}",
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND",
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES",
+        raw_services_key,
+        token_services_key,
+        *legacy_keys,
+        "OPENAI_API_KEY_BACKGROUND",
+        "OPENAI_API_KEY_BACKGROUND_SERVICES",
+    )
 
 
 def _proactive_role_services_env_keys(instance_name: str, instance_token: str, channel_token: str) -> tuple[str, ...]:

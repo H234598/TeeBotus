@@ -269,7 +269,7 @@ def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-background"
     assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "key-instance"
-    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
+    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == "key-other-background"
 
 
 def test_openai_key_resolution_strips_background_services_key():
@@ -280,27 +280,37 @@ def test_openai_key_resolution_strips_background_services_key():
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-background"
 
 
-def test_openai_key_resolution_ignores_global_background_key():
+def test_openai_key_resolution_accepts_global_background_key():
     env = {"OPENAI_API_KEY_BACKGROUND": "key-global-background"}
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-global-background"
 
 
-def test_openai_key_resolution_ignores_global_proactive_key():
-    env = {"OPENAI_API_KEY_PROACTIVE": "key-global-proactive"}
+def test_openai_key_resolution_accepts_global_proactive_key_before_background_key():
+    env = {
+        "OPENAI_API_KEY_PROACTIVE": "key-global-proactive",
+        "OPENAI_API_KEY_BACKGROUND": "key-global-background",
+    }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-global-proactive"
 
 
-def test_openai_key_resolution_ignores_legacy_instance_background_key():
+def test_openai_key_resolution_accepts_global_proactive_services_key():
+    env = {"OPENAI_API_KEY_PROACTIVE_SERVICES": "key-global-proactive-services"}
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-global-proactive-services"
+
+
+def test_openai_key_resolution_accepts_instance_background_before_global_background_key():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_2": "key-legacy-background-slot",
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "key-legacy-background",
         "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "key-legacy-background-a, key-legacy-background-b",
+        "OPENAI_API_KEY_BACKGROUND": "key-global-background",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
-    assert resolve_openai_key("Depressionsbot", "background", 2, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-legacy-background"
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "key-legacy-background-slot"
 
 
 def test_openai_key_resolution_prefers_proactive_key_before_background_key():
@@ -325,6 +335,43 @@ def test_openai_key_resolution_accepts_proactive_role_keys():
     assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-plan"
     assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == "key-decision"
     assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-worker"
+
+
+def test_openai_key_resolution_proactive_role_falls_back_to_instance_proactive_before_global_proactive():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-instance-proactive",
+        "OPENAI_API_KEY_PROACTIVE": "key-global-proactive",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "key-background",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-instance-proactive"
+    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == "key-instance-proactive"
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-instance-proactive"
+
+
+def test_openai_key_resolution_proactive_role_falls_back_to_services_keys():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN_SERVICES": "key-plan-services",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION_SERVICES": "key-decision-services",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_WORKER_SERVICES": "key-worker-services",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_SERVICES": "key-instance-proactive-services",
+        "OPENAI_API_KEY_PROACTIVE_SERVICES": "key-global-proactive-services",
+        "OPENAI_API_KEY_BACKGROUND_SERVICES": "key-global-background-services",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-plan-services"
+    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == "key-decision-services"
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-worker-services"
+
+
+def test_openai_key_resolution_proactive_role_falls_back_to_shared_services_key():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_SERVICES": "key-instance-proactive-services",
+        "OPENAI_API_KEY_PROACTIVE_SERVICES": "key-global-proactive-services",
+        "OPENAI_API_KEY_BACKGROUND_SERVICES": "key-global-background-services",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-instance-proactive-services"
 
 
 def test_openai_key_resolution_accepts_proactive_role_services_key():
@@ -360,13 +407,12 @@ def test_openai_key_resolution_proactive_role_channels_do_not_fall_back_to_user_
         "OPENAI_API_KEYS_DEPRESSIONSBOT": "sk-list",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
         "OPENAI_API_KEY": "sk-global",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-legacy-proactive",
         "Depressionsbot_BACKGROUND_SERVICES": "key-background",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == ""
-    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == ""
-    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-background"
+    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == "key-background"
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-background"
 
 
 def test_llm_setting_resolution_accepts_proactive_role_channels():
@@ -381,7 +427,7 @@ def test_llm_setting_resolution_accepts_proactive_role_channels():
     assert resolve_llm_setting("Depressionsbot", "proactive_worker", 1, "PROVIDER", env) == "litellm"
 
 
-def test_openai_key_resolution_ignores_generic_background_services_aliases():
+def test_openai_key_resolution_accepts_background_openai_services_aliases():
     env = {
         "DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-token-alias",
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES_2": "key-background-slot",
@@ -389,8 +435,8 @@ def test_openai_key_resolution_ignores_generic_background_services_aliases():
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-background-single",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
-    assert resolve_openai_key("Depressionsbot", "background", 2, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-background-single"
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "key-background-slot"
 
 
 def test_openai_key_resolution_background_services_single_key_is_shared_across_slots():
@@ -401,13 +447,13 @@ def test_openai_key_resolution_background_services_single_key_is_shared_across_s
     assert resolve_openai_key("Depressionsbot", "background", 2, env) == "key-background"
 
 
-def test_openai_key_resolution_background_services_is_depressionsbot_only():
+def test_openai_key_resolution_background_services_are_instance_scoped():
     env = {
         "Depressionsbot_BACKGROUND_SERVICES": "key-background",
         "Bot_der_Wahrheit_BACKGROUND_SERVICES": "key-other-background",
     }
 
-    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
+    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == "key-other-background"
 
 
 def test_openai_key_resolution_non_user_channels_do_not_fall_back_to_user_keys():

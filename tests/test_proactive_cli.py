@@ -761,15 +761,33 @@ def test_resolve_proactive_role_openai_key_keeps_roles_separate() -> None:
     assert resolve_proactive_role_openai_key("Depressionsbot", "worker", env) == "sk-worker"
 
 
-def test_resolve_proactive_role_openai_key_allows_legacy_fallback_only_for_plan() -> None:
+def test_resolve_proactive_role_openai_key_allows_shared_proactive_fallback_for_all_roles() -> None:
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-legacy",
         "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
     }
 
     assert resolve_proactive_role_openai_key("Depressionsbot", "plan", env) == "sk-legacy"
-    assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == ""
-    assert resolve_proactive_role_openai_key("Depressionsbot", "worker", env) == ""
+    assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == "sk-legacy"
+    assert resolve_proactive_role_openai_key("Depressionsbot", "worker", env) == "sk-legacy"
+
+
+def test_resolve_proactive_role_openai_key_falls_back_to_global_and_background_keys() -> None:
+    env = {
+        "OPENAI_API_KEY_PROACTIVE": "sk-global-proactive",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+        "OPENAI_API_KEY_BACKGROUND": "sk-global-background",
+    }
+
+    assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == "sk-global-proactive"
+    assert resolve_proactive_role_openai_key(
+        "Depressionsbot",
+        "worker",
+        {
+            "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+            "OPENAI_API_KEY_BACKGROUND": "sk-global-background",
+        },
+    ) == "sk-background"
 
 
 def test_resolve_proactive_role_openai_key_rejects_unknown_role() -> None:

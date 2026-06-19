@@ -41,7 +41,6 @@ PROACTIVE_ROLE_LLM_CHANNELS = {
     "worker": "proactive_worker",
 }
 PROACTIVE_ROLE_OPENAI_CHANNELS = PROACTIVE_ROLE_LLM_CHANNELS
-PROACTIVE_LEGACY_OPENAI_CHANNEL = "proactive"
 PROACTIVE_ROLE_LLM_SETTING_NAMES = (
     "ENABLED",
     "PROFILE",
@@ -215,10 +214,7 @@ def resolve_proactive_role_openai_key(instance_name: str, role: str, env: Mappin
     source = os.environ if env is None else env
     normalized_role = _normalize_proactive_role(role)
     channel = PROACTIVE_ROLE_OPENAI_CHANNELS.get(normalized_role)
-    key = resolve_openai_key(instance_name, channel, 1, source)
-    if key or normalized_role != "plan":
-        return key
-    return resolve_openai_key(instance_name, PROACTIVE_LEGACY_OPENAI_CHANNEL, 1, source)
+    return resolve_openai_key(instance_name, channel, 1, source)
 
 
 def _normalize_proactive_role(role: str) -> str:
