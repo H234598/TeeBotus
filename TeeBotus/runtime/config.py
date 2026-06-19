@@ -175,6 +175,25 @@ def _validate_instance_name_segment(name: str, *, label: str) -> str:
     return value
 
 
+def _validate_unique_instance_env_tokens(instance_names: Sequence[str]) -> tuple[str, ...]:
+    selected = tuple(instance_names)
+    seen: dict[str, str] = {}
+    collisions: list[str] = []
+    for instance_name in selected:
+        token = normalize_instance_env_token(instance_name)
+        previous = seen.get(token)
+        if previous is not None and previous != instance_name:
+            collisions.append(f"{previous}/{instance_name}->{token}")
+            continue
+        seen[token] = instance_name
+    if collisions:
+        raise RuntimeConfigError(
+            "instance names normalize to duplicate environment token(s): "
+            f"{', '.join(collisions)}. Rename one instance folder or select only one of the colliding instances."
+        )
+    return selected
+
+
 def _first_nonempty_env_value(source: Mapping[str, str], *keys: str) -> str:
     for key in keys:
         value = str(source.get(key, "") or "").strip()
@@ -531,7 +550,7 @@ def build_runtime_config(
     channels = resolve_channels(source, cli_channels)
     channels_explicit = _channels_were_explicitly_selected(source, cli_channels)
     instances_explicit = _instances_were_explicitly_selected(source)
-    selected_instances = resolve_selected_instances(instances_dir, source)
+    selected_instances = _validate_unique_instance_env_tokens(resolve_selected_instances(instances_dir, source))
     instances = []
     for instance_name in selected_instances:
         accounts = build_account_run_configs(instance_name, channels, source)

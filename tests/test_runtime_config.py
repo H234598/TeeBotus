@@ -483,6 +483,30 @@ def test_runtime_discovers_instances(tmp_path: Path):
     assert config.instances[0].accounts[0].telegram_token == "token"
 
 
+def test_runtime_rejects_discovered_instances_with_colliding_env_tokens(tmp_path: Path):
+    for name in ("A-B", "A_B"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
+
+    with pytest.raises(RuntimeConfigError, match=r"A-B/A_B->A_B"):
+        build_runtime_config({"TELEGRAM_BOT_INSTANCES_DIR": str(tmp_path)}, cli_channels="telegram")
+
+
+def test_runtime_rejects_explicit_instances_with_colliding_env_tokens(tmp_path: Path):
+    for name in ("A B", "A_B"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
+
+    with pytest.raises(RuntimeConfigError, match=r"A B/A_B->A_B"):
+        build_runtime_config(
+            {
+                "TELEGRAM_BOT_INSTANCES_DIR": str(tmp_path),
+                "TEEBOTUS_INSTANCES": "A B,A_B",
+            },
+            cli_channels="telegram",
+        )
+
+
 def test_instances_dir_resolution_strips_whitespace_and_uses_first_nonempty_value(tmp_path: Path):
     fallback = tmp_path / "fallback"
     explicit = tmp_path / "explicit"
