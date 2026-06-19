@@ -168,7 +168,12 @@ def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REP
 
 
 def _normalize_version_key(version: str) -> str:
-    return str(version or "").strip().lstrip("vV")
+    text = str(version or "").strip()
+    if text in {"v", "V"}:
+        return ""
+    if len(text) >= 2 and text[0] in {"v", "V"} and text[1].isdigit():
+        return text[1:]
+    return text
 
 
 def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:

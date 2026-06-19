@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from TeeBotus.core.version_notifications import (
     _normalize_state,
+    _normalize_version_key,
     build_version_notification_text,
     github_has_version,
     github_repo_url,
@@ -541,6 +542,15 @@ def test_notify_recent_telegram_users_normalizes_version_key(tmp_path: Path) -> 
     assert len(sent) == 1
     assert list(state["versions"]) == ["1.0.3"]
     assert "Version 1.0.3" in sent[0][1]
+
+
+def test_version_key_normalization_removes_only_single_semver_prefix() -> None:
+    assert _normalize_version_key("v1.0.3") == "1.0.3"
+    assert _normalize_version_key("V1.0.3") == "1.0.3"
+    assert _normalize_version_key("v") == ""
+    assert _normalize_version_key("V") == ""
+    assert _normalize_version_key("vv1.0.3") == "vv1.0.3"
+    assert _normalize_version_key("version1") == "version1"
 
 
 def test_notify_recent_telegram_users_skips_empty_normalized_version(tmp_path: Path) -> None:
