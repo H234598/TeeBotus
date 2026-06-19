@@ -78,6 +78,7 @@ def notify_recent_telegram_users_for_version(
                     "reason": _delivery_error_reason(exc),
                 }
             continue
+        failed_identities.pop(recipient.identity_key, None)
         sent_identities.add(recipient.identity_key)
         sent_count += 1
     version_state["sent_identities"] = sorted(sent_identities)

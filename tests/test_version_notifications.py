@@ -754,6 +754,8 @@ def test_notify_recent_telegram_users_retries_when_failed_route_changes(tmp_path
     assert attempts == [111, 222]
     assert sent == [222]
     assert count == 1
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
 
 
 def test_notify_recent_telegram_users_recovers_malformed_version_state(tmp_path: Path) -> None:
