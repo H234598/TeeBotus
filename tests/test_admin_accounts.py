@@ -459,6 +459,27 @@ def test_account_recovery_status_ignores_malformed_source_counts_without_crashin
     assert "readable but contain no memory payloads" in recommendation
 
 
+def test_account_recovery_status_treats_readable_empty_raw_sources_as_empty() -> None:
+    status, recommendation = _account_recovery_status(
+        [
+            {
+                "name": "json_files",
+                "active": True,
+                "readable": True,
+                "entries": 0,
+                "index_present": False,
+                "collections": 0,
+                "raw_entries": 0,
+                "raw_index_present": True,
+                "raw_collections": 1,
+            }
+        ]
+    )
+
+    assert status == "empty"
+    assert "readable but contain no memory payloads" in recommendation
+
+
 def test_sqlite_sources_for_unrecoverable_accounts_ignores_malformed_counts_without_crashing(tmp_path: Path) -> None:
     path = tmp_path / "Account_Memory.sqlite3"
 
@@ -610,6 +631,23 @@ def test_memory_recovery_quarantines_unrecoverable_json_state_files(tmp_path: Pa
     moved = result["instances"][0]["json_files"][0]
     assert moved["path"] == str(state_path)
     assert Path(moved["quarantine_path"]).exists()
+
+
+def test_memory_recovery_report_treats_empty_json_state_as_empty(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.write_agent_state(account_id, {})
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    account = report["instances"][0]["accounts"][0]
+    source = next(source for source in account["sources"] if source["name"] == "json_files")
+    assert account["recovery_status"] == "empty"
+    assert source["readable"] is True
+    assert source["raw_collections"] == 1
+    assert source["collections"] == 0
 
 
 def test_memory_recovery_report_mentions_unreadable_inactive_snapshots_under_accounts_root(tmp_path: Path) -> None:

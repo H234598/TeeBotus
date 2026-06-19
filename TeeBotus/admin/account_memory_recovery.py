@@ -1409,6 +1409,7 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
         source
         for source in source_reports
         if source.get("active", True) is not False
+        and not source.get("readable")
         and (
             _source_count(source, "raw_entries") > 0
             or bool(source.get("raw_index_present"))
@@ -1419,6 +1420,7 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
         source
         for source in source_reports
         if source.get("active", True) is False
+        and not source.get("readable")
         and (
             _source_count(source, "raw_entries") > 0
             or bool(source.get("raw_index_present"))
