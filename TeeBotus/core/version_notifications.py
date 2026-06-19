@@ -62,6 +62,7 @@ def notify_recent_telegram_users_for_version(
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
         if _sent_delivery_matches_recipient(sent_identities, recipient, identities):
+            _clear_resolved_failures(failed_identities, recipient, identities)
             sent_identities.add(recipient.identity_key)
             continue
         if _failed_delivery_matches_recipient(failed_identities, recipient):
