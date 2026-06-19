@@ -2006,6 +2006,48 @@ def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) ->
     assert bot.main(["--runtime-status", "--channels", "matrix"]) == 0
     captured = capsys.readouterr()
     assert "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused" in captured.out
+    assert "matrix_account=Demo/matrix:1 target=matrix.example:443 status=configured user_id=configured" in captured.out
+
+
+def test_runtime_status_reports_duplicate_matrix_user_id_without_leaking_user_id(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    for name in ("DemoA", "DemoB"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCES", "DemoA,DemoB")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMOA", "https://matrix-a.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMOA", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMOA", "token-a")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMOB", "https://matrix-b.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMOB", "@bot:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMOB", "token-b")
+
+    def fake_check_matrix_homeservers(config):
+        return tuple(
+            SimpleNamespace(
+                account=account,
+                ok=True,
+                target=f"{account.matrix_homeserver.removeprefix('https://')}:443",
+                error="",
+            )
+            for instance in config.instances
+            for account in instance.accounts
+            if account.channel == "matrix"
+        )
+
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", fake_check_matrix_homeservers)
+
+    assert bot.main(["--runtime-status", "--channels", "matrix"]) == 0
+    captured = capsys.readouterr()
+    assert (
+        "matrix_account=DemoB/matrix:1 target=matrix-b.example:443 status=broken "
+        "error=duplicate user ID with DemoA/matrix:1"
+    ) in captured.out
+    assert "@bot:example" not in captured.out
 
 
 def test_runtime_status_reports_numbered_signal_and_matrix_slots(monkeypatch, capsys) -> None:
@@ -2074,6 +2116,7 @@ def test_runtime_status_reports_numbered_signal_and_matrix_slots(monkeypatch, ca
     assert "signal_service=Demo/signal:2 target=127.0.0.1:8081 status=reachable" in captured.out
     assert "signal_account=Demo/signal:2 phone=+492 target=127.0.0.1:8081 status=registered" in captured.out
     assert "matrix_homeserver=Demo/matrix:2 target=matrix-b.example:443 status=reachable" in captured.out
+    assert "matrix_account=Demo/matrix:2 target=matrix-b.example:443 status=configured user_id=configured" in captured.out
 
 
 def test_runtime_status_reports_requested_matrix_without_config(monkeypatch, capsys, tmp_path) -> None:

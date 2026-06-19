@@ -108,7 +108,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
         from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
         from TeeBotus.runtime.config import RuntimeConfigError, resolve_runtime_config
-        from TeeBotus.runtime.matrix_runner import check_matrix_homeservers
+        from TeeBotus.runtime.matrix_runner import check_matrix_accounts, check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
         from TeeBotus.runtime.qdrant import (
             check_default_collections,
@@ -250,6 +250,10 @@ def _runtime_status(argv: Sequence[str]) -> int:
         state = "reachable" if health.ok else "unreachable"
         detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
         messenger_lines.append(f"matrix_homeserver={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
+    for health in check_matrix_accounts(config):
+        state = "configured" if health.ok else "broken"
+        detail = " user_id=configured" if health.ok else f" error={_sanitize_status_text(health.error)}"
+        messenger_lines.append(f"matrix_account={health.account.instance_name}/{health.account.label} target={_sanitize_status_url(health.target)} status={state}{detail}")
     _print_runtime_status_section("Messenger", messenger_lines)
 
     local_service_lines: list[str] = []

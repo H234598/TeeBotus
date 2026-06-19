@@ -42,6 +42,14 @@ class MatrixHomeserverHealth:
     error: str = ""
 
 
+@dataclass(frozen=True)
+class MatrixAccountHealth:
+    account: AccountRunConfig
+    ok: bool
+    target: str
+    error: str = ""
+
+
 class MatrixRuntimeBridge:
     def __init__(
         self,
@@ -722,6 +730,29 @@ def _matrix_raw_content(raw_event: Any) -> dict[str, Any]:
 
 def check_matrix_homeservers(config: RuntimeConfig, *, timeout_seconds: float = 1.0) -> tuple[MatrixHomeserverHealth, ...]:
     return tuple(check_matrix_homeserver(account, timeout_seconds=timeout_seconds) for account in _matrix_accounts(config))
+
+
+def check_matrix_accounts(config: RuntimeConfig) -> tuple[MatrixAccountHealth, ...]:
+    healths: list[MatrixAccountHealth] = []
+    seen_user_ids: dict[str, str] = {}
+    for account in _matrix_accounts(config):
+        try:
+            _host, _port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
+        except MatrixRuntimeError as exc:
+            healths.append(MatrixAccountHealth(account=account, ok=False, target=account.matrix_homeserver, error=str(exc)))
+            continue
+        user_id = str(account.matrix_user_id or "").strip()
+        if not user_id:
+            healths.append(MatrixAccountHealth(account=account, ok=False, target=target, error="missing Matrix user ID"))
+            continue
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen_user_ids.get(user_id)
+        if previous_label is not None:
+            healths.append(MatrixAccountHealth(account=account, ok=False, target=target, error=f"duplicate user ID with {previous_label}"))
+            continue
+        seen_user_ids[user_id] = label
+        healths.append(MatrixAccountHealth(account=account, ok=True, target=target))
+    return tuple(healths)
 
 
 def check_matrix_homeserver(account: AccountRunConfig, *, timeout_seconds: float = 1.0) -> MatrixHomeserverHealth:

@@ -15,6 +15,7 @@ from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.message_tracking import SentMessageRef
 from TeeBotus.runtime.matrix_runner import (
+    check_matrix_accounts,
     MatrixHomeserverHealth,
     MatrixRuntimeBridge,
     MatrixRuntimeError,
@@ -1578,6 +1579,48 @@ def test_matrix_start_rejects_duplicate_user_id_before_import(monkeypatch, tmp_p
 
     with pytest.raises(MatrixRuntimeError, match="Duplicate Matrix user ID"):
         run_matrix_accounts(config)
+
+
+def test_check_matrix_accounts_reports_duplicate_user_id_without_leaking_user_id(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-a.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-a",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-b.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-b",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("matrix",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+
+    health = check_matrix_accounts(config)
+
+    assert health[0].ok is True
+    assert health[1].ok is False
+    assert health[1].target == "matrix-b.example:443"
+    assert health[1].error == "duplicate user ID with DemoA/matrix:1"
+    assert "@bot:example" not in health[1].error
 
 
 def test_matrix_homeserver_health_uses_normalized_host_port(monkeypatch) -> None:
