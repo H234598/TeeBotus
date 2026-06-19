@@ -621,7 +621,7 @@ def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
         return {"versions": {}}
     return _normalize_state(data)
 

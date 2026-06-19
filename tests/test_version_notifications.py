@@ -1621,6 +1621,29 @@ def test_notify_recent_telegram_users_ignores_malformed_plaintext_legacy_state_w
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
 
 
+def test_notify_recent_telegram_users_recovers_non_utf8_plaintext_legacy_state(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_bytes(b"\xff\xfe\x00not-json")
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_merges_sqlite_and_legacy_sent_identities(tmp_path: Path, monkeypatch) -> None:
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
