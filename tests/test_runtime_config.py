@@ -47,6 +47,27 @@ def test_runtime_status_rejects_duplicate_channels_option():
             resolve_runtime_config(argv, env={})
 
 
+def test_runtime_config_all_option_requests_instance_discovery(tmp_path: Path):
+    for name in ("DemoA", "DemoB"):
+        instance_dir = tmp_path / name
+        instance_dir.mkdir()
+        (instance_dir / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
+    env = {
+        "TEEBOTUS_INSTANCES_DIR": str(tmp_path),
+        "TEEBOTUS_INSTANCE": "Ignored",
+        "TELEGRAM_BOT_TOKEN_DEMOA": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEMOB": "token-b",
+    }
+
+    config = resolve_runtime_config(["--all", "--channels", "telegram"], env=env)
+
+    assert config.selected_instances == ("DemoA", "DemoB")
+    assert config.channels == ("telegram",)
+    assert config.channels_explicit is True
+    assert config.instances_explicit is False
+    assert tuple(instance.instance_name for instance in config.instances) == ("DemoA", "DemoB")
+
+
 def test_runtime_config_marks_only_concrete_channel_selection_as_explicit(tmp_path: Path):
     (tmp_path / "Depressionsbot").mkdir()
     (tmp_path / "Depressionsbot" / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")

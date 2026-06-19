@@ -415,7 +415,6 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
     single_user_id = source.get(f"MATRIX_BOT_USER_ID_{token}", "").strip()
     single_access_token = source.get(f"MATRIX_BOT_ACCESS_TOKEN_{token}", "").strip()
     single_device_id = source.get(f"MATRIX_BOT_DEVICE_ID_{token}", "").strip()
-    required_singles = (single_homeserver, single_user_id, single_access_token)
     homeservers = _merge_numbered_values(
         source,
         (*base_homeservers, single_homeserver),
@@ -600,12 +599,23 @@ def resolve_runtime_config(
     argv: Sequence[str] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
+    source: Mapping[str, str] = os.environ if env is None else env
+    runtime_env: dict[str, str] | None = None
     cli_channels: str | None = None
     unknown: list[str] = []
     args = list(argv or ())
     index = 0
     while index < len(args):
         arg = args[index]
+        if arg == "--all":
+            if runtime_env is None:
+                runtime_env = dict(source)
+            runtime_env.pop("TEEBOTUS_INSTANCES", None)
+            runtime_env.pop("TELEGRAM_BOT_INSTANCES", None)
+            runtime_env["TEEBOTUS_INSTANCE"] = "all"
+            runtime_env["TELEGRAM_BOT_INSTANCE"] = "all"
+            index += 1
+            continue
         if arg == "--channels":
             if cli_channels is not None:
                 raise RuntimeConfigError("duplicate --channels option; pass one comma-separated channel list")
@@ -624,7 +634,7 @@ def resolve_runtime_config(
         index += 1
     if unknown:
         raise RuntimeConfigError(f"unsupported runtime-status option(s): {', '.join(unknown)}")
-    return build_runtime_config(env=env, cli_channels=cli_channels)
+    return build_runtime_config(env=runtime_env if runtime_env is not None else source, cli_channels=cli_channels)
 
 
 def _merge_numbered_values(
