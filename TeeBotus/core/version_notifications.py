@@ -67,11 +67,16 @@ def notify_recent_telegram_users_for_version(
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
+    historical_sent_identities = _historical_sent_identity_set(state, normalized_version, resolved_now)
     historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities, resolved_now)
     version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
-        if _sent_delivery_matches_recipient(sent_identities, recipient, identities):
+        if _sent_delivery_matches_recipient(sent_identities, recipient, identities) or _sent_delivery_matches_recipient(
+            historical_sent_identities,
+            recipient,
+            identities,
+        ):
             missing_sent_alias = recipient.identity_key not in sent_identities
             previous_failures = dict(failed_identities)
             _clear_resolved_failures(failed_identities, recipient, identities)
@@ -615,6 +620,23 @@ def _historical_failed_identity_map(
     return dict(sorted(failed_identities.items()))
 
 
+def _historical_sent_identity_set(state: dict[str, Any], current_version: str, now: datetime) -> set[str]:
+    versions = state.get("versions")
+    if not isinstance(versions, dict):
+        return set()
+    sent_identities: set[str] = set()
+    for version_key, version_state in versions.items():
+        if not isinstance(version_key, str):
+            continue
+        if not _version_state_is_equal_precedence_historical(version_key, version_state, current_version, now):
+            continue
+        if _version_state_updated_at(version_state) is not None:
+            continue
+        if isinstance(version_state, dict):
+            sent_identities.update(_telegram_identity_list(version_state.get("sent_identities")))
+    return sent_identities
+
+
 def _historical_version_state_order_key(item: tuple[Any, Any]) -> tuple[tuple[tuple[int, int | str], ...], datetime, str]:
     version_key = str(item[0] or "")
     version_state = item[1]
@@ -646,12 +668,32 @@ def _version_state_is_historical(
 ) -> bool:
     if _version_is_before(version_key, current_version):
         return True
+    return _version_state_is_equal_precedence_historical(version_key, version_state, current_version, now)
+
+
+def _version_state_is_equal_precedence_historical(
+    version_key: str,
+    version_state: object,
+    current_version: str,
+    now: datetime,
+) -> bool:
     if _version_order_key(version_key) != _version_order_key(current_version):
         return False
     if _normalize_version_key(version_key) == current_version:
         return False
     updated_at = _version_state_updated_at(version_state)
-    return updated_at is not None and updated_at <= now
+    if updated_at is not None:
+        return updated_at <= now
+    return _version_state_has_delivery_state(version_state)
+
+
+def _version_state_has_delivery_state(version_state: object) -> bool:
+    if not isinstance(version_state, dict):
+        return False
+    return bool(
+        _telegram_identity_list(version_state.get("sent_identities"))
+        or _failed_identity_map(version_state.get("failed_identities"))
+    )
 
 
 def _clear_historical_failures_resolved_by_sent_identities(

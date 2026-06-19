@@ -1959,6 +1959,41 @@ def test_notify_recent_telegram_users_carries_equal_precedence_failure_in_same_s
     assert failed["failed_at"] == "2026-06-14T12:00:00+00:00"
 
 
+def test_notify_recent_telegram_users_uses_legacy_sent_equal_precedence_without_updated_at(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.4+build.1": {
+                        "sent_identities": ["telegram:user:111"],
+                        "failed_identities": {},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.4+build.2",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+
+    assert count == 0
+    assert attempts == []
+    assert state["versions"]["1.0.4+build.2"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_replays_equal_precedence_build_states_by_updated_at(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Ada")
@@ -2140,6 +2175,48 @@ def test_notify_recent_telegram_users_stores_state_in_sqlite_when_available(tmp_
     assert not state_path.exists()
     state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    raw_db = sqlite_path.read_bytes()
+    assert b"telegram:user:111" not in raw_db
+
+
+def test_notify_recent_telegram_users_reuses_sqlite_sent_equal_precedence_state(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    store.write_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {
+            "versions": {
+                "1.0.4+build.1": {
+                    "sent_identities": ["telegram:user:111"],
+                    "failed_identities": {},
+                }
+            }
+        },
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.4+build.2",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert not state_path.exists()
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+    assert state["versions"]["1.0.4+build.2"]["sent_identities"] == ["telegram:user:111"]
     raw_db = sqlite_path.read_bytes()
     assert b"telegram:user:111" not in raw_db
 
