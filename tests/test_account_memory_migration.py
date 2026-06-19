@@ -96,3 +96,47 @@ def test_migrate_selected_instances_skips_missing_instances(tmp_path, monkeypatc
         (existing_instance / "data" / "accounts", False),
         (existing_instance / "data" / "accounts", False),
     ]
+
+
+def test_migrate_selected_instances_deduplicates_duplicates(tmp_path, monkeypatch) -> None:
+    calls: list[tuple[Path, bool]] = []
+
+    class _FakeAccountStore:
+        def __init__(self, accounts_dir: Path, instance_name: str, *_args, create_dirs: bool = True, **_kwargs) -> None:
+            calls.append((accounts_dir, create_dirs))
+            self.accounts_dir = accounts_dir
+            self.account_memory_vault = SimpleNamespace(
+                read_jsonl=lambda path: [],
+                read_json=lambda path, default: default,
+            )
+
+        def write_memory_entries(self, account_id: str, entries: list[dict]) -> None:
+            pass
+
+        def write_memory_index(self, account_id: str, index: dict) -> None:
+            pass
+
+        def read_memory_entries(self, account_id: str) -> list[dict]:
+            return []
+
+        def read_memory_index(self, account_id: str) -> dict:
+            return {}
+
+    monkeypatch.setattr(database_migration, "AccountStore", _FakeAccountStore)
+
+    instances_dir = tmp_path / "instances"
+    existing_instance = instances_dir / "Existing"
+    existing_instance.mkdir(parents=True)
+
+    result = database_migration._migrate(
+        instances_dir=instances_dir,
+        selected=("Existing", "Existing", ""),
+        dry_run=True,
+        delete_json_files=False,
+    )
+
+    assert result == {"migrated": 0, "skipped": 0, "deleted": 0}
+    assert calls == [
+        (existing_instance / "data" / "accounts", False),
+        (existing_instance / "data" / "accounts", False),
+    ]

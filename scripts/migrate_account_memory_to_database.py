@@ -126,7 +126,8 @@ def _restore_env(previous: dict[str, str | None]) -> None:
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
     if selected:
-        return [instances_dir / name for name in selected if (instances_dir / name).is_dir()]
+        names = tuple(dict.fromkeys(str(name).strip() for name in selected if str(name).strip()))
+        return [instances_dir / name for name in names if (instances_dir / name).is_dir()]
     if not instances_dir.exists():
         return []
     return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())
