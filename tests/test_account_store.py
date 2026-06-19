@@ -1418,6 +1418,46 @@ def test_account_store_sqlite_backend_keeps_valid_timestamp_over_invalid_legacy_
     assert rows[0]["updated_at"] == "2026-06-15T09:00:00+00:00"
 
 
+def test_account_store_sqlite_backend_uses_valid_created_at_when_updated_at_is_invalid_jsonl_row(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_same",
+                "message_text": "Bitte erinnern",
+                "status": "queued",
+                "created_at": "2026-06-15T08:00:00+00:00",
+                "updated_at": "2026-06-15T08:00:00+00:00",
+            }
+        ],
+    )
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [
+            {
+                "id": "pro_same",
+                "message_text": "Bitte erinnern",
+                "status": "sent",
+                "message_ref": "telegram:42",
+                "created_at": "2026-06-15T09:00:00+00:00",
+                "updated_at": "broken",
+            }
+        ],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows[0]["status"] == "sent"
+    assert rows[0]["message_ref"] == "telegram:42"
+    assert rows[0]["created_at"] == "2026-06-15T09:00:00+00:00"
+
+
 def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
@@ -1466,6 +1506,31 @@ def test_account_store_sqlite_backend_keeps_valid_timestamp_over_invalid_legacy_
 
     assert state["previous_response_id"] == "resp-sql"
     assert state["updated_at"] == "2026-06-14T11:59:00+00:00"
+    assert not legacy_path.exists()
+
+
+def test_account_store_sqlite_backend_uses_valid_created_at_when_updated_at_is_invalid_json_document(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_llm_state(account_id, {"previous_response_id": "resp-sql", "updated_at": "2026-06-14T11:59:00+00:00"})
+    legacy_path = store.account_dir(account_id) / LLM_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {
+            "previous_response_id": "resp-legacy",
+            "created_at": "2026-06-14T12:00:00+00:00",
+            "updated_at": "broken",
+        },
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-legacy"
+    assert state["created_at"] == "2026-06-14T12:00:00+00:00"
+    assert state["updated_at"] == "broken"
     assert not legacy_path.exists()
 
 

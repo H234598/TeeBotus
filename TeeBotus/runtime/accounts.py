@@ -3498,13 +3498,26 @@ def _merge_account_jsonl_rows(primary_rows: list[dict[str, Any]], legacy_rows: l
 
 
 def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]) -> dict[str, Any]:
-    source_updated = str(source_data.get("updated_at") or source_data.get("created_at") or "")
-    target_updated = str(target_data.get("updated_at") or target_data.get("created_at") or "")
+    source_updated = _state_timestamp_text(source_data)
+    target_updated = _state_timestamp_text(target_data)
     if _source_state_is_newer(source_updated, target_updated):
         merged = {**target_data, **source_data}
     else:
         merged = {**source_data, **target_data}
     return merged
+
+
+def _state_timestamp_text(data: dict[str, Any]) -> str:
+    fallback = ""
+    for key in ("updated_at", "created_at"):
+        text = str(data.get(key) or "").strip()
+        if not text:
+            continue
+        if not fallback:
+            fallback = text
+        if _parse_state_timestamp(text) is not None:
+            return text
+    return fallback
 
 
 def _source_state_is_newer(source_updated: str, target_updated: str) -> bool:
