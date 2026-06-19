@@ -11,6 +11,7 @@ DEFAULT_CONTAINER_NAME = "teebotus-qdrant"
 DEFAULT_VOLUME_NAME = "teebotus-qdrant"
 DEFAULT_BIND_HOST = "127.0.0.1"
 DEFAULT_PORT = 6333
+SYSTEMD_EXEC_PREFIX_CHARS = frozenset("@-:+!|")
 
 
 @dataclass(frozen=True)
@@ -72,8 +73,7 @@ def render_qdrant_systemd_unit(
     volume_name = _systemd_token(volume_name, label="volume name")
     bind_host = _validate_bind_host(bind_host)
     port = _validate_port(port)
-    podman = str(podman or "podman").strip() or "podman"
-    podman = _validate_systemd_unit_value(podman, label="podman executable")
+    podman = _validate_executable(podman or "podman", label="podman executable")
     service_name = f"{container_name}.service"
     publish = f"{bind_host}:{port}:{port}"
     podman_q = _shell_quote(podman)
@@ -157,6 +157,19 @@ def _systemd_token(value: str, *, label: str) -> str:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
     if any(char not in allowed for char in text):
         raise ValueError(f"Qdrant {label} contains unsupported characters")
+    return text
+
+
+def _validate_executable(value: str, *, label: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"Qdrant {label} must not be empty")
+    _validate_systemd_unit_value(text, label=label)
+    if text[0] in SYSTEMD_EXEC_PREFIX_CHARS:
+        raise ValueError(f"Qdrant {label} must not start with a special ExecStart prefix")
+    path = Path(text).expanduser()
+    if ("/" in text or "\\" in text) and not path.is_absolute():
+        raise ValueError(f"Qdrant {label} must be a PATH executable name or absolute path")
     return text
 
 

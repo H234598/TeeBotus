@@ -85,6 +85,31 @@ def test_render_qdrant_systemd_unit_rejects_control_characters() -> None:
             raise AssertionError(f"expected control character rejection for {kwargs}")
 
 
+def test_render_qdrant_systemd_unit_rejects_podman_execstart_prefixes() -> None:
+    for podman in ("-podman", "@podman", ":podman", "+podman", "!podman", "|podman"):
+        try:
+            render_qdrant_systemd_unit(podman=podman)
+        except ValueError as exc:
+            assert "special ExecStart prefix" in str(exc)
+        else:
+            raise AssertionError(f"expected podman executable rejection for {podman!r}")
+
+
+def test_render_qdrant_systemd_unit_rejects_relative_podman_path() -> None:
+    try:
+        render_qdrant_systemd_unit(podman="bin/podman")
+    except ValueError as exc:
+        assert "PATH executable name or absolute path" in str(exc)
+    else:
+        raise AssertionError("expected relative podman path rejection")
+
+
+def test_render_qdrant_systemd_unit_allows_absolute_podman_path() -> None:
+    unit = render_qdrant_systemd_unit(podman="/usr/bin/podman")
+
+    assert "ExecStart=/usr/bin/podman run --rm" in unit.service_text
+
+
 def test_render_qdrant_systemd_unit_escapes_systemd_percent_specifiers() -> None:
     unit = render_qdrant_systemd_unit(
         podman="/usr/bin/podman%h",
