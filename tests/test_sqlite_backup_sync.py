@@ -137,3 +137,28 @@ def test_sqlite_backup_sync_checks_collection_accounts_for_payload_count(tmp_pat
 
     assert result.account_payloads_checked == 1
     assert result.copied is True
+
+
+def test_sqlite_backup_sync_deduplicates_accounts_with_collection_and_entry_payloads(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    write_sqlite_memory(primary, memory_id="mem_primary")
+
+    mixed_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary, fallback_path=None),
+    )
+    mixed_backend.write_collection(
+        "a" * 128,
+        "proactive_outbox",
+        [{"id": "pro_1", "message_text": "Backup dedupe", "status": "queued"}],
+    )
+
+    result = sqlite_backup_sync.sync_account_memory_sqlite_backup(
+        accounts_root=accounts_root,
+        provider=provider(b"a" * 32),
+    )
+
+    assert result.account_payloads_checked == 1
