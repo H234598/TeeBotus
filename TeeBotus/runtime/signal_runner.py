@@ -25,7 +25,14 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceS
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
-from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.engine import (
+    EngineResult,
+    TeeBotusEngine,
+    _command_name,
+    _command_targets_other_bot,
+    _text_addresses_bot,
+    should_ignore_event_without_account,
+)
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import runtime_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
@@ -64,6 +71,16 @@ class SignalAccountHealth:
     registered: bool = False
     error: str = ""
     warning: str = ""
+    router: str = ""
+
+
+@dataclass(frozen=True)
+class _SignalRouteCandidate:
+    command: "TeeBotusSignalCommand"
+    event: Any
+    account_id: str = ""
+    addressed: bool = False
+    targets_other_bot: bool = False
 
 
 LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -133,7 +150,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             openai_client=self.openai_client,
             llm_client=self.llm_client,
             llm_enabled_override=run_config.llm_enabled,
-            bot_address_names=(run_config.signal_phone_number, run_config.label),
+            bot_address_names=(run_config.signal_phone_number, run_config.label, run_config.instance_name),
             working_memory_store=self.working_memory_store,
             bibliothekar_store=self.bibliothekar_store,
             youtube_job_runner=self.youtube_job_runner,
@@ -413,16 +430,107 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 continue
 
 
+class SharedSignalRouterCommand(_SignalBotCommand):
+    """Route one shared Signal account to the right TeeBotus instance."""
+
+    def __init__(
+        self,
+        *,
+        run_configs: Sequence[AccountRunConfig],
+        instances_dir: str | Path,
+        secret_provider: InstanceSecretProvider | None = None,
+    ) -> None:
+        super().__init__()
+        accounts = tuple(run_configs)
+        if not accounts:
+            raise SignalRuntimeError("Shared Signal router needs at least one Signal account config")
+        _validate_shared_signal_route(accounts)
+        self.run_configs = accounts
+        self.instances_dir = Path(instances_dir)
+        self.commands = tuple(
+            TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir, secret_provider=secret_provider)
+            for account in accounts
+        )
+        self.bot: Any | None = None
+
+    def setup(self) -> None:
+        return None
+
+    async def handle(self, context: Any) -> None:
+        for command in self.commands:
+            command.bot = self.bot or getattr(context, "bot", None)
+        candidates = self._route_candidates(context)
+        selected = self._select_route(candidates)
+        if selected is None:
+            await self.commands[0]._delete_local_attachments(context)
+            return
+        LOGGER.info(
+            "Shared Signal router selected instance=%s recipient=%s message_ref=%s candidates=%s.",
+            selected.command.run_config.instance_name,
+            selected.event.chat_id,
+            selected.event.message_ref,
+            len(candidates),
+        )
+        await selected.command.handle(context)
+
+    def _route_candidates(self, context: Any) -> list[_SignalRouteCandidate]:
+        candidates: list[_SignalRouteCandidate] = []
+        for command in self.commands:
+            event = signal_context_to_event(
+                context=context,
+                instance_name=command.run_config.instance_name,
+                adapter_slot=command.run_config.slot,
+                account_label=command.run_config.label,
+            )
+            if event is None:
+                continue
+            account_id = ""
+            try:
+                account_id = command.account_store.get_account_for_identity(event.identity_key) or ""
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                account_id = ""
+            if account_id:
+                event = event.with_account(account_id)
+            targets_other = _signal_event_targets_other_bot(command, event)
+            candidates.append(
+                _SignalRouteCandidate(
+                    command=command,
+                    event=event,
+                    account_id=account_id,
+                    addressed=False if targets_other else _signal_event_addresses_command(command, event),
+                    targets_other_bot=targets_other,
+                )
+            )
+        return candidates
+
+    def _select_route(self, candidates: Sequence[_SignalRouteCandidate]) -> _SignalRouteCandidate | None:
+        usable = [candidate for candidate in candidates if not candidate.targets_other_bot]
+        if not usable:
+            return None
+        addressed = [candidate for candidate in usable if candidate.addressed]
+        if addressed:
+            linked_addressed = [candidate for candidate in addressed if candidate.account_id]
+            return (linked_addressed or addressed)[0]
+        linked = [candidate for candidate in usable if candidate.account_id]
+        if linked:
+            return linked[0]
+        private = [candidate for candidate in usable if candidate.event.chat_type == "private"]
+        if private:
+            return private[0]
+        command_candidates = [candidate for candidate in usable if _command_name(candidate.event.text)]
+        if command_candidates:
+            return command_candidates[0]
+        return None
+
+
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
     accounts = _signal_accounts(config)
-    duplicate_error = _duplicate_signal_phone_error(accounts)
-    if duplicate_error:
-        raise SignalRuntimeError(duplicate_error)
+    groups = _signal_router_groups(accounts)
     _import_signalbot()
     ensure_signal_services_available(config)
     threads: list[threading.Thread] = []
-    for account in accounts:
-        thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
+    for group in groups:
+        thread = _signal_router_thread(accounts=group, instances_dir=config.instances_dir)
         thread.start()
         threads.append(thread)
     return threads
@@ -434,19 +542,29 @@ def run_signal_accounts(config: RuntimeConfig) -> int:
         raise SignalRuntimeError(
             "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
         )
-    duplicate_error = _duplicate_signal_phone_error(accounts)
-    if duplicate_error:
-        raise SignalRuntimeError(duplicate_error)
+    groups = _signal_router_groups(accounts)
     _import_signalbot()
     ensure_signal_services_available(config)
-    for account in accounts[1:]:
-        thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
+    for group in groups[1:]:
+        thread = _signal_router_thread(accounts=group, instances_dir=config.instances_dir)
         thread.start()
-    run_signal_account(account=accounts[0], instances_dir=config.instances_dir)
+    if len(groups[0]) == 1:
+        run_signal_account(account=groups[0][0], instances_dir=config.instances_dir)
+    else:
+        run_signal_router_group(accounts=groups[0], instances_dir=config.instances_dir)
     return 0
 
 
 def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) -> None:
+    run_signal_router_group(accounts=(account,), instances_dir=instances_dir)
+
+
+def run_signal_router_group(*, accounts: Sequence[AccountRunConfig], instances_dir: str | Path) -> None:
+    accounts = tuple(accounts)
+    if not accounts:
+        raise SignalRuntimeError("Signal router group is empty")
+    _validate_shared_signal_route(accounts)
+    account = accounts[0]
     if account.channel != "signal":
         raise SignalRuntimeError(f"unsupported Signal account channel: {account.channel}")
     signalbot = _import_signalbot()
@@ -454,7 +572,10 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
     config_class = getattr(signalbot, "Config")
     bot_class = getattr(signalbot, "SignalBot")
     bot = bot_class(config_class(**_signalbot_config_kwargs(signalbot, account)))
-    command = TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir)
+    if len(accounts) == 1:
+        command = TeeBotusSignalCommand(run_config=account, instances_dir=instances_dir)
+    else:
+        command = SharedSignalRouterCommand(run_configs=accounts, instances_dir=instances_dir)
     command.bot = bot
     bot.register(command)
     bot.start()
@@ -464,26 +585,73 @@ def _signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "signal")
 
 
-def _duplicate_signal_phone_error(accounts: Sequence[AccountRunConfig]) -> str:
-    seen: dict[str, str] = {}
-    duplicates: list[str] = []
+def _signal_router_groups(accounts: Sequence[AccountRunConfig]) -> tuple[tuple[AccountRunConfig, ...], ...]:
+    groups: list[list[AccountRunConfig]] = []
+    group_indexes: dict[tuple[str, str], int] = {}
+    phone_services: dict[str, tuple[str, str]] = {}
     for account in accounts:
+        if account.channel != "signal":
+            raise SignalRuntimeError(f"unsupported Signal account channel: {account.channel}")
         phone = str(account.signal_phone_number or "").strip()
-        if not phone:
-            continue
+        service_key = _signal_service_cache_key(account.signal_service)
         label = f"{account.instance_name}/{account.label}"
-        previous_label = seen.get(phone)
-        if previous_label is None:
-            seen[phone] = label
+        if phone:
+            previous = phone_services.get(phone)
+            if previous is not None and previous[0] != service_key:
+                raise SignalRuntimeError(
+                    "Duplicate Signal phone number configured across different signal-cli-rest-api services. "
+                    "Use one shared service for one Signal account or register separate phone numbers. "
+                    f"Duplicate slot pairs: {previous[1]} / {label}"
+                )
+            phone_services[phone] = (service_key, label)
+        key = (service_key, phone)
+        index = group_indexes.get(key)
+        if index is None:
+            group_indexes[key] = len(groups)
+            groups.append([account])
         else:
-            duplicates.append(f"{previous_label} / {label}")
-    if not duplicates:
-        return ""
-    return (
-        "Duplicate Signal phone number configured across bot slots. "
-        "Each Signal runtime slot needs its own registered phone number. Duplicate slot pairs: "
-        + ", ".join(duplicates)
+            groups[index].append(account)
+    return tuple(tuple(group) for group in groups)
+
+
+def _validate_shared_signal_route(accounts: Sequence[AccountRunConfig]) -> None:
+    if not accounts:
+        raise SignalRuntimeError("Shared Signal router needs at least one Signal account config")
+    _signal_router_groups(accounts)
+
+
+def _signal_event_targets_other_bot(command: TeeBotusSignalCommand, event: Any) -> bool:
+    return _command_targets_other_bot(str(getattr(event, "text", "") or ""), _signal_command_address_names(command, event))
+
+
+def _signal_event_addresses_command(command: TeeBotusSignalCommand, event: Any) -> bool:
+    names = _signal_command_address_names(command, event)
+    if _command_name(str(getattr(event, "text", "") or "")):
+        return not _command_targets_other_bot(str(getattr(event, "text", "") or ""), names)
+    if getattr(event, "chat_type", "") == "group":
+        try:
+            if not command.engine.should_ignore_without_account(event):
+                return True
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            pass
+    return _text_addresses_bot(str(getattr(event, "text", "") or ""), names)
+
+
+def _signal_command_address_names(command: TeeBotusSignalCommand, event: Any) -> frozenset[str]:
+    try:
+        names = set(command.engine._bot_address_names_for_event(event))  # noqa: SLF001 - router uses engine routing contract.
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        names = set(command.engine.bot_address_names)
+    names.update(
+        str(value or "").strip()
+        for value in (
+            command.run_config.signal_phone_number,
+            command.run_config.label,
+            command.run_config.instance_name,
+        )
+        if str(value or "").strip()
     )
+    return frozenset(names)
 
 
 def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
@@ -606,21 +774,34 @@ def check_signal_service(account: AccountRunConfig, *, timeout_seconds: float = 
 
 def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, ...]:
     healths: list[SignalAccountHealth] = []
-    seen_phones: dict[str, str] = {}
+    seen_phones: dict[str, tuple[str, str]] = {}
     service_accounts_cache: dict[str, tuple[bool, list[Any], str]] = {}
     for account in _signal_accounts(config):
         phone = str(account.signal_phone_number or "").strip()
         label = f"{account.instance_name}/{account.label}"
-        previous_label = seen_phones.get(phone)
-        duplicate_warning = f"duplicate phone number with {previous_label}" if phone and previous_label is not None else ""
-        if phone:
-            seen_phones[phone] = label
         try:
             _host, _port, target = _signal_service_host_port(account.signal_service)
         except SignalRuntimeError as exc:
+            previous = seen_phones.get(phone)
+            duplicate_warning = f"duplicate phone number with {previous[1]}" if phone and previous is not None else ""
             healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc), warning=duplicate_warning))
+            if phone and previous is None:
+                seen_phones[phone] = ("", label)
             continue
         service_key = _signal_service_cache_key(account.signal_service)
+        duplicate_warning = ""
+        router = ""
+        previous = seen_phones.get(phone)
+        if phone and previous is not None:
+            previous_service_key, previous_label = previous
+            if previous_service_key == service_key:
+                router = f"shared_with:{previous_label}"
+            elif previous_service_key:
+                duplicate_warning = f"duplicate phone number with {previous_label} on different service"
+            else:
+                duplicate_warning = f"duplicate phone number with {previous_label}"
+        if phone:
+            seen_phones[phone] = (service_key, label)
         if service_key not in service_accounts_cache:
             try:
                 if _signal_service_looks_like_signal_cli_api(account):
@@ -631,7 +812,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 service_accounts_cache[service_key] = (False, [], str(exc))
         ok, accounts, error = service_accounts_cache[service_key]
         if not ok:
-            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=error, warning=duplicate_warning))
+            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=error, warning=duplicate_warning, router=router))
             continue
         registered = account.signal_phone_number in {_signal_cli_api_account_identifier(value) for value in accounts}
         healths.append(
@@ -642,6 +823,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 registered=registered,
                 error="" if registered else "account missing in signal-cli-rest-api /v1/accounts",
                 warning=duplicate_warning,
+                router=router,
             )
         )
     return tuple(healths)
@@ -938,6 +1120,19 @@ def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Pa
         target=run_signal_account,
         kwargs={"account": account, "instances_dir": instances_dir},
         name=f"teebotus-signal-{account.instance_name}-{account.slot}",
+        daemon=True,
+    )
+
+
+def _signal_router_thread(*, accounts: Sequence[AccountRunConfig], instances_dir: str | Path) -> threading.Thread:
+    accounts = tuple(accounts)
+    if len(accounts) == 1:
+        return _signal_account_thread(account=accounts[0], instances_dir=instances_dir)
+    label = "_".join(f"{account.instance_name}-{account.slot}" for account in accounts)
+    return threading.Thread(
+        target=run_signal_router_group,
+        kwargs={"accounts": accounts, "instances_dir": instances_dir},
+        name=f"teebotus-signal-shared-{label}",
         daemon=True,
     )
 

@@ -25,6 +25,7 @@ from TeeBotus.runtime.signal_runner import (
     SignalRuntimeError,
     check_signal_accounts,
     SignalServiceHealth,
+    SharedSignalRouterCommand,
     TeeBotusSignalCommand,
     check_signal_service,
     ensure_signal_services_available,
@@ -796,6 +797,129 @@ def test_signal_group_free_text_can_address_bot_by_phone(tmp_path) -> None:
     assert context.sent == ["Echo: +491234 hallo"]
 
 
+def test_shared_signal_router_private_first_contact_uses_primary_instance(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    router = SharedSignalRouterCommand(
+        run_configs=accounts,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.text = "/account"
+
+    asyncio.run(router.handle(context))
+
+    assert context.sent
+    assert "Deine TeeBotus-Account-ID" in context.sent[0]
+    assert router.commands[0].account_store.get_account_for_identity("signal:uuid:signal-uuid")
+    assert router.commands[1].account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
+
+
+def test_shared_signal_router_private_alias_routes_linked_instance(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Bote_der_Wahrheit",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="Depressionsbot",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    router = SharedSignalRouterCommand(
+        run_configs=accounts,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    for command in router.commands:
+        account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+        command.engine.process_result = (  # type: ignore[method-assign]
+            lambda event, instance=command.run_config.instance_name: EngineResult(
+                event.account_id,
+                [SendText(event.chat_id, f"{instance} handled")],
+                handled=True,
+            )
+        )
+    second_account_id = router.commands[1].account_store.get_account_for_identity("signal:uuid:signal-uuid")
+    assert second_account_id
+    router.commands[1].account_store.append_structured_memory_entry(
+        second_account_id,
+        {"id": "mem_alias", "user_text": "Ich nenne dich ab jetzt Mondhase.", "bot_text": "Okay."},
+    )
+    context = FakeSignalContext()
+    context.message.text = "Mondhase, status bitte"
+
+    asyncio.run(router.handle(context))
+
+    assert context.sent == ["Depressionsbot handled"]
+
+
+def test_shared_signal_router_ignores_unaddressed_group_without_creating_accounts(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    router = SharedSignalRouterCommand(
+        run_configs=accounts,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.group = "group-1"
+    context.message.text = "Hallo Gruppe"
+
+    asyncio.run(router.handle(context))
+
+    assert context.sent == []
+    assert router.commands[0].account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
+    assert router.commands[1].account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
+
+
 def test_signal_command_constructs_openai_client_from_run_config(monkeypatch, tmp_path) -> None:
     captured: list[str] = []
 
@@ -1449,7 +1573,7 @@ def test_check_signal_accounts_reports_duplicate_phone_without_leaking_number(mo
     assert health[1].registered is True
     assert health[1].target == "127.0.0.1:8081"
     assert health[1].error == ""
-    assert health[1].warning == "duplicate phone number with DemoA/signal:1"
+    assert health[1].warning == "duplicate phone number with DemoA/signal:1 on different service"
     assert "+491234" not in health[1].warning
 
 
@@ -1496,7 +1620,142 @@ def test_check_signal_accounts_warns_about_duplicate_phone_even_when_first_servi
     assert health[1].warning == "duplicate phone number with DemoA/signal:1"
 
 
-def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:
+def test_check_signal_accounts_marks_same_service_duplicate_as_shared_router(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: ["+491234"])
+
+    health = check_signal_accounts(config)
+
+    assert health[0].warning == ""
+    assert health[0].router == ""
+    assert health[1].warning == ""
+    assert health[1].router == "shared_with:DemoA/signal:1"
+
+
+def test_signal_start_uses_shared_router_for_same_service_duplicate_phone(monkeypatch, tmp_path) -> None:
+    calls: list[tuple[str, tuple[str, ...]]] = []
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", lambda _config: ())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.run_signal_router_group",
+        lambda *, accounts, instances_dir: calls.append(("blocking", tuple(account.instance_name for account in accounts))),
+    )
+
+    assert run_signal_accounts(config) == 0
+
+    assert calls == [("blocking", ("DemoA", "DemoB"))]
+
+
+def test_signal_background_start_uses_shared_router_for_same_service_duplicate_phone(monkeypatch, tmp_path) -> None:
+    calls: list[tuple[str, tuple[str, ...]]] = []
+
+    class FakeThread:
+        def __init__(self, accounts) -> None:
+            self.accounts = tuple(accounts)
+
+        def start(self) -> None:
+            calls.append(("background", tuple(account.instance_name for account in self.accounts)))
+
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: object())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", lambda _config: ())
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_router_thread", lambda *, accounts, instances_dir: FakeThread(accounts))
+
+    threads = start_signal_accounts_in_background(config)
+
+    assert len(threads) == 1
+    assert calls == [("background", ("DemoA", "DemoB"))]
+
+
+def test_signal_start_rejects_duplicate_phone_on_different_services_before_import(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(
             instance_name="DemoA",
@@ -1528,11 +1787,11 @@ def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_pat
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
 
-    with pytest.raises(SignalRuntimeError, match="Duplicate Signal phone number"):
+    with pytest.raises(SignalRuntimeError, match="different signal-cli-rest-api services"):
         run_signal_accounts(config)
 
 
-def test_signal_background_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:
+def test_signal_background_start_rejects_duplicate_phone_on_different_services_before_import(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(
             instance_name="DemoA",
@@ -1564,7 +1823,7 @@ def test_signal_background_start_rejects_duplicate_phone_before_import(monkeypat
     )
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
 
-    with pytest.raises(SignalRuntimeError, match="Duplicate Signal phone number"):
+    with pytest.raises(SignalRuntimeError, match="different signal-cli-rest-api services"):
         start_signal_accounts_in_background(config)
 
 

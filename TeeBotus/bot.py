@@ -244,6 +244,9 @@ def _runtime_status(argv: Sequence[str]) -> int:
         warning = str(getattr(health, "warning", "") or "").strip()
         if warning:
             detail_parts.append(f"warning={_sanitize_status_text(warning)}")
+        router = str(getattr(health, "router", "") or "").strip()
+        if router:
+            detail_parts.append(f"router={_sanitize_status_text(router)}")
         detail = f" {' '.join(detail_parts)}" if detail_parts else ""
         messenger_lines.append(
             f"signal_account={health.account.instance_name}/{health.account.label} "
