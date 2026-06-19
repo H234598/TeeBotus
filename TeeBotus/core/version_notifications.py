@@ -59,7 +59,7 @@ def notify_recent_telegram_users_for_version(
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
-    historical_failed_identities = _historical_failed_identity_map(state, normalized_version)
+    historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities)
     version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
@@ -190,6 +190,23 @@ def _normalize_version_key(version: str) -> str:
     if len(text) >= 2 and text[0] in {"v", "V"} and text[1].isdigit():
         return text[1:]
     return text
+
+
+def _version_order_key(version: str) -> tuple[tuple[int, int | str], ...]:
+    text = _normalize_version_key(version)
+    chunks: list[tuple[int, int | str]] = []
+    current = ""
+    current_is_digit: bool | None = None
+    for char in text:
+        is_digit = char.isdigit()
+        if current and current_is_digit != is_digit:
+            chunks.append((0, int(current)) if current_is_digit else (1, current.casefold()))
+            current = ""
+        current += char
+        current_is_digit = is_digit
+    if current:
+        chunks.append((0, int(current)) if current_is_digit else (1, current.casefold()))
+    return tuple(chunks)
 
 
 def _inline_text(value: object) -> str:
@@ -528,17 +545,70 @@ def _record_skipped_failed_delivery(
     return failed_identities != previous_failures
 
 
-def _historical_failed_identity_map(state: dict[str, Any], current_version: str) -> dict[str, object]:
+def _historical_failed_identity_map(
+    state: dict[str, Any],
+    current_version: str,
+    identities: dict[str, Any],
+) -> dict[str, object]:
     versions = state.get("versions")
     if not isinstance(versions, dict):
         return {}
-    merged: dict[str, Any] = {}
-    for version_key, version_state in versions.items():
+    failed_identities: dict[str, object] = {}
+    ordered_versions = sorted(
+        versions.items(),
+        key=lambda item: _version_order_key(str(item[0] or "")),
+    )
+    for version_key, version_state in ordered_versions:
         if not isinstance(version_key, str) or _normalize_version_key(version_key) == current_version:
             continue
         if isinstance(version_state, dict):
-            merged = _merge_version_notification_state(merged, version_state)
-    return _failed_identity_map(merged.get("failed_identities"))
+            normalized_version_state = _merge_version_notification_state({}, version_state)
+            for identity_key, failure in _failed_identity_map(normalized_version_state.get("failed_identities")).items():
+                existing_failure = failed_identities.get(identity_key)
+                if existing_failure is not None and _failure_payload_quality(existing_failure) > _failure_payload_quality(failure):
+                    continue
+                if existing_failure is not None:
+                    failure = _merge_failure_payload(existing_failure, failure)
+                failed_identities[identity_key] = failure
+            _clear_historical_failures_resolved_by_sent_identities(
+                failed_identities,
+                _telegram_identity_list(normalized_version_state.get("sent_identities")),
+                identities,
+            )
+    return dict(sorted(failed_identities.items()))
+
+
+def _clear_historical_failures_resolved_by_sent_identities(
+    failed_identities: dict[str, object],
+    sent_identities: list[str],
+    identities: dict[str, Any],
+) -> None:
+    for sent_identity in sent_identities:
+        failed_identities.pop(sent_identity, None)
+        payload = identities.get(sent_identity)
+        if not isinstance(payload, dict):
+            continue
+        account_id = _normalized_account_id(payload.get("account_id"))
+        route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
+        if not account_id or _route_channel(route) != "telegram":
+            continue
+        route_chat_type = _route_chat_type(route)
+        if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
+            continue
+        route_slot = _route_adapter_slot(route)
+        chat_id = _route_chat_id(route, sent_identity)
+        if route_slot is None or chat_id is None:
+            continue
+        recipient = VersionNotificationRecipient(
+            instance_name="",
+            account_id=account_id,
+            identity_key=sent_identity,
+            chat_id=chat_id,
+            adapter_slot=route_slot,
+        )
+        for identity_key, failure in list(failed_identities.items()):
+            if _failed_identity_matches_recipient(identity_key, failure, recipient, identities):
+                failed_identities.pop(identity_key, None)
 
 
 def _clear_resolved_failures(
