@@ -36,16 +36,16 @@ def _safe_instance_name(value: str) -> str:
     return text
 
 
-def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
-    text = str(value)
-    expanded = str(Path(text).expanduser())
-    text = expanded
+def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{operation} must not be empty")
     if "\x00" in text or "\r" in text or "\n" in text or "\t" in text:
         raise ValueError(f"{operation} contains invalid control character")
     if "\\" in text:
         raise ValueError(f"{operation} contains invalid path separator")
     if text == "/":
-        return Path("/").resolve()
+        return True, tuple()
     is_absolute = text.startswith("/")
     normalized = text[1:] if is_absolute else text
     if not normalized:
@@ -59,6 +59,11 @@ def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
         if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
             raise ValueError(f"{operation} contains invalid path segment")
         parts.append(part)
+    return is_absolute, tuple(parts)
+
+
+def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
+    is_absolute, parts = _split_safe_relative_parts(str(value), operation=operation)
     if is_absolute:
         return Path("/").joinpath(*parts).resolve() if parts else Path("/").resolve()
     return Path.cwd().joinpath(*parts).resolve() if parts else Path.cwd()

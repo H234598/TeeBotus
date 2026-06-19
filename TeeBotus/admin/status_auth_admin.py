@@ -35,6 +35,7 @@ _SENSITIVE_REDACTION_KEYS = {
     "instance_secret",
 }
 _SENSITIVE_REDACTION_KEY_FRAGMENTS = ("token", "secret", "apikey", "passphrase", "password", "api_key", "secret_key", "verifier", "cookie")
+_SENSITIVE_TEXT_FRAGMENTS = ("token", "secret", "apikey", "passphrase", "password", "api_key", "secret_key", "verifier", "cookie")
 _SENSITIVE_FIELD_ALLOWLIST = {"account_id", "linked_identities", "identity_key"}
 _SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
 
@@ -67,6 +68,11 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
 
 
 def _sanitize_output(payload: Any) -> Any:
+    if isinstance(payload, str):
+        lowered = payload.casefold()
+        if any(fragment in lowered for fragment in _SENSITIVE_TEXT_FRAGMENTS):
+            return _REDACTED_VALUE
+        return payload
     if isinstance(payload, list):
         return [_sanitize_output(item) for item in payload]
     if isinstance(payload, tuple):
@@ -103,6 +109,16 @@ def _safe_output_path(output: str) -> Path:
     if target.exists() and target.is_dir():
         raise ValueError(f"output path must be a file path: {output}")
     return target
+
+
+def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_json: bool) -> None:
+    safe_report = _sanitize_output(report)
+    output = (
+        json.dumps(safe_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        if as_json
+        else render_text_report(safe_report)
+    )
+    output_path.write_text(output, encoding="utf-8")
 
 
 @dataclass(frozen=True)
@@ -260,12 +276,6 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         instances=instances,
         provider=provider,
     )
-    sanitized_report = _sanitize_output(report)
-    output = (
-        json.dumps(sanitized_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-        if args.format == "json"
-        else render_text_report(sanitized_report)
-    )
     if args.output:
         try:
             output_path = _safe_output_path(args.output)
@@ -273,11 +283,17 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             print(f"status-auth: {exc}", file=sys.stderr)
             return 2
         try:
-            output_path.write_text(output, encoding="utf-8")
+            _write_status_auth_report(output_path, report, as_json=(args.format == "json"))
         except OSError as exc:
             print(f"status-auth: unable to write output: {exc}", file=sys.stderr)
             return 2
     else:
+        sanitized_report = _sanitize_output(report)
+        output = (
+            json.dumps(sanitized_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            if args.format == "json"
+            else render_text_report(sanitized_report)
+        )
         print(output, end="")
     return 0
 
