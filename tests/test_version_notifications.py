@@ -997,6 +997,30 @@ def test_version_notification_state_normalization_drops_malformed_failure_payloa
     assert failures["telegram:user:222"]["reason"] == "legacy route missing"
 
 
+def test_version_notification_state_normalization_drops_invalid_failure_account_id() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "account_id": "not-a-valid-account-id",
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "chat not found",
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert "account_id" not in failure
+    assert failure["chat_id"] == 111
+    assert failure["adapter_slot"] == 1
+
+
 def test_version_notification_state_normalization_keeps_complete_failure_payload() -> None:
     state = _normalize_state(
         {

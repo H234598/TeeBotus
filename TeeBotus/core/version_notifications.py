@@ -594,7 +594,17 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
         identity_key = str(key or "").strip() if isinstance(key, str) else ""
         if not identity_key or not isinstance(payload, dict):
             continue
-        normalized[identity_key] = payload
+        normalized[identity_key] = _normalized_failure_payload(payload)
+    return normalized
+
+
+def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
+    normalized = dict(payload)
+    account_id = _normalized_account_id(normalized.get("account_id"))
+    if account_id:
+        normalized["account_id"] = account_id
+    else:
+        normalized.pop("account_id", None)
     return normalized
 
 
