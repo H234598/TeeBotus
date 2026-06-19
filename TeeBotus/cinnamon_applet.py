@@ -47,6 +47,11 @@ BARE_AUTHORIZATION_TOKEN_RE = re.compile(
     r"(?<![A-Za-z0-9_-])((?i:Bearer|Basic|ApiKey)|Token)"
     r"\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
 )
+QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
+    r"(^|[\s=;,&?(\[<{])([\"'])((?:proxy-)?authorization)\2(\s*[=:]\s*)([\"'])"
+    r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
+    re.IGNORECASE,
+)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
@@ -664,6 +669,7 @@ def _redact(value: str) -> str:
     text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
     text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
     text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
+    text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
     text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
@@ -677,6 +683,17 @@ def _redact_url_credentials(match: re.Match[str]) -> str:
     if "=" in value:
         return value.split("=", 1)[0] + "=<redacted>@"
     return "<redacted>@"
+
+
+def _redact_quoted_authorization_token(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key_quote = str(match.group(2) or '"')
+    key = str(match.group(3) or "authorization")
+    separator = str(match.group(4) or ":")
+    value_quote = str(match.group(5) or '"')
+    scheme = str(match.group(6) or "Bearer")
+    closing_quote = str(match.group(8) or value_quote)
+    return f"{prefix}{key_quote}{key}{key_quote}{separator}{value_quote}{scheme} <redacted-secret>{closing_quote}"
 
 
 def _redact_secret_assignment(match: re.Match[str]) -> str:
