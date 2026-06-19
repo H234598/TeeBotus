@@ -18,9 +18,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
     assert set(optional) >= {"dev", "llm", "agents", "rag", "tools"}
     assert set(optional["dev"]) >= {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"}
     assert any(dependency.startswith("litellm==1.89.2;") for dependency in optional["llm"])
-    assert any(dependency.startswith("python-dotenv==1.2.2;") for dependency in optional["llm"])
     assert any(dependency.startswith("litellm==1.83.7;") for dependency in optional["llm"])
-    assert any(dependency.startswith("python-dotenv==1.0.1;") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.43.0;") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.30.0;") for dependency in optional["llm"])
     assert "ollama==0.6.2" in optional["llm"]
@@ -35,17 +33,15 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
         "beautifulsoup4==4.15.0",
         "llama-index-core==0.14.22",
     }
-    assert any(dependency.startswith("fastmcp==3.4.2;") for dependency in optional["tools"])
-    assert any(dependency.startswith("fastmcp==2.2.0;") for dependency in optional["tools"])
+    assert "fastmcp==3.4.2" in optional["tools"]
+    assert "python-dotenv==1.2.2" in optional["tools"]
 
 
 def test_pyproject_litellm_extra_blocks_known_bad_versions() -> None:
     llm_deps = _pyproject()["project"]["optional-dependencies"]["llm"]
 
     assert any(dependency.startswith("litellm==1.89.2;") for dependency in llm_deps)
-    assert any(dependency.startswith("python-dotenv==1.2.2;") for dependency in llm_deps)
     assert any(dependency.startswith("litellm==1.83.7;") for dependency in llm_deps)
-    assert any(dependency.startswith("python-dotenv==1.0.1;") for dependency in llm_deps)
     assert any(dependency.startswith("openai==2.43.0;") for dependency in llm_deps)
     assert any(dependency.startswith("openai==2.30.0;") for dependency in llm_deps)
     assert "ollama==0.6.2" in llm_deps

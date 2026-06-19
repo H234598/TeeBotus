@@ -9,3 +9,5 @@ h11==0.16.0
 faster-whisper==1.2.1
 litellm==1.89.2; python_version < '3.14'
 litellm==1.83.7; python_version >= '3.14'
+python-dotenv==1.2.2
+fastmcp==3.4.2

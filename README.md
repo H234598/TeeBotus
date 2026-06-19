@@ -164,7 +164,7 @@ python3 scripts/install_adapter_deps.py
 python3 scripts/check_adapter_deps.py
 ```
 
-`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.0` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, baut `signal-cli-rest-api` aus dem gepinnten Upstream-Tag mit Go nach `~/.local/opt` und laesst danach `scripts/check_adapter_deps.py` laufen.
+`nio-bot 1.0.2.post1` deklariert upstream noch `matrix-nio==0.20.*`. TeeBotus prueft aktuell den echten Runtime-Override `matrix-nio==0.25.2` mit `h11==0.16.0`, weil unsere genutzten `nio-bot`-/`matrix-nio`-Vertraege damit laufen und die moderne `httpcore`-/`httpx`-Kette importierbar bleibt. Auf Python 3.14 deklariert `litellm==1.83.7` ausserdem noch `python-dotenv==1.0.1`; TeeBotus prueft stattdessen den validierten Override `python-dotenv==1.2.2`, damit die Tool-Schiene aktuell bleibt. `pip check` meldet diese beiden bekannten Upstream-Metadatenkonflikte, `scripts/check_adapter_deps.py` prueft die realen Runtime-Vertraege. `scripts/install_adapter_deps.py` installiert `nio-bot` deshalb gezielt ohne dessen alte `matrix-nio`-Abhaengigkeit, installiert `signal-cli` nach `~/.local/opt` mit Symlink in `~/.local/bin`, baut `signal-cli-rest-api` aus dem gepinnten Upstream-Tag mit Go nach `~/.local/opt` und laesst danach `scripts/check_adapter_deps.py` laufen.
 
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
@@ -1059,7 +1059,7 @@ FastMCP ist optional. Ohne installiertes `fastmcp` bleibt TeeBotus importierbar;
 python3 -m pip install '.[tools]'
 ```
 
-Plan2-Extras sind absichtlich gepinnt. `litellm==1.84.0`, `python-dotenv==1.2.2` und `fastmcp==3.2.0` sind die aktuellen Security-Mindeststaende fuer die GitHub-Dependabot-Warnungen; TeeBotus prueft diese Pins in `scripts/check_adapter_deps.py` und `scripts/check_plan2_optional_extras.py`.
+Plan2-Extras sind absichtlich gepinnt. Auf Python 3.14 bleibt `litellm==1.83.7` der hoechste kompatible LiteLLM-Pin; `[tools]` haelt trotzdem `python-dotenv==1.2.2` und `fastmcp==3.4.2` aktuell. Installiere `[llm]` und `[tools]` dort nicht in einem einzigen Pip-Resolver-Vorgang, sondern sequenziell ueber `scripts/install_adapter_deps.py` oder getrennte `pip install`-Aufrufe. TeeBotus prueft diese Pins in `scripts/check_adapter_deps.py` und `scripts/check_plan2_optional_extras.py`.
 
 OpenAI-Flex-Processing wird ueber `service_tier: flex` im `## OpenAI`-Block der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Gemini/Vertex-Flex laeuft getrennt ueber `service_tier: flex` im `## LLM`-Block oder die oben genannten `TEEBOTUS_GEMINI_*`-/`TEEBOTUS_LLM_SERVICE_TIER*`-Schalter. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 

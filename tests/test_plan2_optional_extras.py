@@ -6,24 +6,22 @@ import sys
 from scripts.check_plan2_optional_extras import build_optional_extras_report
 
 
-def _active_llm_versions() -> tuple[str, str, str]:
+def _active_llm_versions() -> tuple[str, str]:
     if sys.version_info >= (3, 14):
-        return "1.83.7", "1.0.1", "2.30.0"
-    return "1.89.2", "1.2.2", "2.43.0"
+        return "1.83.7", "2.30.0"
+    return "1.89.2", "2.43.0"
 
 
 def _active_fastmcp_version() -> str:
-    if sys.version_info >= (3, 14):
-        return "2.2.0"
     return "3.4.2"
 
 
 def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) -> None:
-    litellm_version, dotenv_version, openai_version = _active_llm_versions()
+    litellm_version, openai_version = _active_llm_versions()
     fastmcp_version = _active_fastmcp_version()
     safe_versions = {
         "litellm": litellm_version,
-        "python-dotenv": dotenv_version,
+        "python-dotenv": "1.2.2",
         "openai": openai_version,
         "fastmcp": fastmcp_version,
     }
@@ -38,11 +36,8 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert report["ok"] is True
     assert set(report["extras"]) == {"llm", "rag", "agents", "tools"}
     assert any(dependency.startswith("litellm==1.89.2;") for dependency in report["extras"]["llm"]["declared"])
-    assert any(dependency.startswith("python-dotenv==1.2.2;") for dependency in report["extras"]["llm"]["declared"])
     assert any(dependency.startswith("litellm==1.83.7;") for dependency in report["extras"]["llm"]["declared"])
-    assert any(dependency.startswith("python-dotenv==1.0.1;") for dependency in report["extras"]["llm"]["declared"])
     assert f"litellm=={litellm_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
-    assert f"python-dotenv=={dotenv_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
     assert any(dependency.startswith("openai==2.43.0;") for dependency in report["extras"]["llm"]["declared"])
     assert any(dependency.startswith("openai==2.30.0;") for dependency in report["extras"]["llm"]["declared"])
     assert f"openai=={openai_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
@@ -53,9 +48,10 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert "llama-index-core==0.14.22" in report["extras"]["rag"]["declared"]
     assert "pydantic-ai-slim==1.107.0" in report["extras"]["agents"]["declared"]
     assert "langgraph==1.2.6" in report["extras"]["agents"]["declared"]
-    assert any(dependency.startswith("fastmcp==3.4.2;") for dependency in report["extras"]["tools"]["declared"])
-    assert any(dependency.startswith("fastmcp==2.2.0;") for dependency in report["extras"]["tools"]["declared"])
-    assert f"fastmcp=={fastmcp_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["tools"]["active_declared"]
+    assert "fastmcp==3.4.2" in report["extras"]["tools"]["declared"]
+    assert "python-dotenv==1.2.2" in report["extras"]["tools"]["declared"]
+    assert f"fastmcp=={fastmcp_version}" in report["extras"]["tools"]["active_declared"]
+    assert "python-dotenv==1.2.2" in report["extras"]["tools"]["active_declared"]
 
 
 def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> None:
@@ -74,7 +70,7 @@ def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> No
 
 
 def test_plan2_optional_extras_strict_mode_fails_on_pinned_version_mismatch(monkeypatch) -> None:
-    expected_litellm, _dotenv_version, _openai_version = _active_llm_versions()
+    expected_litellm, _openai_version = _active_llm_versions()
 
     def version(package: str) -> str:
         if package == "litellm":

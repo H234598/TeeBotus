@@ -50,7 +50,10 @@ def main(argv: list[str] | None = None) -> int:
                 _check_python_package("h11", pins["h11"]),
                 _check_python_package("faster-whisper", pins["faster-whisper"]),
                 _check_python_package("litellm", pins["litellm"]),
+                _check_python_package("python-dotenv", "1.2.2"),
+                _check_python_package("fastmcp", "3.4.2"),
                 _check_litellm_supply_chain_guard(pins["litellm"]),
+                _check_litellm_dotenv_contract(pins["litellm"]),
                 _check_local_transcription_contract(),
                 _check_niobot_matrix_contract(),
                 _check_matrix_file_contract(),
@@ -103,7 +106,7 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
         installed = importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
         return False, f"{name} missing, expected {expected}"
-    import_name = {"nio-bot": "niobot", "matrix-nio": "nio", "blurhash-python": "blurhash"}.get(
+    import_name = {"nio-bot": "niobot", "matrix-nio": "nio", "blurhash-python": "blurhash", "python-dotenv": "dotenv"}.get(
         name, name.replace("-", "_")
     )
     try:
@@ -137,6 +140,26 @@ def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
     return True, f"litellm supply_chain_guard=ok blocked={','.join(sorted(BAD_LITELLM_VERSIONS))}"
 
 
+def _check_litellm_dotenv_contract(expected_litellm: str) -> tuple[bool, str]:
+    try:
+        litellm_version = importlib.metadata.version("litellm")
+        dotenv_version = importlib.metadata.version("python-dotenv")
+    except importlib.metadata.PackageNotFoundError as exc:
+        return False, f"litellm dotenv contract missing package: {exc.name}"
+    if litellm_version != expected_litellm:
+        return False, f"litellm dotenv contract litellm={litellm_version} expected={expected_litellm}"
+    try:
+        importlib.import_module("litellm")
+        dotenv_module = importlib.import_module("dotenv")
+    except Exception as exc:
+        return False, f"litellm dotenv contract import_error={type(exc).__name__}: {exc}"
+    if not callable(getattr(dotenv_module, "load_dotenv", None)):
+        return False, "litellm dotenv contract dotenv.load_dotenv missing"
+    if dotenv_version != "1.2.2":
+        return False, f"litellm dotenv contract python-dotenv={dotenv_version} expected=1.2.2"
+    return True, f"litellm dotenv contract=ok litellm={litellm_version} python-dotenv={dotenv_version}"
+
+
 def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -> tuple[bool, str]:
     try:
         payload = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -152,13 +175,12 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     if not isinstance(optional, dict):
         errors.append("missing optional-dependencies")
         optional = {}
-    litellm_version, dotenv_version, openai_version = _active_llm_versions()
+    litellm_version, openai_version = _active_llm_versions()
     fastmcp_version = _active_fastmcp_version()
     expected_extras = {
         "dev": {"pytest": "", "pytest-cov": "", "ruff": "", "mypy": "", "pip-audit": ""},
         "llm": {
             "litellm": litellm_version,
-            "python-dotenv": dotenv_version,
             "openai": openai_version,
             "ollama": "0.6.2",
         },
@@ -173,7 +195,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
             "llama-index-core": "0.14.22",
         },
         "agents": {"pydantic-ai-slim": "1.107.0", "langgraph": "1.2.6"},
-        "tools": {"fastmcp": fastmcp_version},
+        "tools": {"fastmcp": fastmcp_version, "python-dotenv": "1.2.2"},
     }
     for extra, expected in expected_extras.items():
         found = _active_optional_dependency_versions(optional.get(extra, []))
@@ -231,15 +253,13 @@ def _min_safe_litellm_version() -> str:
     return MIN_SAFE_LITELLM_VERSION
 
 
-def _active_llm_versions() -> tuple[str, str, str]:
+def _active_llm_versions() -> tuple[str, str]:
     if sys.version_info >= (3, 14):
-        return PY314_COMPATIBLE_LITELLM_VERSION, "1.0.1", "2.30.0"
-    return PY313_LITELLM_VERSION, "1.2.2", "2.43.0"
+        return PY314_COMPATIBLE_LITELLM_VERSION, "2.30.0"
+    return PY313_LITELLM_VERSION, "2.43.0"
 
 
 def _active_fastmcp_version() -> str:
-    if sys.version_info >= (3, 14):
-        return "2.2.0"
     return "3.4.2"
 
 

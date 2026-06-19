@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -22,6 +23,8 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "h11==0.16.0",
                 "faster-whisper==1.2.1",
                 "litellm==1.83.7",
+                "python-dotenv==1.2.2",
+                "fastmcp==3.4.2",
             ]
         )
         + "\n",
@@ -30,14 +33,15 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
 
     commands = build_python_install_commands(read_pins(lockfile), python="python3", user=True)
 
-    assert len(commands) == 3
+    assert len(commands) == 4
     assert "matrix-nio==0.25.2" in commands[0]
     assert "h11==0.16.0" not in commands[0]
     assert "faster-whisper==1.2.1" in commands[0]
     assert "litellm==1.83.7" not in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
     assert commands[1][-2:] == ["h11==0.16.0", "litellm==1.83.7"]
-    assert commands[2][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
+    assert commands[2][-2:] == ["python-dotenv==1.2.2", "fastmcp==3.4.2"]
+    assert commands[3][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
 
 def test_signal_cli_release_url_uses_pinned_github_release() -> None:
@@ -58,6 +62,8 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert "signalbot==1.2.2" in output
     assert "matrix-nio==0.25.2" in output
     assert f"litellm=={_active_litellm_version()}" in output
+    assert "python-dotenv==1.2.2" in output
+    assert "fastmcp==3.4.2" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
@@ -92,6 +98,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
 
     monkeypatch.setattr(check_adapter_deps, "_check_python_package", lambda name, _expected: (called.append(f"package:{name}") or (True, name)))
     monkeypatch.setattr(check_adapter_deps, "_check_litellm_supply_chain_guard", ok("litellm_guard"))
+    monkeypatch.setattr(check_adapter_deps, "_check_litellm_dotenv_contract", ok("litellm_dotenv"))
     monkeypatch.setattr(check_adapter_deps, "_check_local_transcription_contract", ok("local_transcription"))
     monkeypatch.setattr(check_adapter_deps, "_check_niobot_matrix_contract", ok("niobot_matrix"))
     monkeypatch.setattr(check_adapter_deps, "_check_matrix_file_contract", ok("matrix_file"))
@@ -107,6 +114,9 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "signal_cli" not in called
     assert "signal_cli_rest_api" not in called
     assert "package:signalbot" in called
+    assert "package:python-dotenv" in called
+    assert "package:fastmcp" in called
+    assert "litellm_dotenv" in called
     assert "pyproject_contract" in called
     assert "llm_profiles_contract" in called
     assert "secret_permissions" in called
@@ -128,10 +138,10 @@ def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_
 
         [project.optional-dependencies]
         dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
-        llm = ["litellm==1.89.2", "python-dotenv==1.2.2", "openai==2.43.0", "ollama==0.6.2", "surprise-llm"]
+        llm = ["litellm==1.89.2", "openai==2.43.0", "ollama==0.6.2", "surprise-llm"]
         rag = ["haystack-ai==2.30.2", "qdrant-haystack==10.3.0", "sentence-transformers==5.6.0", "pypdf==6.13.3", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.15.0", "llama-index-core==0.14.22"]
         agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.6"]
-        tools = ["fastmcp==3.4.2"]
+        tools = ["fastmcp==3.4.2", "python-dotenv==1.2.2"]
 
         [project.scripts]
         teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
@@ -212,6 +222,36 @@ def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.Mo
 
     assert not ok
     assert "suspicious_pth_files" in message
+
+
+def test_litellm_dotenv_contract_accepts_current_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    versions = {"litellm": "1.83.7", "python-dotenv": "1.2.2"}
+    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda name: versions[name])
+    monkeypatch.setattr(
+        check_adapter_deps.importlib,
+        "import_module",
+        lambda name: types.SimpleNamespace(load_dotenv=lambda: None) if name == "dotenv" else types.SimpleNamespace(),
+    )
+
+    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.83.7")
+
+    assert ok
+    assert "python-dotenv=1.2.2" in message
+
+
+def test_litellm_dotenv_contract_rejects_old_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    versions = {"litellm": "1.83.7", "python-dotenv": "1.0.1"}
+    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda name: versions[name])
+    monkeypatch.setattr(
+        check_adapter_deps.importlib,
+        "import_module",
+        lambda name: types.SimpleNamespace(load_dotenv=lambda: None) if name == "dotenv" else types.SimpleNamespace(),
+    )
+
+    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.83.7")
+
+    assert not ok
+    assert "expected=1.2.2" in message
 
 
 def _active_litellm_version() -> str:

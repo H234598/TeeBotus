@@ -96,6 +96,11 @@ def build_python_install_commands(pins: dict[str, str], *, python: str, user: bo
         ],
         [
             *pip_base,
+            f"python-dotenv=={pins['python-dotenv']}",
+            f"fastmcp=={pins['fastmcp']}",
+        ],
+        [
+            *pip_base,
             "--no-deps",
             f"nio-bot=={pins['nio-bot']}",
         ],
