@@ -11,6 +11,7 @@ import pytest
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
+    CODEX_HISTORY_OUTBOX_FILENAME,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
     EncryptedJsonVault,
@@ -287,6 +288,31 @@ def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypte
 
     with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account memory/state"):
         AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+
+def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypted_codex_outbox_state(tmp_path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+    EncryptedJsonVault(
+        "Depressionsbot",
+        provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+    ).write_jsonl(
+        account_dir / CODEX_HISTORY_OUTBOX_FILENAME,
+        [{"kind": "codex_run_summary", "id": "hist_existing", "status": "sent"}],
+    )
+
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing encrypted codex outbox state"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account memory/state"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
 
 
 def test_account_store_records_key_manifest_and_refuses_missing_manifest_secret(tmp_path, monkeypatch) -> None:
