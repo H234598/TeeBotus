@@ -25,6 +25,8 @@ def _safe_state_root(value: str | None, *, fallback: Path) -> Path:
         return fallback
     try:
         root = Path(value).expanduser()
+        if not root.is_absolute():
+            root = Path.home() / root
         normalized = root.resolve()
         home_root = Path.home().resolve()
     except (OSError, TypeError, ValueError):
