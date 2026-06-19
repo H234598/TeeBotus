@@ -249,7 +249,9 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "_resolveSpawnArgv: function(argv)" in source
     assert "_normalizeCommandArgv: function(argv, throwOnError)" in source
     assert "_trustedExecutablePath: function(command)" in source
+    assert "_trustedAbsoluteExecutablePath: function(path)" in source
     assert "_findTrustedProgramInPath: function(command)" in source
+    assert "Object.prototype.hasOwnProperty.call(TRUSTED_USER_LOCAL_COMMANDS, name)" in source
     assert "launcher.spawnv(resolvedArgv)" in source
     assert "options = options || {};" in source
     assert "process.force_exit();" in source
@@ -885,6 +887,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
           let tooLargeArgError = "";
           let tooLargeCommandError = "";
           let userLocalDisallowedError = "";
+          let absoluteUserLocalDisallowedError = "";
           let prototypeDisallowedError = "";
           let manyArgs = ["gnome-terminal"];
           for (let index = 0; index < 128; index++) {
@@ -925,6 +928,11 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             userLocalDisallowedError = String(err);
           }
           try {
+            applet._resolveSpawnArgv(["/tmp/.local/bin/custom-tool"]);
+          } catch (err) {
+            absoluteUserLocalDisallowedError = String(err);
+          }
+          try {
             applet._resolveSpawnArgv(["constructor"]);
           } catch (err) {
             prototypeDisallowedError = String(err);
@@ -934,8 +942,11 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             absolute: applet._resolveSpawnArgv(["/usr/bin/python3", "-m", "TeeBotus"]),
             trustedBare: applet._trustedExecutablePath("gnome-terminal"),
             userLocalBare: applet._trustedExecutablePath("codex-usage"),
+            userLocalAbsolute: applet._trustedExecutablePath("/tmp/.local/bin/codex-usage"),
             userLocalDisallowedBare: applet._trustedExecutablePath("custom-tool"),
+            userLocalDisallowedAbsolute: applet._trustedExecutablePath("/tmp/.local/bin/custom-tool"),
             prototypeDisallowedBare: applet._trustedExecutablePath("constructor"),
+            prototypeDisallowedAbsolute: applet._trustedExecutablePath("/tmp/.local/bin/constructor"),
             shellBare: applet._trustedExecutablePath("bash"),
             trustedAbsolute: applet._trustedExecutablePath("/usr/bin/python3"),
             missingAbsolute: applet._trustedExecutablePath("/tmp/missing-python"),
@@ -947,6 +958,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             tooLargeArgError: tooLargeArgError,
             tooLargeCommandError: tooLargeCommandError,
             userLocalDisallowedError: userLocalDisallowedError,
+            absoluteUserLocalDisallowedError: absoluteUserLocalDisallowedError,
             prototypeDisallowedError: prototypeDisallowedError
           };
         })()
@@ -958,8 +970,11 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "absolute": ["/usr/bin/python3", "-m", "TeeBotus"],
         "trustedBare": "/usr/bin/gnome-terminal",
         "userLocalBare": "/tmp/.local/bin/codex-usage",
+        "userLocalAbsolute": "/tmp/.local/bin/codex-usage",
         "userLocalDisallowedBare": None,
+        "userLocalDisallowedAbsolute": None,
         "prototypeDisallowedBare": None,
+        "prototypeDisallowedAbsolute": None,
         "shellBare": "/usr/bin/bash",
         "trustedAbsolute": "/usr/bin/python3",
         "missingAbsolute": None,
@@ -971,6 +986,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "tooLargeArgError": "Error: Command argument is too large",
         "tooLargeCommandError": "Error: Command is too large",
         "userLocalDisallowedError": "Error: Command is not in a trusted system path",
+        "absoluteUserLocalDisallowedError": "Error: Command is not in a trusted system path",
         "prototypeDisallowedError": "Error: Command is not in a trusted system path",
     }
 

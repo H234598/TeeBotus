@@ -1599,7 +1599,26 @@ TeeBotusApplet.prototype = {
     if (value.indexOf("/") < 0) {
       return this._findTrustedProgramInPath(value);
     }
-    return value;
+    return this._trustedAbsoluteExecutablePath(value);
+  },
+
+  _trustedAbsoluteExecutablePath: function(path) {
+    let name = String(path || "").split("/").pop();
+    if (!name || this._hasCommandControlChars(name) || !/^[A-Za-z0-9._+-]+$/.test(name)) {
+      return null;
+    }
+    for (let directory of TRUSTED_SPAWN_DIRS) {
+      if (path === GLib.build_filenamev([directory, name])) {
+        return path;
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(TRUSTED_USER_LOCAL_COMMANDS, name)) {
+      let userLocalPath = GLib.build_filenamev([TRUSTED_USER_LOCAL_SPAWN_DIR, name]);
+      if (path === userLocalPath) {
+        return path;
+      }
+    }
+    return null;
   },
 
   _findTrustedProgramInPath: function(command) {
