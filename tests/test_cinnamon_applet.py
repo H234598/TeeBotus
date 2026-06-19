@@ -74,7 +74,7 @@ const context = {{
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
-            file_test: (path, flag) => flag === 1 && path === "/usr/bin/gnome-terminal",
+            file_test: (path, flag) => flag === 1 && ["/usr/bin/gnome-terminal", "/usr/bin/python3"].includes(path),
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -683,6 +683,10 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
           let invalidStatusCommand = applet._statusCommand();
           let invalidCodex = applet._codexUsageArgs();
           let invalidTerminal = applet._terminalArgs();
+          applet.pythonCommand = "/tmp/missing-python -B";
+          applet.terminalCommand = "/tmp/missing-terminal --";
+          let missingAbsoluteStatusCommand = applet._statusCommand();
+          let missingAbsoluteTerminal = applet._terminalArgs();
           applet.pythonCommand = "/usr/bin/python3 -c print(1)";
           let dangerousPythonCommand = applet._statusCommand();
           applet.pythonCommand = "/usr/bin/python3 -m other";
@@ -700,6 +704,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
             invalidStatusCommand: invalidStatusCommand,
             invalidCodex: invalidCodex,
             invalidTerminal: invalidTerminal,
+            missingAbsoluteStatusCommand: missingAbsoluteStatusCommand,
+            missingAbsoluteTerminal: missingAbsoluteTerminal,
             dangerousPythonCommand: dangerousPythonCommand,
             moduleOverrideCommand: moduleOverrideCommand,
             validStatusCommand: validStatusCommand,
@@ -711,6 +717,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
               applet._isSafeExecutable("--help"),
               applet._isSafeExecutable("file:///tmp/tool"),
               applet._isSafeExecutable("../python"),
+              applet._isSafeExecutable("/tmp/missing-python"),
+              applet._isSafeExecutable("/usr/bin/python3"),
               applet._isSafeExecutable("python3")
             ]
           };
@@ -722,6 +730,9 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/usr/bin/python3'"
     assert result["invalidCodex"] == ["codex-usage"]
     assert result["invalidTerminal"] == ["/usr/bin/gnome-terminal", "--"]
+    assert result["missingAbsoluteStatusCommand"][0] == "/usr/bin/python3"
+    assert "/tmp/missing-python" not in result["missingAbsoluteStatusCommand"]
+    assert result["missingAbsoluteTerminal"] == ["/usr/bin/gnome-terminal", "--"]
     assert result["dangerousPythonCommand"][0] == "/usr/bin/python3"
     assert "-c" not in result["dangerousPythonCommand"]
     assert "print(1)" not in result["dangerousPythonCommand"]
@@ -733,7 +744,7 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validTerminal"] == ["xterm", "-hold", "-e"]
     assert result["validTerminalWithFinalMarker"] == ["xterm", "-hold", "-e"]
     assert result["embeddedCommandTerminal"] == ["/usr/bin/gnome-terminal", "--"]
-    assert result["unsafeChecks"] == [False, False, False, True]
+    assert result["unsafeChecks"] == [False, False, False, False, True, True]
 
 
 def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:

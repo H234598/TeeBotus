@@ -1582,7 +1582,7 @@ TeeBotusApplet.prototype = {
       return false;
     }
     if (command.indexOf("/") >= 0) {
-      return command.charAt(0) === "/";
+      return command.charAt(0) === "/" && GLib.file_test(command, GLib.FileTest.IS_EXECUTABLE);
     }
     if (command === "." || command === "..") {
       return false;
