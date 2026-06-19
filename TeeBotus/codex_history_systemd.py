@@ -80,6 +80,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-qdrant-dry-run", action="store_true", help="Count periodic Qdrant chunks without writing Qdrant.")
     parser.add_argument("--index-graph", action="store_true", help="Export an admin-only Mermaid graph during the periodic Codex-History index job.")
     parser.add_argument("--index-graph-svg", action="store_true", help="Also export a dependency-free SVG Codex-History graph image.")
+    parser.add_argument(
+        "--index-graph-svg-engine",
+        choices=("builtin", "auto", "mmdc"),
+        default="builtin",
+        help="SVG renderer for periodic graph export; auto uses Mermaid CLI mmdc when installed.",
+    )
     parser.add_argument("--index-graph-queue-svg", action="store_true", help="Queue the SVG Codex-History graph for admin dispatch.")
     parser.add_argument("--index-categorize", action="store_true", help="Run optional local Codex-History categorization in the periodic index job.")
     parser.add_argument("--index-categorize-profile", default="local_ollama", help="Local-only LLM profile used by periodic Codex-History categorization.")
@@ -142,6 +148,7 @@ def main(argv: list[str] | None = None) -> int:
                 qdrant_dry_run=bool(args.index_qdrant_dry_run),
                 graph=bool(args.index_graph),
                 graph_svg=bool(args.index_graph_svg),
+                graph_svg_engine=args.index_graph_svg_engine,
                 graph_queue_svg=bool(args.index_graph_queue_svg),
                 categorize=bool(args.index_categorize),
                 categorize_profile=args.index_categorize_profile,
@@ -309,6 +316,7 @@ def render_codex_history_index_systemd_units(
     qdrant_dry_run: bool = False,
     graph: bool = False,
     graph_svg: bool = False,
+    graph_svg_engine: str = "builtin",
     graph_queue_svg: bool = False,
     categorize: bool = False,
     categorize_profile: str = "local_ollama",
@@ -333,6 +341,7 @@ def render_codex_history_index_systemd_units(
     randomized_delay = _systemd_interval(randomized_delay)
     repo_filter = _optional_systemd_argument(repo, label="index repo filter")
     qdrant_url = _optional_systemd_argument(qdrant_url, label="index qdrant url")
+    graph_svg_engine = _graph_svg_engine(graph_svg_engine)
     categorize_profile = _optional_systemd_argument(categorize_profile, label="index categorize profile") or "local_ollama"
     strategic_analysis_profile = _optional_systemd_argument(strategic_analysis_profile, label="index strategic analysis profile") or "local_ollama"
     index_limit = _non_negative_int(limit, label="index limit")
@@ -363,8 +372,10 @@ def render_codex_history_index_systemd_units(
         command.append("--qdrant-dry-run")
     if graph or graph_svg or graph_queue_svg:
         command.append("--graph")
-        if graph_svg:
+        if graph_svg or graph_queue_svg:
             command.append("--graph-svg")
+            if graph_svg_engine != "builtin":
+                command.extend(["--graph-svg-engine", graph_svg_engine])
         if graph_queue_svg:
             command.append("--graph-queue-svg")
     if categorize:
@@ -541,6 +552,13 @@ def _event_mode(value: str) -> str:
     text = _validate_systemd_unit_value(str(value or "auto").strip().casefold(), label="event mode")
     if text not in {"auto", "watchdog", "snapshot", "poll"}:
         raise ValueError("Codex history event mode must be one of auto, watchdog, snapshot or poll")
+    return text
+
+
+def _graph_svg_engine(value: str) -> str:
+    text = _validate_systemd_unit_value(str(value or "builtin").strip().casefold(), label="graph svg engine")
+    if text not in {"builtin", "auto", "mmdc"}:
+        raise ValueError("Codex history graph svg engine must be builtin, auto, or mmdc")
     return text
 
 
