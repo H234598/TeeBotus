@@ -168,12 +168,17 @@ def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REP
 
 
 def _normalize_version_key(version: str) -> str:
-    text = str(version or "").strip()
+    text = _inline_text(version)
     if text in {"v", "V"}:
         return ""
     if len(text) >= 2 and text[0] in {"v", "V"} and text[1].isdigit():
         return text[1:]
     return text
+
+
+def _inline_text(value: object) -> str:
+    text = "".join(char if ord(char) >= 32 and ord(char) != 127 else " " for char in str(value or ""))
+    return " ".join(text.split())
 
 
 def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:

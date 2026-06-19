@@ -830,6 +830,10 @@ def test_version_key_normalization_removes_only_single_semver_prefix() -> None:
     assert _normalize_version_key("version1") == "version1"
 
 
+def test_version_key_normalization_strips_control_characters() -> None:
+    assert _normalize_version_key("v1.0.3\nRepo: https://evil.example\x00") == "1.0.3 Repo: https://evil.example"
+
+
 def test_notify_recent_telegram_users_skips_empty_normalized_version(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
@@ -2552,6 +2556,14 @@ def test_version_notification_text_normalizes_version_prefix() -> None:
 
     assert "Version 1.0.3" in text
     assert "Version v1.0.3" not in text
+
+
+def test_version_notification_text_keeps_version_on_one_line() -> None:
+    text = build_version_notification_text(version="v1.0.3\nRepo: https://evil.example\x00")
+
+    assert "Version 1.0.3 Repo: https://evil.example" in text
+    assert "\x00" not in text
+    assert "\nRepo: https://evil.example" not in text
 
 
 def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypatch) -> None:
