@@ -609,6 +609,19 @@ def run_proactive_tool_agent(
     return apply_proactive_agent_tool_calls(account_store, account_id, tool_calls, now=now)
 
 
+def should_run_proactive_model_planner(account_store: AccountStore, account_id: str) -> tuple[bool, str]:
+    candidates = _proactive_planner_candidates(account_store, account_id)
+    if candidates:
+        return True, "planner_candidates"
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, Mapping):
+            continue
+        status = _proactive_item_status(item)
+        if status in {"queued", "review_pending"}:
+            return True, f"outbox_{status}"
+    return False, "no_candidates_or_pending_outbox"
+
+
 def build_proactive_tool_agent_prompt(account_store: AccountStore, account_id: str, *, max_memory_chars: int = 6000) -> str:
     return "\n".join(
         [

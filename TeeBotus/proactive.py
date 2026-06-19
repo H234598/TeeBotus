@@ -29,6 +29,7 @@ from TeeBotus.runtime.proactive_agent import (
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
     run_proactive_tool_agent,
+    should_run_proactive_model_planner,
 )
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
@@ -423,9 +424,15 @@ async def run_proactive_agent_cycle(
                         "queued_item_ids": list(planning.queued_item_ids),
                         "skipped_reason": planning.skipped_reason,
                     }
+                model_planner_allowed = True
+                model_planner_skip_reason = ""
+                if effective_llm_plan or effective_tool_plan:
+                    model_planner_allowed, model_planner_skip_reason = should_run_proactive_model_planner(store, account_id)
                 if effective_llm_plan:
                     if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
                         account_report["llm_planning"] = {"skipped_reason": "llm_planner_instance_not_enabled"}
+                    elif not model_planner_allowed:
+                        account_report["llm_planning"] = {"skipped_reason": f"model_planner_idle:{model_planner_skip_reason}"}
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:
@@ -449,6 +456,8 @@ async def run_proactive_agent_cycle(
                 if effective_tool_plan:
                     if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
                         account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
+                    elif not model_planner_allowed:
+                        account_report["tool_planning"] = {"skipped_reason": f"model_planner_idle:{model_planner_skip_reason}"}
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:

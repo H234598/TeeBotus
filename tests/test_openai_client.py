@@ -1,11 +1,15 @@
 import unittest
 import base64
+import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import (
     OpenAIAPIError,
     OpenAIClient,
+    build_prompt_cache_key,
     build_image_payload,
     build_response_payload,
     build_speech_payload,
@@ -13,6 +17,7 @@ from TeeBotus.openai_client import (
     extract_image_bytes,
     extract_output_text,
     extract_transcription_text,
+    log_openai_usage,
     summarize_empty_response,
 )
 
@@ -34,6 +39,17 @@ class OpenAIClientTests(unittest.TestCase):
         self.assertIn("Basis.", payload["instructions"])
         self.assertIn("Bot_Rüstzeug.md", payload["instructions"])
         self.assertIn("Regelwerk.", payload["instructions"])
+        self.assertTrue(payload["prompt_cache_key"].startswith("teebotus-reply-"))
+
+    def test_build_response_payload_prompt_cache_key_is_stable_and_scoped(self) -> None:
+        instructions = BotInstructions(openai_model="gpt-test", openai_system_prompt="Basis.")
+
+        reply_payload = build_response_payload("Hallo", instructions, cache_scope="reply")
+        tool_payload = build_response_payload("Hallo", instructions, cache_scope="tool")
+
+        self.assertEqual(reply_payload["prompt_cache_key"], build_prompt_cache_key("gpt-test", instructions.openai_instructions_text(), "reply"))
+        self.assertNotEqual(reply_payload["prompt_cache_key"], tool_payload["prompt_cache_key"])
+        self.assertNotIn("Basis", reply_payload["prompt_cache_key"])
 
     def test_build_response_payload_includes_optional_web_search(self) -> None:
         instructions = BotInstructions(openai_web_search=True, openai_web_search_context_size="medium")
@@ -173,6 +189,39 @@ class OpenAIClientTests(unittest.TestCase):
         payload = {"data": [{"b64_json": base64.b64encode(b"png-data").decode("ascii")}]}
 
         self.assertEqual(extract_image_bytes(payload), b"png-data")
+
+    def test_log_openai_usage_writes_safe_jsonl_with_cached_tokens(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            usage_log = Path(tmp) / "usage.jsonl"
+            with patch.dict("os.environ", {"TEEBOTUS_OPENAI_USAGE_LOG": str(usage_log)}):
+                log_openai_usage(
+                    "tool",
+                    {
+                        "model": "gpt-test",
+                        "prompt_cache_key": "teebotus-tool-deadbeef",
+                        "instructions": "nicht loggen",
+                        "input": "auch nicht loggen",
+                    },
+                    {
+                        "id": "resp_123",
+                        "service_tier": "flex",
+                        "usage": {
+                            "input_tokens": 1000,
+                            "input_tokens_details": {"cached_tokens": 900},
+                            "output_tokens": 50,
+                            "output_tokens_details": {"reasoning_tokens": 7},
+                        },
+                    },
+                )
+
+            event = json.loads(usage_log.read_text(encoding="utf-8").strip())
+            self.assertEqual(event["operation"], "tool")
+            self.assertEqual(event["input_tokens"], 1000)
+            self.assertEqual(event["cached_tokens"], 900)
+            self.assertEqual(event["output_tokens"], 50)
+            self.assertEqual(event["reasoning_tokens"], 7)
+            self.assertNotIn("instructions", event)
+            self.assertNotIn("nicht loggen", usage_log.read_text(encoding="utf-8"))
 
     def test_summarize_empty_response_does_not_dump_full_payload(self) -> None:
         summary = summarize_empty_response(

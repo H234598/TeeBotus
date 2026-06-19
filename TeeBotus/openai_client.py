@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import urllib.error
 import urllib.request
 import uuid
 import base64
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 from .instructions import BotInstructions
@@ -56,7 +60,7 @@ class OpenAIClient:
         instructions: BotInstructions,
         previous_response_id: str | None = None,
     ) -> OpenAIResponse:
-        payload = build_response_payload(user_text, instructions, previous_response_id)
+        payload = build_response_payload(user_text, instructions, previous_response_id, cache_scope="reply")
         data = json.dumps(payload).encode("utf-8")
         request = urllib.request.Request(
             RESPONSES_URL,
@@ -80,6 +84,7 @@ class OpenAIClient:
         except urllib.error.URLError as exc:
             raise OpenAIAPIError(f"OpenAI network error: {exc.reason}") from exc
 
+        log_openai_usage("reply", payload, response_payload)
         text = extract_output_text(response_payload)
         if not text:
             raise OpenAIAPIError(summarize_empty_response(response_payload, instructions.openai_max_output_tokens))
@@ -125,6 +130,7 @@ class OpenAIClient:
         except urllib.error.URLError as exc:
             raise OpenAIAPIError(f"OpenAI image network error: {exc.reason}") from exc
 
+        log_openai_usage("image", payload, response_payload)
         image_data = extract_image_bytes(response_payload)
         if not image_data:
             raise OpenAIAPIError("OpenAI image response did not contain image data")
@@ -138,7 +144,7 @@ class OpenAIClient:
         tools: list[dict[str, Any]],
         previous_response_id: str | None = None,
     ) -> dict[str, Any]:
-        payload = build_response_payload(user_text, instructions, previous_response_id)
+        payload = build_response_payload(user_text, instructions, previous_response_id, cache_scope="tool")
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
         data = json.dumps(payload).encode("utf-8")
@@ -164,6 +170,7 @@ class OpenAIClient:
             raise OpenAIAPIError(f"OpenAI tool-call network error: {exc.reason}") from exc
         if not isinstance(response_payload, dict):
             raise OpenAIAPIError("OpenAI tool-call response was not a JSON object")
+        log_openai_usage("tool", payload, response_payload)
         return response_payload
 
     def create_voice(self, text: str, instructions: BotInstructions) -> OpenAIVoice:
@@ -194,6 +201,7 @@ class OpenAIClient:
 
         if not audio:
             raise OpenAIAPIError("OpenAI speech response did not contain audio data")
+        log_openai_usage("speech", payload, None, extra={"response_bytes": len(audio), "content_type": content_type})
         return OpenAIVoice(
             audio=audio,
             filename=_voice_filename(instructions.openai_voice_format),
@@ -239,6 +247,7 @@ class OpenAIClient:
 
         if not isinstance(payload, dict):
             raise OpenAIAPIError("OpenAI transcription response was not a JSON object")
+        log_openai_usage("transcription", fields, payload)
         if "text" not in payload:
             keys = ", ".join(sorted(str(key) for key in payload.keys()))
             raise OpenAIAPIError(f"OpenAI transcription response did not include a text field; keys={keys}")
@@ -249,11 +258,15 @@ def build_response_payload(
     user_text: str,
     instructions: BotInstructions,
     previous_response_id: str | None = None,
+    *,
+    cache_scope: str = "reply",
 ) -> dict[str, Any]:
+    instruction_text = instructions.openai_instructions_text()
     payload: dict[str, Any] = {
         "model": instructions.openai_model,
-        "instructions": instructions.openai_instructions_text(),
+        "instructions": instruction_text,
         "input": user_text,
+        "prompt_cache_key": build_prompt_cache_key(instructions.openai_model, instruction_text, cache_scope),
     }
 
     if previous_response_id:
@@ -275,6 +288,91 @@ def build_response_payload(
     if instructions.openai_verbosity:
         payload["text"] = {"verbosity": instructions.openai_verbosity}
     return payload
+
+
+def build_prompt_cache_key(model: str, instruction_text: str, scope: str = "reply") -> str:
+    normalized_scope = "".join(char for char in str(scope or "reply").casefold() if char.isalnum() or char in {"_", "-"})[:24] or "reply"
+    digest = sha256(f"{model}\n{normalized_scope}\n{instruction_text}".encode("utf-8")).hexdigest()[:24]
+    return f"teebotus-{normalized_scope}-{digest}"
+
+
+def log_openai_usage(
+    operation: str,
+    request_payload: dict[str, Any],
+    response_payload: dict[str, Any] | None,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    usage = response_payload.get("usage") if isinstance(response_payload, dict) and isinstance(response_payload.get("usage"), dict) else {}
+    event: dict[str, Any] = {
+        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "operation": operation,
+        "model": request_payload.get("model"),
+        "service_tier_requested": request_payload.get("service_tier"),
+        "service_tier_reported": response_payload.get("service_tier") if isinstance(response_payload, dict) else None,
+        "response_id": response_payload.get("id") if isinstance(response_payload, dict) else None,
+        "prompt_cache_key": request_payload.get("prompt_cache_key"),
+        "request_chars": len(json.dumps(request_payload, ensure_ascii=False, sort_keys=True)),
+        "request_token_estimate": _rough_token_estimate(request_payload),
+        "tools_count": len(request_payload.get("tools") or []) if isinstance(request_payload.get("tools"), list) else 0,
+        "tool_choice": request_payload.get("tool_choice"),
+        "usage": dict(usage),
+        "input_tokens": _first_int(usage, ("input_tokens", "prompt_tokens")),
+        "cached_tokens": _cached_token_count(usage),
+        "output_tokens": _first_int(usage, ("output_tokens", "completion_tokens")),
+        "reasoning_tokens": _nested_int(usage, ("output_tokens_details", "reasoning_tokens")),
+    }
+    if extra:
+        event.update(extra)
+    LOGGER.info("openai_usage %s", json.dumps(event, ensure_ascii=False, sort_keys=True))
+    path = _openai_usage_log_path()
+    if path is None:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True))
+            handle.write("\n")
+    except OSError as exc:
+        LOGGER.warning("Could not append OpenAI usage log %s: %s", path, exc)
+
+
+def _openai_usage_log_path() -> Path | None:
+    configured = os.environ.get("TEEBOTUS_OPENAI_USAGE_LOG", "").strip()
+    if configured.casefold() in {"0", "false", "off", "none", "disabled"}:
+        return None
+    if configured:
+        return Path(configured).expanduser()
+    state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser()
+    return state_home / "TeeBotus" / "openai_usage.jsonl"
+
+
+def _rough_token_estimate(payload: dict[str, Any]) -> int:
+    return max(1, (len(json.dumps(payload, ensure_ascii=False, sort_keys=True)) + 3) // 4)
+
+
+def _first_int(mapping: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, int) and value >= 0:
+            return value
+    return None
+
+
+def _nested_int(mapping: dict[str, Any], path: tuple[str, str]) -> int | None:
+    outer = mapping.get(path[0])
+    if not isinstance(outer, dict):
+        return None
+    value = outer.get(path[1])
+    return value if isinstance(value, int) and value >= 0 else None
+
+
+def _cached_token_count(usage: dict[str, Any]) -> int | None:
+    for outer_key in ("input_tokens_details", "prompt_tokens_details"):
+        value = _nested_int(usage, (outer_key, "cached_tokens"))
+        if value is not None:
+            return value
+    return None
 
 
 def build_image_payload(prompt: str, instructions: BotInstructions) -> dict[str, Any]:

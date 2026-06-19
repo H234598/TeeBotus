@@ -308,6 +308,35 @@ def test_proactive_cycle_plan_uses_instance_tool_planner_resolver(tmp_path) -> N
     assert "llm_planning" not in account
 
 
+def test_proactive_cycle_tool_plan_skips_model_when_account_is_idle(tmp_path) -> None:
+    class Client:
+        def create_tool_calls(self, *_args):
+            raise AssertionError("idle proactive accounts must not call the model planner")
+
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={
+                "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+                "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES": "Depressionsbot",
+            },
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            tool_plan=True,
+            llm_planner_factory=lambda _instance, _store, _account_id: (Client(), "instructions"),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["tool_planning"] == {"skipped_reason": "model_planner_idle:no_candidates_or_pending_outbox"}
+    assert account["due_items"] == []
+
+
 def test_proactive_cycle_plan_uses_instance_llm_planner_resolver(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
