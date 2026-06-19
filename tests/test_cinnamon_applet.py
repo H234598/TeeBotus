@@ -239,6 +239,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const MAX_COMMAND_CHARS = 32768;" in source
     assert "const MAX_UNIT_TOKEN_CHARS = 96;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
+    assert "_nonNegativeInt: function(value, fallback)" in source
     assert "_strictInt: function(value)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
@@ -1068,14 +1069,47 @@ def test_cinnamon_applet_rejects_partial_integer_settings() -> None:
         """
         (function() {
           applet.statusTimeoutSeconds = "30abc";
+          let malformedSummary = applet._statusSummary({
+            ok: false,
+            unit: { active_state: "active" },
+            health: {
+              status: "warning",
+              total_problem_count: "1abc",
+              command_problem_count: "2abc",
+              qdrant_runtime_problem_count: "3abc",
+              qdrant_probe_problem_count: "4",
+              problem_statuses: "warning:5abc,broken:6"
+            },
+            runtime: {
+              summary: {
+                instances: "1",
+                channels: "telegram",
+                problem_status_count: "7abc"
+              },
+              status_counts: {
+                warning: "8abc",
+                broken: "9"
+              }
+            },
+            qdrant: {
+              collections: {
+                teebotus_user_memory: { count: "10abc" }
+              }
+            }
+          });
           return {
             positiveJunk: applet._positiveInt("12abc", 7),
             positiveFloat: applet._positiveInt("12.9", 7),
             positiveValid: applet._positiveInt("0012", 7),
+            nonNegativeJunk: applet._nonNegativeInt("0abc", 5),
+            nonNegativeValid: applet._nonNegativeInt("0", 5),
             boundedJunk: applet._boundedInt("30abc", 10, 1, 60),
             boundedFloat: applet._boundedInt("30.9", 10, 1, 60),
             boundedValid: applet._boundedInt("0030", 10, 1, 60),
-            timeoutJunk: applet._statusTimeoutSeconds()
+            timeoutJunk: applet._statusTimeoutSeconds(),
+            staleJunk: applet._codexUsageIsStale({ codex_usage: "local", stale_hours: "48abc" }),
+            staleValid: applet._codexUsageIsStale({ codex_usage: "local", stale_hours: "48" }),
+            malformedSummary: malformedSummary
           };
         })()
         """
@@ -1085,10 +1119,18 @@ def test_cinnamon_applet_rejects_partial_integer_settings() -> None:
         "positiveJunk": 7,
         "positiveFloat": 7,
         "positiveValid": 12,
+        "nonNegativeJunk": 5,
+        "nonNegativeValid": 0,
         "boundedJunk": 10,
         "boundedFloat": 10,
         "boundedValid": 30,
         "timeoutJunk": 30,
+        "staleJunk": False,
+        "staleValid": True,
+        "malformedSummary": (
+            "Health Warnung | Unit active | 1 | telegram | Warnungen 9 | "
+            "Probleme defekt:6 | Qdrant Probe:4"
+        ),
     }
 
 

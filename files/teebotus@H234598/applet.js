@@ -504,7 +504,7 @@ TeeBotusApplet.prototype = {
   },
 
   _sectionProblemText: function(value) {
-    let count = parseInt(value || 0, 10) || 0;
+    let count = this._nonNegativeInt(value, 0);
     return count > 0 ? " | Probleme " + String(count) : "";
   },
 
@@ -718,7 +718,8 @@ TeeBotusApplet.prototype = {
   },
 
   _codexUsageIsStale: function(fields) {
-    return Boolean((fields || {}).codex_usage) && ((parseInt((fields || {}).stale_hours || -1, 10) || 0) >= CODEX_USAGE_STALE_WARNING_HOURS);
+    let staleHours = this._strictInt((fields || {}).stale_hours);
+    return Boolean((fields || {}).codex_usage) && staleHours >= CODEX_USAGE_STALE_WARNING_HOURS;
   },
 
   _formatAccountLine: function(line) {
@@ -971,11 +972,11 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
-    let bad = parseInt(health.total_problem_count, 10);
-    if (!(bad >= 0)) {
-      bad = parseInt(summary.problem_status_count, 10);
+    let bad = this._nonNegativeInt(health.total_problem_count, null);
+    if (bad === null) {
+      bad = this._nonNegativeInt(summary.problem_status_count, null);
     }
-    if (!(bad >= 0)) {
+    if (bad === null) {
       bad = this._problemStatusCount(counts);
     }
     let state = String(unit.active_state || "unknown");
@@ -999,7 +1000,7 @@ TeeBotusApplet.prototype = {
         continue;
       }
       let status = part.slice(0, index).trim();
-      let count = parseInt(part.slice(index + 1), 10);
+      let count = this._nonNegativeInt(part.slice(index + 1), 0);
       if (!status || !(count > 0)) {
         continue;
       }
@@ -1020,14 +1021,14 @@ TeeBotusApplet.prototype = {
   },
 
   _commandProblemBreakdownText: function(health) {
-    let count = parseInt((health || {}).command_problem_count || 0, 10) || 0;
+    let count = this._nonNegativeInt((health || {}).command_problem_count, 0);
     return count > 0 ? " | Kommando:" + String(count) : "";
   },
 
   _qdrantProblemBreakdownText: function(health) {
-    let runtimeCount = parseInt((health || {}).qdrant_runtime_problem_count || 0, 10) || 0;
-    let probeCount = parseInt((health || {}).qdrant_probe_problem_count || 0, 10) || 0;
-    let unitCount = parseInt((health || {}).qdrant_unit_problem_count || 0, 10) || 0;
+    let runtimeCount = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
+    let probeCount = this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0);
+    let unitCount = this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0);
     if (runtimeCount <= 0 && probeCount <= 0 && unitCount <= 0) {
       return "";
     }
@@ -1047,7 +1048,7 @@ TeeBotusApplet.prototype = {
   _problemStatusCount: function(counts) {
     let total = 0;
     for (let status of PROBLEM_STATUSES) {
-      total += parseInt((counts || {})[status] || 0, 10) || 0;
+      total += this._nonNegativeInt((counts || {})[status], 0);
     }
     return total;
   },
@@ -1693,13 +1694,18 @@ TeeBotusApplet.prototype = {
     if (!item) {
       return 0;
     }
-    let parsed = parseInt(item.count, 10);
+    let parsed = this._nonNegativeInt(item.count, 0);
     return parsed > 0 ? parsed : 0;
   },
 
   _positiveInt: function(value, fallback) {
     let parsed = this._strictInt(value);
     return parsed > 0 ? parsed : fallback;
+  },
+
+  _nonNegativeInt: function(value, fallback) {
+    let parsed = this._strictInt(value);
+    return parsed !== null && parsed >= 0 ? parsed : fallback;
   },
 
   _boundedInt: function(value, fallback, minValue, maxValue) {
