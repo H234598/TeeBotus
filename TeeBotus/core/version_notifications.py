@@ -512,11 +512,12 @@ def _normalize_state(data: Any) -> dict[str, Any]:
         version_key = _normalize_version_key(key)
         if not version_key:
             continue
+        normalized_value = _merge_version_notification_state({}, value)
         existing = normalized_versions.get(version_key)
         if isinstance(existing, dict):
-            normalized_versions[version_key] = _merge_version_notification_state(existing, value)
+            normalized_versions[version_key] = _merge_version_notification_state(existing, normalized_value)
         else:
-            normalized_versions[version_key] = value
+            normalized_versions[version_key] = normalized_value
     normalized["versions"] = dict(sorted(normalized_versions.items()))
     return normalized
 

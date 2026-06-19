@@ -587,6 +587,31 @@ def test_version_notification_state_normalization_prefers_exact_version_metadata
     assert state["versions"]["1.0.3"]["updated_at"] == "2026-06-14T12:00:00+00:00"
 
 
+def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": [" telegram:user:111 ", "", 123],
+                    "failed_identities": {
+                        " telegram:user:222 ": {
+                            "account_id": "b" * 128,
+                            "adapter_slot": 1,
+                            "chat_id": 222,
+                        },
+                        "": {"chat_id": 999},
+                        123: {"chat_id": 123},
+                    },
+                }
+            }
+        }
+    )
+
+    version_state = state["versions"]["1.0.3"]
+    assert version_state["sent_identities"] == ["telegram:user:111"]
+    assert list(version_state["failed_identities"]) == ["telegram:user:222"]
+
+
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
