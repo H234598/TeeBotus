@@ -159,6 +159,8 @@ def _service_name(value: str) -> str:
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.@-")
     if any(char not in allowed for char in name):
         raise ValueError("systemd service name contains unsupported characters")
+    if not name[0].isalnum():
+        raise ValueError("systemd service name must start with an ASCII letter or digit")
     return name
 
 

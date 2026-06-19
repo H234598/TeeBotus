@@ -62,6 +62,22 @@ def test_render_teebotus_systemd_unit_can_limit_channels_and_no_all(tmp_path: Pa
     assert "--all" not in unit.service_text
 
 
+def test_render_teebotus_systemd_unit_allows_instance_service_name(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path, service_name="teebotus@Depressionsbot")
+
+    assert unit.service_name == "teebotus@Depressionsbot.service"
+
+
+def test_render_teebotus_systemd_unit_rejects_unsafe_service_names(tmp_path: Path) -> None:
+    for service_name in ("-bad", "--force", ".", "..", "@bad", "_hidden"):
+        try:
+            render_teebotus_systemd_unit(repo_root=tmp_path, service_name=service_name)
+        except ValueError as exc:
+            assert "must start with an ASCII letter or digit" in str(exc)
+        else:
+            raise AssertionError(f"expected unsafe service name rejection for {service_name!r}")
+
+
 def test_render_teebotus_systemd_unit_rejects_unknown_channel(tmp_path: Path) -> None:
     try:
         render_teebotus_systemd_unit(repo_root=tmp_path, channels="telegram,irc")
