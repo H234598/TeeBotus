@@ -630,10 +630,11 @@ def _historical_sent_identity_set(state: dict[str, Any], current_version: str, n
             continue
         if not _version_state_is_equal_precedence_historical(version_key, version_state, current_version, now):
             continue
-        if _version_state_updated_at(version_state) is not None:
+        if not isinstance(version_state, dict):
             continue
-        if isinstance(version_state, dict):
-            sent_identities.update(_telegram_identity_list(version_state.get("sent_identities")))
+        if _parse_datetime(_valid_timestamp_string(version_state.get("updated_at"))) is not None:
+            continue
+        sent_identities.update(_telegram_identity_list(version_state.get("sent_identities")))
     return sent_identities
 
 
