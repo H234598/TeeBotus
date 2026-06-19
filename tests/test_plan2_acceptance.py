@@ -3979,6 +3979,22 @@ def test_runtime_status_broken_lines_allow_safe_key_metadata() -> None:
     assert check_plan2_acceptance._runtime_status_broken_lines(output) == [output.splitlines()[2]]
 
 
+def test_runtime_status_broken_lines_flags_unhealthy_qdrant_lines() -> None:
+    output = "\n".join(
+        [
+            "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
+            "qdrant=127.0.0.1:6333 status=ready fallback=keyword_memory_search",
+            "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
+            "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=ready vector_size=64",
+        ]
+    )
+
+    assert check_plan2_acceptance._runtime_status_broken_lines(output) == [
+        "qdrant=127.0.0.1:6333 status=unreachable fallback=keyword_memory_search",
+        "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=unavailable vector_size=64",
+    ]
+
+
 def test_runtime_status_broken_lines_flags_url_credentials() -> None:
     output = "\n".join(
         [

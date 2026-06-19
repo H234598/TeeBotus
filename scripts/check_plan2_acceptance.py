@@ -2636,6 +2636,8 @@ def _runtime_status_line_is_broken(line: str) -> bool:
         "matrix_homeserver=": {"unreachable"},
         "local_transcription=": {"unavailable"},
         "bibliothekar=": {"unavailable", "unreachable"},
+        "qdrant=": {"unreachable", "disabled"},
+        "qdrant_collection=": {"unavailable"},
     }
     for prefix, problem_statuses in status_by_prefix.items():
         if not line.startswith(prefix):
