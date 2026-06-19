@@ -2424,6 +2424,31 @@ def test_explicit_channels_telegram_signal_without_signal_config_fails_before_te
     assert calls == []
 
 
+def test_explicit_missing_channel_error_precedes_account_storage_preflight(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_secret_health_lines",
+        lambda *, instance_name, project_root: [
+            f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--channels", "telegram,signal"]) == 2
+
+    captured = capsys.readouterr()
+    assert "Signal ist angefordert" in captured.err
+    assert "account storage preflight failed" not in captured.err
+    assert calls == []
+
+
 def test_env_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

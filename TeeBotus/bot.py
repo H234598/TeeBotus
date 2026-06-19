@@ -1969,12 +1969,12 @@ def _main_impl(argv: list[str] | None = None) -> int:
     if "telegram" not in config.channels and len(_non_telegram_channels(config)) != 1:
         print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
         return 2
-    if not _run_account_storage_preflight(config):
-        return 2
     missing_explicit_channels = _runtime_missing_explicit_channel_errors(config)
     if missing_explicit_channels:
         for message in missing_explicit_channels:
             print(message, file=sys.stderr)
+        return 2
+    if not _run_account_storage_preflight(config):
         return 2
     if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
         configured_non_telegram = _configured_non_telegram_channels(config)
