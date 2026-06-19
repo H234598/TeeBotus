@@ -914,6 +914,37 @@ def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tm
     assert "chat not found" in failed["reason"]
 
 
+def test_notify_recent_telegram_users_does_not_retry_cannot_initiate_conversation_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Blocked")
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError("bot can't initiate conversation with a user")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    count_again = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert count_again == 0
+    assert attempts == [111]
+
+
 def test_notify_recent_telegram_users_normalizes_sent_identity_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

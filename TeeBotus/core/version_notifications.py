@@ -369,6 +369,8 @@ def _is_permanent_delivery_error(exc: Exception) -> bool:
             "user is deactivated",
             "have no rights to send",
             "forbidden: bot",
+            "can't initiate conversation",
+            "cannot initiate conversation",
         )
     )
 
