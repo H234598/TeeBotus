@@ -61,7 +61,7 @@ from TeeBotus.bot import (
 from TeeBotus import __version__
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.state import RuntimeStateStore
 
@@ -1779,6 +1779,91 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [("123", "ok")])
         self.assertIn("Telegram sent message tracking failed", "\n".join(logs.output))
+
+    def test_handle_update_with_runtime_context_marks_codex_history_reply_acknowledged(self) -> None:
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            account_id = account_store.resolve_or_create_account(telegram_identity_key("456"), display_label="Ada")
+            item_id = account_store.append_codex_history_item(
+                INSTANCE_STATE_ACCOUNT_ID,
+                {
+                    "kind": "codex_run_summary",
+                    "status": "accepted",
+                    "summary_prefix": "v1.8.2 #0001",
+                    "summary_number": 1,
+                    "summary": {"title": "Runtime Reply Ack"},
+                    "version": {"summary_prefix": "v1.8.2 #0001", "summary_number": 1},
+                    "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+                    "status_history": [{"at": "2026-06-19T12:00:00+00:00", "status": "accepted", "reason": "accepted"}],
+                },
+            )
+            account_store.append_codex_history_dispatch_result(
+                INSTANCE_STATE_ACCOUNT_ID,
+                {
+                    "codex_history_item_id": item_id,
+                    "account_id": account_id,
+                    "instance": "Demo",
+                    "status": "accepted",
+                    "channel": "telegram",
+                    "chat_id": "123",
+                    "message_ref": "101",
+                    "summary_prefix": "v1.8.2 #0001",
+                },
+            )
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.process_result = lambda event: EngineResult(event.account_id, [], handled=True)  # type: ignore[method-assign]
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 202,
+                        "text": "ok, gesehen",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                        "reply_to_message": {
+                            "message_id": 101,
+                            "document": {"file_name": "TeeBotus_release_1.8.2_0001.md"},
+                        },
+                    }
+                },
+                chat_state=ChatState(),
+                runtime_context=context,
+            )
+
+            persisted = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+            dispatch_rows = account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+
+        self.assertEqual(api.sent_messages, [])
+        self.assertEqual(persisted["status"], "acknowledged")
+        self.assertEqual(persisted["delivery"]["acknowledged_at"], persisted["delivery"]["delivered_at"])
+        self.assertEqual([row["status"] for row in dispatch_rows], ["accepted", "delivered", "acknowledged"])
+        self.assertEqual(dispatch_rows[-1]["message_ref"], "101")
+        self.assertEqual(dispatch_rows[-1]["reply_message_ref"], "202")
+        self.assertEqual(dispatch_rows[-1]["reply_text_preview"], "ok, gesehen")
 
     def test_handle_update_with_runtime_context_logs_action_dispatch_errors(self) -> None:
         from TeeBotus.runtime.actions import SendText

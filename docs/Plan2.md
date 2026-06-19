@@ -16,18 +16,18 @@ Quelle:
 
 - `/home/teladi/Downloads/Plan2.md` ist in `docs/Plan2.md` integriert.
 - Download-SHA256: `b0e429bef5398e6cf067693f5390486ccb137f3ebef9770cb0509c585cd832f0`
-- Die Docs-Version ist absichtlich nicht bytegleich mit `/Downloads/Plan2.md`, weil sie nach dem Import um Repo-Stand, Gemini/Vertex, Free-Tier-Guard, LLM-State und Benchmark-Fortschreibungen gepflegt wurde.
+- Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
 Umgesetzt:
 
 - Plan2 liegt versioniert unter `docs/` und ist der lebende Migrationsplan fuer providerneutrale LLMs, Bibliothekar/RAG, Agenten-Subtasks und Benchmarks.
-- Die spaeteren Repo-Fortschreibungen zu dynamischer Pyproject-Version, neutralen LLM-Fehlertexten, Runtime-Profilauflösung, `LLM_State.json`, Gemini/Vertex, Free-Tier-Guard, HF-Pool-Gating und Benchmarkstruktur sind im Dokument erhalten.
 - Der Zusatzauftrag "Baue valide Benchmarktests fuer alles" bleibt am Ende des Plans als verbindlicher Benchmark-Abschnitt dokumentiert.
+- Fuer bereits umgesetzte Detailarbeit sind Code, Tests, Runtime-Status, Benchmarks und spezifischere Plaene die autoritative Quelle.
 
 Offen:
 
-- Neue `/Downloads/Plan2.md`-Aenderungen sollen kuenftig gemerged, nicht blind ueber die gepflegte `docs/Plan2.md`-Version kopiert werden.
-- Der tatsaechliche Umsetzungsstand bleibt ueber Code, Tests, Runtime-Status und die spezifischeren Plan3-/Codex-Outbox-Dokumente zu pruefen.
+- Neue `/Downloads/Plan2.md`-Aenderungen sollen kuenftig gemerged, nicht blind ueber gepflegte Repo-Ergaenzungen kopiert werden.
+- Der tatsaechliche Umsetzungsstand bleibt gegen Code, Tests, Runtime-Status und die spezifischeren Plan3-/Codex-Outbox-Dokumente zu pruefen.
 
 ---
 
@@ -321,8 +321,9 @@ Extras:
 ```toml
 [project]
 name = "teebotus"
-dynamic = ["version"]
+version = "1.4.28"
 requires-python = ">=3.11"
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -653,16 +654,7 @@ Neu:
 - timeout_seconds: 180
 - max_output_tokens: 700
 - temperature: 0.7
-- missing_key: Das Textmodell ist aktiviert, aber der benoetigte API-Key fehlt.
-- error: Ich kann das Textmodell gerade nicht erreichen.
-- reset: Der Text-LLM-Kontext fuer diesen Chat wurde geloescht.
 ```
-
-`missing_key`, `error` und `reset` im `## LLM`-Block sind die neutralen
-Text-LLM-Antworttexte. `## OpenAI - missing_key/error/reset` bleibt Legacy und
-setzt die neutralen Texte ebenfalls, solange `## LLM` sie nicht ueberschreibt.
-OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription
-behalten eigene Fehlertexte.
 
 Legacy bleibt:
 
@@ -692,19 +684,13 @@ TEEBOTUS_LLM_BASE_URL_DEPRESSIONSBOT_TELEGRAM_1=http://127.0.0.1:11434
 ### 8.4 Auflösung
 
 ```text
-1. TEEBOTUS_LLM_PROFILE_<INSTANCE>_<CHANNEL>_<SLOT> und allgemeinere PROFILE-Varianten
-2. explizite Runtime-Route: TEEBOTUS_LLM_PURPOSE / PROVIDER / MODEL in Slot-, Kanal-, Instanz- oder globaler Form
-3. profile aus Bot_Verhalten.md, aber nur wenn keine explizite Runtime-Route gesetzt ist
-4. provider/model/base_url/fallback_models/api_key_env aus Bot_Verhalten.md
+1. TEEBOTUS_LLM_PROVIDER_<INSTANCE>_<CHANNEL>_<SLOT>
+2. TEEBOTUS_LLM_PROVIDER_<INSTANCE>_<CHANNEL>
+3. TEEBOTUS_LLM_PROVIDER_<INSTANCE>
+4. TEEBOTUS_LLM_PROVIDER
 5. Legacy OpenAI, wenn OPENAI_API_KEY vorhanden
 6. none
 ```
-
-Wichtig: Runtime-Overrides muessen ein Profil aus `Bot_Verhalten.md`
-ueberschreiben koennen. Ein Runtime-Profil gewinnt immer; Runtime-Purpose,
-Runtime-Provider oder Runtime-Model unterdruecken dagegen nur das
-Instruction-Profil und laufen dann ueber Purpose-Routing oder direkte
-Provider-/Model-Aufloesung.
 
 ### 8.5 RuntimeConfig erweitern
 
@@ -727,17 +713,6 @@ llm=Depressionsbot/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b bas
 llm=Depressionsbot/signal:1 provider=openai model=gpt-5.5 status=configured
 llm=Depressionsbot/matrix:1 provider=none status=disabled
 ```
-
-Remote-Profile muessen bei fehlendem Primaer-Key `status=missing_key`
-melden. Explizit aktivierte Remote-Fallbacks muessen bei fehlendem
-Fallback-Key `status=degraded fallback_api_key=missing` melden, waehrend
-lokale Ollama- und loopback-LiteLLM-Ziele ohne Key `configured` bleiben.
-
-Runtime-Status muss dieselbe effektive LLM-Aufloesung nutzen wie der Bot-Start:
-`Bot_Verhalten.md` als Basis, Runtime-Overrides mit Vorrang, deaktivierte LLMs
-als `provider=none status=disabled`. Ollama-Health darf nur effektiv aktive
-Ollama-Ziele pruefen und muss deaktivierte LLMs sowie durch Remote-Profile
-ueberschriebene Direct-Ollama-Werte ignorieren.
 
 Keine Secrets anzeigen.
 
@@ -824,8 +799,6 @@ class LiteLLMTextClient:
 ### 9.2 Wichtig: previous_response_id
 
 OpenAI Responses API kann `previous_response_id`. Providerneutrale Chat-Completions können das meist nicht.
-Persistiert wird dieser Text-LLM-Kontext accountbezogen in `LLM_State.json`;
-`OpenAI_State.json` bleibt nur Legacy-Migrationsinput.
 
 Kurzfristig:
 
@@ -946,7 +919,7 @@ Manueller Bot-Test:
 
 ---
 
-## 11. Phase 5 — Providerprofile für HuggingFace/Groq/Gemini/Vertex
+## 11. Phase 5 — Providerprofile für HuggingFace/Groq/Gemini
 
 ### 11.1 Profile-Datei
 
@@ -970,87 +943,16 @@ profiles:
     model: groq/llama-3.1-8b-instant
     api_key_env: GROQ_API_KEY
 
-  gemini_flash_stateless:
+  gemini_flash:
     provider: litellm
-    model: gemini/gemini-3.5-flash
+    model: gemini/gemini-2.5-flash
     api_key_env: GEMINI_API_KEY
-
-  gemini_flash_stateful:
-    provider: gemini_interactions
-    model: gemini/gemini-3.5-flash
-    api_key_env: GEMINI_API_KEY
-
-  vertex_gemini_flash:
-    provider: litellm
-    model: vertex_ai/gemini-3.5-flash
-    api_key_env: GOOGLE_APPLICATION_CREDENTIALS
 
   openai_premium:
     provider: openai
     model: gpt-5.5
     api_key_env: OPENAI_API_KEY
 ```
-
-Gemini-Keyrotation ist fuer `gemini_flash_stateless` und
-`gemini_flash_stateful` zusaetzlich ueber
-`GEMINI_API_KEYS_ACCOUNT_N` oder instanzspezifisch
-`TEEBOTUS_GEMINI_API_KEYS_<INSTANZ>_ACCOUNT_N` verfuegbar. Die Buckets werden
-spaltenweise sortiert, also Account 1 Projekt-Key 1, Account 2 Projekt-Key 1,
-Account 3 Projekt-Key 1, danach Account 1 Projekt-Key 2 usw. Google limitiert
-Gemini pro Projekt, nicht pro API-Key; deshalb darf pro Projekt nur ein Key in
-den Ring. Mehrere Keys desselben Projekts erhoehen die Quote nicht. Bei
-`429`/Quota-/Usage-Limit wechselt der LiteLLM-Client auf den naechsten Key;
-sonst bleibt der aktive Key stehen.
-
-Google-Routen ueber `gemini_interactions` laufen im normalen Chatpfad stateful:
-TeeBotus nutzt `store=true` und `previous_interaction_id`. Google-Routen ueber
-LiteLLM/Vertex bleiben stateless; TeeBotus sendet dort den notwendigen lokalen
-Kontext selbst. `--runtime-status` zeigt entsprechend `google_mode=stateful`
-oder `google_mode=stateless`.
-
-Der Free-Tier-Guard ist fuer Google-Routen default-on und lokal konfigurierbar:
-
-```bash
-TEEBOTUS_GEMINI_FREE_TIER_RPM=5
-TEEBOTUS_GEMINI_FREE_TIER_TPM=250000
-TEEBOTUS_GEMINI_FREE_TIER_RPD=20
-TEEBOTUS_GEMINI_FREE_TIER_RESERVE_TOKENS=2048
-TEEBOTUS_GEMINI_FREE_TIER_REFRESH_ENABLED=true
-TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS=86400
-TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL=https://ai.google.dev/gemini-api/docs/rate-limits
-```
-
-Der Guard zaehlt pro Projekt-Key Requests/min, geschaetzte Input-Tokens/min und
-Requests/Tag. Wenn ein Request die Reserve kurz vor dem Free-Tier-Limit
-verletzen wuerde, wird der Provider-Aufruf uebersprungen und der naechste
-Projekt-Key versucht. Sind alle Projekt-Keys lokal erschoepft, bricht der
-LLM-Aufruf sauber ab. Die konkreten Quoten muessen aus AI Studio/Projektquoten
-uebernommen werden.
-
-Zusaetzlich holt TeeBotus beim Bot-Start fuer Gemini/Vertex-Konfigurationen
-maximal einmal pro Tag (`TEEBOTUS_GEMINI_FREE_TIER_REFRESH_INTERVAL_SECONDS`,
-Default `86400`) eine Limit-Quelle und cached parsebare Modellwerte. Die
-Default-Quelle ist die offizielle Gemini-Rate-Limit-Seite; fuer wirklich
-projektaktive AI-Studio-/Quota-Werte kann `TEEBOTUS_GEMINI_FREE_TIER_LIMITS_URL`
-auf einen eigenen JSON-Export zeigen. Eine Quelle wird nur uebernommen, wenn sie
-Free-Tier-RPM/TPM/RPD pro Modell parsebar liefert; Batch-Tabellen oder
-nichtnumerische Doku ueberschreiben den letzten guten Cache nicht. Effektive
-Prioritaet: explizite Env-Werte > Cache > konservative Defaults.
-
-Instanzspezifisch funktionieren
-`TEEBOTUS_GEMINI_FREE_TIER_<INSTANZ>_RPM`, `_TPM`, `_RPD`,
-`_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine Dimension.
-`--runtime-status` zeigt die aktiven Guard-Werte und den Cache-/Refreshzustand
-als `gemini_free_tier_limits status=...`.
-
-`hf_pool` bleibt im Runtime-Pfad explizit non-fatal: Unit-Tests injizieren den
-`HFPoolMockExecutor` bewusst, aber der echte Provider nutzt ohne Schalter keinen
-Mock fuer konfigurierte Targets. Wenn kein Live-Executor aktiviert ist, liefert
-`provider=hf_pool` kontrolliert `HFPoolUnavailable` und ein explizit erlaubter
-Fallback kann uebernehmen. Echte HF-Chat-Completions laufen nur mit
-`TEEBOTUS_HF_POOL_LIVE=1` oder `TEEBOTUS_HF_POOL_EXECUTOR=live`; optional setzt
-`TEEBOTUS_HF_POOL_STATE_DB=/pfad/hf_pool_state.sqlite3` den persistenten
-Cooldown-/Usage-State.
 
 ### 11.2 Routing-Datei
 
@@ -1066,7 +968,7 @@ purposes:
 
   hard_reasoning:
     profile: openai_premium
-    fallback: gemini_flash_stateful
+    fallback: gemini_flash
 
   cheap_fast:
     profile: groq_fast
@@ -1077,7 +979,7 @@ purposes:
     fallback: null
 
   bibliothekar_answer:
-    profile: gemini_flash_stateful
+    profile: gemini_flash
     fallback: local_ollama
 
   structured_decision:
@@ -1545,10 +1447,6 @@ llm=Depressionsbot/telegram:1 provider=litellm model=ollama_chat/llama3.1:8b bas
 ollama=127.0.0.1:11434 status=reachable models=llama3.1:8b,qwen2.5:7b
 
 bibliothekar=Depressionsbot backend=haystack store=qdrant collection=teebotus_books status=reachable documents=12421 chunks=98334
-
-account_crypto=Depressionsbot status=ok mapping=present memory=present pepper=present keyring=ok
-account_memory=Depressionsbot/<account_id> status=ok
-account_identity=Depressionsbot status=ok identity_warnings=0 runtime_slots=signal:1,telegram:1 identities=signal:1,telegram:1
 
 signal_service=Depressionsbot/signal:1 target=127.0.0.1:8080 status=reachable
 matrix_homeserver=Depressionsbot/matrix:1 target=matrix.example:443 status=reachable
@@ -2045,14 +1943,13 @@ Das Repo ist weiter H234598/TeeBotus, private, Branch main; der installierte Rep
 Der Entry-Point ist aktuell gesund: TeeBotus/__main__.py delegiert bewusst an TeeBotus.bot.main, damit python3 -m TeeBotus und python3 -m TeeBotus --all stabil bleiben.
 TeeBotus.bot bleibt vorerst der stabile öffentliche Einstieg. Telegram liegt aktuell noch in TeeBotus.adapters.telegram_runtime und nutzt Long-Polling; das ist aber nur noch als Transport-Kompatibilität zu verstehen. Ziel ist, Telegram wie Signal und Matrix als additiven Runtime-Slot zu behandeln.
 
-Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Für Textantworten läuft der Zugriff inzwischen über `llm_client`/Runtime-LLM-Factory; `openai_client` bleibt als Legacy-Alias und Spezialclient für OpenAI-spezifische Funktionen erhalten.
+Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Sie hängt aber weiterhin direkt an openai_client; ein neutraler llm_client existiert im aktuellen Stand noch nicht.
 
 Der OpenAI-Client ist weiter ein Spezialclient, nicht nur ein simpler Chat-Aufruf: Responses API, Image Generation, Tool Calls, Speech und Transcription hängen dort zusammen.
-BotInstructions sind noch teilweise openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image und Transcription laufen weiter unter OpenAI-Namen; Text-LLM-Fehler-, Missing-Key- und Reset-Texte haben inzwischen neutrale `llm_*`-Felder mit OpenAI-Legacy-Bruecke.
-Die Runtime-Konfiguration trägt pro Account weiter `openai_api_key` als Legacy-Pfad, hat aber zusätzlich die neutralen `llm_*` Felder wie `llm_provider`, `llm_model`, `llm_base_url`, `llm_profile`, `llm_purpose` und Fallback-/Timeout-Optionen.
-Persistenter Text-LLM-State wird inzwischen als `LLM_State.json` geschrieben; vorhandenes `OpenAI_State.json` wird beim Lesen/Mergen migriert.
+Auch BotInstructions sind noch stark openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image, Transcription, Fehlertexte und Reset-Texte laufen unter OpenAI-Namen.
+Die Runtime-Konfiguration trägt pro Account ebenfalls noch openai_api_key, nicht llm_provider/llm_model.
 
-Wichtig: `pyproject.toml` nutzt setuptools, dynamische Version über `TeeBotus.__version__`, erzwingt aktuell `requires-python = ">=3.11"` und enthält die Plan2-Extras `dev`, `llm`, `rag`, `agents`, `tools` plus Scripts für `teebotus-bibliothekar`, `teebotus-proactive`, `teebotus-proactive-review`, `teebotus-proactive-systemd`, `teebotus-systemd` und `teebotus-qdrant-systemd`.
+Wichtig: pyproject.toml existiert bereits, aber ist minimal. Es nutzt setuptools, requires-python >=3.10, dynamische Version und bereits Scripts für teebotus-bibliothekar, teebotus-proactive, teebotus-proactive-review und teebotus-proactive-systemd.
 
 Vergleich der Pläne
 
@@ -2111,7 +2008,11 @@ Haystack ist nicht Phase 6 „neues Paket“, sondern Phase 6 „Backend unter b
 
 3. pyproject: Plan v2 überschreibt zu viel
 
-Plan v2 schlägt ein pyproject.toml mit Python >=3.11/3.12-Fokus und Extras vor. Der aktuelle Repo-Stand folgt dieser Entscheidung bewusst: `pyproject.toml`, `scripts/check_adapter_deps.py` und die Pyproject-Tests erzwingen `requires-python = ">=3.11"`.
+Plan v2 schlägt ein neues pyproject.toml mit Python >=3.11/3.12-Fokus und Extras vor. Das ist grundsätzlich gut, aber TeeBotus hat aktuell requires-python >=3.10.
+
+Ich würde nicht ohne Not auf >=3.11 erhöhen, außer eine neue Abhängigkeit erzwingt es. Besser:
+
+requires-python = ">=3.10"
 
 und Extras ergänzen:
 
@@ -2159,8 +2060,8 @@ Ich würde den Plan jetzt so umstellen:
 Phase 0 — Baseline
 - aktuellen main sichern
 - Tests laufen lassen
-- pyproject mit dynamischer Version und Plan2-Extras beibehalten
-- Python >=3.11 beibehalten, solange die gepinnten Plan2-Extras diese Grenze rechtfertigen
+- pyproject nur minimal um Extras erweitern
+- Python >=3.10 beibehalten
 
 Phase 1 — LLM-Interface
 - TeeBotus/llm/base.py
@@ -2211,7 +2112,11 @@ Was aus Plan v2 gestrichen oder geändert werden sollte
 
 requires-python = ">=3.11"
 
-beibehalten; eine Absenkung auf Python 3.10 waere inzwischen eine eigene Kompatibilitaetsentscheidung und muesste gegen alle gepinnten Plan2-Extras, CI und Adapter-Doctor geprueft werden.
+zu:
+
+requires-python = ">=3.10"
+
+solange TeeBotus nicht bewusst angehoben wird.
 
 Ändern:
 
@@ -2269,7 +2174,6 @@ Abdecken:
 - Account-Memory: JSON/SQL/PostgreSQL-Pfade, Lesen, Schreiben, Suche, Index-Rebuild, Migration.
 - Bibliothekar: lokaler Store, Haystack/Qdrant-Backend, Indexing, Query, Citation-Payload-Aufbau.
 - LLM-Router: Provider-Auswahl, Fallback-Entscheidung, strukturierte Decisions ohne echte Provider-Calls.
-- Gemini-Free-Tier: Cache-Refresh, lokale Budget-Reserve und Keyrotation ohne echte Provider-Calls.
 - Proactive-Agent: Planen, Due-Selection, Dispatch-Simulation, Safety-/Policy-Gates.
 - Messenger-Adapter: Telegram, Signal, Matrix Runtime-Checks ohne echte Netzsendung.
 - Transkription/YouTube: lokale Pipeline, Parser, Job-Queue, keine OpenAI-Fallbackkosten.
@@ -2283,7 +2187,6 @@ Benchmarkregeln:
 - Netzwerk/Provider nur hinter explizitem Override.
 - Fixtures muessen klein, versioniert und reproduzierbar sein.
 - Ausgabe als Markdown und JSON nach `/home/teladi/Downloads`.
-- Gemeinsame Benchmark-Invarianten, Quality-Gate und Rankinglogik liegen in `TeeBotus/benchmarks/core.py`; Suite-Aufbau in `TeeBotus/benchmarks/suite.py`; Reporting, Regression und Laufzeitkontext in `TeeBotus/benchmarks/reporting.py`; Adapter-Benchmarks in `TeeBotus/benchmarks/adapters.py`; Bibliothekar-/Retrieval-Benchmarks in `TeeBotus/benchmarks/bibliothekar.py`; HF-Pool-Benchmarks in `TeeBotus/benchmarks/hf_pool.py`; LangGraph-/Workflow-Benchmarks in `TeeBotus/benchmarks/langgraph_flows.py`; LLM-Router-/Gemini-Free-Tier-Benchmarks in `TeeBotus/benchmarks/llm_routing.py`; MCP-/Tool-Benchmarks in `TeeBotus/benchmarks/mcp.py`; Account-Memory-Benchmarks in `TeeBotus/benchmarks/memory.py`; Pydantic-AI-/Decision-Benchmarks in `TeeBotus/benchmarks/pydantic_ai.py`; Proactive-Agent-Benchmarks in `TeeBotus/benchmarks/proactive.py`; Qdrant-Benchmarks in `TeeBotus/benchmarks/qdrant.py`; Runtime-Health-/Fallback-Benchmarks in `TeeBotus/benchmarks/runtime_health.py`; Source-Harvester-/Quality-Benchmarks in `TeeBotus/benchmarks/source_quality.py`; YouTube-/Transkriptions-Benchmarks in `TeeBotus/benchmarks/youtube.py`; `scripts/run_benchmarks.py` bleibt der CLI-Orchestrator.
 - Jeder Benchmark nennt Hardware-/Python-/Dependency-Kontext.
 - Jeder Benchmark misst mindestens Laufzeit, Durchsatz, Fehlerzahl und relevante Payload-/Indexgroessen.
 - Benchmarks duerfen nicht nur Smoke-Tests sein; sie muessen Vergleichswerte liefern.

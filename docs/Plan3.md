@@ -15,8 +15,8 @@ Stand: 2026-06-19
 Quelle:
 
 - `/home/teladi/Downloads/Plan3.md` ist in `docs/Plan3.md` integriert.
-- SHA256: `86a7832047b1de63c50fb5776d7e98f3c54d277054cf518267e03be000fb8553`
-- Plan3 ist die fortgeschriebene Detailplanung fuer HF-Pool, Qdrant, Memory-Suche, Bibliothekar-Backends, Pydantic AI und Benchmarks.
+- Download-SHA256: `86a7832047b1de63c50fb5776d7e98f3c54d277054cf518267e03be000fb8553`
+- Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
 Umgesetzt:
 

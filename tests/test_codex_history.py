@@ -15,6 +15,7 @@ from TeeBotus.admin.codex_history import (
     dispatch_codex_history_outbox,
     import_codex_session_file,
     main as codex_history_main,
+    record_codex_history_reply,
     watch_codex_session_roots,
 )
 from TeeBotus.runtime.actions import SendAttachment
@@ -425,6 +426,74 @@ def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert persisted["status"] == "acknowledged"
     assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[-1]["message_ref"] == "telegram-msg-2"
+
+
+def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "reply-ack-demo", version="1.8.2")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Reply Ack", bullets=["Antworten markieren die Summary."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "telegram",
+            "chat_id": "42",
+            "message_ref": "101",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    result = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        account_id=admin_id,
+        reply_to_message_ref="101",
+        reply_message_ref="202",
+        reply_text="ok, angekommen",
+        now=datetime(2026, 6, 19, 13, tzinfo=timezone.utc),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "acknowledged"
+    assert result["item_id"] == item["id"]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "acknowledged"
+    assert persisted["delivery"]["delivered_at"] == "2026-06-19T13:00:00+00:00"
+    assert persisted["delivery"]["acknowledged_at"] == "2026-06-19T13:00:00+00:00"
+    assert [entry["status"] for entry in persisted["status_history"]][-2:] == ["delivered", "acknowledged"]
+    dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered", "acknowledged"]
+    assert dispatch_rows[-1]["message_ref"] == "101"
+    assert dispatch_rows[-1]["reply_message_ref"] == "202"
+    assert dispatch_rows[-1]["reply_text_preview"] == "ok, angekommen"
+
+
+def test_record_codex_history_reply_ignores_unmatched_message_ref(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "reply-miss-demo", version="1.8.2")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    item = append_codex_history_summary(store, repo_root=repo, title="Reply Miss", bullets=["Fremde Replys bleiben unberuehrt."])
+
+    result = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        reply_to_message_ref="999",
+        reply_message_ref="202",
+        reply_text="ok",
+    )
+
+    assert result == {"ok": False, "status": "not_found", "reason": "no_matching_dispatch"}
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "queued"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
 def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -> None:

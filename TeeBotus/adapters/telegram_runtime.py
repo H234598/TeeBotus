@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from TeeBotus import __version__
+from TeeBotus.admin.codex_history import record_codex_history_reply
 from TeeBotus.core.call_a_teladi import build_teladi_header
 from TeeBotus.core.status import (
     STATUS_COMMAND_ALIASES,
@@ -856,6 +857,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             )
         return True
     event = event.with_account(account_id)
+    _record_codex_history_telegram_reply(context, event, message)
     try:
         engine_result = context.engine.process_result(event)
     except (AccountStoreError, OSError, ValueError, AttributeError):
@@ -884,6 +886,42 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         instance_name=context.instance_name,
     )
     return bool(engine_result.handled or engine_result.actions)
+
+
+def _record_codex_history_telegram_reply(
+    context: TelegramRuntimeContext,
+    event: IncomingEvent,
+    message: dict[str, Any],
+) -> None:
+    reply_to_message_ref = _telegram_reply_message_ref(message)
+    if not reply_to_message_ref:
+        return
+    try:
+        record_codex_history_reply(
+            context.account_store,
+            instance_name=context.instance_name,
+            channel="telegram",
+            chat_id=event.chat_id,
+            account_id=event.account_id,
+            reply_to_message_ref=reply_to_message_ref,
+            reply_message_ref=event.message_ref,
+            reply_text=event.text,
+        )
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.exception(
+            "Telegram Codex-History reply tracking failed instance=%s chat_id=%s message_ref=%s reply_to=%s.",
+            context.instance_name,
+            event.chat_id,
+            event.message_ref,
+            reply_to_message_ref,
+        )
+
+
+def _telegram_reply_message_ref(message: dict[str, Any]) -> str:
+    reply = message.get("reply_to_message")
+    if not isinstance(reply, dict):
+        return ""
+    return str(reply.get("message_id") or "").strip()
 
 
 def _with_telegram_reply_text(event: IncomingEvent, message: dict[str, Any]) -> IncomingEvent:

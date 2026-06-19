@@ -13,14 +13,14 @@ Stand: 2026-06-19
 Quelle:
 
 - `/home/teladi/Downloads/Plan1.md` ist in `docs/Plan1.md` integriert.
-- SHA256: `c96dec8df17fc404731d9952e16b4994a9e13de1b1db7712067786fd7d3836b6`
-- Plan1 bleibt die konservative Basislinie fuer Architektur, Invarianten, Security und Migrationsreihenfolge.
+- Download-SHA256: `c96dec8df17fc404731d9952e16b4994a9e13de1b1db7712067786fd7d3836b6`
+- Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
 Umgesetzt:
 
 - Der Plan liegt versioniert unter `docs/` und bleibt als historische Baseline erhalten.
-- Die harten Start-, Runtime-, Account-Memory- und OpenAIClient-Invarianten sind weiterhin die Kompatibilitaetsgrundlage.
-- Die LLM-, Bibliothekar- und Agenten-Themen aus Plan1 wurden in Plan2 und Plan3 detaillierter fortgeschrieben.
+- Die harten Start-, Runtime-, Account-Memory- und OpenAIClient-Invarianten bleiben die Kompatibilitaetsgrundlage.
+- LLM-, Bibliothekar- und Agenten-Themen aus Plan1 werden in Plan2 und Plan3 detaillierter fortgeschrieben.
 
 Offen:
 

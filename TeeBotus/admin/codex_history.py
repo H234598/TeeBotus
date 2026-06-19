@@ -319,6 +319,93 @@ def acknowledge_codex_history_item(
     }
 
 
+def record_codex_history_reply(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    channel: str,
+    chat_id: str,
+    reply_to_message_ref: str,
+    account_id: str = "",
+    reply_message_ref: str = "",
+    reply_text: str = "",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Mark a dispatched history item as seen when a user replies to it."""
+
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
+    normalized_reply_to = str(reply_to_message_ref or "").strip()
+    if not normalized_channel or not normalized_chat_id or not normalized_reply_to:
+        return {"ok": False, "status": "not_found", "reason": "missing_reply_target"}
+    match = _find_codex_history_dispatch_for_message(
+        store,
+        instance_name=instance_name,
+        channel=normalized_channel,
+        chat_id=normalized_chat_id,
+        message_ref=normalized_reply_to,
+        account_id=account_id,
+    )
+    if match is None:
+        return {"ok": False, "status": "not_found", "reason": "no_matching_dispatch"}
+    item_id = str(match.get("codex_history_item_id") or "").strip()
+    item = _find_codex_history_item_by_id(store, item_id)
+    if item is None:
+        return {"ok": False, "status": "not_found", "reason": "missing_history_item", "item_id": item_id}
+    timestamp = _iso_timestamp(now)
+    route = {"channel": normalized_channel, "chat_id": normalized_chat_id}
+    matched_account_id = str(match.get("account_id") or account_id or "").strip()
+    delivered = _record_codex_history_dispatch_result(
+        store,
+        item,
+        matched_account_id,
+        status="delivered",
+        reason=f"{normalized_channel}_reply_observed",
+        now=timestamp,
+        instance_name=instance_name,
+        route=route,
+        message_ref=normalized_reply_to,
+        reply_message_ref=reply_message_ref,
+        reply_text_preview=reply_text,
+    )
+    _update_codex_history_item_status(
+        store,
+        item_id,
+        "delivered",
+        reason=f"{normalized_channel}_reply_observed",
+        now=timestamp,
+        dispatch_results=[delivered],
+    )
+    acknowledged = _record_codex_history_dispatch_result(
+        store,
+        item,
+        matched_account_id,
+        status="acknowledged",
+        reason=f"{normalized_channel}_reply_acknowledged",
+        now=timestamp,
+        instance_name=instance_name,
+        route=route,
+        message_ref=normalized_reply_to,
+        reply_message_ref=reply_message_ref,
+        reply_text_preview=reply_text,
+    )
+    _update_codex_history_item_status(
+        store,
+        item_id,
+        "acknowledged",
+        reason=f"{normalized_channel}_reply_acknowledged",
+        now=timestamp,
+        dispatch_results=[acknowledged],
+    )
+    return {
+        "ok": True,
+        "status": "acknowledged",
+        "item_id": item_id,
+        "delivered_result": delivered,
+        "acknowledged_result": acknowledged,
+    }
+
+
 def import_codex_session_file(store: AccountStore, session_file: str | Path) -> dict[str, Any]:
     path = _safe_repo_root(Path(session_file), operation="session file")
     parsed = _parse_codex_session_file(path)
@@ -693,6 +780,8 @@ def _record_codex_history_dispatch_result(
     instance_name: str,
     route: Mapping[str, Any] | None = None,
     message_ref: str = "",
+    reply_message_ref: str = "",
+    reply_text_preview: str = "",
 ) -> dict[str, Any]:
     route = route if isinstance(route, Mapping) else {}
     version = item.get("version", {})
@@ -713,6 +802,12 @@ def _record_codex_history_dispatch_result(
         "created_at": now,
         "updated_at": now,
     }
+    normalized_reply_ref = str(reply_message_ref or "").strip()
+    if normalized_reply_ref:
+        row["reply_message_ref"] = normalized_reply_ref
+    normalized_reply_preview = redact_codex_history_text(reply_text_preview).strip()
+    if normalized_reply_preview:
+        row["reply_text_preview"] = normalized_reply_preview[:240]
     store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
     return row
 
@@ -751,7 +846,14 @@ def _update_codex_history_item_status(
             if normalized_status == "accepted":
                 delivery.setdefault("sent_at", now)
                 delivery["accepted_at"] = now
+            if normalized_status == "delivered":
+                delivery.setdefault("sent_at", now)
+                delivery.setdefault("accepted_at", now)
+                delivery["delivered_at"] = now
             if normalized_status == "acknowledged":
+                delivery.setdefault("sent_at", now)
+                delivery.setdefault("accepted_at", now)
+                delivery.setdefault("delivered_at", now)
                 delivery["acknowledged_at"] = now
             if normalized_reason:
                 item["last_reason"] = normalized_reason
@@ -768,6 +870,10 @@ def _update_codex_history_item_status(
 
 def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
     statuses = {str(row.get("status") or "").strip().casefold() for row in rows if isinstance(row, Mapping)}
+    if "acknowledged" in statuses:
+        return "acknowledged"
+    if "delivered" in statuses:
+        return "delivered"
     if "accepted" in statuses:
         return "accepted"
     if "failed" in statuses:
@@ -781,7 +887,7 @@ def _overall_dispatch_reason(rows: Sequence[Mapping[str, Any]]) -> str:
     for row in rows:
         if not isinstance(row, Mapping):
             continue
-        if str(row.get("status") or "").strip().casefold() in {"failed", "skipped", "accepted"}:
+        if str(row.get("status") or "").strip().casefold() in {"failed", "skipped", "accepted", "delivered", "acknowledged"}:
             return str(row.get("reason") or "").strip()
     return ""
 
@@ -887,6 +993,42 @@ def _find_codex_history_item_by_id(store: AccountStore, item_id: str) -> dict[st
             continue
         if str(item.get("id") or "").strip() == str(item_id or "").strip():
             return dict(item)
+    return None
+
+
+def _find_codex_history_dispatch_for_message(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    channel: str,
+    chat_id: str,
+    message_ref: str,
+    account_id: str = "",
+) -> dict[str, Any] | None:
+    normalized_instance = str(instance_name or "").strip()
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
+    normalized_message_ref = str(message_ref or "").strip()
+    normalized_account_id = str(account_id or "").strip().casefold()
+    if not normalized_channel or not normalized_chat_id or not normalized_message_ref:
+        return None
+    for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
+        if not isinstance(row, Mapping):
+            continue
+        if normalized_instance and str(row.get("instance") or "").strip() != normalized_instance:
+            continue
+        if str(row.get("channel") or "").strip().casefold() != normalized_channel:
+            continue
+        if str(row.get("chat_id") or "").strip() != normalized_chat_id:
+            continue
+        if str(row.get("message_ref") or "").strip() != normalized_message_ref:
+            continue
+        if normalized_account_id and str(row.get("account_id") or "").strip().casefold() != normalized_account_id:
+            continue
+        item_id = str(row.get("codex_history_item_id") or "").strip()
+        if not item_id:
+            continue
+        return dict(row)
     return None
 
 
