@@ -1158,6 +1158,21 @@ def test_version_notification_state_normalization_drops_empty_version_states() -
     assert state == {"versions": {}}
 
 
+def test_version_notification_state_normalization_drops_empty_delivery_containers() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": [],
+                    "failed_identities": {},
+                },
+            }
+        }
+    )
+
+    assert state == {"versions": {}}
+
+
 def test_version_notification_plaintext_writer_normalizes_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
@@ -3143,10 +3158,9 @@ def test_notify_recent_telegram_users_retries_transient_delivery_error(tmp_path:
         send_message=send_message,
         now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
     )
-    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
 
     assert attempts == [111, 111]
-    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+    assert not (tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").exists()
 
 
 def test_notify_recent_telegram_users_retries_when_failed_route_changes(tmp_path: Path) -> None:
