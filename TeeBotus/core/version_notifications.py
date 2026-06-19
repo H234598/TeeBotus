@@ -58,11 +58,6 @@ def notify_recent_telegram_users_for_version(
         if on_skip is not None:
             on_skip("version is empty")
         return 0
-    resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
-    if repo_root is not None and not github_has_version(repo_root, normalized_version):
-        if on_skip is not None:
-            on_skip(f"GitHub tag v{normalized_version} not found on remote")
-        return 0
     version_state = _version_state(state, normalized_version)
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
@@ -70,6 +65,8 @@ def notify_recent_telegram_users_for_version(
     historical_sent_identities = _historical_sent_identity_set(state, normalized_version, resolved_now)
     historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities, resolved_now)
     version_state["failed_identities"] = failed_identities
+    resolved_repo_url = repo_url
+    github_version_checked = False
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
         if _sent_delivery_matches_recipient(sent_identities, recipient, identities) or _sent_delivery_matches_recipient(
@@ -95,6 +92,14 @@ def notify_recent_telegram_users_for_version(
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
                 _write_state_incrementally(account_store, state_path, state)
             continue
+        if repo_root is not None and not github_version_checked:
+            if not github_has_version(repo_root, normalized_version):
+                if on_skip is not None:
+                    on_skip(f"GitHub tag v{normalized_version} not found on remote")
+                return sent_count
+            github_version_checked = True
+        if resolved_repo_url is None:
+            resolved_repo_url = github_repo_url(repo_root or Path.cwd())
         message = build_version_notification_text(
             version=normalized_version,
             repo_url=resolved_repo_url,
