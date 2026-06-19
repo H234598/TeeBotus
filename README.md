@@ -168,6 +168,14 @@ python3 scripts/check_adapter_deps.py
 
 Der Dependency-Doctor meldet zusaetzlich `python runtime choice=...`. Python 3.14 bleibt damit pruefbar, wird aber als `advisory` markiert, solange LiteLLM dort nur mit aelteren Pins laeuft. Fuer eine saubere LLM-/Tool-Resolver-Schiene ist Python 3.13 aktuell die empfohlene TeeBotus-Runtime.
 
+Empfohlene lokale 3.13-Runtime ohne Aenderung des Systemdefaults:
+
+```bash
+sudo dnf install -y python3.13 python3.13-devel
+python3 scripts/setup_python313_runtime.py
+python3 -m TeeBotus.systemd --python .venv-py313/bin/python --print
+```
+
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
 ```bash
