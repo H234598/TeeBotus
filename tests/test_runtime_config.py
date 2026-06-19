@@ -337,6 +337,23 @@ def test_openai_key_resolution_accepts_proactive_role_services_key():
     assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-plan-services"
 
 
+def test_openai_key_resolution_accepts_normalized_proactive_role_services_key():
+    env = {
+        "BOT_DER_WAHRHEIT_PROACTIVE_PLAN_SERVICES": "key-plan-services",
+    }
+
+    assert resolve_openai_key("Bot-der-Wahrheit", "proactive_plan", 1, env) == "key-plan-services"
+
+
+def test_openai_key_resolution_prefers_raw_proactive_role_services_key_before_token_alias():
+    env = {
+        "Bot der Wahrheit_PROACTIVE_PLAN_SERVICES": "key-raw-services",
+        "BOT_DER_WAHRHEIT_PROACTIVE_PLAN_SERVICES": "key-token-services",
+    }
+
+    assert resolve_openai_key("Bot der Wahrheit", "proactive_plan", 1, env) == "key-raw-services"
+
+
 def test_openai_key_resolution_proactive_role_channels_do_not_fall_back_to_user_keys():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_1": "sk-instance-slot",

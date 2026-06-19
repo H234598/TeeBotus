@@ -315,10 +315,20 @@ def _resolve_background_openai_key(
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
     if channel_token in PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES:
-        return _first_nonempty_env_value(source, f"{str(instance_name).strip()}_{PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES[channel_token]}")
+        return _first_nonempty_env_value(
+            source,
+            *_proactive_role_services_env_keys(instance_name, instance_token, channel_token),
+        )
     if instance_token != BACKGROUND_SERVICES_INSTANCE_TOKEN:
         return ""
     return _first_nonempty_env_value(source, BACKGROUND_SERVICES_ENV_KEY)
+
+
+def _proactive_role_services_env_keys(instance_name: str, instance_token: str, channel_token: str) -> tuple[str, ...]:
+    suffix = PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES[channel_token]
+    raw_key = f"{str(instance_name).strip()}_{suffix}"
+    token_key = f"{instance_token}_{suffix}"
+    return tuple(dict.fromkeys((raw_key, token_key)))
 
 
 def resolve_llm_setting(
