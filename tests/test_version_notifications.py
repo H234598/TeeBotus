@@ -1968,6 +1968,16 @@ def test_github_repo_url_strips_ssh_remote_query_and_fragment(tmp_path: Path, mo
     assert leaked_token not in repo_url
 
 
+def test_github_repo_url_normalizes_ssh_remote_with_port(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "ssh://git@github.com:22/example/project.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    assert github_repo_url(tmp_path) == "https://github.com/example/project"
+
+
 def test_github_repo_url_uses_default_for_local_remote_paths(tmp_path: Path, monkeypatch) -> None:
     class Result:
         returncode = 0
