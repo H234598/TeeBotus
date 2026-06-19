@@ -628,13 +628,17 @@ def _signal_event_addresses_command(command: TeeBotusSignalCommand, event: Any) 
     names = _signal_command_address_names(command, event)
     if _command_name(str(getattr(event, "text", "") or "")):
         return not _command_targets_other_bot(str(getattr(event, "text", "") or ""), names)
-    if getattr(event, "chat_type", "") == "group":
+    if _normalize_event_chat_type(event) == "group":
         try:
             if not command.engine.should_ignore_without_account(event):
                 return True
         except (AccountStoreError, OSError, ValueError, AttributeError):
             pass
     return _text_addresses_bot(str(getattr(event, "text", "") or ""), names)
+
+
+def _normalize_event_chat_type(event: Any) -> str:
+    return str(getattr(event, "chat_type", "") or "").strip().casefold()
 
 
 def _signal_command_address_names(command: TeeBotusSignalCommand, event: Any) -> frozenset[str]:
