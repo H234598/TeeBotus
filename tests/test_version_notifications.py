@@ -1001,6 +1001,18 @@ def test_version_notification_state_normalization_drops_unknown_version_state_fi
     }
 
 
+def test_version_notification_state_normalization_drops_unknown_top_level_fields() -> None:
+    state = _normalize_state(
+        {
+            "versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}},
+            "debug": {"secret": "raw"},
+            "schema_version": 99,
+        }
+    )
+
+    assert state == {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}}
+
+
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
     state = _normalize_state(
         {
@@ -1718,7 +1730,11 @@ def test_notify_recent_telegram_users_cleans_invalid_sqlite_state_before_github_
     store.write_instance_json_state(
         "Version_Notifications.json",
         "version_notifications",
-        {"versions": {"": {"sent_identities": ["telegram:user:111"]}, "v": {"failed_identities": {}}}},
+        {
+            "versions": {"": {"sent_identities": ["telegram:user:111"]}, "v": {"failed_identities": {}}},
+            "debug": {"secret": "raw"},
+            "schema_version": 99,
+        },
     )
     sent: list[int] = []
 
