@@ -69,6 +69,8 @@ def is_program_history_request(text: str) -> bool:
         "programhistorie",
         "programm historie",
         "program historie",
+        "programm history",
+        "program history",
         "programmaenderungen",
         "programaenderungen",
         "programmanderungen",

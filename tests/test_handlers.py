@@ -77,6 +77,8 @@ class HandlerTests(unittest.TestCase):
         self.assertTrue(is_program_history_request("Welche Programm-Änderung gab es?"))
         self.assertTrue(is_program_history_request("Zeig mir die Programhistorie"))
         self.assertTrue(is_program_history_request("Zeig mir die Programm/Historie"))
+        self.assertTrue(is_program_history_request("Zeig mir die Programm-History"))
+        self.assertTrue(is_program_history_request("Zeig mir die Program History"))
         self.assertTrue(is_program_history_request("Was ist mit neuen Features?"))
         self.assertTrue(is_program_history_request("Was ist mit neuem Feature?"))
         self.assertTrue(is_program_history_request("Gibt es eine neue Funktion?"))
