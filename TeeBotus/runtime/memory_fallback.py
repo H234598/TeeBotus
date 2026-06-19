@@ -62,7 +62,16 @@ class WarningFallbackAccountMemoryBackend:
             }
             return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
 
-        return self._read("read_entries", account_id, callback, self._sync_entries_from_fallback)
+        def full_reader(backend: Any) -> list[dict[str, Any]]:
+            return [dict(row) for row in backend.read_entries(account_id)]
+
+        return self._read(
+            "read_entries",
+            account_id,
+            callback,
+            self._sync_entries_from_fallback,
+            read_full_for_repair=full_reader,
+        )
 
     def write_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         self._write(
@@ -145,15 +154,34 @@ class WarningFallbackAccountMemoryBackend:
         self.last_collection_skipped = 0
         self.last_fallback_sync_error = ""
 
-    def _read(self, operation: str, account_id: str, callback: Callable[[Any], Any], sync_callback: Callable[[str], Any]) -> Any:
+    def _read(
+        self,
+        operation: str,
+        account_id: str,
+        callback: Callable[[Any], Any],
+        sync_callback: Callable[[str], Any],
+        *,
+        read_full_for_repair: Callable[[Any], Any] | None = None,
+    ) -> Any:
         try:
             if self._account_is_dirty(operation, account_id):
                 sync_callback(account_id)
             result = callback(self.primary)
             self._copy_diagnostics(self.primary)
             if self._read_diagnostic_failed(operation):
-                return self._recover_read_from_fallback(operation, account_id, callback)
-            self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
+                fallback_result = callback(self.fallback)
+                if read_full_for_repair is not None:
+                    repair_data = read_full_for_repair(self.fallback)
+                else:
+                    repair_data = fallback_result
+                return self._recover_read_from_fallback(operation, account_id, fallback_result, repair_data)
+            if read_full_for_repair is not None:
+                stale_key = self._operation_stale_key(operation, account_id)
+                if stale_key in self._unrecoverable_fallback_set(operation):
+                    repair_data = read_full_for_repair(self.primary)
+                    self._repair_unrecoverable_fallback_from_primary(operation, account_id, repair_data)
+            else:
+                self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
             self._clear_recovered_if_clean(operation)
             return result
         except Exception as exc:  # noqa: BLE001
@@ -166,7 +194,12 @@ class WarningFallbackAccountMemoryBackend:
                 self._fallback_stale_set(operation).add(stale_key)
                 self._unrecoverable_fallback_set(operation).add(stale_key)
                 self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
-            return result
+                return result
+            if read_full_for_repair is not None:
+                recover_data = read_full_for_repair(self.fallback)
+            else:
+                recover_data = result
+            return self._recover_read_from_fallback(operation, account_id, result, recover_data)
 
     def _write(
         self,
@@ -240,7 +273,13 @@ class WarningFallbackAccountMemoryBackend:
         self.primary.write_collection(account_id, collection, rows)
         self._dirty_collections.discard(key)
 
-    def _recover_read_from_fallback(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> Any:
+    def _recover_read_from_fallback(
+        self,
+        operation: str,
+        account_id: str,
+        result: Any,
+        repair_data: Any,
+    ) -> Any:
         self._fallback_active = True
         self._warn(operation, RuntimeError(self._diagnostic_error_text(operation)))
         primary_entry_read_error = self.last_entry_read_error
@@ -248,7 +287,6 @@ class WarningFallbackAccountMemoryBackend:
         primary_index_read_error = self.last_index_read_error
         primary_collection_read_error = self.last_collection_read_error
         primary_collection_skipped = self.last_collection_skipped
-        result = callback(self.fallback)
         self._copy_diagnostics(self.fallback)
         if self._fallback_result_is_empty_for_failed_read(
             operation,
@@ -270,13 +308,13 @@ class WarningFallbackAccountMemoryBackend:
         if not self._read_diagnostic_failed(operation):
             try:
                 if operation == "read_entries":
-                    self.primary.write_entries(account_id, result)
+                    self.primary.write_entries(account_id, repair_data)
                     self._dirty_entries.discard(account_id)
                     self._stale_fallback_entries.discard(account_id)
                     self._fallback_sync_failed_entries.discard(account_id)
                     self._unrecoverable_fallback_entries.discard(account_id)
                 elif operation == "read_index":
-                    self.primary.write_index(account_id, result)
+                    self.primary.write_index(account_id, repair_data)
                     self._dirty_indexes.discard(account_id)
                     self._stale_fallback_indexes.discard(account_id)
                     self._fallback_sync_failed_indexes.discard(account_id)
@@ -284,7 +322,7 @@ class WarningFallbackAccountMemoryBackend:
                 elif operation.startswith("read_collection:"):
                     collection = self._operation_collection(operation)
                     key = (account_id, collection)
-                    self.primary.write_collection(account_id, collection, result)
+                    self.primary.write_collection(account_id, collection, repair_data)
                     self._dirty_collections.discard(key)
                     self._stale_fallback_collections.discard(key)
                     self._fallback_sync_failed_collections.discard(key)
