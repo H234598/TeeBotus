@@ -88,6 +88,14 @@ def test_runtime_status_problem_lines_extracts_warnings_and_errors() -> None:
     )
 
 
+def test_runtime_status_problem_lines_redacts_secrets() -> None:
+    output = "llm_route=hard_reasoning status=broken error=token sk-testsecret123456 leaked"
+
+    assert runtime_status_problem_lines(output) == (
+        "llm_route=hard_reasoning status=broken error=token sk-<redacted> leaked",
+    )
+
+
 def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

@@ -127,7 +127,7 @@ def runtime_status_problem_lines(status_output: str, *, limit: int = 40) -> tupl
             or " route_error=" in padded
             or _RUNTIME_STATUS_PROBLEM_RE.search(line)
         ):
-            problems.append(line)
+            problems.append(_redact_runtime_status_line(line))
             if len(problems) >= limit:
                 break
     return tuple(problems)
@@ -295,3 +295,11 @@ def _status_token(value: object) -> str:
     if not text:
         return "<none>"
     return re.sub(r"\s+", "_", text.replace("\n", "_"))
+
+
+def _redact_runtime_status_line(line: str) -> str:
+    try:
+        from TeeBotus.core.status import redact_status_text
+    except Exception:  # pragma: no cover - fallback for import-time diagnostics.
+        return str(line or "").replace("\r", " ").replace("\n", " ").strip()
+    return redact_status_text(line)
