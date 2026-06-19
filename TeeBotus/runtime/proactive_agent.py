@@ -1151,6 +1151,19 @@ async def dispatch_due_proactive_outbox_items(
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
             continue
         route = decision.route or _item_route(item)
+        if not isinstance(route, Mapping):
+            route_channel = _item_channel(item)
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="failed",
+                reason="invalid_route",
+                now=resolved_now,
+                expected_status="queued",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_route", route_channel))
+            continue
         channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
         if route.get("chat_type") != "private" or not channel or not chat_id:
