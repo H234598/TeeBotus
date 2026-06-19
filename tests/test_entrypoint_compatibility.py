@@ -2485,6 +2485,35 @@ def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch, tm
     assert [call[0] for call in calls] == ["telegram"]
 
 
+def test_default_auto_channels_report_missing_telegram_before_preflight(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_secret_health_lines",
+        lambda *, instance_name, project_root: [
+            f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
+
+    assert bot.main([]) == 2
+
+    captured = capsys.readouterr()
+    assert "Telegram ist angefordert" in captured.err
+    assert "account storage preflight failed" not in captured.err
+    assert calls == []
+
+
 def test_default_auto_channels_run_signal_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
@@ -2505,6 +2534,39 @@ def test_default_auto_channels_run_signal_blocking_when_telegram_is_unconfigured
     assert [call[0] for call in calls] == ["signal"]
     assert calls[0][1].channels == ("signal",)
     assert tuple(account.channel for instance in calls[0][1].instances for account in instance.accounts) == ("signal",)
+
+
+def test_default_auto_channels_run_signal_preflight_on_narrowed_config(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    refresh_calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMO", raising=False)
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
+    monkeypatch.setattr(
+        "TeeBotus.core.status.account_secret_health_lines",
+        lambda *, instance_name, project_root: [
+            f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(("signal", config)) or 0)
+
+    assert bot.main([]) == 2
+
+    captured = capsys.readouterr()
+    assert "TeeBotus account storage preflight failed" in captured.err
+    assert "Diagnose: python3 -m TeeBotus --runtime-status --channels signal" in captured.err
+    assert "--channels telegram,signal,matrix" not in captured.err
+    assert calls == []
+    assert refresh_calls == []
 
 
 def test_default_auto_channels_run_matrix_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:

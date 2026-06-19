@@ -1974,13 +1974,13 @@ def _main_impl(argv: list[str] | None = None) -> int:
         for message in missing_explicit_channels:
             print(message, file=sys.stderr)
         return 2
-    if not _run_account_storage_preflight(config):
-        return 2
     if "telegram" in config.channels and not _runtime_has_telegram_accounts(config):
         configured_non_telegram = _configured_non_telegram_channels(config)
         if len(configured_non_telegram) == 1 and not _runtime_channels_explicit(config):
             blocking_config = _runtime_config_for_channels(config, configured_non_telegram)
-            _start_gemini_free_tier_limit_refresh(config)
+            if not _run_account_storage_preflight(blocking_config):
+                return 2
+            _start_gemini_free_tier_limit_refresh(blocking_config)
             if configured_non_telegram[0] == "matrix":
                 return _run_matrix_runtime(blocking_config)
             return _run_signal_runtime(blocking_config)
@@ -1988,6 +1988,8 @@ def _main_impl(argv: list[str] | None = None) -> int:
             print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)
             return 2
         print("Telegram ist angefordert, aber kein TELEGRAM_BOT_TOKEN_<INSTANCE> ist konfiguriert.", file=sys.stderr)
+        return 2
+    if not _run_account_storage_preflight(config):
         return 2
     if _channel_requested_without_telegram(config, "matrix") and "signal" not in config.channels:
         _start_gemini_free_tier_limit_refresh(config)
