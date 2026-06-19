@@ -873,6 +873,39 @@ def test_read_llm_state_compares_timezone_aware_updated_at_by_instant(tmp_path):
     assert store.read_llm_state(account_id)["previous_response_id"] == "resp-target"
 
 
+def test_read_llm_state_removes_newer_legacy_openai_state_after_plaintext_migration(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_llm_state(account_id, {"previous_response_id": "resp-target", "updated_at": "2026-06-01T00:00:00+00:00"})
+    openai_path = store.account_dir(account_id) / OPENAI_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        openai_path,
+        {"previous_response_id": "resp-legacy", "updated_at": "2026-06-02T00:00:00+00:00"},
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-legacy"
+    assert not openai_path.exists()
+    assert store.account_memory_vault.read_json(store.account_dir(account_id) / LLM_STATE_FILENAME, {})["previous_response_id"] == "resp-legacy"
+
+
+def test_read_llm_state_removes_older_legacy_openai_state_after_plaintext_migration(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_llm_state(account_id, {"previous_response_id": "resp-target", "updated_at": "2026-06-02T00:00:00+00:00"})
+    openai_path = store.account_dir(account_id) / OPENAI_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        openai_path,
+        {"previous_response_id": "resp-legacy", "updated_at": "2026-06-01T00:00:00+00:00"},
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-target"
+    assert not openai_path.exists()
+
+
 def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

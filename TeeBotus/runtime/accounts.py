@@ -2425,6 +2425,9 @@ class AccountStore:
         selected = _choose_newer_state(legacy_state, llm_state)
         if selected and selected != llm_state:
             self.account_memory_vault.write_json(llm_path, selected)
+            llm_state = selected
+        if legacy_path.exists() and selected == llm_state:
+            self._unlink_migrated_account_file(legacy_path)
         return selected
 
     def write_llm_state(self, account_id: str, data: dict[str, Any]) -> None:
