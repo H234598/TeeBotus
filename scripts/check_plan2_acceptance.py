@@ -2223,15 +2223,20 @@ def _systemd_unit_errors(label: str, text: str) -> list[str]:
         return ["systemd unit output is empty"]
     if "[Unit]" not in text or "[Service]" not in text or "[Install]" not in text:
         errors.append("systemd unit lacks required sections")
+    lines = [line.strip() for line in text.splitlines()]
     if label == "qdrant-systemd-print":
         required = {
-            "ExecStartPre=podman volume create teebotus-qdrant": "Qdrant volume preflight missing",
             "-p 127.0.0.1:6333:6333": "Qdrant must bind only to 127.0.0.1:6333",
             "-v teebotus-qdrant:/qdrant/storage": "Qdrant storage volume missing",
         }
         for needle, message in required.items():
             if needle not in text:
                 errors.append(message)
+        preflight_lines = [line for line in lines if line.startswith("ExecStartPre=")]
+        if not any("podman volume exists teebotus-qdrant" in line for line in preflight_lines) or not any(
+            "podman volume create teebotus-qdrant" in line for line in preflight_lines
+        ):
+            errors.append("Qdrant volume preflight missing")
         if "qdrant/qdrant:latest" in text or re.search(r"\bqdrant/qdrant(?:\s|$)", text):
             errors.append("Qdrant image must be pinned and must not use latest")
         if "-p 0.0.0.0:" in text or "-p [::]:" in text:
@@ -2244,11 +2249,13 @@ def _systemd_unit_errors(label: str, text: str) -> list[str]:
             "NoNewPrivileges=true": "TeeBotus NoNewPrivileges hardening missing",
             "PrivateTmp=true": "TeeBotus PrivateTmp hardening missing",
             "ExecStart=": "TeeBotus ExecStart missing",
-            "python3 -m TeeBotus --all --channels telegram,signal,matrix": "TeeBotus ExecStart must run the multi-channel bot",
         }
         for needle, message in required.items():
             if needle not in text:
                 errors.append(message)
+        execstart_lines = [line for line in lines if line.startswith("ExecStart=")]
+        if not any("-m TeeBotus --all --channels telegram,signal,matrix" in line for line in execstart_lines):
+            errors.append("TeeBotus ExecStart must run the multi-channel bot")
     return errors
 
 

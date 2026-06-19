@@ -2864,8 +2864,36 @@ def test_systemd_unit_validation_flags_public_or_unchecked_units() -> None:
 
     assert any("127.0.0.1" in error for error in qdrant_errors)
     assert any("pinned" in error for error in qdrant_errors)
+    assert any("volume preflight" in error for error in qdrant_errors)
     assert any("permission check missing" in error for error in teebotus_errors)
     assert any("multi-channel" in error for error in teebotus_errors)
+
+
+def test_systemd_unit_validation_accepts_current_rendered_units(tmp_path: Path) -> None:
+    from TeeBotus.qdrant_systemd import render_qdrant_systemd_unit
+    from TeeBotus.systemd import render_teebotus_systemd_unit
+
+    assert check_plan2_acceptance._systemd_unit_errors(
+        "qdrant-systemd-print",
+        render_qdrant_systemd_unit().service_text,
+    ) == []
+    assert check_plan2_acceptance._systemd_unit_errors(
+        "teebotus-systemd-print",
+        render_teebotus_systemd_unit(repo_root=tmp_path).service_text,
+    ) == []
+
+
+def test_systemd_unit_validation_accepts_teebotus_venv_python(tmp_path: Path) -> None:
+    from TeeBotus.systemd import render_teebotus_systemd_unit
+
+    venv_python = tmp_path / ".venv" / "bin" / "python"
+    venv_python.parent.mkdir(parents=True)
+    venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path)
+    errors = check_plan2_acceptance._systemd_unit_errors("teebotus-systemd-print", unit.service_text)
+
+    assert errors == []
 
 
 def test_benchmark_artifact_validation_requires_plan2_core_categories() -> None:
