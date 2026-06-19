@@ -49,10 +49,11 @@ SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
 def resolve_admin_account_group(*, instance_name: str = "", env: Mapping[str, str] | None = None) -> AdminAccountGroup:
     source = os.environ if env is None else env
     env_names = _admin_account_env_names(instance_name)
-    configured_values = [(name, source[name]) for name in env_names if name in source]
-    if configured_values:
-        ids, invalid = _parse_admin_account_ids(value for _name, value in configured_values)
-        return AdminAccountGroup(account_ids=ids, invalid_ids=invalid, source="+".join(name for name, _value in configured_values))
+    for env_name in env_names:
+        if env_name not in source:
+            continue
+        ids, invalid = _parse_admin_account_ids((source[env_name],))
+        return AdminAccountGroup(account_ids=ids, invalid_ids=invalid, source=env_name)
     return AdminAccountGroup(account_ids=DEFAULT_ADMIN_ACCOUNT_IDS, source="default")
 
 
@@ -226,7 +227,7 @@ def _admin_account_env_names(instance_name: str) -> tuple[str, ...]:
     instance_token = _env_instance_token(instance_name)
     if not instance_token:
         return (ADMIN_ACCOUNT_IDS_ENV,)
-    return (ADMIN_ACCOUNT_IDS_ENV, f"{ADMIN_ACCOUNT_IDS_INSTANCE_ENV_PREFIX}{instance_token}")
+    return (f"{ADMIN_ACCOUNT_IDS_INSTANCE_ENV_PREFIX}{instance_token}", ADMIN_ACCOUNT_IDS_ENV)
 
 
 def _parse_admin_account_ids(values: Iterable[str]) -> tuple[tuple[str, ...], tuple[str, ...]]:

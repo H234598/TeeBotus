@@ -40,6 +40,20 @@ def test_admin_group_env_parses_ids_deduplicates_and_reports_invalid() -> None:
     assert group.source == ADMIN_ACCOUNT_IDS_ENV
 
 
+def test_admin_group_instance_env_overrides_global_env() -> None:
+    instance_env = "TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT"
+    group = resolve_admin_account_group(
+        instance_name="Depressionsbot",
+        env={
+            ADMIN_ACCOUNT_IDS_ENV: DEFAULT_ADMIN_ACCOUNT_IDS[0],
+            instance_env: DEFAULT_ADMIN_ACCOUNT_IDS[1],
+        },
+    )
+
+    assert group.account_ids == (DEFAULT_ADMIN_ACCOUNT_IDS[1],)
+    assert group.source == instance_env
+
+
 def test_admin_group_uses_process_environment_when_env_is_omitted(monkeypatch) -> None:
     monkeypatch.setenv(ADMIN_ACCOUNT_IDS_ENV, DEFAULT_ADMIN_ACCOUNT_IDS[0])
 
