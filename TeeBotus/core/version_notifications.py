@@ -152,10 +152,11 @@ def recent_telegram_recipients(
 
 
 def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REPO_URL, memory_text: str = "") -> str:
+    safe_repo_url = _normalize_github_url(repo_url) or DEFAULT_REPO_URL
     return "\n".join(
         [
             f"TeeBotus wurde auf Version {version} aktualisiert.",
-            f"Repo: {repo_url}",
+            f"Repo: {safe_repo_url}",
             "Kleiner Hinweis aus dem Maschinenraum: Es wurde geschraubt, sortiert und einmal sehr ernst auf ein Logfile geschaut.",
             _memory_shaped_joke(memory_text),
         ]

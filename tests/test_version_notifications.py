@@ -1380,6 +1380,19 @@ def test_github_repo_url_strips_https_remote_credentials(tmp_path: Path, monkeyp
     assert leaked_token not in commit_url
 
 
+def test_version_notification_text_strips_repo_url_credentials() -> None:
+    leaked_token = "github_pat_" + "A" * 24
+
+    text = build_version_notification_text(
+        version="1.0.3",
+        repo_url=f"https://user:{leaked_token}@github.com/H234598/TeeBotus.git?token={leaked_token}#frag",
+    )
+
+    assert "Repo: https://github.com/H234598/TeeBotus" in text
+    assert leaked_token not in text
+    assert "user:" not in text
+
+
 def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
 
