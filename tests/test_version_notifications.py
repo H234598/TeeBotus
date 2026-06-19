@@ -1806,6 +1806,16 @@ def test_github_repo_url_normalizes_https_remote(tmp_path: Path, monkeypatch) ->
     assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
 
 
+def test_github_repo_url_upgrades_http_remote_to_https(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "http://github.com/H234598/TeeBotus.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
+
+
 def test_github_repo_url_strips_https_remote_credentials(tmp_path: Path, monkeypatch) -> None:
     leaked_token = "github_pat_" + "A" * 24
 
