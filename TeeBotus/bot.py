@@ -1684,7 +1684,7 @@ def _runtime_config_from_main_args(args: list[str]) -> Any | None:
             index += 1
             continue
         if arg == "--channels":
-            if index + 1 >= len(args):
+            if index + 1 >= len(args) or args[index + 1].startswith("--"):
                 print("Missing value for --channels.", file=sys.stderr)
                 return None
             runtime_args.extend([arg, args[index + 1]])

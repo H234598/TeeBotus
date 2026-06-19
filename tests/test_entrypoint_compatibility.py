@@ -2192,6 +2192,27 @@ def test_channels_telegram_is_stripped_before_telegram_delegation(monkeypatch) -
     assert bot.main(["--channels", "telegram", "--definitely-not-runtime-status"]) == 2
 
 
+def test_channels_rejects_option_like_missing_value_before_runtime_start(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: (_ for _ in ()).throw(AssertionError("runtime started")))
+
+    assert bot.main(["--channels", "--definitely-not-runtime-status"]) == 2
+
+    captured = capsys.readouterr()
+    assert "Missing value for --channels." in captured.err
+
+
+def test_runtime_status_rejects_missing_channels_value_without_system_exit(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+
+    assert bot.main(["--runtime-status", "--channels"]) == 2
+
+    captured = capsys.readouterr()
+    assert "missing value for --channels" in captured.err
+
+
 def test_empty_channels_equals_rejected_before_runtime_start(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

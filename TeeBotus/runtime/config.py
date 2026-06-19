@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import argparse
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
@@ -575,12 +574,27 @@ def resolve_runtime_config(
     argv: Sequence[str] | None = None,
     env: Mapping[str, str] | None = None,
 ) -> RuntimeConfig:
-    parser = argparse.ArgumentParser(prog="python3 -m TeeBotus --runtime-status", add_help=False)
-    parser.add_argument("--channels", default=None)
-    args, unknown = parser.parse_known_args(list(argv or ()))
+    cli_channels: str | None = None
+    unknown: list[str] = []
+    args = list(argv or ())
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg == "--channels":
+            if index + 1 >= len(args) or args[index + 1].startswith("--"):
+                raise RuntimeConfigError("missing value for --channels")
+            cli_channels = args[index + 1]
+            index += 2
+            continue
+        if arg.startswith("--channels="):
+            cli_channels = arg.split("=", 1)[1]
+            index += 1
+            continue
+        unknown.append(arg)
+        index += 1
     if unknown:
         raise RuntimeConfigError(f"unsupported runtime-status option(s): {', '.join(unknown)}")
-    return build_runtime_config(env=env, cli_channels=args.channels)
+    return build_runtime_config(env=env, cli_channels=cli_channels)
 
 
 def _merge_numbered_values(

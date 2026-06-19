@@ -11,6 +11,7 @@ from TeeBotus.runtime.config import (
     resolve_channels,
     resolve_instances_dir,
     resolve_openai_key,
+    resolve_runtime_config,
     resolve_selected_instances,
     resolve_matrix_accounts,
     resolve_llm_setting,
@@ -28,6 +29,12 @@ def test_channels_reject_empty_cli_value_but_allow_empty_env_default():
     assert resolve_channels({"TEEBOTUS_CHANNELS": ""}) == ("telegram", "signal", "matrix")
     with pytest.raises(RuntimeConfigError, match="empty --channels value"):
         resolve_channels({}, cli_channels="")
+
+
+def test_runtime_status_channels_requires_plain_value():
+    for argv in (["--channels"], ["--channels", "--unknown-option"]):
+        with pytest.raises(RuntimeConfigError, match="missing value for --channels"):
+            resolve_runtime_config(argv, env={})
 
 
 def test_runtime_config_marks_only_concrete_channel_selection_as_explicit(tmp_path: Path):
