@@ -89,13 +89,15 @@ def notify_recent_telegram_users_for_version(
                     "failed_at": resolved_now.isoformat(timespec="seconds"),
                     "reason": _delivery_error_reason(exc),
                 }
+                _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
+                _write_state_if_sql_available(account_store, state_path, state)
             continue
         _clear_resolved_failures(failed_identities, recipient, identities)
         sent_identities.add(recipient.identity_key)
+        _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
+        _write_state_if_sql_available(account_store, state_path, state)
         sent_count += 1
-    version_state["sent_identities"] = sorted(sent_identities)
-    version_state["failed_identities"] = dict(sorted(failed_identities.items()))
-    version_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
+    _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
     _write_state(account_store, state_path, state)
     return sent_count
 
@@ -798,6 +800,22 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(normalized_state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _write_state_if_sql_available(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
+    if _sql_state_backend_available(account_store):
+        _write_state(account_store, path, state)
+
+
+def _sync_version_delivery_state(
+    version_state: dict[str, Any],
+    sent_identities: set[str],
+    failed_identities: dict[str, object],
+    updated_at: datetime,
+) -> None:
+    version_state["sent_identities"] = sorted(sent_identities)
+    version_state["failed_identities"] = dict(sorted(failed_identities.items()))
+    version_state["updated_at"] = updated_at.isoformat(timespec="seconds")
 
 
 def _sql_state_backend_available(account_store: AccountStore) -> bool:

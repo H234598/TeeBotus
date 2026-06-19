@@ -456,7 +456,7 @@ class WarningFallbackAccountMemoryBackend:
 
     def _operation_has_unsafe_fallback(self, operation: str, account_id: str) -> bool:
         stale_key = self._operation_stale_key(operation, account_id)
-        return stale_key in self._fallback_stale_set(operation) or stale_key in self._fallback_sync_failed_set(operation)
+        return stale_key in self._fallback_sync_failed_set(operation) or stale_key in self._unrecoverable_fallback_set(operation)
 
     def _read_diagnostic_failed(self, operation: str) -> bool:
         if operation == "read_entries":
