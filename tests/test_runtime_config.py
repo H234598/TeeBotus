@@ -484,6 +484,11 @@ def test_selected_instances_reject_duplicate_names(tmp_path: Path):
         resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "Depressionsbot,Depressionsbot"})
 
 
+def test_single_instance_alias_rejects_comma_separated_values(tmp_path: Path):
+    with pytest.raises(RuntimeConfigError, match="accepts one instance only"):
+        resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCE": "Depressionsbot,Bote_der_Wahrheit"})
+
+
 def test_plural_instances_cannot_mix_discovery_token_with_explicit_names(tmp_path: Path):
     with pytest.raises(RuntimeConfigError, match="cannot combine all/auto"):
         resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "all,Depressionsbot"})

@@ -119,8 +119,14 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
         if selected:
             return _validate_unique_values(selected, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
     single = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCE", "TELEGRAM_BOT_INSTANCE")
-    if single and single.casefold() not in {"all", "auto"}:
-        return (single,)
+    if single:
+        if "," in single:
+            raise RuntimeConfigError(
+                "TEEBOTUS_INSTANCE/TELEGRAM_BOT_INSTANCE accepts one instance only; "
+                "use TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES for multiple instances"
+            )
+        if single.casefold() not in {"all", "auto"}:
+            return (single,)
     return _discover_selected_instances(instances_dir)
 
 
