@@ -165,7 +165,15 @@ async def notify_runtime_status_admin_accounts(
         for invalid_id in group.invalid_ids:
             results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
         candidates: list[tuple[str, dict[str, Any], str, str, str]] = []
-        for account_id in _status_notification_candidate_account_ids(store, group.account_ids):
+        include_status_auth_accounts = False
+        if not group.account_ids and not group.invalid_ids and group.source != "default":
+            env_value = str(source.get(group.source, "") if isinstance(source, Mapping) else "").strip()
+            include_status_auth_accounts = not env_value
+        for account_id in _status_notification_candidate_account_ids(
+            store,
+            configured_account_ids=group.account_ids,
+            include_status_auth_accounts=include_status_auth_accounts,
+        ):
             if not _account_dir_exists(store, account_id):
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
                 continue
@@ -252,14 +260,22 @@ async def notify_runtime_status_admin_accounts(
     return tuple(results)
 
 
-def _status_notification_candidate_account_ids(store: AccountStore, configured_account_ids: Sequence[str]) -> tuple[str, ...]:
+def _status_notification_candidate_account_ids(
+    store: AccountStore,
+    *,
+    configured_account_ids: Sequence[str],
+    include_status_auth_accounts: bool = False,
+) -> tuple[str, ...]:
     candidates: list[str] = []
     seen: set[str] = set()
     try:
         status_auth_account_ids = status_auth_recipient_account_ids(store)
     except Exception:  # noqa: BLE001 - status auth recipient enumeration should not block configured admins.
         status_auth_account_ids = ()
-    for account_id in tuple(configured_account_ids) + tuple(status_auth_account_ids):
+    candidate_ids: tuple[str, ...] = tuple(configured_account_ids)
+    if include_status_auth_accounts:
+        candidate_ids += tuple(status_auth_account_ids)
+    for account_id in candidate_ids:
         normalized = str(account_id or "").strip().casefold()
         if not normalized or normalized in seen:
             continue

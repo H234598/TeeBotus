@@ -233,6 +233,44 @@ def test_runtime_status_admin_notify_numbers_status_summaries_per_account(tmp_pa
     assert [row["summary_prefix"] for row in outbox] == [f"v{__version__} #0001", f"v{__version__} #0002"]
 
 
+def test_runtime_status_admin_notify_does_not_include_status_auth_recipients_when_admin_ids_are_set(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    admin_identity = telegram_identity_key(111)
+    status_identity = telegram_identity_key(222)
+    admin_account_id = account_store.resolve_or_create_account(admin_identity)
+    status_account_id = account_store.resolve_or_create_account(status_identity)
+    account_store.update_identity_route(admin_identity, channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    account_store.update_identity_route(status_identity, channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    account_store.write_status_auth_state(
+        status_account_id,
+        {
+            "schema_version": 1,
+            "authorized": True,
+            "authorized_at": "2026-06-19T12:00:00+00:00",
+            "source": "runtime_code",
+        },
+    )
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: admin_account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": lambda _route, _action, _metadata: "ok"},
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={admin_account_id} channel=telegram",)
+    assert len(account_store.read_status_outbox(admin_account_id)) == 1
+    assert len(account_store.read_status_outbox(status_account_id)) == 0
+
+
 def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
