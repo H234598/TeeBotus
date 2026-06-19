@@ -298,13 +298,19 @@ def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
 
 
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
-    unique: dict[tuple[str, int], VersionNotificationRecipient] = {}
+    unique_by_account_slot: dict[tuple[str, int], VersionNotificationRecipient] = {}
     for recipient in sorted(recipients, key=lambda item: item.identity_key):
         route_key = (recipient.account_id, recipient.adapter_slot)
-        existing = unique.get(route_key)
+        existing = unique_by_account_slot.get(route_key)
         if existing is None or _recipient_route_preferred(recipient, existing):
-            unique[route_key] = recipient
-    return sorted(unique.values(), key=lambda item: item.identity_key)
+            unique_by_account_slot[route_key] = recipient
+    unique_by_route: dict[tuple[int, int], VersionNotificationRecipient] = {}
+    for recipient in sorted(unique_by_account_slot.values(), key=lambda item: item.identity_key):
+        route_key = (recipient.adapter_slot, recipient.chat_id)
+        existing = unique_by_route.get(route_key)
+        if existing is None or _recipient_route_preferred(recipient, existing):
+            unique_by_route[route_key] = recipient
+    return sorted(unique_by_route.values(), key=lambda item: item.identity_key)
 
 
 def _recipient_route_preferred(candidate: VersionNotificationRecipient, current: VersionNotificationRecipient) -> bool:
@@ -331,9 +337,6 @@ def _sent_delivery_matches_recipient(
     for identity_key in sent_identities:
         payload = identities.get(identity_key)
         if not isinstance(payload, dict):
-            continue
-        account_id = str(payload.get("account_id") or "")
-        if account_id != recipient.account_id:
             continue
         if _identity_route_matches_recipient(identity_key, payload, recipient):
             return True

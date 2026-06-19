@@ -449,6 +449,75 @@ def test_recent_telegram_recipients_deduplicates_same_account_route(tmp_path: Pa
     ]
 
 
+def test_recent_telegram_recipients_deduplicates_duplicate_chat_route_across_accounts(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    canonical_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    duplicate_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada Duplicate")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.identity_key, recipient.account_id, recipient.chat_id) for recipient in recipients] == [
+        ("telegram:user:111", canonical_account_id, 111)
+    ]
+    assert duplicate_account_id != canonical_account_id
+
+
+def test_notify_recent_telegram_users_sends_once_for_duplicate_chat_route_accounts(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    canonical_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    duplicate_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada Duplicate")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    assert duplicate_account_id != canonical_account_id
+
+
+def test_notify_recent_telegram_users_skips_sent_duplicate_chat_route_across_accounts(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    canonical_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    duplicate_account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada Duplicate")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"versions": {"1.0.3": {"sent_identities": ["telegram:username:ada"], "failed_identities": {}}}}),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert canonical_account_id != duplicate_account_id
+
+
 def test_recent_telegram_recipients_deduplicates_account_slot_to_newest_route(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
