@@ -21,7 +21,13 @@ from urllib.parse import urlsplit
 from typing import Any
 
 from TeeBotus import __version__
-from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
+from TeeBotus.admin.accounts_report import (
+    BOT_INSTRUCTION_FILENAME,
+    DEFAULT_INSTANCES_DIR,
+    ReadOnlySecretToolInstanceSecretProvider,
+    discover_instances,
+    parse_csv,
+)
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.admin_accounts import resolve_admin_account_group
 from TeeBotus.runtime.accounts import (
@@ -1851,7 +1857,11 @@ def _ensure_explicit_instances_exist(instances_dir: Path, requested_instances: S
     if not normalized_instances:
         return
     safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
-    available = {path.name for path in safe_instances_dir.iterdir() if path.is_dir()}
+    available = {
+        path.name
+        for path in safe_instances_dir.iterdir()
+        if path.is_dir() and (path / BOT_INSTRUCTION_FILENAME).exists()
+    }
     missing: list[str] = []
     for name in normalized_instances:
         if not name:
