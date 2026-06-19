@@ -44,7 +44,7 @@ def notify_recent_telegram_users_for_version(
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
-    if _sql_state_backend_available(account_store):
+    if _sql_state_backend_available(account_store) or state_path.exists():
         _write_state(account_store, state_path, state)
     if not normalized_version:
         if on_skip is not None:

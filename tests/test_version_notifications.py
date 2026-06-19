@@ -1105,6 +1105,52 @@ def test_notify_recent_telegram_users_migrates_legacy_state_to_sqlite_before_git
     assert b"telegram:user:111" not in raw_db
 
 
+def test_notify_recent_telegram_users_normalizes_plaintext_legacy_state_before_github_tag_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda _repo_root, _version: False)
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "v1.0.3": {
+                        "sent_identities": [" telegram:user:111 "],
+                        "failed_identities": {},
+                        "updated_at": "2026-06-14T11:59:00+00:00",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+    skips: list[str] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        repo_root=tmp_path,
+        repo_url="https://github.com/example/project",
+        on_skip=skips.append,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert skips == ["GitHub tag v1.0.3 not found on remote"]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert list(state["versions"]) == ["1.0.3"]
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_cleans_invalid_sqlite_state_before_github_tag_gate(
     tmp_path: Path,
     monkeypatch,
