@@ -6,6 +6,27 @@
 **Repo-Kontext:** `H234598/TeeBotus`, Branch `main`  
 **Leitlinie:** Keine Big-Bang-Migration. Bestehendes laeuft weiter, neue Faehigkeiten werden additiv angebaut.
 
+## Implementierungsstand
+
+Stand: 2026-06-19
+
+Quelle:
+
+- `/home/teladi/Downloads/Plan1.md` ist in `docs/Plan1.md` integriert.
+- SHA256: `c96dec8df17fc404731d9952e16b4994a9e13de1b1db7712067786fd7d3836b6`
+- Plan1 bleibt die konservative Basislinie fuer Architektur, Invarianten, Security und Migrationsreihenfolge.
+
+Umgesetzt:
+
+- Der Plan liegt versioniert unter `docs/` und bleibt als historische Baseline erhalten.
+- Die harten Start-, Runtime-, Account-Memory- und OpenAIClient-Invarianten sind weiterhin die Kompatibilitaetsgrundlage.
+- Die LLM-, Bibliothekar- und Agenten-Themen aus Plan1 wurden in Plan2 und Plan3 detaillierter fortgeschrieben.
+
+Offen:
+
+- Plan1 wird nicht als eigene parallele Umsetzungsqueue gefuehrt.
+- Bei Detailkonflikten gewinnen Plan2/Plan3 oder spezifischere Plaene, solange die harten Invarianten aus Plan1 nicht verletzt werden.
+
 ---
 
 ## 1. Zielarchitektur

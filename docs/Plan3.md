@@ -8,6 +8,27 @@
 
 **v3.3-Zusatz:** Qdrant wird gemeinsamer semantischer Index für Bibliothekar und Usermemory; AccountStore bleibt Wahrheit; Haystack bleibt optionales Pipeline-Backend; Pydantic AI wird als typisierte Decision-Schicht eingeplant; `hf_pool` ist optional, lazy und non-fatal, bis Doctor mindestens ein gesundes Target meldet; zusätzlich ist ein Minimalertrag/MVP-Pfad definiert, damit die Umsetzung sofort nutzbar und rollbackfähig bleibt.
 
+## Implementierungsstand
+
+Stand: 2026-06-19
+
+Quelle:
+
+- `/home/teladi/Downloads/Plan3.md` ist in `docs/Plan3.md` integriert.
+- SHA256: `86a7832047b1de63c50fb5776d7e98f3c54d277054cf518267e03be000fb8553`
+- Plan3 ist die fortgeschriebene Detailplanung fuer HF-Pool, Qdrant, Memory-Suche, Bibliothekar-Backends, Pydantic AI und Benchmarks.
+
+Umgesetzt:
+
+- Der Plan liegt versioniert unter `docs/` und enthaelt die v3.1-, v3.2- und v3.3-Ergaenzungen.
+- Der Safe-Rollout-/Minimalertrag-Pfad fuer `hf_pool` ist als priorisierte Umsetzungsreihenfolge dokumentiert.
+- Qdrant, Embedding-Schicht, MemorySearchService, Bibliothekar-Qdrant, Pydantic-AI-Decisions und Benchmarkauftraege sind als getrennte Arbeitspakete beschrieben.
+
+Offen:
+
+- Der Code-Umsetzungsstand der einzelnen Plan3-Arbeitspakete muss pro Paket gegen Tests, Runtime-Status und Benchmarks gepflegt werden.
+- Wenn Plan3 spaeter fortgeschrieben wird, soll dieser Kopf wie beim Codex-Outbox-Plan den aktuellen Stand sichtbar halten.
+
 ---
 
 ## 1. Kurzurteil

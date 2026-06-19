@@ -8,6 +8,27 @@
 **Repo:** `H234598/TeeBotus`  
 **Grundsatz:** Keine Big-Bang-Migration. Erst stabilisieren, dann Provider abstrahieren, dann RAG/Bibliothekar, dann Agenten-Subtasks.
 
+## Implementierungsstand
+
+Stand: 2026-06-19
+
+Quelle:
+
+- `/home/teladi/Downloads/Plan2.md` ist in `docs/Plan2.md` integriert.
+- Download-SHA256: `b0e429bef5398e6cf067693f5390486ccb137f3ebef9770cb0509c585cd832f0`
+- Die Docs-Version ist absichtlich nicht bytegleich mit `/Downloads/Plan2.md`, weil sie nach dem Import um Repo-Stand, Gemini/Vertex, Free-Tier-Guard, LLM-State und Benchmark-Fortschreibungen gepflegt wurde.
+
+Umgesetzt:
+
+- Plan2 liegt versioniert unter `docs/` und ist der lebende Migrationsplan fuer providerneutrale LLMs, Bibliothekar/RAG, Agenten-Subtasks und Benchmarks.
+- Die spaeteren Repo-Fortschreibungen zu dynamischer Pyproject-Version, neutralen LLM-Fehlertexten, Runtime-Profilauflösung, `LLM_State.json`, Gemini/Vertex, Free-Tier-Guard, HF-Pool-Gating und Benchmarkstruktur sind im Dokument erhalten.
+- Der Zusatzauftrag "Baue valide Benchmarktests fuer alles" bleibt am Ende des Plans als verbindlicher Benchmark-Abschnitt dokumentiert.
+
+Offen:
+
+- Neue `/Downloads/Plan2.md`-Aenderungen sollen kuenftig gemerged, nicht blind ueber die gepflegte `docs/Plan2.md`-Version kopiert werden.
+- Der tatsaechliche Umsetzungsstand bleibt ueber Code, Tests, Runtime-Status und die spezifischeren Plan3-/Codex-Outbox-Dokumente zu pruefen.
+
 ---
 
 ## 0. Kurzfassung für Codex
