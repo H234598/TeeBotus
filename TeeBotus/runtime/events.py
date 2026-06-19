@@ -184,8 +184,12 @@ class IncomingEvent:
 
     @property
     def is_private(self) -> bool:
-        return self.chat_type == "private"
+        return _normalize_chat_type(self.chat_type) == "private"
 
     @property
     def is_group(self) -> bool:
-        return self.chat_type == "group"
+        return _normalize_chat_type(self.chat_type) == "group"
+
+
+def _normalize_chat_type(chat_type: Any) -> str:
+    return str(chat_type or "").strip().casefold()

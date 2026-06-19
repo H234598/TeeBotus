@@ -31,7 +31,7 @@ def record_account_activity(
     *,
     now: datetime | None = None,
 ) -> None:
-    if not account_id or event.chat_type != "private":
+    if not account_id or not event.is_private:
         return
     state = account_store.read_agent_state(account_id)
     profile = _ensure_activity_profile(state)

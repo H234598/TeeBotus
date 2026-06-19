@@ -170,3 +170,36 @@ def test_incoming_event_with_reply_to_text_preserves_link_previews() -> None:
 
     assert updated.reply_to_text == "Vorher"
     assert updated.link_previews == (preview,)
+
+
+@pytest.mark.parametrize(
+    ("chat_type", "expected_private", "expected_group"),
+    (
+        ("private", True, False),
+        ("Private", True, False),
+        ("group", False, True),
+        ("Group", False, True),
+        ("GROUP", False, True),
+    ),
+)
+def test_incoming_event_chat_type_properties_are_case_normalized(
+    chat_type: str,
+    expected_private: bool,
+    expected_group: bool,
+) -> None:
+    event = IncomingEvent(
+        event_id="signal:1",
+        instance="Bot",
+        channel="signal",
+        adapter_slot=1,
+        account_id="",
+        identity_key="signal:uuid:1",
+        chat_id="+491",
+        chat_type=chat_type,  # type: ignore[arg-type]
+        sender_id="1",
+        text="Hallo",
+        message_ref="1",
+    )
+
+    assert event.is_private is expected_private
+    assert event.is_group is expected_group

@@ -312,11 +312,11 @@ class TeeBotusEngine:
             RegistrationAction.ACCOUNT_EDIT,
             RegistrationAction.LINKED_ACCOUNTS,
             RegistrationAction.WTF_UNLINK,
-        } and event.chat_type != "private":
+        } and not event.is_private:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
         pending_account_edit = self.state.get_pending_flow(event.instance, account_id, "account_edit")
-        if pending_account_edit is not None and event.chat_type != "private":
+        if pending_account_edit is not None and not event.is_private:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
         if intent.action == RegistrationAction.NONE:
@@ -689,7 +689,7 @@ class TeeBotusEngine:
         return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
 
     def _export_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction]:
-        if event.chat_type != "private":
+        if not event.is_private:
             return [SendText(event.chat_id, PRIVATE_ONLY, track=False)]
         fmt = _parse_export_format(event.text)
         if fmt is None:
@@ -1108,7 +1108,7 @@ def should_ignore_event_without_account(event: IncomingEvent, bot_address_names:
     command = _command_name(text)
     if _command_targets_other_bot(text, normalized_names):
         return True
-    return event.chat_type == "group" and not command and not _event_is_addressed_to_bot(event, command, normalized_names)
+    return event.is_group and not command and not _event_is_addressed_to_bot(event, command, normalized_names)
 
 
 def account_bot_address_names(account_store: AccountStore, account_id: str) -> frozenset[str]:
@@ -1213,7 +1213,7 @@ def _command_targets_other_bot(text: str, bot_address_names: frozenset[str]) -> 
 
 
 def _event_is_addressed_to_bot(event: IncomingEvent, command: str, bot_address_names: frozenset[str]) -> bool:
-    if event.chat_type != "group":
+    if not event.is_group:
         return True
     if command:
         return True

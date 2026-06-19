@@ -514,7 +514,7 @@ class SharedSignalRouterCommand(_SignalBotCommand):
         linked = [candidate for candidate in usable if candidate.account_id]
         if linked:
             return linked[0]
-        private = [candidate for candidate in usable if candidate.event.chat_type == "private"]
+        private = [candidate for candidate in usable if candidate.event.is_private]
         if private:
             return private[0]
         command_candidates = [candidate for candidate in usable if _command_name(candidate.event.text)]
