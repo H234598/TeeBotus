@@ -71,6 +71,7 @@ class WarningFallbackAccountMemoryBackend:
             callback,
             self._sync_entries_from_fallback,
             read_full_for_repair=full_reader,
+            partial_result=True,
         )
 
     def write_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
@@ -162,6 +163,7 @@ class WarningFallbackAccountMemoryBackend:
         sync_callback: Callable[[str], Any],
         *,
         read_full_for_repair: Callable[[Any], Any] | None = None,
+        partial_result: bool = False,
     ) -> Any:
         try:
             if self._account_is_dirty(operation, account_id):
@@ -174,7 +176,13 @@ class WarningFallbackAccountMemoryBackend:
                     repair_data = read_full_for_repair(self.fallback)
                 else:
                     repair_data = fallback_result
-                return self._recover_read_from_fallback(operation, account_id, fallback_result, repair_data)
+                return self._recover_read_from_fallback(
+                    operation,
+                    account_id,
+                    fallback_result,
+                    repair_data,
+                    partial_result=partial_result,
+                )
             if read_full_for_repair is not None:
                 stale_key = self._operation_stale_key(operation, account_id)
                 if stale_key in self._unrecoverable_fallback_set(operation):
@@ -189,7 +197,7 @@ class WarningFallbackAccountMemoryBackend:
             self._warn(operation, exc)
             result = callback(self.fallback)
             self._copy_diagnostics(self.fallback)
-            if self._fallback_result_is_empty_after_primary_exception(operation, result):
+            if self._fallback_result_is_empty_after_primary_exception(operation, result, partial_result):
                 stale_key = self._operation_stale_key(operation, account_id)
                 self._fallback_stale_set(operation).add(stale_key)
                 self._unrecoverable_fallback_set(operation).add(stale_key)
@@ -199,7 +207,13 @@ class WarningFallbackAccountMemoryBackend:
                 recover_data = read_full_for_repair(self.fallback)
             else:
                 recover_data = result
-            return self._recover_read_from_fallback(operation, account_id, result, recover_data)
+            return self._recover_read_from_fallback(
+                operation,
+                account_id,
+                result,
+                recover_data,
+                partial_result=partial_result,
+            )
 
     def _write(
         self,
@@ -279,6 +293,7 @@ class WarningFallbackAccountMemoryBackend:
         account_id: str,
         result: Any,
         repair_data: Any,
+        partial_result: bool = False,
     ) -> Any:
         self._fallback_active = True
         self._warn(operation, RuntimeError(self._diagnostic_error_text(operation)))
@@ -294,6 +309,7 @@ class WarningFallbackAccountMemoryBackend:
             primary_entry_skipped,
             primary_index_read_error,
             primary_collection_skipped,
+            partial_result=partial_result,
         ):
             self.last_entry_read_error = primary_entry_read_error
             self.last_entry_skipped = primary_entry_skipped
@@ -347,18 +363,24 @@ class WarningFallbackAccountMemoryBackend:
         primary_entry_skipped: int,
         primary_index_read_error: str,
         primary_collection_skipped: int,
+        partial_result: bool = False,
     ) -> bool:
         if operation == "read_entries":
-            return bool(primary_entry_skipped) and result == []
+            return bool(primary_entry_skipped) and result == [] and not partial_result
         if operation == "read_index":
             return bool(primary_index_read_error) and result == {}
         if operation.startswith("read_collection:"):
             return bool(primary_collection_skipped) and result == []
         return False
 
-    def _fallback_result_is_empty_after_primary_exception(self, operation: str, result: Any) -> bool:
+    def _fallback_result_is_empty_after_primary_exception(
+        self,
+        operation: str,
+        result: Any,
+        partial_result: bool = False,
+    ) -> bool:
         if operation == "read_entries":
-            return result == []
+            return result == [] and not partial_result
         if operation == "read_index":
             return result == {}
         if operation.startswith("read_collection:"):

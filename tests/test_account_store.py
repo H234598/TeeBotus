@@ -2100,6 +2100,40 @@ def test_account_memory_fallback_recovers_primary_from_full_entries_after_entrie
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_does_not_mark_unrecoverable_for_empty_entries_by_ids_result(caplog):
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries-by-ids unavailable")
+            requested_ids = {memory_id for memory_id in memory_ids if memory_id}
+            return [dict(row) for row in self.read_entries(account_id) if row.get("id") in requested_ids]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    fallback.entries[account_id] = [{"id": "entry_2"}, {"id": "entry_3"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        rows = backend.read_entries_by_ids(account_id, ["entry_1"])
+
+    assert rows == []
+    assert primary.entries[account_id] == [{"id": "entry_2"}, {"id": "entry_3"}]
+    assert backend.stale_fallback_entry_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+    assert (account_id in backend._unrecoverable_fallback_entries) is False
+
+
 def test_account_memory_fallback_repair_keeps_other_pending_errors_until_cleared(caplog):
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:
