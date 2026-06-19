@@ -24,6 +24,7 @@ LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 MIN_SAFE_LITELLM_VERSION = "1.84.0"
+PY313_LITELLM_VERSION = "1.89.2"
 PY314_COMPATIBLE_LITELLM_VERSION = "1.83.7"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -151,22 +152,27 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     if not isinstance(optional, dict):
         errors.append("missing optional-dependencies")
         optional = {}
-    litellm_version, dotenv_version = _active_llm_versions()
+    litellm_version, dotenv_version, openai_version = _active_llm_versions()
     fastmcp_version = _active_fastmcp_version()
     expected_extras = {
         "dev": {"pytest": "", "pytest-cov": "", "ruff": "", "mypy": "", "pip-audit": ""},
-        "llm": {"litellm": litellm_version, "python-dotenv": dotenv_version, "openai": "2.30.0", "ollama": "0.6.2"},
+        "llm": {
+            "litellm": litellm_version,
+            "python-dotenv": dotenv_version,
+            "openai": openai_version,
+            "ollama": "0.6.2",
+        },
         "rag": {
-            "haystack-ai": "2.30.1",
+            "haystack-ai": "2.30.2",
             "qdrant-haystack": "10.3.0",
-            "sentence-transformers": "5.5.1",
-            "pypdf": "6.13.2",
+            "sentence-transformers": "5.6.0",
+            "pypdf": "6.13.3",
             "pymupdf": "1.27.2.3",
             "ebooklib": "0.20",
-            "beautifulsoup4": "4.14.3",
+            "beautifulsoup4": "4.15.0",
             "llama-index-core": "0.14.22",
         },
-        "agents": {"pydantic-ai-slim": "1.107.0", "langgraph": "1.2.5"},
+        "agents": {"pydantic-ai-slim": "1.107.0", "langgraph": "1.2.6"},
         "tools": {"fastmcp": fastmcp_version},
     }
     for extra, expected in expected_extras.items():
@@ -225,16 +231,16 @@ def _min_safe_litellm_version() -> str:
     return MIN_SAFE_LITELLM_VERSION
 
 
-def _active_llm_versions() -> tuple[str, str]:
+def _active_llm_versions() -> tuple[str, str, str]:
     if sys.version_info >= (3, 14):
-        return PY314_COMPATIBLE_LITELLM_VERSION, "1.0.1"
-    return MIN_SAFE_LITELLM_VERSION, "1.2.2"
+        return PY314_COMPATIBLE_LITELLM_VERSION, "1.0.1", "2.30.0"
+    return PY313_LITELLM_VERSION, "1.2.2", "2.43.0"
 
 
 def _active_fastmcp_version() -> str:
     if sys.version_info >= (3, 14):
         return "2.2.0"
-    return "3.2.0"
+    return "3.4.2"
 
 
 def _active_optional_dependency_versions(raw_deps: object) -> dict[str, str]:
