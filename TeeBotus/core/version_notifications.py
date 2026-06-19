@@ -101,7 +101,7 @@ def recent_telegram_recipients(
     except AccountStoreError:
         raise
     for identity_key, payload in identities.items():
-        if not isinstance(identity_key, str) or not identity_key.startswith("telegram:user:"):
+        if not isinstance(identity_key, str) or not identity_key.startswith("telegram:"):
             continue
         if not isinstance(payload, dict):
             continue
@@ -119,7 +119,9 @@ def recent_telegram_recipients(
             continue
         if route_chat_type and route_chat_type != "private":
             continue
-        chat_id_text = str(route.get("chat_id") or "").strip() or identity_key.removeprefix("telegram:user:")
+        chat_id_text = str(route.get("chat_id") or "").strip()
+        if not chat_id_text and identity_key.startswith("telegram:user:"):
+            chat_id_text = identity_key.removeprefix("telegram:user:")
         if not chat_id_text.isdigit():
             continue
         recipients.append(

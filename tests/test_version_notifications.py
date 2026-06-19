@@ -391,6 +391,22 @@ def test_recent_telegram_recipients_skips_non_private_chat_routes(tmp_path: Path
     ]
 
 
+def test_recent_telegram_recipients_accepts_routed_telegram_fallback_identity(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.identity_key, recipient.account_id, recipient.chat_id) for recipient in recipients] == [
+        ("telegram:username:ada", account_id, 111)
+    ]
+
+
 def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
