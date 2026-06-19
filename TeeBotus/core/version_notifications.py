@@ -610,32 +610,22 @@ def _is_telegram_identity_key(identity_key: str) -> bool:
 
 
 def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
-    normalized = dict(payload)
-    account_id = _normalized_account_id(normalized.get("account_id"))
+    normalized: dict[str, object] = {}
+    account_id = _normalized_account_id(payload.get("account_id"))
     if account_id:
         normalized["account_id"] = account_id
-    else:
-        normalized.pop("account_id", None)
-    failed_at = _valid_timestamp_string(normalized.get("failed_at"))
+    failed_at = _valid_timestamp_string(payload.get("failed_at"))
     if failed_at:
         normalized["failed_at"] = failed_at
-    else:
-        normalized.pop("failed_at", None)
-    chat_id = _optional_positive_int(normalized.get("chat_id"))
+    chat_id = _optional_positive_int(payload.get("chat_id"))
     if chat_id is not None:
         normalized["chat_id"] = chat_id
-    else:
-        normalized.pop("chat_id", None)
-    adapter_slot = _optional_positive_int(normalized.get("adapter_slot"))
+    adapter_slot = _optional_positive_int(payload.get("adapter_slot"))
     if adapter_slot is not None:
         normalized["adapter_slot"] = adapter_slot
-    else:
-        normalized.pop("adapter_slot", None)
-    reason = _inline_text(normalized.get("reason")) if isinstance(normalized.get("reason"), str) else ""
+    reason = _inline_text(payload.get("reason")) if isinstance(payload.get("reason"), str) else ""
     if reason:
         normalized["reason"] = reason[:240]
-    else:
-        normalized.pop("reason", None)
     return normalized
 
 

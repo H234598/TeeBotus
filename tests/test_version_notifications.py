@@ -1103,6 +1103,29 @@ def test_version_notification_state_normalization_sanitizes_failure_reason() -> 
     assert "reason" not in failures["telegram:user:222"]
 
 
+def test_version_notification_state_normalization_drops_unknown_failure_payload_fields() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "chat not found",
+                            "debug": {"secret": "raw"},
+                            "attempts": [1, 2],
+                        }
+                    }
+                }
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure == {"adapter_slot": 1, "chat_id": 111, "reason": "chat not found"}
+
+
 def test_version_notification_state_normalization_drops_empty_telegram_identity_keys() -> None:
     state = _normalize_state(
         {
