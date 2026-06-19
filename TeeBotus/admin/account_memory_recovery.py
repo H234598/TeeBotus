@@ -243,7 +243,8 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 detail = (
                     f"entries={source.get('entries', 0)} raw_entries={source.get('raw_entries', 0)} "
                     f"index_present={source.get('index_present', False)} "
-                    f"raw_index_present={source.get('raw_index_present', False)}"
+                    f"raw_index_present={source.get('raw_index_present', False)} "
+                    f"collections={source.get('collections', 0)} raw_collections={source.get('raw_collections', 0)}"
                 )
                 error = f" error={source.get('error')}" if source.get("error") else ""
                 lines.append(f"  - {source.get('name', '')}: {role} {status}{flag_text} {detail}{error}")
@@ -668,7 +669,11 @@ def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, A
                 continue
             if source.get("active", True) is False:
                 continue
-            if _source_count(source, "raw_entries") <= 0 and not bool(source.get("raw_index_present")):
+            if (
+                _source_count(source, "raw_entries") <= 0
+                and not bool(source.get("raw_index_present"))
+                and _source_count(source, "raw_collections") <= 0
+            ):
                 continue
             raw_path = str(source.get("path") or "").strip()
             if not raw_path:
@@ -723,6 +728,13 @@ def _delete_sqlite_account_rows(path: Path, instance_name: str, account_ids: Seq
                     deleted += _delete_row_count(
                         connection.execute(
                             "DELETE FROM memory_indexes WHERE instance_name = ? AND account_id = ?",
+                            (instance_name, account_id),
+                        )
+                    )
+                if _sqlite_table_exists(connection, "account_jsonl_collections"):
+                    deleted += _delete_row_count(
+                        connection.execute(
+                            "DELETE FROM account_jsonl_collections WHERE instance_name = ? AND account_id = ?",
                             (instance_name, account_id),
                         )
                     )

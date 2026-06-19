@@ -551,6 +551,39 @@ def test_memory_recovery_quarantines_unrecoverable_sqlite_rows(tmp_path: Path) -
     assert snapshot_backend.read_entries(account_id)[0]["id"] == "mem_bad"
 
 
+def test_memory_recovery_quarantines_unrecoverable_sqlite_collection_rows(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    primary_path = accounts_root / "Account_Memory.sqlite3"
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=StaticSecretProvider(b"b" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+    primary.write_collection(account_id, "agent_state", [{"id": "agent_state", "proactive": {"enabled": True}}])
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    account = report["instances"][0]["accounts"][0]
+    source = next(source for source in account["sources"] if source["name"] == "sqlite_primary")
+
+    assert account["recovery_status"] == "unrecoverable"
+    assert source["raw_collections"] == 1
+    assert source["collections"] == 0
+    assert "collections:" in source["error"]
+
+    result = quarantine_unrecoverable_account_memory(report, apply=True, quarantine_dir=tmp_path / "quarantine", running_processes=[])
+
+    assert result["status"] == "applied"
+    assert result["totals"]["sqlite_rows_quarantined"] == 1
+    follow_up = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    follow_up_account = follow_up["instances"][0]["accounts"][0]
+    assert follow_up_account["recovery_status"] == "empty"
+    follow_up_source = next(source for source in follow_up_account["sources"] if source["name"] == "sqlite_primary")
+    assert follow_up_source["raw_collections"] == 0
+
+
 def test_memory_recovery_report_mentions_unreadable_inactive_snapshots_under_accounts_root(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
