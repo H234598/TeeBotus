@@ -48,6 +48,22 @@ def test_render_teebotus_systemd_unit_resolves_relative_python_paths(tmp_path: P
     assert f"ExecStartPre={tmp_path.resolve() / 'bin' / 'python'} -m TeeBotus.systemd" in unit.service_text
 
 
+def test_render_teebotus_systemd_unit_rejects_bare_python_execstart_prefixes(tmp_path: Path) -> None:
+    for python_executable in ("-python", "@python", ":python", "+python", "!python", "|python"):
+        try:
+            render_teebotus_systemd_unit(repo_root=tmp_path, python_executable=python_executable)
+        except ValueError as exc:
+            assert "special ExecStart prefix" in str(exc)
+        else:
+            raise AssertionError(f"expected python executable rejection for {python_executable!r}")
+
+
+def test_render_teebotus_systemd_unit_allows_prefixed_python_path_basename(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path, python_executable="bin/-python")
+
+    assert f"ExecStart={tmp_path.resolve() / 'bin' / '-python'} -m TeeBotus" in unit.service_text
+
+
 def test_render_teebotus_systemd_unit_can_limit_channels_and_no_all(tmp_path: Path) -> None:
     unit = render_teebotus_systemd_unit(
         repo_root=tmp_path,

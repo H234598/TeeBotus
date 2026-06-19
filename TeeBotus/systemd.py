@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 DEFAULT_CHANNELS = "telegram,signal,matrix"
+SYSTEMD_EXEC_PREFIX_CHARS = frozenset("@-:+!|")
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,8 @@ def _python_path(repo_root: Path, value: str) -> Path | str:
     if raw:
         path = Path(raw).expanduser()
         if path.name == raw:
+            if raw[0] in SYSTEMD_EXEC_PREFIX_CHARS:
+                raise ValueError("systemd python executable must not start with a special ExecStart prefix")
             return raw
         return path if path.is_absolute() else (repo_root / path).resolve()
     venv_python = repo_root / ".venv" / "bin" / "python"
