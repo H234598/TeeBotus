@@ -34,7 +34,7 @@ Offen:
 - Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts sind angebunden, weitere echte Adapter-Event-Hooks fuer eingehende Plattform-Receipts sind noch offen.
 - Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
 - Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
-- Tieferer grafischer Applet-Drilldown, echtes Bild-Rendering/Versand der Graphen und Live-Aktivierung der strategischen Analyse-Automatik sind noch offen.
+- Tieferer grafischer Applet-Drilldown, Live-Aktivierung der strategischen Analyse-Automatik und optional hochwertigeres Graph-Rendering sind noch offen.
 
 ## Kurzantwort
 
@@ -510,7 +510,9 @@ Stand 2026-06-19:
 - `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
 - `codex-history graph-export` schreibt eine admin-only Mermaid-Projekthistory nach `data/Codex_History_Bibliothek/graphs`; `codex-history index --graph` kann sie im selben Batch erzeugen.
 - `codex-history graph-export --svg` schreibt zusaetzlich ein dependency-freies SVG-Bild; `codex-history index --graph --graph-svg` erzeugt es im selben Low-Priority-Batch.
+- `codex-history graph-export --queue-svg` queued das SVG als `kind=codex_graph_artifact` mit `image/svg+xml` Attachment fuer den bestehenden Admin-Dispatcher.
 - `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
+- `teebotus-codex-history-systemd --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch` hinzu.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -548,7 +550,9 @@ Stand 2026-06-19:
 	* `codex-history index --graph` erzeugt den Graph im kombinierten Low-Priority-Indexlauf.
 	* `teebotus-codex-history-systemd --index-timer --index-graph` haengt den Graph-Export an den Timer.
 * Teilweise erledigt: `--svg`/`--graph-svg` erzeugt zusaetzlich ein dependency-freies SVG-Bild im selben Ordner.
-* Offen: Versand des SVG/Bildartefakts an Admins und optional hochwertigeres Rendering ueber Mermaid/better-git-of-theseus o.ae.
+* Erledigt: `--queue-svg`/`--graph-queue-svg` legt das SVG als queuebares Admin-Outbox-Attachment ab; der bestehende `codex-history dispatch` versendet es mit Dispatch-Results/Acks.
+* Teilweise erledigt: `teebotus-codex-history-systemd --index-timer --index-dispatch` kann den Versand nach dem Index per `ExecStartPost` automatisch ausloesen.
+* Offen: optional hochwertigeres Rendering ueber Mermaid/better-git-of-theseus o.ae.
 * Default: 1x am Tag
 
 ### Phase 8: Strategische Analyse
@@ -562,7 +566,8 @@ Stand 2026-06-19:
 * `codex-history index --strategic-analysis` erzeugt den Bericht vor Export/Qdrant, damit er im selben Batch in Bibliothekar/Qdrant landen kann.
 * `teebotus-codex-history-systemd --index-timer --index-strategic-analysis` haengt die Analyse an den Low-Priority-Index-Timer.
 * Default im Timer: Aus. Remote-Profile sind nur mit `--strategic-analysis-allow-remote` bzw. `--index-strategic-analysis-allow-remote` erlaubt.
-* Offen: Live-Aktivierung nach expliziter Freigabe, State-/Cache-Optimierung fuer stateful APIs, periodischer Admin-Versand im fertig installierten Timer-Setup.
+* Teilweise erledigt: periodischer Admin-Versand ist im systemd-Index-Timer per `--index-dispatch` opt-in.
+* Offen: Live-Aktivierung nach expliziter Freigabe und State-/Cache-Optimierung fuer stateful APIs.
 ## Ungenauer Ablauf:
 
 1. Eigene `codex_history_outbox`, nicht die Status-Outbox weiter aufblasen.

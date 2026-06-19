@@ -80,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-qdrant-dry-run", action="store_true", help="Count periodic Qdrant chunks without writing Qdrant.")
     parser.add_argument("--index-graph", action="store_true", help="Export an admin-only Mermaid graph during the periodic Codex-History index job.")
     parser.add_argument("--index-graph-svg", action="store_true", help="Also export a dependency-free SVG Codex-History graph image.")
+    parser.add_argument("--index-graph-queue-svg", action="store_true", help="Queue the SVG Codex-History graph for admin dispatch.")
     parser.add_argument("--index-categorize", action="store_true", help="Run optional local Codex-History categorization in the periodic index job.")
     parser.add_argument("--index-categorize-profile", default="local_ollama", help="Local-only LLM profile used by periodic Codex-History categorization.")
     parser.add_argument("--index-categorize-dry-run", action="store_true", help="Run periodic categorization without persisting category updates.")
@@ -87,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-strategic-analysis-profile", default="local_ollama", help="LLM profile used by periodic Codex-History strategic analysis.")
     parser.add_argument("--index-strategic-analysis-allow-remote", action="store_true", help="Allow a remote strategic-analysis profile explicitly.")
     parser.add_argument("--index-strategic-analysis-dry-run", action="store_true", help="Run periodic strategic analysis without writing the outbox item.")
+    parser.add_argument("--index-dispatch", action="store_true", help="Dispatch queued Codex-History items after the periodic index job.")
+    parser.add_argument("--index-dispatch-limit", type=int, default=100, help="Max queued Codex-History items to dispatch after periodic indexing; 0 means all.")
+    parser.add_argument("--index-dispatch-dry-run", action="store_true", help="Dry-run the post-index dispatch step.")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -138,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
                 qdrant_dry_run=bool(args.index_qdrant_dry_run),
                 graph=bool(args.index_graph),
                 graph_svg=bool(args.index_graph_svg),
+                graph_queue_svg=bool(args.index_graph_queue_svg),
                 categorize=bool(args.index_categorize),
                 categorize_profile=args.index_categorize_profile,
                 categorize_dry_run=bool(args.index_categorize_dry_run),
@@ -145,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
                 strategic_analysis_profile=args.index_strategic_analysis_profile,
                 strategic_analysis_allow_remote=bool(args.index_strategic_analysis_allow_remote),
                 strategic_analysis_dry_run=bool(args.index_strategic_analysis_dry_run),
+                dispatch=bool(args.index_dispatch),
+                dispatch_limit=int(args.index_dispatch_limit),
+                dispatch_dry_run=bool(args.index_dispatch_dry_run),
             )
             if args.index_timer
             else None
@@ -301,6 +309,7 @@ def render_codex_history_index_systemd_units(
     qdrant_dry_run: bool = False,
     graph: bool = False,
     graph_svg: bool = False,
+    graph_queue_svg: bool = False,
     categorize: bool = False,
     categorize_profile: str = "local_ollama",
     categorize_dry_run: bool = False,
@@ -308,6 +317,9 @@ def render_codex_history_index_systemd_units(
     strategic_analysis_profile: str = "local_ollama",
     strategic_analysis_allow_remote: bool = False,
     strategic_analysis_dry_run: bool = False,
+    dispatch: bool = False,
+    dispatch_limit: int = 100,
+    dispatch_dry_run: bool = False,
 ) -> CodexHistoryIndexSystemdUnits:
     service_name = _service_name(service_name)
     timer_name = _timer_name(timer_name)
@@ -324,6 +336,7 @@ def render_codex_history_index_systemd_units(
     categorize_profile = _optional_systemd_argument(categorize_profile, label="index categorize profile") or "local_ollama"
     strategic_analysis_profile = _optional_systemd_argument(strategic_analysis_profile, label="index strategic analysis profile") or "local_ollama"
     index_limit = _non_negative_int(limit, label="index limit")
+    dispatch_limit = _non_negative_int(dispatch_limit, label="index dispatch limit")
 
     command = [
         _shell_quote(str(python_path)),
@@ -348,10 +361,12 @@ def render_codex_history_index_systemd_units(
         command.extend(["--qdrant-url", _shell_quote(qdrant_url)])
     if qdrant_dry_run:
         command.append("--qdrant-dry-run")
-    if graph:
+    if graph or graph_svg or graph_queue_svg:
         command.append("--graph")
         if graph_svg:
             command.append("--graph-svg")
+        if graph_queue_svg:
+            command.append("--graph-queue-svg")
     if categorize:
         command.append("--categorize")
         command.extend(["--categorize-profile", _shell_quote(categorize_profile)])
@@ -364,30 +379,54 @@ def render_codex_history_index_systemd_units(
             command.append("--strategic-analysis-allow-remote")
         if strategic_analysis_dry_run:
             command.append("--strategic-analysis-dry-run")
+    dispatch_command: list[str] = []
+    if dispatch:
+        dispatch_command = [
+            _shell_quote(str(python_path)),
+            "-m",
+            "TeeBotus.admin",
+            "codex-history",
+            "dispatch",
+            "--instances-dir",
+            _shell_quote(instances_arg),
+            "--limit",
+            str(dispatch_limit),
+        ]
+        if instances:
+            dispatch_command.append(_shell_quote(f"--instances={instances}"))
+        if instance:
+            dispatch_command.append(_shell_quote(f"--instance={instance}"))
+        if dispatch_dry_run:
+            dispatch_command.append("--dry-run")
 
-    service_text = "\n".join(
+    service_lines = [
+        "[Unit]",
+        "Description=TeeBotus Codex history admin index refresh",
+        "Documentation=https://github.com/H234598/TeeBotus",
+        "Wants=network-online.target",
+        "After=network-online.target",
+        "",
+        "[Service]",
+        "Type=oneshot",
+        f"WorkingDirectory={_systemd_unit_value(str(repo_root), label='repo root')}",
+        f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
+        "Nice=10",
+        "IOSchedulingClass=best-effort",
+        "IOSchedulingPriority=7",
+        "CPUWeight=10",
+        "IOWeight=10",
+        "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
+    ]
+    if dispatch_command:
+        service_lines.append("ExecStartPost=" + _systemd_unit_value(" ".join(dispatch_command), label="dispatch command line"))
+    service_lines.extend(
         [
-            "[Unit]",
-            "Description=TeeBotus Codex history admin index refresh",
-            "Documentation=https://github.com/H234598/TeeBotus",
-            "Wants=network-online.target",
-            "After=network-online.target",
-            "",
-            "[Service]",
-            "Type=oneshot",
-            f"WorkingDirectory={_systemd_unit_value(str(repo_root), label='repo root')}",
-            f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
-            "Nice=10",
-            "IOSchedulingClass=best-effort",
-            "IOSchedulingPriority=7",
-            "CPUWeight=10",
-            "IOWeight=10",
-            "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
             "NoNewPrivileges=true",
             "PrivateTmp=true",
             "",
         ]
     )
+    service_text = "\n".join(service_lines)
     timer_text = "\n".join(
         [
             "[Unit]",

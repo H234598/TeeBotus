@@ -119,6 +119,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
         repo_root=tmp_path,
         graph=True,
         graph_svg=True,
+        graph_queue_svg=True,
         categorize=True,
         categorize_profile="local_ollama",
         categorize_dry_run=True,
@@ -126,10 +127,14 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
         strategic_analysis_profile="local_ollama",
         strategic_analysis_allow_remote=True,
         strategic_analysis_dry_run=True,
+        dispatch=True,
+        dispatch_limit=7,
+        dispatch_dry_run=True,
     )
 
     assert "--graph" in units.service_text
     assert "--graph-svg" in units.service_text
+    assert "--graph-queue-svg" in units.service_text
     assert "--categorize" in units.service_text
     assert "--categorize-profile local_ollama" in units.service_text
     assert "--categorize-dry-run" in units.service_text
@@ -137,6 +142,10 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
     assert "--strategic-analysis-profile local_ollama" in units.service_text
     assert "--strategic-analysis-allow-remote" in units.service_text
     assert "--strategic-analysis-dry-run" in units.service_text
+    assert "ExecStartPost=" in units.service_text
+    assert "codex-history dispatch" in units.service_text
+    assert "--limit 7" in units.service_text
+    assert "--dry-run" in units.service_text
 
 
 def test_render_codex_history_index_systemd_units_rejects_unsafe_timer_name(tmp_path: Path) -> None:
