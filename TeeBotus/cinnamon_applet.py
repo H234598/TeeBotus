@@ -602,17 +602,22 @@ def _quoted_character_indexes(text: str) -> set[int]:
         if char == "=" and index + 1 < len(text) and text[index + 1] in {"'", '"', "`"}:
             quote = text[index + 1]
             quote_index = index + 1
+            candidate: set[int] = set()
+            closed = False
             while quote_index < len(text):
-                quoted.add(quote_index)
+                candidate.add(quote_index)
                 if text[quote_index] == "\\" and quote_index + 1 < len(text):
-                    quoted.add(quote_index + 1)
+                    candidate.add(quote_index + 1)
                     quote_index += 2
                     continue
                 if quote_index > index + 1 and text[quote_index] == quote:
+                    closed = True
                     break
                 quote_index += 1
-            index = quote_index + 1
-            continue
+            if closed:
+                quoted.update(candidate)
+                index = quote_index + 1
+                continue
         index += 1
     return quoted
 

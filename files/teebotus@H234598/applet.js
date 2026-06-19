@@ -756,19 +756,27 @@ TeeBotusApplet.prototype = {
       if (value === "=" && (nextValue === "\"" || nextValue === "'" || nextValue === "`")) {
         let quote = nextValue;
         let quoteIndex = i + 1;
+        let candidate = {};
+        let closed = false;
         while (quoteIndex < text.length) {
-          indexes[quoteIndex] = true;
+          candidate[quoteIndex] = true;
           if (text.charAt(quoteIndex) === "\\" && quoteIndex + 1 < text.length) {
-            indexes[quoteIndex + 1] = true;
+            candidate[quoteIndex + 1] = true;
             quoteIndex += 2;
             continue;
           }
           if (quoteIndex > i + 1 && text.charAt(quoteIndex) === quote) {
+            closed = true;
             break;
           }
           quoteIndex++;
         }
-        i = quoteIndex;
+        if (closed) {
+          for (let key in candidate) {
+            indexes[key] = true;
+          }
+          i = quoteIndex;
+        }
       }
     }
     return indexes;

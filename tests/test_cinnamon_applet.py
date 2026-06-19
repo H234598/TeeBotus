@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
+import subprocess
 import tomllib
 from pathlib import Path
+
+import pytest
 
 import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
@@ -36,6 +40,49 @@ def _js_status_label_keys(source: str) -> set[str]:
     match = re.search(r"let labels = \{(.*?)\n    \};", source, re.DOTALL)
     assert match is not None
     return set(re.findall(r"\n\s*([A-Za-z_][A-Za-z0-9_]*):", match.group(1)))
+
+
+def _run_js_parse_fields(line: str) -> dict[str, str]:
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not available for Cinnamon applet parser parity check")
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+    script = f"""
+const vm = require("vm");
+const source = {json.dumps(source)};
+const line = {json.dumps(line)};
+const TextIconApplet = function() {{}};
+TextIconApplet.prototype = {{}};
+const context = {{
+  console: console,
+  imports: {{
+    ui: {{
+      applet: {{ TextIconApplet: TextIconApplet }},
+      popupMenu: {{}},
+      settings: {{}}
+    }},
+    gi: {{
+      St: {{}},
+      Gio: {{}},
+      GLib: {{
+        get_home_dir: () => "/tmp",
+        build_filenamev: (parts) => parts.join("/"),
+        shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
+      }}
+    }},
+    mainloop: {{
+      source_remove: () => {{}},
+      timeout_add_seconds: () => 0
+    }}
+  }}
+}};
+vm.createContext(context);
+vm.runInContext(source + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;", context);
+const applet = Object.create(context.__TeeBotusApplet.prototype);
+console.log(JSON.stringify(applet._parseFields(line)));
+"""
+    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10)
+    return json.loads(completed.stdout)
 
 
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
@@ -231,6 +278,22 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
         }
     )
     assert FREE_TEXT_STATUS_FIELD_BOUNDARIES["command"] == frozenset({"apply_command"})
+
+
+def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> None:
+    lines = [
+        'account_memory=Demo path="/tmp/\\" status=broken warning=fake" status=ok warning=real',
+        'account_memory=Demo path="/tmp/status=hidden status=broken warning=real',
+        "structured_decision=demo/telegram status=enabled route_status=unavailable "
+        "route_error=provider status=500 fallback=local_ollama fallback_model=llama3 "
+        "remote_fallback=enabled warning=retry",
+        "account_identity_warning=Demo code=runtime_channel_without_identity "
+        "message=Use option foo=bar only after login. "
+        "action=First run /register, then confirm status=ok manually",
+    ]
+
+    for line in lines:
+        assert _run_js_parse_fields(line) == cinnamon_applet._parse_status_fields(line)
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:
@@ -925,6 +988,7 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
         account_memory=Demo/backtick note=`warning=fake` status=ok warning=real
         account_memory=Demo/escaped path="/tmp/\\" status=broken warning=fake" status=ok warning=real
         account_memory=Demo/escaped-single note='it\\'s status=broken warning=fake' status=ok warning=real
+        account_memory=Demo/unclosed path="/tmp/status=hidden status=broken warning=real
         """
     )
 
@@ -935,6 +999,7 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
     backtick_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][4])
     escaped_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][5])
     escaped_single_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][6])
+    unclosed_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][7])
 
     assert path_fields["path"] == '"/tmp/status=broken warning=fake"'
     assert path_fields["status"] == "ok"
@@ -953,12 +1018,15 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
     assert escaped_single_fields["note"] == "'it\\'s status=broken warning=fake'"
     assert escaped_single_fields["status"] == "ok"
     assert escaped_single_fields["warning"] == "real"
+    assert unclosed_fields["path"] == '"/tmp/status=hidden'
+    assert unclosed_fields["status"] == "broken"
+    assert unclosed_fields["warning"] == "real"
     assert parsed["status_counts"]["ok"] == 6
     assert parsed["status_counts"]["needed"] == 1
-    assert parsed["status_counts"]["warning"] == 4
-    assert "broken" not in parsed["status_counts"]
-    assert parsed["summary"]["problem_status_count"] == 5
-    assert parsed["summary"]["problem_statuses"] == "needed:1,warning:4"
+    assert parsed["status_counts"]["broken"] == 1
+    assert parsed["status_counts"]["warning"] == 5
+    assert parsed["summary"]["problem_status_count"] == 7
+    assert parsed["summary"]["problem_statuses"] == "broken:1,needed:1,warning:5"
 
 
 def test_cinnamon_applet_runtime_parser_keeps_apostrophes_in_free_text_neutral() -> None:
