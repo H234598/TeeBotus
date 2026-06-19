@@ -786,6 +786,36 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     assert result["pending"] is False
 
 
+def test_cinnamon_applet_local_status_text_updates_menu_header() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            unit: {},
+            health: {status: "ok"},
+            runtime: {summary: {llm_routes: 2}}
+          };
+          applet.set_applet_label = function(value) { values.panelLabel = value; };
+          applet.set_applet_tooltip = function(value) { values.tooltip = value; };
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._setStatusText("Kopiert.");
+          values.statusText = applet.statusText;
+          return values;
+        })()
+        """
+    )
+
+    assert result["statusText"] == "Kopiert."
+    assert result["tooltip"] == "Kopiert."
+    assert result["summary"] == "Kopiert."
+    assert result["header"] == "TB 1.2.3"
+    assert "LLM-Routen: 2" in result["version"]
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """

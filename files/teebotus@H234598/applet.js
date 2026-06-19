@@ -1056,6 +1056,14 @@ TeeBotusApplet.prototype = {
     this.set_applet_tooltip(this.statusText || _("TB"));
   },
 
+  _setStatusText: function(text) {
+    this.statusText = String(text || "");
+    this._updatePanel();
+    if (this.headerItem && this.summaryItem && this.versionItem) {
+      this._updateHeader();
+    }
+  },
+
   _setPanelState: function(state) {
     if (state === "refreshing") {
       this.set_applet_label("TB");
@@ -1140,7 +1148,7 @@ TeeBotusApplet.prototype = {
     }
     let run = () => {
       this._spawn(["systemctl", "--user", action, unit], (stdout, stderr, ok) => {
-        this.statusText = ok ? _("Service action completed: ") + action : _("Service action failed: ") + (stderr || stdout);
+        this._setStatusText(ok ? _("Service action completed: ") + action : _("Service action failed: ") + (stderr || stdout));
         this._refreshStatus();
       });
     };
@@ -1181,9 +1189,7 @@ TeeBotusApplet.prototype = {
         key: Clutter.KEY_Escape,
         action: function() {
           dialog.close();
-          this.statusText = _("Service action cancelled.");
-          this._updatePanel();
-          this._updateHeader();
+          this._setStatusText(_("Service action cancelled."));
           complete(false);
         }.bind(this),
       },
@@ -1196,9 +1202,7 @@ TeeBotusApplet.prototype = {
       }
     ]);
     if (!dialog.open()) {
-      this.statusText = _("Service confirmation dialog could not be opened.");
-      this._updatePanel();
-      this._updateHeader();
+      this._setStatusText(_("Service confirmation dialog could not be opened."));
       complete(false);
     }
   },
@@ -1257,8 +1261,7 @@ TeeBotusApplet.prototype = {
   _openTerminalShell: function(cwd, command) {
     let terminal = this._terminalArgs();
     if (!terminal) {
-      this.statusText = _("No terminal found.");
-      this._updatePanel();
+      this._setStatusText(_("No terminal found."));
       return;
     }
     let shellCommand = "cd " + this._safeShellWord(cwd) + " && " + command + "; printf '\\n'; read -r -p 'Enter zum Schliessen...'";
@@ -1311,8 +1314,7 @@ TeeBotusApplet.prototype = {
 
   _copyText: function(text) {
     this.clipboard.set_text(St.ClipboardType.CLIPBOARD, String(text || ""));
-    this.statusText = _("Kopiert.");
-    this._updatePanel();
+    this._setStatusText(_("Kopiert."));
   },
 
   _openAppletSettings: function() {
