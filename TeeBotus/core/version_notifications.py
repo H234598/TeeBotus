@@ -703,19 +703,24 @@ def _clear_historical_failures_resolved_by_sent_identities(
     for sent_identity in sent_identities:
         failed_identities.pop(sent_identity, None)
         payload = identities.get(sent_identity)
-        if not isinstance(payload, dict):
-            continue
-        account_id = _normalized_account_id(payload.get("account_id"))
-        route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
-        if not account_id or _route_channel(route) != "telegram":
-            continue
-        route_chat_type = _route_chat_type(route)
-        if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
-            continue
-        route_slot = _route_adapter_slot(route)
-        chat_id = _route_chat_id(route, sent_identity)
-        if route_slot is None or chat_id is None:
-            continue
+        if isinstance(payload, dict):
+            account_id = _normalized_account_id(payload.get("account_id"))
+            route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
+            if not account_id or _route_channel(route) != "telegram":
+                continue
+            route_chat_type = _route_chat_type(route)
+            if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
+                continue
+            route_slot = _route_adapter_slot(route)
+            chat_id = _route_chat_id(route, sent_identity)
+            if route_slot is None or chat_id is None:
+                continue
+        else:
+            account_id = ""
+            chat_id = _telegram_user_identity_chat_id(sent_identity)
+            route_slot = 1 if chat_id is not None else None
+            if route_slot is None or chat_id is None:
+                continue
         recipient = VersionNotificationRecipient(
             instance_name="",
             account_id=account_id,

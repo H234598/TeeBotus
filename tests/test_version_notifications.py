@@ -1879,6 +1879,54 @@ def test_notify_recent_telegram_users_ignores_historical_failure_after_later_ali
     assert account_id
 
 
+def test_notify_recent_telegram_users_clears_historical_alias_failure_after_encoded_user_success(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    },
+                    "1.0.4": {
+                        "sent_identities": ["telegram:user:111"],
+                        "failed_identities": {},
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.5",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+
+    assert count == 1
+    assert attempts == [111]
+    assert state["versions"]["1.0.5"]["sent_identities"] == ["telegram:username:ada"]
+    assert state["versions"]["1.0.5"]["failed_identities"] == {}
+    assert account_id
+
+
 def test_notify_recent_telegram_users_does_not_treat_future_failure_as_historical(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Ada")
