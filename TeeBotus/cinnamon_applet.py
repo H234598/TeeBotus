@@ -90,6 +90,11 @@ SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
+QUOTED_SECRET_ASSIGNMENT_RE = re.compile(
+    rf"([\s=;,&?(\[<{{])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
+    rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
+    re.IGNORECASE,
+)
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
 SAFE_SECRET_NUMERIC_METADATA = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens"})
 SAFE_SECRET_TEXT_METADATA = frozenset({"tokens", "token_usage", "costs", "limits", "free_tier_guard"})
@@ -659,6 +664,7 @@ def _redact(value: str) -> str:
     text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
     text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
     text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
+    text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text
@@ -689,15 +695,32 @@ def _redact_secret_assignment_fragment(match: re.Match[str]) -> str:
     return prefix + _redact_secret_assignment_text(key, separator, value, original=original)
 
 
+def _redact_quoted_secret_assignment(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key_quote = str(match.group(2) or '"')
+    key = str(match.group(3) or "")
+    separator = str(match.group(4) or ":")
+    value = str(match.group(5) or "")
+    original = match.group(0)[len(prefix) :]
+    redacted = _redact_secret_assignment_text(key, separator, value, original=original)
+    if redacted == original:
+        return match.group(0)
+    raw_value = value.strip()
+    value_quote = raw_value[:1] if raw_value[:1] in {"'", '"', "`"} and raw_value[-1:] == raw_value[:1] else ""
+    rendered_value = f"{value_quote}<redacted>{value_quote}" if value_quote else "<redacted>"
+    return f"{prefix}{key_quote}{key}{key_quote}{separator}{rendered_value}"
+
+
 def _redact_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
     key_token = key.strip().casefold().replace("-", "_").replace(" ", "_")
-    normalized_value = value.strip().strip("\"'`").casefold()
     raw_value = value.strip()
+    unquoted_value = raw_value.strip("\"'`")
+    normalized_value = unquoted_value.casefold()
     if normalized_value in SAFE_SECRET_VALUES:
         return original
-    if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", raw_value):
+    if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", unquoted_value):
         return original
-    if key_token in SAFE_SECRET_NUMERIC_METADATA and (raw_value.isdigit() or re.fullmatch(r"\d+/\d+", raw_value)):
+    if key_token in SAFE_SECRET_NUMERIC_METADATA and (unquoted_value.isdigit() or re.fullmatch(r"\d+/\d+", unquoted_value)):
         return original
     if key_token in SAFE_SECRET_TEXT_METADATA:
         return original

@@ -853,13 +853,14 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
         llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token escaped_api_key="secret\\"still-secret" escaped_password='secret\\'still-password' escaped_token=`secret\\`still-token` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
 
         [API Keys, Limits und Kosten]
-        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 private_key=-----BEGIN PRIVATE KEY----- message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret>
+        api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 private_key=-----BEGIN PRIVATE KEY----- message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret> diagnostic_json={{"api_key":"json-secret-value","client_secret":"json spaced secret","api_key_env":"GEMINI_API_KEY","api_key_ring":"3"}}
 
         [Messenger]
         telegram_slot=Demo/telegram:1 status=configured token=configured target=https://user:plainpass@example.test/path
         """
     )
     rendered = json.dumps(parsed, sort_keys=True)
+    api_line = parsed["sections"]["API Keys, Limits und Kosten"][0]
 
     assert github_token not in rendered
     assert "nested-secret" not in rendered
@@ -878,6 +879,8 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "bracket secret value" not in rendered
     assert "curly-secret" not in rendered
     assert "angle-secret" not in rendered
+    assert "json-secret-value" not in rendered
+    assert "json spaced secret" not in rendered
     assert "user:plainpass" not in rendered
     assert "api_key=<redacted-secret>" in rendered
     assert "client_secret=<redacted>" in rendered
@@ -894,6 +897,10 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "details=[api_key=<redacted>]" in rendered
     assert "meta={password=<redacted>}" in rendered
     assert "hint=<token=<redacted>>" in rendered
+    assert '"api_key":"<redacted>"' in api_line
+    assert '"client_secret":"<redacted>"' in api_line
+    assert '"api_key_env":"GEMINI_API_KEY"' in api_line
+    assert '"api_key_ring":"3"' in api_line
     assert "api_key_env=GEMINI_API_KEY" in rendered
     assert "api_key_ring=3" in rendered
     assert "password:<redacted>" in rendered
