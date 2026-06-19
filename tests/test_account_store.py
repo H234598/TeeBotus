@@ -1518,6 +1518,94 @@ def test_account_json_state_keeps_legacy_file_when_compaction_write_fails(tmp_pa
     assert store.account_memory_vault.read_json(legacy_path, {})["previous_response_id"] == "resp-legacy"
 
 
+def test_instance_json_state_reads_legacy_file_when_collection_read_fails(tmp_path):
+    class FailingReadCollectionBackend:
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            raise AccountStoreError("collection read failed")
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("read fallback must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = FailingReadCollectionBackend()
+    legacy_path = tmp_path / "Version_Notifications.json"
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}},
+    )
+
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert legacy_path.exists()
+
+
+def test_account_json_state_reads_legacy_file_when_collection_read_fails(tmp_path):
+    class FailingReadCollectionBackend:
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            raise AccountStoreError("collection read failed")
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("read fallback must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = FailingReadCollectionBackend()
+    legacy_path = store.account_dir(account_id) / LLM_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"previous_response_id": "resp-legacy", "updated_at": "2026-06-14T11:59:00+00:00"},
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-legacy"
+    assert legacy_path.exists()
+
+
+def test_agent_json_state_reads_legacy_file_when_collection_read_fails(tmp_path):
+    class FailingReadCollectionBackend:
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            raise AccountStoreError("collection read failed")
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("read fallback must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = FailingReadCollectionBackend()
+    legacy_path = store.account_dir(account_id) / "Agent_State.json"
+    store.account_memory_vault.write_json(legacy_path, {"proactive": {"enabled": True}})
+
+    state = store.read_agent_state(account_id)
+
+    assert state["proactive"]["enabled"] is True
+    assert legacy_path.exists()
+
+
+def test_account_jsonl_collection_reads_legacy_file_when_collection_read_fails(tmp_path):
+    class FailingReadCollectionBackend:
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            raise AccountStoreError("collection read failed")
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("read fallback must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = FailingReadCollectionBackend()
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "pro_legacy", "message_text": "Fallback lesen", "status": "queued"}],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [{"id": "pro_legacy", "message_text": "Fallback lesen", "status": "queued"}]
+    assert legacy_path.exists()
+
+
 def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
     sqlite_path = tmp_path / "memory.sqlite3"
     account_id = "a" * 128

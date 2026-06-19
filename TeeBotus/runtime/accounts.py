@@ -280,6 +280,10 @@ class AccountStoreError(RuntimeError):
     """Raised for account-store integrity or crypto errors."""
 
 
+class _AccountCollectionReadError(AccountStoreError):
+    """Raised when a collection backend read fails before migration can start."""
+
+
 @dataclass(frozen=True)
 class AccountMemorySelection:
     prompt_text: str
@@ -2393,14 +2397,28 @@ class AccountStore:
         llm_path = account_dir / LLM_STATE_FILENAME
         legacy_path = account_dir / OPENAI_STATE_FILENAME
         if self._account_memory_collection_backend_available():
-            sql_state = self._read_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, {})
+            sql_state_available = True
+            try:
+                sql_state = self._read_account_json_document(
+                    account_id,
+                    LLM_STATE_FILENAME,
+                    LLM_STATE_COLLECTION,
+                    {},
+                    fallback_to_legacy_on_read_error=False,
+                )
+            except _AccountCollectionReadError:
+                if not llm_path.exists() and not legacy_path.exists():
+                    raise
+                sql_state = {}
+                sql_state_available = False
             llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
             legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
             selected = _choose_newer_state(legacy_state, _choose_newer_state(llm_state, sql_state))
-            if selected != sql_state:
+            if sql_state_available and selected != sql_state:
                 self._write_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, selected)
-            self._unlink_migrated_account_file(llm_path)
-            self._unlink_migrated_account_file(legacy_path)
+            if sql_state_available:
+                self._unlink_migrated_account_file(llm_path)
+                self._unlink_migrated_account_file(legacy_path)
             return selected
         llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
         legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
@@ -2447,10 +2465,15 @@ class AccountStore:
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if not (callable(read_collection) and callable(write_collection)):
             return dict(default)
-        rows = [row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)]
+        path = self.root.parent / safe_filename
+        try:
+            rows = [row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)]
+        except Exception:
+            if path.exists():
+                return self._read_legacy_instance_json_state(path, dict(default))
+            raise
         data = _merge_json_document_rows(rows, dict(default))
         should_compact = len(rows) > 1
-        path = self.root.parent / safe_filename
         should_unlink_legacy = False
         if path.exists():
             legacy_data = self._read_legacy_instance_json_state(path, dict(default))
@@ -2487,16 +2510,29 @@ class AccountStore:
         backend = self.account_memory_backend
         return callable(getattr(backend, "read_collection", None)) and callable(getattr(backend, "write_collection", None))
 
-    def _read_account_json_document(self, account_id: str, filename: str, collection: str, default: dict[str, Any]) -> dict[str, Any]:
+    def _read_account_json_document(
+        self,
+        account_id: str,
+        filename: str,
+        collection: str,
+        default: dict[str, Any],
+        *,
+        fallback_to_legacy_on_read_error: bool = True,
+    ) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
         read_collection = getattr(backend, "read_collection", None) if backend is not None else None
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(read_collection) and callable(write_collection):
-            rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
+            path = self.account_dir(account_id) / filename
+            try:
+                rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
+            except Exception as exc:
+                if fallback_to_legacy_on_read_error and path.exists():
+                    return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+                raise _AccountCollectionReadError(str(exc)) from exc
             data = _merge_json_document_rows(rows, dict(default))
             should_compact = len(rows) > 1
-            path = self.account_dir(account_id) / filename
             should_unlink_legacy = False
             if path.exists():
                 legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
@@ -2529,7 +2565,12 @@ class AccountStore:
         read_collection = getattr(backend, "read_collection", None) if backend is not None else None
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(read_collection) and callable(write_collection):
-            rows = list(read_collection(account_id, collection))
+            try:
+                rows = list(read_collection(account_id, collection))
+            except Exception:
+                if path.exists():
+                    return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+                raise
             if path.exists():
                 legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 merged_rows = _merge_account_jsonl_rows(rows, legacy_rows)
