@@ -115,6 +115,11 @@ def test_build_account_configs_rejects_unknown_direct_channel():
         build_account_run_configs("Depressionsbot", ("irc",), {})
 
 
+def test_build_account_configs_rejects_empty_direct_channel_sequence():
+    with pytest.raises(RuntimeConfigError, match="must include at least one channel"):
+        build_account_run_configs("Depressionsbot", (), {})
+
+
 def test_build_account_configs_rejects_duplicate_direct_channels():
     with pytest.raises(RuntimeConfigError, match="duplicate values in runtime channels"):
         build_account_run_configs("Depressionsbot", ("telegram", " Telegram "), {})

@@ -173,6 +173,8 @@ def _normalize_runtime_channel(channel: str, *, label: str) -> str:
 
 def _normalize_runtime_channels(channels: Sequence[str], *, label: str) -> tuple[str, ...]:
     normalized = tuple(_normalize_runtime_channel(channel, label=label) for channel in channels)
+    if not normalized:
+        raise RuntimeConfigError(f"{label} must include at least one channel")
     return _validate_unique_values(normalized, label=label)
 
 
