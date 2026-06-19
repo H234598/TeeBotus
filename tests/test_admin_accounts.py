@@ -5,6 +5,7 @@ import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from TeeBotus.admin import __main__ as admin_entrypoint
 from TeeBotus.admin.account_memory_recovery import (
@@ -21,7 +22,15 @@ from TeeBotus.admin.account_memory_recovery import (
 )
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
 from TeeBotus.admin.accounts_report import build_accounts_admin_report, main as accounts_report_main, render_text_report, runtime_report_env
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, INSTANCE_STATE_ACCOUNT_ID, AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.admin.status_auth_admin import build_status_auth_report, main as status_auth_admin_main
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_STATE_ACCOUNT_ID,
+    AccountStore,
+    AccountStoreError,
+    StaticSecretProvider,
+    signal_identity_key,
+)
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
@@ -211,6 +220,61 @@ def test_accounts_report_cli_uses_local_dotenv_for_runtime_slots(tmp_path: Path,
     assert result == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["instances"][0]["runtime_slots"]["configured_channels"] == {"signal": 1, "telegram": 1}
+
+
+def test_status_auth_report_lists_authorized_accounts_and_outbox(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.update_identity_route("telegram:user:2", channel="telegram", chat_id="2", chat_type="private", adapter_slot=1)
+    store.write_status_auth_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "authorized": True,
+            "authorized_at": "2026-06-19T12:00:00+00:00",
+        },
+    )
+    store.append_status_outbox_item(account_id, {"kind": "runtime_status_summary", "summary_number": 1, "status": "sent"})
+
+    report = build_status_auth_report(instances_dir=tmp_path, provider=provider())
+
+    instance_report = report["instances"][0]
+    assert instance_report["status_auth"]["authorized_accounts"] == 1
+    assert instance_report["status_auth"]["outbox_items"] == 1
+    assert instance_report["status_auth"]["accounts"][0]["account_id"] == account_id
+    assert instance_report["status_auth"]["accounts"][0]["route"]["channel"] == "telegram"
+
+
+def test_status_auth_report_cli_outputs_json(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True})
+
+    result = status_auth_admin_main(["report", "--instances-dir", str(tmp_path), "--format", "json"], provider=provider())
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["totals"]["authorized_accounts"] == 1
+
+
+def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True})
+
+    def _broken_route(_store: AccountStore, _account_id: str) -> dict[str, Any]:
+        raise AccountStoreError("route lookup failed")
+
+    monkeypatch.setattr("TeeBotus.admin.status_auth_admin.select_proactive_route", _broken_route)
+
+    report = build_status_auth_report(instances_dir=tmp_path, provider=provider())
+
+    account_report = report["instances"][0]["status_auth"]["accounts"][0]
+    assert account_report["account_id"] == account_id
+    assert account_report["route_error"] == "AccountStoreError:route lookup failed"
 
 
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
