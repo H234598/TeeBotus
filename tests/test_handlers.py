@@ -82,6 +82,8 @@ class HandlerTests(unittest.TestCase):
         self.assertTrue(is_program_history_request("Zeig mir die letzten Comitts"))
         self.assertTrue(is_program_history_request("Gibt es Release-Notes?"))
         self.assertFalse(is_program_history_request("commit bitte"))
+        self.assertFalse(is_program_history_request("Was sind Commits?"))
+        self.assertFalse(is_program_history_request("Kannst du Commits erklären?"))
         self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))
 
     def test_uses_exact_text_reply_before_echo(self) -> None:
