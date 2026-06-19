@@ -748,6 +748,44 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
     assert result["statusText"].startswith("Health")
 
 
+def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let calls = [];
+          applet.statusTimeoutSeconds = 30;
+          applet.repoPath = "/old-repo";
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawn = function(argv, callback, cwd, options) {
+            calls.push({argv: argv, cwd: cwd, pending: applet.statusRefreshPending});
+            if (calls.length === 1) {
+              applet.repoPath = "/new-repo";
+              applet._refreshStatus();
+            }
+            callback("{\\"ok\\":true,\\"unit\\":{},\\"health\\":{},\\"runtime\\":{}}", "", true);
+          };
+          applet._refreshStatus();
+          return {
+            calls: calls,
+            running: applet.statusRunning,
+            pending: applet.statusRefreshPending
+          };
+        })()
+        """
+    )
+
+    assert len(result["calls"]) == 2
+    assert result["calls"][0]["cwd"] == "/old-repo"
+    assert result["calls"][0]["pending"] is False
+    assert result["calls"][1]["cwd"] == "/new-repo"
+    second_command = result["calls"][1]["argv"]
+    assert second_command[second_command.index("--repo-root") + 1] == "/new-repo"
+    assert result["running"] is False
+    assert result["pending"] is False
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """

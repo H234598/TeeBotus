@@ -176,6 +176,7 @@ TeeBotusApplet.prototype = {
     this.statusText = "";
     this.statusTimer = 0;
     this.statusRunning = false;
+    this.statusRefreshPending = false;
     this.lastError = "";
     this.appletRemoved = false;
     this.spawnGeneration = 0;
@@ -902,9 +903,11 @@ TeeBotusApplet.prototype = {
 
   _refreshStatus: function() {
     if (this.statusRunning) {
+      this.statusRefreshPending = true;
       return;
     }
     this.statusRunning = true;
+    this.statusRefreshPending = false;
     this._setPanelState("refreshing");
     this._spawnJson(this._statusCommand(), (payload, error) => {
       this.statusRunning = false;
@@ -919,6 +922,10 @@ TeeBotusApplet.prototype = {
       }
       this._buildMenu();
       this._updatePanel();
+      if (this.statusRefreshPending && !this.appletRemoved) {
+        this.statusRefreshPending = false;
+        this._refreshStatus();
+      }
     }, this._repoPath(), { timeoutMs: (this._statusTimeoutSeconds() + STATUS_TIMEOUT_GRACE_SECONDS) * 1000 });
   },
 
@@ -1617,6 +1624,8 @@ TeeBotusApplet.prototype = {
   on_applet_removed_from_panel: function() {
     this.appletRemoved = true;
     this.spawnGeneration += 1;
+    this.statusRunning = false;
+    this.statusRefreshPending = false;
     if (this.statusTimer) {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
