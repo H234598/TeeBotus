@@ -244,7 +244,7 @@ def test_codex_history_systemd_print_mode_can_output_index_timer(tmp_path: Path,
     assert "# teebotus-codex-history-index.service" in captured.out
     assert "# teebotus-codex-history-index.timer" in captured.out
     assert "ExecStart=python3 -m TeeBotus.admin codex-history index" in captured.out
-    assert "OnUnitActiveSec=6h" in captured.out
+    assert "OnUnitActiveSec=24h" in captured.out
 
 
 def test_codex_history_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path: Path) -> None:

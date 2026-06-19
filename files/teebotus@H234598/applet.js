@@ -382,6 +382,12 @@ TeeBotusApplet.prototype = {
     this.projectMenu.menu.addMenuItem(this._actionItem(_("GitHub öffnen"), () => this._openUri(this._githubUrl())));
     this.projectMenu.menu.addMenuItem(this._actionItem(_("Commits öffnen"), () => this._openUri(this._commitsUrl())));
     this.projectMenu.menu.addMenuItem(this._actionItem(_("README im Terminal"), () => this._openTerminalForCommand(this._repoPath(), ["sed", "-n", "1,140p", "README.md"])));
+    this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Report"), () => this._openCodexHistoryReport()));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Index jetzt"), () => this._openCodexHistoryIndex()));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Strategie jetzt"), () => this._openCodexHistoryStrategy()));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Timer aktivieren"), () => this._openCodexHistoryTimerEnable()));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Codex-History Timer Status"), () => this._openCodexHistoryTimerStatus()));
   },
 
   _populateDynamicMenus: function() {
@@ -1378,6 +1384,61 @@ TeeBotusApplet.prototype = {
 
   _openQdrantStatusTerminal: function() {
     this._openTerminalForCommand(this._repoPath(), ["systemctl", "--user", "status", this._qdrantUnit(), "--no-pager"]);
+  },
+
+  _openCodexHistoryReport: function() {
+    this._openTerminalForCommand(this._repoPath(), this._codexHistoryAdminArgs(["report"]));
+  },
+
+  _openCodexHistoryIndex: function() {
+    this._openTerminalForCommand(
+      this._repoPath(),
+      this._codexHistoryAdminArgs(["index", "--qdrant", "--qdrant-ensure", "--graph", "--graph-svg"])
+    );
+  },
+
+  _openCodexHistoryStrategy: function() {
+    this._openTerminalForCommand(
+      this._repoPath(),
+      this._codexHistoryAdminArgs(["strategic-analysis", "--profile", "local_ollama"])
+    );
+  },
+
+  _openCodexHistoryTimerEnable: function() {
+    this._openTerminalForCommand(
+      this._repoPath(),
+      this._pythonArgs().concat([
+        "-m",
+        "TeeBotus.codex_history_systemd",
+        "--repo-root",
+        this._repoPath(),
+        "--index-timer",
+        "--index-graph",
+        "--index-graph-svg",
+        "--index-graph-queue-svg",
+        "--index-strategic-analysis",
+        "--index-dispatch",
+        "--enable"
+      ])
+    );
+  },
+
+  _openCodexHistoryTimerStatus: function() {
+    this._openTerminalForCommand(
+      this._repoPath(),
+      ["systemctl", "--user", "status", "teebotus-codex-history-index.timer", "teebotus-codex-history-index.service", "--no-pager"]
+    );
+  },
+
+  _codexHistoryAdminArgs: function(args) {
+    return this._pythonArgs().concat([
+      "-m",
+      "TeeBotus.admin",
+      "codex-history",
+    ]).concat(args || []).concat([
+      "--instances-dir",
+      GLib.build_filenamev([this._repoPath(), "instances"])
+    ]);
   },
 
   _appendQdrantActions: function() {

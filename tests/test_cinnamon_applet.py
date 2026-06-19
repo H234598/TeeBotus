@@ -370,6 +370,15 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "Qdrant-Status" in source
     assert "Usermemory-Vektoranzahl" in source
     assert "TeeBotus.embedding" in source
+    assert "Codex-History Report" in source
+    assert "Codex-History Index jetzt" in source
+    assert "Codex-History Strategie jetzt" in source
+    assert "Codex-History Timer aktivieren" in source
+    assert "_openCodexHistoryTimerEnable" in source
+    assert "TeeBotus.codex_history_systemd" in source
+    assert "--index-strategic-analysis" in source
+    assert "--index-graph-queue-svg" in source
+    assert "--index-dispatch" in source
     assert "/status" in source
     assert "/voicemodel" in source
     assert 'this.set_applet_label("TB")' in source
