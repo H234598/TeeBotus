@@ -107,6 +107,37 @@ def test_render_proactive_systemd_unit_rejects_instance_path_segments(tmp_path) 
             raise AssertionError(f"expected instance path segment rejection for {instance_name!r}")
 
 
+def test_render_proactive_systemd_unit_uses_collision_resistant_unit_names(tmp_path) -> None:
+    units = [
+        render_proactive_systemd_unit(
+            repo_root=tmp_path,
+            instances_dir="instances",
+            instance_name=instance_name,
+            interval="5min",
+        )
+        for instance_name in ("A B", "A-B", "A_B", "A@B")
+    ]
+
+    service_names = [unit.service_name for unit in units]
+    assert len(set(service_names)) == len(service_names)
+    assert "teebotus-proactive-a-b.service" in service_names
+    assert all(name.startswith("teebotus-proactive-a-b") for name in service_names)
+
+
+def test_render_proactive_systemd_unit_rejects_slugless_instance_name(tmp_path) -> None:
+    try:
+        render_proactive_systemd_unit(
+            repo_root=tmp_path,
+            instances_dir="instances",
+            instance_name="!!!",
+            interval="5min",
+        )
+    except ValueError as exc:
+        assert "alphanumeric" in str(exc)
+    else:
+        raise AssertionError("expected slugless instance name to fail")
+
+
 def test_proactive_systemd_rejects_instance_traversal_before_bot_verhalten_lookup(tmp_path, capsys) -> None:
     outside_dir = tmp_path / "outside"
     outside_dir.mkdir()

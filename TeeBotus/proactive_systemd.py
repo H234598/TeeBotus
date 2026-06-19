@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -146,9 +147,15 @@ def render_proactive_systemd_unit(
 
 
 def _systemd_instance_token(instance_name: str) -> str:
-    token = "".join(char.casefold() if char.isalnum() else "-" for char in str(instance_name or "").strip())
+    raw = str(instance_name or "").strip()
+    token = "".join(char.casefold() if char.isalnum() else "-" for char in raw)
     token = "-".join(part for part in token.split("-") if part)
-    return token or "default"
+    if not token:
+        raise ValueError("systemd instance name must contain at least one alphanumeric character")
+    if raw.casefold() == token:
+        return token
+    digest = hashlib.blake2s(raw.encode("utf-8"), digest_size=4).hexdigest()
+    return f"{token}-{digest}"
 
 
 def _instance_name(value: str) -> str:
