@@ -31,8 +31,8 @@ Umgesetzt:
 
 Offen:
 
-- Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts sind angebunden, weitere echte Adapter-Event-Hooks fuer eingehende Plattform-Receipts sind noch offen.
-- Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
+- Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts und Signal-Read/Delivery-Receipt-Events sind angebunden. Telegram-Bot-API liefert fuer Bot-Nachrichten keine echten Delivery-/Read-Receipts, daher gibt es dort keinen nativen Hook.
+- Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden; native Plattform-Receipts sind fuer Matrix und Signal angebunden.
 - Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
 - Optional hochwertigeres Graph-Rendering ist als `mmdc`/`auto`-Pfad angebunden; weitere Layout-Qualitaet bleibt optional.
 
@@ -487,7 +487,7 @@ Stand 2026-06-19:
 - Signal-Replys mit Quote-Timestamp und Matrix-Replys mit `m.in_reply_to.event_id` nutzen dieselbe kanalneutrale Ack-Logik.
 - Native Receipt-Basis setzt nur `delivered` und stuft bereits `acknowledged` Items nicht zurueck.
 - Matrix-`ReceiptEvent`s werden gegen `codex_history_dispatch_results.message_ref` gemappt und setzen passende History-Eintraege auf `delivered`.
-- Offen: weitere echte Adapter-Hooks fuer eingehende native Plattform-Receipts, vor allem falls Signal/Telegram dafuer separat verwertbare Events liefern.
+- Native Receipts: Matrix-`ReceiptEvent`s und Signal-Receipt-Events werden gegen `codex_history_dispatch_results.message_ref` gemappt. Telegram bleibt bewusst ohne nativen Receipt-Hook, weil die Bot API keine echten Delivery-/Read-Receipts fuer Bot-Nachrichten liefert.
 
 ### Phase 5: Applet/Status
 

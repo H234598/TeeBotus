@@ -676,6 +676,72 @@ def test_signal_command_marks_codex_history_reply_acknowledged(tmp_path) -> None
     assert dispatch_rows[-1]["reply_text_preview"] == "gesehen"
 
 
+def test_signal_command_records_codex_history_native_read_receipts(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+    item_id = command.account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "kind": "codex_run_summary",
+            "status": "accepted",
+            "summary_prefix": "v1.8.2 #0001",
+            "summary": {"title": "Signal Native Receipt"},
+            "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+        },
+    )
+    command.account_store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": account_id,
+            "instance": "Demo",
+            "status": "accepted",
+            "channel": "signal",
+            "chat_id": "+491234",
+            "message_ref": "777777",
+            "summary_prefix": "v1.8.2 #0001",
+        },
+    )
+    context = FakeSignalContext()
+    context.message.text = ""
+    context.message.type = MessageType.READ_MESSAGE
+    context.message.raw_message = json.dumps(
+        {
+            "envelope": {
+                "source": "+491234",
+                "receiptMessage": {
+                    "type": "READ",
+                    "timestamps": [777777],
+                },
+            }
+        }
+    )
+
+    asyncio.run(command.handle(context))
+
+    persisted = command.account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    dispatch_rows = command.account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert persisted["status"] == "delivered"
+    assert persisted["delivery"]["delivered_at"]
+    assert persisted["delivery"].get("acknowledged_at", "") == ""
+    assert dispatch_rows[-1]["status"] == "delivered"
+    assert dispatch_rows[-1]["reason"] == "signal_read_receipt"
+    assert dispatch_rows[-1]["receipt_type"] == "read"
+    assert dispatch_rows[-1]["message_ref"] == "777777"
+
+
 def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path, monkeypatch) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()

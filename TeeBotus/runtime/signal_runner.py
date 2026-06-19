@@ -17,8 +17,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
-from TeeBotus.admin.codex_history import record_codex_history_reply
-from TeeBotus.adapters.signal import _signal_raw_data_message, _signal_required_timestamp, send_signal_actions, signal_context_to_event
+from TeeBotus.admin.codex_history import record_codex_history_delivery_receipt, record_codex_history_reply
+from TeeBotus.adapters.signal import _signal_message_recipient, _signal_raw_data_message, _signal_required_timestamp, send_signal_actions, signal_context_to_event
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
@@ -174,6 +174,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self._dispatch_loop = asyncio.get_running_loop()
         self._dispatch_loop_thread_id = threading.get_ident()
         try:
+            if self._record_codex_history_native_receipts(getattr(context, "message", None)):
+                return
             event = signal_context_to_event(
                 context=context,
                 instance_name=self.run_config.instance_name,
@@ -439,6 +441,35 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 event.message_ref,
                 reply_to_ref,
             )
+
+    def _record_codex_history_native_receipts(self, message: Any) -> bool:
+        receipt = _signal_native_receipt(message)
+        if not receipt:
+            return False
+        chat_id = receipt.get("chat_id", "")
+        receipt_type = receipt.get("receipt_type", "delivered")
+        message_refs = receipt.get("message_refs", ())
+        if not chat_id or not message_refs:
+            return True
+        for message_ref in message_refs:
+            try:
+                record_codex_history_delivery_receipt(
+                    self.account_store,
+                    instance_name=self.run_config.instance_name,
+                    channel="signal",
+                    chat_id=chat_id,
+                    message_ref=message_ref,
+                    receipt_type=receipt_type,
+                )
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                LOGGER.exception(
+                    "Signal Codex-History receipt tracking failed instance=%s recipient=%s message_ref=%s receipt_type=%s.",
+                    self.run_config.instance_name,
+                    chat_id,
+                    message_ref,
+                    receipt_type,
+                )
+        return True
 
     async def _delete_local_attachments(self, context: Any) -> None:
         message = getattr(context, "message", None)
@@ -710,6 +741,82 @@ def _signal_reply_message_ref(message: Any) -> str:
         if value:
             return value
     return ""
+
+
+def _signal_native_receipt(message: Any) -> dict[str, Any]:
+    message_refs = _signal_receipt_message_refs(message)
+    if not message_refs:
+        return {}
+    chat_id = _signal_message_recipient_for_receipt(message)
+    if not chat_id:
+        return {}
+    return {
+        "chat_id": chat_id,
+        "receipt_type": _signal_receipt_type(message),
+        "message_refs": tuple(dict.fromkeys(message_refs)),
+    }
+
+
+def _signal_receipt_message_refs(message: Any) -> list[str]:
+    refs: list[str] = []
+    for attr in ("timestamps", "target_sent_timestamps", "target_timestamps", "sent_timestamps"):
+        value = getattr(message, attr, None)
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            refs.extend(str(item or "").strip() for item in value if str(item or "").strip())
+    raw_message = getattr(message, "raw_message", None)
+    if isinstance(raw_message, str) and raw_message.strip():
+        try:
+            payload = json.loads(raw_message)
+        except (TypeError, ValueError):
+            payload = {}
+        envelope = payload.get("envelope") if isinstance(payload, Mapping) else {}
+        receipt_message = envelope.get("receiptMessage") if isinstance(envelope, Mapping) else {}
+        if isinstance(receipt_message, Mapping):
+            timestamps = receipt_message.get("timestamps") or receipt_message.get("targetSentTimestamps") or []
+            if isinstance(timestamps, Sequence) and not isinstance(timestamps, (str, bytes, bytearray)):
+                refs.extend(str(item or "").strip() for item in timestamps if str(item or "").strip())
+            for key in ("timestamp", "targetSentTimestamp"):
+                value = str(receipt_message.get(key) or "").strip()
+                if value:
+                    refs.append(value)
+    return [ref for ref in refs if ref]
+
+
+def _signal_message_recipient_for_receipt(message: Any) -> str:
+    group = str(getattr(message, "group", "") or "").strip()
+    if group:
+        return group
+    recipient = _signal_message_recipient(message)
+    if recipient:
+        return recipient
+    for attr in ("source", "source_number", "source_uuid"):
+        value = str(getattr(message, attr, "") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _signal_receipt_type(message: Any) -> str:
+    raw_type = ""
+    raw_message = getattr(message, "raw_message", None)
+    if isinstance(raw_message, str) and raw_message.strip():
+        try:
+            payload = json.loads(raw_message)
+        except (TypeError, ValueError):
+            payload = {}
+        envelope = payload.get("envelope") if isinstance(payload, Mapping) else {}
+        receipt_message = envelope.get("receiptMessage") if isinstance(envelope, Mapping) else {}
+        if isinstance(receipt_message, Mapping):
+            raw_type = str(receipt_message.get("type") or "").strip()
+    if not raw_type:
+        message_type = getattr(message, "type", None)
+        raw_type = str(getattr(message_type, "name", "") or "").strip()
+    normalized = raw_type.casefold()
+    if "view" in normalized:
+        return "viewed"
+    if "read" in normalized:
+        return "read"
+    return "delivered"
 
 
 def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
