@@ -546,7 +546,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     output = _json_dump(report) if args.format == "json" else render_text_report(report)
     if args.output:
-        Path(args.output).write_text(output, encoding="utf-8")
+        try:
+            Path(args.output).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            print(f"accounts: unable to write output: {exc}", file=sys.stderr)
+            return 2
     else:
         print(output, end="")
     return 0

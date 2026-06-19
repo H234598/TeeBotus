@@ -222,6 +222,29 @@ def test_accounts_report_cli_uses_local_dotenv_for_runtime_slots(tmp_path: Path,
     assert payload["instances"][0]["runtime_slots"]["configured_channels"] == {"signal": 1, "telegram": 1}
 
 
+def test_accounts_report_cli_rejects_missing_parent_directory(tmp_path: Path, capsys) -> None:
+    instances_dir = tmp_path / "instances"
+    make_instance(instances_dir)
+
+    output_path = tmp_path / "missing" / "dir" / "accounts.json"
+    result = accounts_report_main(
+        [
+            "accounts",
+            "report",
+            "--instances-dir",
+            str(instances_dir),
+            "--format",
+            "json",
+            "--output",
+            str(output_path),
+        ]
+    )
+
+    assert result == 2
+    assert "accounts:" in capsys.readouterr().err
+    assert not output_path.exists()
+
+
 def test_status_auth_report_lists_authorized_accounts_and_outbox(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
