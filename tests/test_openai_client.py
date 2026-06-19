@@ -17,6 +17,7 @@ from TeeBotus.openai_client import (
     extract_image_bytes,
     extract_output_text,
     extract_transcription_text,
+    _openai_usage_log_path,
     log_openai_usage,
     summarize_empty_response,
 )
@@ -193,7 +194,10 @@ class OpenAIClientTests(unittest.TestCase):
     def test_log_openai_usage_writes_safe_jsonl_with_cached_tokens(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             usage_log = Path(tmp) / "usage.jsonl"
-            with patch.dict("os.environ", {"TEEBOTUS_OPENAI_USAGE_LOG": str(usage_log)}):
+            with patch.dict(
+                "os.environ",
+                {"TEEBOTUS_OPENAI_USAGE_LOG": "usage.jsonl", "XDG_STATE_HOME": str(tmp)},
+            ):
                 log_openai_usage(
                     "tool",
                     {
@@ -222,6 +226,19 @@ class OpenAIClientTests(unittest.TestCase):
             self.assertEqual(event["reasoning_tokens"], 7)
             self.assertNotIn("instructions", event)
             self.assertNotIn("nicht loggen", usage_log.read_text(encoding="utf-8"))
+
+    def test_openai_usage_log_path_rejects_path_outside_state_home(self) -> None:
+        with tempfile.TemporaryDirectory() as state_home:
+            with patch.dict("os.environ", {"TEEBOTUS_OPENAI_USAGE_LOG": "/tmp/openai_usage.jsonl", "XDG_STATE_HOME": state_home}):
+                assert _openai_usage_log_path() is None
+
+    def test_openai_usage_log_path_accepts_relative_path_under_state_home(self) -> None:
+        with tempfile.TemporaryDirectory() as state_home:
+            with patch.dict("os.environ", {"TEEBOTUS_OPENAI_USAGE_LOG": "foo/openai_usage.jsonl", "XDG_STATE_HOME": state_home}):
+                path = _openai_usage_log_path()
+                assert path is not None
+                assert str(path).startswith(state_home)
+
 
     def test_summarize_empty_response_does_not_dump_full_payload(self) -> None:
         summary = summarize_empty_response(

@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 import uuid
 import base64
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -20,6 +21,7 @@ IMAGES_URL = "https://api.openai.com/v1/images/generations"
 SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 TRANSCRIPTIONS_URL = "https://api.openai.com/v1/audio/transcriptions"
 LOGGER = logging.getLogger("TeeBotus.openai_client")
+_SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
 
 
 class OpenAIAPIError(RuntimeError):
@@ -342,9 +344,51 @@ def _openai_usage_log_path() -> Path | None:
     if configured.casefold() in {"0", "false", "off", "none", "disabled"}:
         return None
     if configured:
-        return Path(configured).expanduser()
-    state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser()
+        safe_state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser().resolve()
+        if "\x00" in configured or "\r" in configured or "\n" in configured or "\t" in configured:
+            return None
+        if "\\" in configured:
+            return None
+        _, parts = _split_safe_relative_parts(configured, operation="openai usage log path")
+        if not parts:
+            return None
+        try:
+            candidate = (safe_state_home / Path(*parts)).resolve()
+        except OSError:
+            return None
+        try:
+            candidate.relative_to(safe_state_home)
+        except ValueError:
+            return None
+        if candidate.exists() and candidate.is_dir():
+            return None
+        return candidate
+    state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")).expanduser().resolve()
     return state_home / "TeeBotus" / "openai_usage.jsonl"
+
+
+def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{operation} must not be empty")
+    if text == "/":
+        return True, tuple()
+    if "\x00" in text or "\r" in text or "\n" in text or "\t" in text:
+        raise ValueError(f"{operation} contains invalid control character")
+    is_absolute = text.startswith("/")
+    normalized = text[1:] if is_absolute else text
+    if not normalized:
+        raise ValueError(f"{operation} must not be empty")
+    parts: list[str] = []
+    for part in normalized.split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError(f"{operation} contains forbidden relative segment")
+        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
+            raise ValueError(f"{operation} contains invalid path segment")
+        parts.append(part)
+    return is_absolute, tuple(parts)
 
 
 def _rough_token_estimate(payload: dict[str, Any]) -> int:
