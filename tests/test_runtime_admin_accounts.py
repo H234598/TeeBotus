@@ -40,6 +40,15 @@ def test_admin_group_env_parses_ids_deduplicates_and_reports_invalid() -> None:
     assert group.source == ADMIN_ACCOUNT_IDS_ENV
 
 
+def test_admin_group_uses_process_environment_when_env_is_omitted(monkeypatch) -> None:
+    monkeypatch.setenv(ADMIN_ACCOUNT_IDS_ENV, DEFAULT_ADMIN_ACCOUNT_IDS[0])
+
+    group = resolve_admin_account_group()
+
+    assert group.account_ids == (DEFAULT_ADMIN_ACCOUNT_IDS[0],)
+    assert group.source == ADMIN_ACCOUNT_IDS_ENV
+
+
 def test_admin_account_status_uses_account_route(tmp_path) -> None:
     account_store = store_for(tmp_path)
     identity = telegram_identity_key(123)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -46,7 +47,7 @@ SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
 
 
 def resolve_admin_account_group(*, instance_name: str = "", env: Mapping[str, str] | None = None) -> AdminAccountGroup:
-    source = env or {}
+    source = os.environ if env is None else env
     env_names = _admin_account_env_names(instance_name)
     configured_values = [(name, source[name]) for name in env_names if name in source]
     if configured_values:
@@ -145,7 +146,7 @@ async def notify_runtime_status_admin_accounts(
     problem_lines = runtime_status_problem_lines(status_output)
     if not problem_lines:
         return (AdminNotificationResult(instance_name="runtime_status", account_id="", status="skipped", reason="no_problem_lines"),)
-    source = env or {}
+    source = os.environ if env is None else env
     resolved_store_factory = store_factory or _default_account_store
     resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source)
     message = _runtime_status_admin_message(problem_lines, selected_instances=selected_instances, now=now)
