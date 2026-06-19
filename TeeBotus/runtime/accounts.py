@@ -2451,7 +2451,7 @@ class AccountStore:
         data = dict(rows[0]) if rows else dict(default)
         path = self.root.parent / safe_filename
         if path.exists():
-            legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+            legacy_data = self._read_legacy_instance_json_state(path, dict(default))
             selected = _merge_nested_json_documents(legacy_data, data)
             if selected != data:
                 write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [selected])
@@ -2468,6 +2468,14 @@ class AccountStore:
             raise AccountStoreError("account memory SQL collection backend is not available")
         write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [dict(data)])
         self._unlink_migrated_account_file(self.root.parent / safe_filename)
+
+    def _read_legacy_instance_json_state(self, path: Path, default: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+        except AccountStoreError:
+            if _looks_like_teebotus_encrypted_payload(path):
+                raise
+            return dict(default)
 
     def _account_memory_collection_backend_available(self) -> bool:
         backend = self.account_memory_backend
