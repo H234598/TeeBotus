@@ -522,6 +522,9 @@ def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
 
 def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     merged = {**base, **incoming}
+    updated_at = _newest_timestamp_string(base.get("updated_at"), incoming.get("updated_at"))
+    if updated_at:
+        merged["updated_at"] = updated_at
     sent_identities = set(_string_list(base.get("sent_identities")))
     sent_identities.update(_string_list(incoming.get("sent_identities")))
     if sent_identities or "sent_identities" in base or "sent_identities" in incoming:
@@ -578,6 +581,20 @@ def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:
     if isinstance(incoming, dict):
         merged.update(incoming)
     return merged
+
+
+def _newest_timestamp_string(base: object, incoming: object) -> str:
+    base_text = str(base or "").strip() if isinstance(base, str) else ""
+    incoming_text = str(incoming or "").strip() if isinstance(incoming, str) else ""
+    base_timestamp = _parse_datetime(base_text)
+    incoming_timestamp = _parse_datetime(incoming_text)
+    if base_timestamp is not None and incoming_timestamp is not None:
+        return base_text if base_timestamp >= incoming_timestamp else incoming_text
+    if incoming_timestamp is not None:
+        return incoming_text
+    if base_timestamp is not None:
+        return base_text
+    return incoming_text or base_text
 
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:

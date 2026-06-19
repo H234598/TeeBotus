@@ -910,6 +910,29 @@ def test_version_notification_state_normalization_prefers_exact_version_metadata
     assert state["versions"]["1.0.3"]["updated_at"] == "2026-06-14T12:00:00+00:00"
 
 
+def test_version_notification_state_normalization_keeps_newest_updated_at() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": ["telegram:user:111"],
+                    "failed_identities": {},
+                    "updated_at": "2026-06-14T11:00:00+00:00",
+                },
+                "v1.0.3": {
+                    "sent_identities": ["telegram:user:222"],
+                    "failed_identities": {},
+                    "updated_at": "2026-06-14T12:00:00+00:00",
+                },
+            }
+        }
+    )
+
+    assert list(state["versions"]) == ["1.0.3"]
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:user:222"]
+    assert state["versions"]["1.0.3"]["updated_at"] == "2026-06-14T12:00:00+00:00"
+
+
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
     state = _normalize_state(
         {
