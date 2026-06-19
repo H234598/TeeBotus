@@ -560,6 +560,27 @@ def test_recent_telegram_recipients_skips_blank_route_chat_id(tmp_path: Path) ->
     assert recipients == []
 
 
+def test_recent_telegram_recipients_skips_zero_route_chat_id(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="ZeroChat")
+    identities = store._load_identities()
+    identities["telegram:user:111"]["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "0",
+        "chat_type": "private",
+        "adapter_slot": 1,
+    }
+    store._save_identities(identities)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert recipients == []
+
+
 def test_recent_telegram_recipients_accepts_legacy_route_without_chat_id(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="LegacyRoute")
@@ -580,6 +601,19 @@ def test_recent_telegram_recipients_accepts_legacy_route_without_chat_id(tmp_pat
     assert [(recipient.identity_key, recipient.account_id, recipient.chat_id) for recipient in recipients] == [
         ("telegram:user:111", account_id, 111)
     ]
+
+
+def test_recent_telegram_recipients_skips_negative_legacy_user_chat_id(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:-100123", display_label="Group Shaped")
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert recipients == []
 
 
 def test_recent_telegram_recipients_accepts_routed_telegram_fallback_identity(tmp_path: Path) -> None:

@@ -316,14 +316,12 @@ def _route_chat_type(route: dict[str, Any]) -> str | None:
 
 def _route_chat_id(route: dict[str, Any], identity_key: str) -> int | None:
     if "chat_id" not in route:
-        if identity_key.startswith("telegram:user:"):
-            return _optional_int(identity_key.removeprefix("telegram:user:"))
-        return None
+        return _telegram_user_identity_chat_id(identity_key)
     value = route.get("chat_id")
     if isinstance(value, bool):
         return None
     chat_id_text = str(value or "").strip()
-    if not chat_id_text or not chat_id_text.isdigit():
+    if not chat_id_text or not chat_id_text.isdigit() or int(chat_id_text) <= 0:
         return None
     return int(chat_id_text)
 
@@ -392,10 +390,18 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
 
 
 def _encoded_telegram_user_route_matches_recipient(identity_key: str, recipient: VersionNotificationRecipient) -> bool:
-    if not identity_key.startswith("telegram:user:"):
-        return False
-    chat_id = _optional_int(identity_key.removeprefix("telegram:user:"))
+    chat_id = _telegram_user_identity_chat_id(identity_key)
     return chat_id == recipient.chat_id and recipient.adapter_slot == 1
+
+
+def _telegram_user_identity_chat_id(identity_key: str) -> int | None:
+    if not identity_key.startswith("telegram:user:"):
+        return None
+    chat_id_text = identity_key.removeprefix("telegram:user:").strip()
+    if not chat_id_text.isdigit():
+        return None
+    chat_id = int(chat_id_text)
+    return chat_id if chat_id > 0 else None
 
 
 def _is_permanent_delivery_error(exc: Exception) -> bool:
