@@ -71,7 +71,11 @@ def notify_recent_telegram_users_for_version(
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
                 _write_state_if_sql_available(account_store, state_path, state)
             continue
-        if _failed_delivery_matches_recipient(failed_identities, recipient, identities):
+        matched_failure = _matched_failed_delivery(failed_identities, recipient, identities)
+        if matched_failure is not None:
+            if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure):
+                _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
+                _write_state_if_sql_available(account_store, state_path, state)
             continue
         message = build_version_notification_text(
             version=normalized_version,
@@ -469,12 +473,52 @@ def _failed_delivery_matches_recipient(
     recipient: VersionNotificationRecipient,
     identities: dict[str, Any],
 ) -> bool:
-    if _failed_delivery_route_matches(failed_identities.get(recipient.identity_key), recipient):
-        return True
-    return any(
-        identity_key != recipient.identity_key and _failed_identity_matches_recipient(identity_key, failure, recipient, identities)
-        for identity_key, failure in failed_identities.items()
-    )
+    return _matched_failed_delivery(failed_identities, recipient, identities) is not None
+
+
+def _matched_failed_delivery(
+    failed_identities: dict[str, object],
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> tuple[str, dict[str, object]] | None:
+    direct_failure = failed_identities.get(recipient.identity_key)
+    if _failed_delivery_route_matches(direct_failure, recipient):
+        return recipient.identity_key, direct_failure if isinstance(direct_failure, dict) else {}
+    for identity_key, failure in failed_identities.items():
+        if identity_key == recipient.identity_key:
+            continue
+        if _failed_identity_matches_recipient(identity_key, failure, recipient, identities):
+            return identity_key, failure if isinstance(failure, dict) else {}
+    return None
+
+
+def _record_skipped_failed_delivery(
+    failed_identities: dict[str, object],
+    recipient: VersionNotificationRecipient,
+    matched_failure: tuple[str, dict[str, object]],
+) -> bool:
+    previous_failures = dict(failed_identities)
+    matched_identity, source_failure = matched_failure
+    if matched_identity == recipient.identity_key:
+        return False
+    canonical_failure: dict[str, object] = {
+        "account_id": recipient.account_id,
+        "adapter_slot": recipient.adapter_slot,
+        "chat_id": recipient.chat_id,
+    }
+    failed_at = _valid_timestamp_string(source_failure.get("failed_at"))
+    if failed_at:
+        canonical_failure["failed_at"] = failed_at
+    reason = _inline_text(source_failure.get("reason")) if isinstance(source_failure.get("reason"), str) else ""
+    if reason:
+        canonical_failure["reason"] = reason[:240]
+    existing_failure = failed_identities.get(recipient.identity_key)
+    if isinstance(existing_failure, dict):
+        canonical_failure = _merge_failure_payload(existing_failure, canonical_failure)
+    normalized_failure = _normalized_failure_payload(canonical_failure)
+    if normalized_failure:
+        failed_identities[recipient.identity_key] = normalized_failure
+    return failed_identities != previous_failures
 
 
 def _clear_resolved_failures(

@@ -1786,6 +1786,56 @@ def test_notify_recent_telegram_users_persists_already_sent_cleanup_to_sqlite_be
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:username:ada"]
 
 
+def test_notify_recent_telegram_users_persists_failed_skip_alias_to_sqlite_before_abort(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Already Failed")
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.resolve_or_create_account("telegram:username:zzlate", display_label="Abort")
+    store.update_identity_route("telegram:username:zzlate", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    store.write_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": [],
+                    "failed_identities": {"telegram:user:111": {"reason": "chat not found"}},
+                }
+            }
+        },
+    )
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, _text: str) -> None:
+        attempts.append(chat_id)
+        raise KeyboardInterrupt("runtime stopped")
+
+    with pytest.raises(KeyboardInterrupt):
+        notify_recent_telegram_users_for_version(
+            version="1.0.3",
+            instances_dir=tmp_path / "instances",
+            instance_name="Demo",
+            account_store=store,
+            send_message=send_message,
+            now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+        )
+
+    assert attempts == [222]
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+    failed = state["versions"]["1.0.3"]["failed_identities"]
+    assert failed["telegram:user:111"] == {"reason": "chat not found"}
+    assert failed["telegram:username:ada"]["account_id"] == account_id
+    assert failed["telegram:username:ada"]["chat_id"] == 111
+    assert failed["telegram:username:ada"]["adapter_slot"] == 1
+    assert failed["telegram:username:ada"]["reason"] == "chat not found"
+
+
 def test_notify_recent_telegram_users_migrates_runtime_state_path_to_sqlite_when_store_root_differs(
     tmp_path: Path,
     monkeypatch,
