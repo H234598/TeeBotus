@@ -483,6 +483,9 @@ def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(
         "path": "from-shell.sqlite3",
         "fallback": "quoted-fallback.sqlite3",
     }
+    assert os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_BACKEND") is None
+    assert os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH") == "from-shell.sqlite3"
+    assert os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH") is None
 
 
 def test_embedding_cli_bibliothekar_rebuild_dry_run_json(monkeypatch, capsys, tmp_path):

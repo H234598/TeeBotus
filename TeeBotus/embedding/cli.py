@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import asdict
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -18,52 +20,52 @@ from TeeBotus.runtime.qdrant import QDRANT_USER_MEMORY_COLLECTION, qdrant_user_m
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    _load_dotenv_for_instances_dir(args.instances_dir)
-    if args.command == "memory-rebuild":
-        results = rebuild_qdrant_memory_indexes(
-            instances_dir=args.instances_dir,
-            instance_names=args.instance,
-            account_ids=args.account_id,
-            qdrant_url=args.qdrant_url or None,
-            collection_name=_memory_collection_from_args(args),
-            embedding_overrides=_embedding_overrides_from_args(args),
-            dry_run=args.dry_run,
-            include_legacy_raw_account_id_cleanup=args.include_legacy_raw_account_id_cleanup,
-        )
-        if args.json:
-            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
-        else:
-            for result in results:
-                print(_format_memory_rebuild_result(result))
-        return 1 if any(result.status == "error" for result in results) else 0
-    if args.command == "collections-ensure":
-        results = ensure_qdrant_collections_for_instances(
-            instances_dir=args.instances_dir,
-            instance_names=args.instance,
-            qdrant_url=args.qdrant_url or None,
-            embedding_overrides=_embedding_overrides_from_args(args),
-            include_memory_side_dimensions=args.include_memory_side_index,
-        )
-        if args.json:
-            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
-        else:
-            for result in results:
-                print(_format_collection_ensure_result(result))
-        return 1 if any(not result.ok for result in results) else 0
-    if args.command == "bibliothekar-rebuild":
-        results = rebuild_qdrant_bibliothekar_indexes(
-            instances_dir=args.instances_dir,
-            instance_names=args.instance,
-            qdrant_url=args.qdrant_url or None,
-            embedding_overrides=_embedding_overrides_from_args(args),
-            dry_run=args.dry_run,
-        )
-        if args.json:
-            print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
-        else:
-            for result in results:
-                print(_format_bibliothekar_rebuild_result(result))
-        return 1 if any(result.status == "error" for result in results) else 0
+    with _dotenv_defaults_for_instances_dir(args.instances_dir):
+        if args.command == "memory-rebuild":
+            results = rebuild_qdrant_memory_indexes(
+                instances_dir=args.instances_dir,
+                instance_names=args.instance,
+                account_ids=args.account_id,
+                qdrant_url=args.qdrant_url or None,
+                collection_name=_memory_collection_from_args(args),
+                embedding_overrides=_embedding_overrides_from_args(args),
+                dry_run=args.dry_run,
+                include_legacy_raw_account_id_cleanup=args.include_legacy_raw_account_id_cleanup,
+            )
+            if args.json:
+                print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+            else:
+                for result in results:
+                    print(_format_memory_rebuild_result(result))
+            return 1 if any(result.status == "error" for result in results) else 0
+        if args.command == "collections-ensure":
+            results = ensure_qdrant_collections_for_instances(
+                instances_dir=args.instances_dir,
+                instance_names=args.instance,
+                qdrant_url=args.qdrant_url or None,
+                embedding_overrides=_embedding_overrides_from_args(args),
+                include_memory_side_dimensions=args.include_memory_side_index,
+            )
+            if args.json:
+                print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+            else:
+                for result in results:
+                    print(_format_collection_ensure_result(result))
+            return 1 if any(not result.ok for result in results) else 0
+        if args.command == "bibliothekar-rebuild":
+            results = rebuild_qdrant_bibliothekar_indexes(
+                instances_dir=args.instances_dir,
+                instance_names=args.instance,
+                qdrant_url=args.qdrant_url or None,
+                embedding_overrides=_embedding_overrides_from_args(args),
+                dry_run=args.dry_run,
+            )
+            if args.json:
+                print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+            else:
+                for result in results:
+                    print(_format_bibliothekar_rebuild_result(result))
+            return 1 if any(result.status == "error" for result in results) else 0
     parser.print_help()
     return 2
 
@@ -145,9 +147,19 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
     return str(getattr(args, "collection", "") or QDRANT_USER_MEMORY_COLLECTION).strip() or QDRANT_USER_MEMORY_COLLECTION
 
 
-def _load_dotenv_for_instances_dir(instances_dir: str | Path) -> None:
+@contextmanager
+def _dotenv_defaults_for_instances_dir(instances_dir: str | Path) -> Iterator[None]:
+    inserted_keys: list[str] = []
     for key, value in _read_dotenv_values(_project_root_for_instances_dir(instances_dir) / ".env").items():
-        os.environ.setdefault(key, value)
+        if key in os.environ:
+            continue
+        os.environ[key] = value
+        inserted_keys.append(key)
+    try:
+        yield
+    finally:
+        for key in inserted_keys:
+            os.environ.pop(key, None)
 
 
 def _project_root_for_instances_dir(instances_dir: str | Path) -> Path:
