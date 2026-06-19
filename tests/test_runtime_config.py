@@ -137,6 +137,7 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
 def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
     env = {
         "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
+        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "sk-other-background",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
     }
 
@@ -179,39 +180,40 @@ def test_openai_key_resolution_ignores_legacy_instance_background_key():
 def test_openai_key_resolution_prefers_proactive_key_before_background_key():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background",
+        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
     }
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-proactive"
 
 
-def test_openai_key_resolution_supports_indexed_background_keys():
+def test_openai_key_resolution_ignores_generic_background_services_aliases():
     env = {
-        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
-        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
-    }
-
-    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background-b"
-
-
-def test_openai_key_resolution_background_services_prefers_slot_before_list():
-    env = {
+        "DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-token-alias",
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES_2": "sk-background-slot",
         "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-single",
     }
 
-    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background-slot"
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == ""
 
 
-def test_openai_key_resolution_background_services_list_beats_single():
+def test_openai_key_resolution_background_services_single_key_is_shared_across_slots():
     env = {
-        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-single",
+        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
     }
 
-    assert resolve_openai_key("Depressionsbot", "proactive", 2, env) == "sk-background-b"
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background"
+
+
+def test_openai_key_resolution_background_services_is_depressionsbot_only():
+    env = {
+        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
+        "Bot_der_Wahrheit_BACKGROUND_SERVICES": "sk-other-background",
+    }
+
+    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
 
 
 def test_openai_key_resolution_rejects_empty_positional_key_slot():

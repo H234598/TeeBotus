@@ -11,6 +11,8 @@ DEFAULT_INSTANCES_DIR = "instances"
 DEFAULT_CHANNELS = ("telegram", "signal", "matrix")
 SUPPORTED_CHANNELS = frozenset(DEFAULT_CHANNELS)
 BACKGROUND_OPENAI_CHANNELS = frozenset({"PROACTIVE", "BACKGROUND"})
+BACKGROUND_SERVICES_INSTANCE_TOKEN = "DEPRESSIONSBOT"
+BACKGROUND_SERVICES_ENV_KEY = "Depressionsbot_BACKGROUND_SERVICES"
 
 
 class RuntimeConfigError(RuntimeError):
@@ -199,35 +201,18 @@ def resolve_openai_key(
     return ""
 
 
-def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str, instance_token: str, channel_token: str, slot: int) -> str:
+def _resolve_background_openai_key(
+    source: Mapping[str, str],
+    _instance_name: str,
+    instance_token: str,
+    channel_token: str,
+    _slot: int,
+) -> str:
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
-    raw_instance = str(instance_name or "").strip()
-    slot_candidates = [
-        f"{raw_instance}_BACKGROUND_SERVICES_{slot}",
-        f"{instance_token}_BACKGROUND_SERVICES_{slot}",
-        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES_{slot}",
-    ]
-    candidates = [
-        f"{raw_instance}_BACKGROUND_SERVICES",
-        f"{instance_token}_BACKGROUND_SERVICES",
-        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES",
-    ]
-    list_candidates = [
-        f"OPENAI_API_KEYS_{instance_token}_BACKGROUND_SERVICES",
-    ]
-    for key in slot_candidates:
-        value = _first_nonempty_env_value(source, key)
-        if value:
-            return value
-    resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot, label=list_candidates[0])
-    if resolved:
-        return resolved
-    for key in candidates:
-        value = _first_nonempty_env_value(source, key)
-        if value:
-            return value
-    return ""
+    if instance_token != BACKGROUND_SERVICES_INSTANCE_TOKEN:
+        return ""
+    return _first_nonempty_env_value(source, BACKGROUND_SERVICES_ENV_KEY)
 
 
 def resolve_llm_setting(
