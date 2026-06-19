@@ -1077,6 +1077,70 @@ def test_version_notification_state_normalization_keeps_newest_failed_at() -> No
     assert failure["reason"] == "newer failure"
 
 
+def test_version_notification_state_normalization_keeps_valid_failure_route_over_invalid_route() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "v1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "valid failure route",
+                        }
+                    }
+                },
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 0,
+                            "reason": "invalid failure route",
+                        }
+                    }
+                },
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure["adapter_slot"] == 1
+    assert failure["chat_id"] == 111
+    assert failure["reason"] == "valid failure route"
+
+
+def test_version_notification_state_normalization_replaces_invalid_failure_route_with_valid_route() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "v1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 0,
+                            "chat_id": 0,
+                            "reason": "invalid failure route",
+                        }
+                    }
+                },
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "valid failure route",
+                        }
+                    }
+                },
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure["adapter_slot"] == 1
+    assert failure["chat_id"] == 111
+    assert failure["reason"] == "valid failure route"
+
+
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

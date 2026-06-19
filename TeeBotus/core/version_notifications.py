@@ -458,8 +458,8 @@ def _failed_delivery_route_matches(failure: object, recipient: VersionNotificati
     failed_account_id = str(failure.get("account_id") or "").strip()
     if failed_account_id and failed_account_id != recipient.account_id:
         return False
-    failed_chat_id = _optional_int(failure.get("chat_id"))
-    failed_slot = _optional_int(failure.get("adapter_slot"))
+    failed_chat_id = _optional_positive_int(failure.get("chat_id"))
+    failed_slot = _optional_positive_int(failure.get("adapter_slot"))
     if failed_chat_id is None or failed_slot is None:
         return False
     return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
@@ -570,7 +570,7 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
 def _failure_payload_quality(value: object) -> int:
     if not isinstance(value, dict):
         return 0
-    has_route = _optional_int(value.get("chat_id")) is not None and _optional_int(value.get("adapter_slot")) is not None
+    has_route = _optional_positive_int(value.get("chat_id")) is not None and _optional_positive_int(value.get("adapter_slot")) is not None
     return 2 if has_route else 1
 
 
