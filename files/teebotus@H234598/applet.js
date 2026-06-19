@@ -1387,15 +1387,23 @@ TeeBotusApplet.prototype = {
   },
 
   _openAppletSettings: function() {
-    this._spawn(["cinnamon-settings", "applets", UUID], () => {});
+    this._spawnAndReportFailure(["cinnamon-settings", "applets", UUID], _("Settings launch failed: "));
   },
 
   _openPath: function(path) {
-    this._spawn(["gio", "open", this._safeLocalPath(path, this._repoPath())], () => {});
+    this._spawnAndReportFailure(["gio", "open", this._safeLocalPath(path, this._repoPath())], _("Open path failed: "));
   },
 
   _openUri: function(uri) {
-    this._spawn(["gio", "open", this._safeProjectUrl(uri, DEFAULT_GITHUB_URL)], () => {});
+    this._spawnAndReportFailure(["gio", "open", this._safeProjectUrl(uri, DEFAULT_GITHUB_URL)], _("Open link failed: "));
+  },
+
+  _spawnAndReportFailure: function(argv, failurePrefix) {
+    this._spawn(argv, (stdout, stderr, ok) => {
+      if (!ok) {
+        this._setStatusText(String(failurePrefix || _("Command failed: ")) + (stderr || stdout || _("Command failed")));
+      }
+    });
   },
 
   _menuLine: function(label, reactive) {

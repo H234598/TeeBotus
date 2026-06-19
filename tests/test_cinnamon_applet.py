@@ -775,6 +775,32 @@ def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
     ]
 
 
+def test_cinnamon_applet_reports_open_action_failures() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let statuses = [];
+          applet._spawn = function(argv, callback) {
+            callback("", argv[0] + " failed", false);
+          };
+          applet._setStatusText = function(text) {
+            statuses.push(String(text || ""));
+          };
+          applet._openAppletSettings();
+          applet._openPath("/repo");
+          applet._openUri("https://example.invalid");
+          return statuses;
+        })()
+        """
+    )
+
+    assert result == [
+        "Settings launch failed: cinnamon-settings failed",
+        "Open path failed: gio failed",
+        "Open link failed: gio failed",
+    ]
+
+
 def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     result = _run_js_applet_expression(
         """
