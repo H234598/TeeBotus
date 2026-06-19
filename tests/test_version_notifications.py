@@ -391,6 +391,27 @@ def test_recent_telegram_recipients_ignores_invalid_adapter_slot_filter(tmp_path
     assert recipients == []
 
 
+def test_recent_telegram_recipients_skips_invalid_route_adapter_slot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="BrokenSlot")
+    identities = store._load_identities()
+    identities["telegram:user:111"]["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "111",
+        "chat_type": "private",
+        "adapter_slot": "telegram:broken",
+    }
+    store._save_identities(identities)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert recipients == []
+
+
 def test_recent_telegram_recipients_skips_non_private_chat_routes(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Private")

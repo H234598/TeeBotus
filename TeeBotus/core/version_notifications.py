@@ -129,7 +129,9 @@ def recent_telegram_recipients(
         route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
         route_channel = str(route.get("channel") or "telegram").strip().casefold()
         route_chat_type = str(route.get("chat_type") or "").strip().casefold()
-        route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
+        route_slot = _route_adapter_slot(route)
+        if route_slot is None:
+            continue
         if adapter_slot_filter is not None and route_slot != adapter_slot_filter:
             continue
         if route_channel != "telegram":
@@ -289,12 +291,11 @@ def _parse_datetime(value: str) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
-    try:
-        slot = int(value)
-    except (TypeError, ValueError):
-        return default
-    return slot if slot > 0 else default
+def _route_adapter_slot(route: dict[str, Any]) -> int | None:
+    value = route.get("adapter_slot")
+    if value is None or str(value).strip() == "":
+        return 1
+    return _optional_positive_int(value)
 
 
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
@@ -351,7 +352,9 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
     route_chat_type = str(route.get("chat_type") or "").strip().casefold()
     if route_chat_type and route_chat_type != "private":
         return False
-    route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
+    route_slot = _route_adapter_slot(route)
+    if route_slot is None:
+        return False
     chat_id_text = str(route.get("chat_id") or "").strip()
     if not chat_id_text and identity_key.startswith("telegram:user:"):
         chat_id_text = identity_key.removeprefix("telegram:user:")
