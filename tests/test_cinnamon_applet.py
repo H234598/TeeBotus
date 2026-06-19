@@ -242,6 +242,10 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "Gio.SubprocessLauncher.new" in source
     assert "}, this._repoPath(), { timeoutMs:" in source
     assert "this._spawn(argv, (stdout, stderr, ok) => {" in source
+    assert "const TRUSTED_SPAWN_DIRS = " in source
+    assert "_resolveSpawnArgv: function(argv)" in source
+    assert "_findTrustedProgramInPath: function(command)" in source
+    assert "launcher.spawnv(resolvedArgv)" in source
     assert "options = options || {};" in source
     assert "process.force_exit();" in source
     assert "launcher.set_cwd(String(cwd))" in source
@@ -728,6 +732,44 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validTerminalWithFinalMarker"] == ["xterm", "-hold", "-e"]
     assert result["embeddedCommandTerminal"] == ["gnome-terminal", "--"]
     assert result["unsafeChecks"] == [False, False, False, True]
+
+
+def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let missingError = "";
+          let controlError = "";
+          try {
+            applet._resolveSpawnArgv(["unknown-tool", "--help"]);
+          } catch (err) {
+            missingError = String(err);
+          }
+          try {
+            applet._resolveSpawnArgv(["gnome-terminal", "bad\\narg"]);
+          } catch (err) {
+            controlError = String(err);
+          }
+          return {
+            bare: applet._resolveSpawnArgv(["gnome-terminal", "--"]),
+            absolute: applet._resolveSpawnArgv(["/usr/bin/python3", "-m", "TeeBotus"]),
+            trusted: applet._findTrustedProgramInPath("gnome-terminal"),
+            unsafeName: applet._findTrustedProgramInPath("../gnome-terminal"),
+            missingError: missingError,
+            controlError: controlError
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "bare": ["/usr/bin/gnome-terminal", "--"],
+        "absolute": ["/usr/bin/python3", "-m", "TeeBotus"],
+        "trusted": "/usr/bin/gnome-terminal",
+        "unsafeName": None,
+        "missingError": "Error: Command is not in a trusted system path",
+        "controlError": "Error: Command argument contains invalid control character",
+    }
 
 
 def test_cinnamon_applet_bounds_configured_command_arguments() -> None:

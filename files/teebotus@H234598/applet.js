@@ -125,6 +125,7 @@ const QUICK_COMMANDS = [
   "/register",
   "/memory_reset"
 ];
+const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin"];
 const TERMINAL_CANDIDATES = [
   "gnome-terminal",
   "x-terminal-emulator",
@@ -1124,11 +1125,12 @@ TeeBotusApplet.prototype = {
       callback(stdout, stderr, ok);
     };
     try {
+      let resolvedArgv = this._resolveSpawnArgv(argv);
       let launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE);
       if (cwd) {
         launcher.set_cwd(String(cwd));
       }
-      process = launcher.spawnv(argv);
+      process = launcher.spawnv(resolvedArgv);
       let timeoutMs = Number(options.timeoutMs || 0);
       if (timeoutMs > 0) {
         timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
@@ -1523,6 +1525,55 @@ TeeBotusApplet.prototype = {
       }
     }
     return args;
+  },
+
+  _resolveSpawnArgv: function(argv) {
+    if (!Array.isArray(argv) || argv.length === 0) {
+      throw new Error("Command arguments are empty");
+    }
+    let normalized = [];
+    for (let index = 0; index < argv.length; index++) {
+      if (argv[index] === null || argv[index] === undefined) {
+        throw new Error("Command argument is missing");
+      }
+      let value = String(argv[index]);
+      if (this._hasCommandControlChars(value)) {
+        throw new Error("Command argument contains invalid control character");
+      }
+      normalized.push(value);
+    }
+    let command = String(normalized[0] || "").trim();
+    if (!this._isSafeExecutable(command)) {
+      throw new Error("Command is not executable");
+    }
+    if (command.indexOf("/") < 0) {
+      let resolved = this._findTrustedProgramInPath(command);
+      if (!resolved) {
+        throw new Error("Command is not in a trusted system path");
+      }
+      normalized[0] = resolved;
+    } else {
+      normalized[0] = command;
+    }
+    return normalized;
+  },
+
+  _findTrustedProgramInPath: function(command) {
+    let name = String(command || "").trim();
+    if (!name || name.indexOf("/") >= 0 || this._hasCommandControlChars(name) || !/^[A-Za-z0-9._+-]+$/.test(name)) {
+      return null;
+    }
+    let resolved = GLib.find_program_in_path(name);
+    if (!resolved) {
+      return null;
+    }
+    let path = String(resolved || "");
+    for (let directory of TRUSTED_SPAWN_DIRS) {
+      if (path === directory + "/" + name || path.indexOf(directory + "/") === 0) {
+        return path;
+      }
+    }
+    return null;
   },
 
   _isSafeExecutable: function(value) {
