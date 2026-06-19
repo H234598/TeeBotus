@@ -5080,7 +5080,7 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
         {
             "status": "accepted",
             "summary_prefix": "v1.8.0 #0001",
-            "project": {"repo_name": "TeeBotus"},
+            "project": {"repo_id": "repo-teebotus", "repo_name": "TeeBotus"},
             "summary": {"title": "Erster Lauf"},
         },
     )
@@ -5089,7 +5089,7 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
         {
             "status": "failed",
             "summary_prefix": "v1.8.0 #0002",
-            "project": {"repo_name": "TeeBotus"},
+            "project": {"repo_id": "repo-teebotus", "repo_name": "TeeBotus"},
             "summary": {"title": "Dispatch Fehler"},
         },
     )
@@ -5098,13 +5098,17 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
         {
             "status": "queued",
             "summary_prefix": "v1.8.0 #0003",
-            "project": {"repo_name": "TeeBotus"},
+            "project": {"repo_id": "repo-teebotus", "repo_name": "TeeBotus"},
             "summary": {"title": "Noch offen"},
         },
     )
 
     assert codex_history_status_lines(instance_name="Demo", account_store=store) == [
-        "codex_history=Demo status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003"
+        "codex_history=Demo status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003",
+        (
+            "codex_history_repo=Demo repo=TeeBotus status=warning queued=1 failed=1 total=3 "
+            "latest_prefix=v1.8.0_#0003 latest_status=queued latest_title=Noch_offen"
+        ),
     ]
 
 

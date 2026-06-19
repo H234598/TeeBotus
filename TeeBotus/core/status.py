@@ -8,7 +8,7 @@ import os
 import re
 import shlex
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from TeeBotus import __version__
 from TeeBotus.core.rich_text import html_with_single_link
@@ -735,7 +735,7 @@ def codex_history_status_lines(
                 f"error={_status_field_value(summary['error'])}"
             )
         ]
-    return [
+    lines = [
         (
             f"codex_history={_status_field_value(instance_name)} status={summary['status']} "
             f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
@@ -743,6 +743,21 @@ def codex_history_status_lines(
             f"latest_prefix={_status_field_value(summary['latest_prefix'])}"
         )
     ]
+    for repo in summary.get("repos", []):
+        if not isinstance(repo, Mapping):
+            continue
+        lines.append(
+            (
+                f"codex_history_repo={_status_field_value(instance_name)} "
+                f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
+                f"status={repo.get('status', 'unknown')} "
+                f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
+                f"latest_prefix={_status_field_value(repo.get('latest_prefix', '<none>'))} "
+                f"latest_status={_status_field_value(repo.get('latest_status', '<none>'))} "
+                f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}"
+            )
+        )
+    return lines
 
 
 def _codex_history_chat_status_lines(*, account_store: AccountStore | None) -> list[str]:
@@ -793,7 +808,47 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         "total": len(valid_rows),
         "latest_repo": latest_repo,
         "latest_prefix": latest_prefix,
+        "repos": _codex_history_repo_summaries(valid_rows),
     }
+
+
+def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        project = row.get("project", {})
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_name = redact_status_text(project.get("repo_name") or "<none>") or "<none>"
+        repo_key = str(project.get("repo_id") or repo_name).strip() or repo_name
+        status = str(row.get("status") or "unknown").strip().casefold() or "unknown"
+        entry = grouped.setdefault(
+            repo_key,
+            {
+                "repo_name": repo_name,
+                "queued": 0,
+                "failed": 0,
+                "total": 0,
+                "latest_prefix": "<none>",
+                "latest_status": "<none>",
+                "latest_title": "<none>",
+            },
+        )
+        entry["total"] += 1
+        if status == "queued":
+            entry["queued"] += 1
+        elif status == "failed":
+            entry["failed"] += 1
+        summary = row.get("summary", {})
+        if not isinstance(summary, Mapping):
+            summary = {}
+        entry["latest_prefix"] = redact_status_text(row.get("summary_prefix") or "<none>") or "<none>"
+        entry["latest_status"] = status
+        entry["latest_title"] = redact_status_text(summary.get("title") or "<none>") or "<none>"
+    result = []
+    for entry in grouped.values():
+        entry["status"] = "warning" if entry["queued"] or entry["failed"] else "ok"
+        result.append(entry)
+    return sorted(result, key=lambda item: str(item.get("repo_name") or "").casefold())
 
 
 def _status_field_value(value: object) -> str:

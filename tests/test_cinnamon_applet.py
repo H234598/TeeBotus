@@ -333,7 +333,9 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_formatProjectHistoryLine" in source
     assert 'sections["Projekt-History"]' in source
     assert "summary.codex_history_instances" in source
+    assert "summary.codex_history_repos" in source
     assert "summary.codex_history_problem_status_count" in source
+    assert "fields.codex_history_repo" in source
     assert "_formatMemoryLine" in source
     assert "_formatAccountLine" in source
     assert "_accountStatusLines" in source
@@ -1574,18 +1576,21 @@ def test_cinnamon_applet_runtime_parser_summarizes_codex_history() -> None:
         """
         [Projekt-History]
         codex_history=Depressionsbot status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003
+        codex_history_repo=Depressionsbot repo=TeeBotus status=warning queued=1 failed=1 total=3 latest_prefix=v1.8.0_#0003 latest_status=queued latest_title=Noch_offen
         codex_history=Bote_der_Wahrheit status=ok queued=0 failed=0 total=2 latest_repo=Docs latest_prefix=v1.0.0_#0002
+        codex_history_repo=Bote_der_Wahrheit repo=Docs status=ok queued=0 failed=0 total=2 latest_prefix=v1.0.0_#0002 latest_status=accepted latest_title=Dokumentiert
         """
     )
 
     assert parsed["summary"]["codex_history_instances"] == 2
-    assert parsed["summary"]["codex_history_problem_status_count"] == 1
+    assert parsed["summary"]["codex_history_repos"] == 2
+    assert parsed["summary"]["codex_history_problem_status_count"] == 2
     assert parsed["summary"]["codex_history"] == (
         "codex_history=Depressionsbot status=warning queued=1 failed=1 total=3 "
         "latest_repo=TeeBotus latest_prefix=v1.8.0_#0003"
     )
-    assert parsed["status_counts"]["warning"] == 1
-    assert parsed["status_counts"]["ok"] == 1
+    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["status_counts"]["ok"] == 2
 
 
 def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_path) -> None:

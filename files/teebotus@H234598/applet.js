@@ -437,6 +437,7 @@ TeeBotusApplet.prototype = {
       let projectHistoryLines = [];
       projectHistoryLines.push(
         "Uebersicht: Codex-History Instanzen " + String(summary.codex_history_instances || 0)
+        + " | Repos " + String(summary.codex_history_repos || 0)
         + this._sectionProblemText(summary.codex_history_problem_status_count)
       );
       projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
@@ -668,6 +669,17 @@ TeeBotusApplet.prototype = {
 
   _formatProjectHistoryLine: function(line) {
     let fields = this._parseFields(line);
+    if (fields.codex_history_repo) {
+      let repo = fields.repo || "?";
+      let latestPrefix = fields.latest_prefix ? "; zuletzt " + String(fields.latest_prefix).replace(/_/g, " ") : "";
+      let latestTitle = fields.latest_title ? " " + String(fields.latest_title).replace(/_/g, " ") : "";
+      let latestStatus = fields.latest_status ? "; letzter Status " + this._statusWord(fields.latest_status) : "";
+      return "Repo-History " + repo + " (" + fields.codex_history_repo + "): " + this._statusWord(fields.status)
+        + "; offen " + String(fields.queued || "0")
+        + "; fehlgeschlagen " + String(fields.failed || "0")
+        + "; gesamt " + String(fields.total || "0")
+        + latestPrefix + latestTitle + latestStatus + this._errorText(fields);
+    }
     if (fields.codex_history) {
       let latestRepo = fields.latest_repo ? "; zuletzt " + fields.latest_repo : "";
       let latestPrefix = fields.latest_prefix ? " " + String(fields.latest_prefix).replace(/_/g, " ") : "";

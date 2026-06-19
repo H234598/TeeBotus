@@ -317,6 +317,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "codex_usage_accounts": 0,
         "codex_history": "",
         "codex_history_instances": 0,
+        "codex_history_repos": 0,
         "codex_history_problem_status_count": 0,
         "gemini_free_tier": "",
         "qdrant": "",
@@ -372,6 +373,8 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
                 summary["codex_history"] = line
             elif not summary["codex_history"]:
                 summary["codex_history"] = line
+        elif line.startswith("codex_history_repo="):
+            summary["codex_history_repos"] += 1
         elif line.startswith("gemini_free_tier_limits "):
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):
