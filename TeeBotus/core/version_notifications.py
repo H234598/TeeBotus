@@ -128,7 +128,7 @@ def recent_telegram_recipients(
             continue
         route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
         route_channel = _route_channel(route)
-        route_chat_type = str(route.get("chat_type") or "").strip().casefold()
+        route_chat_type = _route_chat_type(route)
         route_slot = _route_adapter_slot(route)
         if route_slot is None:
             continue
@@ -136,7 +136,7 @@ def recent_telegram_recipients(
             continue
         if route_channel != "telegram":
             continue
-        if route_chat_type and route_chat_type != "private":
+        if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
             continue
         chat_id_text = str(route.get("chat_id") or "").strip()
         if not chat_id_text and identity_key.startswith("telegram:user:"):
@@ -309,6 +309,13 @@ def _route_channel(route: dict[str, Any]) -> str | None:
     return text or None
 
 
+def _route_chat_type(route: dict[str, Any]) -> str | None:
+    if "chat_type" not in route:
+        return ""
+    text = str(route.get("chat_type") or "").strip().casefold()
+    return text or None
+
+
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
     unique_by_account_slot: dict[tuple[str, int], VersionNotificationRecipient] = {}
     for recipient in sorted(recipients, key=lambda item: item.identity_key):
@@ -360,8 +367,8 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
     route_channel = _route_channel(route)
     if route_channel != "telegram":
         return False
-    route_chat_type = str(route.get("chat_type") or "").strip().casefold()
-    if route_chat_type and route_chat_type != "private":
+    route_chat_type = _route_chat_type(route)
+    if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
         return False
     route_slot = _route_adapter_slot(route)
     if route_slot is None:
