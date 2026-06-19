@@ -57,6 +57,7 @@ PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
 PROACTIVE_OUTBOX_COLLECTION = "proactive_outbox"
 PROACTIVE_AUDIT_COLLECTION = "proactive_audit"
 PROACTIVE_DISPATCH_RESULTS_COLLECTION = "proactive_dispatch_results"
+INSTANCE_MEMORY_STATE_FILENAMES = ("Version_Notifications.json",)
 SECRET_TOOL_COMMAND = "secret-tool"
 SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
 SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS"
@@ -1316,6 +1317,8 @@ class AccountStore:
             yield account_dir / "Account_Tombstone.json"
 
     def _memory_secret_payload_paths(self) -> Iterable[Path]:
+        for filename in INSTANCE_MEMORY_STATE_FILENAMES:
+            yield self.root.parent / filename
         if not self.accounts_dir.exists():
             return
         filenames = (

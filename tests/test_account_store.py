@@ -269,6 +269,26 @@ def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypte
         AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
 
 
+def test_account_store_refuses_to_autocreate_memory_secret_for_existing_encrypted_instance_state(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    EncryptedJsonVault(
+        "Depressionsbot",
+        provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+    ).write_json(tmp_path / "Version_Notifications.json", {"versions": {"1.0.3": {"sent_identities": []}}})
+
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+    monkeypatch.setattr(secret_provider, "_lookup", lambda _instance, _purpose: None)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("store must not be called for existing encrypted instance state"),
+    )
+
+    with pytest.raises(AccountStoreError, match="refusing to create missing instance secret for existing encrypted account memory/state"):
+        AccountStore(root, "Depressionsbot", secret_provider, create_dirs=False)
+
+
 def test_account_store_records_key_manifest_and_refuses_missing_manifest_secret(tmp_path, monkeypatch) -> None:
     root = tmp_path / "accounts"
     stored: dict[tuple[str, str], bytes] = {}
