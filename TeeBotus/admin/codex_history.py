@@ -306,6 +306,10 @@ def watch_codex_session_roots(
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     iterations = 0
+    if max_iterations < 1:
+        max_iterations = 1
+    if poll_interval_seconds < 0:
+        poll_interval_seconds = 0.0
     items: list[dict[str, Any]] = []
     while True:
         iterations += 1
@@ -1126,9 +1130,11 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
             safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
             max_iterations = int(args.max_iterations or 0)
-            if max_iterations < 0:
-                max_iterations = 0
+            if max_iterations < 1:
+                max_iterations = 1
             poll_interval_seconds = float(args.poll_interval or 0.0)
+            if poll_interval_seconds < 0.0:
+                poll_interval_seconds = 0.0
             instance_reports: list[dict[str, Any]] = []
             selected = discover_instances(instances_dir, selected_instances)
             for instance_name in selected:

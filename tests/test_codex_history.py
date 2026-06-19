@@ -477,6 +477,24 @@ def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsy
     assert payload["instances"][0]["status_counts"] == {"imported": 1}
 
 
+def test_watch_codex_session_roots_normalizes_iteration_options(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-loop-bounds-demo", version="3.3.0")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-watch-bound", turn_id="turn-bound")
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        max_iterations=0,
+        poll_interval_seconds=-1.0,
+        limit=10,
+    )
+
+    assert result["iterations"] == 1
+    assert result["status_counts"] == {"imported": 1}
+
+
 def test_normalize_and_classify_remote_urls() -> None:
     assert _normalize_remote_url("git@github.com:Org/Repo.git") == "ssh://git@github.com/org/repo"
     assert _repo_provider("git@github.com:Org/Repo.git") == "github"
