@@ -582,6 +582,42 @@ def test_build_account_configs_for_telegram_signal_and_matrix():
     assert {account.llm_service_tier for account in accounts} == {"flex"}
 
 
+def test_build_account_configs_accepts_numbered_signal_and_matrix_slots():
+    env = {
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT": "+491",
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT_2": "127.0.0.1:8081",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT_2": "+492",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2": "https://matrix-b.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2": "@b:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2": "token-b",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT_2": "dev-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "key-shared",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_SIGNAL_2": "key-signal-2",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_MATRIX_2": "key-matrix-2",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_SIGNAL_2": "signal-provider",
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT_MATRIX_2": "matrix-profile",
+    }
+
+    accounts = build_account_run_configs("Depressionsbot", ("signal", "matrix"), env)
+    by_label = {account.label: account for account in accounts}
+
+    assert list(by_label) == ["signal:1", "signal:2", "matrix:1", "matrix:2"]
+    assert by_label["signal:1"].signal_service == "127.0.0.1:8080"
+    assert by_label["signal:2"].signal_service == "127.0.0.1:8081"
+    assert by_label["signal:2"].signal_phone_number == "+492"
+    assert by_label["signal:2"].openai_api_key == "key-signal-2"
+    assert by_label["signal:2"].llm_provider == "signal-provider"
+    assert by_label["matrix:1"].matrix_device_id == ""
+    assert by_label["matrix:2"].matrix_homeserver == "https://matrix-b.example"
+    assert by_label["matrix:2"].matrix_device_id == "dev-b"
+    assert by_label["matrix:2"].openai_api_key == "key-matrix-2"
+    assert by_label["matrix:2"].llm_profile == "matrix-profile"
+
+
 def test_build_account_configs_rejects_multi_telegram_without_matching_openai_keys():
     env = {
         "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",

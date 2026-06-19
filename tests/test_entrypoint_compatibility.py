@@ -2008,6 +2008,74 @@ def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) ->
     assert "matrix_homeserver=Demo/matrix:1 target=matrix.example:443 status=unreachable error=connection refused" in captured.out
 
 
+def test_runtime_status_reports_numbered_signal_and_matrix_slots(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO_2", "http://127.0.0.1:8081")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO_2", "+492")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix-a.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@a:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "token-a")
+    monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO_2", "https://matrix-b.example")
+    monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO_2", "@b:example")
+    monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO_2", "token-b")
+    monkeypatch.setenv("MATRIX_BOT_DEVICE_ID_DEMO_2", "dev-b")
+
+    def fake_check_signal_services(config):
+        return tuple(
+            SimpleNamespace(
+                account=account,
+                ok=True,
+                target=account.signal_service.removeprefix("http://"),
+                error="",
+            )
+            for instance in config.instances
+            for account in instance.accounts
+            if account.channel == "signal"
+        )
+
+    def fake_check_signal_accounts(config):
+        return tuple(
+            SimpleNamespace(
+                account=account,
+                ok=True,
+                registered=True,
+                target=account.signal_service.removeprefix("http://"),
+                error="",
+            )
+            for instance in config.instances
+            for account in instance.accounts
+            if account.channel == "signal"
+        )
+
+    def fake_check_matrix_homeservers(config):
+        return tuple(
+            SimpleNamespace(
+                account=account,
+                ok=True,
+                target=f"{account.matrix_homeserver.removeprefix('https://')}:443",
+                error="",
+            )
+            for instance in config.instances
+            for account in instance.accounts
+            if account.channel == "matrix"
+        )
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_accounts", fake_check_signal_accounts)
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.check_matrix_homeservers", fake_check_matrix_homeservers)
+
+    assert bot.main(["--runtime-status", "--channels", "signal,matrix"]) == 0
+
+    captured = capsys.readouterr()
+    assert "signal_service=Demo/signal:2 target=127.0.0.1:8081 status=reachable" in captured.out
+    assert "signal_account=Demo/signal:2 phone=+492 target=127.0.0.1:8081 status=registered" in captured.out
+    assert "matrix_homeserver=Demo/matrix:2 target=matrix-b.example:443 status=reachable" in captured.out
+
+
 def test_runtime_status_reports_requested_matrix_without_config(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
