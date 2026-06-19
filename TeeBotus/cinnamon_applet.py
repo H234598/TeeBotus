@@ -73,11 +73,11 @@ SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
     r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
 )
 SECRET_ASSIGNMENT_VALUE_PATTERN = (
-    r"<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|"
+    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
     r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)\]}>])+"
 )
 SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN = (
-    r"<redacted(?:-secret)?>|\"[^\"\r\n]*\"|'[^'\r\n]*'|`[^`\r\n]*`|"
+    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
     r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)&\]}>])+"
 )
 SECRET_ASSIGNMENT_RE = re.compile(

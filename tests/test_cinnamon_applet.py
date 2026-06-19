@@ -850,7 +850,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     parsed = parse_runtime_status(
         f"""
         [LLM-Routen und Backends]
-        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
+        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token escaped_api_key="secret\\"still-secret" escaped_password='secret\\'still-password' escaped_token=`secret\\`still-token` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
 
         [API Keys, Limits und Kosten]
         api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 private_key=-----BEGIN PRIVATE KEY----- message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret>
@@ -870,6 +870,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "plain-private-key" not in rendered
     assert "plain signing key" not in rendered
     assert "plain multi word token" not in rendered
+    assert "still-secret" not in rendered
+    assert "still-password" not in rendered
+    assert "still-token" not in rendered
     assert "-----BEGIN PRIVATE KEY-----" not in rendered
     assert "structured-secret" not in rendered
     assert "bracket secret value" not in rendered
@@ -884,6 +887,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert "service_account_private_key=<redacted>" in rendered
     assert "signing_key=<redacted>" in rendered
     assert "refresh_token=<redacted>" in rendered
+    assert "escaped_api_key=<redacted>" in rendered
+    assert "escaped_password=<redacted>" in rendered
+    assert "escaped_token=<redacted>" in rendered
     assert "message=(client_secret=<redacted>)" in rendered
     assert "details=[api_key=<redacted>]" in rendered
     assert "meta={password=<redacted>}" in rendered
