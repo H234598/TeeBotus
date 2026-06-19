@@ -20,11 +20,17 @@ def test_render_qdrant_systemd_unit_pins_image_and_localhost() -> None:
 
 
 def test_render_qdrant_systemd_unit_rejects_latest_or_unpinned_image() -> None:
-    for image in ("qdrant/qdrant", "qdrant/qdrant:latest"):
+    for image in (
+        "qdrant/qdrant",
+        "qdrant/qdrant:latest",
+        "-bad:v1",
+        "docker.io/qdrant/qdrant:v1.18.2 extra",
+        "docker.io/qdrant/qdrant%x:v1.18.2",
+    ):
         try:
             render_qdrant_systemd_unit(image=image)
         except ValueError as exc:
-            assert "pinned tag" in str(exc) or "explicit tag" in str(exc)
+            assert "Qdrant image" in str(exc)
         else:
             raise AssertionError(f"expected image={image} to fail")
 
@@ -81,13 +87,12 @@ def test_render_qdrant_systemd_unit_rejects_control_characters() -> None:
 
 def test_render_qdrant_systemd_unit_escapes_systemd_percent_specifiers() -> None:
     unit = render_qdrant_systemd_unit(
-        image="docker.io/qdrant/qdrant%x:v1.18.2",
         podman="/usr/bin/podman%h",
     )
 
     assert "ExecStartPre=-/usr/bin/podman%%h rm -f teebotus-qdrant" in unit.service_text
     assert "/usr/bin/podman%%h volume exists teebotus-qdrant" in unit.service_text
-    assert "docker.io/qdrant/qdrant%%x:v1.18.2" in unit.service_text
+    assert "docker.io/qdrant/qdrant:v1.18.2" in unit.service_text
     assert "%%%%h" not in unit.service_text
 
 

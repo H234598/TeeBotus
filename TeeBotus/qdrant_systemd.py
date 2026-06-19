@@ -117,6 +117,13 @@ def _validate_image(value: str) -> str:
     if not image:
         raise ValueError("Qdrant image must not be empty")
     _validate_systemd_unit_value(image, label="image")
+    if image.startswith("-"):
+        raise ValueError("Qdrant image must not start with '-'")
+    if any(char.isspace() for char in image):
+        raise ValueError("Qdrant image must not contain whitespace")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._/:@-")
+    if any(char not in allowed for char in image):
+        raise ValueError("Qdrant image contains unsupported characters")
     if image in {"qdrant/qdrant", "qdrant/qdrant:latest"} or image.endswith(":latest"):
         raise ValueError("Qdrant image must use a pinned tag, not latest")
     if ":" not in image.rsplit("/", 1)[-1]:
