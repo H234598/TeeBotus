@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -14,6 +15,11 @@ NOTIFICATION_STATE_FILENAME = "Version_Notifications.json"
 NOTIFICATION_STATE_COLLECTION = "version_notifications"
 ACTIVE_WINDOW_DAYS = 7
 DEFAULT_REPO_URL = "https://github.com/H234598/TeeBotus"
+SEMVER_RE = re.compile(
+    r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)"
+    r"(?:-(?P<prerelease>[0-9A-Za-z.-]+))?"
+    r"(?:\+[0-9A-Za-z.-]+)?$"
+)
 
 
 @dataclass(frozen=True)
@@ -194,6 +200,9 @@ def _normalize_version_key(version: str) -> str:
 
 def _version_order_key(version: str) -> tuple[tuple[int, int | str], ...]:
     text = _normalize_version_key(version)
+    semver_key = _semver_order_key(text)
+    if semver_key:
+        return semver_key
     chunks: list[tuple[int, int | str]] = []
     current = ""
     current_is_digit: bool | None = None
@@ -206,6 +215,25 @@ def _version_order_key(version: str) -> tuple[tuple[int, int | str], ...]:
         current_is_digit = is_digit
     if current:
         chunks.append((0, int(current)) if current_is_digit else (1, current.casefold()))
+    return tuple(chunks)
+
+
+def _semver_order_key(version: str) -> tuple[tuple[int, int | str], ...]:
+    match = SEMVER_RE.fullmatch(version)
+    if match is None:
+        return ()
+    chunks: list[tuple[int, int | str]] = [
+        (0, int(match.group("major"))),
+        (0, int(match.group("minor"))),
+        (0, int(match.group("patch"))),
+    ]
+    prerelease = match.group("prerelease")
+    if prerelease is None:
+        chunks.append((2, ""))
+        return tuple(chunks)
+    chunks.append((1, ""))
+    for identifier in prerelease.split("."):
+        chunks.append((0, int(identifier)) if identifier.isdigit() else (1, identifier))
     return tuple(chunks)
 
 
