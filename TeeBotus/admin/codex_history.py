@@ -36,6 +36,8 @@ from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_r
 CODEX_HISTORY_SCHEMA_VERSION = 1
 CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
+CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
+CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
 
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b")
 _TELEGRAM_TOKEN_RE = re.compile(r"\b\d{7,12}:[A-Za-z0-9_\-]{25,}\b")
@@ -75,6 +77,8 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
     for part in raw_parts:
         if part in {"", "."}:
             continue
+        if part == "..":
+            raise ValueError(f"{operation} contains forbidden relative segment: {part}")
         if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
             raise ValueError(f"{operation} contains invalid path segment: {part}")
         parts.append(part)
@@ -586,6 +590,70 @@ def default_codex_session_roots() -> tuple[Path, ...]:
     if agents_root.is_dir():
         roots.extend(path / ".codex" / "sessions" for path in sorted(agents_root.iterdir()) if path.is_dir())
     return tuple(roots)
+
+
+def export_codex_history_bibliothekar_docs(
+    store: AccountStore,
+    *,
+    instance_dir: str | Path,
+    instance_name: str,
+    repo: str = "",
+    limit: int = 0,
+    overwrite: bool = True,
+) -> dict[str, Any]:
+    """Export redacted Codex history as admin-only Markdown documents.
+
+    The destination intentionally differs from data/Bibliothek so normal user-facing
+    Bibliothekar retrieval cannot expose Codex run history by accident.
+    """
+
+    safe_instance_name = _safe_instance_name(instance_name)
+    safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
+    destination = _codex_history_bibliothekar_root(safe_instance_dir)
+    rows = _filter_outbox(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), repo)
+    items = [item for item in rows if _codex_history_item_indexable(item)]
+    items = sorted(items, key=_summary_sort_key)
+    if limit > 0:
+        items = items[-int(limit) :]
+    destination.mkdir(parents=True, exist_ok=True)
+    _write_codex_history_bibliothekar_readme(destination, safe_instance_name)
+    exported: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    for item in items:
+        project = item.get("project", {})
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_name = str(project.get("repo_name") or "project").strip() or "project"
+        repo_dir = destination / "codex_history" / _safe_filename_component(repo_name, default="project")
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        target = (repo_dir / _codex_history_bibliothekar_filename(item)).resolve()
+        try:
+            target.relative_to(destination.resolve())
+        except ValueError as exc:
+            raise ValueError("codex history export target escapes admin bibliothekar root") from exc
+        if target.exists() and not overwrite:
+            skipped.append({"item_id": str(item.get("id") or ""), "path": str(target), "reason": "exists"})
+            continue
+        text = _codex_history_bibliothekar_markdown(item)
+        target.write_text(text, encoding="utf-8")
+        exported.append(
+            {
+                "item_id": str(item.get("id") or ""),
+                "summary_prefix": str(item.get("summary_prefix") or ""),
+                "repo_name": repo_name,
+                "path": str(target),
+                "categories": _codex_history_bibliothekar_categories(item),
+            }
+        )
+    return {
+        "ok": True,
+        "instance": safe_instance_name,
+        "destination": str(destination),
+        "exported": len(exported),
+        "skipped": len(skipped),
+        "files": exported,
+        "skipped_files": skipped,
+    }
 
 
 def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
@@ -1441,6 +1509,15 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report_parser.add_argument("--format", choices=("text", "json"), default="text")
     report_parser.add_argument("--output", default="")
 
+    bibliothekar_export_parser = subparsers.add_parser("bibliothekar-export")
+    bibliothekar_export_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    bibliothekar_export_parser.add_argument("--instances", default="")
+    bibliothekar_export_parser.add_argument("--instance", default="")
+    bibliothekar_export_parser.add_argument("--repo", default="")
+    bibliothekar_export_parser.add_argument("--limit", type=int, default=0)
+    bibliothekar_export_parser.add_argument("--format", choices=("text", "json"), default="text")
+    bibliothekar_export_parser.add_argument("--no-overwrite", action="store_true")
+
     dispatch_parser = subparsers.add_parser("dispatch")
     dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     dispatch_parser.add_argument("--instances", default="")
@@ -1519,6 +1596,45 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0
         except (OSError, ValueError) as exc:
             print(f"report failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "bibliothekar-export":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            _ensure_explicit_instances_exist(instances_dir, selected_instances)
+            reports: list[dict[str, Any]] = []
+            for instance_name in discover_instances(instances_dir, selected_instances):
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                reports.append(
+                    export_codex_history_bibliothekar_docs(
+                        store,
+                        instance_dir=instances_dir / instance_name,
+                        instance_name=instance_name,
+                        repo=args.repo,
+                        limit=int(args.limit or 0),
+                        overwrite=not bool(args.no_overwrite),
+                    )
+                )
+            payload = {
+                "ok": not any(not report.get("ok") for report in reports),
+                "instances_dir": str(instances_dir),
+                "instances": reports,
+                "totals": {
+                    "exported": sum(int(report.get("exported") or 0) for report in reports),
+                    "skipped": sum(int(report.get("skipped") or 0) for report in reports),
+                },
+            }
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_bibliothekar_export_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"bibliothekar-export failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "dispatch":
         try:
@@ -1773,6 +1889,32 @@ def _render_receipt_report(payload: Mapping[str, Any]) -> str:
     return line + "\n"
 
 
+def _render_bibliothekar_export_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Bibliothekar Export", ""]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.append(f"exported: {totals.get('exported', 0)}")
+        lines.append(f"skipped: {totals.get('skipped', 0)}")
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        lines.append(f"  destination: {instance.get('destination', '')}")
+        lines.append(f"  exported: {instance.get('exported', 0)}")
+        lines.append(f"  skipped: {instance.get('skipped', 0)}")
+        for item in instance.get("files", []) or []:
+            if not isinstance(item, Mapping):
+                continue
+            lines.append(
+                "  file: "
+                f"{item.get('summary_prefix', '')} "
+                f"{item.get('repo_name', '')} "
+                f"{item.get('path', '')}"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _render_watch_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Watch", "", f"mode: {payload.get('mode', '')}"]
     roots = payload.get("sessions_roots", [])
@@ -1938,6 +2080,206 @@ def _history_keywords(
         for token in re.findall(r"[A-Za-z0-9_.-]{3,}", value):
             words.add(token.casefold())
     return sorted(word for word in words if word)
+
+
+def _codex_history_bibliothekar_root(instance_dir: Path) -> Path:
+    safe_instance_dir = _safe_repo_root(instance_dir, operation="instance directory")
+    data_dir = (safe_instance_dir / "data").resolve()
+    destination = (data_dir / CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME).resolve()
+    normal_library = (data_dir / "Bibliothek").resolve()
+    if destination == normal_library:
+        raise ValueError("codex history export must not use the normal user Bibliothek")
+    try:
+        destination.relative_to(data_dir)
+    except ValueError as exc:
+        raise ValueError("codex history export target escapes instance data directory") from exc
+    return destination
+
+
+def _codex_history_item_indexable(item: Mapping[str, Any]) -> bool:
+    if not isinstance(item, Mapping):
+        return False
+    if str(item.get("kind") or "").strip() != "codex_run_summary":
+        return False
+    indexing = item.get("indexing", {})
+    if isinstance(indexing, Mapping) and indexing.get("indexable") is False:
+        return False
+    return True
+
+
+def _write_codex_history_bibliothekar_readme(destination: Path, instance_name: str) -> None:
+    readme = destination / CODEX_HISTORY_BIBLIOTHEKAR_README
+    text = "\n".join(
+        [
+            "# TeeBotus Codex History Bibliothekar Export",
+            "",
+            f"- Instanz: `{instance_name}`",
+            "- Zugriff: admin-only",
+            "- Quelle: `codex_history_outbox`",
+            "- Zweck: separate Indexquelle fuer Qdrant/Bibliothekar-Projekthistory",
+            "",
+            "Dieser Ordner darf nicht in die normale Nutzerbibliothek `data/Bibliothek` kopiert oder dort gemountet werden.",
+            "Nicht-Admin-Nutzer duerfen weder von dieser Sammlung erfahren noch Inhalte daraus erhalten.",
+            "",
+        ]
+    )
+    readme.write_text(text, encoding="utf-8")
+
+
+def _codex_history_bibliothekar_markdown(item: Mapping[str, Any]) -> str:
+    project = item.get("project", {})
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    delivery = item.get("delivery", {})
+    codex = item.get("codex", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    if not isinstance(delivery, Mapping):
+        delivery = {}
+    if not isinstance(codex, Mapping):
+        codex = {}
+    categories = _codex_history_bibliothekar_categories(item)
+    keywords = _codex_history_bibliothekar_keywords(item, categories)
+    title = redact_codex_history_text(summary.get("title") or "Codex run summary").strip() or "Codex run summary"
+    markdown = redact_codex_history_text(summary.get("markdown") or "").strip()
+    if not markdown:
+        markdown = f"# {item.get('summary_prefix', '')} {title}".strip()
+    lines = [
+        f"# Codex History: {item.get('summary_prefix', '')} {title}".strip(),
+        "",
+        "> Admin-only TeeBotus Codex-History-Export. Nicht fuer normale Nutzer-Bibliotheken freigeben.",
+        "",
+        "## Index-Metadaten",
+        f"- Kategorie: {', '.join(categories)}",
+        f"- Keywords: {', '.join(keywords[:80])}",
+        "- Zugriff: admin-only",
+        "- Sammlung: codex_history_outbox",
+        "- Dokumenttyp: project-history",
+        "",
+        "## Projekt",
+        f"- Repo: `{redact_codex_history_text(project.get('repo_name', '')).strip()}`",
+        f"- Repo-Root: `{redact_codex_history_text(project.get('repo_root', '')).strip()}`",
+        f"- Remote: `{redact_codex_history_text(project.get('remote_url', '')).strip()}`",
+        f"- Provider: `{redact_codex_history_text(project.get('provider', '')).strip()}`",
+        f"- Branch: `{redact_codex_history_text(project.get('branch', '')).strip()}`",
+        f"- Commit: `{redact_codex_history_text(project.get('head_commit', '')).strip()}`",
+        f"- Dirty: `{bool(project.get('dirty'))}`",
+        "",
+        "## Version und Status",
+        f"- SemVer: `{redact_codex_history_text(version.get('semver', '')).strip()}`",
+        f"- Tag: `{redact_codex_history_text(version.get('tag', '')).strip()}`",
+        f"- Summary: `{redact_codex_history_text(item.get('summary_prefix', '')).strip()}`",
+        f"- Status: `{redact_codex_history_text(item.get('status', '')).strip()}`",
+        f"- Erstellt: `{redact_codex_history_text(item.get('created_at', '')).strip()}`",
+        f"- Aktualisiert: `{redact_codex_history_text(item.get('updated_at', '')).strip()}`",
+        f"- Sent: `{redact_codex_history_text(delivery.get('sent_at', '')).strip()}`",
+        f"- Accepted: `{redact_codex_history_text(delivery.get('accepted_at', '')).strip()}`",
+        f"- Delivered: `{redact_codex_history_text(delivery.get('delivered_at', '')).strip()}`",
+        f"- Acknowledged: `{redact_codex_history_text(delivery.get('acknowledged_at', '')).strip()}`",
+        "",
+        "## Codex",
+        f"- Source: `{redact_codex_history_text(item.get('source', '')).strip()}`",
+        f"- Session: `{redact_codex_history_text(codex.get('session_id', '')).strip()}`",
+        f"- Turn: `{redact_codex_history_text(codex.get('turn_id', '')).strip()}`",
+        "",
+        "## Summary",
+        markdown,
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _codex_history_bibliothekar_categories(item: Mapping[str, Any]) -> list[str]:
+    project = item.get("project", {})
+    summary = item.get("summary", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    status = str(item.get("status") or "unknown").strip().casefold() or "unknown"
+    repo_name = _safe_filename_component(str(project.get("repo_name") or "project"), default="project").casefold()
+    categories: set[str] = {
+        "admin-only",
+        "codex-history",
+        "project-history",
+        f"repo-{repo_name}",
+        f"status-{_safe_filename_component(status, default='unknown').casefold()}",
+    }
+    text_parts = [
+        str(summary.get("title") or ""),
+        _join_codex_history_summary_values(summary.get("bullets", [])),
+        _join_codex_history_summary_values(summary.get("changed_files", [])),
+        _join_codex_history_summary_values(summary.get("tests", [])),
+    ]
+    text = " ".join(text_parts).casefold()
+    category_terms = {
+        "change-feature": ("feature", "gebaut", "implement", "neu", "add", "ergaenz"),
+        "change-bugfix": ("fix", "bug", "repar", "fehler", "regress"),
+        "change-test": ("test", "pytest", "benchmark", "check", "verify", "verifiz"),
+        "change-docs": ("doc", "docs", "readme", "plan", "bericht", ".md"),
+        "change-security": ("secret", "auth", "admin", "policy", "guard", "sicher", "encrypt"),
+        "change-dependency": ("dependency", "deps", "requirements", "lock", "pin", "version"),
+        "change-runtime": ("runtime", "restart", "service", "systemd", "adapter", "telegram", "signal", "matrix"),
+        "change-memory": ("memory", "accountstore", "sql", "sqlite", "postgres", "qdrant", "vector"),
+        "change-bibliothekar": ("bibliothek", "bibliothekar", "library", "index"),
+        "change-llm": ("llm", "openai", "gemini", "litellm", "model", "planner"),
+    }
+    for category, needles in category_terms.items():
+        if any(needle in text for needle in needles):
+            categories.add(category)
+    return sorted(categories)
+
+
+def _codex_history_bibliothekar_keywords(item: Mapping[str, Any], categories: Sequence[str]) -> list[str]:
+    indexing = item.get("indexing", {})
+    words: set[str] = {str(category).casefold() for category in categories if str(category or "").strip()}
+    if isinstance(indexing, Mapping):
+        keywords = indexing.get("keywords", [])
+        if isinstance(keywords, Sequence) and not isinstance(keywords, (str, bytes, bytearray)):
+            for keyword in keywords:
+                value = str(keyword or "").strip().casefold()
+                if value:
+                    words.add(value)
+    for field in ("summary_prefix", "status", "source", "created_at", "updated_at"):
+        value = str(item.get(field) or "").strip().casefold()
+        if value:
+            words.add(value)
+    return sorted(words)
+
+
+def _join_codex_history_summary_values(value: object) -> str:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return " ".join(str(item or "") for item in value)
+    return ""
+
+
+def _codex_history_bibliothekar_filename(item: Mapping[str, Any]) -> str:
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    try:
+        number = int(item.get("summary_number") or version.get("summary_number") or 0)
+    except (TypeError, ValueError):
+        number = 0
+    prefix = _safe_filename_component(str(item.get("summary_prefix") or version.get("summary_prefix") or "summary"), default="summary", max_length=48)
+    title = _safe_filename_component(str(summary.get("title") or "codex-run"), default="codex-run", max_length=64)
+    item_id = _safe_filename_component(str(item.get("id") or uuid.uuid4().hex), default="item", max_length=32)
+    return f"{max(number, 0):04d}_{prefix}_{title}_{item_id}.md"
+
+
+def _safe_filename_component(value: str, *, default: str, max_length: int = 96) -> str:
+    text = redact_codex_history_text(value).strip()
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", text).strip("._-")
+    if not safe:
+        safe = default
+    return safe[:max(8, max_length)].strip("._-") or default
 
 
 def _upsert_project(store: AccountStore, account_id: str, repo: Mapping[str, Any], item: Mapping[str, Any], timestamp: str) -> None:

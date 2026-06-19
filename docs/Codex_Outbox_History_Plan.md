@@ -501,11 +501,18 @@ Stand 2026-06-19:
 - `--runtime-status` gibt zusaetzlich `codex_history_repo=<Instanz> repo=... status=... queued=... failed=... total=... latest_prefix=... latest_status=... latest_title=...` aus.
 - Das Cinnamon-Applet parst diese Runtime-Zeilen und zeigt Instanzuebersicht plus Repo-Details im Projekt-Menue.
 - `codex-history report` liefert `repo_history` mit pro-Repo Status-/Dispatch-Zaehlern, letzten Summaries und `--repo`/`--summary-limit`.
+- `codex-history bibliothekar-export` schreibt redigierte Projekthistory-Markdowns in `data/Codex_History_Bibliothek`, absichtlich getrennt von der normalen Nutzerbibliothek `data/Bibliothek`.
+- Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
 ### Phase 6: Qdrant + Bibliothek
-* Verheirate alles mit Qdrant (64D) und dem Bibliothekar
-* Denk dir Kategorien aus, die Qdrant dann benutzen kann und baue sie ein.
+* Teilweise erledigt: `codex-history bibliothekar-export` erzeugt admin-only Markdown-Dokumente aus `codex_history_outbox`.
+	* Zielordner: `instances/<Instanz>/data/Codex_History_Bibliothek`
+	* Der normale Runtime-Bibliothekar liest weiterhin nur `data/Bibliothek`; dadurch leakt Codex-History nicht an normale Nutzer.
+	* Die Dokumente enthalten Metadaten, Status, Version, Repo, Commit, Delivery-Felder, Summary und Kategorien.
+* Offen: separater Qdrant-Index fuer diese admin-only Quelle, nicht die normale Nutzer-Collection.
+* Offen: Automatischer Rebuild dieser separaten Collection nach Export.
+* Kategorien fuer Qdrant sind eingebaut, aber noch deterministisch/statisch.
 * Ein geeignetes, Int8, lokales LLM darf die Kategorien für die Nachricht(en) festlegen.
 	* Es ist es klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.
 * User die keine Admins sind dürfen auf keinen Fall etwas von der Sammlung erfahren. 

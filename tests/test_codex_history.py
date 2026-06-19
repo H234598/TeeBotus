@@ -13,6 +13,7 @@ from TeeBotus.admin.codex_history import (
     append_codex_history_summary,
     build_codex_history_report,
     dispatch_codex_history_outbox,
+    export_codex_history_bibliothekar_docs,
     _safe_output_path,
     _safe_repo_root,
     import_codex_session_file,
@@ -313,6 +314,82 @@ def test_codex_history_report_builds_repo_history_and_filters_dispatch_results(t
     assert "alpha-history summaries=2 statuses=accepted=1, failed=1 dispatch=accepted=1, failed=1" in rendered
     assert "v1.8.0 #0002 failed Alpha zwei" in rendered
     assert "beta-history" not in rendered
+
+
+def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "bibliothekar-export-demo", version="1.8.6")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    fake_key = "sk-" + "svcacct-" + ("c" * 48)
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Bibliothekar Export",
+        bullets=[
+            "Qdrant und Bibliothekar bekommen admin-only Projekthistory.",
+            f"Secret {fake_key} darf nicht im Export stehen.",
+        ],
+        changed_files=["TeeBotus/admin/codex_history.py", "docs/Codex_Outbox_History_Plan.md"],
+        tests=["pytest tests/test_codex_history.py"],
+    )
+
+    result = export_codex_history_bibliothekar_docs(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+    )
+
+    destination = (instance_dir / "data" / "Codex_History_Bibliothek").resolve()
+    assert result["ok"] is True
+    assert result["destination"] == str(destination)
+    assert result["exported"] == 1
+    assert result["files"][0]["item_id"] == item["id"]
+    assert "codex-history" in result["files"][0]["categories"]
+    assert "change-bibliothekar" in result["files"][0]["categories"]
+    assert "change-memory" in result["files"][0]["categories"]
+    assert not (instance_dir / "data" / "Bibliothek").exists()
+    assert (destination / "README.md").exists()
+
+    exported_text = Path(result["files"][0]["path"]).read_text(encoding="utf-8")
+    assert "admin-only" in exported_text
+    assert "codex_history_outbox" in exported_text
+    assert "Qdrant und Bibliothekar" in exported_text
+    assert fake_key not in exported_text
+    assert "<redacted:openai-key>" in exported_text
+
+
+def test_codex_history_cli_bibliothekar_export_filters_repo(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo_alpha = make_git_repo(tmp_path, "alpha-export", version="1.8.7")
+    repo_beta = make_git_repo(tmp_path, "beta-export", version="2.0.0")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo_alpha, title="Alpha Export", bullets=["Soll exportiert werden."])
+    append_codex_history_summary(store, repo_root=repo_beta, title="Beta Export", bullets=["Soll gefiltert werden."])
+
+    result = codex_history_main(
+        [
+            "bibliothekar-export",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--repo",
+            "alpha-export",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["totals"] == {"exported": 1, "skipped": 0}
+    files = payload["instances"][0]["files"]
+    assert len(files) == 1
+    assert files[0]["repo_name"] == "alpha-export"
+    assert Path(files[0]["path"]).exists()
+    assert "Alpha Export" in Path(files[0]["path"]).read_text(encoding="utf-8")
+    assert "Beta Export" not in Path(files[0]["path"]).read_text(encoding="utf-8")
 
 
 def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp_path: Path) -> None:
