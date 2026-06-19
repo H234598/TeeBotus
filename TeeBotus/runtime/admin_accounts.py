@@ -13,7 +13,7 @@ from typing import Any, Callable
 from TeeBotus import __version__
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, TOKEN_HEX_RE
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
 from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids
 
@@ -44,6 +44,14 @@ class AdminNotificationResult:
     status: str
     reason: str = ""
     channel: str = ""
+
+
+@dataclass(frozen=True)
+class RuntimeStatusSummaryPayload:
+    item_id: str
+    message_text: str
+    markdown_document: str
+    markdown_filename: str
 
 
 StoreFactory = Callable[[Path, str], AccountStore]
@@ -164,7 +172,7 @@ async def notify_runtime_status_admin_accounts(
         group = resolve_admin_account_group(instance_name=instance_name, env=source)
         for invalid_id in group.invalid_ids:
             results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
-        candidates: list[tuple[str, dict[str, Any], str, str, str]] = []
+        candidates: list[tuple[str, dict[str, Any], str, RuntimeStatusSummaryPayload]] = []
         include_status_auth_accounts = False
         if not group.account_ids and not group.invalid_ids and group.source != "default":
             env_value = str(source.get(group.source, "") if isinstance(source, Mapping) else "").strip()
@@ -190,7 +198,7 @@ async def notify_runtime_status_admin_accounts(
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
                 continue
             try:
-                item_id, message = _queue_runtime_status_summary(
+                summary_payload = _queue_runtime_status_summary(
                     store,
                     account_id,
                     problem_lines=problem_lines,
@@ -201,12 +209,12 @@ async def notify_runtime_status_admin_accounts(
             except Exception as exc:  # noqa: BLE001 - one broken status store must not hide runtime-status output.
                 results.append(AdminNotificationResult(instance_name, account_id, "failed", f"outbox:{type(exc).__name__}", channel=channel))
                 continue
-            candidates.append((account_id, route, channel, item_id, message))
+            candidates.append((account_id, route, channel, summary_payload))
         if not candidates:
             continue
         senders_by_channel: dict[str, ProactiveSender] = {}
         sender_errors_by_channel: dict[str, str] = {}
-        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _item_id, _message in candidates))
+        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _summary_payload in candidates))
         if sender_factory is not None:
             try:
                 senders = sender_factory(instance_name, store)
@@ -233,29 +241,36 @@ async def notify_runtime_status_admin_accounts(
                     sender_errors_by_channel[channel] = "no_sender"
                     continue
                 senders_by_channel[channel] = sender
-        for account_id, route, channel, item_id, message in candidates:
+        for account_id, route, channel, summary_payload in candidates:
             sender_error = sender_errors_by_channel.get(channel)
             if sender_error == "no_sender":
-                _record_runtime_status_dispatch(store, account_id, item_id, status="skipped", reason=sender_error, channel=channel, now=now)
+                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="skipped", reason=sender_error, channel=channel, now=now)
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
                 continue
             if sender_error:
-                _record_runtime_status_dispatch(store, account_id, item_id, status="failed", reason=sender_error, channel=channel, now=now)
+                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=sender_error, channel=channel, now=now)
                 results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
                 continue
             sender = senders_by_channel[channel]
             chat_id = str(route.get("chat_id") or "").strip()
-            action = SendText(chat_id, message, track=False)
+            action = SendAttachment(
+                chat_id,
+                summary_payload.markdown_document.encode("utf-8"),
+                summary_payload.markdown_filename,
+                "text/markdown",
+                caption=summary_payload.message_text,
+                track=False,
+            )
             try:
                 outcome = sender(route, action, {"source": "runtime_status_admin", "account_id": account_id})
                 if isawaitable(outcome):
                     await outcome
             except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
                 reason = f"send:{type(exc).__name__}"
-                _record_runtime_status_dispatch(store, account_id, item_id, status="failed", reason=reason, channel=channel, now=now)
+                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=reason, channel=channel, now=now)
                 results.append(AdminNotificationResult(instance_name, account_id, "failed", reason, channel=channel))
                 continue
-            _record_runtime_status_dispatch(store, account_id, item_id, status="sent", channel=channel, now=now)
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="sent", channel=channel, now=now)
             results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
     return tuple(results)
 
@@ -292,18 +307,20 @@ def _queue_runtime_status_summary(
     selected_instances: Sequence[str],
     route: Mapping[str, Any],
     now: datetime | None = None,
-) -> tuple[str, str]:
+) -> RuntimeStatusSummaryPayload:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     with store.status_outbox_lock(account_id):
         rows = store.read_status_outbox(account_id)
         summary_number = _next_status_summary_number(rows)
         summary_prefix = _status_summary_prefix(summary_number)
-        message = _runtime_status_admin_message(
+        message_text = _runtime_status_admin_message_text()
+        markdown_document = _runtime_status_admin_markdown(
             problem_lines,
             selected_instances=selected_instances,
             now=now,
             summary_prefix=summary_prefix,
         )
+        markdown_filename = _runtime_status_markdown_filename(summary_number)
         item_id = _unique_status_item_id(rows)
         rows.append(
             {
@@ -315,9 +332,13 @@ def _queue_runtime_status_summary(
                 "updated_at": timestamp,
                 "summary_number": summary_number,
                 "summary_prefix": summary_prefix,
+                "program_name": "TeeBotus",
                 "program_version": __version__,
                 "tag": f"v{__version__}",
-                "message_text": message,
+                "message_text": message_text,
+                "markdown_document": markdown_document,
+                "markdown_filename": markdown_filename,
+                "markdown_content_type": "text/markdown",
                 "problem_lines": list(problem_lines),
                 "selected_instances": list(selected_instances),
                 "route": dict(route),
@@ -325,7 +346,12 @@ def _queue_runtime_status_summary(
             }
         )
         store.write_status_outbox(account_id, rows)
-        return item_id, message
+        return RuntimeStatusSummaryPayload(
+            item_id=item_id,
+            message_text=message_text,
+            markdown_document=markdown_document,
+            markdown_filename=markdown_filename,
+        )
 
 
 def _record_runtime_status_dispatch(
@@ -452,30 +478,46 @@ def _parse_admin_account_ids(values: Iterable[str]) -> tuple[tuple[str, ...], tu
     return tuple(account_ids), tuple(invalid_ids)
 
 
-def _runtime_status_admin_message(
+def _runtime_status_admin_message_text() -> str:
+    return f"Release TeeBotus {__version__}"
+
+
+def _runtime_status_admin_markdown(
     problem_lines: Sequence[str],
     *,
     selected_instances: Sequence[str],
     now: datetime | None = None,
     summary_prefix: str = "",
 ) -> str:
-    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
+    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     instance_text = ",".join(selected_instances) if selected_instances else "auto"
-    title = "TeeBotus Runtime-Status Warnungen"
-    if summary_prefix:
-        title = f"{summary_prefix} {title}"
     lines = [
-        title,
-        f"Zeit: {timestamp}",
-        f"Instanzen: {instance_text}",
+        f"# Release TeeBotus {__version__}",
         "",
-        "Probleme:",
+        f"**Summary:** `{_escape_markdown_inline(summary_prefix or f'v{__version__}')}`",
+        "**Programm:** TeeBotus",
+        f"**Version:** `{_escape_markdown_inline(__version__)}`",
+        f"**Zeit:** `{_escape_markdown_inline(timestamp)}`",
+        f"**Instanzen:** `{_escape_markdown_inline(instance_text)}`",
+        "",
+        "## Probleme",
+        "",
     ]
-    lines.extend(f"- {line}" for line in problem_lines)
-    message = "\n".join(lines)
-    if len(message) <= 3500:
-        return message
-    return f"{message[:3470].rstrip()}\n... gekuerzt"
+    if problem_lines:
+        lines.extend(f"- `{_escape_markdown_inline(line)}`" for line in problem_lines)
+    else:
+        lines.append("- Keine Probleme gemeldet.")
+    lines.extend(["", "## Versand", "", "- Status: `queued` beim Erzeugen, danach `sent`/`failed` im Dispatch-Status."])
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _runtime_status_markdown_filename(summary_number: int) -> str:
+    safe_version = re.sub(r"[^A-Za-z0-9._-]+", "_", __version__).strip("._-") or "unknown"
+    return f"TeeBotus_release_{safe_version}_{max(1, int(summary_number)):04d}.md"
+
+
+def _escape_markdown_inline(value: object) -> str:
+    return str(value if value is not None else "").replace("`", r"\`").replace("\n", " ").strip()
 
 
 def _runtime_sender_factory(instances_dir: Path, env: Mapping[str, str], *, channels: Sequence[str]) -> SenderFactory:
