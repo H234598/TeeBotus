@@ -2398,6 +2398,16 @@ def test_github_has_version_normalizes_uppercase_version_prefix(tmp_path: Path, 
     assert calls[0][-1] == "v1.0.3"
 
 
+def test_github_has_version_rejects_unrelated_remote_tag_output(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "a" * 40 + "\trefs/tags/v9.9.9\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    assert github_has_version(tmp_path, "1.0.3") is False
+
+
 def test_github_repo_url_normalizes_https_remote(tmp_path: Path, monkeypatch) -> None:
     class Result:
         returncode = 0

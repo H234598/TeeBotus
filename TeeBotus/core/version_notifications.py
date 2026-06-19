@@ -197,7 +197,14 @@ def github_has_version(repo_root: Path, version: str, *, remote: str = "origin")
         )
     except (OSError, subprocess.TimeoutExpired):
         return False
-    return result.returncode == 0 and bool(result.stdout.strip())
+    if result.returncode != 0:
+        return False
+    expected_refs = {f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"}
+    for line in result.stdout.splitlines():
+        parts = line.strip().split()
+        if parts and parts[-1] in expected_refs:
+            return True
+    return False
 
 
 def github_repo_url(repo_root: Path, *, remote: str = "origin") -> str:
