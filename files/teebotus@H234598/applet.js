@@ -22,6 +22,7 @@ const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MENU_LINE_LIMIT = 14;
+const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
 const PROBLEM_STATUSES = [
   "broken",
   "config_conflict",
@@ -305,7 +306,7 @@ TeeBotusApplet.prototype = {
     let summary = runtime.summary || {};
     let runtimeLines = [];
     if (summary.instances || summary.channels) {
-      runtimeLines.push("Instanzen: " + String(summary.instances || "?") + " | Kanaele: " + String(summary.channels || this.channels || DEFAULT_CHANNELS));
+      runtimeLines.push("Instanzen: " + String(summary.instances || "?") + " | Kanaele: " + String(summary.channels || this._channels()));
     }
     runtimeLines = runtimeLines.concat(this._formatLines((sections["Konfiguration"] || []).concat(sections["Start"] || []), (line) => this._formatRuntimeLine(line)));
     this._populateLines(this.runtimeMenu.menu, runtimeLines, this._dynamicEmptyText(_("Runtime-Konfiguration wird geladen.")));
@@ -859,13 +860,13 @@ TeeBotusApplet.prototype = {
       "--repo-root",
       this._repoPath(),
       "--channels",
-      String(this.channels || DEFAULT_CHANNELS),
+      this._channels(),
       "--unit",
       this._runtimeUnit(),
       "--qdrant-unit",
       this._qdrantUnit(),
       "--qdrant-url",
-      String(this.qdrantUrl || DEFAULT_QDRANT_URL),
+      this._qdrantUrl(),
       "--python",
       this._pythonPath(),
       "--timeout",
@@ -888,7 +889,7 @@ TeeBotusApplet.prototype = {
     }
     let state = String(unit.active_state || "unknown");
     let instances = String(summary.instances || "?");
-    let channels = String(summary.channels || this.channels || DEFAULT_CHANNELS);
+    let channels = String(summary.channels || this._channels());
     let qdrant = payload.qdrant || {};
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
@@ -1100,7 +1101,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openRuntimeStatusTerminal: function() {
-    this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus", "--runtime-status", "--channels", String(this.channels || DEFAULT_CHANNELS)]));
+    this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus", "--runtime-status", "--channels", this._channels()]));
   },
 
   _openQdrantStatusTerminal: function() {
@@ -1254,6 +1255,20 @@ TeeBotusApplet.prototype = {
 
   _qdrantUnit: function() {
     return this._safeSystemdUnit(this.qdrantUnit, DEFAULT_QDRANT_UNIT);
+  },
+
+  _channels: function() {
+    let result = [];
+    let seen = {};
+    for (let part of String(this.channels || DEFAULT_CHANNELS).split(",")) {
+      let channel = String(part || "").trim().toLowerCase();
+      if (ALLOWED_CHANNELS.indexOf(channel) < 0 || seen[channel]) {
+        continue;
+      }
+      seen[channel] = true;
+      result.push(channel);
+    }
+    return result.length > 0 ? result.join(",") : DEFAULT_CHANNELS;
   },
 
   _codexUsagePath: function() {

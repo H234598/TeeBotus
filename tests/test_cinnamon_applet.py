@@ -359,6 +359,9 @@ def test_cinnamon_applet_qdrant_actions_keep_url_local_only() -> None:
 
     assert schema["qdrant-url"]["default"] == "http://127.0.0.1:6333"
     assert "Must stay local" in schema["qdrant-url"]["tooltip"]
+    assert "const ALLOWED_CHANNELS = " in source
+    assert "_channels: function()" in source
+    assert 'ALLOWED_CHANNELS.indexOf(channel) < 0' in source
     assert "return this._safeLocalHttpUrl(this.qdrantUrl, DEFAULT_QDRANT_URL);" in source
     assert "_safeLocalHttpUrl: function(value, fallback)" in source
     assert '["127.0.0.1", "localhost", "::1"].indexOf(normalizedHost)' in source
@@ -405,6 +408,42 @@ def test_cinnamon_applet_sanitizes_systemd_units_from_settings() -> None:
     assert command[command.index("--qdrant-unit") + 1] == "teebotus-qdrant.service"
     assert "--force" not in command
     assert "../qdrant.service" not in command
+
+
+def test_cinnamon_applet_sanitizes_status_command_channels_and_qdrant_url() -> None:
+    result = _run_js_applet_expression(
+        """
+        [
+          (function() {
+            applet.channels = "Signal, telegram, signal, bad, --help, matrix";
+            applet.qdrantUrl = "https://example.com:6333";
+            applet.runtimeUnit = "teebotus.service";
+            applet.qdrantUnit = "teebotus-qdrant.service";
+            applet.pythonCommand = "/usr/bin/python3";
+            applet.repoPath = "/repo";
+            applet.statusTimeoutSeconds = 30;
+            return applet._statusCommand();
+          })(),
+          (function() {
+            applet.channels = "bad,--help";
+            return applet._channels();
+          })(),
+          (function() {
+            applet.channels = "matrix,telegram,matrix";
+            return applet._channels();
+          })()
+        ]
+        """
+    )
+
+    command = result[0]
+    assert command[command.index("--channels") + 1] == "signal,telegram,matrix"
+    assert command[command.index("--qdrant-url") + 1] == "http://127.0.0.1:6333"
+    assert "bad" not in command
+    assert "--help" not in command
+    assert "https://example.com:6333" not in command
+    assert result[1] == "telegram,signal"
+    assert result[2] == "matrix,telegram"
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
