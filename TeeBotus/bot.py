@@ -2095,16 +2095,24 @@ def _runtime_status_admin_notify_args(argv: Sequence[str]) -> tuple[bool, tuple[
 
 def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> None:
     try:
-        from TeeBotus.runtime.admin_accounts import format_admin_notification_result_lines, notify_runtime_status_admin_accounts
+        from TeeBotus.runtime.admin_accounts import (
+            format_admin_notification_result_lines,
+            notify_runtime_status_admin_accounts,
+            runtime_status_problem_lines,
+        )
         from TeeBotus.runtime.config import resolve_runtime_config
 
         sanitized_status_output = _sanitize_admin_status_output(status_output)
+        problem_lines = runtime_status_problem_lines(sanitized_status_output)
         config = resolve_runtime_config(argv=list(argv))
+        if not problem_lines:
+            return
         results = asyncio.run(
             notify_runtime_status_admin_accounts(
                 instances_dir=config.instances_dir,
                 selected_instances=tuple(instance.instance_name for instance in config.instances),
-                status_output=sanitized_status_output,
+                status_output="",
+                problem_lines=problem_lines,
                 env=os.environ,
             )
         )

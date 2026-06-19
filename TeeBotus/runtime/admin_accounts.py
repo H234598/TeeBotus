@@ -152,12 +152,14 @@ async def notify_runtime_status_admin_accounts(
     instances_dir: Path,
     selected_instances: Sequence[str],
     status_output: str,
+    problem_lines: tuple[str, ...] | None = None,
     env: Mapping[str, str] | None = None,
     store_factory: StoreFactory | None = None,
     sender_factory: SenderFactory | None = None,
     now: datetime | None = None,
 ) -> tuple[AdminNotificationResult, ...]:
-    problem_lines = runtime_status_problem_lines(status_output)
+    if problem_lines is None:
+        problem_lines = runtime_status_problem_lines(status_output)
     if not problem_lines:
         return (AdminNotificationResult(instance_name="runtime_status", account_id="", status="skipped", reason="no_problem_lines"),)
     source = os.environ if env is None else env
