@@ -356,7 +356,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        print(_sanitize_status_text(line))
+        print(line)
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -932,11 +932,13 @@ def _status_api_key_state(route: Any, *, provider: str, model: str, instance_nam
 def _status_safe_path(value: str | os.PathLike[str] | os.PathLike[bytes], *, fallback: Path, allowed_root: Path) -> Path:
     try:
         candidate = Path(value).expanduser()
-        resolved = candidate.resolve()
         allowed_root = allowed_root.resolve()
     except (OSError, TypeError, ValueError):
         return fallback
+    if not candidate.is_absolute():
+        candidate = allowed_root / candidate
     try:
+        resolved = candidate.resolve()
         resolved.relative_to(allowed_root)
     except ValueError:
         return fallback
@@ -1101,7 +1103,11 @@ def _runtime_status_hf_pool_state_store() -> Any | None:
     try:
         from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 
-        state_path = default_hf_pool_state_path()
+        state_path = _status_safe_path(
+            default_hf_pool_state_path(),
+            fallback=Path.home() / ".local" / "state" / "teebotus" / "hf_pool_state.sqlite3",
+            allowed_root=Path.home(),
+        )
         if not state_path.exists():
             return None
         return SQLiteHFPoolRuntimeStateStore(state_path)
@@ -1662,12 +1668,7 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bhf_[A-Za-z0-9]{8,}\b", "hf_<redacted>", text)
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
-    text = re.sub(
-        r"(?:[a-z][a-z0-9+.-]*://|(?:target|base_url|url)=)[^/\s:@]{1,512}:[^/\s@]{1,512}@",
-        _status_url_credential_replacement,
-        text,
-        flags=re.IGNORECASE,
-    )
+    text = _sanitize_status_url_credentials(text)
     text = _status_secret_assignment_pattern.sub(_status_secret_assignment_replacement, text)
     text = _status_secret_assignment_fragment_pattern.sub(_status_secret_assignment_fragment_replacement, text)
     return text.replace("\r", " ").replace("\n", " ")
@@ -1701,13 +1702,42 @@ def _sanitize_admin_status_output(output: str) -> str:
     return "\n".join(_sanitize_admin_notify_status_line(line) for line in text.split("\n"))
 
 
-def _status_url_credential_replacement(match: re.Match[str]) -> str:
-    value = match.group(0)
-    if "://" in value:
-        return value.split("://", 1)[0] + "://<redacted>@"
-    if "=" in value:
-        return value.split("=", 1)[0] + "=<redacted>@"
-    return "<redacted>@"
+def _sanitize_status_url_credentials(value: str) -> str:
+    lowered = value.lower()
+    if "://" not in value and not lowered.startswith("target=") and not lowered.startswith("base_url=") and not lowered.startswith("url="):
+        return value
+    segments = re.split(r"(\s+)", value)
+    for index, segment in enumerate(segments):
+        if not segment or segment.isspace():
+            continue
+        segments[index] = _sanitize_status_url_credentials_segment(segment)
+    return "".join(segments)
+
+
+def _sanitize_status_url_credentials_segment(segment: str) -> str:
+    lowered = segment.lower()
+    for prefix in ("target=", "base_url=", "url="):
+        if lowered.startswith(prefix):
+            return _sanitize_status_url_value(segment[len(prefix) :], value_prefix=segment[: len(prefix)])
+    return _sanitize_status_url_value(segment)
+
+
+def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
+    if "://" not in value:
+        return f"{value_prefix}{value}"
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return f"{value_prefix}{value}"
+    if parsed.username is None or parsed.password is None:
+        return f"{value_prefix}{value}"
+    host = parsed.hostname or ""
+    if not host:
+        return f"{value_prefix}{value}"
+    netloc = f"{parsed.username}:<redacted>@{host}"
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))}"
 
 
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
@@ -1727,18 +1757,12 @@ def _status_secret_assignment_fragment_replacement(match: re.Match[str]) -> str:
 
 
 def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
-    key_token = key.strip().casefold().replace("-", "_").replace(" ", "_")
+    _ = original
     normalized_value = value.strip().strip("\"'`").casefold()
     if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"}:
-        return original
-    if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", value.strip()):
-        return original
-    if key_token in {"api_key_ring", "gemini_api_key_ring"} and value.strip().isdigit():
-        return original
-    if key_token == "api_key_instances" and re.fullmatch(r"\d+/\d+", value.strip()):
-        return original
-    if key_token in {"tokens", "token_usage", "costs", "limits", "free_tier_guard", "max_output_tokens"}:
-        return original
+        return f"{key}{separator}{value}"
+    if not value:
+        return f"{key}{separator}{value}"
     return f"{key}{separator}<redacted>"
 
 
@@ -1835,12 +1859,12 @@ def _run_account_storage_preflight(config: Any) -> bool:
             file=sys.stderr,
         )
         for line in broken_lines:
-            print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
+            print(_sanitize_status_text(line), file=sys.stderr)
         return True
     channels = ",".join(str(channel) for channel in getattr(config, "channels", ()) if str(channel or "").strip()) or "telegram,signal,matrix"
     print("TeeBotus account storage preflight failed; refusing to start bot loops.", file=sys.stderr)
     for line in broken_lines:
-        print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
+        print(_sanitize_status_text(line), file=sys.stderr)
     print(f"Diagnose: python3 -m TeeBotus --runtime-status --channels {channels}", file=sys.stderr)
     print(f"Emergency override: {ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV}=1", file=sys.stderr)
     return False
@@ -1943,7 +1967,7 @@ def _run_signal_runtime(config: Any) -> int:
     try:
         return int(run_signal_accounts(config))
     except SignalRuntimeError as exc:
-        print(_sanitize_admin_notify_status_line(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
+        print(_sanitize_status_text(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -1956,7 +1980,7 @@ def _start_signal_runtime_background(config: Any) -> int:
     try:
         start_signal_accounts_in_background(config)
     except SignalRuntimeError as exc:
-        print(_sanitize_admin_notify_status_line(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
+        print(_sanitize_status_text(f"TeeBotus Signal runtime error: {exc}"), file=sys.stderr)
         return 2
     return 0
 
@@ -1970,7 +1994,7 @@ def _run_matrix_runtime(config: Any) -> int:
     try:
         return int(run_matrix_accounts(config))
     except MatrixRuntimeError as exc:
-        print(_sanitize_admin_notify_status_line(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
+        print(_sanitize_status_text(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -1983,7 +2007,7 @@ def _start_matrix_runtime_background(config: Any) -> int:
     try:
         start_matrix_accounts_in_background(config)
     except MatrixRuntimeError as exc:
-        print(_sanitize_admin_notify_status_line(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
+        print(_sanitize_status_text(f"TeeBotus Matrix runtime error: {exc}"), file=sys.stderr)
         return 2
     return 0
 
@@ -1997,7 +2021,7 @@ def _run_telegram_runtime(config: Any) -> int:
     try:
         return int(start_telegram_accounts(config))
     except TelegramRuntimeError as exc:
-        print(_sanitize_admin_notify_status_line(f"TeeBotus Telegram runtime error: {exc}"), file=sys.stderr)
+        print(_sanitize_status_text(f"TeeBotus Telegram runtime error: {exc}"), file=sys.stderr)
         return 2
 
 
@@ -2012,9 +2036,7 @@ def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
         start_gemini_free_tier_limit_refresh_background(instance_names=instance_names)
     except Exception as exc:  # noqa: BLE001 - refresh must not block bot startup.
         print(
-            _sanitize_admin_notify_status_line(
-                f"TeeBotus Gemini free-tier refresh start failed: {type(exc).__name__}: {exc}"
-            ),
+            _sanitize_status_text(f"TeeBotus Gemini free-tier refresh start failed: {type(exc).__name__}: {exc}"),
             file=sys.stderr,
         )
 
