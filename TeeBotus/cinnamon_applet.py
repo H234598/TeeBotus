@@ -91,12 +91,12 @@ SECRET_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
-    rf"([\s=;,&?(\[<{{])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"([\s=;,&?#(\[<{{])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 QUOTED_SECRET_ASSIGNMENT_RE = re.compile(
-    rf"(^|[\s=;,&?(\[<{{])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
+    rf"(^|[\s=;,&?#(\[<{{])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
