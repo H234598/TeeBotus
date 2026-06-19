@@ -1257,8 +1257,6 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     project_root = project_root.resolve()
     root = project_root / "instances" / instance_name / "data" / "accounts"
     account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
-    if not account_dirs:
-        return [f"account_memory={instance_name} status=none"]
     try:
         store = AccountStore(
             root,
@@ -1284,6 +1282,8 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     instance_fallback_warning = _account_memory_fallback_warning(store, INSTANCE_STATE_ACCOUNT_ID)
     if instance_fallback_warning:
         lines.append(f"account_memory={instance_name}/__instance_state status=warning{instance_fallback_warning}")
+    if not account_dirs:
+        return lines or [f"account_memory={instance_name} status=none"]
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_error = ""

@@ -1031,6 +1031,52 @@ def test_account_memory_index_health_reports_stale_instance_collection_sync(tmp_
     ]
 
 
+def test_account_memory_index_health_reports_none_without_accounts_or_instance_state(tmp_path: Path, monkeypatch) -> None:
+    class Backend:
+        stale_fallback_entry_account_ids: tuple[str, ...] = ()
+        stale_fallback_index_account_ids: tuple[str, ...] = ()
+        stale_fallback_collection_account_ids: tuple[str, ...] = ()
+        last_fallback_sync_error = ""
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_memory=Demo status=none"]
+
+
+def test_account_memory_index_health_reports_stale_instance_collection_without_account_dirs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class Backend:
+        stale_fallback_entry_account_ids: tuple[str, ...] = ()
+        stale_fallback_index_account_ids: tuple[str, ...] = ()
+        stale_fallback_collection_account_ids = (INSTANCE_STATE_ACCOUNT_ID,)
+        last_fallback_sync_error = "write_collection:version_notifications: fallback unavailable"
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_memory=Demo/__instance_state status=warning "
+        "warning=fallback_sync_stale:collections:write_collection:version_notifications: fallback unavailable"
+    ]
+
+
 def test_version_notification_text_does_not_expose_memory_files() -> None:
     text = build_version_notification_text(version="1.0.3", memory_text="User_Habbits_and_behave.md crypto secret")
 
