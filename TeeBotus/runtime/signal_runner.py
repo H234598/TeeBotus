@@ -63,6 +63,7 @@ class SignalAccountHealth:
     target: str
     registered: bool = False
     error: str = ""
+    warning: str = ""
 
 
 LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -611,19 +612,13 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
         phone = str(account.signal_phone_number or "").strip()
         label = f"{account.instance_name}/{account.label}"
         previous_label = seen_phones.get(phone)
-        if phone and previous_label is not None:
-            try:
-                _host, _port, target = _signal_service_host_port(account.signal_service)
-            except SignalRuntimeError:
-                target = account.signal_service
-            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=f"duplicate phone number with {previous_label}"))
-            continue
+        duplicate_warning = f"duplicate phone number with {previous_label}" if phone and previous_label is not None else ""
         if phone:
             seen_phones[phone] = label
         try:
             _host, _port, target = _signal_service_host_port(account.signal_service)
         except SignalRuntimeError as exc:
-            healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc)))
+            healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc), warning=duplicate_warning))
             continue
         service_key = _signal_service_cache_key(account.signal_service)
         if service_key not in service_accounts_cache:
@@ -636,7 +631,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 service_accounts_cache[service_key] = (False, [], str(exc))
         ok, accounts, error = service_accounts_cache[service_key]
         if not ok:
-            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=error))
+            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=error, warning=duplicate_warning))
             continue
         registered = account.signal_phone_number in {_signal_cli_api_account_identifier(value) for value in accounts}
         healths.append(
@@ -646,6 +641,7 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
                 target=target,
                 registered=registered,
                 error="" if registered else "account missing in signal-cli-rest-api /v1/accounts",
+                warning=duplicate_warning,
             )
         )
     return tuple(healths)

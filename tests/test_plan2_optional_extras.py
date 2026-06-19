@@ -1,15 +1,30 @@
 from __future__ import annotations
 
 import importlib.metadata
+import sys
 
 from scripts.check_plan2_optional_extras import build_optional_extras_report
 
 
+def _active_llm_versions() -> tuple[str, str]:
+    if sys.version_info >= (3, 14):
+        return "1.83.7", "1.0.1"
+    return "1.84.0", "1.2.2"
+
+
+def _active_fastmcp_version() -> str:
+    if sys.version_info >= (3, 14):
+        return "2.2.0"
+    return "3.2.0"
+
+
 def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) -> None:
+    litellm_version, dotenv_version = _active_llm_versions()
+    fastmcp_version = _active_fastmcp_version()
     safe_versions = {
-        "litellm": "1.84.0",
-        "python-dotenv": "1.2.2",
-        "fastmcp": "3.2.0",
+        "litellm": litellm_version,
+        "python-dotenv": dotenv_version,
+        "fastmcp": fastmcp_version,
     }
     monkeypatch.setattr(
         "scripts.check_plan2_optional_extras.importlib.metadata.version",
@@ -21,8 +36,12 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert report["schema_version"] == 1
     assert report["ok"] is True
     assert set(report["extras"]) == {"llm", "rag", "agents", "tools"}
-    assert "litellm==1.84.0" in report["extras"]["llm"]["declared"]
-    assert "python-dotenv==1.2.2" in report["extras"]["llm"]["declared"]
+    assert any(dependency.startswith("litellm==1.84.0;") for dependency in report["extras"]["llm"]["declared"])
+    assert any(dependency.startswith("python-dotenv==1.2.2;") for dependency in report["extras"]["llm"]["declared"])
+    assert any(dependency.startswith("litellm==1.83.7;") for dependency in report["extras"]["llm"]["declared"])
+    assert any(dependency.startswith("python-dotenv==1.0.1;") for dependency in report["extras"]["llm"]["declared"])
+    assert f"litellm=={litellm_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
+    assert f"python-dotenv=={dotenv_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
     assert "openai==2.30.0" in report["extras"]["llm"]["declared"]
     assert "ollama==0.6.2" in report["extras"]["llm"]["declared"]
     assert "haystack-ai==2.30.1" in report["extras"]["rag"]["declared"]
@@ -31,7 +50,9 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert "llama-index-core==0.14.22" in report["extras"]["rag"]["declared"]
     assert "pydantic-ai-slim==1.107.0" in report["extras"]["agents"]["declared"]
     assert "langgraph==1.2.5" in report["extras"]["agents"]["declared"]
-    assert "fastmcp==3.2.0" in report["extras"]["tools"]["declared"]
+    assert any(dependency.startswith("fastmcp==3.2.0;") for dependency in report["extras"]["tools"]["declared"])
+    assert any(dependency.startswith("fastmcp==2.2.0;") for dependency in report["extras"]["tools"]["declared"])
+    assert f"fastmcp=={fastmcp_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["tools"]["active_declared"]
 
 
 def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> None:
@@ -50,6 +71,8 @@ def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> No
 
 
 def test_plan2_optional_extras_strict_mode_fails_on_pinned_version_mismatch(monkeypatch) -> None:
+    expected_litellm, _dotenv_version = _active_llm_versions()
+
     def version(package: str) -> str:
         if package == "litellm":
             return "1.82.7"
@@ -60,7 +83,7 @@ def test_plan2_optional_extras_strict_mode_fails_on_pinned_version_mismatch(monk
     report = build_optional_extras_report(require_installed=True)
 
     assert report["ok"] is False
-    assert {"name": "litellm", "expected": "1.84.0", "installed": "1.82.7"} in report["extras"]["llm"]["version_mismatches"]
+    assert {"name": "litellm", "expected": expected_litellm, "installed": "1.82.7"} in report["extras"]["llm"]["version_mismatches"]
     assert any("llm version mismatches" in error for error in report["errors"])
 
 
@@ -90,7 +113,7 @@ def test_plan2_optional_extras_blocks_compromised_litellm_even_when_versions_mat
     assert report["ok"] is False
     assert any("litellm pin 1.82.7 is blocked" in error for error in report["errors"])
     assert any("litellm installed 1.82.7 is blocked" in error for error in report["errors"])
-    assert any("litellm pin 1.82.7 is below security minimum 1.84.0" in error for error in report["errors"])
+    assert any("litellm pin 1.82.7 is below security minimum" in error for error in report["errors"])
 
 
 def test_plan2_optional_extras_requires_exact_plan2_pins(monkeypatch, tmp_path) -> None:

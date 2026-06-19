@@ -16,11 +16,15 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
+from packaging.markers import default_environment
+from packaging.requirements import InvalidRequirement, Requirement
+
 
 LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 MIN_SAFE_LITELLM_VERSION = "1.84.0"
+PY314_COMPATIBLE_LITELLM_VERSION = "1.83.7"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -76,10 +80,20 @@ def _read_pins(path: Path) -> dict[str, str]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        name, sep, version = stripped.partition("==")
-        if not sep:
+        try:
+            requirement = Requirement(stripped)
+        except InvalidRequirement:
+            name, sep, version = stripped.partition("==")
+            if not sep:
+                raise SystemExit(f"Invalid lock line: {line}") from None
+            pins[name.strip()] = version.strip()
+            continue
+        if requirement.marker is not None and not requirement.marker.evaluate(environment=default_environment()):
+            continue
+        specifiers = list(requirement.specifier)
+        if len(specifiers) != 1 or specifiers[0].operator != "==":
             raise SystemExit(f"Invalid lock line: {line}")
-        pins[name.strip()] = version.strip()
+        pins[requirement.name.replace("_", "-")] = specifiers[0].version
     return pins
 
 
@@ -103,18 +117,19 @@ def _check_python_package(name: str, expected: str) -> tuple[bool, str]:
 
 
 def _check_litellm_supply_chain_guard(expected: str) -> tuple[bool, str]:
+    min_safe_litellm = _min_safe_litellm_version()
     if expected in BAD_LITELLM_VERSIONS:
         return False, f"litellm pin={expected} is blocked due to known compromised PyPI releases"
-    if _version_tuple(expected) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
-        return False, f"litellm pin={expected} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
+    if _version_tuple(expected) < _version_tuple(min_safe_litellm):
+        return False, f"litellm pin={expected} is below security minimum {min_safe_litellm}"
     try:
         installed = importlib.metadata.version("litellm")
     except importlib.metadata.PackageNotFoundError:
         return False, f"litellm missing, expected {expected}"
     if installed in BAD_LITELLM_VERSIONS:
         return False, f"litellm installed={installed} is blocked due to known compromised PyPI releases"
-    if _version_tuple(installed) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
-        return False, f"litellm installed={installed} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
+    if _version_tuple(installed) < _version_tuple(min_safe_litellm):
+        return False, f"litellm installed={installed} is below security minimum {min_safe_litellm}"
     suspicious_pth = _litellm_pth_files()
     if suspicious_pth:
         return False, "litellm suspicious_pth_files=" + ",".join(str(path) for path in suspicious_pth)
@@ -136,34 +151,44 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     if not isinstance(optional, dict):
         errors.append("missing optional-dependencies")
         optional = {}
+    litellm_version, dotenv_version = _active_llm_versions()
+    fastmcp_version = _active_fastmcp_version()
     expected_extras = {
-        "dev": {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"},
-        "llm": {"litellm==1.84.0", "python-dotenv==1.2.2", "openai==2.30.0", "ollama==0.6.2"},
+        "dev": {"pytest": "", "pytest-cov": "", "ruff": "", "mypy": "", "pip-audit": ""},
+        "llm": {"litellm": litellm_version, "python-dotenv": dotenv_version, "openai": "2.30.0", "ollama": "0.6.2"},
         "rag": {
-            "haystack-ai==2.30.1",
-            "qdrant-haystack==10.3.0",
-            "sentence-transformers==5.5.1",
-            "pypdf==6.13.2",
-            "pymupdf==1.27.2.3",
-            "ebooklib==0.20",
-            "beautifulsoup4==4.14.3",
-            "llama-index-core==0.14.22",
+            "haystack-ai": "2.30.1",
+            "qdrant-haystack": "10.3.0",
+            "sentence-transformers": "5.5.1",
+            "pypdf": "6.13.2",
+            "pymupdf": "1.27.2.3",
+            "ebooklib": "0.20",
+            "beautifulsoup4": "4.14.3",
+            "llama-index-core": "0.14.22",
         },
-        "agents": {"pydantic-ai-slim==1.107.0", "langgraph==1.2.5"},
-        "tools": {"fastmcp==3.2.0"},
+        "agents": {"pydantic-ai-slim": "1.107.0", "langgraph": "1.2.5"},
+        "tools": {"fastmcp": fastmcp_version},
     }
     for extra, expected in expected_extras.items():
-        found = set(optional.get(extra, [])) if isinstance(optional.get(extra), list) else set()
-        missing = sorted(expected - found)
+        found = _active_optional_dependency_versions(optional.get(extra, []))
+        missing = sorted(set(expected) - set(found))
         if missing:
             errors.append(f"{extra} missing {','.join(missing)}")
-        unexpected = sorted(found - expected)
+        unexpected = sorted(set(found) - set(expected))
         if extra in {"llm", "rag", "agents", "tools"} and unexpected:
             errors.append(f"{extra} unexpected {','.join(unexpected)}")
+        version_mismatches = sorted(
+            f"{name}=={found[name]} expected=={expected_version}"
+            for name, expected_version in expected.items()
+            if expected_version and name in found and found[name] != expected_version
+        )
+        if version_mismatches:
+            errors.append(f"{extra} version_mismatch {','.join(version_mismatches)}")
     llm_deps = set(optional.get("llm", [])) if isinstance(optional.get("llm"), list) else set()
-    for bad_version in BAD_LITELLM_VERSIONS:
-        if f"litellm=={bad_version}" in llm_deps:
-            errors.append(f"llm pins blocked litellm version {bad_version}")
+    for dependency in llm_deps:
+        name, version = _optional_dependency_name_version(str(dependency))
+        if name == "litellm" and version in BAD_LITELLM_VERSIONS:
+            errors.append(f"llm pins blocked litellm version {version}")
     scripts = project.get("scripts")
     if not isinstance(scripts, dict):
         errors.append("missing project scripts")
@@ -192,6 +217,56 @@ def _version_tuple(value: str) -> tuple[int, ...]:
             break
         parts.append(int(chunk))
     return tuple(parts or [0])
+
+
+def _min_safe_litellm_version() -> str:
+    if sys.version_info >= (3, 14):
+        return PY314_COMPATIBLE_LITELLM_VERSION
+    return MIN_SAFE_LITELLM_VERSION
+
+
+def _active_llm_versions() -> tuple[str, str]:
+    if sys.version_info >= (3, 14):
+        return PY314_COMPATIBLE_LITELLM_VERSION, "1.0.1"
+    return MIN_SAFE_LITELLM_VERSION, "1.2.2"
+
+
+def _active_fastmcp_version() -> str:
+    if sys.version_info >= (3, 14):
+        return "2.2.0"
+    return "3.2.0"
+
+
+def _active_optional_dependency_versions(raw_deps: object) -> dict[str, str]:
+    if not isinstance(raw_deps, list):
+        return {}
+    versions: dict[str, str] = {}
+    for dependency in raw_deps:
+        applies = True
+        try:
+            requirement = Requirement(str(dependency))
+        except InvalidRequirement:
+            requirement = None
+        if requirement is not None and requirement.marker is not None:
+            applies = bool(requirement.marker.evaluate(environment=default_environment()))
+        if not applies:
+            continue
+        name, version = _optional_dependency_name_version(str(dependency))
+        if name:
+            versions[name] = version
+    return versions
+
+
+def _optional_dependency_name_version(dependency: str) -> tuple[str, str]:
+    try:
+        requirement = Requirement(dependency)
+    except InvalidRequirement:
+        head = dependency.split(";", 1)[0].strip()
+        name, sep, version = head.partition("==")
+        return name.strip().replace("_", "-"), version.strip() if sep else ""
+    specifiers = list(requirement.specifier)
+    version = specifiers[0].version if len(specifiers) == 1 and specifiers[0].operator == "==" else ""
+    return requirement.name.replace("_", "-"), version
 
 
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:

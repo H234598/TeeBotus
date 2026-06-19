@@ -1445,13 +1445,15 @@ def test_check_signal_accounts_reports_duplicate_phone_without_leaking_number(mo
     health = check_signal_accounts(config)
 
     assert health[0].ok is True
-    assert health[1].ok is False
+    assert health[1].ok is True
+    assert health[1].registered is True
     assert health[1].target == "127.0.0.1:8081"
-    assert health[1].error == "duplicate phone number with DemoA/signal:1"
-    assert "+491234" not in health[1].error
+    assert health[1].error == ""
+    assert health[1].warning == "duplicate phone number with DemoA/signal:1"
+    assert "+491234" not in health[1].warning
 
 
-def test_check_signal_accounts_reports_duplicate_phone_even_when_first_service_is_invalid(tmp_path) -> None:
+def test_check_signal_accounts_warns_about_duplicate_phone_even_when_first_service_is_invalid(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(
             instance_name="DemoA",
@@ -1481,14 +1483,17 @@ def test_check_signal_accounts_reports_duplicate_phone_even_when_first_service_i
             InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
         ),
     )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: ["+491234"])
 
     health = check_signal_accounts(config)
 
     assert health[0].ok is False
     assert "darf keinen Pfad" in health[0].error
-    assert health[1].ok is False
+    assert health[1].ok is True
+    assert health[1].registered is True
     assert health[1].target == "127.0.0.1:8081"
-    assert health[1].error == "duplicate phone number with DemoA/signal:1"
+    assert health[1].warning == "duplicate phone number with DemoA/signal:1"
 
 
 def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:

@@ -238,7 +238,13 @@ def _runtime_status(argv: Sequence[str]) -> int:
             state = "missing"
         else:
             state = "unavailable"
-        detail = "" if health.ok else f" error={_sanitize_status_text(health.error)}"
+        detail_parts: list[str] = []
+        if not health.ok and health.error:
+            detail_parts.append(f"error={_sanitize_status_text(health.error)}")
+        warning = str(getattr(health, "warning", "") or "").strip()
+        if warning:
+            detail_parts.append(f"warning={_sanitize_status_text(warning)}")
+        detail = f" {' '.join(detail_parts)}" if detail_parts else ""
         messenger_lines.append(
             f"signal_account={health.account.instance_name}/{health.account.label} "
             f"phone={health.account.signal_phone_number} target={_sanitize_status_url(health.target)} status={state}{detail}"

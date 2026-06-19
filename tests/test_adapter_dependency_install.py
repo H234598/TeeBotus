@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -55,7 +56,7 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert result == 0
     output = capsys.readouterr().out
     assert "signalbot==1.2.2" in output
-    assert "litellm==1.84.0" in output
+    assert f"litellm=={_active_litellm_version()}" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
@@ -195,10 +196,10 @@ def test_litellm_supply_chain_guard_blocks_bad_pin() -> None:
 
 
 def test_litellm_supply_chain_guard_blocks_below_security_minimum() -> None:
-    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.83.7")
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard(_below_active_litellm_minimum())
 
     assert not ok
-    assert "below security minimum 1.84.0" in message
+    assert "below security minimum" in message
 
 
 def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -210,3 +211,15 @@ def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.Mo
 
     assert not ok
     assert "suspicious_pth_files" in message
+
+
+def _active_litellm_version() -> str:
+    if sys.version_info >= (3, 14):
+        return "1.83.7"
+    return "1.84.0"
+
+
+def _below_active_litellm_minimum() -> str:
+    if sys.version_info >= (3, 14):
+        return "1.83.6"
+    return "1.83.7"

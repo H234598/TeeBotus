@@ -11,6 +11,9 @@ import tempfile
 from pathlib import Path
 from urllib.request import urlretrieve
 
+from packaging.markers import default_environment
+from packaging.requirements import InvalidRequirement, Requirement
+
 
 LOCKFILE = Path(__file__).resolve().parents[1] / "adapter-dependencies.lock"
 
@@ -54,10 +57,20 @@ def read_pins(path: Path) -> dict[str, str]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        name, sep, version = stripped.partition("==")
-        if not sep:
+        try:
+            requirement = Requirement(stripped)
+        except InvalidRequirement:
+            name, sep, version = stripped.partition("==")
+            if not sep:
+                raise SystemExit(f"Invalid lock line: {line}") from None
+            pins[name.strip()] = version.strip()
+            continue
+        if requirement.marker is not None and not requirement.marker.evaluate(environment=default_environment()):
+            continue
+        specifiers = list(requirement.specifier)
+        if len(specifiers) != 1 or specifiers[0].operator != "==":
             raise SystemExit(f"Invalid lock line: {line}")
-        pins[name.strip()] = version.strip()
+        pins[requirement.name.replace("_", "-")] = specifiers[0].version
     return pins
 
 

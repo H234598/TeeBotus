@@ -2058,6 +2058,42 @@ def test_runtime_status_reports_signal_service_health(monkeypatch, capsys) -> No
     ) in captured.out
 
 
+def test_runtime_status_reports_duplicate_signal_phone_as_warning(monkeypatch, capsys) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
+
+    def fake_check_signal_services(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "signal"][0]
+        return (SimpleNamespace(account=account, ok=True, target="127.0.0.1:8080", error=""),)
+
+    def fake_check_signal_accounts(config):
+        account = [account for instance in config.instances for account in instance.accounts if account.channel == "signal"][0]
+        return (
+            SimpleNamespace(
+                account=account,
+                ok=True,
+                registered=True,
+                target="127.0.0.1:8080",
+                error="",
+                warning="duplicate phone number with Other/signal:1",
+            ),
+        )
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_accounts", fake_check_signal_accounts)
+
+    assert bot.main(["--runtime-status", "--channels", "signal"]) == 0
+    captured = capsys.readouterr()
+    assert (
+        "signal_account=Demo/signal:1 phone=+491234 target=127.0.0.1:8080 status=registered "
+        "warning=duplicate phone number with Other/signal:1"
+    ) in captured.out
+    assert "status=unavailable warning=duplicate phone number" not in captured.out
+
+
 def test_runtime_status_reports_matrix_homeserver_health(monkeypatch, capsys) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)

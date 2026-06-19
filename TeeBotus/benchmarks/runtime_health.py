@@ -11,8 +11,8 @@ from typing import Any, Callable
 from scripts.check_adapter_deps import (
     LOCKFILE,
     BAD_LITELLM_VERSIONS,
-    MIN_SAFE_LITELLM_VERSION,
     _check_pyproject_plan2_contract,
+    _min_safe_litellm_version,
     _read_pins,
     _version_tuple,
 )
@@ -218,10 +218,11 @@ def _write_static_secret_manifest(accounts_root: Path, *, instance_name: str, se
 
 
 def _benchmark_litellm_pin_guard(expected: str) -> tuple[bool, str]:
+    min_safe_litellm = _min_safe_litellm_version()
     if expected in BAD_LITELLM_VERSIONS:
         return False, f"litellm pin={expected} is blocked due to known compromised PyPI releases"
-    if _version_tuple(expected) < _version_tuple(MIN_SAFE_LITELLM_VERSION):
-        return False, f"litellm pin={expected} is below security minimum {MIN_SAFE_LITELLM_VERSION}"
+    if _version_tuple(expected) < _version_tuple(min_safe_litellm):
+        return False, f"litellm pin={expected} is below security minimum {min_safe_litellm}"
     return True, f"litellm supply_chain_guard=ok pin={expected} installed_check=skipped_for_quick_benchmark"
 
 
