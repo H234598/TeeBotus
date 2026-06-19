@@ -15,6 +15,62 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_
 from TeeBotus.runtime.proactive_agent import select_proactive_route
 
 REPORT_SCHEMA_VERSION = 1
+_REDACTED_VALUE = "<redacted>"
+_SENSITIVE_REDACTION_KEYS = {
+    "secret",
+    "secret_verifier",
+    "verifier",
+    "token",
+    "api_key",
+    "apikey",
+    "password",
+    "passphrase",
+    "bearer_token",
+    "auth_token",
+    "cookie",
+    "session_id",
+    "account_secret",
+    "openai_api_key",
+    "instance_secret",
+}
+_SENSITIVE_REDACTION_KEY_FRAGMENTS = ("token", "secret", "apikey", "passphrase", "password", "api_key", "secret_key", "verifier", "cookie")
+_SENSITIVE_FIELD_ALLOWLIST = {"account_id", "linked_identities", "identity_key"}
+
+
+def _sanitize_output(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return [_sanitize_output(item) for item in payload]
+    if isinstance(payload, tuple):
+        return tuple(_sanitize_output(item) for item in payload)
+    if isinstance(payload, dict):
+        result: dict[str, Any] = {}
+        for key, value in payload.items():
+            lowered = str(key).casefold()
+            should_redact = (
+                lowered in _SENSITIVE_REDACTION_KEYS
+                or (lowered not in _SENSITIVE_FIELD_ALLOWLIST and any(fragment in lowered for fragment in _SENSITIVE_REDACTION_KEY_FRAGMENTS))
+            )
+            if should_redact:
+                result[str(key)] = _REDACTED_VALUE
+            else:
+                result[str(key)] = _sanitize_output(value)
+        if "account_id" in result:
+            result["account_id"] = _REDACTED_VALUE
+        return result
+    return payload
+
+
+def _safe_output_path(output: str) -> Path:
+    output_path = Path(output).expanduser()
+    root = Path.cwd().resolve()
+    target = (root / output_path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"output path escapes the working directory: {output}") from exc
+    if output_path.is_absolute():
+        raise ValueError(f"output path must be relative: {output}")
+    return target
 
 
 @dataclass(frozen=True)
@@ -172,9 +228,19 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         instances=instances,
         provider=provider,
     )
-    output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
+    sanitized_report = _sanitize_output(report)
+    output = (
+        json.dumps(sanitized_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        if args.format == "json"
+        else render_text_report(sanitized_report)
+    )
     if args.output:
-        Path(args.output).write_text(output, encoding="utf-8")
+        try:
+            output_path = _safe_output_path(args.output)
+        except ValueError as exc:
+            print(f"status-auth: {exc}", file=sys.stderr)
+            return 2
+        output_path.write_text(output, encoding="utf-8")
     else:
         print(output, end="")
     return 0
