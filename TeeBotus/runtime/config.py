@@ -448,10 +448,10 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
     )
     if not (len(homeservers) == len(user_ids) == len(access_tokens)):
         raise RuntimeConfigError(f"Matrix homeserver/user/access_token slot mismatch for instance {instance_name}")
-    if device_ids and len(device_ids) != len(homeservers):
+    if device_ids and len(device_ids) > len(homeservers):
         raise RuntimeConfigError(f"Matrix device_id slot mismatch for instance {instance_name}")
-    if not device_ids:
-        device_ids = tuple("" for _ in homeservers)
+    if len(device_ids) < len(homeservers):
+        device_ids = (*device_ids, *(("",) * (len(homeservers) - len(device_ids))))
     pairs = tuple(
         (homeserver, user_id, access_token, device_id)
         for homeserver, user_id, access_token, device_id in zip(homeservers, user_ids, access_tokens, device_ids)

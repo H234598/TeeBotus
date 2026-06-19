@@ -490,6 +490,37 @@ def test_matrix_account_resolution_allows_sparse_numbered_device_id_slots():
     )
 
 
+def test_matrix_account_resolution_allows_short_device_id_list():
+    env = {
+        "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://matrix-a.example,https://matrix-b.example",
+        "MATRIX_BOT_USER_IDS_DEPRESSIONSBOT": "@a:example,@b:example",
+        "MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT": "token-a,token-b",
+        "MATRIX_BOT_DEVICE_IDS_DEPRESSIONSBOT": "dev-a",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
+        ("https://matrix-b.example", "@b:example", "token-b", ""),
+    )
+
+
+def test_matrix_account_resolution_allows_single_device_id_with_numbered_account():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT": "token-a",
+        "MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT": "dev-a",
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT_2": "https://matrix-b.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_2": "@b:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_2": "token-b",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
+        ("https://matrix-b.example", "@b:example", "token-b", ""),
+    )
+
+
 def test_matrix_account_resolution_rejects_numbered_required_slot_mismatch():
     env = {
         "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
