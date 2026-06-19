@@ -1874,6 +1874,53 @@ def test_account_memory_fallback_syncs_dirty_collection_back_to_primary(caplog):
     assert "primary backend recovered" in caplog.text
 
 
+def test_account_memory_fallback_blocks_collection_writes_after_unrecoverable_empty_fallback(caplog):
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary collection unavailable")
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(sorted(collection for item_account, collection in self.collections if item_account == account_id))
+
+    account_id = "a" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        rows = backend.read_collection(account_id, "version_notifications")
+        with pytest.raises(AccountStoreError, match="write blocked because primary is unreadable and fallback has no recoverable data"):
+            backend.write_collection(account_id, "version_notifications", [{"id": "version_state_new"}])
+
+    assert rows == []
+    assert (account_id, "version_notifications") not in primary.collections
+    assert (account_id, "version_notifications") not in fallback.collections
+    assert backend.stale_fallback_collection_account_ids == (account_id,)
+    assert backend.last_fallback_sync_error.startswith("write_collection:version_notifications: write blocked")
+    assert "ACCOUNT MEMORY WRITE BLOCKED" in caplog.text
+
+
 def test_account_memory_fallback_recovers_primary_entry_diagnostics(caplog):
     class Backend:
         def __init__(self, rows: list[dict[str, str]], *, skipped: int = 0, error: str = "") -> None:
