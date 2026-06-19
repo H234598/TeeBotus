@@ -224,11 +224,11 @@ async def notify_runtime_status_admin_accounts(
             else:
                 for channel in candidate_channels:
                     try:
-                        sender = senders.get(channel)
+                        sender = _sender_for_channel(senders, channel)
                     except Exception as exc:
                         sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
                         continue
-                    if sender is None:
+                    if sender is None or sender is _SENDER_NOT_FOUND:
                         sender_errors_by_channel[channel] = "no_sender"
                         continue
                     if not callable(sender):
@@ -244,11 +244,11 @@ async def notify_runtime_status_admin_accounts(
                     sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
                     continue
                 try:
-                    sender = senders.get(channel)
+                    sender = _sender_for_channel(senders, channel)
                 except Exception as exc:
                     sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
                     continue
-                if sender is None:
+                if sender is None or sender is _SENDER_NOT_FOUND:
                     sender_errors_by_channel[channel] = "no_sender"
                     continue
                 if not callable(sender):
@@ -463,6 +463,32 @@ def format_admin_notification_result_lines(results: Iterable[AdminNotificationRe
             parts.append(f"reason={_status_token(result.reason)}")
         lines.append(" ".join(parts))
     return tuple(lines)
+
+
+_SENDER_NOT_FOUND = object()
+
+
+def _sender_for_channel(senders: object, channel: str) -> Any | object:
+    normalized_channel = str(channel or "").strip().casefold()
+    try:
+        sender = senders.get(normalized_channel)
+    except Exception:
+        if not isinstance(senders, Mapping):
+            raise
+        sender = _SENDER_NOT_FOUND
+        for sender_channel, sender_value in senders.items():
+            if str(sender_channel or "").strip().casefold() == normalized_channel:
+                sender = sender_value
+                break
+    else:
+        if sender is None and isinstance(senders, Mapping):
+            for sender_channel, sender_value in senders.items():
+                if str(sender_channel or "").strip().casefold() == normalized_channel:
+                    sender = sender_value
+                    break
+            else:
+                sender = _SENDER_NOT_FOUND
+    return sender
 
 
 def _admin_account_env_names(instance_name: str) -> tuple[str, ...]:

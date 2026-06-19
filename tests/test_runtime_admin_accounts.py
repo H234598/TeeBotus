@@ -402,6 +402,32 @@ def test_runtime_status_admin_notify_treats_non_callable_sender_as_failure(tmp_p
     assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
 
 
+def test_runtime_status_admin_notify_handles_sender_keys_without_case_sensitivity(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    sent: list[SendAttachment] = []
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"Telegram": lambda _route, action, _metadata: sent.append(action) or "ok"},
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert len(sent) == 1
+
+
 def test_runtime_status_admin_notify_handles_broken_default_runtime_sender_factory(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
