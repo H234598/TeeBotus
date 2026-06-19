@@ -21,7 +21,7 @@ from TeeBotus.admin.account_memory_recovery import (
 )
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
 from TeeBotus.admin.accounts_report import build_accounts_admin_report, main as accounts_report_main, render_text_report, runtime_report_env
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStore, StaticSecretProvider, signal_identity_key
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, INSTANCE_STATE_ACCOUNT_ID, AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
@@ -318,9 +318,38 @@ def test_memory_recovery_sqlite_probes_do_not_create_missing_databases(tmp_path:
     missing = tmp_path / "missing" / "Account_Memory.sqlite3"
 
     assert _sqlite_account_ids(missing) == set()
-    assert _sqlite_raw_counts(missing, "Depressionsbot", "a" * 128) == (0, False)
+    assert _sqlite_raw_counts(missing, "Depressionsbot", "a" * 128) == (0, False, 0)
     assert not missing.exists()
     assert not missing.parent.exists()
+
+
+def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.write_agent_state(account_id, {"proactive": {"enabled": True}})
+    store.write_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {"versions": {"1.0.3": {"sent_identities": ["telegram:user:2"]}}},
+    )
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    assert _sqlite_account_ids(accounts_root / "Account_Memory.sqlite3") == {account_id}
+    assert INSTANCE_STATE_ACCOUNT_ID not in _sqlite_account_ids(accounts_root / "Account_Memory.sqlite3")
+    assert len(report["instances"][0]["accounts"]) == 1
+    account = report["instances"][0]["accounts"][0]
+    assert account["account_id"] == account_id
+    assert account["recoverable"] is True
+    assert account["recovery_status"] == "recoverable"
+    source = next(source for source in account["sources"] if source["name"] == "sqlite_primary")
+    assert source["collections"] == 1
+    assert source["raw_collections"] == 1
+    assert source["entries"] == 0
+    assert source["index_present"] is False
 
 
 def test_memory_recovery_cli_writes_json_without_secret_payloads(tmp_path: Path) -> None:

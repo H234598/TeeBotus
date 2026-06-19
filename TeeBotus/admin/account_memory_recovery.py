@@ -18,6 +18,7 @@ from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNT_PROFILE_FILENAME,
+    INSTANCE_STATE_ACCOUNT_ID,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
     AccountStore,
@@ -32,7 +33,7 @@ from TeeBotus.runtime.artifacts import safe_artifact_name
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 RECOVERY_SCHEMA_VERSION = 2
-SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes")
+SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes", "account_jsonl_collections")
 LEGACY_USER_MEMORY_DIRNAME = "users"
 ACCOUNT_METADATA_SECRET_GUARD_PURPOSES = (INSTANCE_MAPPING_KEY_PURPOSE, INSTANCE_PEPPER_PURPOSE)
 
@@ -850,7 +851,7 @@ def _inspect_source(source: RecoverySource, *, instance_name: str, account_id: s
 
 
 def _inspect_sqlite_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
-    raw_entries, raw_index_present = _sqlite_raw_counts(source.path, instance_name, account_id)
+    raw_entries, raw_index_present, raw_collections = _sqlite_raw_counts(source.path, instance_name, account_id)
     return _inspect_sqlite_snapshot_source(
         source,
         instance_name=instance_name,
@@ -858,6 +859,7 @@ def _inspect_sqlite_source(source: RecoverySource, *, instance_name: str, accoun
         provider=provider,
         raw_entries=raw_entries,
         raw_index_present=raw_index_present,
+        raw_collections=raw_collections,
     )
 
 
@@ -869,8 +871,9 @@ def _inspect_sqlite_snapshot_source(
     provider: InstanceSecretProvider,
     raw_entries: int,
     raw_index_present: bool,
+    raw_collections: int,
 ) -> dict[str, Any]:
-    entries, index, errors = _read_sqlite_snapshot_payloads(
+    entries, index, collections, errors = _read_sqlite_snapshot_payloads(
         source.path,
         instance_name=instance_name,
         account_id=account_id,
@@ -882,13 +885,15 @@ def _inspect_sqlite_snapshot_source(
         "payload_kind": "encrypted_account_memory",
         "path": str(source.path),
         "active": source.active,
-        "readable": bool(not errors or entries or index),
+        "readable": bool(not errors or entries or index or collections),
         "fully_readable": not errors,
-        "partial": bool(errors and (entries or index)),
+        "partial": bool(errors and (entries or index or collections)),
         "entries": len(entries),
         "raw_entries": raw_entries,
         "index_present": bool(index),
         "raw_index_present": raw_index_present,
+        "collections": len(collections),
+        "raw_collections": raw_collections,
         "error": "; ".join(errors),
     }
 
@@ -899,7 +904,7 @@ def _read_sqlite_snapshot_payloads(
     instance_name: str,
     account_id: str,
     provider: InstanceSecretProvider,
-) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[str]]:
     backend = SQLiteAccountMemoryBackend(
         instance_name=instance_name,
         provider=provider,
@@ -908,6 +913,7 @@ def _read_sqlite_snapshot_payloads(
     )
     entries: list[dict[str, Any]] = []
     index: dict[str, Any] = {}
+    collections: list[dict[str, Any]] = []
     errors: list[str] = []
     try:
         with _connect_sqlite_readonly(path) as connection:
@@ -944,9 +950,31 @@ def _read_sqlite_snapshot_payloads(
                         index = backend._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
                     except AccountStoreError as exc:
                         errors.append(f"index: {exc}")
+            if _sqlite_table_exists(connection, "account_jsonl_collections"):
+                rows = connection.execute(
+                    """
+                    SELECT collection, item_key, payload_nonce, payload_ciphertext
+                    FROM account_jsonl_collections
+                    WHERE instance_name = ? AND account_id = ?
+                    ORDER BY collection ASC, ordinal ASC
+                    """,
+                    (instance_name, account_id),
+                ).fetchall()
+                skipped_error = ""
+                for row in rows:
+                    collection = str(row[0])
+                    item_key = str(row[1])
+                    try:
+                        collections.append(
+                            backend._decrypt_json(account_id, f"jsonl:{collection}:{item_key}", bytes(row[2]), bytes(row[3]))
+                        )
+                    except AccountStoreError as exc:
+                        skipped_error = skipped_error or str(exc)
+                if skipped_error:
+                    errors.append(f"collections: {skipped_error}")
     except sqlite3.Error as exc:
         errors.append(f"sqlite: {exc}")
-    return entries, index, errors
+    return entries, index, collections, errors
 
 
 def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
@@ -1002,16 +1030,21 @@ def _sqlite_account_ids(path: Path) -> set[str]:
                 if not _sqlite_table_exists(connection, table):
                     continue
                 ids.update(str(row[0]) for row in connection.execute(f"SELECT DISTINCT account_id FROM {table}"))
-            return {account_id for account_id in ids if TOKEN_HEX_RE.fullmatch(account_id)}
+            return {
+                account_id
+                for account_id in ids
+                if TOKEN_HEX_RE.fullmatch(account_id) and account_id != INSTANCE_STATE_ACCOUNT_ID
+            }
     except sqlite3.Error:
         return set()
 
 
-def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple[int, bool]:
+def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple[int, bool, int]:
     try:
         with _connect_sqlite_readonly(path) as connection:
             entries = 0
             index_present = False
+            collections = 0
             if _sqlite_table_exists(connection, "memory_entries"):
                 entries = int(
                     connection.execute(
@@ -1027,9 +1060,16 @@ def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple
                     ).fetchone()
                     is not None
                 )
-            return entries, index_present
+            if _sqlite_table_exists(connection, "account_jsonl_collections"):
+                collections = int(
+                    connection.execute(
+                        "SELECT count(*) FROM account_jsonl_collections WHERE instance_name = ? AND account_id = ?",
+                        (instance_name, account_id),
+                    ).fetchone()[0]
+                )
+            return entries, index_present, collections
     except sqlite3.Error:
-        return 0, False
+        return 0, False, 0
 
 
 @contextlib.contextmanager
@@ -1296,7 +1336,12 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
     readable_payload_sources = [
         source
         for source in source_reports
-        if source.get("readable") and (_source_count(source, "entries") > 0 or bool(source.get("index_present")))
+        if source.get("readable")
+        and (
+            _source_count(source, "entries") > 0
+            or bool(source.get("index_present"))
+            or _source_count(source, "collections") > 0
+        )
     ]
     if readable_payload_sources:
         names = ", ".join(str(source.get("name") or "<unknown>") for source in readable_payload_sources)
@@ -1304,12 +1349,22 @@ def _account_recovery_status(source_reports: Sequence[Mapping[str, Any]]) -> tup
     raw_payload_sources = [
         source
         for source in source_reports
-        if source.get("active", True) is not False and (_source_count(source, "raw_entries") > 0 or bool(source.get("raw_index_present")))
+        if source.get("active", True) is not False
+        and (
+            _source_count(source, "raw_entries") > 0
+            or bool(source.get("raw_index_present"))
+            or _source_count(source, "raw_collections") > 0
+        )
     ]
     inactive_raw_payload_sources = [
         source
         for source in source_reports
-        if source.get("active", True) is False and (_source_count(source, "raw_entries") > 0 or bool(source.get("raw_index_present")))
+        if source.get("active", True) is False
+        and (
+            _source_count(source, "raw_entries") > 0
+            or bool(source.get("raw_index_present"))
+            or _source_count(source, "raw_collections") > 0
+        )
     ]
     if raw_payload_sources:
         return (
