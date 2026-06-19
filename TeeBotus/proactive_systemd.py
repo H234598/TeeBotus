@@ -96,7 +96,7 @@ def render_proactive_systemd_unit(
     instances_arg = str((repo / instances_dir).resolve()) if not Path(instances_dir).is_absolute() else str(Path(instances_dir).resolve())
     repo_value = _systemd_unit_value(str(repo), label="repo root")
     env_value = _systemd_unit_value(str(repo / ".env"), label="env file")
-    instances_arg = _systemd_unit_value(instances_arg, label="instances dir")
+    instances_arg = _validate_systemd_unit_value(instances_arg, label="instances dir")
     command = [
         "python3",
         "-m",
@@ -115,21 +115,21 @@ def render_proactive_systemd_unit(
     service_text = "\n".join(
         [
             "[Unit]",
-            f"Description=TeeBotus proactive agent cycle for {instance_name}",
+            f"Description={_systemd_unit_value(f'TeeBotus proactive agent cycle for {instance_name}', label='description')}",
             "Documentation=https://github.com/H234598/TeeBotus",
             "",
             "[Service]",
             "Type=oneshot",
             f"WorkingDirectory={repo_value}",
             f"EnvironmentFile=-{env_value}",
-            "ExecStart=" + " ".join(command),
+            "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
             "",
         ]
     )
     timer_text = "\n".join(
         [
             "[Unit]",
-            f"Description=Run TeeBotus proactive agent cycle for {instance_name}",
+            f"Description={_systemd_unit_value(f'Run TeeBotus proactive agent cycle for {instance_name}', label='description')}",
             "",
             "[Timer]",
             "OnBootSec=5min",
@@ -152,7 +152,7 @@ def _systemd_instance_token(instance_name: str) -> str:
 
 
 def _instance_name(value: str) -> str:
-    text = _systemd_unit_value(str(value or "").strip(), label="instance name")
+    text = _validate_systemd_unit_value(str(value or "").strip(), label="instance name")
     if not text:
         raise ValueError("systemd instance name must not be empty")
     if text in {".", ".."} or "/" in text or "\\" in text:
@@ -170,6 +170,10 @@ def _systemd_interval(value: str) -> str:
 
 
 def _systemd_unit_value(value: str, *, label: str) -> str:
+    return _validate_systemd_unit_value(value, label=label).replace("%", "%%")
+
+
+def _validate_systemd_unit_value(value: str, *, label: str) -> str:
     text = str(value)
     if any(ord(char) < 32 or ord(char) == 127 for char in text):
         raise ValueError(f"systemd {label} contains invalid control characters")
@@ -177,7 +181,7 @@ def _systemd_unit_value(value: str, *, label: str) -> str:
 
 
 def _shell_quote(value: str) -> str:
-    _systemd_unit_value(value, label="command argument")
+    _validate_systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):

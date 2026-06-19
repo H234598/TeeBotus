@@ -71,6 +71,20 @@ def test_render_teebotus_systemd_unit_rejects_control_characters(tmp_path: Path)
             raise AssertionError(f"expected control character rejection for {kwargs}")
 
 
+def test_render_teebotus_systemd_unit_escapes_systemd_percent_specifiers(tmp_path: Path) -> None:
+    repo_root = tmp_path / "TeeBotus%x%h"
+    unit = render_teebotus_systemd_unit(
+        repo_root=repo_root,
+        python_executable="/usr/bin/python3%x",
+        env_file=".env%h",
+    )
+
+    assert f"WorkingDirectory={repo_root.resolve()}".replace("%", "%%") in unit.service_text
+    assert f"EnvironmentFile=-{repo_root.resolve() / '.env%h'}".replace("%", "%%") in unit.service_text
+    assert "ExecStartPre=/usr/bin/python3%%x -m TeeBotus.systemd" in unit.service_text
+    assert "ExecStart=/usr/bin/python3%%x -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+
+
 def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> None:
     result = main(["--repo-root", str(tmp_path), "--print"])
 

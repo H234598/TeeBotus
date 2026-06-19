@@ -88,16 +88,19 @@ def render_teebotus_systemd_unit(
             f"WorkingDirectory={repo_value}",
             f"EnvironmentFile=-{env_value}",
             "ExecStartPre="
-            + " ".join(
-                [
-                    _shell_quote(str(python_path)),
-                    "-m",
-                    "TeeBotus.systemd",
-                    "--check-env-file",
-                    _shell_quote(str(env_path)),
-                ]
+            + _systemd_unit_value(
+                " ".join(
+                    [
+                        _shell_quote(str(python_path)),
+                        "-m",
+                        "TeeBotus.systemd",
+                        "--check-env-file",
+                        _shell_quote(str(env_path)),
+                    ]
+                ),
+                label="command line",
             ),
-            "ExecStart=" + " ".join(command),
+            "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
             "Restart=on-failure",
             "RestartSec=10",
             "NoNewPrivileges=true",
@@ -155,6 +158,10 @@ def _service_name(value: str) -> str:
 
 
 def _systemd_unit_value(value: str, *, label: str) -> str:
+    return _validate_systemd_unit_value(value, label=label).replace("%", "%%")
+
+
+def _validate_systemd_unit_value(value: str, *, label: str) -> str:
     text = str(value)
     if any(ord(char) < 32 or ord(char) == 127 for char in text):
         raise ValueError(f"systemd {label} contains invalid control characters")
@@ -173,7 +180,7 @@ def _channels(value: str) -> str:
 
 
 def _shell_quote(value: str) -> str:
-    _systemd_unit_value(value, label="command argument")
+    _validate_systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):

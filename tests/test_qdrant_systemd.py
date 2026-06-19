@@ -52,6 +52,18 @@ def test_render_qdrant_systemd_unit_rejects_control_characters() -> None:
             raise AssertionError(f"expected control character rejection for {kwargs}")
 
 
+def test_render_qdrant_systemd_unit_escapes_systemd_percent_specifiers() -> None:
+    unit = render_qdrant_systemd_unit(
+        image="docker.io/qdrant/qdrant%x:v1.18.2",
+        podman="/usr/bin/podman%h",
+    )
+
+    assert "ExecStartPre=-/usr/bin/podman%%h rm -f teebotus-qdrant" in unit.service_text
+    assert "/usr/bin/podman%%h volume exists teebotus-qdrant" in unit.service_text
+    assert "docker.io/qdrant/qdrant%%x:v1.18.2" in unit.service_text
+    assert "%%%%h" not in unit.service_text
+
+
 def test_qdrant_systemd_print_mode_outputs_unit(capsys) -> None:
     result = main(["--print"])
 

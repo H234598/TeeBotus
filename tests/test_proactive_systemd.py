@@ -123,6 +123,22 @@ def test_proactive_systemd_rejects_instance_traversal_before_bot_verhalten_looku
     assert "--llm-plan" not in captured.out
 
 
+def test_render_proactive_systemd_unit_escapes_systemd_percent_specifiers(tmp_path) -> None:
+    repo_root = tmp_path / "TeeBotus%x%h"
+    unit = render_proactive_systemd_unit(
+        repo_root=repo_root,
+        instances_dir="instances%h",
+        instance_name="Depressionsbot%h",
+        interval="5min",
+    )
+
+    assert f"WorkingDirectory={repo_root.resolve()}".replace("%", "%%") in unit.service_text
+    assert "Description=TeeBotus proactive agent cycle for Depressionsbot%%h" in unit.service_text
+    assert f"--instances-dir {repo_root.resolve() / 'instances%h'}".replace("%", "%%") in unit.service_text
+    assert "--instance Depressionsbot%%h" in unit.service_text
+    assert "Description=Run TeeBotus proactive agent cycle for Depressionsbot%%h" in unit.timer_text
+
+
 def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     instance_dir.mkdir(parents=True)

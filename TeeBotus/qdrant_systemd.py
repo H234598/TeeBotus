@@ -70,7 +70,7 @@ def render_qdrant_systemd_unit(
     bind_host = _validate_bind_host(bind_host)
     port = _validate_port(port)
     podman = str(podman or "podman").strip() or "podman"
-    podman = _systemd_unit_value(podman, label="podman executable")
+    podman = _validate_systemd_unit_value(podman, label="podman executable")
     service_name = f"{container_name}.service"
     publish = f"{bind_host}:{port}:{port}"
     podman_q = _shell_quote(podman)
@@ -92,13 +92,17 @@ def render_qdrant_systemd_unit(
             "Type=simple",
             "Restart=on-failure",
             "RestartSec=5s",
-            f"ExecStartPre=-{podman_q} rm -f {container_q}",
-            f"ExecStartPre=/bin/sh -c {_shell_quote(ensure_volume_command)}",
-            (
-                f"ExecStart={podman_q} run --rm --name {container_q} "
-                f"-p {_shell_quote(publish)} -v {volume_q}:/qdrant/storage {image_q}"
+            f"ExecStartPre={_systemd_unit_value(f'-{podman_q} rm -f {container_q}', label='command line')}",
+            f"ExecStartPre={_systemd_unit_value(f'/bin/sh -c {_shell_quote(ensure_volume_command)}', label='command line')}",
+            "ExecStart="
+            + _systemd_unit_value(
+                (
+                    f"{podman_q} run --rm --name {container_q} "
+                    f"-p {_shell_quote(publish)} -v {volume_q}:/qdrant/storage {image_q}"
+                ),
+                label="command line",
             ),
-            f"ExecStop={podman_q} stop -t 10 {container_q}",
+            f"ExecStop={_systemd_unit_value(f'{podman_q} stop -t 10 {container_q}', label='command line')}",
             "",
             "[Install]",
             "WantedBy=default.target",
@@ -112,7 +116,7 @@ def _validate_image(value: str) -> str:
     image = str(value or "").strip()
     if not image:
         raise ValueError("Qdrant image must not be empty")
-    _systemd_unit_value(image, label="image")
+    _validate_systemd_unit_value(image, label="image")
     if image in {"qdrant/qdrant", "qdrant/qdrant:latest"} or image.endswith(":latest"):
         raise ValueError("Qdrant image must use a pinned tag, not latest")
     if ":" not in image.rsplit("/", 1)[-1]:
@@ -145,6 +149,10 @@ def _systemd_token(value: str, *, label: str) -> str:
 
 
 def _systemd_unit_value(value: str, *, label: str) -> str:
+    return _validate_systemd_unit_value(value, label=label).replace("%", "%%")
+
+
+def _validate_systemd_unit_value(value: str, *, label: str) -> str:
     text = str(value)
     if any(ord(char) < 32 or ord(char) == 127 for char in text):
         raise ValueError(f"Qdrant {label} contains invalid control characters")
@@ -152,7 +160,7 @@ def _systemd_unit_value(value: str, *, label: str) -> str:
 
 
 def _shell_quote(value: str) -> str:
-    _systemd_unit_value(value, label="command argument")
+    _validate_systemd_unit_value(value, label="command argument")
     if not value:
         return "''"
     if all(char.isalnum() or char in "@%_+=:,./-" for char in value):
