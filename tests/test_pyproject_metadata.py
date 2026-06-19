@@ -1,14 +1,29 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
+from TeeBotus import __version__
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SEMVER_RE = re.compile(
+    r"^(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)"
+    r"(?:-((?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
+)
 
 
 def _pyproject() -> dict:
     return tomllib.loads((PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def test_package_version_is_semver() -> None:
+    assert SEMVER_RE.fullmatch(__version__)
+    assert _pyproject()["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "TeeBotus.__version__"}
 
 
 def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
