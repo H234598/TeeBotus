@@ -1879,6 +1879,55 @@ def test_notify_recent_telegram_users_carries_historical_failure_across_build_me
     assert failed["failed_at"] == "2026-06-14T11:00:00+00:00"
 
 
+def test_notify_recent_telegram_users_replays_equal_precedence_build_states_by_updated_at(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.4+build.10": {
+                        "sent_identities": ["telegram:user:111"],
+                        "failed_identities": {},
+                        "updated_at": "2026-06-14T12:00:00+00:00",
+                    },
+                    "1.0.4+build.2": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "failed_at": "2026-06-14T11:00:00+00:00",
+                                "reason": "chat not found",
+                            }
+                        },
+                        "updated_at": "2026-06-14T11:00:00+00:00",
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.4+build.11",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 13, 0, tzinfo=timezone.utc),
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+
+    assert count == 1
+    assert attempts == [111]
+    assert state["versions"]["1.0.4+build.11"]["failed_identities"] == {}
+    assert state["versions"]["1.0.4+build.11"]["sent_identities"] == ["telegram:user:111"]
+
+
 def test_notify_recent_telegram_users_normalizes_sent_identity_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

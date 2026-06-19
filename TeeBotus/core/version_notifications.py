@@ -593,7 +593,7 @@ def _historical_failed_identity_map(
     failed_identities: dict[str, object] = {}
     ordered_versions = sorted(
         versions.items(),
-        key=lambda item: _version_order_key(str(item[0] or "")),
+        key=_historical_version_state_order_key,
     )
     for version_key, version_state in ordered_versions:
         if not isinstance(version_key, str) or not _version_state_is_historical(version_key, version_state, current_version, now):
@@ -615,6 +615,19 @@ def _historical_failed_identity_map(
     return dict(sorted(failed_identities.items()))
 
 
+def _historical_version_state_order_key(item: tuple[Any, Any]) -> tuple[tuple[tuple[int, int | str], ...], datetime, str]:
+    version_key = str(item[0] or "")
+    version_state = item[1]
+    updated_at = _version_state_updated_at(version_state) or datetime.min.replace(tzinfo=timezone.utc)
+    return (_version_order_key(version_key), updated_at, version_key)
+
+
+def _version_state_updated_at(version_state: object) -> datetime | None:
+    if not isinstance(version_state, dict):
+        return None
+    return _parse_datetime(_valid_timestamp_string(version_state.get("updated_at")))
+
+
 def _version_state_is_historical(
     version_key: str,
     version_state: object,
@@ -627,9 +640,7 @@ def _version_state_is_historical(
         return False
     if _normalize_version_key(version_key) == current_version:
         return False
-    if not isinstance(version_state, dict):
-        return False
-    updated_at = _parse_datetime(_valid_timestamp_string(version_state.get("updated_at")))
+    updated_at = _version_state_updated_at(version_state)
     return updated_at is not None and updated_at < now
 
 
