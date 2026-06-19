@@ -34,7 +34,7 @@ Offen:
 - Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts sind angebunden, weitere echte Adapter-Event-Hooks fuer eingehende Plattform-Receipts sind noch offen.
 - Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
 - Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
-- Optional hochwertigeres Graph-Rendering ist noch offen.
+- Optional hochwertigeres Graph-Rendering ist als `mmdc`/`auto`-Pfad angebunden; weitere Layout-Qualitaet bleibt optional.
 
 ## Kurzantwort
 
@@ -509,7 +509,7 @@ Stand 2026-06-19:
 - `teebotus-codex-history-systemd --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`; Default-Rhythmus: `24h`.
 - `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
 - `codex-history graph-export` schreibt eine admin-only Mermaid-Projekthistory nach `data/Codex_History_Bibliothek/graphs`; `codex-history index --graph` kann sie im selben Batch erzeugen.
-- `codex-history graph-export --svg` schreibt zusaetzlich ein dependency-freies SVG-Bild; `codex-history index --graph --graph-svg` erzeugt es im selben Low-Priority-Batch.
+- `codex-history graph-export --svg` schreibt zusaetzlich ein dependency-freies SVG-Bild; `--svg-engine auto|mmdc` kann optional Mermaid CLI (`mmdc`) nutzen. `codex-history index --graph --graph-svg --graph-svg-engine ...` erzeugt es im selben Low-Priority-Batch.
 - `codex-history graph-export --queue-svg` queued das SVG als `kind=codex_graph_artifact` mit `image/svg+xml` Attachment fuer den bestehenden Admin-Dispatcher.
 - `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
 - `teebotus-codex-history-systemd --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch` hinzu.
@@ -550,10 +550,13 @@ Stand 2026-06-19:
 	* Ziel: `instances/<Instanz>/data/Codex_History_Bibliothek/graphs/codex_history_graph.md`
 	* `codex-history index --graph` erzeugt den Graph im kombinierten Low-Priority-Indexlauf.
 	* `teebotus-codex-history-systemd --index-timer --index-graph` haengt den Graph-Export an den Timer.
-* Teilweise erledigt: `--svg`/`--graph-svg` erzeugt zusaetzlich ein dependency-freies SVG-Bild im selben Ordner.
+* Erledigt: `--svg`/`--graph-svg` erzeugt zusaetzlich ein SVG-Bild im selben Ordner.
+	* Default: `--svg-engine builtin`, dependency-frei.
+	* Optional: `--svg-engine auto` nutzt Mermaid CLI `mmdc`, wenn lokal installiert, und faellt sonst mit Report-Warnung auf builtin zurueck.
+	* Explizit: `--svg-engine mmdc` verlangt Mermaid CLI und scheitert sauber, wenn sie fehlt oder fehlschlaegt.
 * Erledigt: `--queue-svg`/`--graph-queue-svg` legt das SVG als queuebares Admin-Outbox-Attachment ab; der bestehende `codex-history dispatch` versendet es mit Dispatch-Results/Acks.
 * Teilweise erledigt: `teebotus-codex-history-systemd --index-timer --index-dispatch` kann den Versand nach dem Index per `ExecStartPost` automatisch ausloesen.
-* Offen: optional hochwertigeres Rendering ueber Mermaid/better-git-of-theseus o.ae.
+* Teilweise erledigt: optional hochwertigeres Rendering ueber Mermaid CLI `mmdc` ist angebunden; weitere Renderer wie better-git-of-theseus bleiben optional.
 * Default: 1x am Tag (`OnUnitActiveSec=24h`).
 
 ### Phase 8: Strategische Analyse

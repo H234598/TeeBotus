@@ -377,6 +377,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_openCodexHistoryTimerEnable" in source
     assert "TeeBotus.codex_history_systemd" in source
     assert "--index-strategic-analysis" in source
+    assert "--index-graph-svg-engine" in source
+    assert '"auto"' in source
     assert "--index-graph-queue-svg" in source
     assert "--index-dispatch" in source
     assert "/status" in source

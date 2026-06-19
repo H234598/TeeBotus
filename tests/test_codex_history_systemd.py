@@ -119,6 +119,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
         repo_root=tmp_path,
         graph=True,
         graph_svg=True,
+        graph_svg_engine="auto",
         graph_queue_svg=True,
         categorize=True,
         categorize_profile="local_ollama",
@@ -134,6 +135,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
 
     assert "--graph" in units.service_text
     assert "--graph-svg" in units.service_text
+    assert "--graph-svg-engine auto" in units.service_text
     assert "--graph-queue-svg" in units.service_text
     assert "--categorize" in units.service_text
     assert "--categorize-profile local_ollama" in units.service_text

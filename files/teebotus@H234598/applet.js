@@ -1415,6 +1415,8 @@ TeeBotusApplet.prototype = {
         "--index-timer",
         "--index-graph",
         "--index-graph-svg",
+        "--index-graph-svg-engine",
+        "auto",
         "--index-graph-queue-svg",
         "--index-strategic-analysis",
         "--index-dispatch",

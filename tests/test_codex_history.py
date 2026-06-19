@@ -487,6 +487,7 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert "<svg" in svg_text
     assert "TeeBotus Codex-History" in svg_text
     assert "Graph Export" in svg_text
+    assert result["svg_engine"] == "builtin"
     queued = result["queued_item"]
     assert queued["kind"] == "codex_graph_artifact"
     assert queued["status"] == "queued"
@@ -514,6 +515,44 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert sent[-1].filename.endswith(".svg")
     assert sent[-1].content_type == "image/svg+xml"
     assert b"<svg" in sent[-1].data
+
+
+def test_codex_history_graph_export_auto_svg_engine_falls_back_to_builtin(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "graph-auto-demo", version="1.9.3")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="Auto Graph", bullets=["Optionales Rendering."])
+    monkeypatch.setattr("TeeBotus.admin.codex_history.shutil.which", lambda _name: None)
+
+    result = export_codex_history_graph_doc(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+        svg=True,
+        svg_engine="auto",
+    )
+
+    assert result["svg_exported"] == 1
+    assert result["svg_engine"] == "builtin"
+    assert result["svg_warning"] == "mmdc_not_found_fallback_builtin"
+    assert "Auto Graph" in Path(result["svg_path"]).read_text(encoding="utf-8")
+
+
+def test_codex_history_graph_export_explicit_mmdc_requires_mermaid_cli(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "graph-mmdc-demo", version="1.9.3")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="MMDC Graph", bullets=["Mermaid CLI Pflicht."])
+    monkeypatch.setattr("TeeBotus.admin.codex_history.shutil.which", lambda _name: None)
+
+    with pytest.raises(ValueError, match="mmdc svg render requested"):
+        export_codex_history_graph_doc(
+            store,
+            instance_dir=instance_dir,
+            instance_name="Depressionsbot",
+            svg=True,
+            svg_engine="mmdc",
+        )
 
 
 def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_path: Path) -> None:
