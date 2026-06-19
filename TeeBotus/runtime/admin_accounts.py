@@ -223,9 +223,16 @@ async def notify_runtime_status_admin_accounts(
                     sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
             else:
                 for channel in candidate_channels:
-                    sender = senders.get(channel)
+                    try:
+                        sender = senders.get(channel)
+                    except Exception as exc:
+                        sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                        continue
                     if sender is None:
                         sender_errors_by_channel[channel] = "no_sender"
+                        continue
+                    if not callable(sender):
+                        sender_errors_by_channel[channel] = "sender_factory:non_callable"
                         continue
                     senders_by_channel[channel] = sender
         else:
@@ -236,9 +243,16 @@ async def notify_runtime_status_admin_accounts(
                 except Exception as exc:  # noqa: BLE001 - one runtime channel must not block other admin channels.
                     sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
                     continue
-                sender = senders.get(channel)
+                try:
+                    sender = senders.get(channel)
+                except Exception as exc:
+                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                    continue
                 if sender is None:
                     sender_errors_by_channel[channel] = "no_sender"
+                    continue
+                if not callable(sender):
+                    sender_errors_by_channel[channel] = "sender_factory:non_callable"
                     continue
                 senders_by_channel[channel] = sender
         for account_id, route, channel, summary_payload in candidates:

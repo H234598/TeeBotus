@@ -354,6 +354,82 @@ def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_pat
     assert f"admin_notify=Depressionsbot status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
 
 
+def test_runtime_status_admin_notify_handles_broken_sender_factory_return_value(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: object(),
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:AttributeError",)
+
+
+def test_runtime_status_admin_notify_treats_non_callable_sender_as_failure(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": 42},
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
+
+
+def test_runtime_status_admin_notify_handles_broken_default_runtime_sender_factory(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    def broken_runtime_sender_factory(_instances_dir: Path, _env: dict[str, str], *, channels: tuple[str, ...]):
+        return lambda _instance, _store: {"telegram": 42}
+
+    monkeypatch.setattr("TeeBotus.runtime.admin_accounts._runtime_sender_factory", broken_runtime_sender_factory)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
+
+
 def test_runtime_status_admin_notify_calls_injected_sender_factory_once_per_instance(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
