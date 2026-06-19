@@ -39,6 +39,7 @@ tools = [
     # Keep tools-sequenced installs to avoid shared resolver conflicts.
     "fastmcp==3.4.2",
     "python-dotenv==1.2.2",
+    "watchdog==6.0.0",
 ]
 
 [project.scripts]

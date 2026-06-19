@@ -26,6 +26,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "openai==2.30.0",
                 "python-dotenv==1.2.2",
                 "fastmcp==3.4.2",
+                "watchdog==6.0.0",
             ]
         )
         + "\n",
@@ -45,7 +46,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
     assert "litellm==1.89.2" not in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
     assert commands[1][-3:] == ["h11==0.16.0", "litellm==1.89.2", "openai==2.30.0"]
-    assert commands[2][-2:] == ["python-dotenv==1.2.2", "fastmcp==3.4.2"]
+    assert commands[2][-3:] == ["python-dotenv==1.2.2", "fastmcp==3.4.2", "watchdog==6.0.0"]
     assert commands[3][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
 
@@ -70,6 +71,7 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert f"openai=={_active_openai_version()}" in output
     assert "python-dotenv==1.2.2" in output
     assert "fastmcp==3.4.2" in output
+    assert "watchdog==6.0.0" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
     assert "git clone --depth 1 --branch 0.100 https://github.com/bbernhard/signal-cli-rest-api.git" in output
     assert "go build -o signal-cli-rest-api main.go" in output
@@ -143,6 +145,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "package:signalbot" in called
     assert "package:python-dotenv" in called
     assert "package:fastmcp" in called
+    assert "package:watchdog" in called
     assert "package:openai" in called
     assert "package:psycopg" in called
     assert "package:psycopg-binary" in called
@@ -166,7 +169,7 @@ def test_adapter_lock_pyproject_contract_accepts_current_pins() -> None:
     ok, message = check_adapter_deps._check_adapter_lock_pyproject_contract()
 
     assert ok
-    assert "packages=fastmcp,litellm,openai,python-dotenv" in message
+    assert "packages=fastmcp,litellm,openai,python-dotenv,watchdog" in message
 
 
 def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
@@ -186,6 +189,7 @@ def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
         tools = [
             "fastmcp==3.4.2",
             "python-dotenv==1.2.2",
+            "watchdog==6.0.0",
         ]
         """,
         encoding="utf-8",
@@ -210,6 +214,7 @@ def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
     assert "missing_from_lock" in message
     assert "openai==2.43.0" in message
     assert "fastmcp==3.4.2" in message
+    assert "watchdog==6.0.0" in message
     assert "unexpected_in_lock" in message
     assert "openai==2.41.0" in message
 
@@ -296,7 +301,7 @@ def test_pyproject_plan2_contract_rejects_unexpected_plan2_extra_dependency(tmp_
         llm = ["litellm==1.89.2", "openai==2.43.0", "ollama==0.6.2", "surprise-llm"]
         rag = ["haystack-ai==2.30.2", "qdrant-haystack==10.3.0", "sentence-transformers==5.6.0", "pypdf==6.13.3", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.15.0", "llama-index-core==0.14.22"]
         agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.6"]
-        tools = ["fastmcp==3.4.2", "python-dotenv==1.2.2"]
+        tools = ["fastmcp==3.4.2", "python-dotenv==1.2.2", "watchdog==6.0.0"]
 
         [project.scripts]
         teebotus-bibliothekar = "TeeBotus.bibliothekar.cli:main"
@@ -370,10 +375,11 @@ def test_litellm_supply_chain_guard_blocks_below_security_minimum() -> None:
 
 def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "litellm_init.pth").write_text("bad", encoding="utf-8")
-    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda _name: "1.84.0")
+    active_litellm_version = _active_litellm_version()
+    monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda _name: active_litellm_version)
     monkeypatch.setattr(check_adapter_deps.sys, "path", [str(tmp_path)])
 
-    ok, message = check_adapter_deps._check_litellm_supply_chain_guard("1.84.0")
+    ok, message = check_adapter_deps._check_litellm_supply_chain_guard(active_litellm_version)
 
     assert not ok
     assert "suspicious_pth_files" in message

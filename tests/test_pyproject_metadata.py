@@ -49,6 +49,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
     }
     assert "fastmcp==3.4.2" in optional["tools"]
     assert "python-dotenv==1.2.2" in optional["tools"]
+    assert "watchdog==6.0.0" in optional["tools"]
 
 
 def test_pyproject_litellm_extra_blocks_known_bad_versions() -> None:
@@ -69,7 +70,7 @@ def test_requirements_defers_sequenced_llm_and_tool_dependencies() -> None:
         if line.strip() and not line.strip().startswith("#")
     }
 
-    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "nio-bot", "matrix-nio", "h11")
+    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "watchdog", "nio-bot", "matrix-nio", "h11")
     assert not any(dependency.startswith(blocked_prefixes) for dependency in requirements)
     assert "psycopg[binary]==3.3.4" in requirements
 

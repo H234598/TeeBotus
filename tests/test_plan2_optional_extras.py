@@ -24,6 +24,7 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
         "python-dotenv": "1.2.2",
         "openai": openai_version,
         "fastmcp": fastmcp_version,
+        "watchdog": "6.0.0",
     }
     monkeypatch.setattr(
         "scripts.check_plan2_optional_extras.importlib.metadata.version",
@@ -49,8 +50,10 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert "langgraph==1.2.6" in report["extras"]["agents"]["declared"]
     assert "fastmcp==3.4.2" in report["extras"]["tools"]["declared"]
     assert "python-dotenv==1.2.2" in report["extras"]["tools"]["declared"]
+    assert "watchdog==6.0.0" in report["extras"]["tools"]["declared"]
     assert f"fastmcp=={fastmcp_version}" in report["extras"]["tools"]["active_declared"]
     assert "python-dotenv==1.2.2" in report["extras"]["tools"]["active_declared"]
+    assert "watchdog==6.0.0" in report["extras"]["tools"]["active_declared"]
 
 
 def test_plan2_optional_extras_strict_mode_fails_when_missing(monkeypatch) -> None:

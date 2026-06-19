@@ -12,3 +12,4 @@ openai==2.43.0; python_version < '3.14'
 openai==2.30.0; python_version >= '3.14'
 python-dotenv==1.2.2
 fastmcp==3.4.2
+watchdog==6.0.0

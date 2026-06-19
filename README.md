@@ -1079,7 +1079,7 @@ FastMCP ist optional. Ohne installiertes `fastmcp` bleibt TeeBotus importierbar;
 python3 -m pip install '.[tools]'
 ```
 
-Plan2-Extras sind absichtlich gepinnt. Auch auf Python 3.14 wird `litellm==1.89.2` genutzt; `[tools]` hält `python-dotenv==1.2.2` und `fastmcp==3.4.2` aktuell. Installiere `[llm]` und `[tools]` dort nicht in einem einzigen Pip-Resolver-Vorgang, sondern sequenziell ueber `scripts/install_adapter_deps.py` oder getrennte `pip install`-Aufrufe. TeeBotus prueft diese Pins in `scripts/check_adapter_deps.py` und `scripts/check_plan2_optional_extras.py`.
+Plan2-Extras sind absichtlich gepinnt. Fuer eine saubere Resolver-Schiene ist Python 3.13 die empfohlene Runtime; Python 3.14 bleibt im Dependency-Doctor advisory. `[llm]` pinnt `litellm==1.89.2`, `[tools]` haelt `python-dotenv==1.2.2`, `fastmcp==3.4.2` und `watchdog==6.0.0` aktuell. Installiere `[llm]` und `[tools]` dort nicht in einem einzigen Pip-Resolver-Vorgang, sondern sequenziell ueber `scripts/install_adapter_deps.py` oder getrennte `pip install`-Aufrufe. TeeBotus prueft diese Pins in `scripts/check_adapter_deps.py` und `scripts/check_plan2_optional_extras.py`.
 
 OpenAI-Flex-Processing wird ueber `service_tier: flex` im `## OpenAI`-Block der aktiven Instanz-`Bot_Verhalten.md` aktiviert. Gemini/Vertex-Flex laeuft getrennt ueber `service_tier: flex` im `## LLM`-Block oder die oben genannten `TEEBOTUS_GEMINI_*`-/`TEEBOTUS_LLM_SERVICE_TIER*`-Schalter. Wegen der laengeren Laufzeit von Flex-Anfragen ist dort auch `timeout_seconds: 900` gesetzt.
 

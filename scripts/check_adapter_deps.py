@@ -27,6 +27,7 @@ MIN_SAFE_LITELLM_VERSION = "1.84.0"
 PY313_LITELLM_VERSION = "1.89.2"
 PY314_COMPATIBLE_LITELLM_VERSION = "1.89.2"
 PSYCOPG_VERSION = "3.3.4"
+WATCHDOG_VERSION = "6.0.0"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -55,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_python_package("openai", pins["openai"]),
                 _check_python_package("python-dotenv", "1.2.2"),
                 _check_python_package("fastmcp", "3.4.2"),
+                _check_python_package("watchdog", WATCHDOG_VERSION),
                 _check_python_package("psycopg", PSYCOPG_VERSION),
                 _check_python_package("psycopg-binary", PSYCOPG_VERSION),
                 _check_litellm_supply_chain_guard(pins["litellm"]),
@@ -231,7 +233,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
             "llama-index-core": "0.14.22",
         },
         "agents": {"pydantic-ai-slim": "1.107.0", "langgraph": "1.2.6"},
-        "tools": {"fastmcp": fastmcp_version, "python-dotenv": "1.2.2"},
+        "tools": {"fastmcp": fastmcp_version, "python-dotenv": "1.2.2", "watchdog": WATCHDOG_VERSION},
     }
     for extra, expected in expected_extras.items():
         found = _active_optional_dependency_versions(optional.get(extra, []))
@@ -278,7 +280,7 @@ def _check_adapter_lock_pyproject_contract(
     lockfile_path: Path = LOCKFILE,
     pyproject_path: Path = REPO_ROOT / "pyproject.toml",
 ) -> tuple[bool, str]:
-    managed_names = {"litellm", "openai", "python-dotenv", "fastmcp"}
+    managed_names = {"litellm", "openai", "python-dotenv", "fastmcp", "watchdog"}
     try:
         lock_lines = _dependency_lines(lockfile_path)
         payload = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
@@ -304,7 +306,7 @@ def _check_adapter_lock_pyproject_contract(
         errors.append("unexpected_in_lock " + ",".join(unexpected))
     if errors:
         return False, "adapter lock pyproject contract failed: " + "; ".join(errors)
-    return True, "adapter lock pyproject contract=ok packages=fastmcp,litellm,openai,python-dotenv"
+    return True, "adapter lock pyproject contract=ok packages=fastmcp,litellm,openai,python-dotenv,watchdog"
 
 
 def _check_requirements_runtime_contract(path: Path = REPO_ROOT / "requirements.txt") -> tuple[bool, str]:
@@ -320,7 +322,7 @@ def _check_requirements_runtime_contract(path: Path = REPO_ROOT / "requirements.
     required = f"psycopg[binary]=={PSYCOPG_VERSION}"
     if required not in requirements:
         errors.append(f"missing {required}")
-    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "nio-bot", "matrix-nio", "h11")
+    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "watchdog", "nio-bot", "matrix-nio", "h11")
     blocked = sorted(dependency for dependency in requirements if dependency.startswith(blocked_prefixes))
     if blocked:
         errors.append("sequenced dependencies must stay out of requirements.txt: " + ",".join(blocked))
