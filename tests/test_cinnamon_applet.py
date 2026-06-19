@@ -74,7 +74,7 @@ const context = {{
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
-            file_test: (path, flag) => flag === 1 && ["/usr/bin/gnome-terminal", "/usr/bin/python3"].includes(path),
+            file_test: (path, flag) => flag === 1 && ["/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/xterm"].includes(path),
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -246,6 +246,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._spawn(argv, (stdout, stderr, ok) => {" in source
     assert "const TRUSTED_SPAWN_DIRS = " in source
     assert "_resolveSpawnArgv: function(argv)" in source
+    assert "_trustedExecutablePath: function(command)" in source
     assert "_findTrustedProgramInPath: function(command)" in source
     assert "launcher.spawnv(resolvedArgv)" in source
     assert "options = options || {};" in source
@@ -741,8 +742,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validStatusCommand"][:2] == ["/usr/bin/python3", "-B"]
     assert result["validStatusCommand"][result["validStatusCommand"].index("--python") + 1] == "'/usr/bin/python3' '-B'"
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
-    assert result["validTerminal"] == ["xterm", "-hold", "-e"]
-    assert result["validTerminalWithFinalMarker"] == ["xterm", "-hold", "-e"]
+    assert result["validTerminal"] == ["/usr/bin/xterm", "-hold", "-e"]
+    assert result["validTerminalWithFinalMarker"] == ["/usr/bin/xterm", "-hold", "-e"]
     assert result["embeddedCommandTerminal"] == ["/usr/bin/gnome-terminal", "--"]
     assert result["unsafeChecks"] == [False, False, False, False, True, True]
 
@@ -766,6 +767,9 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
           return {
             bare: applet._resolveSpawnArgv(["gnome-terminal", "--"]),
             absolute: applet._resolveSpawnArgv(["/usr/bin/python3", "-m", "TeeBotus"]),
+            trustedBare: applet._trustedExecutablePath("gnome-terminal"),
+            trustedAbsolute: applet._trustedExecutablePath("/usr/bin/python3"),
+            missingAbsolute: applet._trustedExecutablePath("/tmp/missing-python"),
             trusted: applet._findTrustedProgramInPath("gnome-terminal"),
             unsafeName: applet._findTrustedProgramInPath("../gnome-terminal"),
             missingError: missingError,
@@ -778,6 +782,9 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
     assert result == {
         "bare": ["/usr/bin/gnome-terminal", "--"],
         "absolute": ["/usr/bin/python3", "-m", "TeeBotus"],
+        "trustedBare": "/usr/bin/gnome-terminal",
+        "trustedAbsolute": "/usr/bin/python3",
+        "missingAbsolute": None,
         "trusted": "/usr/bin/gnome-terminal",
         "unsafeName": None,
         "missingError": "Error: Command is not in a trusted system path",

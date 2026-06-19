@@ -1294,6 +1294,14 @@ TeeBotusApplet.prototype = {
     if (configured) {
       let parsed = this._safeExecutableArgs(configured, []);
       if (parsed.length > 0) {
+        let resolvedCommand = this._trustedExecutablePath(parsed[0]);
+        if (!resolvedCommand) {
+          parsed = [];
+        } else {
+          parsed[0] = resolvedCommand;
+        }
+      }
+      if (parsed.length > 0) {
         let terminalArgs = this._terminalCommandArgs(parsed);
         if (terminalArgs) {
           return terminalArgs;
@@ -1547,16 +1555,23 @@ TeeBotusApplet.prototype = {
     if (!this._isSafeExecutable(command)) {
       throw new Error("Command is not executable");
     }
-    if (command.indexOf("/") < 0) {
-      let resolved = this._findTrustedProgramInPath(command);
-      if (!resolved) {
-        throw new Error("Command is not in a trusted system path");
-      }
-      normalized[0] = resolved;
-    } else {
-      normalized[0] = command;
+    let resolvedCommand = this._trustedExecutablePath(command);
+    if (!resolvedCommand) {
+      throw new Error("Command is not in a trusted system path");
     }
+    normalized[0] = resolvedCommand;
     return normalized;
+  },
+
+  _trustedExecutablePath: function(command) {
+    let value = String(command || "").trim();
+    if (!this._isSafeExecutable(value)) {
+      return null;
+    }
+    if (value.indexOf("/") < 0) {
+      return this._findTrustedProgramInPath(value);
+    }
+    return value;
   },
 
   _findTrustedProgramInPath: function(command) {
