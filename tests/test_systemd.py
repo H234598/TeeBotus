@@ -33,6 +33,21 @@ def test_render_teebotus_systemd_unit_uses_venv_python_when_present(tmp_path: Pa
     assert f"ExecStartPre={venv_python.resolve()} -m TeeBotus.systemd --check-env-file {tmp_path.resolve() / '.env'}" in unit.service_text
 
 
+def test_render_teebotus_systemd_unit_keeps_bare_python_executable_on_path(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path, python_executable="python3")
+
+    assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+    assert f"ExecStart={tmp_path.resolve() / 'python3'}" not in unit.service_text
+    assert "ExecStartPre=python3 -m TeeBotus.systemd" in unit.service_text
+
+
+def test_render_teebotus_systemd_unit_resolves_relative_python_paths(tmp_path: Path) -> None:
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path, python_executable="bin/python")
+
+    assert f"ExecStart={tmp_path.resolve() / 'bin' / 'python'} -m TeeBotus" in unit.service_text
+    assert f"ExecStartPre={tmp_path.resolve() / 'bin' / 'python'} -m TeeBotus.systemd" in unit.service_text
+
+
 def test_render_teebotus_systemd_unit_can_limit_channels_and_no_all(tmp_path: Path) -> None:
     unit = render_teebotus_systemd_unit(
         repo_root=tmp_path,

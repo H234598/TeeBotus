@@ -114,10 +114,12 @@ def render_teebotus_systemd_unit(
     return TeeBotusSystemdUnit(service_name=service_name, service_text=service_text)
 
 
-def _python_path(repo_root: Path, value: str) -> Path:
+def _python_path(repo_root: Path, value: str) -> Path | str:
     raw = str(value or "").strip()
     if raw:
         path = Path(raw).expanduser()
+        if path.name == raw:
+            return raw
         return path if path.is_absolute() else (repo_root / path).resolve()
     venv_python = repo_root / ".venv" / "bin" / "python"
     if venv_python.exists():
