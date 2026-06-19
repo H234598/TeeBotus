@@ -35,6 +35,7 @@ def build_runtime_text_llm_client(
     temperature: float | str | None = None,
     max_tokens: int | str | None = None,
     service_tier: str = "",
+    gemini_key_scope: str = "",
     env: Mapping[str, str] | None = None,
     instance_name: str = "",
     openai_client_factory: Callable[[str], object] = OpenAIClient,
@@ -65,6 +66,7 @@ def build_runtime_text_llm_client(
             temperature=temperature,
             max_tokens=max_tokens,
             service_tier=service_tier,
+            gemini_key_scope=gemini_key_scope,
             env=env,
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
@@ -84,6 +86,7 @@ def build_runtime_text_llm_client(
             temperature=temperature,
             max_tokens=max_tokens,
             service_tier=service_tier,
+            gemini_key_scope=gemini_key_scope,
             env=env,
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
@@ -114,6 +117,7 @@ def build_runtime_text_llm_client(
             provider=resolved_provider,
             model=resolved_model,
             explicit_api_key=api_key,
+            scope=gemini_key_scope,
         ),
         gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
             env,
@@ -216,6 +220,7 @@ def _build_route_client(
     temperature: float | str | None,
     max_tokens: int | str | None,
     service_tier: str,
+    gemini_key_scope: str,
     env: Mapping[str, str] | None,
     instance_name: str,
     openai_client_factory: Callable[[str], object],
@@ -256,6 +261,7 @@ def _build_route_client(
             provider=route.provider,
             model=route.model,
             explicit_api_key=override_api_key,
+            scope=gemini_key_scope,
         ),
         gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
             source,
@@ -294,6 +300,7 @@ def _build_profile_client(
     temperature: float | str | None,
     max_tokens: int | str | None,
     service_tier: str,
+    gemini_key_scope: str,
     env: Mapping[str, str] | None,
     instance_name: str,
     openai_client_factory: Callable[[str], object],
@@ -329,6 +336,7 @@ def _build_profile_client(
             provider=profile.provider,
             model=profile.model,
             explicit_api_key=override_api_key,
+            scope=gemini_key_scope,
         ),
         gemini_free_tier_limits=_gemini_free_tier_limits_for_route(
             source,
@@ -366,12 +374,13 @@ def _gemini_api_key_ring_for_route(
     provider: str,
     model: str,
     explicit_api_key: str,
+    scope: str = "",
 ) -> tuple[str, ...]:
     if str(explicit_api_key or "").strip():
         return ()
     if not _route_uses_gemini_api(provider=provider, model=model):
         return ()
-    return resolve_gemini_api_key_ring(env, instance_name=instance_name)
+    return resolve_gemini_api_key_ring(env, instance_name=instance_name, scope=scope)
 
 
 def _gemini_free_tier_limits_for_route(

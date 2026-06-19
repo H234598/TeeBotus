@@ -10,6 +10,7 @@ DEFAULT_INSTANCES_DIR = "instances"
 DEFAULT_CHANNELS = ("telegram", "signal", "matrix")
 SUPPORTED_CHANNELS = frozenset(DEFAULT_CHANNELS)
 PROACTIVE_ROLE_OPENAI_CHANNELS = frozenset({"PROACTIVE_PLAN", "PROACTIVE_DECISION", "PROACTIVE_WORKER"})
+PROACTIVE_ROLE_LLM_CHANNELS = frozenset({"proactive_plan", "proactive_decision", "proactive_worker"})
 BACKGROUND_OPENAI_CHANNELS = frozenset({"PROACTIVE", "BACKGROUND", *PROACTIVE_ROLE_OPENAI_CHANNELS})
 BACKGROUND_SERVICES_INSTANCE_TOKEN = "DEPRESSIONSBOT"
 BACKGROUND_SERVICES_ENV_KEY = "Depressionsbot_BACKGROUND_SERVICES"
@@ -240,6 +241,15 @@ def _normalize_runtime_channel(channel: str, *, label: str) -> str:
     return normalized
 
 
+def _normalize_llm_channel(channel: str, *, label: str) -> str:
+    normalized = str(channel or "").strip().casefold()
+    if not normalized:
+        raise RuntimeConfigError(f"empty channel in {label}")
+    if normalized not in SUPPORTED_CHANNELS and normalized not in PROACTIVE_ROLE_LLM_CHANNELS:
+        raise RuntimeConfigError(f"unsupported channel in LLM runtime channel: {normalized}")
+    return normalized
+
+
 def _normalize_runtime_channels(channels: Sequence[str], *, label: str) -> tuple[str, ...]:
     normalized = tuple(_normalize_runtime_channel(channel, label=label) for channel in channels)
     if not normalized:
@@ -344,7 +354,7 @@ def resolve_llm_setting(
     if not setting:
         raise RuntimeConfigError("LLM setting name must not be empty")
     instance_token = normalize_instance_env_token(instance_name)
-    channel_token = _normalize_runtime_channel(channel, label="LLM runtime channel").upper()
+    channel_token = _normalize_llm_channel(channel, label="LLM runtime channel").upper()
     candidates = [
         f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}_{slot}",
         f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}",

@@ -4,10 +4,13 @@ import asyncio
 from datetime import datetime, timezone
 
 from TeeBotus.proactive import (
+    ProactiveRoleLLMClient,
     main,
+    resolve_proactive_role_llm_settings,
     resolve_proactive_role_openai_key,
     run_proactive_agent_cycle,
     run_proactive_agent_dry_run,
+    runtime_proactive_role_llm_factory,
     runtime_llm_planner_factory,
     runtime_sender_factory,
 )
@@ -626,7 +629,7 @@ def test_proactive_cycle_llm_plan_reports_plan_role_when_context_is_unavailable(
     )
 
     account = report["instances"][0]["accounts"][0]
-    assert account["llm_planning"] == {"openai_role": "plan", "skipped_reason": "llm_planner_unavailable"}
+    assert account["llm_planning"] == {"llm_role": "plan", "openai_role": "plan", "skipped_reason": "llm_planner_unavailable"}
 
 
 def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_path) -> None:
@@ -769,9 +772,93 @@ def test_resolve_proactive_role_openai_key_rejects_unknown_role() -> None:
     try:
         resolve_proactive_role_openai_key("Depressionsbot", "sender", {})
     except ValueError as exc:
-        assert "unsupported proactive OpenAI role" in str(exc)
+        assert "unsupported proactive LLM role" in str(exc)
     else:
         raise AssertionError("expected unsupported proactive role to fail")
+
+
+def test_resolve_proactive_role_llm_settings_keeps_role_keys_separate() -> None:
+    env = {
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT_PROACTIVE_PLAN": "gemini_flash_stateful",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN": "plan-key",
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT_PROACTIVE_DECISION": "groq_fast",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "decision-key",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_PROACTIVE_WORKER": "litellm",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT_PROACTIVE_WORKER": "anthropic/worker",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_WORKER": "worker-key",
+    }
+
+    assert resolve_proactive_role_llm_settings("Depressionsbot", "plan", env)["api_key"] == "plan-key"
+    assert resolve_proactive_role_llm_settings("Depressionsbot", "decision", env)["profile"] == "groq_fast"
+    worker = resolve_proactive_role_llm_settings("Depressionsbot", "worker", env)
+    assert worker["provider"] == "litellm"
+    assert worker["model"] == "anthropic/worker"
+    assert worker["api_key"] == "worker-key"
+
+
+def test_runtime_proactive_role_llm_factory_builds_non_openai_clients_with_role_keys(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## OpenAI\n- enabled: true\n", encoding="utf-8")
+    calls: list[dict] = []
+
+    class Client:
+        provider = "litellm"
+        model = "test-model"
+
+        def create_reply(self, _text, _instructions, _previous_response_id=None):
+            return '{"schema_version":1,"decisions":[]}'
+
+    def build_client(**kwargs):
+        calls.append(kwargs)
+        return Client()
+
+    monkeypatch.setattr("TeeBotus.proactive.build_runtime_text_llm_client", build_client)
+    env = {
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_PROACTIVE_PLAN": "litellm",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT_PROACTIVE_PLAN": "groq/plan",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN": "plan-key",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_PROACTIVE_DECISION": "litellm",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT_PROACTIVE_DECISION": "groq/decision",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "decision-key",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_PROACTIVE_WORKER": "litellm",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT_PROACTIVE_WORKER": "groq/worker",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_WORKER": "worker-key",
+    }
+
+    contexts = {
+        role: runtime_proactive_role_llm_factory(instances_dir, role=role, env=env)("Depressionsbot", store_for(instance_dir), "account")
+        for role in ("plan", "decision", "worker")
+    }
+
+    assert all(context is not None for context in contexts.values())
+    assert [call["provider"] for call in calls] == ["litellm", "litellm", "litellm"]
+    assert [call["model"] for call in calls] == ["groq/plan", "groq/decision", "groq/worker"]
+    assert [call["api_key"] for call in calls] == ["plan-key", "decision-key", "worker-key"]
+    assert [call["gemini_key_scope"] for call in calls] == ["proactive_plan", "proactive_decision", "proactive_worker"]
+    for role, context in contexts.items():
+        assert context is not None
+        client, _instructions = context
+        assert isinstance(client, ProactiveRoleLLMClient)
+        assert client.proactive_role == role
+
+
+def test_proactive_role_llm_client_uses_text_reply_as_tool_plan_fallback() -> None:
+    class TextOnlyClient:
+        provider = "litellm"
+        model = "groq/test"
+
+        def create_reply(self, user_text, _instructions, _previous_response_id=None):
+            assert "Tool-Definitionen nur als Referenz" in user_text
+            return type("Response", (), {"text": '{"schema_version":1,"decisions":[]}'})()
+
+    client = ProactiveRoleLLMClient(TextOnlyClient(), role="worker", channel="proactive_worker")
+
+    response = client.create_tool_calls("Prompt", "instructions", [{"name": "proactive_noop"}])
+
+    assert response["text"] == '{"schema_version":1,"decisions":[]}'
+    assert response["output"][0]["content"][0]["text"] == '{"schema_version":1,"decisions":[]}'
 
 
 def test_runtime_llm_planner_factory_uses_proactive_plan_key_and_instance_instructions(tmp_path, monkeypatch) -> None:

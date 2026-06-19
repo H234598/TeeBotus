@@ -59,14 +59,15 @@ def _state_for(keys: tuple[str, ...]) -> _RingState:
         return state
 
 
-def resolve_gemini_api_key_ring(env: Mapping[str, str] | None = None, *, instance_name: str = "") -> tuple[str, ...]:
+def resolve_gemini_api_key_ring(env: Mapping[str, str] | None = None, *, instance_name: str = "", scope: str = "") -> tuple[str, ...]:
     source = os.environ if env is None else env
     token = _env_token(instance_name)
-    for name in _flat_ring_env_names(token):
+    scope_token = _env_token(scope)
+    for name in _flat_ring_env_names(token, scope_token):
         keys = _parse_csv(source.get(name))
         if keys:
             return keys
-    buckets = _numbered_gemini_key_buckets(source, token=token)
+    buckets = _numbered_gemini_key_buckets(source, token=token, scope_token=scope_token)
     if buckets:
         return interleave_key_buckets(buckets)
     # Google documents both names. If both are present, GOOGLE_API_KEY wins.
@@ -89,8 +90,22 @@ def interleave_key_buckets(buckets: Sequence[Sequence[str]]) -> tuple[str, ...]:
     return _dedupe_nonempty(result)
 
 
-def _numbered_gemini_key_buckets(source: Mapping[str, str], *, token: str) -> tuple[tuple[str, ...], ...]:
+def _numbered_gemini_key_buckets(source: Mapping[str, str], *, token: str, scope_token: str = "") -> tuple[tuple[str, ...], ...]:
     prefixes = []
+    if token and scope_token:
+        prefixes.extend(
+            [
+                f"TEEBOTUS_GEMINI_API_KEYS_{token}_{scope_token}_ACCOUNT_",
+                f"GEMINI_API_KEYS_{token}_{scope_token}_ACCOUNT_",
+            ]
+        )
+    if scope_token:
+        prefixes.extend(
+            [
+                f"TEEBOTUS_GEMINI_API_KEYS_{scope_token}_ACCOUNT_",
+                f"GEMINI_API_KEYS_{scope_token}_ACCOUNT_",
+            ]
+        )
     if token:
         prefixes.extend(
             [
@@ -118,8 +133,22 @@ def _numbered_gemini_key_buckets(source: Mapping[str, str], *, token: str) -> tu
     return tuple(buckets_by_index[index] for index in sorted(buckets_by_index) if buckets_by_index[index])
 
 
-def _flat_ring_env_names(token: str) -> tuple[str, ...]:
+def _flat_ring_env_names(token: str, scope_token: str = "") -> tuple[str, ...]:
     names: list[str] = []
+    if token and scope_token:
+        names.extend(
+            [
+                f"TEEBOTUS_GEMINI_API_KEY_RING_{token}_{scope_token}",
+                f"GEMINI_API_KEY_RING_{token}_{scope_token}",
+            ]
+        )
+    if scope_token:
+        names.extend(
+            [
+                f"TEEBOTUS_GEMINI_API_KEY_RING_{scope_token}",
+                f"GEMINI_API_KEY_RING_{scope_token}",
+            ]
+        )
     if token:
         names.extend(
             [

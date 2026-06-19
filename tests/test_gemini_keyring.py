@@ -53,6 +53,35 @@ def test_resolve_gemini_key_ring_accepts_instance_scoped_buckets() -> None:
     assert resolve_gemini_api_key_ring(env, instance_name="Demo") == ("a1", "b1", "a2", "b2")
 
 
+def test_resolve_gemini_key_ring_prefers_role_scope_over_instance_and_global_ring() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_API_KEY_RING_DEMO_PROACTIVE_PLAN": "plan-a,plan-b",
+        "TEEBOTUS_GEMINI_API_KEY_RING_DEMO": "instance-a",
+        "GEMINI_API_KEYS": "global-a",
+    }
+
+    assert resolve_gemini_api_key_ring(env, instance_name="Demo", scope="proactive_plan") == ("plan-a", "plan-b")
+
+
+def test_resolve_gemini_key_ring_falls_back_from_role_scope_to_instance_ring() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_API_KEY_RING_DEMO": "instance-a,instance-b",
+        "GEMINI_API_KEYS": "global-a",
+    }
+
+    assert resolve_gemini_api_key_ring(env, instance_name="Demo", scope="proactive_worker") == ("instance-a", "instance-b")
+
+
+def test_resolve_gemini_key_ring_accepts_role_scoped_account_buckets() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_API_KEYS_DEMO_PROACTIVE_DECISION_ACCOUNT_1": "a1,a2",
+        "TEEBOTUS_GEMINI_API_KEYS_DEMO_PROACTIVE_DECISION_ACCOUNT_2": "b1,b2",
+        "TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_1": "instance-a1",
+    }
+
+    assert resolve_gemini_api_key_ring(env, instance_name="Demo", scope="proactive_decision") == ("a1", "b1", "a2", "b2")
+
+
 def test_resolve_gemini_key_ring_prefers_google_api_key_for_single_key_fallback() -> None:
     env = {"GEMINI_API_KEY": "gemini-single", "GOOGLE_API_KEY": "google-single"}
 

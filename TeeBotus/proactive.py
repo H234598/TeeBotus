@@ -15,7 +15,8 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX
 from TeeBotus.adapters.telegram_runtime import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_openai_key
+from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_llm_setting, resolve_openai_key
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.notification_loudness import queue_due_notification_loudness_prompts
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
@@ -34,12 +35,28 @@ from TeeBotus.runtime.proactive_agent import (
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
 PROACTIVE_LLM_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_LLM_PLANNER_"
-PROACTIVE_ROLE_OPENAI_CHANNELS = {
+PROACTIVE_ROLE_LLM_CHANNELS = {
     "plan": "proactive_plan",
     "decision": "proactive_decision",
     "worker": "proactive_worker",
 }
+PROACTIVE_ROLE_OPENAI_CHANNELS = PROACTIVE_ROLE_LLM_CHANNELS
 PROACTIVE_LEGACY_OPENAI_CHANNEL = "proactive"
+PROACTIVE_ROLE_LLM_SETTING_NAMES = (
+    "ENABLED",
+    "PROFILE",
+    "PURPOSE",
+    "PROVIDER",
+    "MODEL",
+    "FALLBACK_MODELS",
+    "API_KEY",
+    "BASE_URL",
+    "ALLOW_REMOTE_FALLBACK",
+    "TIMEOUT_SECONDS",
+    "MAX_OUTPUT_TOKENS",
+    "TEMPERATURE",
+    "SERVICE_TIER",
+)
 MATRIX_LAZY_READY_TIMEOUT_SECONDS = 35.0
 LOGGER = logging.getLogger("TeeBotus.proactive")
 
@@ -125,28 +142,135 @@ def run_proactive_agent_dry_run(
 
 
 def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> LLMPlannerFactory:
+    return runtime_proactive_role_llm_factory(instances_dir, role="plan", env=env)
+
+
+def runtime_proactive_role_llm_factory(instances_dir: Path, *, role: str, env: Mapping[str, str] | None = None) -> LLMPlannerFactory:
     source = os.environ if env is None else env
+    normalized_role = _normalize_proactive_role(role)
 
     def factory(instance_name: str, _store: AccountStore, _account_id: str) -> tuple[Any, Any] | None:
-        key = resolve_proactive_role_openai_key(instance_name, "plan", source)
-        if not key:
+        context = build_proactive_role_llm_context(instances_dir, instance_name, normalized_role, env=source)
+        if context is None:
             return None
-        instructions = load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
-        return OpenAIClient(key), instructions
+        return context
 
     return factory
 
 
+def build_proactive_role_llm_context(
+    instances_dir: Path,
+    instance_name: str,
+    role: str,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> tuple[Any, Any] | None:
+    source = os.environ if env is None else env
+    normalized_role = _normalize_proactive_role(role)
+    instructions = load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
+    role_openai_key = resolve_proactive_role_openai_key(instance_name, normalized_role, source)
+    settings = resolve_proactive_role_llm_settings(instance_name, normalized_role, source)
+    if not _proactive_role_llm_settings_configured(settings):
+        if not role_openai_key:
+            return None
+        return OpenAIClient(role_openai_key), instructions
+    channel = PROACTIVE_ROLE_LLM_CHANNELS[normalized_role]
+    client = build_runtime_text_llm_client(
+        instructions=instructions,
+        openai_client=None,
+        default_api_key=role_openai_key,
+        enabled=settings["enabled"],
+        profile=settings["profile"],
+        purpose=settings["purpose"] or channel,
+        allow_remote_fallback=settings["allow_remote_fallback"],
+        provider=settings["provider"],
+        model=settings["model"],
+        fallback_models=settings["fallback_models"],
+        api_key=settings["api_key"],
+        api_base=settings["base_url"],
+        timeout=settings["timeout_seconds"],
+        temperature=settings["temperature"],
+        max_tokens=settings["max_output_tokens"],
+        service_tier=settings["service_tier"],
+        gemini_key_scope=channel,
+        env=source,
+        instance_name=instance_name,
+    )
+    if client is None:
+        return None
+    return ProactiveRoleLLMClient(client, role=normalized_role, channel=channel), instructions
+
+
+def resolve_proactive_role_llm_settings(instance_name: str, role: str, env: Mapping[str, str] | None = None) -> dict[str, str]:
+    source = os.environ if env is None else env
+    normalized_role = _normalize_proactive_role(role)
+    channel = PROACTIVE_ROLE_LLM_CHANNELS[normalized_role]
+    return {
+        name.casefold(): resolve_llm_setting(instance_name, channel, 1, name, source)
+        for name in PROACTIVE_ROLE_LLM_SETTING_NAMES
+    }
+
+
 def resolve_proactive_role_openai_key(instance_name: str, role: str, env: Mapping[str, str] | None = None) -> str:
     source = os.environ if env is None else env
-    normalized_role = str(role or "").strip().casefold()
+    normalized_role = _normalize_proactive_role(role)
     channel = PROACTIVE_ROLE_OPENAI_CHANNELS.get(normalized_role)
-    if channel is None:
-        raise ValueError(f"unsupported proactive OpenAI role: {role}")
     key = resolve_openai_key(instance_name, channel, 1, source)
     if key or normalized_role != "plan":
         return key
     return resolve_openai_key(instance_name, PROACTIVE_LEGACY_OPENAI_CHANNEL, 1, source)
+
+
+def _normalize_proactive_role(role: str) -> str:
+    normalized_role = str(role or "").strip().casefold()
+    if normalized_role not in PROACTIVE_ROLE_LLM_CHANNELS:
+        raise ValueError(f"unsupported proactive LLM role: {role}")
+    return normalized_role
+
+
+def _proactive_role_llm_settings_configured(settings: Mapping[str, str]) -> bool:
+    return any(str(settings.get(name.casefold()) or "").strip() for name in PROACTIVE_ROLE_LLM_SETTING_NAMES)
+
+
+class ProactiveRoleLLMClient:
+    def __init__(self, client: Any, *, role: str, channel: str) -> None:
+        self.client = client
+        self.proactive_role = role
+        self.proactive_channel = channel
+        self.provider = str(getattr(client, "provider", "") or "")
+        self.model = str(getattr(client, "model", "") or "")
+        self.capabilities = getattr(client, "capabilities", None)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.client, name)
+
+    def create_reply(self, user_text: str, instructions: Any, previous_response_id: str | None = None) -> Any:
+        create_reply = getattr(self.client, "create_reply")
+        return create_reply(user_text, instructions, previous_response_id)
+
+    def create_tool_calls(
+        self,
+        user_text: str,
+        instructions: Any,
+        tools: list[dict[str, Any]],
+        previous_response_id: str | None = None,
+    ) -> dict[str, Any]:
+        create_tool_calls = getattr(self.client, "create_tool_calls", None)
+        if callable(create_tool_calls):
+            return create_tool_calls(user_text, instructions, tools, previous_response_id)
+        prompt = "\n".join(
+            [
+                user_text,
+                "",
+                "Dieser LLM-Provider hat keinen nativen Tool-Call-Transport in dieser Route.",
+                "Gib stattdessen exakt das JSON-Planungsschema aus dem Prompt zurueck; kein Markdown, kein Erklaertext.",
+                "Tool-Definitionen nur als Referenz:",
+                json.dumps(tools, ensure_ascii=False, sort_keys=True),
+            ]
+        )
+        response = self.create_reply(prompt, instructions, previous_response_id)
+        text = str(getattr(response, "text", response) or "").strip()
+        return {"text": text, "output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
 
 
 def runtime_planner_resolver() -> PlannerResolver:
@@ -454,7 +578,7 @@ async def run_proactive_agent_cycle(
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:
-                            account_report["llm_planning"] = {"openai_role": "plan", "skipped_reason": "llm_planner_unavailable"}
+                            account_report["llm_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "llm_planner_unavailable"}
                         else:
                             openai_client, instructions = planner_context
                             llm_planning = run_proactive_llm_planner(
@@ -466,7 +590,7 @@ async def run_proactive_agent_cycle(
                             )
                             account_report["llm_planning"] = {
                                 "account_id": llm_planning.account_id,
-                                "openai_role": "plan",
+                                **_proactive_llm_role_report(openai_client, role="plan"),
                                 "created_memory_ids": list(llm_planning.created_memory_ids),
                                 "queued_item_ids": list(llm_planning.queued_item_ids),
                                 "errors": list(llm_planning.errors),
@@ -480,7 +604,7 @@ async def run_proactive_agent_cycle(
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:
-                            account_report["tool_planning"] = {"openai_role": "plan", "skipped_reason": "tool_planner_unavailable"}
+                            account_report["tool_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "tool_planner_unavailable"}
                         else:
                             openai_client, instructions = planner_context
                             tool_planning = run_proactive_tool_agent(
@@ -492,7 +616,7 @@ async def run_proactive_agent_cycle(
                             )
                             account_report["tool_planning"] = {
                                 "account_id": tool_planning.account_id,
-                                "openai_role": "plan",
+                                **_proactive_llm_role_report(openai_client, role="plan"),
                                 "created_memory_ids": list(tool_planning.created_memory_ids),
                                 "queued_item_ids": list(tool_planning.queued_item_ids),
                                 "errors": list(tool_planning.errors),
@@ -630,6 +754,20 @@ def _cycle_ok(instances: list[dict[str, Any]]) -> bool:
     return True
 
 
+def _proactive_llm_role_report(client: Any | None, *, role: str) -> dict[str, str]:
+    resolved_role = str(getattr(client, "proactive_role", "") or role or "").strip()
+    report = {"llm_role": resolved_role}
+    if resolved_role:
+        report["openai_role"] = resolved_role
+    provider = str(getattr(client, "provider", "") or "").strip()
+    model = str(getattr(client, "model", "") or "").strip()
+    if provider:
+        report["llm_provider"] = provider
+    if model:
+        report["llm_model"] = model
+    return report
+
+
 def _print_dry_run_report(report: dict[str, Any]) -> None:
     mode = "dispatch" if report.get("dispatch") else "dry_run"
     print(f"proactive_{mode} generated_at={report['generated_at']}")
@@ -681,7 +819,7 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
 
 
 def _openai_role_suffix(report: Mapping[str, Any]) -> str:
-    role = str(report.get("openai_role") or "").strip()
+    role = str(report.get("llm_role") or report.get("openai_role") or "").strip()
     return f" role={role}" if role else ""
 
 

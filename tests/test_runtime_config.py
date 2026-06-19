@@ -369,6 +369,18 @@ def test_openai_key_resolution_proactive_role_channels_do_not_fall_back_to_user_
     assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == ""
 
 
+def test_llm_setting_resolution_accepts_proactive_role_channels():
+    env = {
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT_PROACTIVE_PLAN": "groq_fast",
+        "TEEBOTUS_LLM_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "decision-key",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT_PROACTIVE_WORKER": "litellm",
+    }
+
+    assert resolve_llm_setting("Depressionsbot", "proactive_plan", 1, "PROFILE", env) == "groq_fast"
+    assert resolve_llm_setting("Depressionsbot", "proactive_decision", 1, "API_KEY", env) == "decision-key"
+    assert resolve_llm_setting("Depressionsbot", "proactive_worker", 1, "PROVIDER", env) == "litellm"
+
+
 def test_openai_key_resolution_ignores_generic_background_services_aliases():
     env = {
         "DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-token-alias",
