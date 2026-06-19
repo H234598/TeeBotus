@@ -49,6 +49,18 @@ def test_pyproject_litellm_extra_blocks_known_bad_versions() -> None:
     assert "litellm==1.82.8" not in llm_deps
 
 
+def test_requirements_defers_sequenced_llm_and_tool_dependencies() -> None:
+    requirements = {
+        line.strip()
+        for line in (PROJECT_ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+
+    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "nio-bot", "matrix-nio", "h11")
+    assert not any(dependency.startswith(blocked_prefixes) for dependency in requirements)
+    assert "psycopg[binary]==3.3.4" in requirements
+
+
 def test_pytest_config_points_at_local_tests() -> None:
     pytest_config = _pyproject()["tool"]["pytest"]["ini_options"]
 

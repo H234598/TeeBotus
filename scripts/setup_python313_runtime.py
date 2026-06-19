@@ -21,6 +21,7 @@ def main(argv: list[str] | None = None, *, runner: Runner = subprocess.run) -> i
     parser.add_argument("--python", default="python3.13", help="Python 3.13 executable to use.")
     parser.add_argument("--venv", default=DEFAULT_VENV, help="Target venv path, relative to repo root unless absolute.")
     parser.add_argument("--dry-run", action="store_true", help="Print commands without creating the venv.")
+    parser.add_argument("--skip-requirements", action="store_true", help="Do not install requirements.txt into the venv.")
     parser.add_argument("--skip-editable", action="store_true", help="Do not install TeeBotus itself into the venv.")
     parser.add_argument("--skip-adapter-deps", action="store_true", help="Do not install pinned Python adapter dependencies.")
     parser.add_argument("--install-systemd", action="store_true", help="Render and write teebotus.service for the new venv.")
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None, *, runner: Runner = subprocess.run) -> i
     commands = _setup_commands(
         python=python,
         venv=venv,
+        install_requirements=not args.skip_requirements,
         install_editable=not args.skip_editable,
         install_adapter_deps=not args.skip_adapter_deps,
         dry_run=args.dry_run,
@@ -106,6 +108,7 @@ def _setup_commands(
     *,
     python: str,
     venv: Path,
+    install_requirements: bool,
     install_editable: bool,
     install_adapter_deps: bool,
     dry_run: bool,
@@ -116,6 +119,8 @@ def _setup_commands(
         [venv_python, "-m", "pip", "install", "--upgrade", "pip"],
         [venv_python, "-m", "pip", "install", "--upgrade", "packaging"],
     ]
+    if install_requirements:
+        commands.append([venv_python, "-m", "pip", "install", "-r", str(REPO_ROOT / "requirements.txt")])
     if install_editable:
         commands.append([venv_python, "-m", "pip", "install", "--no-deps", "-e", str(REPO_ROOT)])
     if install_adapter_deps:
