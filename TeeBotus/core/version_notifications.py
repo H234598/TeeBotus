@@ -39,15 +39,16 @@ def notify_recent_telegram_users_for_version(
     on_skip: Callable[[str], object] | None = None,
     now: datetime | None = None,
 ) -> int:
+    normalized_version = _normalize_version_key(version)
     resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
-    if repo_root is not None and not github_has_version(repo_root, version):
+    if repo_root is not None and not github_has_version(repo_root, normalized_version):
         if on_skip is not None:
-            on_skip(f"GitHub tag v{str(version).strip().lstrip('v')} not found on remote")
+            on_skip(f"GitHub tag v{normalized_version} not found on remote")
         return 0
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
-    version_state = _version_state(state, version)
+    version_state = _version_state(state, normalized_version)
     sent_identities = set(_string_list(version_state.get("sent_identities")))
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
     version_state["failed_identities"] = failed_identities
@@ -56,7 +57,7 @@ def notify_recent_telegram_users_for_version(
         if recipient.identity_key in sent_identities or _failed_delivery_matches_recipient(failed_identities, recipient):
             continue
         message = build_version_notification_text(
-            version=version,
+            version=normalized_version,
             repo_url=resolved_repo_url,
             memory_text=_memory_signal_text(account_store, recipient.account_id),
         )
@@ -145,6 +146,10 @@ def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REP
             _memory_shaped_joke(memory_text),
         ]
     )
+
+
+def _normalize_version_key(version: str) -> str:
+    return str(version or "").strip().lstrip("vV")
 
 
 def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:

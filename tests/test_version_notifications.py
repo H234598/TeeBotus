@@ -461,6 +461,36 @@ def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) 
     assert "ffmpeg" in sent[0][1]
 
 
+def test_notify_recent_telegram_users_normalizes_version_key(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    sent: list[tuple[int, str]] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append((chat_id, text)),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    count_again = notify_recent_telegram_users_for_version(
+        version="v1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append((chat_id, text)),
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert count == 1
+    assert count_again == 0
+    assert len(sent) == 1
+    assert list(state["versions"]) == ["1.0.3"]
+    assert "Version 1.0.3" in sent[0][1]
+
+
 def test_notify_recent_telegram_users_continues_after_send_error(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Broken")
