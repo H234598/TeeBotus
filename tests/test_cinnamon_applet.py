@@ -61,14 +61,18 @@ const context = {{
       popupMenu: {{}},
       settings: {{}}
     }},
-    gi: {{
-      Clutter: {{}},
-      St: {{}},
-      Gio: {{}},
-      GLib: {{
-        get_home_dir: () => "/tmp",
-        build_filenamev: (parts) => parts.join("/"),
-        find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
+        gi: {{
+          Clutter: {{}},
+          St: {{}},
+          Gio: {{}},
+          Pango: {{
+            EllipsizeMode: {{ NONE: "none", END: "end" }},
+            WrapMode: {{ WORD_CHAR: "word_char" }}
+          }},
+          GLib: {{
+            get_home_dir: () => "/tmp",
+            build_filenamev: (parts) => parts.join("/"),
+            find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -157,6 +161,36 @@ console.log(JSON.stringify({{before, after: applet.statusTimer, keepRunning, rem
     assert result == {"before": 42, "after": 0, "keepRunning": False, "removed": []}
 
 
+def test_cinnamon_applet_menu_labels_have_bounded_layout() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          const item = {
+            label: {
+              styles: [],
+              clutter_text: {},
+              set_style: function(style) { this.styles.push(style); }
+            }
+          };
+          applet._styleMenuItemLabel(item, { maxWidthEm: 31, wrap: true });
+          return {
+            styles: item.label.styles,
+            wrap: item.label.clutter_text.line_wrap,
+            wrapMode: item.label.clutter_text.line_wrap_mode,
+            ellipsize: item.label.clutter_text.ellipsize
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "styles": ["max-width: 31em;"],
+        "wrap": True,
+        "wrapMode": "word_char",
+        "ellipsize": "none",
+    }
+
+
 def test_cinnamon_applet_files_are_present_and_wired() -> None:
     metadata = json.loads((APPLET_DIR / "metadata.json").read_text(encoding="utf-8"))
     schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
@@ -208,6 +242,11 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "launcher.set_cwd(String(cwd))" in source
     assert "const ModalDialog = imports.ui.modalDialog;" in source
     assert "const Clutter = imports.gi.Clutter;" in source
+    assert "const Pango = imports.gi.Pango;" in source
+    assert "MENU_LABEL_WIDTH_EM = 42" in source
+    assert "_applyMenuLayout: function()" in source
+    assert "_styleMenuItemLabel: function(item, options)" in source
+    assert "item.label.clutter_text.ellipsize" in source
     assert "this.appletRemoved = false;" in source
     assert "this.spawnGeneration = 0;" in source
     assert "let spawnGeneration = this.spawnGeneration;" in source

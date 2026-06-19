@@ -6,6 +6,7 @@ const Clutter = imports.gi.Clutter;
 const St = imports.gi.St;
 const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
+const Pango = imports.gi.Pango;
 const Mainloop = imports.mainloop;
 
 const UUID = "teebotus@H234598";
@@ -26,6 +27,10 @@ const STATUS_TIMEOUT_MIN_SECONDS = 1;
 const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
+const MENU_MIN_WIDTH_EM = 34;
+const MENU_LABEL_WIDTH_EM = 42;
+const SUBMENU_MIN_WIDTH_EM = 44;
+const SUBMENU_LABEL_WIDTH_EM = 48;
 const MENU_LINE_LIMIT = 14;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
 const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-I", "-S", "-E", "-s", "-q", "-O", "-OO"];
@@ -257,9 +262,68 @@ TeeBotusApplet.prototype = {
     if (this.showActionsSection) this.menu.addMenuItem(this.actionsMenu);
     if (this.showQuickCommandsSection) this.menu.addMenuItem(this.quickCommandsMenu);
     if (this.showProjectSection) this.menu.addMenuItem(this.projectMenu);
+    this._applyMenuLayout();
     this._populateStaticMenus();
     this._populateDynamicMenus();
     this._updateHeader();
+  },
+
+  _applyMenuLayout: function() {
+    this._stylePopupMenu(this.menu, MENU_MIN_WIDTH_EM);
+    this._styleSubmenu(this.statusMenu);
+    this._styleSubmenu(this.runtimeMenu);
+    this._styleSubmenu(this.messengerMenu);
+    this._styleSubmenu(this.llmMenu);
+    this._styleSubmenu(this.apiMenu);
+    this._styleSubmenu(this.memoryMenu);
+    this._styleSubmenu(this.bibliothekarMenu);
+    this._styleSubmenu(this.proactiveMenu);
+    this._styleSubmenu(this.actionsMenu);
+    this._styleSubmenu(this.quickCommandsMenu);
+    this._styleSubmenu(this.projectMenu);
+  },
+
+  _stylePopupMenu: function(menu, widthEm) {
+    let style = "min-width: " + String(widthEm) + "em;";
+    if (menu && menu.box && menu.box.set_style) {
+      menu.box.set_style(style);
+    }
+    if (menu && menu.actor && menu.actor.set_style) {
+      menu.actor.set_style(style);
+    }
+  },
+
+  _styleSubmenu: function(menuItem) {
+    if (!menuItem || !menuItem.menu) {
+      return;
+    }
+    this._styleMenuItemLabel(menuItem, { maxWidthEm: MENU_LABEL_WIDTH_EM });
+    this._stylePopupMenu(menuItem.menu, SUBMENU_MIN_WIDTH_EM);
+  },
+
+  _styleMenuItemLabel: function(item, options) {
+    options = options || {};
+    if (!item || !item.label) {
+      return item;
+    }
+    let maxWidth = Number(options.maxWidthEm || SUBMENU_LABEL_WIDTH_EM);
+    if (item.label.set_style) {
+      item.label.set_style("max-width: " + String(maxWidth) + "em;");
+    }
+    try {
+      if (item.label.clutter_text) {
+        if (options.wrap && Pango && Pango.WrapMode) {
+          item.label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        }
+        item.label.clutter_text.line_wrap = Boolean(options.wrap);
+        if (Pango && Pango.EllipsizeMode) {
+          item.label.clutter_text.ellipsize = options.wrap ? Pango.EllipsizeMode.NONE : Pango.EllipsizeMode.END;
+        }
+      }
+    } catch (err) {
+      global.logError(err);
+    }
+    return item;
   },
 
   _populateStaticMenus: function() {
@@ -1257,11 +1321,15 @@ TeeBotusApplet.prototype = {
   },
 
   _menuLine: function(label, reactive) {
-    return new PopupMenu.PopupMenuItem(String(label || ""), { reactive: Boolean(reactive) });
+    return this._styleMenuItemLabel(
+      new PopupMenu.PopupMenuItem(String(label || ""), { reactive: Boolean(reactive) }),
+      { maxWidthEm: SUBMENU_LABEL_WIDTH_EM }
+    );
   },
 
   _actionItem: function(label, callback) {
     let item = new PopupMenu.PopupMenuItem(String(label || ""));
+    this._styleMenuItemLabel(item, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM });
     item.connect("activate", callback);
     return item;
   },
