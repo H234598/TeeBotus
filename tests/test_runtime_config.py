@@ -70,6 +70,23 @@ def test_openai_key_resolution_ignores_global_background_key():
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
 
 
+def test_openai_key_resolution_ignores_global_proactive_key():
+    env = {"OPENAI_API_KEY_PROACTIVE": "sk-global-proactive"}
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+
+
+def test_openai_key_resolution_ignores_legacy_instance_background_key():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_2": "sk-legacy-background-slot",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-legacy-background",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "sk-legacy-background-a, sk-legacy-background-b",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == ""
+
+
 def test_openai_key_resolution_prefers_proactive_key_before_background_key():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
@@ -82,7 +99,7 @@ def test_openai_key_resolution_prefers_proactive_key_before_background_key():
 
 def test_openai_key_resolution_supports_indexed_background_keys():
     env = {
-        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "sk-background-a, sk-background-b",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
     }
 

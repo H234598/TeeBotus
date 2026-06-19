@@ -132,13 +132,14 @@ def resolve_openai_key(
         f"OPENAI_API_KEYS_{instance_token}_{channel_token}",
         f"OPENAI_API_KEYS_{instance_token}",
     ]
-    if source.get(candidates[0]):
-        return source[candidates[0]]
-    resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
-    if resolved:
-        return resolved
-    if source.get(candidates[1]):
-        return source[candidates[1]]
+    if channel_token != "BACKGROUND":
+        if source.get(candidates[0]):
+            return source[candidates[0]]
+        resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
+        if resolved:
+            return resolved
+        if source.get(candidates[1]):
+            return source[candidates[1]]
     background_key = _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
     if background_key:
         return background_key
@@ -161,17 +162,12 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
         f"{raw_instance}_BACKGROUND_SERVICES_{slot}",
         f"{instance_token}_BACKGROUND_SERVICES_{slot}",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES_{slot}",
-        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_{slot}",
         f"{raw_instance}_BACKGROUND_SERVICES",
         f"{instance_token}_BACKGROUND_SERVICES",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES",
-        f"OPENAI_API_KEY_{instance_token}_BACKGROUND",
     ]
-    if channel_token != "BACKGROUND":
-        candidates.append(f"OPENAI_API_KEY_{channel_token}")
     list_candidates = [
         f"OPENAI_API_KEYS_{instance_token}_BACKGROUND_SERVICES",
-        f"OPENAI_API_KEYS_{instance_token}_BACKGROUND",
     ]
     if source.get(candidates[0]):
         return source[candidates[0]]
@@ -181,7 +177,7 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
     for key in candidates[1:]:
         if source.get(key):
             return source[key]
-    return _resolve_indexed_secret(source.get(list_candidates[1]), slot)
+    return ""
 
 
 def resolve_llm_setting(
