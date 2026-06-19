@@ -776,7 +776,7 @@ def test_resolve_proactive_role_openai_key_falls_back_to_global_and_background_k
     env = {
         "OPENAI_API_KEY_PROACTIVE": "sk-global-proactive",
         "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
-        "OPENAI_API_KEY_BACKGROUND": "sk-global-background",
+        "OPENAI_API_KEY_BACKGROUND": "fixture-global-background-key",
     }
 
     assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == "sk-global-proactive"
@@ -785,7 +785,7 @@ def test_resolve_proactive_role_openai_key_falls_back_to_global_and_background_k
         "worker",
         {
             "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
-            "OPENAI_API_KEY_BACKGROUND": "sk-global-background",
+            "OPENAI_API_KEY_BACKGROUND": "fixture-global-background-key",
         },
     ) == "sk-background"
 
@@ -965,7 +965,7 @@ def test_runtime_llm_planner_factory_uses_plan_services_key_before_background_ke
     factory = runtime_llm_planner_factory(
         instances_dir,
         env={
-            "Depressionsbot_PROACTIVE_PLAN_SERVICES": "sk-plan-services",
+            "Depressionsbot_PROACTIVE_PLAN_SERVICES": "fixture-plan-services-key",
             "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
             "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
         },
@@ -974,7 +974,7 @@ def test_runtime_llm_planner_factory_uses_plan_services_key_before_background_ke
     context = factory("Depressionsbot", store_for(instance_dir), "account")
 
     assert context is not None
-    assert created_keys == ["sk-plan-services"]
+    assert created_keys == ["fixture-plan-services-key"]
 
 
 def test_runtime_llm_planner_factory_uses_background_key_before_instance_key(tmp_path, monkeypatch) -> None:

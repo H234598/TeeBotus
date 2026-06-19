@@ -73,7 +73,10 @@ def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing
     assert not (accounts_root / "accounts" / ACCOUNT_ID / LLM_STATE_FILENAME).exists()
 
 
-def test_runtime_state_store_persists_previous_llm_response_id(tmp_path):
+def test_runtime_state_store_persists_previous_llm_response_id(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
@@ -84,12 +87,17 @@ def test_runtime_state_store_persists_previous_llm_response_id(tmp_path):
     reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-1"
+    llm_state_path = account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME
+    assert llm_state_path.exists()
     assert account_store.read_llm_state(ACCOUNT_ID)["kept"] == "value"
     assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-1"
-    assert (account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME).exists()
+    assert llm_state_path.exists()
 
 
-def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path):
+def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
