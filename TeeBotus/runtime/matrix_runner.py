@@ -736,21 +736,29 @@ def check_matrix_accounts(config: RuntimeConfig) -> tuple[MatrixAccountHealth, .
     healths: list[MatrixAccountHealth] = []
     seen_user_ids: dict[str, str] = {}
     for account in _matrix_accounts(config):
-        try:
-            _host, _port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
-        except MatrixRuntimeError as exc:
-            healths.append(MatrixAccountHealth(account=account, ok=False, target=account.matrix_homeserver, error=str(exc)))
-            continue
         user_id = str(account.matrix_user_id or "").strip()
         if not user_id:
+            try:
+                _host, _port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
+            except MatrixRuntimeError:
+                target = account.matrix_homeserver
             healths.append(MatrixAccountHealth(account=account, ok=False, target=target, error="missing Matrix user ID"))
             continue
         label = f"{account.instance_name}/{account.label}"
         previous_label = seen_user_ids.get(user_id)
         if previous_label is not None:
+            try:
+                _host, _port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
+            except MatrixRuntimeError:
+                target = account.matrix_homeserver
             healths.append(MatrixAccountHealth(account=account, ok=False, target=target, error=f"duplicate user ID with {previous_label}"))
             continue
         seen_user_ids[user_id] = label
+        try:
+            _host, _port, target = _matrix_homeserver_host_port(account.matrix_homeserver)
+        except MatrixRuntimeError as exc:
+            healths.append(MatrixAccountHealth(account=account, ok=False, target=account.matrix_homeserver, error=str(exc)))
+            continue
         healths.append(MatrixAccountHealth(account=account, ok=True, target=target))
     return tuple(healths)
 

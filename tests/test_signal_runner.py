@@ -1451,6 +1451,46 @@ def test_check_signal_accounts_reports_duplicate_phone_without_leaking_number(mo
     assert "+491234" not in health[1].error
 
 
+def test_check_signal_accounts_reports_duplicate_phone_even_when_first_service_is_invalid(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080/path",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8081",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+
+    health = check_signal_accounts(config)
+
+    assert health[0].ok is False
+    assert "darf keinen Pfad" in health[0].error
+    assert health[1].ok is False
+    assert health[1].target == "127.0.0.1:8081"
+    assert health[1].error == "duplicate phone number with DemoA/signal:1"
+
+
 def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(

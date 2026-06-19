@@ -1662,6 +1662,48 @@ def test_check_matrix_accounts_reports_duplicate_user_id_without_leaking_user_id
     assert "@bot:example" not in health[1].error
 
 
+def test_check_matrix_accounts_reports_duplicate_user_id_even_when_first_homeserver_is_invalid(tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-a.example/client",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-a",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-b.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-b",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("matrix",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+
+    health = check_matrix_accounts(config)
+
+    assert health[0].ok is False
+    assert "darf keinen Pfad" in health[0].error
+    assert health[1].ok is False
+    assert health[1].target == "matrix-b.example:443"
+    assert health[1].error == "duplicate user ID with DemoA/matrix:1"
+
+
 def test_matrix_homeserver_health_uses_normalized_host_port(monkeypatch) -> None:
     calls: list[tuple[tuple[str, int], float]] = []
 

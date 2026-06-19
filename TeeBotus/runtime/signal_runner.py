@@ -608,19 +608,23 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
     seen_phones: dict[str, str] = {}
     service_accounts_cache: dict[str, tuple[bool, list[Any], str]] = {}
     for account in _signal_accounts(config):
+        phone = str(account.signal_phone_number or "").strip()
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen_phones.get(phone)
+        if phone and previous_label is not None:
+            try:
+                _host, _port, target = _signal_service_host_port(account.signal_service)
+            except SignalRuntimeError:
+                target = account.signal_service
+            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=f"duplicate phone number with {previous_label}"))
+            continue
+        if phone:
+            seen_phones[phone] = label
         try:
             _host, _port, target = _signal_service_host_port(account.signal_service)
         except SignalRuntimeError as exc:
             healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc)))
             continue
-        phone = str(account.signal_phone_number or "").strip()
-        label = f"{account.instance_name}/{account.label}"
-        previous_label = seen_phones.get(phone)
-        if phone and previous_label is not None:
-            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=f"duplicate phone number with {previous_label}"))
-            continue
-        if phone:
-            seen_phones[phone] = label
         service_key = _signal_service_cache_key(account.signal_service)
         if service_key not in service_accounts_cache:
             try:
