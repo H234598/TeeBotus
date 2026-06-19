@@ -41,13 +41,15 @@ def notify_recent_telegram_users_for_version(
 ) -> int:
     normalized_version = _normalize_version_key(version)
     resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
+    resolved_now = now or datetime.now(timezone.utc)
+    state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
+    state = _load_state(account_store, state_path)
+    if _sql_state_backend_available(account_store) and _state_has_versions(state):
+        _write_state(account_store, state_path, state)
     if repo_root is not None and not github_has_version(repo_root, normalized_version):
         if on_skip is not None:
             on_skip(f"GitHub tag v{normalized_version} not found on remote")
         return 0
-    resolved_now = now or datetime.now(timezone.utc)
-    state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
-    state = _load_state(account_store, state_path)
     version_state = _version_state(state, normalized_version)
     sent_identities = set(_string_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
@@ -480,3 +482,8 @@ def _normalize_state(data: Any) -> dict[str, Any]:
     if not isinstance(versions, dict):
         normalized["versions"] = {}
     return normalized
+
+
+def _state_has_versions(state: dict[str, Any]) -> bool:
+    versions = state.get("versions")
+    return isinstance(versions, dict) and bool(versions)
