@@ -94,17 +94,17 @@ def evaluate_status_auth_gate(
         return StatusAuthGateResult(True, account_id)
     if not text_contains_status_auth_code(event.text, instance_name=event.instance, env=env):
         return StatusAuthGateResult(False, account_id, reason="unauthorized")
-    if event.chat_type != "private":
+    if not _is_private_chat_type(event.chat_type):
         return StatusAuthGateResult(False, account_id, reason="non_private_auth_attempt")
     account_id = account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
     if event.chat_id:
         account_store.update_identity_route(
-            event.identity_key,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            chat_type=event.chat_type,
-            adapter_slot=event.adapter_slot,
-        )
+        event.identity_key,
+        channel=event.channel,
+        chat_id=event.chat_id,
+        chat_type=_normalize_chat_type(event.chat_type),
+        adapter_slot=event.adapter_slot,
+    )
     authorize_status_recipient(account_store, account_id, event, now=now)
     return StatusAuthGateResult(False, account_id, action_text=STATUS_AUTH_CONFIRMATION_TEXT, reason="authorized")
 
@@ -156,3 +156,11 @@ def _status_auth_env_names(instance_name: str) -> tuple[tuple[str, bool], ...]:
 
 def _env_instance_token(instance_name: str) -> str:
     return re.sub(r"[^A-Z0-9]+", "_", str(instance_name or "").strip().upper()).strip("_")
+
+
+def _normalize_chat_type(chat_type: Any) -> str:
+    return str(chat_type or "").strip().casefold()
+
+
+def _is_private_chat_type(chat_type: Any) -> bool:
+    return _normalize_chat_type(chat_type) == "private"

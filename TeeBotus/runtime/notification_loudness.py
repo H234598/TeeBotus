@@ -31,7 +31,7 @@ def maybe_handle_notification_loudness_response(
     *,
     now: datetime | None = None,
 ) -> tuple[SendText, ...] | None:
-    if event.chat_type != "private":
+    if not _is_private_chat_type(event.chat_type):
         return None
     decision = _notification_loudness_decision(event.text, pending=_route_status(account_store, account_id, event) == "pending")
     if decision is None:
@@ -49,7 +49,7 @@ def maybe_notification_loudness_prompt_action(
     *,
     now: datetime | None = None,
 ) -> SendText | None:
-    if event.chat_type != "private" or not account_id:
+    if not _is_private_chat_type(event.chat_type) or not account_id:
         return None
     if not _event_has_current_private_route(account_store, event):
         return None
@@ -334,7 +334,7 @@ def _event_route(event: IncomingEvent) -> dict[str, Any]:
     return {
         "channel": event.channel,
         "chat_id": event.chat_id,
-        "chat_type": event.chat_type,
+        "chat_type": _normalize_chat_type(event.chat_type),
         "adapter_slot": event.adapter_slot,
     }
 
@@ -344,16 +344,23 @@ def _route_key(event: IncomingEvent) -> str:
 
 
 def _private_route(route: Any) -> bool:
-    return isinstance(route, Mapping) and route.get("chat_type") == "private" and bool(str(route.get("channel") or "").strip()) and bool(str(route.get("chat_id") or "").strip())
+    return (
+        isinstance(route, Mapping)
+        and _is_private_chat_type(route.get("chat_type"))
+        and bool(str(route.get("channel") or "").strip())
+        and bool(str(route.get("chat_id") or "").strip())
+    )
 
 
 def _event_has_current_private_route(account_store: AccountStore, event: IncomingEvent) -> bool:
     route = account_store.get_identity_route(event.identity_key)
     if not _private_route(route):
         return False
+    if not _is_private_chat_type(event.chat_type):
+        return False
     return (
-        str(route.get("channel") or "") == event.channel
-        and str(route.get("chat_id") or "") == event.chat_id
+        str(route.get("channel") or "").strip().casefold() == str(event.channel or "").strip().casefold()
+        and str(route.get("chat_id") or "").strip() == str(event.chat_id or "").strip()
         and _route_slot(route.get("adapter_slot")) == int(event.adapter_slot or 1)
     )
 
@@ -467,3 +474,11 @@ def _normalize_text(text: str) -> str:
     for char in ",.;:!?()[]{}\"'":
         normalized = normalized.replace(char, " ")
     return " ".join(normalized.split())
+
+
+def _normalize_chat_type(chat_type: Any) -> str:
+    return str(chat_type or "").strip().casefold()
+
+
+def _is_private_chat_type(chat_type: Any) -> bool:
+    return _normalize_chat_type(chat_type) == "private"

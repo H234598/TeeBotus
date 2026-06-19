@@ -30,6 +30,10 @@ def store(tmp_path) -> AccountStore:
 
 
 def event(identity_key: str, text: str = "Hallo") -> IncomingEvent:
+    return event_with_chat_type(identity_key, text=text, chat_type="private")
+
+
+def event_with_chat_type(identity_key: str, text: str = "Hallo", chat_type: str = "private") -> IncomingEvent:
     return IncomingEvent(
         event_id="telegram:1",
         instance="Depressionsbot",
@@ -38,12 +42,25 @@ def event(identity_key: str, text: str = "Hallo") -> IncomingEvent:
         account_id="",
         identity_key=identity_key,
         chat_id="chat-1",
-        chat_type="private",
+        chat_type=chat_type,
         sender_id=identity_key,
         sender_name=identity_key,
         text=text,
         message_ref="1",
     )
+
+
+def test_engine_asks_user_to_unmute_in_private_chat_type_variant(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime)
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    prepare_account_with_route(account_store, identity)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event_with_chat_type(identity, "/ping", chat_type="Private"))
+
+    assert len(actions) == 2
+    assert actions[1].text == NOTIFICATION_LOUDNESS_PROMPT
 
 
 def prepare_account_with_route(account_store: AccountStore, identity: str) -> str:

@@ -31,6 +31,7 @@ def event(
     text: str,
     *,
     channel: str = "telegram",
+    chat_type: str = "private",
     attachments: tuple[IncomingAttachment, ...] = (),
     link_previews: tuple[IncomingLinkPreview, ...] = (),
 ) -> IncomingEvent:
@@ -42,7 +43,7 @@ def event(
         account_id="",
         identity_key=identity_key,
         chat_id="chat-1",
-        chat_type="private",
+        chat_type=chat_type,
         sender_id=identity_key,
         sender_name=identity_key,
         text=text,
@@ -112,6 +113,18 @@ def test_status_auth_gate_silences_user_until_code_seen(tmp_path, monkeypatch):
     help_actions = engine.process(event(identity, "/help"))
     assert help_actions
     assert "Befehle" in help_actions[0].text
+
+
+def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "Mondbot, 18hhGfuu3 bitte Statuszugang aktivieren.", chat_type="Private"))
+
+    assert len(actions) == 1
+    assert "Statuszugang aktiviert" in actions[0].text
 
 
 def test_status_auth_state_authorized_tolerates_non_mapping_state(tmp_path, monkeypatch) -> None:
