@@ -151,6 +151,7 @@ def test_legacy_user_memory_import_dry_run_does_not_create_account(tmp_path: Pat
         provider=provider(),
     )
 
+    assert not (target_root / "Depressionsbot").exists()
     assert stats.sources == 1
     assert stats.entries_seen == 1
     assert stats.entries_imported == 1
@@ -159,6 +160,58 @@ def test_legacy_user_memory_import_dry_run_does_not_create_account(tmp_path: Pat
     store = AccountStore(target_root / "Depressionsbot" / "data" / "accounts", "Depressionsbot", secret_provider=provider())
     assert store.get_account_for_identity(telegram_identity_key("395935293")) is None
 
+
+def test_legacy_user_memory_import_main_expands_tilde_legacy_instances_path(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            "~/legacy",
+            "--target-instances-dir",
+            str(target_root),
+            "--json-output",
+            str(tmp_path / "import.json"),
+            "--markdown-output",
+            str(tmp_path / "import.md"),
+        ]
+    )
+
+    assert result == 0
+    assert (tmp_path / "import.json").exists()
+    assert (tmp_path / "import.md").exists()
+    assert (tmp_path / "target" / "Depressionsbot").exists()
+
+
+def test_legacy_user_memory_import_main_expands_tilde_report_outputs_and_creates_parents(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root)
+    report_json = Path("~/teebotus-import-output/legacy-import.json")
+    report_markdown = Path("~/teebotus-import-output/legacy-import.md")
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--json-output",
+            str(report_json),
+            "--markdown-output",
+            str(report_markdown),
+        ]
+    )
+
+    assert result == 0
+    assert (tmp_path / "teebotus-import-output" / "legacy-import.json").exists()
+    assert (tmp_path / "teebotus-import-output" / "legacy-import.md").exists()
 
 def test_legacy_user_memory_import_empty_source_does_not_create_account_or_reset_metadata(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
@@ -1132,7 +1185,7 @@ def test_legacy_user_memory_import_rehearsal_apply_writes_only_copy_while_bot_ru
     monkeypatch.setattr(legacy_import, "SecretToolInstanceSecretProvider", lambda **_kwargs: provider())
     legacy_root = tmp_path / "legacy"
     target_root = tmp_path / "target"
-    rehearsal_root = tmp_path / "rehearsal-instances"
+    rehearsal_root = tmp_path / "teebotus-rehearsal-instances"
     write_legacy_entries(legacy_root)
     (target_root / "Depressionsbot" / "data").mkdir(parents=True)
     json_output = tmp_path / "rehearsal.json"
@@ -1176,12 +1229,88 @@ def test_legacy_user_memory_import_rehearsal_apply_writes_only_copy_while_bot_ru
     assert "rehearsal_active: `True`" in markdown
 
 
+def test_legacy_user_memory_import_prepare_rehearsal_copy_dir_cleans_existing_directory(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    rehearsal_root = tmp_path / "rehearsal-root"
+    rehearsal_root.mkdir(parents=True)
+    (rehearsal_root / "old.txt").write_text("old", encoding="utf-8")
+
+    result = legacy_import._prepare_rehearsal_target_copy(legacy_root, rehearsal_root)
+
+    assert result == rehearsal_root
+    assert rehearsal_root.exists()
+    assert rehearsal_root.is_dir()
+    assert not (rehearsal_root / "old.txt").exists()
+
+
+def test_legacy_user_memory_import_prepare_rehearsal_copy_file_is_replaced(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    rehearsal_root = tmp_path / "rehearsal-root"
+    rehearsal_root.write_text("old", encoding="utf-8")
+
+    result = legacy_import._prepare_rehearsal_target_copy(legacy_root, rehearsal_root)
+
+    assert result == rehearsal_root
+    assert rehearsal_root.exists()
+    assert rehearsal_root.is_dir()
+    assert not (rehearsal_root / "old.txt").exists()
+
+
+def test_legacy_user_memory_import_prepare_rehearsal_copy_broken_symlink_is_replaced(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    target_dir = tmp_path / "does-not-exist"
+    rehearsal_link = tmp_path / "rehearsal-link"
+    rehearsal_link.symlink_to(target_dir)
+
+    result = legacy_import._prepare_rehearsal_target_copy(legacy_root, rehearsal_link)
+
+    assert result == rehearsal_link
+    assert rehearsal_link.exists()
+    assert rehearsal_link.is_dir()
+    assert not rehearsal_link.is_symlink()
+
+
+def test_legacy_user_memory_import_prepare_rehearsal_copy_rejects_same_path_as_source(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "teebotus-instances"
+    legacy_root.mkdir(parents=True)
+
+    with pytest.raises(SystemExit):
+        legacy_import._prepare_rehearsal_target_copy(legacy_root, legacy_root)
+    assert legacy_root.exists()
+    assert legacy_root.is_dir()
+
+
+def test_legacy_user_memory_import_prepare_rehearsal_copy_rejects_nested_path_within_source(tmp_path: Path) -> None:
+    legacy_root = tmp_path / "teebotus-instances"
+    legacy_root.mkdir(parents=True)
+    nested = legacy_root / "nested"
+
+    with pytest.raises(SystemExit):
+        legacy_import._prepare_rehearsal_target_copy(legacy_root, nested)
+    assert nested.exists() is False
+
+
+def test_legacy_user_memory_import_prepare_rehearsal_copy_rejects_parent_path_of_source(tmp_path: Path) -> None:
+    source_root = tmp_path / "teebotus"
+    source = source_root / "instances"
+    source_root.mkdir(parents=True)
+    source.mkdir()
+
+    with pytest.raises(SystemExit):
+        legacy_import._prepare_rehearsal_target_copy(source, source_root)
+    assert source_root.exists()
+    assert source.exists()
+
+
 def test_legacy_user_memory_import_rehearsal_requires_apply(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setattr(legacy_import, "_detect_running_teebotus_processes", lambda: [])
     legacy_root = tmp_path / "legacy"
     target_root = tmp_path / "target"
-    rehearsal_root = tmp_path / "rehearsal-instances"
+    rehearsal_root = tmp_path / "teebotus-rehearsal-instances"
     write_legacy_entries(legacy_root)
     target_root.mkdir()
 
@@ -1199,6 +1328,32 @@ def test_legacy_user_memory_import_rehearsal_requires_apply(tmp_path: Path, monk
     assert result == 2
     assert "requires --apply" in capsys.readouterr().err
     assert not rehearsal_root.exists()
+
+
+def test_legacy_user_memory_import_rehearsal_rejects_unsafe_copy_dir(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    rehearsal_root = tmp_path / "rehearsal-instances"
+    rehearsal_root.mkdir(parents=True)
+    (rehearsal_root / "old.txt").write_text("old", encoding="utf-8")
+    write_legacy_entries(legacy_root)
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--rehearsal-copy-dir",
+            str(rehearsal_root),
+        ]
+    )
+
+    assert result == 2
+    assert "unsafe rehearsal copy dir" in capsys.readouterr().err
+    assert rehearsal_root.exists()
+    assert (rehearsal_root / "old.txt").exists()
 
 
 def test_legacy_user_memory_import_sqlite_backups_are_unique_within_same_second(tmp_path: Path, monkeypatch) -> None:
