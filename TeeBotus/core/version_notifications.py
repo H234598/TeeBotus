@@ -707,16 +707,17 @@ def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
 
 
 def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
+    normalized_state = _normalize_state(state)
     if _sql_state_backend_available(account_store):
         account_store.write_instance_json_state(
             NOTIFICATION_STATE_FILENAME,
             NOTIFICATION_STATE_COLLECTION,
-            _normalize_state(state),
+            normalized_state,
         )
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(normalized_state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
 
 

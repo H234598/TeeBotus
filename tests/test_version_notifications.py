@@ -11,6 +11,7 @@ import pytest
 from TeeBotus.core.version_notifications import (
     _normalize_state,
     _normalize_version_key,
+    _write_state,
     build_version_notification_text,
     github_has_version,
     github_repo_url,
@@ -1011,6 +1012,29 @@ def test_version_notification_state_normalization_drops_unknown_top_level_fields
     )
 
     assert state == {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}}
+
+
+def test_version_notification_plaintext_writer_normalizes_state(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+
+    _write_state(
+        store,
+        state_path,
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": [" telegram:user:111 "],
+                    "debug": {"secret": "raw"},
+                }
+            },
+            "debug": {"secret": "raw"},
+        },
+    )
+
+    assert json.loads(state_path.read_text(encoding="utf-8")) == {
+        "versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}
+    }
 
 
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
