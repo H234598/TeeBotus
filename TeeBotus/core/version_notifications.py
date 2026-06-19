@@ -82,6 +82,7 @@ def notify_recent_telegram_users_for_version(
                     pass
             if _is_permanent_delivery_error(exc):
                 failed_identities[recipient.identity_key] = {
+                    "account_id": recipient.account_id,
                     "adapter_slot": recipient.adapter_slot,
                     "chat_id": recipient.chat_id,
                     "failed_at": resolved_now.isoformat(timespec="seconds"),
@@ -368,6 +369,9 @@ def _clear_resolved_failures(
 
 def _failed_delivery_route_matches(failure: object, recipient: VersionNotificationRecipient) -> bool:
     if not isinstance(failure, dict):
+        return False
+    failed_account_id = str(failure.get("account_id") or "").strip()
+    if failed_account_id and failed_account_id != recipient.account_id:
         return False
     failed_chat_id = _optional_int(failure.get("chat_id"))
     failed_slot = _optional_int(failure.get("adapter_slot"))

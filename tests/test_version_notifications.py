@@ -681,6 +681,7 @@ def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tm
     assert count_again == 0
     assert attempts == [111]
     failed = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failed["account_id"] == store.get_account_for_identity("telegram:user:111")
     assert failed["chat_id"] == 111
     assert failed["adapter_slot"] == 1
     assert "chat not found" in failed["reason"]
@@ -1185,6 +1186,51 @@ def test_notify_recent_telegram_users_skips_failed_route_across_identity_alias(t
     assert attempts == []
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert "telegram:username:ada" in state["versions"]["1.0.3"]["failed_identities"]
+
+
+def test_notify_recent_telegram_users_does_not_skip_failure_from_different_account(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    other_account_id = "b" * 128
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:user:222": {
+                                "account_id": other_account_id,
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [111]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert state["versions"]["1.0.3"]["failed_identities"]["telegram:user:222"]["account_id"] == other_account_id
+    assert account_id != other_account_id
 
 
 def test_notify_recent_telegram_users_skips_sent_account_across_identity_alias(tmp_path: Path) -> None:
