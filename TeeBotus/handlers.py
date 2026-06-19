@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -107,10 +108,14 @@ def _normalize_command(text: str) -> str:
 
 
 def _normalize_history_text(text: str) -> str:
-    return (
+    normalized = (
         text.casefold()
         .replace("ä", "ae")
         .replace("ö", "oe")
         .replace("ü", "ue")
         .replace("ß", "ss")
     )
+    spaced = re.sub(r"[^0-9a-z]+", " ", normalized).strip()
+    spaced = re.sub(r"\s+", " ", spaced)
+    compact = spaced.replace(" ", "")
+    return f"{spaced} {compact}".strip()
