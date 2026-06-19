@@ -343,6 +343,7 @@ def test_status_auth_report_cli_rejects_absolute_output_path(tmp_path: Path, cap
 
     assert result == 2
     assert "status-auth:" in capsys.readouterr().err
+    assert not absolute_path.exists()
 
 
 def test_status_auth_report_cli_rejects_parent_traversal_output_path(tmp_path: Path, capsys) -> None:
