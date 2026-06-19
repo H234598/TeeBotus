@@ -160,6 +160,11 @@ class WarningFallbackAccountMemoryBackend:
             self._warn(operation, exc)
             result = callback(self.fallback)
             self._copy_diagnostics(self.fallback)
+            if self._fallback_result_is_empty_after_primary_exception(operation, result):
+                stale_key = self._operation_stale_key(operation, account_id)
+                self._fallback_stale_set(operation).add(stale_key)
+                self._unrecoverable_fallback_set(operation).add(stale_key)
+                self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
             return result
 
     def _write(
@@ -310,6 +315,15 @@ class WarningFallbackAccountMemoryBackend:
             return bool(primary_index_read_error) and result == {}
         if operation.startswith("read_collection:"):
             return bool(primary_collection_skipped) and result == []
+        return False
+
+    def _fallback_result_is_empty_after_primary_exception(self, operation: str, result: Any) -> bool:
+        if operation == "read_entries":
+            return result == []
+        if operation == "read_index":
+            return result == {}
+        if operation.startswith("read_collection:"):
+            return result == []
         return False
 
     def _account_is_dirty(self, operation: str, account_id: str) -> bool:
