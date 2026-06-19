@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_python_package("h11", pins["h11"]),
                 _check_python_package("faster-whisper", pins["faster-whisper"]),
                 _check_python_package("litellm", pins["litellm"]),
+                _check_python_package("openai", pins["openai"]),
                 _check_python_package("python-dotenv", "1.2.2"),
                 _check_python_package("fastmcp", "3.4.2"),
                 _check_python_package("psycopg", PSYCOPG_VERSION),

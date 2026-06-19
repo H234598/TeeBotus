@@ -23,6 +23,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "h11==0.16.0",
                 "faster-whisper==1.2.1",
                 "litellm==1.83.7",
+                "openai==2.30.0",
                 "python-dotenv==1.2.2",
                 "fastmcp==3.4.2",
             ]
@@ -43,7 +44,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
     assert "faster-whisper==1.2.1" in commands[0]
     assert "litellm==1.83.7" not in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
-    assert commands[1][-2:] == ["h11==0.16.0", "litellm==1.83.7"]
+    assert commands[1][-3:] == ["h11==0.16.0", "litellm==1.83.7", "openai==2.30.0"]
     assert commands[2][-2:] == ["python-dotenv==1.2.2", "fastmcp==3.4.2"]
     assert commands[3][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
@@ -66,6 +67,7 @@ def test_adapter_dependency_dry_run_includes_native_installs(capsys) -> None:
     assert "signalbot==1.2.2" in output
     assert "matrix-nio==0.25.2" in output
     assert f"litellm=={_active_litellm_version()}" in output
+    assert f"openai=={_active_openai_version()}" in output
     assert "python-dotenv==1.2.2" in output
     assert "fastmcp==3.4.2" in output
     assert "download https://github.com/AsamK/signal-cli/releases/download/v0.14.5/signal-cli-0.14.5.tar.gz" in output
@@ -122,6 +124,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "package:signalbot" in called
     assert "package:python-dotenv" in called
     assert "package:fastmcp" in called
+    assert "package:openai" in called
     assert "package:psycopg" in called
     assert "package:psycopg-binary" in called
     assert "python_runtime_choice" in called
@@ -338,6 +341,12 @@ def _active_litellm_version() -> str:
     if sys.version_info >= (3, 14):
         return "1.83.7"
     return "1.89.2"
+
+
+def _active_openai_version() -> str:
+    if sys.version_info >= (3, 14):
+        return "2.30.0"
+    return "2.43.0"
 
 
 def _below_active_litellm_minimum() -> str:

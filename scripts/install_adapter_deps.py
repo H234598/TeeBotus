@@ -97,6 +97,7 @@ def build_python_install_commands(pins: dict[str, str], *, python: str, user: bo
             *pip_base,
             f"h11=={pins['h11']}",
             f"litellm=={pins['litellm']}",
+            f"openai=={pins['openai']}",
         ],
         [
             *pip_base,
