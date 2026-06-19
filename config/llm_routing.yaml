@@ -24,3 +24,7 @@ purposes:
   structured_decision:
     profile: hf_pool_structured
     fallback: local_ollama
+
+  codex_history_categorization:
+    profile: local_ollama
+    fallback: null

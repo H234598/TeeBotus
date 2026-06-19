@@ -506,6 +506,7 @@ Stand 2026-06-19:
 - `codex-history watch --post-index` aktualisiert den admin-only Bibliothekar-Export nach Watcher-Scans; `--post-index-qdrant` haengt optional den separaten Qdrant-Rebuild an.
 - `teebotus-codex-history-systemd` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
 - `teebotus-codex-history-systemd --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`.
+- `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -527,10 +528,14 @@ Stand 2026-06-19:
 	* `teebotus-codex-history-systemd --index-timer` erzeugt `teebotus-codex-history-index.service` und `teebotus-codex-history-index.timer`.
 	* Der Service ist `Type=oneshot` und laeuft mit `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `CPUWeight=10`, `IOWeight=10`.
 	* Default-Timer: `OnUnitActiveSec=6h`, `RandomizedDelaySec=15min`, `Persistent=true`.
-* Offen: lokale LLM-Kategorisierung im Low-Priority-Batch.
-* Kategorien fuer Qdrant sind eingebaut, aber noch deterministisch/statisch.
-* Ein geeignetes, Int8, lokales LLM darf die Kategorien für die Nachricht(en) festlegen.
-	* Es ist es klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.
+* Teilweise erledigt: lokale LLM-Kategorisierung im Low-Priority-Batch.
+	* `codex-history categorize --profile local_ollama` nutzt nur lokale LLM-Profile; Remote-Profile wie OpenAI/Gemini/Groq/HF-Pool werden fuer diesen Pfad abgelehnt.
+	* `codex-history index --categorize --categorize-profile local_ollama` kategorisiert vor Markdown-Export und optionalem Qdrant-Rebuild.
+	* `teebotus-codex-history-systemd --index-timer --index-categorize` haengt die Kategorisierung an den low-priority Timer-Service.
+	* LLM-Ausgaben werden gegen eine feste Kategorie-Whitelist normalisiert; Repo-, Status- und Admin-Scope-Tags bleiben deterministisch, damit kein Modell falsche Scope-Tags erzeugt.
+* Kategorien fuer Qdrant sind eingebaut. Ohne `--categorize` bleiben sie deterministisch/statisch; mit `--categorize` werden zusaetzliche lokale LLM-Tags persistiert.
+* Ein geeignetes, Int8, lokales LLM darf die Kategorien fuer die Nachricht(en) festlegen.
+	* Es ist klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.
 * User die keine Admins sind dürfen auf keinen Fall etwas von der Sammlung erfahren. 
 * Noch weniger (auf gar keinen verdammten Fall) dürfen sie Daten aus den Sammlungen erhalten.
 ### Phase 7: Grafische Aufbereitung

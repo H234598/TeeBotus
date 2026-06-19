@@ -6,12 +6,16 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
+
 from TeeBotus.admin.codex_history import (
     _normalize_remote_url,
     _repo_provider,
     acknowledge_codex_history_item,
     append_codex_history_summary,
+    build_local_codex_history_categorizer,
     build_codex_history_report,
+    categorize_codex_history_outbox,
     codex_history_bibliothekar_chunks,
     dispatch_codex_history_outbox,
     export_codex_history_bibliothekar_docs,
@@ -21,6 +25,7 @@ from TeeBotus.admin.codex_history import (
     main as codex_history_main,
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
+    run_codex_history_index,
     watch_codex_session_roots,
 )
 from TeeBotus.runtime.actions import SendAttachment
@@ -389,6 +394,81 @@ def test_codex_history_bibliothekar_chunks_are_admin_only_and_citeable(tmp_path:
     assert "project-history" in chunk["categories"]
     assert "codex-history" in chunk["text"]
     assert chunk["file_sha256"]
+
+
+def test_codex_history_categorize_persists_local_llm_categories(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "categorize-demo", version="1.9.1")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Secret- und Runtime-Fix",
+        bullets=["Auth-Guard repariert und systemd Runtime abgesichert."],
+    )
+
+    def fake_categorizer(_item: dict[str, object]) -> dict[str, object]:
+        return {
+            "categories": [
+                "change-security",
+                "risk-runtime-outage",
+                "repo-wrong",
+                "bad category",
+                "change-security",
+            ]
+        }
+
+    result = categorize_codex_history_outbox(
+        store,
+        categorizer=fake_categorizer,
+        now=datetime(2026, 6, 19, 13, tzinfo=timezone.utc),
+    )
+
+    assert result["ok"] is True
+    assert result["categorized"] == 1
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    indexing = persisted["indexing"]
+    assert indexing["category_source"] == "local_llm"
+    assert indexing["categorized_at"] == "2026-06-19T13:00:00+00:00"
+    assert "change-security" in indexing["categories"]
+    assert "risk-runtime-outage" in indexing["categories"]
+    assert "repo-wrong" not in indexing["categories"]
+    assert "bad-category" not in indexing["categories"]
+
+    exported = export_codex_history_bibliothekar_docs(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+    )
+    assert "risk-runtime-outage" in exported["files"][0]["categories"]
+    assert exported["files"][0]["item_id"] == item["id"]
+
+
+def test_codex_history_index_can_categorize_before_export_without_provider_call(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "categorize-index-demo", version="1.9.2")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="Benchmark gebaut", bullets=["Neue Latenzbenchmarks."])
+
+    result = run_codex_history_index(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+        categorize=True,
+        categorizer=lambda _item: {"categories": ["work-benchmark", "change-performance"]},
+    )
+
+    assert result["ok"] is True
+    assert result["categorize"]["categorized"] == 1
+    assert result["export"]["exported"] == 1
+    exported_text = Path(result["export"]["files"][0]["path"]).read_text(encoding="utf-8")
+    assert "work-benchmark" in exported_text
+    assert "change-performance" in exported_text
+
+
+def test_codex_history_local_categorizer_rejects_remote_profiles() -> None:
+    with pytest.raises(ValueError, match="local-only"):
+        build_local_codex_history_categorizer(profile="openai_premium", env={})
 
 
 def test_codex_history_cli_bibliothekar_export_filters_repo(tmp_path: Path, capsys) -> None:

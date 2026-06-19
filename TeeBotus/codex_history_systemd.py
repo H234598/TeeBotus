@@ -78,6 +78,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-limit", type=int, default=0, help="Limit codex-history index to latest N summaries after filtering; 0 means all.")
     parser.add_argument("--index-qdrant-url", default="", help="Override Qdrant URL for periodic index rebuild.")
     parser.add_argument("--index-qdrant-dry-run", action="store_true", help="Count periodic Qdrant chunks without writing Qdrant.")
+    parser.add_argument("--index-categorize", action="store_true", help="Run optional local Codex-History categorization in the periodic index job.")
+    parser.add_argument("--index-categorize-profile", default="local_ollama", help="Local-only LLM profile used by periodic Codex-History categorization.")
+    parser.add_argument("--index-categorize-dry-run", action="store_true", help="Run periodic categorization without persisting category updates.")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -127,6 +130,9 @@ def main(argv: list[str] | None = None) -> int:
                 limit=int(args.index_limit),
                 qdrant_url=args.index_qdrant_url,
                 qdrant_dry_run=bool(args.index_qdrant_dry_run),
+                categorize=bool(args.index_categorize),
+                categorize_profile=args.index_categorize_profile,
+                categorize_dry_run=bool(args.index_categorize_dry_run),
             )
             if args.index_timer
             else None
@@ -281,6 +287,9 @@ def render_codex_history_index_systemd_units(
     limit: int = 0,
     qdrant_url: str = "",
     qdrant_dry_run: bool = False,
+    categorize: bool = False,
+    categorize_profile: str = "local_ollama",
+    categorize_dry_run: bool = False,
 ) -> CodexHistoryIndexSystemdUnits:
     service_name = _service_name(service_name)
     timer_name = _timer_name(timer_name)
@@ -294,6 +303,7 @@ def render_codex_history_index_systemd_units(
     randomized_delay = _systemd_interval(randomized_delay)
     repo_filter = _optional_systemd_argument(repo, label="index repo filter")
     qdrant_url = _optional_systemd_argument(qdrant_url, label="index qdrant url")
+    categorize_profile = _optional_systemd_argument(categorize_profile, label="index categorize profile") or "local_ollama"
     index_limit = _non_negative_int(limit, label="index limit")
 
     command = [
@@ -319,6 +329,11 @@ def render_codex_history_index_systemd_units(
         command.extend(["--qdrant-url", _shell_quote(qdrant_url)])
     if qdrant_dry_run:
         command.append("--qdrant-dry-run")
+    if categorize:
+        command.append("--categorize")
+        command.extend(["--categorize-profile", _shell_quote(categorize_profile)])
+        if categorize_dry_run:
+            command.append("--categorize-dry-run")
 
     service_text = "\n".join(
         [

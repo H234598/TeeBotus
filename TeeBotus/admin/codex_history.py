@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 import re
 import subprocess
 import threading
@@ -44,6 +45,40 @@ CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
+CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
+CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
+CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
+    {
+        "change-feature",
+        "change-bugfix",
+        "change-test",
+        "change-docs",
+        "change-security",
+        "change-dependency",
+        "change-runtime",
+        "change-memory",
+        "change-bibliothekar",
+        "change-llm",
+        "change-refactor",
+        "change-migration",
+        "change-performance",
+        "change-observability",
+        "change-ui",
+        "change-cli",
+        "change-config",
+        "impact-user-visible",
+        "impact-admin-only",
+        "impact-data-model",
+        "risk-security",
+        "risk-data-loss",
+        "risk-cost",
+        "risk-runtime-outage",
+        "risk-privacy",
+        "work-planning",
+        "work-release",
+        "work-benchmark",
+    }
+)
 
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b")
 _TELEGRAM_TOKEN_RE = re.compile(r"\b\d{7,12}:[A-Za-z0-9_\-]{25,}\b")
@@ -124,6 +159,9 @@ class CodexHistoryReportOptions:
     repo: str = ""
     summary_limit: int = 20
     provider: InstanceSecretProvider | None = None
+
+
+CodexHistoryCategorizer = Callable[[Mapping[str, Any]], Mapping[str, Any] | Sequence[str] | str]
 
 
 def utc_now() -> str:
@@ -687,6 +725,160 @@ def codex_history_bibliothekar_chunks(
     return tuple(chunks)
 
 
+def categorize_codex_history_outbox(
+    store: AccountStore,
+    *,
+    repo: str = "",
+    limit: int = 0,
+    categorizer: CodexHistoryCategorizer | None = None,
+    profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
+    env: Mapping[str, str] | None = None,
+    dry_run: bool = False,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Annotate Codex history summaries with local, admin-only categories.
+
+    The default categorizer is deliberately local-only. Remote LLM profiles are
+    rejected before any provider call can happen.
+    """
+
+    timestamp = _iso_timestamp(now)
+    llm_categorizer = categorizer or build_local_codex_history_categorizer(profile=profile, env=env)
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    candidates = [item for item in _filter_outbox(rows, repo) if _codex_history_item_indexable(item)]
+    candidates = sorted(candidates, key=_summary_sort_key)
+    if limit > 0:
+        candidates = candidates[-int(limit) :]
+    candidate_ids = {str(item.get("id") or "").strip() for item in candidates if isinstance(item, Mapping)}
+    categorized: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+    updates: dict[str, dict[str, Any]] = {}
+    for item in candidates:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        base_categories = _codex_history_bibliothekar_categories(item, include_persisted=False)
+        try:
+            decision = llm_categorizer(item)
+            llm_categories = _codex_history_llm_categories_from_decision(decision)
+            categories = sorted(set(base_categories).union(llm_categories))
+            updates[item_id] = {
+                "categories": categories,
+                "category_source": "local_llm",
+                "category_model": _codex_history_categorizer_model(llm_categorizer, profile),
+                "categorized_at": timestamp,
+                "category_error": "",
+            }
+            categorized.append(
+                {
+                    "item_id": item_id,
+                    "summary_prefix": str(item.get("summary_prefix") or ""),
+                    "categories": categories,
+                    "category_source": "local_llm",
+                }
+            )
+        except Exception as exc:  # noqa: BLE001 - optional local LLMs fail in provider-specific ways.
+            detail = redact_codex_history_text(f"{type(exc).__name__}: {exc}")[:240]
+            updates[item_id] = {
+                "categories": sorted(base_categories),
+                "category_source": "deterministic_fallback",
+                "category_model": _codex_history_categorizer_model(llm_categorizer, profile),
+                "categorized_at": timestamp,
+                "category_error": detail,
+            }
+            errors.append(
+                {
+                    "item_id": item_id,
+                    "summary_prefix": str(item.get("summary_prefix") or ""),
+                    "error": detail,
+                }
+            )
+    if updates and not dry_run:
+        with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+            writable_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+            for row in writable_rows:
+                if not isinstance(row, dict):
+                    continue
+                item_id = str(row.get("id") or "").strip()
+                if item_id not in candidate_ids or item_id not in updates:
+                    continue
+                indexing = row.setdefault("indexing", {})
+                if not isinstance(indexing, dict):
+                    indexing = {}
+                    row["indexing"] = indexing
+                indexing.update(updates[item_id])
+                row["updated_at"] = timestamp
+            store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, writable_rows)
+    return {
+        "ok": not errors,
+        "dry_run": bool(dry_run),
+        "profile": str(profile or CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
+        "scanned": len(candidates),
+        "categorized": len(categorized),
+        "errors": errors,
+        "items": categorized,
+        "allowed_categories": sorted(CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST),
+    }
+
+
+def build_local_codex_history_categorizer(
+    *,
+    profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
+    env: Mapping[str, str] | None = None,
+) -> CodexHistoryCategorizer:
+    from TeeBotus.instructions import BotInstructions
+    from TeeBotus.llm.config import build_text_llm_client, load_llm_profiles, normalize_llm_provider
+
+    profile_name = str(profile or CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE
+    profiles = load_llm_profiles()
+    if profile_name not in profiles:
+        raise ValueError(f"unknown local Codex-History categorizer profile: {profile_name}")
+    llm_profile = profiles[profile_name]
+    if llm_profile.is_remote:
+        raise ValueError(f"Codex-History categorizer profile must be local-only: {profile_name}")
+    instructions = BotInstructions(
+        openai_enabled=False,
+        llm_enabled=True,
+        llm_provider=normalize_llm_provider(llm_profile.provider),
+        llm_model=llm_profile.model,
+        llm_base_url=llm_profile.base_url,
+        llm_timeout_seconds=90,
+        llm_max_output_tokens=300,
+        llm_temperature=0.0,
+        openai_timeout_seconds=90,
+        openai_max_output_tokens=300,
+        openai_rule_text=(
+            "Du kategorisierst nur TeeBotus Codex-History-Eintraege. "
+            "Antworte ausschliesslich als JSON-Objekt mit dem Feld categories."
+        ),
+    )
+    source = os.environ if env is None else env
+    api_key = str(source.get(llm_profile.api_key_env, "") or "").strip() if llm_profile.api_key_env else ""
+    client = build_text_llm_client(
+        instructions=instructions,
+        openai_client=None,
+        provider=llm_profile.provider,
+        model=llm_profile.model,
+        api_key=api_key,
+        api_base=llm_profile.base_url,
+        temperature=0.0,
+        max_tokens=300,
+        timeout=90,
+        use_instruction_fallback_models=False,
+        env=source,
+    )
+    if client is None or not hasattr(client, "create_reply"):
+        raise ValueError(f"Codex-History categorizer profile is not usable: {profile_name}")
+
+    def _categorize(item: Mapping[str, Any]) -> Mapping[str, Any]:
+        response = client.create_reply(_codex_history_category_prompt(item), instructions)  # type: ignore[attr-defined]
+        return _parse_codex_history_llm_category_response(str(getattr(response, "text", "") or ""))
+
+    setattr(_categorize, "category_model", llm_profile.model)
+    setattr(_categorize, "category_profile", profile_name)
+    return _categorize
+
+
 def run_codex_history_index(
     store: AccountStore,
     *,
@@ -699,10 +891,26 @@ def run_codex_history_index(
     qdrant_url: str = "",
     qdrant_dry_run: bool = False,
     qdrant_ensure: bool = False,
+    categorize: bool = False,
+    categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
+    categorize_dry_run: bool = False,
+    categorizer: CodexHistoryCategorizer | None = None,
+    env: Mapping[str, str] | None = None,
     secret_provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
     safe_instance_name = _safe_instance_name(instance_name)
     safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
+    category_report: dict[str, Any] = {}
+    if categorize:
+        category_report = categorize_codex_history_outbox(
+            store,
+            repo=repo,
+            limit=limit,
+            categorizer=categorizer,
+            profile=categorize_profile,
+            env=env,
+            dry_run=categorize_dry_run,
+        )
     export_report = export_codex_history_bibliothekar_docs(
         store,
         instance_dir=safe_instance_dir,
@@ -744,8 +952,9 @@ def run_codex_history_index(
     ensure_ok = not ensure_results or all(bool(result.get("ok")) for result in ensure_results)
     qdrant_ok = not qdrant_results or not any(str(result.get("status") or "").casefold() == "error" for result in qdrant_results)
     return {
-        "ok": bool(export_report.get("ok", True)) and ensure_ok and qdrant_ok,
+        "ok": bool(export_report.get("ok", True)) and bool(category_report.get("ok", True)) and ensure_ok and qdrant_ok,
         "instance": safe_instance_name,
+        "categorize": category_report,
         "export": export_report,
         "qdrant_ensure": ensure_results,
         "qdrant": qdrant_results,
@@ -1614,6 +1823,16 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     bibliothekar_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     bibliothekar_export_parser.add_argument("--no-overwrite", action="store_true")
 
+    categorize_parser = subparsers.add_parser("categorize")
+    categorize_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    categorize_parser.add_argument("--instances", default="")
+    categorize_parser.add_argument("--instance", default="")
+    categorize_parser.add_argument("--repo", default="")
+    categorize_parser.add_argument("--limit", type=int, default=0)
+    categorize_parser.add_argument("--profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
+    categorize_parser.add_argument("--dry-run", action="store_true")
+    categorize_parser.add_argument("--format", choices=("text", "json"), default="text")
+
     index_parser = subparsers.add_parser("index")
     index_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     index_parser.add_argument("--instances", default="")
@@ -1626,6 +1845,9 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--qdrant-url", default="")
     index_parser.add_argument("--qdrant-dry-run", action="store_true")
     index_parser.add_argument("--qdrant-ensure", action="store_true")
+    index_parser.add_argument("--categorize", action="store_true")
+    index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
+    index_parser.add_argument("--categorize-dry-run", action="store_true")
 
     dispatch_parser = subparsers.add_parser("dispatch")
     dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
@@ -1752,6 +1974,44 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         except (OSError, ValueError) as exc:
             print(f"bibliothekar-export failed: {exc}", file=sys.stderr)
             return 2
+    if args.command == "categorize":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            _ensure_explicit_instances_exist(instances_dir, selected_instances)
+            reports: list[dict[str, Any]] = []
+            for instance_name in discover_instances(instances_dir, selected_instances):
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                report = categorize_codex_history_outbox(
+                    store,
+                    repo=args.repo,
+                    limit=int(args.limit or 0),
+                    profile=args.profile,
+                    dry_run=bool(args.dry_run),
+                )
+                reports.append({"instance": instance_name, **report})
+            payload = {
+                "ok": not any(not report.get("ok") for report in reports),
+                "instances_dir": str(instances_dir),
+                "instances": reports,
+                "totals": {
+                    "scanned": sum(int(report.get("scanned") or 0) for report in reports),
+                    "categorized": sum(int(report.get("categorized") or 0) for report in reports),
+                    "errors": sum(len(report.get("errors") or []) for report in reports),
+                },
+            }
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_categorize_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"categorize failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "index":
         try:
             selected_instances = parse_csv(getattr(args, "instances", None))
@@ -1774,6 +2034,9 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         qdrant_url=args.qdrant_url,
                         qdrant_dry_run=bool(args.qdrant_dry_run),
                         qdrant_ensure=bool(args.qdrant_ensure),
+                        categorize=bool(args.categorize),
+                        categorize_profile=args.categorize_profile,
+                        categorize_dry_run=bool(args.categorize_dry_run),
                         secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
                     )
                 )
@@ -2079,10 +2342,14 @@ def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
 
 
 def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
-    totals = {"exported": 0, "skipped": 0, "qdrant_points": 0, "qdrant_errors": 0}
+    totals = {"categorized": 0, "category_errors": 0, "exported": 0, "skipped": 0, "qdrant_points": 0, "qdrant_errors": 0}
     for report in reports:
         if not isinstance(report, Mapping):
             continue
+        category_report = report.get("categorize", {})
+        if isinstance(category_report, Mapping):
+            totals["categorized"] += int(category_report.get("categorized") or 0)
+            totals["category_errors"] += len(category_report.get("errors") or [])
         export = report.get("export", {})
         if isinstance(export, Mapping):
             totals["exported"] += int(export.get("exported") or 0)
@@ -2173,10 +2440,43 @@ def _render_bibliothekar_export_report(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_categorize_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Categorize", ""]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.append(f"scanned: {totals.get('scanned', 0)}")
+        lines.append(f"categorized: {totals.get('categorized', 0)}")
+        lines.append(f"errors: {totals.get('errors', 0)}")
+    for instance in payload.get("instances", []) or []:
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        lines.append(f"  profile: {instance.get('profile', '')}")
+        lines.append(f"  dry_run: {bool(instance.get('dry_run', False))}")
+        lines.append(f"  scanned: {instance.get('scanned', 0)}")
+        lines.append(f"  categorized: {instance.get('categorized', 0)}")
+        for item in instance.get("items", []) or []:
+            if not isinstance(item, Mapping):
+                continue
+            lines.append(
+                "  item: "
+                f"{item.get('summary_prefix', '')} "
+                f"{item.get('item_id', '')} "
+                f"categories={','.join(item.get('categories', []) or [])}"
+            )
+        for item in instance.get("errors", []) or []:
+            if isinstance(item, Mapping):
+                lines.append(f"  error: {item.get('summary_prefix', '')} {item.get('error', '')}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_index_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Index", ""]
     totals = payload.get("totals", {})
     if isinstance(totals, Mapping):
+        lines.append(f"categorized: {totals.get('categorized', 0)}")
+        lines.append(f"category_errors: {totals.get('category_errors', 0)}")
         lines.append(f"exported: {totals.get('exported', 0)}")
         lines.append(f"skipped: {totals.get('skipped', 0)}")
         lines.append(f"qdrant_points: {totals.get('qdrant_points', 0)}")
@@ -2187,9 +2487,21 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         export = instance.get("export", {})
         if not isinstance(export, Mapping):
             export = {}
+        category_report = instance.get("categorize", {})
+        if not isinstance(category_report, Mapping):
+            category_report = {}
         lines.append("")
         lines.append(f"Instance: {instance.get('instance', '')}")
         lines.append(f"  ok: {bool(instance.get('ok', False))}")
+        if category_report:
+            lines.append(
+                "  categorize: "
+                f"profile={category_report.get('profile', '')} "
+                f"dry_run={bool(category_report.get('dry_run', False))} "
+                f"scanned={category_report.get('scanned', 0)} "
+                f"categorized={category_report.get('categorized', 0)} "
+                f"errors={len(category_report.get('errors') or [])}"
+            )
         lines.append(f"  destination: {export.get('destination', '')}")
         lines.append(f"  exported: {export.get('exported', 0)}")
         lines.append(f"  skipped: {export.get('skipped', 0)}")
@@ -2561,7 +2873,105 @@ def _codex_history_bibliothekar_chunk(item: Mapping[str, Any], *, destination: P
     }
 
 
-def _codex_history_bibliothekar_categories(item: Mapping[str, Any]) -> list[str]:
+def _codex_history_category_prompt(item: Mapping[str, Any]) -> str:
+    project = item.get("project", {})
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    payload = {
+        "task": "Select matching categories for this TeeBotus Codex-History entry.",
+        "rules": [
+            "Return only JSON.",
+            "Use only categories from allowed_categories.",
+            "Do not invent repo/status/admin scope categories.",
+            "Prefer 2 to 8 categories.",
+        ],
+        "schema": {"categories": ["change-feature", "risk-security"], "rationale": "optional short German reason"},
+        "allowed_categories": sorted(CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST),
+        "entry": {
+            "repo_name": redact_codex_history_text(project.get("repo_name", "")),
+            "summary_prefix": redact_codex_history_text(item.get("summary_prefix") or version.get("summary_prefix") or ""),
+            "title": redact_codex_history_text(summary.get("title", "")),
+            "bullets": [redact_codex_history_text(value)[:280] for value in _sequence_values(summary.get("bullets", []))[:12]],
+            "changed_files": [redact_codex_history_text(value)[:240] for value in _sequence_values(summary.get("changed_files", []))[:24]],
+            "tests": [redact_codex_history_text(value)[:240] for value in _sequence_values(summary.get("tests", []))[:12]],
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _parse_codex_history_llm_category_response(text: str) -> dict[str, Any]:
+    payload = _json_object_from_text(text)
+    if not payload:
+        raise ValueError("local categorizer returned no JSON object")
+    categories = _normalize_codex_history_llm_categories(payload.get("categories", []))
+    if not categories:
+        raise ValueError("local categorizer returned no allowed categories")
+    rationale = redact_codex_history_text(payload.get("rationale", "")).strip()[:240]
+    result: dict[str, Any] = {"categories": categories}
+    if rationale:
+        result["rationale"] = rationale
+    return result
+
+
+def _codex_history_llm_categories_from_decision(decision: Mapping[str, Any] | Sequence[str] | str) -> list[str]:
+    if isinstance(decision, Mapping):
+        return _normalize_codex_history_llm_categories(decision.get("categories", []))
+    return _normalize_codex_history_llm_categories(decision)
+
+
+def _normalize_codex_history_llm_categories(value: object) -> list[str]:
+    raw_values: list[str] = []
+    if isinstance(value, str):
+        raw_values = [part.strip() for part in re.split(r"[,;\n]+", value) if part.strip()]
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        raw_values = [str(item or "").strip() for item in value if str(item or "").strip()]
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_values:
+        category = re.sub(r"[^a-z0-9_.-]+", "-", raw.casefold()).strip(".-_")
+        if category not in CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST:
+            continue
+        if category in seen:
+            continue
+        seen.add(category)
+        result.append(category)
+    return result[:32]
+
+
+def _json_object_from_text(text: str) -> dict[str, Any]:
+    value = str(text or "").strip()
+    if not value:
+        return {}
+    try:
+        payload = json.loads(value)
+        return payload if isinstance(payload, dict) else {}
+    except json.JSONDecodeError:
+        pass
+    start = value.find("{")
+    end = value.rfind("}")
+    if start < 0 or end <= start:
+        return {}
+    try:
+        payload = json.loads(value[start : end + 1])
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _codex_history_categorizer_model(categorizer: object, profile: str) -> str:
+    model = str(getattr(categorizer, "category_model", "") or "").strip()
+    if model:
+        return model
+    return str(getattr(categorizer, "category_profile", "") or profile or "").strip()
+
+
+def _codex_history_bibliothekar_categories(item: Mapping[str, Any], *, include_persisted: bool = True) -> list[str]:
     project = item.get("project", {})
     summary = item.get("summary", {})
     if not isinstance(project, Mapping):
@@ -2599,6 +3009,10 @@ def _codex_history_bibliothekar_categories(item: Mapping[str, Any]) -> list[str]
     for category, needles in category_terms.items():
         if any(needle in text for needle in needles):
             categories.add(category)
+    if include_persisted:
+        indexing = item.get("indexing", {})
+        if isinstance(indexing, Mapping):
+            categories.update(_normalize_codex_history_llm_categories(indexing.get("categories", [])))
     return sorted(categories)
 
 
@@ -2623,6 +3037,12 @@ def _join_codex_history_summary_values(value: object) -> str:
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return " ".join(str(item or "") for item in value)
     return ""
+
+
+def _sequence_values(value: object) -> list[str]:
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [str(item or "") for item in value if str(item or "").strip()]
+    return []
 
 
 def _codex_history_bibliothekar_filename(item: Mapping[str, Any]) -> str:
