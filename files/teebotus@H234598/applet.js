@@ -25,6 +25,7 @@ const STATUS_REFRESH_MIN_SECONDS = 15;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MENU_LINE_LIMIT = 14;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
+const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-I", "-S", "-E", "-s", "-q", "-O", "-OO"];
 const PROBLEM_STATUSES = [
   "broken",
   "config_conflict",
@@ -1250,7 +1251,7 @@ TeeBotusApplet.prototype = {
   },
 
   _pythonArgs: function() {
-    return this._safeExecutableArgs(this.pythonCommand, [DEFAULT_PYTHON]);
+    return this._safePythonArgs(this.pythonCommand, [DEFAULT_PYTHON]);
   },
 
   _pythonPath: function() {
@@ -1328,6 +1329,20 @@ TeeBotusApplet.prototype = {
     let args = this._commandArgs(value, fallbackArgs);
     if (args.length === 0 || !this._isSafeExecutable(args[0])) {
       return fallbackArgs;
+    }
+    return args;
+  },
+
+  _safePythonArgs: function(value, fallback) {
+    let fallbackArgs = (fallback || []).slice();
+    let args = this._commandArgs(value, fallbackArgs);
+    if (args.length === 0 || !this._isSafeExecutable(args[0])) {
+      return fallbackArgs;
+    }
+    for (let index = 1; index < args.length; index++) {
+      if (SAFE_PYTHON_PREFIX_FLAGS.indexOf(String(args[index] || "")) < 0) {
+        return fallbackArgs;
+      }
     }
     return args;
   },

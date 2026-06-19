@@ -149,12 +149,14 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this.spawnGeneration += 1;" in source
     assert "_commandArgs: function(value, fallback)" in source
     assert "GLib.shell_parse_argv(raw)" in source
-    assert "return this._safeExecutableArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
+    assert "return this._safePythonArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._safeExecutableArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
     assert "_safeExecutableArgs: function(value, fallback)" in source
+    assert "_safePythonArgs: function(value, fallback)" in source
     assert "_isSafeExecutable: function(value)" in source
+    assert "const SAFE_PYTHON_PREFIX_FLAGS = " in source
     assert "_safeLocalPath: function(value, fallback)" in source
     assert "_libraryPath: function()" in source
     assert "_safeProjectUrl: function(value, fallback)" in source
@@ -563,6 +565,10 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
           let invalidStatusCommand = applet._statusCommand();
           let invalidCodex = applet._codexUsageArgs();
           let invalidTerminal = applet._terminalArgs();
+          applet.pythonCommand = "/usr/bin/python3 -c print(1)";
+          let dangerousPythonCommand = applet._statusCommand();
+          applet.pythonCommand = "/usr/bin/python3 -m other";
+          let moduleOverrideCommand = applet._statusCommand();
           applet.pythonCommand = "/usr/bin/python3 -B";
           applet.codexUsageCommand = "codex-usage --profile daily";
           applet.terminalCommand = "xterm -hold";
@@ -571,6 +577,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
             invalidStatusCommand: invalidStatusCommand,
             invalidCodex: invalidCodex,
             invalidTerminal: invalidTerminal,
+            dangerousPythonCommand: dangerousPythonCommand,
+            moduleOverrideCommand: moduleOverrideCommand,
             validStatusCommand: validStatusCommand,
             validCodex: applet._codexUsageArgs(),
             validTerminal: applet._terminalArgs(),
@@ -589,6 +597,11 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/usr/bin/python3'"
     assert result["invalidCodex"] == ["codex-usage"]
     assert result["invalidTerminal"] == ["gnome-terminal", "--"]
+    assert result["dangerousPythonCommand"][0] == "/usr/bin/python3"
+    assert "-c" not in result["dangerousPythonCommand"]
+    assert "print(1)" not in result["dangerousPythonCommand"]
+    assert result["moduleOverrideCommand"][0] == "/usr/bin/python3"
+    assert "other" not in result["moduleOverrideCommand"]
     assert result["validStatusCommand"][:2] == ["/usr/bin/python3", "-B"]
     assert result["validStatusCommand"][result["validStatusCommand"].index("--python") + 1] == "'/usr/bin/python3' '-B'"
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
