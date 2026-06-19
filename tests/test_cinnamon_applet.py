@@ -74,6 +74,7 @@ const context = {{
     }},
     mainloop: {{
       source_remove: () => {{}},
+      timeout_add: () => 0,
       timeout_add_seconds: () => 0
     }}
   }}
@@ -132,12 +133,18 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert schema["status-timeout-seconds"]["default"] == 30
     assert "const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;" in source
     assert "this.statusTimeoutSeconds = DEFAULT_STATUS_TIMEOUT_SECONDS;" in source
-    assert "this._positiveInt(this.statusTimeoutSeconds, DEFAULT_STATUS_TIMEOUT_SECONDS)" in source
+    assert "this._statusTimeoutSeconds()" in source
+    assert "STATUS_TIMEOUT_MAX_SECONDS = 300" in source
+    assert "STATUS_TIMEOUT_GRACE_SECONDS = 5" in source
+    assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
     assert "this.menuManager.addMenu(this.menu)" in source
     assert "Gio.SubprocessLauncher.new" in source
-    assert "}, this._repoPath());" in source
+    assert "}, this._repoPath(), { timeoutMs:" in source
+    assert "this._spawn(argv, (stdout, stderr, ok) => {" in source
+    assert "options = options || {};" in source
+    assert "process.force_exit();" in source
     assert "launcher.set_cwd(String(cwd))" in source
     assert "const ModalDialog = imports.ui.modalDialog;" in source
     assert "const Clutter = imports.gi.Clutter;" in source
@@ -607,6 +614,39 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
     assert result["validTerminal"] == ["xterm", "-hold", "-e"]
     assert result["unsafeChecks"] == [False, False, False, True]
+
+
+def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let captured = null;
+          applet.statusTimeoutSeconds = 999999;
+          applet.repoPath = "/repo";
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawn = function(argv, callback, cwd, options) {
+            captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
+            callback("{\\"ok\\":true,\\"unit\\":{},\\"health\\":{},\\"runtime\\":{}}", "", true);
+          };
+          applet._refreshStatus();
+          return {
+            captured: captured,
+            runningAfterCallback: applet.statusRunning,
+            statusText: applet.statusText
+          };
+        })()
+        """
+    )
+
+    command = result["captured"]["argv"]
+    assert command[command.index("--timeout") + 1] == "300"
+    assert result["captured"]["cwd"] == "/repo"
+    assert result["captured"]["options"]["timeoutMs"] == 305000
+    assert result["captured"]["runningBeforeCallback"] is True
+    assert result["runningAfterCallback"] is False
+    assert result["statusText"].startswith("Health")
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

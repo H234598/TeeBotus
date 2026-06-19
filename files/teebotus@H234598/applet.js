@@ -22,6 +22,9 @@ const DEFAULT_COMMITS_URL = "https://github.com/H234598/TeeBotus/commits/main";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
 const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
+const STATUS_TIMEOUT_MIN_SECONDS = 1;
+const STATUS_TIMEOUT_MAX_SECONDS = 300;
+const STATUS_TIMEOUT_GRACE_SECONDS = 5;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MENU_LINE_LIMIT = 14;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
@@ -852,7 +855,7 @@ TeeBotusApplet.prototype = {
       }
       this._buildMenu();
       this._updatePanel();
-    }, this._repoPath());
+    }, this._repoPath(), { timeoutMs: (this._statusTimeoutSeconds() + STATUS_TIMEOUT_GRACE_SECONDS) * 1000 });
   },
 
   _statusCommand: function() {
@@ -873,7 +876,7 @@ TeeBotusApplet.prototype = {
       "--python",
       this._pythonPath(),
       "--timeout",
-      String(this._positiveInt(this.statusTimeoutSeconds, DEFAULT_STATUS_TIMEOUT_SECONDS))
+      String(this._statusTimeoutSeconds())
     ]);
   },
 
@@ -988,7 +991,7 @@ TeeBotusApplet.prototype = {
     }
   },
 
-  _spawnJson: function(argv, callback, cwd) {
+  _spawnJson: function(argv, callback, cwd, options) {
     this._spawn(argv, (stdout, stderr, ok) => {
       if (!ok) {
         callback(null, stderr || _("Command failed"));
@@ -999,13 +1002,25 @@ TeeBotusApplet.prototype = {
       } catch (err) {
         callback(null, _("Invalid JSON from helper: ") + String(err));
       }
-    }, cwd);
+    }, cwd, options);
   },
 
-  _spawn: function(argv, callback, cwd) {
+  _spawn: function(argv, callback, cwd, options) {
+    options = options || {};
     let applet = this;
     let spawnGeneration = this.spawnGeneration;
+    let done = false;
+    let timeoutId = 0;
+    let process = null;
     let finish = function(stdout, stderr, ok) {
+      if (done) {
+        return;
+      }
+      done = true;
+      if (timeoutId) {
+        Mainloop.source_remove(timeoutId);
+        timeoutId = 0;
+      }
       if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {
         return;
       }
@@ -1016,7 +1031,21 @@ TeeBotusApplet.prototype = {
       if (cwd) {
         launcher.set_cwd(String(cwd));
       }
-      let process = launcher.spawnv(argv);
+      process = launcher.spawnv(argv);
+      let timeoutMs = Number(options.timeoutMs || 0);
+      if (timeoutMs > 0) {
+        timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
+          try {
+            if (process && !process.get_if_exited()) {
+              process.force_exit();
+            }
+          } catch (err) {
+            global.logError(err);
+          }
+          finish("", _("Command timed out"), false);
+          return false;
+        });
+      }
       process.communicate_utf8_async(null, null, (proc, result) => {
         try {
           let [, stdout, stderr] = proc.communicate_utf8_finish(result);
@@ -1405,6 +1434,24 @@ TeeBotusApplet.prototype = {
   _positiveInt: function(value, fallback) {
     let parsed = parseInt(value, 10);
     return parsed > 0 ? parsed : fallback;
+  },
+
+  _boundedInt: function(value, fallback, minValue, maxValue) {
+    let parsed = parseInt(value, 10);
+    if (!(parsed >= minValue)) {
+      parsed = fallback;
+    }
+    if (parsed < minValue) {
+      parsed = minValue;
+    }
+    if (parsed > maxValue) {
+      parsed = maxValue;
+    }
+    return parsed;
+  },
+
+  _statusTimeoutSeconds: function() {
+    return this._boundedInt(this.statusTimeoutSeconds, DEFAULT_STATUS_TIMEOUT_SECONDS, STATUS_TIMEOUT_MIN_SECONDS, STATUS_TIMEOUT_MAX_SECONDS);
   },
 
   _safeUnitToken: function(value) {
