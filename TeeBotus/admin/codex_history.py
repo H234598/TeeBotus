@@ -1598,7 +1598,7 @@ def _ensure_explicit_instances_exist(instances_dir: Path, requested_instances: S
     if not normalized_instances:
         return
     safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
-    available = set(discover_instances(safe_instances_dir, normalized_instances))
+    available = {path.name for path in safe_instances_dir.iterdir() if path.is_dir()}
     missing: list[str] = []
     for name in normalized_instances:
         if not name:
