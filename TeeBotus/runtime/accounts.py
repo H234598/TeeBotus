@@ -838,6 +838,34 @@ def _safe_account_filename(value: str) -> str:
     return filename
 
 
+def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
+    if not path:
+        raise AccountStoreError(f"{operation} path is not safe: {path}")
+    prepared = Path(path)
+    if not prepared.name:
+        raise AccountStoreError(f"{operation} path is not safe: {path}")
+    if any(part in {".", ".."} for part in prepared.parts):
+        raise AccountStoreError(f"{operation} path contains unsafe path segments: {path}")
+    checked_roots: list[Path] = []
+    for root in allowed_roots:
+        try:
+            checked_roots.append(Path(root).resolve())
+        except OSError as exc:
+            raise AccountStoreError(f"{operation} root is not valid: {root}") from exc
+    if not checked_roots:
+        return prepared
+    normalized_candidates: list[Path] = []
+    for root in checked_roots:
+        normalized_candidates.append(root / prepared if not prepared.is_absolute() else prepared)
+        try:
+            normalized = normalized_candidates[-1].resolve()
+        except OSError:
+            normalized = normalized_candidates[-1]
+        if normalized == root or normalized.is_relative_to(root):
+            return normalized
+    raise AccountStoreError(f"{operation} path is outside expected roots: {path}")
+
+
 def _safe_collection_name(value: str) -> str:
     name = str(value or "").strip()
     allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
@@ -851,6 +879,14 @@ class EncryptedJsonVault:
     instance_name: str
     provider: InstanceSecretProvider
     purpose: str = INSTANCE_MAPPING_KEY_PURPOSE
+    root: Path | None = None
+
+    def _safe_path(self, path: Path, *, operation: str) -> Path:
+        return _safe_rooted_path(
+            path,
+            allowed_roots=([self.root] if self.root is not None else []),
+            operation=f"encrypted vault {operation}",
+        )
 
     @property
     def key(self) -> bytes:
@@ -860,6 +896,7 @@ class EncryptedJsonVault:
         return key
 
     def read_text(self, path: Path, default: str = "") -> str:
+        path = self._safe_path(path, operation="read")
         try:
             raw = path.read_bytes()
         except FileNotFoundError:
@@ -869,6 +906,7 @@ class EncryptedJsonVault:
         return self.decrypt(raw, kind=path.name).decode("utf-8")
 
     def write_text(self, path: Path, text: str) -> None:
+        path = self._safe_path(path, operation="write")
         self._guard_existing_payload_decryptable(path)
         _atomic_write_bytes(path, self.encrypt(str(text or "").encode("utf-8"), kind=path.name))
 
@@ -953,6 +991,7 @@ class EncryptedJsonVault:
         return f"TeeBotus:{self.instance_name}:{self.purpose}:{kind}:v{MAPPING_VERSION}".encode("utf-8")
 
     def _guard_existing_payload_decryptable(self, path: Path) -> None:
+        path = self._safe_path(path, operation="existing payload check")
         try:
             raw = path.read_bytes()
         except FileNotFoundError:
@@ -997,10 +1036,10 @@ class AccountStore:
 
     @property
     def vault(self) -> EncryptedJsonVault:
-        return EncryptedJsonVault(self.instance_name, self.secret_provider)
+        return EncryptedJsonVault(self.instance_name, self.secret_provider, root=self.root)
 
     def vault_for_purpose(self, purpose: str) -> EncryptedJsonVault:
-        return EncryptedJsonVault(self.instance_name, self.secret_provider, purpose=purpose)
+        return EncryptedJsonVault(self.instance_name, self.secret_provider, purpose=purpose, root=self.root)
 
     @property
     def account_memory_vault(self) -> EncryptedJsonVault:
@@ -1069,7 +1108,7 @@ class AccountStore:
         if tool_provider is None:
             return
         for path in paths:
-            if _looks_like_teebotus_encrypted_payload(path):
+            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 tool_provider.require_existing_secret(self.instance_name, purpose, reason=reason, path=path)
                 return
 
@@ -1144,10 +1183,16 @@ class AccountStore:
         return purpose in self._secret_guard_purpose_set
 
     def _mapping_secret_is_required(self) -> bool:
-        return any(_looks_like_teebotus_encrypted_payload(path) for path in self._mapping_secret_payload_paths())
+        return any(
+            _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root,))
+            for path in self._mapping_secret_payload_paths()
+        )
 
     def _memory_secret_is_required(self) -> bool:
-        if any(_looks_like_teebotus_encrypted_payload(path) for path in self._memory_secret_payload_paths()):
+        if any(
+            _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent))
+            for path in self._memory_secret_payload_paths()
+        ):
             return True
         for path in self._sqlite_memory_payload_paths():
             if _sqlite_memory_has_instance_payload_rows(path, self.instance_name):
@@ -1191,12 +1236,18 @@ class AccountStore:
         *,
         reason: str,
     ) -> None:
-        vault = EncryptedJsonVault(self.instance_name, StaticSecretProvider(secret), purpose=purpose)
+        vault = EncryptedJsonVault(
+            self.instance_name,
+            StaticSecretProvider(secret),
+            purpose=purpose,
+            root=self.root,
+        )
         for path in paths:
-            if not _looks_like_teebotus_encrypted_payload(path):
+            if not _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 continue
             try:
-                vault.decrypt(path.read_bytes(), kind=path.name)
+                safe_path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="candidate vault payload")
+                vault.decrypt(safe_path.read_bytes(), kind=safe_path.name)
             except Exception as exc:  # noqa: BLE001
                 raise AccountStoreError(
                     "refusing to record instance secret fingerprint because existing encrypted "
@@ -1288,7 +1339,7 @@ class AccountStore:
             try:
                 secrets_doc = self._load_secrets()
             except AccountStoreError:
-                if _looks_like_teebotus_encrypted_payload(self.secrets_path):
+                if _looks_like_teebotus_encrypted_payload(self.secrets_path, allowed_roots=(self.root,)):
                     return self.secrets_path
                 raise
             if any(_account_secret_payload_has_verifier(payload) for payload in secrets_doc.values()):
@@ -1299,7 +1350,7 @@ class AccountStore:
             if not account_dir.is_dir():
                 continue
             verifier_path = account_dir / SECRET_VERIFIER_FILENAME
-            if _secret_verifier_file_has_payload(verifier_path):
+            if _secret_verifier_file_has_payload(verifier_path, allowed_roots=(self.root,)):
                 return verifier_path
         return None
 
@@ -2531,7 +2582,7 @@ class AccountStore:
         try:
             return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(path):
+            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 raise
             return dict(default)
 
@@ -3013,25 +3064,27 @@ class AccountStore:
         return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
 
     def _read_json_with_fallback(self, path: Path, default: dict[str, Any], *, vault: EncryptedJsonVault) -> dict[str, Any]:
+        path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="legacy account json read")
         if not path.exists():
             return dict(default)
         try:
             return vault.read_json(path, default)
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(path):
+            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 raise
-            return _read_json_object(path)
+            return _read_json_object(path, allowed_roots=(self.root, self.root.parent))
 
     def _write_json_with_vault(self, path: Path, data: dict[str, Any], *, vault: EncryptedJsonVault) -> None:
         vault.write_json(path, data)
 
     def _read_jsonl_with_fallback(self, path: Path, *, vault: EncryptedJsonVault) -> list[dict[str, Any]]:
+        path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="legacy account jsonl read")
         if not path.exists():
             return []
         try:
             return vault.read_jsonl(path)
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(path):
+            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 raise
             return _read_jsonl_plain(path)
 
@@ -3162,9 +3215,9 @@ class AccountStore:
         try:
             return self.vault.read_json(profile_path, {})
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(profile_path):
+            if _looks_like_teebotus_encrypted_payload(profile_path, allowed_roots=(self.root,)):
                 raise
-            return _read_json_object(profile_path)
+            return _read_json_object(profile_path, allowed_roots=(self.root,))
 
     def _write_account_profile(self, account_id: str, profile: dict[str, Any]) -> None:
         self.vault.write_json(self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME, profile)
@@ -3310,7 +3363,12 @@ class AccountStore:
                 child.unlink(missing_ok=True)
 
 
-def _looks_like_teebotus_encrypted_payload(path: Path) -> bool:
+def _looks_like_teebotus_encrypted_payload(
+    path: Path,
+    *,
+    allowed_roots: Iterable[Path] = (),
+) -> bool:
+    path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="encrypted payload inspection")
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
@@ -3331,7 +3389,8 @@ def _account_secret_payload_has_verifier(payload: Any) -> bool:
     return False
 
 
-def _secret_verifier_file_has_payload(path: Path) -> bool:
+def _secret_verifier_file_has_payload(path: Path, *, allowed_roots: Iterable[Path] = ()) -> bool:
+    path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="secret verifier inspection")
     try:
         raw = path.read_bytes()
     except FileNotFoundError:
@@ -3485,7 +3544,8 @@ def _is_any_teebotus_encrypted_payload(raw: bytes) -> bool:
     )
 
 
-def _read_json_object(path: Path) -> dict[str, Any]:
+def _read_json_object(path: Path, *, allowed_roots: Iterable[Path] = ()) -> dict[str, Any]:
+    path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="legacy JSON read")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:

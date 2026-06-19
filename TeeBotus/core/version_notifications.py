@@ -24,6 +24,24 @@ SEMVER_RE = re.compile(
 )
 
 
+def _safe_instance_name(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("instance name must not be empty")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in text):
+        raise ValueError("instance name contains invalid control characters")
+    if text in {".", ".."} or "/" in text or "\\" in text:
+        raise ValueError("instance name must be a single path segment")
+    return text
+
+
+def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
+    text = str(value)
+    if "\x00" in text:
+        raise ValueError(f"{operation} contains invalid control character")
+    return Path(text).expanduser().resolve()
+
+
 @dataclass(frozen=True)
 class VersionNotificationRecipient:
     instance_name: str
@@ -49,11 +67,13 @@ def notify_recent_telegram_users_for_version(
     now: datetime | None = None,
 ) -> int:
     normalized_version = _normalize_version_key(version)
+    safe_instance_name = _safe_instance_name(instance_name)
+    safe_repo_root = _safe_repo_root(repo_root, operation="repository lookup") if repo_root is not None else None
     resolved_now = now or datetime.now(timezone.utc)
-    state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
-    state = _load_state(account_store, state_path)
+    state_path = _notification_state_path(instances_dir, safe_instance_name)
+    state = _load_state(account_store, instances_dir, safe_instance_name)
     if state_path.exists() or _notification_state_has_versions(state) or _sql_state_collection_has_rows(account_store):
-        _write_state(account_store, state_path, state)
+        _write_state(account_store, instances_dir, safe_instance_name, state)
     if not normalized_version:
         if on_skip is not None:
             on_skip("version is empty")
@@ -68,7 +88,12 @@ def notify_recent_telegram_users_for_version(
     resolved_repo_url = repo_url or None
     github_version_checked = False
     sent_count = 0
-    for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
+    for recipient in recent_telegram_recipients(
+        account_store,
+        instance_name=safe_instance_name,
+        adapter_slot=adapter_slot,
+        now=resolved_now,
+    ):
         if _sent_delivery_matches_recipient(sent_identities, recipient, identities) or _sent_delivery_matches_recipient(
             historical_sent_identities,
             recipient,
@@ -80,7 +105,7 @@ def notify_recent_telegram_users_for_version(
             sent_identities.add(recipient.identity_key)
             if missing_sent_alias or failed_identities != previous_failures:
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_incrementally(account_store, state_path, state)
+                _write_state_incrementally(account_store, instances_dir, safe_instance_name, state)
             continue
         matched_failure = _matched_failed_delivery(failed_identities, recipient, identities)
         if matched_failure is None:
@@ -88,16 +113,16 @@ def notify_recent_telegram_users_for_version(
         if matched_failure is not None:
             if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure):
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_incrementally(account_store, state_path, state)
+                _write_state_incrementally(account_store, instances_dir, safe_instance_name, state)
             continue
         if repo_root is not None and not github_version_checked:
-            if not github_has_version(repo_root, normalized_version):
+            if not github_has_version(safe_repo_root, normalized_version):
                 if on_skip is not None:
                     on_skip(f"GitHub tag v{normalized_version} not found on remote")
                 return sent_count
             github_version_checked = True
         if resolved_repo_url is None:
-            resolved_repo_url = github_repo_url(repo_root or Path.cwd())
+            resolved_repo_url = github_repo_url(safe_repo_root or Path.cwd())
         message = build_version_notification_text(
             version=normalized_version,
             repo_url=resolved_repo_url,
@@ -120,16 +145,20 @@ def notify_recent_telegram_users_for_version(
                     "reason": _delivery_error_reason(exc),
                 }
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-                _write_state_incrementally(account_store, state_path, state)
+                _write_state_incrementally(account_store, instances_dir, safe_instance_name, state)
             continue
         _clear_resolved_failures(failed_identities, recipient, identities)
         sent_identities.add(recipient.identity_key)
         _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-        _write_state_incrementally(account_store, state_path, state)
+        _write_state_incrementally(account_store, instances_dir, safe_instance_name, state)
         sent_count += 1
     _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
-    _write_state(account_store, state_path, state)
+    _write_state(account_store, instances_dir, safe_instance_name, state)
     return sent_count
+
+
+def _notification_state_path(instances_dir: Path, instance_name: str) -> Path:
+    return Path(instances_dir) / _safe_instance_name(instance_name) / "data" / NOTIFICATION_STATE_FILENAME
 
 
 def recent_telegram_recipients(
@@ -259,6 +288,7 @@ def _inline_text(value: object) -> str:
 
 
 def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:
+    safe_repo_root = _safe_repo_root(repo_root, operation="git ls-remote")
     normalized_version = _normalize_version_key(version)
     if not normalized_version:
         return False
@@ -266,7 +296,7 @@ def github_has_version(repo_root: Path, version: str, *, remote: str = "origin")
     try:
         result = subprocess.run(
             ["git", "ls-remote", "--exit-code", "--tags", remote, tag],
-            cwd=repo_root,
+            cwd=safe_repo_root,
             text=True,
             capture_output=True,
             check=False,
@@ -285,10 +315,11 @@ def github_has_version(repo_root: Path, version: str, *, remote: str = "origin")
 
 
 def github_repo_url(repo_root: Path, *, remote: str = "origin") -> str:
+    safe_repo_root = _safe_repo_root(repo_root, operation="git remote")
     try:
         result = subprocess.run(
             ["git", "remote", "get-url", remote],
-            cwd=repo_root,
+            cwd=safe_repo_root,
             text=True,
             capture_output=True,
             check=False,
@@ -1032,7 +1063,8 @@ def _valid_timestamp_string(value: object) -> str:
     return text if _parse_datetime(text) is not None else ""
 
 
-def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
+def _load_state(account_store: AccountStore, instances_dir: Path, instance_name: str) -> dict[str, Any]:
+    path = _notification_state_path(instances_dir, instance_name)
     if _sql_state_backend_available(account_store):
         state = _normalize_state(
             account_store.read_instance_json_state(
@@ -1043,13 +1075,14 @@ def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
             )
         )
         if path.exists():
-            state = _merge_notification_states(_read_legacy_state(account_store, path), state)
+            state = _merge_notification_states(_read_legacy_state(account_store, instances_dir, instance_name), state)
         return state
-    return _read_legacy_state(account_store, path)
+    return _read_legacy_state(account_store, instances_dir, instance_name)
 
 
-def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
+def _write_state(account_store: AccountStore, instances_dir: Path, instance_name: str, state: dict[str, Any]) -> None:
     normalized_state = _normalize_state(state)
+    path = _notification_state_path(instances_dir, instance_name)
     if _sql_state_backend_available(account_store):
         if _notification_state_has_versions(normalized_state):
             account_store.write_instance_json_state(
@@ -1070,8 +1103,8 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
     tmp.replace(path)
 
 
-def _write_state_incrementally(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
-    _write_state(account_store, path, state)
+def _write_state_incrementally(account_store: AccountStore, instances_dir: Path, instance_name: str, state: dict[str, Any]) -> None:
+    _write_state(account_store, instances_dir, instance_name, state)
 
 
 def _sync_version_delivery_state(
@@ -1115,7 +1148,8 @@ def _notification_state_has_versions(state: dict[str, Any]) -> bool:
     return isinstance(versions, dict) and bool(versions)
 
 
-def _read_legacy_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
+def _read_legacy_state(account_store: AccountStore, instances_dir: Path, instance_name: str) -> dict[str, Any]:
+    path = _notification_state_path(instances_dir, instance_name)
     if not path.exists():
         return {"versions": {}}
     reader = getattr(account_store, "_read_legacy_instance_json_state", None)

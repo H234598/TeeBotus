@@ -807,6 +807,30 @@ def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) 
     assert "ffmpeg" in sent[0][1]
 
 
+@pytest.mark.parametrize(
+    "instance_name",
+    [
+        "../Evil",
+        "..",
+        ".",
+        "Demo/../../etc",
+        "Demo\\Backup",
+    ],
+)
+def test_notify_recent_telegram_users_rejects_unsafe_instance_name(tmp_path: Path, instance_name: str) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+
+    with pytest.raises(ValueError, match="instance name"):
+        notify_recent_telegram_users_for_version(
+            version="1.0.3",
+            instances_dir=tmp_path / "instances",
+            instance_name=instance_name,
+            account_store=store,
+            send_message=lambda _chat_id, _text: None,
+        )
+
+
 def test_notify_recent_telegram_users_normalizes_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
@@ -4786,20 +4810,40 @@ def test_notify_recent_telegram_users_treats_empty_repo_url_as_remote_lookup(
 
 
 def test_github_has_version_normalizes_uppercase_version_prefix(tmp_path: Path, monkeypatch) -> None:
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], dict[str, object]]] = []
 
     class Result:
         returncode = 0
         stdout = "refs/tags/v1.0.3"
 
     def fake_run(args, **_kwargs):
-        calls.append(list(args))
+        calls.append((list(args), dict(_kwargs)))
         return Result()
 
     monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", fake_run)
 
     assert github_has_version(tmp_path, "V1.0.3") is True
-    assert calls[0][-1] == "v1.0.3"
+    assert calls[0][0][-1] == "v1.0.3"
+    assert calls[0][1].get("cwd") == tmp_path.resolve()
+
+
+def test_github_has_version_uses_normalized_repo_root_for_cwd(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "refs/tags/v1.0.3"
+
+    calls: list[object] = []
+
+    def fake_run(args, **kwargs):
+        calls.append(kwargs["cwd"])
+        return Result()
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", fake_run)
+    normalized_root = (tmp_path / "..").resolve()
+
+    assert github_has_version(tmp_path / "..", "1.0.3") is True
+
+    assert calls[0] == normalized_root
 
 
 def test_github_has_version_rejects_unrelated_remote_tag_output(tmp_path: Path, monkeypatch) -> None:
@@ -4950,6 +4994,24 @@ def test_github_repo_url_uses_default_for_encoded_control_remote(tmp_path: Path,
 
     assert repo_url == "https://github.com/H234598/TeeBotus"
     assert "%0A" not in repo_url
+
+
+def test_github_repo_url_uses_normalized_repo_root_for_cwd(tmp_path: Path, monkeypatch) -> None:
+    calls: list[object] = []
+
+    class Result:
+        returncode = 0
+        stdout = "https://github.com/H234598/TeeBotus.git\n"
+
+    def fake_run(args, **kwargs):
+        calls.append(kwargs["cwd"])
+        return Result()
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", fake_run)
+    normalized_root = (tmp_path / "..").resolve()
+
+    assert github_repo_url(tmp_path / "..") == "https://github.com/H234598/TeeBotus"
+    assert calls[0] == normalized_root
 
 
 def test_version_notification_text_strips_repo_url_credentials() -> None:
