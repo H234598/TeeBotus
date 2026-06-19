@@ -50,11 +50,15 @@ def notify_recent_telegram_users_for_version(
     state = _load_state(account_store, state_path)
     version_state = _version_state(state, normalized_version)
     sent_identities = set(_string_list(version_state.get("sent_identities")))
+    identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
     version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
-        if recipient.identity_key in sent_identities or _failed_delivery_matches_recipient(failed_identities, recipient):
+        if _sent_delivery_matches_recipient(sent_identities, recipient, identities):
+            sent_identities.add(recipient.identity_key)
+            continue
+        if _failed_delivery_matches_recipient(failed_identities, recipient):
             continue
         message = build_version_notification_text(
             version=normalized_version,
@@ -270,6 +274,41 @@ def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipie
         route_key = (recipient.account_id, recipient.chat_id, recipient.adapter_slot)
         unique.setdefault(route_key, recipient)
     return sorted(unique.values(), key=lambda item: item.identity_key)
+
+
+def _sent_delivery_matches_recipient(
+    sent_identities: set[str],
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> bool:
+    if recipient.identity_key in sent_identities:
+        return True
+    for identity_key in sent_identities:
+        payload = identities.get(identity_key)
+        if not isinstance(payload, dict):
+            continue
+        account_id = str(payload.get("account_id") or "")
+        if account_id != recipient.account_id:
+            continue
+        if _identity_route_matches_recipient(identity_key, payload, recipient):
+            return True
+    return False
+
+
+def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any], recipient: VersionNotificationRecipient) -> bool:
+    route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
+    route_channel = str(route.get("channel") or "telegram").strip().casefold()
+    if route_channel != "telegram":
+        return False
+    route_chat_type = str(route.get("chat_type") or "").strip().casefold()
+    if route_chat_type and route_chat_type != "private":
+        return False
+    route_slot = _normalize_adapter_slot(route.get("adapter_slot"), default=1)
+    chat_id_text = str(route.get("chat_id") or "").strip()
+    if not chat_id_text and identity_key.startswith("telegram:user:"):
+        chat_id_text = identity_key.removeprefix("telegram:user:")
+    chat_id = _optional_int(chat_id_text)
+    return chat_id == recipient.chat_id and route_slot == recipient.adapter_slot
 
 
 def _is_permanent_delivery_error(exc: Exception) -> bool:
