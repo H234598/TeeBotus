@@ -647,6 +647,8 @@ def test_notify_recent_telegram_users_merges_multiple_sqlite_state_rows(tmp_path
         "telegram:user:222",
         "telegram:user:333",
     ]
+    compacted = backend.read_collection(INSTANCE_STATE_ACCOUNT_ID, "version_notifications")
+    assert compacted == [state]
 
 
 def test_notify_recent_telegram_users_records_permanent_error_when_on_error_fails(tmp_path: Path) -> None:

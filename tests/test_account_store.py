@@ -1298,6 +1298,8 @@ def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_pat
     assert state["previous_response_ids"] == ["resp-b", "resp-a"]
     assert state["profile"] == {"tone": "ruhig", "provider": "gemini"}
     assert state["updated_at"] == "2026-06-14T11:59:00+00:00"
+    compacted = backend.read_collection(account_id, "llm_state")
+    assert compacted == [state]
 
 
 def test_sqlite_account_memory_refuses_destructive_write_with_wrong_secret(tmp_path):
