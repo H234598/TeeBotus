@@ -656,6 +656,8 @@ def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, 
         if existing_failure is not None:
             failure = _merge_failure_payload(existing_failure, failure)
         failed_identities[identity_key] = failure
+    for sent_identity in sent_identities:
+        failed_identities.pop(sent_identity, None)
     if failed_identities or "failed_identities" in base or "failed_identities" in incoming:
         merged["failed_identities"] = dict(sorted(failed_identities.items()))
     return merged
