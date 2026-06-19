@@ -2111,7 +2111,6 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
             notify_runtime_status_admin_accounts(
                 instances_dir=config.instances_dir,
                 selected_instances=tuple(instance.instance_name for instance in config.instances),
-                status_output="",
                 problem_lines=problem_lines,
                 env=os.environ,
             )

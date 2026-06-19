@@ -151,7 +151,7 @@ async def notify_runtime_status_admin_accounts(
     *,
     instances_dir: Path,
     selected_instances: Sequence[str],
-    status_output: str,
+    status_output: str = "",
     problem_lines: tuple[str, ...] | None = None,
     env: Mapping[str, str] | None = None,
     store_factory: StoreFactory | None = None,
