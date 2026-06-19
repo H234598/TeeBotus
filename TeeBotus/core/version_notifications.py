@@ -63,8 +63,13 @@ def notify_recent_telegram_users_for_version(
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
         if _sent_delivery_matches_recipient(sent_identities, recipient, identities):
+            missing_sent_alias = recipient.identity_key not in sent_identities
+            previous_failures = dict(failed_identities)
             _clear_resolved_failures(failed_identities, recipient, identities)
             sent_identities.add(recipient.identity_key)
+            if missing_sent_alias or failed_identities != previous_failures:
+                _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
+                _write_state_if_sql_available(account_store, state_path, state)
             continue
         if _failed_delivery_matches_recipient(failed_identities, recipient, identities):
             continue
