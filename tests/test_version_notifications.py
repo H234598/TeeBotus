@@ -496,6 +496,42 @@ def test_notify_recent_telegram_users_retries_transient_delivery_error(tmp_path:
     assert state["versions"]["1.0.3"]["failed_identities"] == {}
 
 
+def test_notify_recent_telegram_users_retries_when_failed_route_changes(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Moved")
+    attempts: list[int] = []
+    sent: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        if chat_id == 111:
+            raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+        sent.append(chat_id)
+
+    notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        adapter_slot=2,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+
+    assert attempts == [111, 222]
+    assert sent == [222]
+    assert count == 1
+
+
 def test_notify_recent_telegram_users_requires_github_version_when_repo_root_is_given(tmp_path: Path, monkeypatch) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")

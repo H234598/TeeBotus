@@ -54,7 +54,7 @@ def notify_recent_telegram_users_for_version(
         version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
-        if recipient.identity_key in sent_identities or recipient.identity_key in failed_identities:
+        if recipient.identity_key in sent_identities or _failed_delivery_matches_recipient(failed_identities, recipient):
             continue
         message = build_version_notification_text(
             version=version,
@@ -263,6 +263,26 @@ def _is_permanent_delivery_error(exc: Exception) -> bool:
             "forbidden: bot",
         )
     )
+
+
+def _failed_delivery_matches_recipient(failed_identities: dict[str, object], recipient: VersionNotificationRecipient) -> bool:
+    failure = failed_identities.get(recipient.identity_key)
+    if failure is None:
+        return False
+    if not isinstance(failure, dict):
+        return True
+    failed_chat_id = _optional_int(failure.get("chat_id"))
+    failed_slot = _optional_int(failure.get("adapter_slot"))
+    if failed_chat_id is None or failed_slot is None:
+        return True
+    return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
+
+
+def _optional_int(value: object) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _delivery_error_reason(exc: Exception) -> str:
