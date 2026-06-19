@@ -5,7 +5,6 @@
 #
 # This cannot be represented as one normal pip resolver input because
 # nio-bot 1.0.2.post1 declares matrix-nio==0.20.*, while TeeBotus' verified
-# runtime contract uses matrix-nio==0.25.2 plus h11==0.16.0. On Python 3.14,
-# litellm==1.83.7 also declares python-dotenv==1.0.1 while TeeBotus validates
-# python-dotenv==1.2.2 through a sequenced install.
+# runtime contract uses matrix-nio==0.25.2 plus h11==0.16.0. The [tools] and [llm]
+# pins are therefore sequenced in a controlled install order.
 psycopg[binary]==3.3.4

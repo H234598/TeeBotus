@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 MIN_SAFE_LITELLM_VERSION = "1.84.0"
 PY313_LITELLM_VERSION = "1.89.2"
-PY314_COMPATIBLE_LITELLM_VERSION = "1.83.7"
+PY314_COMPATIBLE_LITELLM_VERSION = "1.89.2"
 PSYCOPG_VERSION = "3.3.4"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -184,7 +184,7 @@ def _check_python_runtime_choice(version_info: tuple[int, int, int] | None = Non
         return (
             True,
             "python runtime choice=advisory current="
-            f"{current_label} recommended=3.13 reason=litellm_latest_excludes_python3.14 "
+            f"{current_label} recommended=3.13 reason=openai_latest_excludes_python3.14 "
             f"active_litellm={PY314_COMPATIBLE_LITELLM_VERSION} active_openai=2.30.0 "
             f"py313_litellm={PY313_LITELLM_VERSION} py313_openai=2.43.0 resolver=override",
         )

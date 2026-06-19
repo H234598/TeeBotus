@@ -19,7 +19,7 @@ PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLAN2_OPTIONAL_EXTRAS = ("llm", "rag", "agents", "tools")
 BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 MIN_SAFE_LITELLM_VERSION = "1.84.0"
-PY314_COMPATIBLE_LITELLM_VERSION = "1.83.7"
+PY314_COMPATIBLE_LITELLM_VERSION = "1.89.2"
 
 
 def main(argv: list[str] | None = None) -> int:

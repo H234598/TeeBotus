@@ -22,7 +22,7 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
                 "blurhash-python==1.2.2",
                 "h11==0.16.0",
                 "faster-whisper==1.2.1",
-                "litellm==1.83.7",
+                "litellm==1.89.2",
                 "openai==2.30.0",
                 "python-dotenv==1.2.2",
                 "fastmcp==3.4.2",
@@ -42,9 +42,9 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
     assert "Pillow>=9.3.0" in commands[0]
     assert "h11==0.16.0" not in commands[0]
     assert "faster-whisper==1.2.1" in commands[0]
-    assert "litellm==1.83.7" not in commands[0]
+    assert "litellm==1.89.2" not in commands[0]
     assert "nio-bot==1.0.2.post1" not in commands[0]
-    assert commands[1][-3:] == ["h11==0.16.0", "litellm==1.83.7", "openai==2.30.0"]
+    assert commands[1][-3:] == ["h11==0.16.0", "litellm==1.89.2", "openai==2.30.0"]
     assert commands[2][-2:] == ["python-dotenv==1.2.2", "fastmcp==3.4.2"]
     assert commands[3][-2:] == ["--no-deps", "nio-bot==1.0.2.post1"]
 
@@ -178,8 +178,7 @@ def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
 
         [project.optional-dependencies]
         llm = [
-            "litellm==1.89.2; python_version < '3.14'",
-            "litellm==1.83.7; python_version >= '3.14'",
+            "litellm==1.89.2",
             "openai==2.43.0; python_version < '3.14'",
             "openai==2.30.0; python_version >= '3.14'",
             "ollama==0.6.2",
@@ -195,8 +194,7 @@ def test_adapter_lock_pyproject_contract_rejects_drift(tmp_path: Path) -> None:
     lockfile.write_text(
         "\n".join(
             [
-                "litellm==1.89.2; python_version < '3.14'",
-                "litellm==1.83.7; python_version >= '3.14'",
+                "litellm==1.89.2",
                 "openai==2.41.0; python_version < '3.14'",
                 "openai==2.30.0; python_version >= '3.14'",
                 "python-dotenv==1.2.2",
@@ -230,7 +228,7 @@ def test_requirements_runtime_contract_rejects_resolver_unsafe_dependencies(tmp_
         "\n".join(
             [
                 "psycopg[binary]==3.3.4",
-                "litellm==1.83.7",
+                "litellm==1.89.2",
                 "openai==2.30.0",
                 "python-dotenv==1.2.2",
             ]
@@ -243,7 +241,7 @@ def test_requirements_runtime_contract_rejects_resolver_unsafe_dependencies(tmp_
 
     assert not ok
     assert "sequenced dependencies must stay out of requirements.txt" in message
-    assert "litellm==1.83.7" in message
+    assert "litellm==1.89.2" in message
     assert "openai==2.30.0" in message
 
 
@@ -273,7 +271,7 @@ def test_python_runtime_choice_keeps_python314_as_advisory_not_failure() -> None
     assert ok
     assert "choice=advisory" in message
     assert "recommended=3.13" in message
-    assert "active_litellm=1.83.7" in message
+    assert "active_litellm=1.89.2" in message
     assert "py313_litellm=1.89.2" in message
     assert "resolver=override" in message
 
@@ -382,7 +380,7 @@ def test_litellm_supply_chain_guard_blocks_suspicious_pth(monkeypatch: pytest.Mo
 
 
 def test_litellm_dotenv_contract_accepts_current_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
-    versions = {"litellm": "1.83.7", "python-dotenv": "1.2.2"}
+    versions = {"litellm": "1.89.2", "python-dotenv": "1.2.2"}
     monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda name: versions[name])
     monkeypatch.setattr(
         check_adapter_deps.importlib,
@@ -390,14 +388,14 @@ def test_litellm_dotenv_contract_accepts_current_dotenv(monkeypatch: pytest.Monk
         lambda name: types.SimpleNamespace(load_dotenv=lambda: None) if name == "dotenv" else types.SimpleNamespace(),
     )
 
-    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.83.7")
+    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.89.2")
 
     assert ok
     assert "python-dotenv=1.2.2" in message
 
 
 def test_litellm_dotenv_contract_rejects_old_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
-    versions = {"litellm": "1.83.7", "python-dotenv": "1.0.1"}
+    versions = {"litellm": "1.89.2", "python-dotenv": "1.0.1"}
     monkeypatch.setattr(check_adapter_deps.importlib.metadata, "version", lambda name: versions[name])
     monkeypatch.setattr(
         check_adapter_deps.importlib,
@@ -405,7 +403,7 @@ def test_litellm_dotenv_contract_rejects_old_dotenv(monkeypatch: pytest.MonkeyPa
         lambda name: types.SimpleNamespace(load_dotenv=lambda: None) if name == "dotenv" else types.SimpleNamespace(),
     )
 
-    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.83.7")
+    ok, message = check_adapter_deps._check_litellm_dotenv_contract("1.89.2")
 
     assert not ok
     assert "expected=1.2.2" in message
@@ -413,7 +411,7 @@ def test_litellm_dotenv_contract_rejects_old_dotenv(monkeypatch: pytest.MonkeyPa
 
 def _active_litellm_version() -> str:
     if sys.version_info >= (3, 14):
-        return "1.83.7"
+        return "1.89.2"
     return "1.89.2"
 
 
@@ -425,5 +423,5 @@ def _active_openai_version() -> str:
 
 def _below_active_litellm_minimum() -> str:
     if sys.version_info >= (3, 14):
-        return "1.83.6"
+        return "1.89.1"
     return "1.83.7"

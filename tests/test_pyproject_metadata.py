@@ -32,8 +32,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
     assert _pyproject()["project"]["requires-python"] == ">=3.11"
     assert set(optional) >= {"dev", "llm", "agents", "rag", "tools"}
     assert set(optional["dev"]) >= {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"}
-    assert any(dependency.startswith("litellm==1.89.2;") for dependency in optional["llm"])
-    assert any(dependency.startswith("litellm==1.83.7;") for dependency in optional["llm"])
+    assert any(dependency.startswith("litellm==1.89.2") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.43.0;") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.30.0;") for dependency in optional["llm"])
     assert "ollama==0.6.2" in optional["llm"]
@@ -55,8 +54,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
 def test_pyproject_litellm_extra_blocks_known_bad_versions() -> None:
     llm_deps = _pyproject()["project"]["optional-dependencies"]["llm"]
 
-    assert any(dependency.startswith("litellm==1.89.2;") for dependency in llm_deps)
-    assert any(dependency.startswith("litellm==1.83.7;") for dependency in llm_deps)
+    assert any(dependency.startswith("litellm==1.89.2") for dependency in llm_deps)
     assert any(dependency.startswith("openai==2.43.0;") for dependency in llm_deps)
     assert any(dependency.startswith("openai==2.30.0;") for dependency in llm_deps)
     assert "ollama==0.6.2" in llm_deps

@@ -16,8 +16,7 @@ dev = [
     "pip-audit",
 ]
 llm = [
-    "litellm==1.89.2; python_version < '3.14'",
-    "litellm==1.83.7; python_version >= '3.14'",
+    "litellm==1.89.2",
     "openai==2.43.0; python_version < '3.14'",
     "openai==2.30.0; python_version >= '3.14'",
     "ollama==0.6.2",
@@ -37,8 +36,7 @@ rag = [
     "llama-index-core==0.14.22",
 ]
 tools = [
-    # On Python 3.14, install this extra separately from [llm]:
-    # litellm==1.83.7 still declares python-dotenv==1.0.1.
+    # Keep tools-sequenced installs to avoid shared resolver conflicts.
     "fastmcp==3.4.2",
     "python-dotenv==1.2.2",
 ]

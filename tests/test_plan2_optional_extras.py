@@ -8,7 +8,7 @@ from scripts.check_plan2_optional_extras import build_optional_extras_report
 
 def _active_llm_versions() -> tuple[str, str]:
     if sys.version_info >= (3, 14):
-        return "1.83.7", "2.30.0"
+        return "1.89.2", "2.30.0"
     return "1.89.2", "2.43.0"
 
 
@@ -35,9 +35,8 @@ def test_plan2_optional_extras_inventory_reports_declared_groups(monkeypatch) ->
     assert report["schema_version"] == 1
     assert report["ok"] is True
     assert set(report["extras"]) == {"llm", "rag", "agents", "tools"}
-    assert any(dependency.startswith("litellm==1.89.2;") for dependency in report["extras"]["llm"]["declared"])
-    assert any(dependency.startswith("litellm==1.83.7;") for dependency in report["extras"]["llm"]["declared"])
-    assert f"litellm=={litellm_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
+    assert any(dependency.startswith("litellm==1.89.2") for dependency in report["extras"]["llm"]["declared"])
+    assert f"litellm=={litellm_version}" in report["extras"]["llm"]["active_declared"]
     assert any(dependency.startswith("openai==2.43.0;") for dependency in report["extras"]["llm"]["declared"])
     assert any(dependency.startswith("openai==2.30.0;") for dependency in report["extras"]["llm"]["declared"])
     assert f"openai=={openai_version}; python_version {'>=' if sys.version_info >= (3, 14) else '<'} '3.14'" in report["extras"]["llm"]["active_declared"]
