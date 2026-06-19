@@ -500,6 +500,20 @@ def _normalize_state(data: Any) -> dict[str, Any]:
     versions = normalized.get("versions")
     if not isinstance(versions, dict):
         normalized["versions"] = {}
+        return normalized
+    normalized_versions: dict[str, Any] = {}
+    for key, value in versions.items():
+        if not isinstance(key, str) or not isinstance(value, dict):
+            continue
+        version_key = _normalize_version_key(key)
+        if not version_key:
+            continue
+        existing = normalized_versions.get(version_key)
+        if isinstance(existing, dict):
+            normalized_versions[version_key] = _merge_version_notification_state(existing, value)
+        else:
+            normalized_versions[version_key] = value
+    normalized["versions"] = dict(sorted(normalized_versions.items()))
     return normalized
 
 
