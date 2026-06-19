@@ -1859,12 +1859,12 @@ def _run_account_storage_preflight(config: Any) -> bool:
             file=sys.stderr,
         )
         for line in broken_lines:
-            print(_sanitize_status_text(line), file=sys.stderr)
+            print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
         return True
     channels = ",".join(str(channel) for channel in getattr(config, "channels", ()) if str(channel or "").strip()) or "telegram,signal,matrix"
     print("TeeBotus account storage preflight failed; refusing to start bot loops.", file=sys.stderr)
     for line in broken_lines:
-        print(_sanitize_status_text(line), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line(line), file=sys.stderr)
     print(f"Diagnose: python3 -m TeeBotus --runtime-status --channels {channels}", file=sys.stderr)
     print(f"Emergency override: {ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV}=1", file=sys.stderr)
     return False
@@ -1967,7 +1967,7 @@ def _run_signal_runtime(config: Any) -> int:
     try:
         return int(run_signal_accounts(config))
     except SignalRuntimeError as exc:
-        print(_sanitize_status_text("TeeBotus Signal runtime error"), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line("TeeBotus Signal runtime error"), file=sys.stderr)
         return 2
 
 
@@ -1980,7 +1980,7 @@ def _start_signal_runtime_background(config: Any) -> int:
     try:
         start_signal_accounts_in_background(config)
     except SignalRuntimeError as exc:
-        print(_sanitize_status_text("TeeBotus Signal runtime error"), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line("TeeBotus Signal runtime error"), file=sys.stderr)
         return 2
     return 0
 
@@ -1994,7 +1994,7 @@ def _run_matrix_runtime(config: Any) -> int:
     try:
         return int(run_matrix_accounts(config))
     except MatrixRuntimeError as exc:
-        print(_sanitize_status_text("TeeBotus Matrix runtime error"), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line("TeeBotus Matrix runtime error"), file=sys.stderr)
         return 2
 
 
@@ -2007,7 +2007,7 @@ def _start_matrix_runtime_background(config: Any) -> int:
     try:
         start_matrix_accounts_in_background(config)
     except MatrixRuntimeError as exc:
-        print(_sanitize_status_text("TeeBotus Matrix runtime error"), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line("TeeBotus Matrix runtime error"), file=sys.stderr)
         return 2
     return 0
 
@@ -2021,7 +2021,7 @@ def _run_telegram_runtime(config: Any) -> int:
     try:
         return int(start_telegram_accounts(config))
     except TelegramRuntimeError as exc:
-        print(_sanitize_status_text("TeeBotus Telegram runtime error"), file=sys.stderr)
+        print(_sanitize_admin_notify_status_line("TeeBotus Telegram runtime error"), file=sys.stderr)
         return 2
 
 
@@ -2036,7 +2036,7 @@ def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
         start_gemini_free_tier_limit_refresh_background(instance_names=instance_names)
     except Exception as exc:  # noqa: BLE001 - refresh must not block bot startup.
         print(
-            _sanitize_status_text("TeeBotus Gemini free-tier refresh start failed"),
+            _sanitize_admin_notify_status_line("TeeBotus Gemini free-tier refresh start failed"),
             file=sys.stderr,
         )
 
