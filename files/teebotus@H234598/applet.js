@@ -125,7 +125,11 @@ const QUICK_COMMANDS = [
   "/register",
   "/memory_reset"
 ];
-const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin", GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"])];
+const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin"];
+const TRUSTED_USER_LOCAL_SPAWN_DIR = GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"]);
+const TRUSTED_USER_LOCAL_COMMANDS = {
+  "codex-usage": true
+};
 const TERMINAL_CANDIDATES = [
   "gnome-terminal",
   "x-terminal-emulator",
@@ -1593,6 +1597,12 @@ TeeBotusApplet.prototype = {
     }
     for (let directory of TRUSTED_SPAWN_DIRS) {
       let path = GLib.build_filenamev([directory, name]);
+      if (GLib.file_test(path, GLib.FileTest.IS_EXECUTABLE)) {
+        return path;
+      }
+    }
+    if (TRUSTED_USER_LOCAL_COMMANDS[name]) {
+      let path = GLib.build_filenamev([TRUSTED_USER_LOCAL_SPAWN_DIR, name]);
       if (GLib.file_test(path, GLib.FileTest.IS_EXECUTABLE)) {
         return path;
       }
