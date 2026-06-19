@@ -420,8 +420,6 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
     required_singles = (single_homeserver, single_user_id, single_access_token)
     if any(required_singles) and not all(required_singles):
         raise RuntimeConfigError(f"Matrix single homeserver/user/access_token must be configured together for instance {instance_name}")
-    if single_device_id and not all(required_singles):
-        raise RuntimeConfigError(f"Matrix single device_id requires homeserver/user/access_token for instance {instance_name}")
     homeservers = _merge_numbered_values(
         source,
         (*base_homeservers, single_homeserver),
@@ -440,6 +438,8 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
         f"MATRIX_BOT_ACCESS_TOKEN_{token}",
         label=f"MATRIX_BOT_ACCESS_TOKEN_{token}",
     )
+    if single_device_id and not homeservers:
+        raise RuntimeConfigError(f"Matrix single device_id requires homeserver/user/access_token for instance {instance_name}")
     device_ids = _merge_optional_numbered_values(
         source,
         (*base_device_ids, single_device_id),
