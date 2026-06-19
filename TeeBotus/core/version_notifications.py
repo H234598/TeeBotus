@@ -48,7 +48,7 @@ def notify_recent_telegram_users_for_version(
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
     version_state = _version_state(state, version)
-    sent_identities = set(str(value) for value in version_state.get("sent_identities", []) if isinstance(value, str))
+    sent_identities = set(_string_list(version_state.get("sent_identities")))
     failed_identities = version_state.get("failed_identities")
     if not isinstance(failed_identities, dict):
         failed_identities = {}
@@ -304,6 +304,12 @@ def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
         raw_version_state = {}
         versions[version] = raw_version_state
     return raw_version_state
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if isinstance(item, str)]
 
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
