@@ -104,6 +104,29 @@ def test_proactive_message_is_queued_only_after_consent_and_private_route(tmp_pa
     assert "TMBMAP1" in raw_outbox
 
 
+def test_proactive_queue_uses_supplied_now_for_initial_metadata(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, 34, 56, tzinfo=timezone.utc)
+
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="metadata_check",
+        message_text="Ping",
+        now=now,
+    )
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["created_at"] == "2026-06-15T12:34:56+00:00"
+    assert item["updated_at"] == "2026-06-15T12:34:56+00:00"
+    assert item["status_history"][0] == {"at": "2026-06-15T12:34:56+00:00", "status": "queued", "reason": "created"}
+
+
 def test_proactive_policy_denies_non_consented_category_and_group_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
