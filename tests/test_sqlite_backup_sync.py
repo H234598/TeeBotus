@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -71,3 +72,36 @@ def test_sqlite_backup_sync_refuses_unreadable_primary_without_overwriting_secon
 
     assert read_sqlite_entry_ids(secondary, secret=b"a" * 32) == ["mem_old_secondary"]
     assert not list(accounts_root.glob(".pre-account-memory-backup-sync-*"))
+
+
+def test_sqlite_backup_sync_checks_collection_payloads(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary, fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_collection(
+        account_id,
+        "proactive_outbox",
+        [{"id": "pro_1", "message_text": "Backup testen", "status": "queued"}],
+    )
+
+    with sqlite3.connect(primary) as connection:
+        connection.execute(
+            """
+            UPDATE account_jsonl_collections
+            SET payload_ciphertext = ?
+            WHERE account_id = ? AND collection = ?
+            """,
+            (b"broken", account_id, "proactive_outbox"),
+        )
+
+    with pytest.raises(RuntimeError, match="payload_not_decryptable"):
+        sync_account_memory_sqlite_backup(
+            accounts_root=accounts_root,
+            provider=provider(b"a" * 32),
+        )

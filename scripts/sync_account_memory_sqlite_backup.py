@@ -170,6 +170,12 @@ def _verify_payloads_decryptable(
             backend.read_index(account_id)
             if backend.last_index_read_error:
                 raise AccountStoreError(backend.last_index_read_error)
+            for collection in backend.read_collection_names(account_id):
+                backend.read_collection(account_id, collection)
+                if backend.last_collection_read_error:
+                    raise AccountStoreError(backend.last_collection_read_error)
+                if backend.last_collection_skipped:
+                    raise AccountStoreError(f"skipped={backend.last_collection_skipped}")
         except AccountStoreError as exc:
             raise RuntimeError(f"payload_not_decryptable instance={instance_name} account={account_id}: {exc}") from exc
         checked += 1
@@ -194,6 +200,11 @@ def _account_payload_refs(path: Path, *, instance_name_filter: str = "") -> list
             refs.update(
                 (str(row[0]), str(row[1]))
                 for row in connection.execute("SELECT DISTINCT instance_name, account_id FROM memory_indexes").fetchall()
+            )
+        if "account_jsonl_collections" in tables:
+            refs.update(
+                (str(row[0]), str(row[1]))
+                for row in connection.execute("SELECT DISTINCT instance_name, account_id FROM account_jsonl_collections").fetchall()
             )
     if instance_name_filter:
         refs = {ref for ref in refs if ref[0] == instance_name_filter}
