@@ -1487,6 +1487,35 @@ def test_codex_history_report_cli_rejects_missing_parent_directory(tmp_path: Pat
     assert not output.exists()
 
 
+def test_codex_history_cli_append_rejects_missing_parent_directory(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "append-output-demo", version="2.0.0")
+    output = tmp_path / "missing" / "dir" / "codex-append.json"
+
+    result = codex_history_main(
+        [
+            "append",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--repo-root",
+            str(repo),
+            "--title",
+            "Output regression",
+            "--format",
+            "json",
+            "--output",
+            str(output),
+        ],
+        provider=provider(),
+    )
+
+    assert result == 2
+    assert "append failed:" in capsys.readouterr().err
+    assert not output.exists()
+
+
 def test_safe_output_path_rejects_windows_drive_paths(tmp_path: Path) -> None:
     try:
         _safe_output_path("C:/codex-output.json")
