@@ -18,9 +18,15 @@ from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNT_PROFILE_FILENAME,
+    AGENT_STATE_FILENAME,
     INSTANCE_STATE_ACCOUNT_ID,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    PROACTIVE_AUDIT_FILENAME,
+    PROACTIVE_DISPATCH_RESULTS_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
     AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
@@ -34,6 +40,24 @@ from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMem
 
 RECOVERY_SCHEMA_VERSION = 2
 SQLITE_MEMORY_TABLES = ("memory_entries", "memory_indexes", "account_jsonl_collections")
+JSON_ACCOUNT_MEMORY_FILES = (
+    USER_MEMORY_ENTRIES_FILENAME,
+    USER_MEMORY_INDEX_FILENAME,
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    AGENT_STATE_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
+    PROACTIVE_AUDIT_FILENAME,
+    PROACTIVE_DISPATCH_RESULTS_FILENAME,
+)
+JSON_ACCOUNT_STATE_FILES = (
+    LLM_STATE_FILENAME,
+    OPENAI_STATE_FILENAME,
+    AGENT_STATE_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
+    PROACTIVE_AUDIT_FILENAME,
+    PROACTIVE_DISPATCH_RESULTS_FILENAME,
+)
 LEGACY_USER_MEMORY_DIRNAME = "users"
 ACCOUNT_METADATA_SECRET_GUARD_PURPOSES = (INSTANCE_MAPPING_KEY_PURPOSE, INSTANCE_PEPPER_PURPOSE)
 
@@ -688,7 +712,7 @@ def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[s
     files: list[Path] = []
     for account_id in account_ids:
         account_dir = accounts_root / ACCOUNTS_DIRNAME / account_id
-        for filename in (USER_MEMORY_ENTRIES_FILENAME, USER_MEMORY_INDEX_FILENAME):
+        for filename in JSON_ACCOUNT_MEMORY_FILES:
             path = account_dir / filename
             if path.exists():
                 files.append(path)
@@ -996,6 +1020,8 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
     errors = []
     entries: list[dict[str, Any]] = []
     index: dict[str, Any] = {}
+    collections = 0
+    raw_collections = 0
     if entries_path.exists():
         try:
             entries = store.account_memory_vault.read_jsonl(entries_path)
@@ -1006,6 +1032,25 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
             index = store.account_memory_vault.read_json(index_path, {})
         except AccountStoreError as exc:
             errors.append(f"index: {exc}")
+    for filename in JSON_ACCOUNT_STATE_FILES:
+        path = source.path / account_id / filename
+        if not path.exists():
+            continue
+        if filename.endswith(".jsonl"):
+            raw_collections += _count_lines(path)
+            try:
+                collections += len(store.account_memory_vault.read_jsonl(path))
+            except AccountStoreError as exc:
+                errors.append(f"{filename}: {exc}")
+        else:
+            raw_collections += 1
+            try:
+                data = store.account_memory_vault.read_json(path, {})
+            except AccountStoreError as exc:
+                errors.append(f"{filename}: {exc}")
+            else:
+                if data:
+                    collections += 1
     return {
         "name": source.name,
         "kind": source.kind,
@@ -1017,6 +1062,8 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
         "raw_entries": _count_lines(entries_path),
         "index_present": bool(index),
         "raw_index_present": index_path.exists(),
+        "collections": collections,
+        "raw_collections": raw_collections,
         "error": "; ".join(errors),
     }
 

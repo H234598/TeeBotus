@@ -584,6 +584,34 @@ def test_memory_recovery_quarantines_unrecoverable_sqlite_collection_rows(tmp_pa
     assert follow_up_source["raw_collections"] == 0
 
 
+def test_memory_recovery_quarantines_unrecoverable_json_state_files(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    wrong_store = AccountStore(accounts_root, "Depressionsbot", StaticSecretProvider(b"b" * 32), create_dirs=False)
+    wrong_store.write_agent_state(account_id, {"proactive": {"enabled": True}})
+    state_path = store.account_dir(account_id) / "Agent_State.json"
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+    account = report["instances"][0]["accounts"][0]
+    source = next(source for source in account["sources"] if source["name"] == "json_files")
+
+    assert account["recovery_status"] == "unrecoverable"
+    assert source["raw_collections"] == 1
+    assert source["collections"] == 0
+    assert "Agent_State.json:" in source["error"]
+
+    result = quarantine_unrecoverable_account_memory(report, apply=True, quarantine_dir=tmp_path / "quarantine", running_processes=[])
+
+    assert result["status"] == "applied"
+    assert result["totals"]["json_files_quarantined"] == 1
+    assert not state_path.exists()
+    moved = result["instances"][0]["json_files"][0]
+    assert moved["path"] == str(state_path)
+    assert Path(moved["quarantine_path"]).exists()
+
+
 def test_memory_recovery_report_mentions_unreadable_inactive_snapshots_under_accounts_root(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
