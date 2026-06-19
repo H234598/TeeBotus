@@ -92,6 +92,37 @@ def test_render_proactive_systemd_unit_rejects_control_characters(tmp_path) -> N
             raise AssertionError(f"expected control character rejection for {kwargs}")
 
 
+def test_render_proactive_systemd_unit_rejects_instance_path_segments(tmp_path) -> None:
+    base = {
+        "repo_root": tmp_path,
+        "instances_dir": "instances",
+        "interval": "5min",
+    }
+    for instance_name in ("../outside", "nested/Depressionsbot", r"nested\\Depressionsbot", ".", "..", ""):
+        try:
+            render_proactive_systemd_unit(**base, instance_name=instance_name)
+        except ValueError as exc:
+            assert "instance name" in str(exc)
+        else:
+            raise AssertionError(f"expected instance path segment rejection for {instance_name!r}")
+
+
+def test_proactive_systemd_rejects_instance_traversal_before_bot_verhalten_lookup(tmp_path, capsys) -> None:
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    (outside_dir / "Bot_Verhalten.md").write_text("## Proactive\n- model_planner: llm\n", encoding="utf-8")
+    (tmp_path / "instances").mkdir()
+
+    try:
+        main(["--repo-root", str(tmp_path), "--instances-dir", "instances", "--instance", "../outside", "--print"])
+    except ValueError as exc:
+        assert "single path segment" in str(exc)
+    else:
+        raise AssertionError("expected traversal instance to fail before reading Bot_Verhalten.md")
+    captured = capsys.readouterr()
+    assert "--llm-plan" not in captured.out
+
+
 def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     instance_dir.mkdir(parents=True)

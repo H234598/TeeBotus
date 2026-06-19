@@ -88,7 +88,7 @@ def render_proactive_systemd_unit(
 ) -> ProactiveSystemdUnit:
     if llm_plan and tool_plan:
         raise ValueError("llm_plan and tool_plan are mutually exclusive")
-    instance_name = _systemd_unit_value(instance_name, label="instance name")
+    instance_name = _instance_name(instance_name)
     safe_instance = _systemd_instance_token(instance_name)
     service_name = f"teebotus-proactive-{safe_instance}.service"
     timer_name = f"teebotus-proactive-{safe_instance}.timer"
@@ -151,6 +151,15 @@ def _systemd_instance_token(instance_name: str) -> str:
     return token or "default"
 
 
+def _instance_name(value: str) -> str:
+    text = _systemd_unit_value(str(value or "").strip(), label="instance name")
+    if not text:
+        raise ValueError("systemd instance name must not be empty")
+    if text in {".", ".."} or "/" in text or "\\" in text:
+        raise ValueError("systemd instance name must be a single path segment")
+    return text
+
+
 def _systemd_interval(value: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -178,6 +187,7 @@ def _shell_quote(value: str) -> str:
 
 def _planner_from_instance_instructions(*, repo_root: Path, instances_dir: str, instance_name: str) -> str:
     repo = repo_root.expanduser().resolve()
+    instance_name = _instance_name(instance_name)
     instances_path = Path(instances_dir)
     if not instances_path.is_absolute():
         instances_path = repo / instances_path
