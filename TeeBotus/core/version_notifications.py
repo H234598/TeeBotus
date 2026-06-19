@@ -209,6 +209,12 @@ def _version_order_key(version: str) -> tuple[tuple[int, int | str], ...]:
     return tuple(chunks)
 
 
+def _version_is_before(version: str, reference: str) -> bool:
+    version_key = _version_order_key(version)
+    reference_key = _version_order_key(reference)
+    return bool(version_key and reference_key and version_key < reference_key)
+
+
 def _inline_text(value: object) -> str:
     text = "".join(char if ord(char) >= 32 and ord(char) != 127 else " " for char in str(value or ""))
     return " ".join(text.split())
@@ -559,7 +565,7 @@ def _historical_failed_identity_map(
         key=lambda item: _version_order_key(str(item[0] or "")),
     )
     for version_key, version_state in ordered_versions:
-        if not isinstance(version_key, str) or _normalize_version_key(version_key) == current_version:
+        if not isinstance(version_key, str) or not _version_is_before(version_key, current_version):
             continue
         if isinstance(version_state, dict):
             normalized_version_state = _merge_version_notification_state({}, version_state)
