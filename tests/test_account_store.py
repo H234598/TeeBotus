@@ -1921,6 +1921,145 @@ def test_account_memory_fallback_blocks_collection_writes_after_unrecoverable_em
     assert "ACCOUNT MEMORY WRITE BLOCKED" in caplog.text
 
 
+def test_account_memory_fallback_repairs_empty_collection_fallback_after_primary_recovers(caplog):
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary collection unavailable")
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(sorted(collection for item_account, collection in self.collections if item_account == account_id))
+
+    account_id = "a" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.read_collection(account_id, "version_notifications")
+    primary.fail_read = False
+    primary.collections[(account_id, "version_notifications")] = [{"id": "version_state_primary"}]
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        rows = backend.read_collection(account_id, "version_notifications")
+        assert rows == [{"id": "version_state_primary"}]
+        assert fallback.collections[(account_id, "version_notifications")] == [{"id": "version_state_primary"}]
+        assert backend.stale_fallback_collection_account_ids == ()
+        assert backend.last_fallback_sync_error == ""
+        backend.write_collection(account_id, "version_notifications", [{"id": "version_state_new"}])
+
+    assert primary.collections[(account_id, "version_notifications")] == [{"id": "version_state_new"}]
+    assert fallback.collections[(account_id, "version_notifications")] == [{"id": "version_state_new"}]
+    assert backend.stale_fallback_collection_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+    assert "primary backend recovered" in caplog.text
+
+
+def test_account_memory_fallback_repairs_empty_entry_fallback_after_primary_recovers(caplog):
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id = "a" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend.read_entries(account_id)
+        primary.fail_read = False
+        primary.entries[account_id] = [{"id": "entry_primary"}]
+        rows = backend.read_entries(account_id)
+
+    assert rows == [{"id": "entry_primary"}]
+    assert primary.entries[account_id] == [{"id": "entry_primary"}]
+    assert fallback.entries[account_id] == [{"id": "entry_primary"}]
+    assert backend.stale_fallback_entry_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+    assert "primary backend recovered" in caplog.text
+
+
+def test_account_memory_fallback_repair_keeps_other_pending_errors_until_cleared(caplog):
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id_a = "a" * 128
+    account_id_b = "b" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    rows_from_unrecoverable = backend.read_entries(account_id_a)
+    assert rows_from_unrecoverable == []
+    assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
+    assert account_id_a in backend.stale_fallback_entry_account_ids
+    backend._fallback_sync_failed_entries.add(account_id_b)
+    backend._fallback_active = True
+    primary.fail_read = False
+    primary.entries[account_id_a] = [{"id": "entry_primary"}]
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        rows = backend.read_entries(account_id_a)
+
+    assert rows == [{"id": "entry_primary"}]
+    assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
+    assert backend.fallback.read_entries(account_id_b) == []
+    assert account_id_b in backend._fallback_sync_failed_entries
+    assert account_id_a not in backend._fallback_sync_failed_entries
+    assert account_id_a not in backend.stale_fallback_entry_account_ids
+    assert "primary backend recovered" not in caplog.text
+
+
 def test_account_memory_fallback_recovers_primary_entry_diagnostics(caplog):
     class Backend:
         def __init__(self, rows: list[dict[str, str]], *, skipped: int = 0, error: str = "") -> None:

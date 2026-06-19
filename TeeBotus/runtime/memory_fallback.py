@@ -153,6 +153,7 @@ class WarningFallbackAccountMemoryBackend:
             self._copy_diagnostics(self.primary)
             if self._read_diagnostic_failed(operation):
                 return self._recover_read_from_fallback(operation, account_id, callback)
+            self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
             self._clear_recovered_if_clean(operation)
             return result
         except Exception as exc:  # noqa: BLE001
@@ -326,6 +327,37 @@ class WarningFallbackAccountMemoryBackend:
             return result == []
         return False
 
+    def _repair_unrecoverable_fallback_from_primary(self, operation: str, account_id: str, result: Any) -> None:
+        stale_key = self._operation_stale_key(operation, account_id)
+        unrecoverable_set = self._unrecoverable_fallback_set(operation)
+        if stale_key not in unrecoverable_set:
+            return
+        try:
+            if operation == "read_entries":
+                self.fallback.write_entries(account_id, result)
+            elif operation == "read_index":
+                self.fallback.write_index(account_id, result)
+            elif operation.startswith("read_collection:"):
+                collection = self._operation_collection(operation)
+                self.fallback.write_collection(account_id, collection, result)
+            else:
+                return
+        except Exception as exc:  # noqa: BLE001
+            self._fallback_stale_set(operation).add(stale_key)
+            self._fallback_sync_failed_set(operation).add(stale_key)
+            self.last_fallback_sync_error = f"{operation}: fallback repair failed: {exc}"
+            LOGGER.critical(
+                "ACCOUNT MEMORY FALLBACK DATABASE REPAIR FROM PRIMARY FAILED. label=%s operation=%s account_id=%s error=%s.",
+                self.label,
+                operation,
+                account_id,
+                exc,
+            )
+            return
+        self._fallback_stale_set(operation).discard(stale_key)
+        self._fallback_sync_failed_set(operation).discard(stale_key)
+        unrecoverable_set.discard(stale_key)
+
     def _account_is_dirty(self, operation: str, account_id: str) -> bool:
         if operation == "read_entries":
             return account_id in self._dirty_entries
@@ -386,6 +418,7 @@ class WarningFallbackAccountMemoryBackend:
             return
         if self._fallback_active:
             LOGGER.critical("Account-Memory primary backend recovered label=%s operation=%s. Fallback warning cleared.", self.label, operation)
+            self.last_fallback_sync_error = ""
         self._fallback_active = False
 
     def _mirror_write(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> None:
