@@ -3455,7 +3455,28 @@ def _merge_nested_json_documents(source_data: dict[str, Any], target_data: dict[
         target_value = target_data[key]
         if isinstance(source_value, dict) and isinstance(target_value, dict):
             merged[key] = _merge_nested_json_documents(source_value, target_value)
+        elif isinstance(source_value, list) and isinstance(target_value, list):
+            merged[key] = _merge_json_lists(target_value, source_value)
     return merged
+
+
+def _merge_json_lists(primary_rows: list[Any], fallback_rows: list[Any]) -> list[Any]:
+    merged = list(primary_rows)
+    seen = {_json_list_item_fingerprint(item) for item in merged}
+    for item in fallback_rows:
+        fingerprint = _json_list_item_fingerprint(item)
+        if fingerprint in seen:
+            continue
+        merged.append(item)
+        seen.add(fingerprint)
+    return merged
+
+
+def _json_list_item_fingerprint(item: Any) -> str:
+    try:
+        return json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        return repr(item)
 
 
 def _account_memory_keywords(text: str) -> list[str]:
