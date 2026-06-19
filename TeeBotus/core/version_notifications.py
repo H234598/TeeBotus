@@ -287,9 +287,16 @@ def _is_permanent_delivery_error(exc: Exception) -> bool:
 
 
 def _failed_delivery_matches_recipient(failed_identities: dict[str, object], recipient: VersionNotificationRecipient) -> bool:
-    failure = failed_identities.get(recipient.identity_key)
-    if failure is None:
-        return False
+    failures = [failed_identities.get(recipient.identity_key)]
+    failures.extend(
+        failure
+        for identity_key, failure in failed_identities.items()
+        if identity_key != recipient.identity_key
+    )
+    return any(_failed_delivery_route_matches(failure, recipient) for failure in failures)
+
+
+def _failed_delivery_route_matches(failure: object, recipient: VersionNotificationRecipient) -> bool:
     if not isinstance(failure, dict):
         return False
     failed_chat_id = _optional_int(failure.get("chat_id"))
