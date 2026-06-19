@@ -130,7 +130,7 @@ def admin_account_group_status_lines(
 def runtime_status_problem_lines(status_output: str, *, limit: int = 40) -> tuple[str, ...]:
     problems: list[str] = []
     for raw_line in str(status_output or "").splitlines():
-        line = raw_line.strip()
+        line = _redact_runtime_status_line(raw_line).strip()
         if not line or line.startswith("["):
             continue
         padded = f" {line}"
@@ -141,7 +141,7 @@ def runtime_status_problem_lines(status_output: str, *, limit: int = 40) -> tupl
             or " route_error=" in padded
             or _RUNTIME_STATUS_PROBLEM_RE.search(line)
         ):
-            problems.append(_redact_runtime_status_line(line))
+            problems.append(line)
             if len(problems) >= limit:
                 break
     return tuple(problems)

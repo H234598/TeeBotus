@@ -1664,6 +1664,13 @@ def _sanitize_admin_notify_status_line(value: object) -> str:
     return redact_status_text(sanitized)
 
 
+def _sanitize_admin_status_output(output: str) -> str:
+    text = str(output or "")
+    if not text:
+        return ""
+    return "\n".join(_sanitize_admin_notify_status_line(line) for line in text.split("\n"))
+
+
 def _status_url_credential_replacement(match: re.Match[str]) -> str:
     value = match.group(0)
     if "://" in value:
@@ -2091,12 +2098,13 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
         from TeeBotus.runtime.admin_accounts import format_admin_notification_result_lines, notify_runtime_status_admin_accounts
         from TeeBotus.runtime.config import resolve_runtime_config
 
+        sanitized_status_output = _sanitize_admin_status_output(status_output)
         config = resolve_runtime_config(argv=list(argv))
         results = asyncio.run(
             notify_runtime_status_admin_accounts(
                 instances_dir=config.instances_dir,
                 selected_instances=tuple(instance.instance_name for instance in config.instances),
-                status_output=status_output,
+                status_output=sanitized_status_output,
                 env=os.environ,
             )
         )

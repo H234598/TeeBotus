@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
+from TeeBotus.core.status import redact_status_text
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider
 from TeeBotus.runtime.proactive_agent import select_proactive_route
 
@@ -128,12 +129,7 @@ def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -
 
 
 def _sanitize_status_auth_output(output: str) -> str:
-    text = str(output or "")
-    try:
-        from TeeBotus.core.status import redact_status_text
-    except Exception:  # pragma: no cover - fallback for import-time constraints.
-        return text
-    return redact_status_text(text)
+    return redact_status_text(str(output or ""))
 
 
 def _emit_status_auth_report(output: str, *, stream: TextIO = sys.stdout) -> None:
