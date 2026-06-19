@@ -8,7 +8,7 @@ import pytest
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm_client import LiteLLMTextClient
-from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
 from TeeBotus.runtime.engine import EngineResult
@@ -581,6 +581,65 @@ def test_matrix_bridge_fetches_reply_text_without_body_fallback(tmp_path) -> Non
     assert client.fetched_events == []
     assert seen[0].text == "Antwort"
     assert seen[0].reply_to_text == "Originaltext"
+
+
+def test_matrix_bridge_marks_codex_history_reply_acknowledged(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = bridge.account_store.resolve_or_create_account("matrix:user:@alice:example")
+    item_id = bridge.account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "kind": "codex_run_summary",
+            "status": "accepted",
+            "summary_prefix": "v1.8.2 #0001",
+            "summary": {"title": "Matrix Reply Ack"},
+            "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+        },
+    )
+    bridge.account_store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": account_id,
+            "instance": "Demo",
+            "status": "accepted",
+            "channel": "matrix",
+            "chat_id": "!room:example",
+            "message_ref": "$history",
+            "summary_prefix": "v1.8.2 #0001",
+        },
+    )
+    bridge.engine.process_result = lambda event: EngineResult(event.account_id, [], handled=True)  # type: ignore[method-assign]
+
+    class ReplyMessage(FakeMatrixMessage):
+        event_id = "$reply"
+        body = "gesehen"
+        source = {"content": {"msgtype": "m.text", "body": "gesehen", "m.relates_to": {"m.in_reply_to": {"event_id": "$history"}}}}
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), ReplyMessage()))
+
+    persisted = bridge.account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    dispatch_rows = bridge.account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert persisted["status"] == "acknowledged"
+    assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered", "acknowledged"]
+    assert dispatch_rows[-1]["message_ref"] == "$history"
+    assert dispatch_rows[-1]["reply_message_ref"] == "$reply"
+    assert dispatch_rows[-1]["reply_text_preview"] == "gesehen"
 
 
 def test_matrix_bridge_fetches_reply_text_from_niobot_cache_tuple(tmp_path) -> None:

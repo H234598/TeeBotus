@@ -17,7 +17,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
 
-from TeeBotus.adapters.signal import _signal_required_timestamp, send_signal_actions, signal_context_to_event
+from TeeBotus.admin.codex_history import record_codex_history_reply
+from TeeBotus.adapters.signal import _signal_raw_data_message, _signal_required_timestamp, send_signal_actions, signal_context_to_event
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
@@ -217,6 +218,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 await self._send_memory_error(context, event)
                 return
             event = event.with_account(account_id)
+            self._record_codex_history_reply(event)
             try:
                 engine_result = _process_engine_result(self.engine, event)
             except (AccountStoreError, OSError, ValueError, AttributeError):
@@ -413,6 +415,30 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     event.chat_id,
                     len(failed_refs),
                 )
+
+    def _record_codex_history_reply(self, event: Any) -> None:
+        reply_to_ref = _signal_reply_message_ref(getattr(event, "raw", None))
+        if not reply_to_ref:
+            return
+        try:
+            record_codex_history_reply(
+                self.account_store,
+                instance_name=self.run_config.instance_name,
+                channel="signal",
+                chat_id=event.chat_id,
+                account_id=event.account_id,
+                reply_to_message_ref=reply_to_ref,
+                reply_message_ref=event.message_ref,
+                reply_text=event.text,
+            )
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            LOGGER.exception(
+                "Signal Codex-History reply tracking failed instance=%s recipient=%s message_ref=%s reply_to=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
+                reply_to_ref,
+            )
 
     async def _delete_local_attachments(self, context: Any) -> None:
         message = getattr(context, "message", None)
@@ -656,6 +682,34 @@ def _signal_command_address_names(command: TeeBotusSignalCommand, event: Any) ->
         if str(value or "").strip()
     )
     return frozenset(names)
+
+
+def _signal_reply_message_ref(message: Any) -> str:
+    quote = getattr(message, "quote", None)
+    if quote is not None:
+        for attr in ("id", "timestamp", "quote_timestamp", "sent_timestamp", "target_sent_timestamp"):
+            value = str(getattr(quote, attr, "") or "").strip()
+            if value:
+                return value
+    raw_message = getattr(message, "raw_message", None)
+    if not isinstance(raw_message, str) or not raw_message.strip():
+        return ""
+    try:
+        payload = json.loads(raw_message)
+    except (TypeError, ValueError):
+        return ""
+    envelope = payload.get("envelope") if isinstance(payload, Mapping) else {}
+    if not isinstance(envelope, dict):
+        return ""
+    data_message = _signal_raw_data_message(envelope)
+    quote_payload = data_message.get("quote") if isinstance(data_message, Mapping) else {}
+    if not isinstance(quote_payload, Mapping):
+        return ""
+    for key in ("id", "timestamp", "sentTimestamp", "targetSentTimestamp"):
+        value = str(quote_payload.get(key) or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:

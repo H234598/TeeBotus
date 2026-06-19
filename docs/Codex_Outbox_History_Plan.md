@@ -18,6 +18,7 @@ Umgesetzt:
 - Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
 - Phase 4 Ack-Basis teilweise: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result.
 - Phase 4 Telegram-Reply-Hook teilweise: Antworten auf ein versendetes Codex-History-Markdown werden ueber `codex_history_dispatch_results.message_ref` erkannt, setzen `delivered_at`/`acknowledged_at` und schreiben append-only Dispatch-Results fuer `delivered` und `acknowledged`.
+- Phase 4 Signal-/Matrix-Reply-Hooks teilweise: Signal-Quote-Timestamps und Matrix-`m.in_reply_to.event_id` werden ebenfalls gegen `codex_history_dispatch_results.message_ref` gemappt und bestaetigen passende History-Eintraege append-only.
 - Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
 - Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen oder mit `--follow --event-mode auto` persistent beobachten; `auto` nutzt optional `watchdog`-Filesystem-Events und faellt ohne Zusatzdependency auf Snapshot/Poll-Warten zurueck.
 - Phase 3 systemd teilweise: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
@@ -28,8 +29,8 @@ Umgesetzt:
 
 Offen:
 
-- Native Kanal-Receipts fuer `delivered` ausserhalb reply-beobachteter Telegram-Bestaetigung sind noch nicht angebunden.
-- Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind noch nicht angebunden.
+- Native Kanal-Receipts fuer `delivered` ausserhalb reply-beobachteter Bestaetigungen sind noch nicht angebunden.
+- Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
 - Native Filesystem-Events sind optional angebunden, aber noch nicht als harte Dependency installiert; ohne `watchdog` laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
 - Tieferer grafischer Applet-Drilldown, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
@@ -480,7 +481,8 @@ Stand 2026-06-19:
 - `codex-history dispatch` markiert Transportannahme als `accepted` und schreibt Dispatch-Results.
 - `codex-history acknowledge --item-id ...` kann aktive Bestaetigung manuell/administrativ setzen, ohne die Summary zu loeschen.
 - Telegram-Replys auf ein versendetes History-Dokument markieren die Summary als `delivered` und direkt danach als `acknowledged`; dabei werden `reply_message_ref` und eine redigierte `reply_text_preview` auditierbar in den Dispatch-Results gespeichert.
-- Offen: native Kanal-Receipts fuer `delivered` sowie Signal-/Matrix-Reply-Hooks.
+- Signal-Replys mit Quote-Timestamp und Matrix-Replys mit `m.in_reply_to.event_id` nutzen dieselbe kanalneutrale Ack-Logik.
+- Offen: native Kanal-Receipts fuer `delivered`.
 
 ### Phase 5: Applet/Status
 

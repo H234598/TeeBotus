@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Sequence
 from urllib.parse import urlsplit
 
+from TeeBotus.admin.codex_history import record_codex_history_reply
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
@@ -175,6 +176,7 @@ class MatrixRuntimeBridge:
             await self._send_memory_error(event)
             return
         event = event.with_account(account_id)
+        self._record_codex_history_reply(event)
         try:
             engine_result = _process_engine_result(self.engine, event)
         except (AccountStoreError, OSError, ValueError, AttributeError):
@@ -360,6 +362,30 @@ class MatrixRuntimeBridge:
                     event.chat_id,
                     len(failed_refs),
                 )
+
+    def _record_codex_history_reply(self, event: IncomingEvent) -> None:
+        reply_to_ref = _matrix_reply_event_id(event.raw)
+        if not reply_to_ref:
+            return
+        try:
+            record_codex_history_reply(
+                self.account_store,
+                instance_name=self.run_config.instance_name,
+                channel="matrix",
+                chat_id=event.chat_id,
+                account_id=event.account_id,
+                reply_to_message_ref=reply_to_ref,
+                reply_message_ref=event.message_ref,
+                reply_text=event.text,
+            )
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            LOGGER.exception(
+                "Matrix Codex-History reply tracking failed instance=%s room_id=%s event_id=%s reply_to=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
+                reply_to_ref,
+            )
 
 
 async def _delete_matrix_message(client: Any, room_id: str, event_id: str) -> None:

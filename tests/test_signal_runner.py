@@ -14,7 +14,7 @@ from signalbot import Command
 from signalbot.message import MessageType
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.runtime.accounts import AccountStoreError, StaticSecretProvider
+from TeeBotus.runtime.accounts import AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendEdit, SendPoll, SendText
 from TeeBotus.llm_client import LiteLLMTextClient
 from TeeBotus.runtime.config import AccountRunConfig, InstanceRunConfig, RuntimeConfig
@@ -277,6 +277,7 @@ def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> N
             chat_id="1",
             channel="telegram",
             instance="Demo",
+            is_private=True,
         )
     )
     account_id, secret = re.findall(r"\b[0-9a-f]{128}\b", registered.actions[0].text)
@@ -618,6 +619,61 @@ def test_signal_command_preserves_explicit_engine_reply_context(tmp_path) -> Non
 
     assert context.sent == ["Explizit"]
     assert context.bot_sent == []
+
+
+def test_signal_command_marks_codex_history_reply_acknowledged(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+    item_id = command.account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "kind": "codex_run_summary",
+            "status": "accepted",
+            "summary_prefix": "v1.8.2 #0001",
+            "summary": {"title": "Signal Reply Ack"},
+            "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+        },
+    )
+    command.account_store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": account_id,
+            "instance": "Demo",
+            "status": "accepted",
+            "channel": "signal",
+            "chat_id": "+491234",
+            "message_ref": "777777",
+            "summary_prefix": "v1.8.2 #0001",
+        },
+    )
+    command.engine.process_result = lambda event: EngineResult(event.account_id, [], handled=True)  # type: ignore[method-assign]
+    context = FakeSignalContext()
+    context.message.text = "gesehen"
+    context.message.timestamp = 888888
+    context.message.quote = SimpleNamespace(id=777777, text="Release Demo 1.8.2")
+
+    asyncio.run(command.handle(context))
+
+    persisted = command.account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    dispatch_rows = command.account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert persisted["status"] == "acknowledged"
+    assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered", "acknowledged"]
+    assert dispatch_rows[-1]["message_ref"] == "777777"
+    assert dispatch_rows[-1]["reply_message_ref"] == "888888"
+    assert dispatch_rows[-1]["reply_text_preview"] == "gesehen"
 
 
 def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path, monkeypatch) -> None:
