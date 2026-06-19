@@ -1334,7 +1334,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
-        return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {type(exc).__name__}: {exc}",), 0, 0)
+        return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {_health_exception_name(exc)}: {exc}",), 0, 0)
     if state:
         if state.get("schema_version") != 1:
             errors.append("agent_state schema_version is not 1")
@@ -1347,7 +1347,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     try:
         outbox = account_store.read_proactive_outbox(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
-        return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {type(exc).__name__}: {exc}",), 0, 0)
+        return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {_health_exception_name(exc)}: {exc}",), 0, 0)
     seen_ids: set[str] = set()
     consented_categories = set(normalized_state["consent"]["categories"])
     for index, item in enumerate(outbox):
@@ -2411,6 +2411,12 @@ def _route_seen_timestamp(route: Mapping[str, Any]) -> float:
     if parsed is None:
         return 0.0
     return parsed.timestamp()
+
+
+def _health_exception_name(exc: Exception) -> str:
+    if isinstance(exc, AccountStoreError):
+        return "AccountStoreError"
+    return type(exc).__name__
 
 
 def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:

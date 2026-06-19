@@ -628,6 +628,38 @@ def test_proactive_agent_health_reports_agent_state_read_error() -> None:
     assert health.errors == ("agent_state read failed: AccountStoreError: encrypted envelope authentication failed",)
 
 
+def test_proactive_agent_health_reports_corrupt_sql_agent_state(tmp_path, monkeypatch) -> None:
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    fallback_path = tmp_path / "memory.backup.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store.write_agent_state(account_id, {"schema_version": 1, "proactive": {"enabled": True}})
+    for path in (sqlite_path, fallback_path):
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                """
+                UPDATE account_jsonl_collections
+                SET payload_ciphertext = ?
+                WHERE account_id = ? AND collection = ?
+                """,
+                (b"broken", account_id, "agent_state"),
+            )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    assert health.queued_count == 0
+    assert health.review_pending_count == 0
+    assert len(health.errors) == 1
+    assert health.errors[0].startswith("agent_state read failed: AccountStoreError:")
+    assert "agent_state" in health.errors[0]
+
+
 def test_proactive_agent_health_reports_outbox_read_error() -> None:
     class BrokenStore:
         def read_agent_state(self, _account_id: str) -> dict:
