@@ -55,18 +55,25 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
 
 def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
     env = {
-        "OPENAI_API_KEY_BACKGROUND": "sk-background",
+        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
     }
 
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
     assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-instance"
+    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
+
+
+def test_openai_key_resolution_ignores_global_background_key():
+    env = {"OPENAI_API_KEY_BACKGROUND": "sk-global-background"}
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
 
 
 def test_openai_key_resolution_prefers_proactive_key_before_background_key():
     env = {
         "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
-        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background",
         "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
     }
 

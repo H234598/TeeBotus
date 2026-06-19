@@ -757,7 +757,7 @@ def test_runtime_llm_planner_factory_uses_background_key_before_instance_key(tmp
     factory = runtime_llm_planner_factory(
         instances_dir,
         env={
-            "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+            "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
             "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
         },
     )

@@ -139,7 +139,7 @@ def resolve_openai_key(
         return resolved
     if source.get(candidates[1]):
         return source[candidates[1]]
-    background_key = _resolve_background_openai_key(source, instance_token, channel_token, slot)
+    background_key = _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
     if background_key:
         return background_key
     if source.get(candidates[2]):
@@ -153,19 +153,25 @@ def resolve_openai_key(
     return ""
 
 
-def _resolve_background_openai_key(source: Mapping[str, str], instance_token: str, channel_token: str, slot: int) -> str:
+def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str, instance_token: str, channel_token: str, slot: int) -> str:
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
+    raw_instance = str(instance_name or "").strip()
     candidates = [
+        f"{raw_instance}_BACKGROUND_SERVICES_{slot}",
+        f"{instance_token}_BACKGROUND_SERVICES_{slot}",
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES_{slot}",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND_{slot}",
+        f"{raw_instance}_BACKGROUND_SERVICES",
+        f"{instance_token}_BACKGROUND_SERVICES",
+        f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND",
     ]
     if channel_token != "BACKGROUND":
         candidates.append(f"OPENAI_API_KEY_{channel_token}")
-    candidates.append("OPENAI_API_KEY_BACKGROUND")
     list_candidates = [
+        f"OPENAI_API_KEYS_{instance_token}_BACKGROUND_SERVICES",
         f"OPENAI_API_KEYS_{instance_token}_BACKGROUND",
-        "OPENAI_API_KEYS_BACKGROUND",
     ]
     if source.get(candidates[0]):
         return source[candidates[0]]
