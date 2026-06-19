@@ -17,13 +17,15 @@ Umgesetzt:
 - CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
 - Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
 - Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
+- Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen; der systemd-User-Service `teebotus-codex-history.service` wird ueber `teebotus-codex-history-systemd` erzeugt und pollt restart-getrieben mit `Restart=always`/`RestartSec`, damit pro Runde alle Instanzen gescannt werden.
+- Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
 Offen:
 
 - Delivery-Receipts/`delivered` und aktive Bestaetigung/`acknowledged` sind noch nicht angebunden.
-- Kontinuierliches `codex-history watch` mit systemd-User-Service, Polling/Filesystem-Events und hartem Fleet-Pfad-Audit ist noch nicht umgesetzt.
+- Filesystem-Events statt restart-getriebenem Polling sind noch nicht umgesetzt.
 - Status/Applet-Integration, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
 ## Kurzantwort
@@ -263,13 +265,28 @@ Beispiel:
 Description=TeeBotus Codex history watcher
 
 [Service]
-ExecStart=/home/teladi/TeeBotus/.venv/bin/python -m TeeBotus.admin.codex_history watch
+WorkingDirectory=/home/teladi/TeeBotus
+EnvironmentFile=-/home/teladi/TeeBotus/.env
+ExecStart=/home/teladi/TeeBotus/.venv-py313/bin/python -m TeeBotus.admin codex-history watch --instances-dir /home/teladi/TeeBotus/instances --max-iterations 1 --limit 1000
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=default.target
 ```
+
+Erzeugung:
+
+```bash
+python3 -m TeeBotus.codex_history_systemd --repo-root /home/teladi/TeeBotus --print
+python3 -m TeeBotus.codex_history_systemd --repo-root /home/teladi/TeeBotus --enable
+```
+
+Die systemd-Variante nutzt bewusst einen bounded Scan pro Service-Start und
+laesst systemd ueber `Restart=always`/`RestartSec` pollen. So blockiert eine
+endlose Watch-Schleife nicht die weiteren TeeBotus-Instanzen; jede Runde ruft
+`codex-history watch` fuer die ausgewaehlten Instanzen auf und beendet sich
+danach sauber.
 
 Der Watcher:
 

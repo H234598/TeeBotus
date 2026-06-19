@@ -48,6 +48,7 @@ teebotus-proactive = "TeeBotus.proactive:main"
 teebotus-proactive-review = "TeeBotus.proactive_review:main"
 teebotus-proactive-systemd = "TeeBotus.proactive_systemd:main"
 teebotus-qdrant-systemd = "TeeBotus.qdrant_systemd:main"
+teebotus-codex-history-systemd = "TeeBotus.codex_history_systemd:main"
 teebotus-embedding = "TeeBotus.embedding.cli:main"
 teebotus-cinnamon-applet = "TeeBotus.cinnamon_applet:main"
 
