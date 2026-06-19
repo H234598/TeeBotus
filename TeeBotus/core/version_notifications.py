@@ -603,7 +603,7 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
 
 
 def _is_telegram_identity_key(identity_key: str) -> bool:
-    return identity_key.startswith("telegram:")
+    return identity_key.startswith("telegram:") and bool(identity_key.removeprefix("telegram:").strip())
 
 
 def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
