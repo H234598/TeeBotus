@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 
-from TeeBotus.admin.codex_history import append_codex_history_summary, build_codex_history_report, main as codex_history_main
+from TeeBotus.admin.codex_history import append_codex_history_summary, build_codex_history_report, dispatch_codex_history_outbox, main as codex_history_main
+from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     CODEX_HISTORY_OUTBOX_FILENAME,
     INSTANCE_STATE_ACCOUNT_ID,
     AccountStore,
     StaticSecretProvider,
+    telegram_identity_key,
 )
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
@@ -193,3 +197,107 @@ def test_codex_history_cli_append_and_report_json(tmp_path: Path, capsys) -> Non
     payload = json.loads(capsys.readouterr().out)
     assert payload["totals"]["outbox_items"] == 1
     assert payload["instances"][0]["codex_history"]["projects"][0]["repo_name"] == "teebotus-demo"
+
+
+def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "dispatch-demo", version="1.9.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(42), channel="telegram", chat_id="42", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Dispatch gebaut",
+        bullets=["Summary wird als Markdown-Datei versendet."],
+        session_id="sess-dispatch",
+    )
+    sent: list[tuple[dict[str, object], SendAttachment, dict[str, object]]] = []
+
+    def sender(route: dict[str, object], action: SendAttachment, metadata: dict[str, object]) -> str:
+        sent.append((route, action, metadata))
+        return "telegram-msg-1"
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"accepted": 1}
+    assert sent
+    route, action, metadata = sent[0]
+    assert route["channel"] == "telegram"
+    assert action.chat_id == "42"
+    assert action.caption == "Release dispatch-demo 1.9.0"
+    assert action.filename == "dispatch-demo_release_1.9.0_0001.md"
+    assert action.content_type == "text/markdown"
+    assert b"# v1.9.0 #0001 Dispatch gebaut" in action.data
+    assert metadata["source"] == "codex_history_dispatch"
+    assert metadata["codex_history_item_id"] == item["id"]
+
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "accepted"
+    assert persisted["delivery"]["attempts"] == 1
+    assert persisted["delivery"]["sent_at"] == "2026-06-19T12:00:00+00:00"
+    assert persisted["delivery"]["accepted_at"] == "2026-06-19T12:00:00+00:00"
+    assert [entry["status"] for entry in persisted["status_history"]][-2:] == ["dispatching", "accepted"]
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["codex_history_item_id"] == item["id"]
+    assert dispatch["account_id"] == admin_id
+    assert dispatch["status"] == "accepted"
+    assert dispatch["message_ref"] == "telegram-msg-1"
+
+
+def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "dry-run-demo", version="1.0.1")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(7), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(7), channel="telegram", chat_id="7", chat_type="private", adapter_slot=1)
+    append_codex_history_summary(store, repo_root=repo, title="Dry Run", bullets=["Nur anzeigen."])
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": lambda _route, _action, _metadata: "must-not-run"},
+            dry_run=True,
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["dry_run"] is True
+    assert result["status_counts"] == {"would_send": 1}
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_item(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "missing-sender-demo", version="1.0.2")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(8), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(8), channel="telegram", chat_id="8", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(store, repo_root=repo, title="Missing Sender", bullets=["Fehler bleibt auditierbar."])
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"failed": 1}
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "failed"
+    assert persisted["last_reason"] == "missing_sender:telegram"
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["status"] == "failed"
+    assert dispatch["reason"] == "missing_sender:telegram"

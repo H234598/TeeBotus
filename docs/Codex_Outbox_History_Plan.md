@@ -15,11 +15,13 @@ Umgesetzt:
 - Repo-Metadaten enthalten `repo_id`, Name, Root, Remote, Provider, Branch, Head-Commit und Dirty-Status.
 - Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
 - CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
+- Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
+- Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
 Offen:
 
-- `codex-history dispatch` verschickt noch nicht; die CLI-Kante existiert erst als expliziter Platzhalter.
+- Delivery-Receipts/`delivered` und aktive Bestaetigung/`acknowledged` sind noch nicht angebunden.
 - `codex-history watch` liest noch keine Codex-Sessionlogs; Dedupe, Fleet-Pfade und systemd-User-Service fehlen noch.
 - Status/Applet-Integration, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
@@ -465,7 +467,7 @@ python3 -m TeeBotus.admin codex-history watch
 ## Ungenauer Ablauf:
 
 1. Eigene `codex_history_outbox`, nicht die Status-Outbox weiter aufblasen.
-2. Eigener Telegrambot/Token für den Nachrichtenoutput (Telegramname: "TeeBotus - Logger"): `8510019782:AAHmYw3brRABw0vBGVgJfsg9_pSIA_pvNDA`
+2. Eigener Telegrambot/Token für den Nachrichtenoutput (Telegramname: "TeeBotus - Logger"): `<TEEBOTUS_LOGGER_TELEGRAM_TOKEN>`
 3. Repo-ID als Pflichtfeld.
 4. Summary-Nummerierung pro Repo.
 5. Watcher als automatische Hauptloesung.

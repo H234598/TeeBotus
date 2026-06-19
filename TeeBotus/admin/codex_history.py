@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import re
@@ -12,11 +13,14 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from inspect import isawaitable
 from pathlib import Path
 from typing import Any
 
 from TeeBotus import __version__
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
+from TeeBotus.runtime.actions import SendAttachment
+from TeeBotus.runtime.admin_accounts import resolve_admin_account_group
 from TeeBotus.runtime.accounts import (
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
@@ -24,9 +28,11 @@ from TeeBotus.runtime.accounts import (
     AccountStoreError,
     InstanceSecretProvider,
 )
+from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
 
 CODEX_HISTORY_SCHEMA_VERSION = 1
 CODEX_HISTORY_TARGET_GROUP = "status_admins"
+CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
 
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b")
 _TELEGRAM_TOKEN_RE = re.compile(r"\b\d{7,12}:[A-Za-z0-9_\-]{25,}\b")
@@ -140,6 +146,72 @@ def append_codex_history_summary(
         return dict(item)
 
 
+async def dispatch_codex_history_outbox(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    account_ids: Sequence[str] = (),
+    senders: Mapping[str, ProactiveSender] | None = None,
+    env: Mapping[str, str] | None = None,
+    now: datetime | None = None,
+    dry_run: bool = False,
+    limit: int = 100,
+) -> dict[str, Any]:
+    timestamp = _iso_timestamp(now)
+    resolved_senders = senders or {}
+    candidate_account_ids = _codex_history_dispatch_account_ids(store, instance_name=instance_name, account_ids=account_ids, env=env)
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    items = [row for row in rows if _codex_history_item_dispatchable(row)]
+    if limit > 0:
+        items = items[:limit]
+    result_rows: list[dict[str, Any]] = []
+    for item in items:
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
+            continue
+        if dry_run:
+            dry_rows = _dry_run_dispatch_rows(item, candidate_account_ids, store)
+            result_rows.extend(dry_rows)
+            continue
+        _update_codex_history_item_status(store, item_id, "dispatching", reason="worker_claimed", now=timestamp, increment_attempt=True)
+        item_results: list[dict[str, Any]] = []
+        for account_id in candidate_account_ids:
+            item_results.append(
+                await _dispatch_codex_history_item_to_account(
+                    store,
+                    item,
+                    account_id,
+                    instance_name=instance_name,
+                    senders=resolved_senders,
+                    now=timestamp,
+                )
+            )
+        if not item_results:
+            item_results.append(
+                _record_codex_history_dispatch_result(
+                    store,
+                    item,
+                    "",
+                    status="skipped",
+                    reason="no_recipient_accounts",
+                    now=timestamp,
+                    instance_name=instance_name,
+                )
+            )
+        final_status = _overall_dispatch_status(item_results)
+        final_reason = _overall_dispatch_reason(item_results)
+        _update_codex_history_item_status(store, item_id, final_status, reason=final_reason, now=timestamp, dispatch_results=item_results)
+        result_rows.extend(item_results)
+    return {
+        "ok": not any(row.get("status") == "failed" for row in result_rows),
+        "dry_run": dry_run,
+        "instance": instance_name,
+        "generated_at": timestamp,
+        "items": result_rows,
+        "status_counts": _status_counts(result_rows),
+    }
+
+
 def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
     root = Path(repo_root).expanduser().resolve()
     git_root = _git_output(root, "rev-parse", "--show-toplevel")
@@ -219,6 +291,306 @@ def build_codex_history_markdown(
         lines.append("- Keine Tests angegeben.")
     lines.append("")
     return "\n".join(lines)
+
+
+def _codex_history_dispatch_account_ids(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    account_ids: Sequence[str],
+    env: Mapping[str, str] | None,
+) -> tuple[str, ...]:
+    candidates = tuple(str(account_id or "").strip().casefold() for account_id in account_ids if str(account_id or "").strip())
+    if not candidates:
+        group = resolve_admin_account_group(instance_name=instance_name, env=env)
+        candidates = tuple(group.account_ids)
+    seen: set[str] = set()
+    result: list[str] = []
+    for account_id in candidates:
+        if account_id in seen:
+            continue
+        seen.add(account_id)
+        result.append(account_id)
+    return tuple(result)
+
+
+def _codex_history_item_dispatchable(item: Mapping[str, Any]) -> bool:
+    if not isinstance(item, Mapping):
+        return False
+    if str(item.get("kind") or "").strip() != "codex_run_summary":
+        return False
+    status = str(item.get("status") or "queued").strip().casefold()
+    return status in CODEX_HISTORY_DISPATCHABLE_STATUSES
+
+
+def _dry_run_dispatch_rows(item: Mapping[str, Any], account_ids: Sequence[str], store: AccountStore) -> list[dict[str, Any]]:
+    item_id = str(item.get("id") or "").strip()
+    rows: list[dict[str, Any]] = []
+    for account_id in account_ids:
+        route = _safe_select_route(store, account_id)
+        channel = str(route.get("channel") or "").strip().casefold() if isinstance(route, Mapping) else ""
+        rows.append(
+            {
+                "codex_history_item_id": item_id,
+                "account_id": account_id,
+                "status": "would_send" if route is not None else "would_skip",
+                "reason": "" if route is not None else "no_private_route",
+                "channel": channel,
+                "summary_prefix": item.get("summary_prefix", ""),
+            }
+        )
+    if not rows:
+        rows.append(
+            {
+                "codex_history_item_id": item_id,
+                "account_id": "",
+                "status": "would_skip",
+                "reason": "no_recipient_accounts",
+                "channel": "",
+                "summary_prefix": item.get("summary_prefix", ""),
+            }
+        )
+    return rows
+
+
+async def _dispatch_codex_history_item_to_account(
+    store: AccountStore,
+    item: Mapping[str, Any],
+    account_id: str,
+    *,
+    instance_name: str,
+    senders: Mapping[str, ProactiveSender],
+    now: str,
+) -> dict[str, Any]:
+    route = _safe_select_route(store, account_id)
+    if route is None:
+        return _record_codex_history_dispatch_result(
+            store,
+            item,
+            account_id,
+            status="skipped",
+            reason="no_private_route",
+            now=now,
+            instance_name=instance_name,
+        )
+    channel = str(route.get("channel") or "").strip().casefold()
+    chat_id = str(route.get("chat_id") or "").strip()
+    if not channel or not chat_id:
+        return _record_codex_history_dispatch_result(
+            store,
+            item,
+            account_id,
+            status="skipped",
+            reason="invalid_route",
+            now=now,
+            instance_name=instance_name,
+            route=route,
+        )
+    sender = _sender_for_channel(senders, channel)
+    if sender is None:
+        return _record_codex_history_dispatch_result(
+            store,
+            item,
+            account_id,
+            status="failed",
+            reason=f"missing_sender:{channel}",
+            now=now,
+            instance_name=instance_name,
+            route=route,
+        )
+    action = _codex_history_attachment_action(item, chat_id)
+    try:
+        sent_ref = sender(
+            route,
+            action,
+            {
+                "source": "codex_history_dispatch",
+                "account_id": account_id,
+                "codex_history_item_id": str(item.get("id") or ""),
+            },
+        )
+        if isawaitable(sent_ref):
+            sent_ref = await sent_ref
+    except Exception as exc:  # noqa: BLE001 - adapter exception types differ per channel.
+        return _record_codex_history_dispatch_result(
+            store,
+            item,
+            account_id,
+            status="failed",
+            reason=f"send_error:{type(exc).__name__}",
+            now=now,
+            instance_name=instance_name,
+            route=route,
+        )
+    return _record_codex_history_dispatch_result(
+        store,
+        item,
+        account_id,
+        status="accepted",
+        reason="accepted",
+        now=now,
+        instance_name=instance_name,
+        route=route,
+        message_ref=str(sent_ref or ""),
+    )
+
+
+def _safe_select_route(store: AccountStore, account_id: str) -> dict[str, Any] | None:
+    try:
+        return select_proactive_route(store, account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return None
+
+
+def _sender_for_channel(senders: Mapping[str, ProactiveSender], channel: str) -> ProactiveSender | None:
+    normalized_channel = str(channel or "").strip().casefold()
+    for key, sender in senders.items():
+        if str(key or "").strip().casefold() == normalized_channel and callable(sender):
+            return sender
+    return None
+
+
+def _codex_history_attachment_action(item: Mapping[str, Any], chat_id: str) -> SendAttachment:
+    summary = item.get("summary", {})
+    project = item.get("project", {})
+    version = item.get("version", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    markdown = str(summary.get("markdown") or "").strip()
+    if not markdown:
+        markdown = f"# {item.get('summary_prefix', 'untagged')} {summary.get('title', 'Codex run summary')}\n"
+    repo_name = str(project.get("repo_name") or "project").strip() or "project"
+    semver = str(version.get("semver") or "untagged").strip() or "untagged"
+    caption = f"Release {repo_name} {semver}"
+    filename = _codex_history_markdown_filename(repo_name, semver, item.get("summary_number") or version.get("summary_number") or 1)
+    return SendAttachment(
+        str(chat_id),
+        markdown.encode("utf-8"),
+        filename,
+        "text/markdown",
+        caption=caption,
+        track=False,
+    )
+
+
+def _codex_history_markdown_filename(repo_name: str, semver: str, summary_number: object) -> str:
+    safe_repo = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(repo_name or "project")).strip("._-") or "project"
+    safe_semver = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(semver or "untagged")).strip("._-") or "untagged"
+    try:
+        number = int(summary_number)
+    except (TypeError, ValueError):
+        number = 1
+    return f"{safe_repo}_release_{safe_semver}_{max(1, number):04d}.md"
+
+
+def _record_codex_history_dispatch_result(
+    store: AccountStore,
+    item: Mapping[str, Any],
+    account_id: str,
+    *,
+    status: str,
+    reason: str,
+    now: str,
+    instance_name: str,
+    route: Mapping[str, Any] | None = None,
+    message_ref: str = "",
+) -> dict[str, Any]:
+    route = route if isinstance(route, Mapping) else {}
+    version = item.get("version", {})
+    if not isinstance(version, Mapping):
+        version = {}
+    row = {
+        "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+        "codex_history_item_id": str(item.get("id") or ""),
+        "account_id": str(account_id or ""),
+        "instance": instance_name,
+        "status": str(status or "").strip().casefold(),
+        "reason": str(reason or "").strip(),
+        "channel": str(route.get("channel") or "").strip().casefold(),
+        "chat_id": str(route.get("chat_id") or "").strip(),
+        "message_ref": str(message_ref or "").strip(),
+        "summary_prefix": str(item.get("summary_prefix") or version.get("summary_prefix") or ""),
+        "summary_number": item.get("summary_number") or version.get("summary_number"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
+    return row
+
+
+def _update_codex_history_item_status(
+    store: AccountStore,
+    item_id: str,
+    status: str,
+    *,
+    reason: str,
+    now: str,
+    increment_attempt: bool = False,
+    dispatch_results: Sequence[Mapping[str, Any]] = (),
+) -> None:
+    normalized_status = str(status or "").strip().casefold()
+    normalized_reason = str(reason or "").strip()
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
+                continue
+            item["status"] = normalized_status
+            item["updated_at"] = now
+            delivery = item.setdefault("delivery", {})
+            if not isinstance(delivery, dict):
+                delivery = {}
+                item["delivery"] = delivery
+            if increment_attempt:
+                try:
+                    delivery["attempts"] = int(delivery.get("attempts") or 0) + 1
+                except (TypeError, ValueError):
+                    delivery["attempts"] = 1
+                delivery["last_attempt_at"] = now
+            if normalized_status == "dispatching":
+                delivery["sent_at"] = now
+            if normalized_status == "accepted":
+                delivery.setdefault("sent_at", now)
+                delivery["accepted_at"] = now
+            if normalized_reason:
+                item["last_reason"] = normalized_reason
+            if dispatch_results:
+                item["last_dispatch_results"] = [dict(row) for row in dispatch_results]
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": now, "status": normalized_status, "reason": normalized_reason})
+            break
+        store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+
+
+def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
+    statuses = {str(row.get("status") or "").strip().casefold() for row in rows if isinstance(row, Mapping)}
+    if "accepted" in statuses:
+        return "accepted"
+    if "failed" in statuses:
+        return "failed"
+    if "skipped" in statuses:
+        return "skipped"
+    return "failed"
+
+
+def _overall_dispatch_reason(rows: Sequence[Mapping[str, Any]]) -> str:
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        if str(row.get("status") or "").strip().casefold() in {"failed", "skipped", "accepted"}:
+            return str(row.get("reason") or "").strip()
+    return ""
+
+
+def _iso_timestamp(now: datetime | None = None) -> str:
+    return (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
 def build_codex_history_report(
@@ -367,6 +739,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report_parser.add_argument("--output", default="")
 
     dispatch_parser = subparsers.add_parser("dispatch")
+    dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    dispatch_parser.add_argument("--instances", default="")
+    dispatch_parser.add_argument("--instance", default="")
+    dispatch_parser.add_argument("--limit", type=int, default=100)
     dispatch_parser.add_argument("--format", choices=("text", "json"), default="text")
     dispatch_parser.add_argument("--dry-run", action="store_true")
 
@@ -405,12 +781,43 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
         _write_or_print(output, args.output)
         return 0
-    if args.command in {"dispatch", "watch"}:
+    if args.command == "dispatch":
+        selected_instances = parse_csv(getattr(args, "instances", None))
+        if args.instance:
+            selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+        instances_dir = Path(args.instances_dir)
+        dispatch_reports: list[dict[str, Any]] = []
+        selected = discover_instances(instances_dir, selected_instances)
+        sender_factory = None if args.dry_run else _runtime_sender_factory(instances_dir)
+        for instance_name in selected:
+            store = _store_for_instance(instances_dir, instance_name, provider)
+            senders = {} if args.dry_run else dict(sender_factory(instance_name, store))  # type: ignore[operator]
+            dispatch_reports.append(
+                asyncio.run(
+                    dispatch_codex_history_outbox(
+                        store,
+                        instance_name=instance_name,
+                        senders=senders,
+                        dry_run=bool(args.dry_run),
+                        limit=int(args.limit or 0),
+                    )
+                )
+            )
+        payload = {
+            "ok": not any(not report.get("ok") for report in dispatch_reports),
+            "dry_run": bool(args.dry_run),
+            "instances_dir": str(instances_dir),
+            "instances": dispatch_reports,
+        }
+        output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_dispatch_report(payload)
+        print(output, end="")
+        return 0 if payload["ok"] else 1
+    if args.command == "watch":
         payload = {
             "ok": False,
             "status": "not_implemented",
             "command": args.command,
-            "message": "Codex history storage/reporting is implemented; dispatch/watch will be wired in a later phase.",
+            "message": "Codex history storage/reporting/dispatch is implemented; watch will be wired in a later phase.",
         }
         output = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n" if args.format == "json" else payload["message"] + "\n"
         print(output, end="")
@@ -433,6 +840,35 @@ def _write_or_print(output: str, output_path: str) -> None:
         Path(output_path).write_text(output, encoding="utf-8")
     else:
         print(output, end="")
+
+
+def _runtime_sender_factory(instances_dir: Path):
+    from TeeBotus.proactive import runtime_sender_factory
+
+    return runtime_sender_factory(instances_dir)
+
+
+def _render_dispatch_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Dispatch", "", f"dry_run: {payload.get('dry_run', False)}"]
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        status_counts = instance.get("status_counts", {})
+        if isinstance(status_counts, Mapping):
+            lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
+        for item in instance.get("items", []):
+            if not isinstance(item, Mapping):
+                continue
+            lines.append(
+                "  dispatch: "
+                f"item={item.get('codex_history_item_id', '')} "
+                f"account={item.get('account_id', '')} "
+                f"status={item.get('status', '')} "
+                f"reason={item.get('reason', '')}"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def _git_output(repo_root: Path, *args: str) -> str:
