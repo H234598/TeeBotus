@@ -442,7 +442,7 @@ def _clear_resolved_failures(
         if isinstance(payload, dict) and str(payload.get("account_id") or "") == recipient.account_id:
             failed_identities.pop(identity_key, None)
             continue
-        if _failed_delivery_route_matches(failure, recipient):
+        if _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(identity_key, failure, recipient):
             failed_identities.pop(identity_key, None)
 
 
