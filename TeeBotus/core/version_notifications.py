@@ -40,12 +40,16 @@ def notify_recent_telegram_users_for_version(
     now: datetime | None = None,
 ) -> int:
     normalized_version = _normalize_version_key(version)
-    resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
     if _sql_state_backend_available(account_store) and _state_has_versions(state):
         _write_state(account_store, state_path, state)
+    if not normalized_version:
+        if on_skip is not None:
+            on_skip("version is empty")
+        return 0
+    resolved_repo_url = repo_url or github_repo_url(repo_root or Path.cwd())
     if repo_root is not None and not github_has_version(repo_root, normalized_version):
         if on_skip is not None:
             on_skip(f"GitHub tag v{normalized_version} not found on remote")
@@ -159,7 +163,10 @@ def _normalize_version_key(version: str) -> str:
 
 
 def github_has_version(repo_root: Path, version: str, *, remote: str = "origin") -> bool:
-    tag = f"v{str(version).strip().lstrip('v')}"
+    normalized_version = _normalize_version_key(version)
+    if not normalized_version:
+        return False
+    tag = f"v{normalized_version}"
     try:
         result = subprocess.run(
             ["git", "ls-remote", "--exit-code", "--tags", remote, tag],

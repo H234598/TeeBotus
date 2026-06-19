@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 from TeeBotus.core.version_notifications import (
     build_version_notification_text,
+    github_has_version,
     github_repo_url,
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
@@ -489,6 +490,29 @@ def test_notify_recent_telegram_users_normalizes_version_key(tmp_path: Path) -> 
     assert len(sent) == 1
     assert list(state["versions"]) == ["1.0.3"]
     assert "Version 1.0.3" in sent[0][1]
+
+
+def test_notify_recent_telegram_users_skips_empty_normalized_version(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    sent: list[int] = []
+    skips: list[str] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="v",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        on_skip=skips.append,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert skips == ["version is empty"]
+    assert not state_path.exists()
 
 
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
@@ -1254,6 +1278,23 @@ def test_notify_recent_telegram_users_includes_normalized_github_repo_link(tmp_p
 
     assert count == 1
     assert "Repo: https://github.com/example/project" in sent[0]
+
+
+def test_github_has_version_normalizes_uppercase_version_prefix(tmp_path: Path, monkeypatch) -> None:
+    calls: list[list[str]] = []
+
+    class Result:
+        returncode = 0
+        stdout = "refs/tags/v1.0.3"
+
+    def fake_run(args, **_kwargs):
+        calls.append(list(args))
+        return Result()
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", fake_run)
+
+    assert github_has_version(tmp_path, "V1.0.3") is True
+    assert calls[0][-1] == "v1.0.3"
 
 
 def test_github_repo_url_normalizes_https_remote(tmp_path: Path, monkeypatch) -> None:
