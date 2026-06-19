@@ -84,9 +84,13 @@ class HandlerTests(unittest.TestCase):
         self.assertTrue(is_program_history_request("Release Log bitte"))
         self.assertTrue(is_program_history_request("Zeig mir den Release-Log"))
         self.assertTrue(is_program_history_request("Zeig mir das ReleaseLog"))
+        self.assertTrue(is_program_history_request("Welche Releases gab es?"))
+        self.assertTrue(is_program_history_request("Zeig mir die letzten Releases"))
         self.assertFalse(is_program_history_request("commit bitte"))
         self.assertFalse(is_program_history_request("Was sind Commits?"))
         self.assertFalse(is_program_history_request("Kannst du Commits erklären?"))
+        self.assertFalse(is_program_history_request("Was sind Releases?"))
+        self.assertFalse(is_program_history_request("Kannst du Releases erklären?"))
         self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))
 
     def test_readme_history_examples_match_detection(self) -> None:

@@ -118,7 +118,11 @@ def is_program_history_request(text: str) -> bool:
         "release log",
         "releaselog",
         "release notes",
-        "releases",
+        "welche releases gab",
+        "letzte releases",
+        "letzten releases",
+        "zeig mir releases",
+        "zeige mir releases",
         "changelog",
     )
     return any(_contains_history_phrase(normalized, needle) for needle in needles)
