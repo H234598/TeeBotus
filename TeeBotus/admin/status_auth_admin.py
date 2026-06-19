@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider
@@ -112,13 +112,20 @@ def _safe_output_path(output: str) -> Path:
 
 
 def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_json: bool) -> None:
+    with output_path.open("w", encoding="utf-8") as handle:
+        _emit_status_auth_report(report, as_json=as_json, stream=handle)
+
+
+def _emit_status_auth_report(
+    report: dict[str, Any], *, as_json: bool, stream: TextIO = sys.stdout
+) -> None:
     safe_report = _sanitize_output(report)
     output = (
         json.dumps(safe_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         if as_json
         else render_text_report(safe_report)
     )
-    output_path.write_text(output, encoding="utf-8")
+    stream.write(output)
 
 
 @dataclass(frozen=True)
@@ -288,13 +295,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             print(f"status-auth: unable to write output: {exc}", file=sys.stderr)
             return 2
     else:
-        sanitized_report = _sanitize_output(report)
-        output = (
-            json.dumps(sanitized_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-            if args.format == "json"
-            else render_text_report(sanitized_report)
-        )
-        print(output, end="")
+        _emit_status_auth_report(report, as_json=(args.format == "json"))
     return 0
 
 
