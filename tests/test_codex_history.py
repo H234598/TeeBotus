@@ -1078,6 +1078,15 @@ def test_safe_output_path_rejects_parent_traversal(tmp_path: Path) -> None:
         raise AssertionError("parent traversal in output path must be rejected")
 
 
+def test_safe_output_path_rejects_windows_drive_paths(tmp_path: Path) -> None:
+    try:
+        _safe_output_path("C:/codex-output.json")
+    except ValueError as exc:
+        assert "invalid path segment" in str(exc) or "invalid path separator" in str(exc)
+    else:
+        raise AssertionError("windows drive output path must be rejected")
+
+
 def test_safe_repo_root_rejects_parent_traversal(tmp_path: Path) -> None:
     try:
         _safe_repo_root(tmp_path / "../other")
@@ -1085,6 +1094,15 @@ def test_safe_repo_root_rejects_parent_traversal(tmp_path: Path) -> None:
         assert "forbidden relative segment" in str(exc)
     else:
         raise AssertionError("parent traversal in repo root must be rejected")
+
+
+def test_safe_repo_root_rejects_windows_drive_paths(tmp_path: Path) -> None:
+    try:
+        _safe_repo_root("C:/tmp")
+    except ValueError as exc:
+        assert "invalid path segment" in str(exc) or "invalid path separator" in str(exc)
+    else:
+        raise AssertionError("windows drive repo path must be rejected")
 
 
 def test_normalize_and_classify_remote_urls() -> None:
