@@ -913,6 +913,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert parsed["summary"]["llm_routes"] == 1
     assert parsed["summary"]["api_budgets"] == 1
     assert parsed["summary"]["telegram_slots"] == 1
+    assert cinnamon_applet._redact('"api_key":"start-secret"') == '"api_key":"<redacted>"'
+    assert cinnamon_applet._redact("'client_secret':'start secret'") == "'client_secret':'<redacted>'"
+    assert cinnamon_applet._redact('"api_key_env":"GEMINI_API_KEY"') == '"api_key_env":"GEMINI_API_KEY"'
 
 
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
