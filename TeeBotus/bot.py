@@ -356,7 +356,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        print(line)
+        print(_sanitize_admin_notify_status_line(line))
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -1743,17 +1743,15 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
     key = str(match.group(1) or "")
     separator = str(match.group(2) or "=")
-    value = str(match.group(3) or "")
-    return _status_secret_assignment_text(key, separator, value, original=match.group(0))
+    return f"{key}{separator}<redacted>"
 
 
 def _status_secret_assignment_fragment_replacement(match: re.Match[str]) -> str:
     prefix = str(match.group(1) or "")
     key = str(match.group(2) or "")
     separator = str(match.group(3) or "=")
-    value = str(match.group(4) or "")
-    original = match.group(0)[len(prefix) :]
-    return prefix + _status_secret_assignment_text(key, separator, value, original=original)
+    _ = match.group(4) or ""
+    return prefix + f"{key}{separator}<redacted>"
 
 
 def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
@@ -2065,6 +2063,13 @@ def _main_impl(argv: list[str] | None = None) -> int:
 
     if args and args[0] in {"--runtime-status", "runtime-status"}:
         return _runtime_status_preserving_environment(args[1:])
+
+    try:
+        from TeeBotus.runtime.maintenance import configure_runtime_logging
+
+        configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"))
+    except Exception:  # noqa: BLE001 - logging setup must not block startup.
+        print("TeeBotus runtime logging setup failed", file=sys.stderr)
 
     config = _runtime_config_from_main_args(args)
     if config is None:
