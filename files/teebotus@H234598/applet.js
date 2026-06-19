@@ -17,6 +17,8 @@ const DEFAULT_QDRANT_UNIT = "teebotus-qdrant.service";
 const DEFAULT_QDRANT_URL = "http://127.0.0.1:6333";
 const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
+const DEFAULT_GITHUB_URL = "https://github.com/H234598/TeeBotus";
+const DEFAULT_COMMITS_URL = "https://github.com/H234598/TeeBotus/commits/main";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
 const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
@@ -156,8 +158,8 @@ TeeBotusApplet.prototype = {
     this.libraryPath = GLib.build_filenamev([DEFAULT_REPO_PATH, "instances", "Depressionsbot", "data", "Bibliothek"]);
     this.proactiveInstance = "Depressionsbot";
     this.proactiveCommand = DEFAULT_PYTHON + " -m TeeBotus.proactive --instance Depressionsbot --dispatch --plan --tool-plan";
-    this.githubUrl = "https://github.com/H234598/TeeBotus";
-    this.commitsUrl = "https://github.com/H234598/TeeBotus/commits/main";
+    this.githubUrl = DEFAULT_GITHUB_URL;
+    this.commitsUrl = DEFAULT_COMMITS_URL;
     this.codexUsagePath = DEFAULT_CODEX_USAGE_PATH;
     this.codexUsageCommand = DEFAULT_CODEX_USAGE_COMMAND;
     this.clipboard = St.Clipboard.get_default();
@@ -294,8 +296,8 @@ TeeBotusApplet.prototype = {
 
     this.projectMenu.menu.removeAll();
     this.projectMenu.menu.addMenuItem(this._actionItem(_("Repo-Ordner öffnen"), () => this._openPath(this._repoPath())));
-    this.projectMenu.menu.addMenuItem(this._actionItem(_("GitHub öffnen"), () => this._openUri(this.githubUrl)));
-    this.projectMenu.menu.addMenuItem(this._actionItem(_("Commits öffnen"), () => this._openUri(this.commitsUrl)));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("GitHub öffnen"), () => this._openUri(this._githubUrl())));
+    this.projectMenu.menu.addMenuItem(this._actionItem(_("Commits öffnen"), () => this._openUri(this._commitsUrl())));
     this.projectMenu.menu.addMenuItem(this._actionItem(_("README im Terminal"), () => this._openTerminalForCommand(this._repoPath(), ["sed", "-n", "1,140p", "README.md"])));
   },
 
@@ -1219,7 +1221,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openUri: function(uri) {
-    this._spawn(["gio", "open", String(uri || this.githubUrl)], () => {});
+    this._spawn(["gio", "open", this._safeProjectUrl(uri, DEFAULT_GITHUB_URL)], () => {});
   },
 
   _menuLine: function(label, reactive) {
@@ -1285,6 +1287,14 @@ TeeBotusApplet.prototype = {
 
   _codexUsagePath: function() {
     return this._safeLocalPath(this.codexUsagePath, DEFAULT_CODEX_USAGE_PATH);
+  },
+
+  _githubUrl: function() {
+    return this._safeProjectUrl(this.githubUrl, DEFAULT_GITHUB_URL);
+  },
+
+  _commitsUrl: function() {
+    return this._safeProjectUrl(this.commitsUrl, DEFAULT_COMMITS_URL);
   },
 
   _codexUsageCommand: function() {
@@ -1380,6 +1390,18 @@ TeeBotusApplet.prototype = {
       return fallbackPath;
     }
     return path;
+  },
+
+  _safeProjectUrl: function(value, fallback) {
+    let fallbackUrl = String(fallback || DEFAULT_GITHUB_URL).trim() || DEFAULT_GITHUB_URL;
+    let url = String(value || fallbackUrl).trim() || fallbackUrl;
+    if (url.length > 2048 || /[\u0000-\u001F\u007F\s]/.test(url)) {
+      return fallbackUrl;
+    }
+    if (!/^https:\/\/github\.com\/H234598\/TeeBotus(?:\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*)?(?:\?[A-Za-z0-9._~!$&'()*+,;=:@%/?-]*)?$/.test(url)) {
+      return fallbackUrl;
+    }
+    return url;
   },
 
   _safeShellWord: function(value) {

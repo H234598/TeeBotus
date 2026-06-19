@@ -154,6 +154,9 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "_terminalCommandArgs: function(parsed)" in source
     assert "_safeLocalPath: function(value, fallback)" in source
     assert "_libraryPath: function()" in source
+    assert "_safeProjectUrl: function(value, fallback)" in source
+    assert "_githubUrl: function()" in source
+    assert "_commitsUrl: function()" in source
     assert "_runtimeUnit: function()" in source
     assert "_qdrantUnit: function()" in source
     assert "_safeSystemdUnit: function(value, fallback)" in source
@@ -504,6 +507,47 @@ def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
     assert "file:///etc/passwd" not in opened_targets
     assert "--help" not in opened_targets
     assert all(target.startswith("/") for target in opened_targets)
+
+
+def test_cinnamon_applet_sanitizes_project_urls_from_settings() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let opened = [];
+          applet._spawn = function(argv) {
+            opened.push(argv);
+          };
+          applet.githubUrl = "--help";
+          applet.commitsUrl = "file:///etc/passwd";
+          let validCommit = applet._safeProjectUrl("https://github.com/H234598/TeeBotus/commit/abcdef", "fallback");
+          let foreign = applet._safeProjectUrl("https://example.com/H234598/TeeBotus", "fallback");
+          let credential = applet._safeProjectUrl("https://user@github.com/H234598/TeeBotus", "fallback");
+          applet._openUri(applet._githubUrl());
+          applet._openUri(applet._commitsUrl());
+          return {
+            github: applet._githubUrl(),
+            commits: applet._commitsUrl(),
+            validCommit: validCommit,
+            foreign: foreign,
+            credential: credential,
+            opened: opened
+          };
+        })()
+        """
+    )
+
+    assert result["github"] == "https://github.com/H234598/TeeBotus"
+    assert result["commits"] == "https://github.com/H234598/TeeBotus/commits/main"
+    assert result["validCommit"] == "https://github.com/H234598/TeeBotus/commit/abcdef"
+    assert result["foreign"] == "fallback"
+    assert result["credential"] == "fallback"
+    opened_targets = [entry[2] for entry in result["opened"]]
+    assert "--help" not in opened_targets
+    assert "file:///etc/passwd" not in opened_targets
+    assert opened_targets == [
+        "https://github.com/H234598/TeeBotus",
+        "https://github.com/H234598/TeeBotus/commits/main",
+    ]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
