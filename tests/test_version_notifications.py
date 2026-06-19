@@ -1973,6 +1973,16 @@ def test_github_repo_url_uses_default_for_non_github_https_remotes(tmp_path: Pat
     assert "gitlab.internal" not in repo_url
 
 
+def test_github_repo_url_uses_default_for_invalid_remote_port(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "https://github.com:bad/H234598/TeeBotus.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
+
+
 def test_version_notification_text_strips_repo_url_credentials() -> None:
     leaked_token = "github_pat_" + "A" * 24
 

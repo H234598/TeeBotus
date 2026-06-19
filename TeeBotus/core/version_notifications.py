@@ -233,8 +233,12 @@ def _normalize_github_url(value: str) -> str:
         if len(path_parts) < 2:
             return ""
         netloc = parsed.hostname
-        if parsed.port is not None:
-            netloc = f"{netloc}:{parsed.port}"
+        try:
+            port = parsed.port
+        except ValueError:
+            return ""
+        if port is not None:
+            netloc = f"{netloc}:{port}"
         raw = urlunsplit(("https", netloc, "/" + "/".join(path_parts[:2]), "", ""))
     else:
         return ""
