@@ -1166,7 +1166,7 @@ async def dispatch_due_proactive_outbox_items(
             continue
         channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
-        if route.get("chat_type") != "private" or not channel or not chat_id:
+        if str(route.get("chat_type") or "").strip().casefold() != "private" or not channel or not chat_id:
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
             continue
@@ -1449,7 +1449,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             if not isinstance(route, dict):
                 errors.append(f"{status} outbox item {item_id or index} missing route")
             else:
-                if route.get("chat_type") != "private":
+                if str(route.get("chat_type") or "").strip().casefold() != "private":
                     errors.append(f"{status} outbox item {item_id or index} route is not private")
                 if not str(route.get("channel") or "").strip():
                     errors.append(f"{status} outbox item {item_id or index} missing route channel")
