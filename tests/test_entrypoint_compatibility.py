@@ -2569,6 +2569,57 @@ def test_default_auto_channels_run_signal_preflight_on_narrowed_config(monkeypat
     assert refresh_calls == []
 
 
+def test_default_auto_channels_signal_fallback_preflight_skips_empty_instances(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    for name in ("SignalBot", "TelegramOnly"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    calls = []
+    refresh_calls = []
+    checked_instances = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCES", "SignalBot,TelegramOnly")
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_SIGNALBOT", raising=False)
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_TELEGRAMONLY", raising=False)
+    monkeypatch.setenv("SIGNAL_BOT_SERVICE_SIGNALBOT", "http://127.0.0.1:8080")
+    monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_SIGNALBOT", "+491234")
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_TELEGRAMONLY", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_TELEGRAMONLY", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_SIGNALBOT", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_SIGNALBOT", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_SIGNALBOT", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_TELEGRAMONLY", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_TELEGRAMONLY", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_TELEGRAMONLY", raising=False)
+
+    def secret_health(*, instance_name, project_root):
+        checked_instances.append(instance_name)
+        if instance_name == "TelegramOnly":
+            return [
+                "account_crypto=TelegramOnly status=broken mapping=present memory=missing_required keyring=broken"
+            ]
+        return []
+
+    monkeypatch.setattr("TeeBotus.core.status.account_secret_health_lines", secret_health)
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
+    monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main([]) == 0
+
+    assert checked_instances == ["SignalBot"]
+    assert calls
+    assert calls[0].selected_instances == ("SignalBot",)
+    assert tuple(instance.instance_name for instance in calls[0].instances) == ("SignalBot",)
+    assert tuple(account.channel for instance in calls[0].instances for account in instance.accounts) == ("signal",)
+    assert refresh_calls and refresh_calls[0] is calls[0]
+
+
 def test_default_auto_channels_run_matrix_blocking_when_telegram_is_unconfigured(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []

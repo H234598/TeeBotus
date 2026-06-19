@@ -1839,18 +1839,24 @@ def _configured_non_telegram_channels(config: Any) -> tuple[str, ...]:
 def _runtime_config_for_channels(config: Any, channels: Sequence[str]) -> Any:
     selected_channels = tuple(str(channel) for channel in channels if str(channel or "").strip())
     selected_channel_set = set(selected_channels)
-    instances = tuple(
-        replace(
-            instance,
-            accounts=tuple(
-                account
-                for account in getattr(instance, "accounts", ())
-                if str(getattr(account, "channel", "") or "") in selected_channel_set
-            ),
+    instances = []
+    selected_instances = []
+    for instance in getattr(config, "instances", ()):
+        accounts = tuple(
+            account
+            for account in getattr(instance, "accounts", ())
+            if str(getattr(account, "channel", "") or "") in selected_channel_set
         )
-        for instance in getattr(config, "instances", ())
+        if not accounts:
+            continue
+        instances.append(replace(instance, accounts=accounts))
+        selected_instances.append(str(getattr(instance, "instance_name", "") or ""))
+    return replace(
+        config,
+        channels=selected_channels,
+        selected_instances=tuple(name for name in selected_instances if name.strip()),
+        instances=tuple(instances),
     )
-    return replace(config, channels=selected_channels, instances=instances)
 
 
 def _run_signal_runtime(config: Any) -> int:
