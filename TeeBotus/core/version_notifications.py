@@ -564,8 +564,6 @@ def _record_skipped_failed_delivery(
 ) -> bool:
     previous_failures = dict(failed_identities)
     matched_identity, source_failure = matched_failure
-    if matched_identity == recipient.identity_key and not force_record:
-        return False
     canonical_failure: dict[str, object] = {
         "account_id": recipient.account_id,
         "adapter_slot": recipient.adapter_slot,

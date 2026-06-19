@@ -1688,6 +1688,50 @@ def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tm
     assert "chat not found" in failed["reason"]
 
 
+def test_notify_recent_telegram_users_canonicalizes_direct_permanent_failure_account_id(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Broken")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "failed_identities": {
+                            "telegram:user:111": {
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert attempts == []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    failed = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failed["account_id"] == account_id
+    assert failed["chat_id"] == 111
+    assert failed["adapter_slot"] == 1
+    assert failed["reason"] == "chat not found"
+
+
 def test_notify_recent_telegram_users_does_not_retry_cannot_initiate_conversation_error(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Blocked")
@@ -3912,6 +3956,7 @@ def test_notify_recent_telegram_users_does_not_clear_complete_failures_without_a
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["versions"]["1.0.3"]["failed_identities"] == {
         "telegram:username:ada": {
+            "account_id": account_id,
             "chat_id": 222,
             "adapter_slot": 2,
             "reason": "chat not found",
@@ -4306,6 +4351,7 @@ def test_notify_recent_telegram_users_does_not_clear_unknown_account_id_failure_
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["versions"]["1.0.3"]["failed_identities"] == {
         "telegram:username:ada": {
+            "account_id": account_id,
             "chat_id": 222,
             "adapter_slot": 2,
             "reason": "chat not found",
