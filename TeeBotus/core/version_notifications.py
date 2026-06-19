@@ -592,10 +592,14 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
     normalized: dict[str, object] = {}
     for key, payload in value.items():
         identity_key = str(key or "").strip() if isinstance(key, str) else ""
-        if not identity_key or not isinstance(payload, dict):
+        if not _is_telegram_identity_key(identity_key) or not isinstance(payload, dict):
             continue
         normalized[identity_key] = _normalized_failure_payload(payload)
     return normalized
+
+
+def _is_telegram_identity_key(identity_key: str) -> bool:
+    return identity_key.startswith("telegram:")
 
 
 def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
