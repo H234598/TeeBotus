@@ -518,8 +518,15 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         payload = json.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {"status": "broken", "count": 0, "error": f"invalid JSON: {type(exc).__name__}"}
-    result = payload.get("result") if isinstance(payload, dict) else {}
-    count = result.get("count") if isinstance(result, dict) else 0
+    if not isinstance(payload, dict):
+        return {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
+    api_status = str(payload.get("status", "") or "").casefold()
+    if api_status and api_status not in {"ok", "green"}:
+        return {"status": "broken", "count": 0, "error": f"unexpected Qdrant status: {api_status}"}
+    result = payload.get("result")
+    if not isinstance(result, dict) or "count" not in result:
+        return {"status": "broken", "count": 0, "error": "missing Qdrant count result"}
+    count = result.get("count")
     try:
         parsed_count = max(0, int(count))
     except (TypeError, ValueError):

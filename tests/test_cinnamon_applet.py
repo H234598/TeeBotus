@@ -1354,6 +1354,43 @@ def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collectio
     assert payload["health"]["total_problem_count"] == 1
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload: object) -> None:
+            self.payload = payload
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
+    payloads: list[object] = [
+        {"status": "ok", "result": {"count": 7}},
+        {"status": "ok", "result": {}},
+        {"status": "error", "result": {"count": 0}},
+        ["not", "a", "dict"],
+    ]
+
+    def fake_urlopen(_request: object, timeout: int) -> FakeResponse:
+        assert timeout == 2
+        return FakeResponse(payloads.pop(0))
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", fake_urlopen)
+
+    ready = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+    missing_count = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+    error_status = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+    non_object = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert ready == {"status": "ready", "count": 7, "error": ""}
+    assert missing_count == {"status": "broken", "count": 0, "error": "missing Qdrant count result"}
+    assert error_status == {"status": "broken", "count": 0, "error": "unexpected Qdrant status: error"}
+    assert non_object == {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
