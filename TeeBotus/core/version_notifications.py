@@ -651,7 +651,7 @@ def _version_state_is_historical(
     if _normalize_version_key(version_key) == current_version:
         return False
     updated_at = _version_state_updated_at(version_state)
-    return updated_at is not None and updated_at < now
+    return updated_at is not None and updated_at <= now
 
 
 def _clear_historical_failures_resolved_by_sent_identities(

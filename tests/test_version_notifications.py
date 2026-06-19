@@ -1923,6 +1923,42 @@ def test_notify_recent_telegram_users_uses_failed_at_for_equal_precedence_withou
     assert failed["failed_at"] == "2026-06-14T11:00:00+00:00"
 
 
+def test_notify_recent_telegram_users_carries_equal_precedence_failure_in_same_second(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    attempts: list[int] = []
+    now = datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc)
+
+    def send_message(chat_id: int, _text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+
+    first_count = notify_recent_telegram_users_for_version(
+        version="1.0.4+build.1",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=now,
+    )
+    second_count = notify_recent_telegram_users_for_version(
+        version="1.0.4+build.2",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=now,
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert first_count == 0
+    assert second_count == 0
+    assert attempts == [111]
+    failed = state["versions"]["1.0.4+build.2"]["failed_identities"]["telegram:user:111"]
+    assert failed["chat_id"] == 111
+    assert failed["failed_at"] == "2026-06-14T12:00:00+00:00"
+
+
 def test_notify_recent_telegram_users_replays_equal_precedence_build_states_by_updated_at(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Ada")
