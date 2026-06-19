@@ -230,6 +230,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._statusTimeoutSeconds()" in source
     assert "STATUS_TIMEOUT_MAX_SECONDS = 300" in source
     assert "STATUS_TIMEOUT_GRACE_SECONDS = 5" in source
+    assert "const MAX_HELPER_JSON_CHARS = 120000;" in source
+    assert "if (text.length > MAX_HELPER_JSON_CHARS)" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
@@ -775,6 +777,35 @@ def test_cinnamon_applet_status_refresh_rejects_non_object_json() -> None:
     assert result["statusPayload"] is None
     assert result["statusText"] == "Statusfehler: Invalid JSON object from helper"
     assert result["lastError"] == "Invalid JSON object from helper"
+
+
+def test_cinnamon_applet_status_refresh_rejects_large_json_output() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.statusTimeoutSeconds = 30;
+          applet.repoPath = "/repo";
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawn = function(argv, callback, cwd, options) {
+            callback(" ".repeat(120001), "", true);
+          };
+          applet._refreshStatus();
+          return {
+            running: applet.statusRunning,
+            statusPayload: applet.statusPayload,
+            statusText: applet.statusText,
+            lastError: applet.lastError
+          };
+        })()
+        """
+    )
+
+    assert result["running"] is False
+    assert result["statusPayload"] is None
+    assert result["statusText"] == "Statusfehler: Helper JSON output too large"
+    assert result["lastError"] == "Helper JSON output too large"
 
 
 def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:

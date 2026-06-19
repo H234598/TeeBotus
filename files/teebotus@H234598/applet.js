@@ -27,6 +27,7 @@ const STATUS_TIMEOUT_MIN_SECONDS = 1;
 const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
+const MAX_HELPER_JSON_CHARS = 120000;
 const MENU_MIN_WIDTH_EM = 34;
 const MENU_LABEL_WIDTH_EM = 42;
 const SUBMENU_MIN_WIDTH_EM = 44;
@@ -1080,8 +1081,13 @@ TeeBotusApplet.prototype = {
         callback(null, stderr || _("Command failed"));
         return;
       }
+      let text = String(stdout || "");
+      if (text.length > MAX_HELPER_JSON_CHARS) {
+        callback(null, _("Helper JSON output too large"));
+        return;
+      }
       try {
-        let payload = JSON.parse(stdout);
+        let payload = JSON.parse(text);
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
           callback(null, _("Invalid JSON object from helper"));
           return;
