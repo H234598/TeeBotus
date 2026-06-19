@@ -27,6 +27,7 @@ def test_resolve_qdrant_url_rejects_public_or_secret_targets() -> None:
         "http://127.0.0.1:6333/collections",
         "http://127.0.0.1:6333?api-key=secret",
         "http://127.0.0.1",
+        "http://127.0.0.1:0",
     )
 
     for url in bad_urls:

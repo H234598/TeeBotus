@@ -1429,6 +1429,14 @@ def test_cinnamon_applet_qdrant_status_redacts_invalid_url_secrets() -> None:
     assert "api_key=<redacted>" in status["url"]
 
 
+def test_cinnamon_applet_qdrant_status_rejects_invalid_local_ports() -> None:
+    for url in ("http://127.0.0.1:0", "http://127.0.0.1:99999"):
+        status = cinnamon_applet._qdrant_status(url)
+
+        assert status["error"] == "invalid local qdrant url"
+        assert status["collections"] == {}
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
     class FakeResponse:
         status = 200

@@ -79,6 +79,8 @@ def resolve_qdrant_url(value: object | None = None, *, env: Mapping[str, str] | 
         raise ValueError("Qdrant URL must include a valid port if one is specified.") from exc
     if port is None:
         raise ValueError("Qdrant URL must include an explicit port.")
+    if port <= 0:
+        raise ValueError("Qdrant URL must include a valid port.")
     if parsed.username or parsed.password:
         raise ValueError("Qdrant URL must not contain credentials.")
     if parsed.query or parsed.fragment:

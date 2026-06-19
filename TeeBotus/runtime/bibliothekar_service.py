@@ -816,6 +816,8 @@ def _normalize_local_qdrant_url(value: object) -> str:
         raise ValueError("Bibliothekar Qdrant URL must include a valid port if one is specified.") from exc
     if port is None:
         raise ValueError("Bibliothekar Qdrant URL must include an explicit port.")
+    if port <= 0:
+        raise ValueError("Bibliothekar Qdrant URL must include a valid port.")
     if parsed.username or parsed.password:
         raise ValueError("Bibliothekar Qdrant URL must not contain credentials.")
     if parsed.query or parsed.fragment:

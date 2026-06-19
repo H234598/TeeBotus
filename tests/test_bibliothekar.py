@@ -1734,6 +1734,7 @@ def test_haystack_status_rejects_qdrant_url_query_fragment_path_or_missing_port(
         ("http://127.0.0.1:6333#token", "must not contain query parameters or fragments"),
         ("http://127.0.0.1:6333/collections", "must be a base URL without a path"),
         ("http://127.0.0.1:99999", "must include a valid port"),
+        ("http://127.0.0.1:0", "must include a valid port"),
         ("http://127.0.0.1:bad", "must include a valid port"),
         ("http://127.0.0.1", "must include an explicit port"),
         ("http://[::1", "must be a valid URL"),

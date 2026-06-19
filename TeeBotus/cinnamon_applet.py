@@ -484,6 +484,8 @@ def _safe_local_qdrant_url(value: str) -> str:
             return ""
     except ValueError:
         return ""
+    if parsed.port <= 0:
+        return ""
     if parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
         return ""
     return raw.rstrip("/")
