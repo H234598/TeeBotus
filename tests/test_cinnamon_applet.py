@@ -232,6 +232,9 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "STATUS_TIMEOUT_GRACE_SECONDS = 5" in source
     assert "const MAX_HELPER_JSON_CHARS = 120000;" in source
     assert "if (text.length > MAX_HELPER_JSON_CHARS)" in source
+    assert "const MAX_COMMAND_ARG_CHARS = 4096;" in source
+    assert "const MAX_COMMAND_ARG_COUNT = 128;" in source
+    assert "const MAX_COMMAND_CHARS = 32768;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
     assert "new PopupMenu.PopupMenuManager(this)" in source
     assert "new Applet.AppletPopupMenu(this, orientation)" in source
@@ -715,6 +718,40 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
     assert result["validTerminal"] == ["xterm", "-hold", "-e"]
     assert result["unsafeChecks"] == [False, False, False, True]
+
+
+def test_cinnamon_applet_bounds_configured_command_arguments() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let manyArgs = ["codex-usage"];
+          for (let index = 0; index < 129; index++) {
+            manyArgs.push("x");
+          }
+          let totalArgs = ["codex-usage"];
+          for (let index = 0; index < 40; index++) {
+            totalArgs.push("x".repeat(1000));
+          }
+          return {
+            tooLong: applet._safeExecutableArgs("codex-usage " + "x".repeat(4097), ["codex-usage"]),
+            tooMany: applet._safeExecutableArgs(manyArgs.join(" "), ["codex-usage"]),
+            tooLarge: applet._safeExecutableArgs(totalArgs.join(" "), ["codex-usage"]),
+            controlChar: applet._safeExecutableArgs("codex-usage bad\\\\narg", ["codex-usage"]),
+            newline: applet._safeExecutableArgs("codex-usage bad\\narg", ["codex-usage"]),
+            valid: applet._safeExecutableArgs("codex-usage latest --format json", ["codex-usage"])
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "tooLong": ["codex-usage"],
+        "tooMany": ["codex-usage"],
+        "tooLarge": ["codex-usage"],
+        "controlChar": ["codex-usage"],
+        "newline": ["codex-usage"],
+        "valid": ["codex-usage", "latest", "--format", "json"],
+    }
 
 
 def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:

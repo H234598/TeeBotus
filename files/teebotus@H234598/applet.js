@@ -28,6 +28,9 @@ const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MAX_HELPER_JSON_CHARS = 120000;
+const MAX_COMMAND_ARG_CHARS = 4096;
+const MAX_COMMAND_ARG_COUNT = 128;
+const MAX_COMMAND_CHARS = 32768;
 const MENU_MIN_WIDTH_EM = 34;
 const MENU_LABEL_WIDTH_EM = 42;
 const SUBMENU_MIN_WIDTH_EM = 44;
@@ -1430,19 +1433,53 @@ TeeBotusApplet.prototype = {
   },
 
   _commandArgs: function(value, fallback) {
+    let fallbackArgs = (fallback || []).slice();
     let raw = String(value || "").trim();
-    if (!raw) {
-      return (fallback || []).slice();
+    if (!raw || this._hasCommandControlChars(raw)) {
+      return fallbackArgs;
     }
     try {
       let [, argv] = GLib.shell_parse_argv(raw);
       if (argv && argv.length > 0) {
-        return argv.map((part) => String(part));
+        if (argv.length > MAX_COMMAND_ARG_COUNT) {
+          return fallbackArgs;
+        }
+        let normalized = [];
+        let totalChars = 0;
+        for (let part of argv) {
+          if (part === null || part === undefined) {
+            return fallbackArgs;
+          }
+          let text = String(part);
+          if (this._hasCommandControlChars(text) || text.length > MAX_COMMAND_ARG_CHARS) {
+            return fallbackArgs;
+          }
+          totalChars += text.length;
+          if (totalChars > MAX_COMMAND_CHARS) {
+            return fallbackArgs;
+          }
+          normalized.push(text);
+        }
+        return normalized;
       }
     } catch (err) {
-      return (fallback || []).slice();
+      return fallbackArgs;
     }
-    return (fallback || []).slice();
+    return fallbackArgs;
+  },
+
+  _hasCommandControlChars: function(value) {
+    let text = String(value || "").toLowerCase();
+    if (text.indexOf("\\n") >= 0 || text.indexOf("\\r") >= 0 || text.indexOf("\\u000a") >= 0 || text.indexOf("\\u000d") >= 0) {
+      return true;
+    }
+    for (let index = 0; index < text.length; index++) {
+      let code = text.charCodeAt(index);
+      if (code < 0x20 || code === 0x7f) {
+        return true;
+      }
+    }
+    return false;
   },
 
   _safeExecutableArgs: function(value, fallback) {
