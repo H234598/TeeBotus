@@ -81,6 +81,18 @@ class ImportStats:
     events: list[dict[str, Any]] = field(default_factory=list)
 
 
+def _normalize_instance_selection(values: Iterable[str]) -> tuple[str, ...]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        instance = str(value).strip()
+        if not instance or instance in seen:
+            continue
+        selected.append(instance)
+        seen.add(instance)
+    return tuple(selected)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import plaintext legacy data/users/* user memories into encrypted account memory.")
     parser.add_argument(
@@ -119,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
 
     requested_target_instances_dir = Path(args.target_instances_dir).expanduser()
     requested_legacy_instances_dir = Path(args.legacy_instances_dir).expanduser()
+    instances = _normalize_instance_selection(args.instance)
     rehearsal_copy_dir = Path(args.rehearsal_copy_dir).expanduser() if args.rehearsal_copy_dir else None
     target_instances_dir = requested_target_instances_dir
     if rehearsal_copy_dir is not None:
@@ -139,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                     stats = import_legacy_user_memory(
                         legacy_instances_dir=requested_legacy_instances_dir,
                         target_instances_dir=target_instances_dir,
-                        instances=tuple(args.instance),
+                        instances=instances,
                         apply=False,
                         replace_unreadable=args.replace_unreadable,
                         replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
@@ -154,7 +167,7 @@ def main(argv: list[str] | None = None) -> int:
                     requested_legacy_instances_dir=Path(stats.requested_legacy_instances_dir or args.legacy_instances_dir),
                     target_instances_dir=target_instances_dir,
                     requested_target_instances_dir=requested_target_instances_dir,
-                    instances=tuple(args.instance),
+                    instances=instances,
                     backend=args.backend,
                     replace_unreadable=args.replace_unreadable,
                     replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
@@ -174,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
         stats = import_legacy_user_memory(
             legacy_instances_dir=requested_legacy_instances_dir,
             target_instances_dir=target_instances_dir,
-            instances=tuple(args.instance),
+            instances=instances,
             apply=args.apply,
             replace_unreadable=args.replace_unreadable,
             replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
@@ -190,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         requested_legacy_instances_dir=Path(stats.requested_legacy_instances_dir or args.legacy_instances_dir),
         target_instances_dir=target_instances_dir,
         requested_target_instances_dir=requested_target_instances_dir,
-        instances=tuple(args.instance),
+        instances=instances,
         backend=args.backend,
         replace_unreadable=args.replace_unreadable,
         replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
@@ -239,10 +252,11 @@ def import_legacy_user_memory(
     requested_legacy_instances_dir = Path(legacy_instances_dir)
     if not requested_legacy_instances_dir.exists():
         raise SystemExit(f"legacy instances directory does not exist: {requested_legacy_instances_dir}")
-    legacy_instances_dir = _resolve_legacy_instances_dir(requested_legacy_instances_dir, set(instances))
+    selected = set(_normalize_instance_selection(instances))
+    legacy_instances_dir = _resolve_legacy_instances_dir(requested_legacy_instances_dir, selected)
     stats.requested_legacy_instances_dir = str(requested_legacy_instances_dir)
     stats.effective_legacy_instances_dir = str(legacy_instances_dir)
-    selected = set(instances)
+    selected = set(_normalize_instance_selection(instances))
     reset_account_stores: set[Path] = set()
     memory_keyring_repair_roots: dict[Path, str] = {}
     deferred_strict_verifications: list[tuple[Path, str, str, str, str]] = []

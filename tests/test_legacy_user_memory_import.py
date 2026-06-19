@@ -213,6 +213,58 @@ def test_legacy_user_memory_import_main_expands_tilde_report_outputs_and_creates
     assert (tmp_path / "teebotus-import-output" / "legacy-import.json").exists()
     assert (tmp_path / "teebotus-import-output" / "legacy-import.md").exists()
 
+
+def test_legacy_user_memory_import_main_normalizes_instance_filter(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, instance="Depressionsbot", user_id="111")
+    write_legacy_entries(legacy_root, instance="Otherbot", user_id="222")
+    report = tmp_path / "legacy-import.json"
+
+    result = import_main(
+        [
+            "--legacy-instances-dir",
+            str(legacy_root),
+            "--target-instances-dir",
+            str(target_root),
+            "--instance",
+            "",
+            "--instance",
+            "   ",
+            "--instance",
+            "Depressionsbot",
+            "--instance",
+            "Depressionsbot",
+            "--json-output",
+            str(report),
+        ]
+    )
+
+    assert result == 0
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["instances"] == ["Depressionsbot"]
+    assert payload["totals"]["sources"] == 1
+    assert payload["totals"]["entries_imported"] == 1
+
+
+def test_legacy_user_memory_import_function_normalizes_instance_filter(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    legacy_root = tmp_path / "legacy"
+    target_root = tmp_path / "target"
+    write_legacy_entries(legacy_root, instance="Depressionsbot", user_id="333")
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=False,
+        instances=("  ", "Depressionsbot", "", "Depressionsbot"),
+        provider=provider(),
+    )
+
+    assert stats.sources == 1
+
+
 def test_legacy_user_memory_import_empty_source_does_not_create_account_or_reset_metadata(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     legacy_root = tmp_path / "legacy"
