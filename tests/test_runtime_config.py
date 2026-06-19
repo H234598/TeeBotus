@@ -53,6 +53,35 @@ def test_openai_key_resolution_accepts_channel_wide_key_before_instance_slot_key
     assert resolve_openai_key("Depressionsbot", "signal", 1, env) == "sk-signal-channel"
 
 
+def test_openai_key_resolution_uses_background_key_only_for_non_user_channels():
+    env = {
+        "OPENAI_API_KEY_BACKGROUND": "sk-background",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-background"
+    assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-instance"
+
+
+def test_openai_key_resolution_prefers_proactive_key_before_background_key():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "sk-proactive"
+
+
+def test_openai_key_resolution_supports_indexed_background_keys():
+    env = {
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND": "sk-background-a, sk-background-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background-b"
+
+
 def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     env = {
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",

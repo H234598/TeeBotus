@@ -742,6 +742,32 @@ def test_runtime_llm_planner_factory_uses_proactive_key_and_instance_instruction
     assert instructions.openai_timeout_seconds == 123
 
 
+def test_runtime_llm_planner_factory_uses_background_key_before_instance_key(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## OpenAI\n- enabled: true\n", encoding="utf-8")
+    created_keys: list[str] = []
+
+    class Client:
+        def __init__(self, key: str) -> None:
+            created_keys.append(key)
+
+    monkeypatch.setattr("TeeBotus.proactive.OpenAIClient", Client)
+    factory = runtime_llm_planner_factory(
+        instances_dir,
+        env={
+            "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND": "sk-background",
+            "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        },
+    )
+
+    context = factory("Depressionsbot", store_for(instance_dir), "account")
+
+    assert context is not None
+    assert created_keys == ["sk-background"]
+
+
 def test_runtime_llm_planner_factory_returns_none_without_key(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
