@@ -391,9 +391,9 @@ def _sent_delivery_matches_recipient(
         payload = identities.get(identity_key)
         if not isinstance(payload, dict):
             continue
-        if _normalized_account_id(payload.get("account_id")) == recipient.account_id:
-            return True
         if _identity_route_matches_recipient(identity_key, payload, recipient):
+            return True
+        if _identity_account_slot_matches_recipient(payload, recipient):
             return True
     return False
 
@@ -411,6 +411,19 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
         return False
     chat_id = _route_chat_id(route, identity_key)
     return chat_id == recipient.chat_id and route_slot == recipient.adapter_slot
+
+
+def _identity_account_slot_matches_recipient(payload: dict[str, Any], recipient: VersionNotificationRecipient) -> bool:
+    if _normalized_account_id(payload.get("account_id")) != recipient.account_id:
+        return False
+    route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
+    if _route_channel(route) != "telegram":
+        return False
+    route_chat_type = _route_chat_type(route)
+    if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
+        return False
+    route_slot = _route_adapter_slot(route)
+    return route_slot == recipient.adapter_slot
 
 
 def _encoded_telegram_user_route_matches_recipient(identity_key: str, recipient: VersionNotificationRecipient) -> bool:
