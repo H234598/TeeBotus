@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Callable
+from TeeBotus import __version__
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, TOKEN_HEX_RE
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
+from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids
 
 ADMIN_ACCOUNT_IDS_ENV = "TEEBOTUS_ADMIN_ACCOUNT_IDS"
 ADMIN_ACCOUNT_IDS_INSTANCE_ENV_PREFIX = "TEEBOTUS_ADMIN_ACCOUNT_IDS_"
@@ -150,7 +152,8 @@ async def notify_runtime_status_admin_accounts(
         return (AdminNotificationResult(instance_name="runtime_status", account_id="", status="skipped", reason="no_problem_lines"),)
     source = os.environ if env is None else env
     resolved_store_factory = store_factory or _default_account_store
-    message = _runtime_status_admin_message(problem_lines, selected_instances=selected_instances, now=now)
+    resolved_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    message = _runtime_status_admin_message(problem_lines, selected_instances=selected_instances, now=resolved_now)
     results: list[AdminNotificationResult] = []
     for instance_name in selected_instances:
         try:
@@ -161,8 +164,16 @@ async def notify_runtime_status_admin_accounts(
         group = resolve_admin_account_group(instance_name=instance_name, env=source)
         for invalid_id in group.invalid_ids:
             results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
+        recipient_ids = group.account_ids
+        if not recipient_ids and not group.invalid_ids and group.source != "default":
+            env_value = str(source.get(group.source, "") if isinstance(source, Mapping) else "").strip()
+            if not env_value:
+                try:
+                    recipient_ids = status_auth_recipient_account_ids(store)
+                except Exception:  # noqa: BLE001 - status auth recipient enumeration should not block admin notify.
+                    recipient_ids = ()
         candidates: list[tuple[str, dict[str, Any], str]] = []
-        for account_id in group.account_ids:
+        for account_id in recipient_ids:
             if not _account_dir_exists(store, account_id):
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
                 continue
@@ -220,16 +231,95 @@ async def notify_runtime_status_admin_accounts(
                 continue
             sender = senders_by_channel[channel]
             chat_id = str(route.get("chat_id") or "").strip()
-            action = SendText(chat_id, message, track=False)
+            summary_number = _next_status_summary_number(store, account_id)
+            summary_prefix = f"v{__version__} #{summary_number:04d}"
+            action_text = f"{summary_prefix} {message}"
+            action = SendText(chat_id, action_text, track=False)
+            dispatch_status = "sent"
+            dispatch_reason = ""
             try:
                 outcome = sender(route, action, {"source": "runtime_status_admin", "account_id": account_id})
                 if isawaitable(outcome):
                     await outcome
             except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"send:{type(exc).__name__}", channel=channel))
+                dispatch_status = "failed"
+                dispatch_reason = f"send:{type(exc).__name__}"
+                results.append(AdminNotificationResult(instance_name, account_id, dispatch_status, dispatch_reason, channel=channel))
+                account_store_status_item = {
+                    "schema_version": 1,
+                    "summary_prefix": summary_prefix,
+                    "summary_number": summary_number,
+                    "message_text": action_text,
+                    "status": dispatch_status,
+                    "reason": dispatch_reason,
+                    "instance_name": instance_name,
+                    "account_id": account_id,
+                    "channel": channel,
+                    "created_at": resolved_now.isoformat(),
+                    "updated_at": resolved_now.isoformat(),
+                }
+                store.append_status_outbox_item(account_id, account_store_status_item)
+                store.append_status_dispatch_results(
+                    account_id,
+                    [
+                        {
+                            "schema_version": 1,
+                            "summary_prefix": summary_prefix,
+                            "summary_number": summary_number,
+                            "status": dispatch_status,
+                            "reason": dispatch_reason,
+                            "instance_name": instance_name,
+                            "account_id": account_id,
+                            "channel": channel,
+                            "created_at": resolved_now.isoformat(),
+                            "updated_at": resolved_now.isoformat(),
+                        }
+                    ],
+                )
                 continue
+            outbox_item = {
+                "schema_version": 1,
+                "summary_prefix": summary_prefix,
+                "summary_number": summary_number,
+                "message_text": action_text,
+                "status": dispatch_status,
+                "instance_name": instance_name,
+                "account_id": account_id,
+                "channel": channel,
+                "created_at": resolved_now.isoformat(),
+                "updated_at": resolved_now.isoformat(),
+            }
+            store.append_status_outbox_item(account_id, outbox_item)
+            store.append_status_dispatch_results(
+                account_id,
+                [
+                    {
+                        "schema_version": 1,
+                        "summary_prefix": summary_prefix,
+                        "summary_number": summary_number,
+                        "status": dispatch_status,
+                        "instance_name": instance_name,
+                        "account_id": account_id,
+                        "channel": channel,
+                        "created_at": resolved_now.isoformat(),
+                        "updated_at": resolved_now.isoformat(),
+                    }
+                ],
+            )
             results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
     return tuple(results)
+
+
+def _next_status_summary_number(account_store: AccountStore, account_id: str) -> int:
+    max_number = 0
+    for row in account_store.read_status_outbox(account_id):
+        try:
+            number = int(str(row.get("summary_number")).strip())
+        except (TypeError, ValueError):
+            continue
+        if number > max_number:
+            max_number = number
+    return max_number + 1
 
 
 def format_admin_notification_result_lines(results: Iterable[AdminNotificationResult]) -> tuple[str, ...]:
