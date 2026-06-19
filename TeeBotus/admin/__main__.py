@@ -19,6 +19,12 @@ def main(argv: list[str] | None = None) -> int:
         except ModuleNotFoundError as exc:
             return _dependency_error(args[1:], exc)
         return module.main(args[1:])
+    if args[0] == "status-auth":
+        try:
+            module = importlib.import_module("TeeBotus.admin.status_auth_admin")
+        except ModuleNotFoundError as exc:
+            return _dependency_error(args[1:], exc)
+        return module.main(args[1:])
     try:
         module = importlib.import_module("TeeBotus.admin.accounts_report")
     except ModuleNotFoundError as exc:
@@ -27,11 +33,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _print_usage(stream) -> None:  # noqa: ANN001
-    print("Usage: python -m TeeBotus.admin {accounts|memory-recovery} ...", file=stream)
+    print("Usage: python -m TeeBotus.admin {accounts|memory-recovery|status-auth} ...", file=stream)
     print("", file=stream)
     print("Admin areas:", file=stream)
     print("  accounts         Account-store report commands", file=stream)
     print("  memory-recovery  Account-memory recovery report and quarantine commands", file=stream)
+    print("  status-auth      Status-auth recipients, summaries, and dispatch report", file=stream)
 
 
 def _dependency_error(args: list[str], exc: ModuleNotFoundError) -> int:

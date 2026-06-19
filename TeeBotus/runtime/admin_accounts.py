@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 import re
+import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Callable
+
 from TeeBotus import __version__
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, TOKEN_HEX_RE
@@ -152,8 +154,6 @@ async def notify_runtime_status_admin_accounts(
         return (AdminNotificationResult(instance_name="runtime_status", account_id="", status="skipped", reason="no_problem_lines"),)
     source = os.environ if env is None else env
     resolved_store_factory = store_factory or _default_account_store
-    resolved_now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    message = _runtime_status_admin_message(problem_lines, selected_instances=selected_instances, now=resolved_now)
     results: list[AdminNotificationResult] = []
     for instance_name in selected_instances:
         try:
@@ -164,16 +164,8 @@ async def notify_runtime_status_admin_accounts(
         group = resolve_admin_account_group(instance_name=instance_name, env=source)
         for invalid_id in group.invalid_ids:
             results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
-        recipient_ids = group.account_ids
-        if not recipient_ids and not group.invalid_ids and group.source != "default":
-            env_value = str(source.get(group.source, "") if isinstance(source, Mapping) else "").strip()
-            if not env_value:
-                try:
-                    recipient_ids = status_auth_recipient_account_ids(store)
-                except Exception:  # noqa: BLE001 - status auth recipient enumeration should not block admin notify.
-                    recipient_ids = ()
-        candidates: list[tuple[str, dict[str, Any], str]] = []
-        for account_id in recipient_ids:
+        candidates: list[tuple[str, dict[str, Any], str, str, str]] = []
+        for account_id in _status_notification_candidate_account_ids(store, group.account_ids):
             if not _account_dir_exists(store, account_id):
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
                 continue
@@ -189,12 +181,24 @@ async def notify_runtime_status_admin_accounts(
             if not channel:
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
                 continue
-            candidates.append((account_id, route, channel))
+            try:
+                item_id, message = _queue_runtime_status_summary(
+                    store,
+                    account_id,
+                    problem_lines=problem_lines,
+                    selected_instances=selected_instances,
+                    route=route,
+                    now=now,
+                )
+            except Exception as exc:  # noqa: BLE001 - one broken status store must not hide runtime-status output.
+                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"outbox:{type(exc).__name__}", channel=channel))
+                continue
+            candidates.append((account_id, route, channel, item_id, message))
         if not candidates:
             continue
         senders_by_channel: dict[str, ProactiveSender] = {}
         sender_errors_by_channel: dict[str, str] = {}
-        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel in candidates))
+        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _item_id, _message in candidates))
         if sender_factory is not None:
             try:
                 senders = sender_factory(instance_name, store)
@@ -221,105 +225,171 @@ async def notify_runtime_status_admin_accounts(
                     sender_errors_by_channel[channel] = "no_sender"
                     continue
                 senders_by_channel[channel] = sender
-        for account_id, route, channel in candidates:
+        for account_id, route, channel, item_id, message in candidates:
             sender_error = sender_errors_by_channel.get(channel)
             if sender_error == "no_sender":
+                _record_runtime_status_dispatch(store, account_id, item_id, status="skipped", reason=sender_error, channel=channel, now=now)
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
                 continue
             if sender_error:
+                _record_runtime_status_dispatch(store, account_id, item_id, status="failed", reason=sender_error, channel=channel, now=now)
                 results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
                 continue
             sender = senders_by_channel[channel]
             chat_id = str(route.get("chat_id") or "").strip()
-            summary_number = _next_status_summary_number(store, account_id)
-            summary_prefix = f"v{__version__} #{summary_number:04d}"
-            action_text = f"{summary_prefix} {message}"
-            action = SendText(chat_id, action_text, track=False)
-            dispatch_status = "sent"
-            dispatch_reason = ""
+            action = SendText(chat_id, message, track=False)
             try:
                 outcome = sender(route, action, {"source": "runtime_status_admin", "account_id": account_id})
                 if isawaitable(outcome):
                     await outcome
             except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
-                dispatch_status = "failed"
-                dispatch_reason = f"send:{type(exc).__name__}"
-                results.append(AdminNotificationResult(instance_name, account_id, dispatch_status, dispatch_reason, channel=channel))
-                account_store_status_item = {
-                    "schema_version": 1,
-                    "summary_prefix": summary_prefix,
-                    "summary_number": summary_number,
-                    "message_text": action_text,
-                    "status": dispatch_status,
-                    "reason": dispatch_reason,
-                    "instance_name": instance_name,
-                    "account_id": account_id,
-                    "channel": channel,
-                    "created_at": resolved_now.isoformat(),
-                    "updated_at": resolved_now.isoformat(),
-                }
-                store.append_status_outbox_item(account_id, account_store_status_item)
-                store.append_status_dispatch_results(
-                    account_id,
-                    [
-                        {
-                            "schema_version": 1,
-                            "summary_prefix": summary_prefix,
-                            "summary_number": summary_number,
-                            "status": dispatch_status,
-                            "reason": dispatch_reason,
-                            "instance_name": instance_name,
-                            "account_id": account_id,
-                            "channel": channel,
-                            "created_at": resolved_now.isoformat(),
-                            "updated_at": resolved_now.isoformat(),
-                        }
-                    ],
-                )
+                reason = f"send:{type(exc).__name__}"
+                _record_runtime_status_dispatch(store, account_id, item_id, status="failed", reason=reason, channel=channel, now=now)
+                results.append(AdminNotificationResult(instance_name, account_id, "failed", reason, channel=channel))
                 continue
-            outbox_item = {
-                "schema_version": 1,
-                "summary_prefix": summary_prefix,
-                "summary_number": summary_number,
-                "message_text": action_text,
-                "status": dispatch_status,
-                "instance_name": instance_name,
-                "account_id": account_id,
-                "channel": channel,
-                "created_at": resolved_now.isoformat(),
-                "updated_at": resolved_now.isoformat(),
-            }
-            store.append_status_outbox_item(account_id, outbox_item)
-            store.append_status_dispatch_results(
-                account_id,
-                [
-                    {
-                        "schema_version": 1,
-                        "summary_prefix": summary_prefix,
-                        "summary_number": summary_number,
-                        "status": dispatch_status,
-                        "instance_name": instance_name,
-                        "account_id": account_id,
-                        "channel": channel,
-                        "created_at": resolved_now.isoformat(),
-                        "updated_at": resolved_now.isoformat(),
-                    }
-                ],
-            )
+            _record_runtime_status_dispatch(store, account_id, item_id, status="sent", channel=channel, now=now)
             results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
     return tuple(results)
 
 
-def _next_status_summary_number(account_store: AccountStore, account_id: str) -> int:
+def _status_notification_candidate_account_ids(store: AccountStore, configured_account_ids: Sequence[str]) -> tuple[str, ...]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    try:
+        status_auth_account_ids = status_auth_recipient_account_ids(store)
+    except Exception:  # noqa: BLE001 - status auth recipient enumeration should not block configured admins.
+        status_auth_account_ids = ()
+    for account_id in tuple(configured_account_ids) + tuple(status_auth_account_ids):
+        normalized = str(account_id or "").strip().casefold()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        candidates.append(normalized)
+    return tuple(candidates)
+
+
+def _queue_runtime_status_summary(
+    store: AccountStore,
+    account_id: str,
+    *,
+    problem_lines: Sequence[str],
+    selected_instances: Sequence[str],
+    route: Mapping[str, Any],
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
+    with store.status_outbox_lock(account_id):
+        rows = store.read_status_outbox(account_id)
+        summary_number = _next_status_summary_number(rows)
+        summary_prefix = _status_summary_prefix(summary_number)
+        message = _runtime_status_admin_message(
+            problem_lines,
+            selected_instances=selected_instances,
+            now=now,
+            summary_prefix=summary_prefix,
+        )
+        item_id = _unique_status_item_id(rows)
+        rows.append(
+            {
+                "id": item_id,
+                "schema_version": 1,
+                "kind": "runtime_status_summary",
+                "status": "queued",
+                "created_at": timestamp,
+                "updated_at": timestamp,
+                "summary_number": summary_number,
+                "summary_prefix": summary_prefix,
+                "program_version": __version__,
+                "tag": f"v{__version__}",
+                "message_text": message,
+                "problem_lines": list(problem_lines),
+                "selected_instances": list(selected_instances),
+                "route": dict(route),
+                "status_history": [{"at": timestamp, "status": "queued", "reason": "runtime_status_problem"}],
+            }
+        )
+        store.write_status_outbox(account_id, rows)
+        return item_id, message
+
+
+def _record_runtime_status_dispatch(
+    store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    status: str,
+    reason: str = "",
+    channel: str = "",
+    now: datetime | None = None,
+) -> None:
+    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
+    normalized_status = str(status or "").strip().casefold()
+    normalized_reason = str(reason or "").strip()
+    summary_prefix = ""
+    summary_number: int | None = None
+    with store.status_outbox_lock(account_id):
+        rows = store.read_status_outbox(account_id)
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
+                continue
+            summary_prefix = str(item.get("summary_prefix") or "")
+            try:
+                summary_number = int(item.get("summary_number") or 0) or None
+            except (TypeError, ValueError):
+                summary_number = None
+            item["status"] = normalized_status
+            item["updated_at"] = timestamp
+            if normalized_status == "sent":
+                item["sent_at"] = timestamp
+            if normalized_reason:
+                item["last_reason"] = normalized_reason
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
+            break
+        store.write_status_outbox(account_id, rows)
+    store.append_status_dispatch_result(
+        account_id,
+        {
+            "schema_version": 1,
+            "status_outbox_item_id": item_id,
+            "status": normalized_status,
+            "reason": normalized_reason,
+            "channel": str(channel or "").strip().casefold(),
+            "summary_prefix": summary_prefix,
+            "summary_number": summary_number,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        },
+    )
+
+
+def _next_status_summary_number(rows: Sequence[Mapping[str, Any]]) -> int:
     max_number = 0
-    for row in account_store.read_status_outbox(account_id):
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
         try:
-            number = int(str(row.get("summary_number")).strip())
+            number = int(str(row.get("summary_number") or "").strip())
         except (TypeError, ValueError):
             continue
         if number > max_number:
             max_number = number
     return max_number + 1
+
+
+def _status_summary_prefix(summary_number: int) -> str:
+    return f"v{__version__} #{max(1, int(summary_number)):04d}"
+
+
+def _unique_status_item_id(rows: Sequence[Mapping[str, Any]]) -> str:
+    existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, Mapping)}
+    item_id = f"stat_{uuid.uuid4().hex}"
+    while item_id in existing_ids:
+        item_id = f"stat_{uuid.uuid4().hex}"
+    return item_id
 
 
 def format_admin_notification_result_lines(results: Iterable[AdminNotificationResult]) -> tuple[str, ...]:
@@ -366,11 +436,20 @@ def _parse_admin_account_ids(values: Iterable[str]) -> tuple[tuple[str, ...], tu
     return tuple(account_ids), tuple(invalid_ids)
 
 
-def _runtime_status_admin_message(problem_lines: Sequence[str], *, selected_instances: Sequence[str], now: datetime | None = None) -> str:
+def _runtime_status_admin_message(
+    problem_lines: Sequence[str],
+    *,
+    selected_instances: Sequence[str],
+    now: datetime | None = None,
+    summary_prefix: str = "",
+) -> str:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat()
     instance_text = ",".join(selected_instances) if selected_instances else "auto"
+    title = "TeeBotus Runtime-Status Warnungen"
+    if summary_prefix:
+        title = f"{summary_prefix} {title}"
     lines = [
-        "TeeBotus Runtime-Status Warnungen",
+        title,
         f"Zeit: {timestamp}",
         f"Instanzen: {instance_text}",
         "",

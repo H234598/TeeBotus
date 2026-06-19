@@ -759,6 +759,7 @@ def test_admin_entrypoint_help_lists_memory_recovery(capsys) -> None:
     output = capsys.readouterr().out
     assert "accounts" in output
     assert "memory-recovery" in output
+    assert "status-auth" in output
 
 
 def test_account_memory_recovery_module_is_directly_executable() -> None:
