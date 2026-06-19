@@ -1484,26 +1484,7 @@ TeeBotusApplet.prototype = {
     try {
       let [, argv] = GLib.shell_parse_argv(raw);
       if (argv && argv.length > 0) {
-        if (argv.length > MAX_COMMAND_ARG_COUNT) {
-          return fallbackArgs;
-        }
-        let normalized = [];
-        let totalChars = 0;
-        for (let part of argv) {
-          if (part === null || part === undefined) {
-            return fallbackArgs;
-          }
-          let text = String(part);
-          if (this._hasCommandControlChars(text) || text.length > MAX_COMMAND_ARG_CHARS) {
-            return fallbackArgs;
-          }
-          totalChars += text.length;
-          if (totalChars > MAX_COMMAND_CHARS) {
-            return fallbackArgs;
-          }
-          normalized.push(text);
-        }
-        return normalized;
+        return this._normalizeCommandArgv(argv, false);
       }
     } catch (err) {
       return fallbackArgs;
@@ -1549,20 +1530,7 @@ TeeBotusApplet.prototype = {
   },
 
   _resolveSpawnArgv: function(argv) {
-    if (!Array.isArray(argv) || argv.length === 0) {
-      throw new Error("Command arguments are empty");
-    }
-    let normalized = [];
-    for (let index = 0; index < argv.length; index++) {
-      if (argv[index] === null || argv[index] === undefined) {
-        throw new Error("Command argument is missing");
-      }
-      let value = String(argv[index]);
-      if (this._hasCommandControlChars(value)) {
-        throw new Error("Command argument contains invalid control character");
-      }
-      normalized.push(value);
-    }
+    let normalized = this._normalizeCommandArgv(argv, true);
     let command = String(normalized[0] || "").trim();
     if (!this._isSafeExecutable(command)) {
       throw new Error("Command is not executable");
@@ -1572,6 +1540,38 @@ TeeBotusApplet.prototype = {
       throw new Error("Command is not in a trusted system path");
     }
     normalized[0] = resolvedCommand;
+    return normalized;
+  },
+
+  _normalizeCommandArgv: function(argv, throwOnError) {
+    let fail = function(message) {
+      if (throwOnError) {
+        throw new Error(message);
+      }
+      return [];
+    };
+    if (!Array.isArray(argv) || argv.length === 0 || argv.length > MAX_COMMAND_ARG_COUNT) {
+      return fail(!Array.isArray(argv) || argv.length === 0 ? "Command arguments are empty" : "Too many command arguments");
+    }
+    let normalized = [];
+    let totalChars = 0;
+    for (let index = 0; index < argv.length; index++) {
+      if (argv[index] === null || argv[index] === undefined) {
+        return fail("Command argument is missing");
+      }
+      let value = String(argv[index]);
+      if (index === 0) {
+        value = value.trim();
+      }
+      if (this._hasCommandControlChars(value) || value.length > MAX_COMMAND_ARG_CHARS) {
+        return fail(this._hasCommandControlChars(value) ? "Command argument contains invalid control character" : "Command argument is too large");
+      }
+      totalChars += value.length;
+      if (totalChars > MAX_COMMAND_CHARS) {
+        return fail("Command is too large");
+      }
+      normalized.push(value);
+    }
     return normalized;
   },
 

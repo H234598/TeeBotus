@@ -246,6 +246,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._spawn(argv, (stdout, stderr, ok) => {" in source
     assert "const TRUSTED_SPAWN_DIRS = " in source
     assert "_resolveSpawnArgv: function(argv)" in source
+    assert "_normalizeCommandArgv: function(argv, throwOnError)" in source
     assert "_trustedExecutablePath: function(command)" in source
     assert "_findTrustedProgramInPath: function(command)" in source
     assert "launcher.spawnv(resolvedArgv)" in source
@@ -827,6 +828,17 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         (function() {
           let missingError = "";
           let controlError = "";
+          let tooManyError = "";
+          let tooLargeArgError = "";
+          let tooLargeCommandError = "";
+          let manyArgs = ["gnome-terminal"];
+          for (let index = 0; index < 128; index++) {
+            manyArgs.push("x");
+          }
+          let totalArgs = ["gnome-terminal"];
+          for (let index = 0; index < 40; index++) {
+            totalArgs.push("x".repeat(1000));
+          }
           try {
             applet._resolveSpawnArgv(["unknown-tool", "--help"]);
           } catch (err) {
@@ -836,6 +848,21 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             applet._resolveSpawnArgv(["gnome-terminal", "bad\\narg"]);
           } catch (err) {
             controlError = String(err);
+          }
+          try {
+            applet._resolveSpawnArgv(manyArgs);
+          } catch (err) {
+            tooManyError = String(err);
+          }
+          try {
+            applet._resolveSpawnArgv(["gnome-terminal", "x".repeat(4097)]);
+          } catch (err) {
+            tooLargeArgError = String(err);
+          }
+          try {
+            applet._resolveSpawnArgv(totalArgs);
+          } catch (err) {
+            tooLargeCommandError = String(err);
           }
           return {
             bare: applet._resolveSpawnArgv(["gnome-terminal", "--"]),
@@ -848,7 +875,10 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             trusted: applet._findTrustedProgramInPath("gnome-terminal"),
             unsafeName: applet._findTrustedProgramInPath("../gnome-terminal"),
             missingError: missingError,
-            controlError: controlError
+            controlError: controlError,
+            tooManyError: tooManyError,
+            tooLargeArgError: tooLargeArgError,
+            tooLargeCommandError: tooLargeCommandError
           };
         })()
         """
@@ -866,6 +896,9 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "unsafeName": None,
         "missingError": "Error: Command is not in a trusted system path",
         "controlError": "Error: Command argument contains invalid control character",
+        "tooManyError": "Error: Too many command arguments",
+        "tooLargeArgError": "Error: Command argument is too large",
+        "tooLargeCommandError": "Error: Command is too large",
     }
 
 
