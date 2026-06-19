@@ -117,11 +117,13 @@ def test_render_codex_history_index_systemd_units_builds_low_priority_timer(tmp_
 def test_render_codex_history_index_systemd_units_can_enable_local_categorization(tmp_path: Path) -> None:
     units = render_codex_history_index_systemd_units(
         repo_root=tmp_path,
+        graph=True,
         categorize=True,
         categorize_profile="local_ollama",
         categorize_dry_run=True,
     )
 
+    assert "--graph" in units.service_text
     assert "--categorize" in units.service_text
     assert "--categorize-profile local_ollama" in units.service_text
     assert "--categorize-dry-run" in units.service_text

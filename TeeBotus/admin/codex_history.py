@@ -45,6 +45,7 @@ CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
+CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
@@ -725,6 +726,54 @@ def codex_history_bibliothekar_chunks(
     return tuple(chunks)
 
 
+def export_codex_history_graph_doc(
+    store: AccountStore,
+    *,
+    instance_dir: str | Path,
+    instance_name: str,
+    repo: str = "",
+    limit: int = 0,
+    overwrite: bool = True,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
+    destination = _codex_history_bibliothekar_root(safe_instance_dir)
+    graph_dir = (destination / CODEX_HISTORY_GRAPH_DIRNAME).resolve()
+    try:
+        graph_dir.relative_to(destination.resolve())
+    except ValueError as exc:
+        raise ValueError("codex history graph export target escapes admin bibliothekar root") from exc
+    rows = _filter_outbox(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), repo)
+    items = [item for item in rows if _codex_history_item_indexable(item)]
+    items = sorted(items, key=_summary_sort_key)
+    if limit > 0:
+        items = items[-int(limit) :]
+    graph_dir.mkdir(parents=True, exist_ok=True)
+    filename = "codex_history_graph.md" if not str(repo or "").strip() else f"codex_history_graph_{_safe_filename_component(repo, default='repo')}.md"
+    target = (graph_dir / filename).resolve()
+    if target.exists() and not overwrite:
+        return {
+            "ok": True,
+            "instance": safe_instance_name,
+            "path": str(target),
+            "exported": 0,
+            "skipped": 1,
+            "reason": "exists",
+            "repo_count": _codex_history_graph_repo_count(items),
+            "item_count": len(items),
+        }
+    target.write_text(_codex_history_graph_markdown(items, instance_name=safe_instance_name, repo_filter=repo), encoding="utf-8")
+    return {
+        "ok": True,
+        "instance": safe_instance_name,
+        "path": str(target),
+        "exported": 1,
+        "skipped": 0,
+        "repo_count": _codex_history_graph_repo_count(items),
+        "item_count": len(items),
+    }
+
+
 def categorize_codex_history_outbox(
     store: AccountStore,
     *,
@@ -891,6 +940,7 @@ def run_codex_history_index(
     qdrant_url: str = "",
     qdrant_dry_run: bool = False,
     qdrant_ensure: bool = False,
+    graph: bool = False,
     categorize: bool = False,
     categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
     categorize_dry_run: bool = False,
@@ -919,6 +969,16 @@ def run_codex_history_index(
         limit=limit,
         overwrite=overwrite,
     )
+    graph_report: dict[str, Any] = {}
+    if graph:
+        graph_report = export_codex_history_graph_doc(
+            store,
+            instance_dir=safe_instance_dir,
+            instance_name=safe_instance_name,
+            repo=repo,
+            limit=limit,
+            overwrite=overwrite,
+        )
     ensure_results: list[dict[str, Any]] = []
     qdrant_results: list[dict[str, Any]] = []
     effective_qdrant_url = str(qdrant_url or "").strip()
@@ -952,10 +1012,11 @@ def run_codex_history_index(
     ensure_ok = not ensure_results or all(bool(result.get("ok")) for result in ensure_results)
     qdrant_ok = not qdrant_results or not any(str(result.get("status") or "").casefold() == "error" for result in qdrant_results)
     return {
-        "ok": bool(export_report.get("ok", True)) and bool(category_report.get("ok", True)) and ensure_ok and qdrant_ok,
+        "ok": bool(export_report.get("ok", True)) and bool(category_report.get("ok", True)) and bool(graph_report.get("ok", True)) and ensure_ok and qdrant_ok,
         "instance": safe_instance_name,
         "categorize": category_report,
         "export": export_report,
+        "graph": graph_report,
         "qdrant_ensure": ensure_results,
         "qdrant": qdrant_results,
     }
@@ -1833,6 +1894,15 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     categorize_parser.add_argument("--dry-run", action="store_true")
     categorize_parser.add_argument("--format", choices=("text", "json"), default="text")
 
+    graph_export_parser = subparsers.add_parser("graph-export")
+    graph_export_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    graph_export_parser.add_argument("--instances", default="")
+    graph_export_parser.add_argument("--instance", default="")
+    graph_export_parser.add_argument("--repo", default="")
+    graph_export_parser.add_argument("--limit", type=int, default=0)
+    graph_export_parser.add_argument("--format", choices=("text", "json"), default="text")
+    graph_export_parser.add_argument("--no-overwrite", action="store_true")
+
     index_parser = subparsers.add_parser("index")
     index_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     index_parser.add_argument("--instances", default="")
@@ -1845,6 +1915,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--qdrant-url", default="")
     index_parser.add_argument("--qdrant-dry-run", action="store_true")
     index_parser.add_argument("--qdrant-ensure", action="store_true")
+    index_parser.add_argument("--graph", action="store_true")
     index_parser.add_argument("--categorize", action="store_true")
     index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
     index_parser.add_argument("--categorize-dry-run", action="store_true")
@@ -2012,6 +2083,47 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         except (OSError, ValueError) as exc:
             print(f"categorize failed: {exc}", file=sys.stderr)
             return 2
+    if args.command == "graph-export":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            _ensure_explicit_instances_exist(instances_dir, selected_instances)
+            reports: list[dict[str, Any]] = []
+            for instance_name in discover_instances(instances_dir, selected_instances):
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                reports.append(
+                    export_codex_history_graph_doc(
+                        store,
+                        instance_dir=instances_dir / instance_name,
+                        instance_name=instance_name,
+                        repo=args.repo,
+                        limit=int(args.limit or 0),
+                        overwrite=not bool(args.no_overwrite),
+                    )
+                )
+            payload = {
+                "ok": not any(not report.get("ok") for report in reports),
+                "instances_dir": str(instances_dir),
+                "instances": reports,
+                "totals": {
+                    "exported": sum(int(report.get("exported") or 0) for report in reports),
+                    "skipped": sum(int(report.get("skipped") or 0) for report in reports),
+                    "repos": sum(int(report.get("repo_count") or 0) for report in reports),
+                    "items": sum(int(report.get("item_count") or 0) for report in reports),
+                },
+            }
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_graph_export_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"graph-export failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "index":
         try:
             selected_instances = parse_csv(getattr(args, "instances", None))
@@ -2034,6 +2146,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         qdrant_url=args.qdrant_url,
                         qdrant_dry_run=bool(args.qdrant_dry_run),
                         qdrant_ensure=bool(args.qdrant_ensure),
+                        graph=bool(args.graph),
                         categorize=bool(args.categorize),
                         categorize_profile=args.categorize_profile,
                         categorize_dry_run=bool(args.categorize_dry_run),
@@ -2342,7 +2455,16 @@ def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
 
 
 def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
-    totals = {"categorized": 0, "category_errors": 0, "exported": 0, "skipped": 0, "qdrant_points": 0, "qdrant_errors": 0}
+    totals = {
+        "categorized": 0,
+        "category_errors": 0,
+        "exported": 0,
+        "skipped": 0,
+        "graph_files": 0,
+        "graph_items": 0,
+        "qdrant_points": 0,
+        "qdrant_errors": 0,
+    }
     for report in reports:
         if not isinstance(report, Mapping):
             continue
@@ -2354,6 +2476,10 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         if isinstance(export, Mapping):
             totals["exported"] += int(export.get("exported") or 0)
             totals["skipped"] += int(export.get("skipped") or 0)
+        graph = report.get("graph", {})
+        if isinstance(graph, Mapping):
+            totals["graph_files"] += int(graph.get("exported") or 0)
+            totals["graph_items"] += int(graph.get("item_count") or 0)
         for result in report.get("qdrant", []) or []:
             if not isinstance(result, Mapping):
                 continue
@@ -2471,6 +2597,27 @@ def _render_categorize_report(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Graph Export", ""]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.append(f"exported: {totals.get('exported', 0)}")
+        lines.append(f"skipped: {totals.get('skipped', 0)}")
+        lines.append(f"repos: {totals.get('repos', 0)}")
+        lines.append(f"items: {totals.get('items', 0)}")
+    for instance in payload.get("instances", []) or []:
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        lines.append(f"  path: {instance.get('path', '')}")
+        lines.append(f"  exported: {instance.get('exported', 0)}")
+        lines.append(f"  skipped: {instance.get('skipped', 0)}")
+        lines.append(f"  repos: {instance.get('repo_count', 0)}")
+        lines.append(f"  items: {instance.get('item_count', 0)}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_index_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Index", ""]
     totals = payload.get("totals", {})
@@ -2479,6 +2626,8 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"category_errors: {totals.get('category_errors', 0)}")
         lines.append(f"exported: {totals.get('exported', 0)}")
         lines.append(f"skipped: {totals.get('skipped', 0)}")
+        lines.append(f"graph_files: {totals.get('graph_files', 0)}")
+        lines.append(f"graph_items: {totals.get('graph_items', 0)}")
         lines.append(f"qdrant_points: {totals.get('qdrant_points', 0)}")
         lines.append(f"qdrant_errors: {totals.get('qdrant_errors', 0)}")
     for instance in payload.get("instances", []):
@@ -2490,6 +2639,9 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         category_report = instance.get("categorize", {})
         if not isinstance(category_report, Mapping):
             category_report = {}
+        graph = instance.get("graph", {})
+        if not isinstance(graph, Mapping):
+            graph = {}
         lines.append("")
         lines.append(f"Instance: {instance.get('instance', '')}")
         lines.append(f"  ok: {bool(instance.get('ok', False))}")
@@ -2505,6 +2657,13 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"  destination: {export.get('destination', '')}")
         lines.append(f"  exported: {export.get('exported', 0)}")
         lines.append(f"  skipped: {export.get('skipped', 0)}")
+        if graph:
+            lines.append(
+                "  graph: "
+                f"path={graph.get('path', '')} "
+                f"repos={graph.get('repo_count', 0)} "
+                f"items={graph.get('item_count', 0)}"
+            )
         for result in instance.get("qdrant_ensure", []) or []:
             if isinstance(result, Mapping):
                 lines.append(
@@ -2871,6 +3030,110 @@ def _codex_history_bibliothekar_chunk(item: Mapping[str, Any], *, destination: P
         "categories": categories,
         "text": text,
     }
+
+
+def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
+    repos: dict[str, dict[str, Any]] = {}
+    for item in items:
+        project = item.get("project", {})
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_id = str(project.get("repo_id") or project.get("repo_name") or "repo").strip() or "repo"
+        repo_entry = repos.setdefault(
+            repo_id,
+            {
+                "name": str(project.get("repo_name") or "project").strip() or "project",
+                "items": [],
+            },
+        )
+        repo_entry["items"].append(item)
+    lines = [
+        f"# Codex History Graph: {redact_codex_history_text(instance_name).strip()}",
+        "",
+        "> Admin-only TeeBotus Codex-History-Graph. Nicht fuer normale Nutzer-Bibliotheken freigeben.",
+        "",
+        f"- Instanz: `{redact_codex_history_text(instance_name).strip()}`",
+        f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
+        f"- Repos: `{len(repos)}`",
+        f"- Summaries: `{len(items)}`",
+        f"- Erstellt: `{utc_now()}`",
+        "",
+        "```mermaid",
+        "flowchart LR",
+        '  scope["Admin Codex-History"]:::scope',
+    ]
+    if not repos:
+        lines.append('  empty["Keine indexierbaren Codex-History-Eintraege"]:::empty')
+        lines.append("  scope --> empty")
+    for repo_index, (_repo_id, repo_entry) in enumerate(sorted(repos.items(), key=lambda entry: str(entry[1].get("name", "")).casefold())):
+        repo_node = f"repo_{repo_index}"
+        repo_name = _mermaid_label(str(repo_entry.get("name") or "project"), max_length=48)
+        lines.append(f'  {repo_node}["{repo_name}"]:::repo')
+        lines.append(f"  scope --> {repo_node}")
+        repo_items = list(repo_entry.get("items") or [])
+        repo_items = sorted((item for item in repo_items if isinstance(item, Mapping)), key=_summary_sort_key)
+        previous_node = ""
+        for item_index, item in enumerate(repo_items[-20:]):
+            item_node = f"item_{repo_index}_{item_index}"
+            summary = item.get("summary", {})
+            if not isinstance(summary, Mapping):
+                summary = {}
+            title = str(summary.get("title") or "Codex run summary")
+            label = _mermaid_label(f"{item.get('summary_prefix', '')} {title}", max_length=72)
+            lines.append(f'  {item_node}["{label}"]:::summary')
+            if previous_node:
+                lines.append(f"  {previous_node} --> {item_node}")
+            else:
+                lines.append(f"  {repo_node} --> {item_node}")
+            status_node = f"status_{repo_index}_{item_index}"
+            status = _safe_filename_component(str(item.get("status") or "unknown"), default="unknown", max_length=32)
+            lines.append(f'  {status_node}["status: {status}"]:::status')
+            lines.append(f"  {item_node} --> {status_node}")
+            category_nodes = _codex_history_graph_category_nodes(item, repo_index=repo_index, item_index=item_index)
+            for category_node, category_label in category_nodes:
+                lines.append(f'  {category_node}["{_mermaid_label(category_label, max_length=42)}"]:::category')
+                lines.append(f"  {item_node} --> {category_node}")
+            previous_node = item_node
+    lines.extend(
+        [
+            "  classDef scope fill:#1f2937,color:#fff,stroke:#111827",
+            "  classDef repo fill:#dbeafe,stroke:#2563eb,color:#111827",
+            "  classDef summary fill:#ecfdf5,stroke:#059669,color:#111827",
+            "  classDef status fill:#fef3c7,stroke:#d97706,color:#111827",
+            "  classDef category fill:#f3e8ff,stroke:#7c3aed,color:#111827",
+            "  classDef empty fill:#fee2e2,stroke:#dc2626,color:#111827",
+            "```",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _codex_history_graph_category_nodes(item: Mapping[str, Any], *, repo_index: int, item_index: int) -> list[tuple[str, str]]:
+    categories = [
+        category
+        for category in _codex_history_bibliothekar_categories(item)
+        if category.startswith(("change-", "risk-", "impact-", "work-"))
+    ][:5]
+    return [(f"cat_{repo_index}_{item_index}_{index}", category) for index, category in enumerate(categories)]
+
+
+def _codex_history_graph_repo_count(items: Sequence[Mapping[str, Any]]) -> int:
+    repo_ids: set[str] = set()
+    for item in items:
+        project = item.get("project", {}) if isinstance(item, Mapping) else {}
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_ids.add(str(project.get("repo_id") or project.get("repo_name") or "repo"))
+    return len(repo_ids)
+
+
+def _mermaid_label(value: str, *, max_length: int) -> str:
+    text = redact_codex_history_text(value).replace("\r", " ").replace("\n", " ").strip()
+    text = re.sub(r"\s+", " ", text)
+    if len(text) > max_length:
+        text = text[: max(8, max_length - 3)].rstrip() + "..."
+    return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _codex_history_category_prompt(item: Mapping[str, Any]) -> str:

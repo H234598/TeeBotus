@@ -507,6 +507,7 @@ Stand 2026-06-19:
 - `teebotus-codex-history-systemd` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
 - `teebotus-codex-history-systemd --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`.
 - `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
+- `codex-history graph-export` schreibt eine admin-only Mermaid-Projekthistory nach `data/Codex_History_Bibliothek/graphs`; `codex-history index --graph` kann sie im selben Batch erzeugen.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -539,7 +540,11 @@ Stand 2026-06-19:
 * User die keine Admins sind dürfen auf keinen Fall etwas von der Sammlung erfahren. 
 * Noch weniger (auf gar keinen verdammten Fall) dürfen sie Daten aus den Sammlungen erhalten.
 ### Phase 7: Grafische Aufbereitung
-* baue einen Automatismus, der mit better-git-of-theseus o.ä., in Intervallen, ein hübsches Bild von allen Repos erzeugt und an die Admins schickt.
+* Teilweise erledigt: `codex-history graph-export` erzeugt ein admin-only Mermaid-Markdown mit Repo -> Summary -> Status/Kategorie-Kanten.
+	* Ziel: `instances/<Instanz>/data/Codex_History_Bibliothek/graphs/codex_history_graph.md`
+	* `codex-history index --graph` erzeugt den Graph im kombinierten Low-Priority-Indexlauf.
+	* `teebotus-codex-history-systemd --index-timer --index-graph` haengt den Graph-Export an den Timer.
+* Offen: Bild-Rendering aus Mermaid/better-git-of-theseus o.ae. und Versand an Admins.
 * Default: 1x am Tag
 
 ### Phase 8: Strategische Analyse

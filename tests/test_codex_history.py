@@ -19,6 +19,7 @@ from TeeBotus.admin.codex_history import (
     codex_history_bibliothekar_chunks,
     dispatch_codex_history_outbox,
     export_codex_history_bibliothekar_docs,
+    export_codex_history_graph_doc,
     _safe_output_path,
     _safe_repo_root,
     import_codex_session_file,
@@ -444,6 +445,37 @@ def test_codex_history_categorize_persists_local_llm_categories(tmp_path: Path) 
     assert exported["files"][0]["item_id"] == item["id"]
 
 
+def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "graph-demo", version="1.9.3")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Graph Export",
+        bullets=["Mermaid-Uebersicht fuer Admins erzeugt."],
+    )
+
+    result = export_codex_history_graph_doc(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+    )
+
+    assert result["ok"] is True
+    assert result["exported"] == 1
+    assert result["repo_count"] == 1
+    assert result["item_count"] == 1
+    graph_path = Path(result["path"])
+    assert graph_path.parent == instance_dir / "data" / "Codex_History_Bibliothek" / "graphs"
+    graph_text = graph_path.read_text(encoding="utf-8")
+    assert "```mermaid" in graph_text
+    assert "flowchart LR" in graph_text
+    assert "Admin-only TeeBotus Codex-History-Graph" in graph_text
+    assert "Graph Export" in graph_text
+    assert not (instance_dir / "data" / "Bibliothek").exists()
+
+
 def test_codex_history_index_can_categorize_before_export_without_provider_call(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "categorize-index-demo", version="1.9.2")
@@ -455,15 +487,19 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
         instance_dir=instance_dir,
         instance_name="Depressionsbot",
         categorize=True,
+        graph=True,
         categorizer=lambda _item: {"categories": ["work-benchmark", "change-performance"]},
     )
 
     assert result["ok"] is True
     assert result["categorize"]["categorized"] == 1
     assert result["export"]["exported"] == 1
+    assert result["graph"]["exported"] == 1
     exported_text = Path(result["export"]["files"][0]["path"]).read_text(encoding="utf-8")
     assert "work-benchmark" in exported_text
     assert "change-performance" in exported_text
+    graph_text = Path(result["graph"]["path"]).read_text(encoding="utf-8")
+    assert "work-benchmark" in graph_text
 
 
 def test_codex_history_local_categorizer_rejects_remote_profiles() -> None:

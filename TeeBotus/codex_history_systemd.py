@@ -78,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-limit", type=int, default=0, help="Limit codex-history index to latest N summaries after filtering; 0 means all.")
     parser.add_argument("--index-qdrant-url", default="", help="Override Qdrant URL for periodic index rebuild.")
     parser.add_argument("--index-qdrant-dry-run", action="store_true", help="Count periodic Qdrant chunks without writing Qdrant.")
+    parser.add_argument("--index-graph", action="store_true", help="Export an admin-only Mermaid graph during the periodic Codex-History index job.")
     parser.add_argument("--index-categorize", action="store_true", help="Run optional local Codex-History categorization in the periodic index job.")
     parser.add_argument("--index-categorize-profile", default="local_ollama", help="Local-only LLM profile used by periodic Codex-History categorization.")
     parser.add_argument("--index-categorize-dry-run", action="store_true", help="Run periodic categorization without persisting category updates.")
@@ -130,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
                 limit=int(args.index_limit),
                 qdrant_url=args.index_qdrant_url,
                 qdrant_dry_run=bool(args.index_qdrant_dry_run),
+                graph=bool(args.index_graph),
                 categorize=bool(args.index_categorize),
                 categorize_profile=args.index_categorize_profile,
                 categorize_dry_run=bool(args.index_categorize_dry_run),
@@ -287,6 +289,7 @@ def render_codex_history_index_systemd_units(
     limit: int = 0,
     qdrant_url: str = "",
     qdrant_dry_run: bool = False,
+    graph: bool = False,
     categorize: bool = False,
     categorize_profile: str = "local_ollama",
     categorize_dry_run: bool = False,
@@ -329,6 +332,8 @@ def render_codex_history_index_systemd_units(
         command.extend(["--qdrant-url", _shell_quote(qdrant_url)])
     if qdrant_dry_run:
         command.append("--qdrant-dry-run")
+    if graph:
+        command.append("--graph")
     if categorize:
         command.append("--categorize")
         command.extend(["--categorize-profile", _shell_quote(categorize_profile)])
