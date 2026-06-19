@@ -1370,7 +1370,7 @@ TeeBotusApplet.prototype = {
       if ((value === "--" || value === "-e") && isFinal) {
         continue;
       }
-      if (value === "--" || value === "-e" || value === "-x" || value === "--execute" || value === "--command" || value.indexOf("--command=") === 0) {
+      if (value === "--" || value === "-e" || value === "-x" || value === "--execute" || value.indexOf("--execute=") === 0 || value === "--command" || value.indexOf("--command=") === 0) {
         return true;
       }
     }

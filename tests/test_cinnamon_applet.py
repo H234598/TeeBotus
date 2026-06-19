@@ -830,6 +830,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
           let validTerminalWithFinalMarker = applet._terminalArgs();
           applet.terminalCommand = "gnome-terminal -- bash -lc bad";
           let embeddedCommandTerminal = applet._terminalArgs();
+          applet.terminalCommand = "xterm --execute=bad";
+          let embeddedExecuteEqualsTerminal = applet._terminalArgs();
           return {
             invalidStatusCommand: invalidStatusCommand,
             invalidCodex: invalidCodex,
@@ -843,6 +845,7 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
             validTerminal: validTerminal,
             validTerminalWithFinalMarker: validTerminalWithFinalMarker,
             embeddedCommandTerminal: embeddedCommandTerminal,
+            embeddedExecuteEqualsTerminal: embeddedExecuteEqualsTerminal,
             unsafeChecks: [
               applet._isSafeExecutable("--help"),
               applet._isSafeExecutable("file:///tmp/tool"),
@@ -874,6 +877,7 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validTerminal"] == ["/usr/bin/xterm", "-hold", "-e"]
     assert result["validTerminalWithFinalMarker"] == ["/usr/bin/xterm", "-hold", "-e"]
     assert result["embeddedCommandTerminal"] == ["/usr/bin/gnome-terminal", "--"]
+    assert result["embeddedExecuteEqualsTerminal"] == ["/usr/bin/gnome-terminal", "--"]
     assert result["unsafeChecks"] == [False, False, False, False, True, True]
 
 
