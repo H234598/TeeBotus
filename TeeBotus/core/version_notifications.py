@@ -522,8 +522,7 @@ def _optional_positive_int(value: object) -> int | None:
 
 
 def _delivery_error_reason(exc: Exception) -> str:
-    text = " ".join(str(exc).split())
-    return text[:240]
+    return _inline_text(exc)[:240]
 
 
 def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
@@ -632,6 +631,11 @@ def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
         normalized["adapter_slot"] = adapter_slot
     else:
         normalized.pop("adapter_slot", None)
+    reason = _inline_text(normalized.get("reason")) if isinstance(normalized.get("reason"), str) else ""
+    if reason:
+        normalized["reason"] = reason[:240]
+    else:
+        normalized.pop("reason", None)
     return normalized
 
 

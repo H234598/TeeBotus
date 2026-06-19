@@ -1076,6 +1076,33 @@ def test_version_notification_state_normalization_drops_invalid_failure_route_fi
     assert failures["telegram:user:222"]["chat_id"] == 222
 
 
+def test_version_notification_state_normalization_sanitizes_failure_reason() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "Bad\x00Request\nchat not found",
+                        },
+                        "telegram:user:222": {
+                            "adapter_slot": 1,
+                            "chat_id": 222,
+                            "reason": {"not": "text"},
+                        },
+                    }
+                }
+            }
+        }
+    )
+
+    failures = state["versions"]["1.0.3"]["failed_identities"]
+    assert failures["telegram:user:111"]["reason"] == "Bad Request chat not found"
+    assert "reason" not in failures["telegram:user:222"]
+
+
 def test_version_notification_state_normalization_drops_empty_telegram_identity_keys() -> None:
     state = _normalize_state(
         {
