@@ -66,7 +66,7 @@ def notify_recent_telegram_users_for_version(
             _clear_resolved_failures(failed_identities, recipient, identities)
             sent_identities.add(recipient.identity_key)
             continue
-        if _failed_delivery_matches_recipient(failed_identities, recipient):
+        if _failed_delivery_matches_recipient(failed_identities, recipient, identities):
             continue
         message = build_version_notification_text(
             version=normalized_version,
@@ -386,14 +386,14 @@ def _sent_delivery_matches_recipient(
     if recipient.identity_key in sent_identities:
         return True
     for identity_key in sent_identities:
-        if _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
-            return True
         payload = identities.get(identity_key)
-        if not isinstance(payload, dict):
+        if isinstance(payload, dict):
+            if _identity_route_matches_recipient(identity_key, payload, recipient):
+                return True
+            if _identity_account_slot_matches_recipient(payload, recipient):
+                return True
             continue
-        if _identity_route_matches_recipient(identity_key, payload, recipient):
-            return True
-        if _identity_account_slot_matches_recipient(payload, recipient):
+        if _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
             return True
     return False
 
@@ -457,7 +457,11 @@ def _is_permanent_delivery_error(exc: Exception) -> bool:
     )
 
 
-def _failed_delivery_matches_recipient(failed_identities: dict[str, object], recipient: VersionNotificationRecipient) -> bool:
+def _failed_delivery_matches_recipient(
+    failed_identities: dict[str, object],
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> bool:
     failures = [failed_identities.get(recipient.identity_key)]
     failures.extend(
         failure
@@ -467,7 +471,7 @@ def _failed_delivery_matches_recipient(failed_identities: dict[str, object], rec
     if any(_failed_delivery_route_matches(failure, recipient) for failure in failures):
         return True
     return any(
-        identity_key != recipient.identity_key and _failed_identity_key_route_matches(identity_key, failure, recipient)
+        identity_key != recipient.identity_key and _failed_identity_key_route_matches(identity_key, failure, recipient, identities)
         for identity_key, failure in failed_identities.items()
     )
 
@@ -485,7 +489,7 @@ def _clear_resolved_failures(
         if isinstance(payload, dict) and _normalized_account_id(payload.get("account_id")) == recipient.account_id:
             failed_identities.pop(identity_key, None)
             continue
-        if _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(identity_key, failure, recipient):
+        if _failed_delivery_route_matches(failure, recipient) or _failed_identity_key_route_matches(identity_key, failure, recipient, identities):
             failed_identities.pop(identity_key, None)
 
 
@@ -502,7 +506,20 @@ def _failed_delivery_route_matches(failure: object, recipient: VersionNotificati
     return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
 
 
-def _failed_identity_key_route_matches(identity_key: str, failure: object, recipient: VersionNotificationRecipient) -> bool:
+def _failed_identity_key_route_matches(
+    identity_key: str,
+    failure: object,
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> bool:
+    payload = identities.get(identity_key)
+    if isinstance(payload, dict):
+        if not (_identity_route_matches_recipient(identity_key, payload, recipient) or _identity_account_slot_matches_recipient(payload, recipient)):
+            return False
+        if not isinstance(failure, dict):
+            return False
+        failed_account_id = _normalized_account_id(failure.get("account_id"))
+        return not failed_account_id or failed_account_id == recipient.account_id
     if not _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
         return False
     if not isinstance(failure, dict):
