@@ -846,11 +846,14 @@ def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collectio
 
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
+    google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
+    slack_bot_token = "xox" + "b-123456789012-123456789012-abcdefghijklmnopqrstuvwx"
+    jwt_like_token = "abcdefghijklmnopqrstuvwx.ABCDEF.abcdefghijklmnopqrstuvwxyz1234567890"
 
     parsed = parse_runtime_status(
         f"""
         [LLM-Routen und Backends]
-        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token escaped_api_key="secret\\"still-secret" escaped_password='secret\\'still-password' escaped_token=`secret\\`still-token` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret
+        llm_route=normal_chat status=broken api_key={github_token} client_secret="plain secret value" password='another secret phrase' bearer_token=`third secret value` private_key="plain private key" service_account_private_key=plain-private-key signing_key=`plain signing key` refresh_token=plain multi word token escaped_api_key="secret\\"still-secret" escaped_password='secret\\'still-password' escaped_token=`secret\\`still-token` api_key_env=GEMINI_API_KEY api_key_ring=3 error=password:nested-secret google_oauth={google_oauth_token} slack={slack_bot_token} jwt={jwt_like_token}
 
         [API Keys, Limits und Kosten]
         api_budget=normal_chat status=configured tokens=provider_usage_response+local_guard max_output_tokens=700 private_key=-----BEGIN PRIVATE KEY----- message=(client_secret=structured-secret) details=[api_key="bracket secret value"] meta={{password=curly-secret}} hint=<token=angle-secret> diagnostic_json={{"api_key":"json-secret-value","client_secret":"json spaced secret","api_key_env":"GEMINI_API_KEY","api_key_ring":"3"}}
@@ -864,6 +867,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
 
     assert github_token not in rendered
     assert "nested-secret" not in rendered
+    assert google_oauth_token not in rendered
+    assert slack_bot_token not in rendered
+    assert jwt_like_token not in rendered
     assert "plain secret value" not in rendered
     assert "another secret phrase" not in rendered
     assert "third secret value" not in rendered
