@@ -510,8 +510,12 @@ Stand 2026-06-19:
 	* Zielordner: `instances/<Instanz>/data/Codex_History_Bibliothek`
 	* Der normale Runtime-Bibliothekar liest weiterhin nur `data/Bibliothek`; dadurch leakt Codex-History nicht an normale Nutzer.
 	* Die Dokumente enthalten Metadaten, Status, Version, Repo, Commit, Delivery-Felder, Summary und Kategorien.
-* Offen: separater Qdrant-Index fuer diese admin-only Quelle, nicht die normale Nutzer-Collection.
-* Offen: Automatischer Rebuild dieser separaten Collection nach Export.
+* Teilweise erledigt: separater Qdrant-Index fuer diese admin-only Quelle.
+	* Collection: `teebotus_codex_history_chunks`
+	* `teebotus-embedding codex-history-rebuild` erzeugt Qdrant-Chunks direkt aus `codex_history_outbox`.
+	* `teebotus-embedding collections-ensure --include-codex-history` legt die optionale Collection an/prueft sie.
+	* Der Index nutzt dieselbe Qdrant-Bibliothekar-Payloadform, aber eine andere Collection als normale Nutzerbibliothek und Usermemory.
+* Offen: Automatischer periodischer Rebuild dieser separaten Collection nach Export/Watcher-Lauf.
 * Kategorien fuer Qdrant sind eingebaut, aber noch deterministisch/statisch.
 * Ein geeignetes, Int8, lokales LLM darf die Kategorien für die Nachricht(en) festlegen.
 	* Es ist es klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.

@@ -12,9 +12,10 @@ from typing import Any
 from TeeBotus.embedding.rebuild import (
     ensure_qdrant_collections_for_instances,
     rebuild_qdrant_bibliothekar_indexes,
+    rebuild_qdrant_codex_history_indexes,
     rebuild_qdrant_memory_indexes,
 )
-from TeeBotus.runtime.qdrant import QDRANT_USER_MEMORY_COLLECTION, qdrant_user_memory_side_collection
+from TeeBotus.runtime.qdrant import QDRANT_CODEX_HISTORY_COLLECTION, QDRANT_USER_MEMORY_COLLECTION, qdrant_user_memory_side_collection
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
                 qdrant_url=args.qdrant_url or None,
                 embedding_overrides=_embedding_overrides_from_args(args),
                 include_memory_side_dimensions=args.include_memory_side_index,
+                include_codex_history=bool(args.include_codex_history),
             )
             if args.json:
                 print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
@@ -65,6 +67,23 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 for result in results:
                     print(_format_bibliothekar_rebuild_result(result))
+            return 1 if any(result.status == "error" for result in results) else 0
+        if args.command == "codex-history-rebuild":
+            results = rebuild_qdrant_codex_history_indexes(
+                instances_dir=args.instances_dir,
+                instance_names=args.instance,
+                qdrant_url=args.qdrant_url or None,
+                collection_name=args.collection or QDRANT_CODEX_HISTORY_COLLECTION,
+                repo=args.repo,
+                limit=int(args.limit or 0),
+                embedding_overrides=_embedding_overrides_from_args(args),
+                dry_run=args.dry_run,
+            )
+            if args.json:
+                print(json.dumps([asdict(result) for result in results], ensure_ascii=False, indent=2))
+            else:
+                for result in results:
+                    print(_format_codex_history_rebuild_result(result))
             return 1 if any(result.status == "error" for result in results) else 0
     parser.print_help()
     return 2
@@ -106,6 +125,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default=[],
         help="Also ensure an optional usermemory side-index collection for this vector size. Can be repeated, e.g. 384 and 1024.",
     )
+    collections.add_argument("--include-codex-history", action="store_true", help="Also ensure the admin-only Codex-History Qdrant collection.")
     collections.add_argument("--embedding-provider", default=None, help="Override usermemory embedding provider for metadata parity.")
     collections.add_argument("--embedding-model", default=None, help="Override usermemory embedding model name.")
     collections.add_argument("--embedding-dimensions", type=int, default=None, help="Override usermemory embedding vector dimensions.")
@@ -123,6 +143,20 @@ def _build_parser() -> argparse.ArgumentParser:
     bibliothekar.add_argument("--embedding-api-key-env", default=None, help="Override embedding API key environment variable.")
     bibliothekar.add_argument("--dry-run", action="store_true", help="Rebuild the local Bibliothekar chunk store and count chunks without writing Qdrant.")
     bibliothekar.set_defaults(command="bibliothekar-rebuild")
+
+    codex_history = subparsers.add_parser("codex-history-rebuild", help="Rebuild admin-only Qdrant Codex-History chunk cache from codex_history_outbox.")
+    codex_history.add_argument("--json", dest="json", action="store_true", default=argparse.SUPPRESS, help="Emit JSON output.")
+    codex_history.add_argument("--qdrant-url", default="", help="Override Qdrant URL from the instance Bibliothekar config.")
+    codex_history.add_argument("--collection", default=QDRANT_CODEX_HISTORY_COLLECTION, help="Override target Qdrant collection.")
+    codex_history.add_argument("--repo", default="", help="Limit rebuild to repo name, repo id, root, or remote substring.")
+    codex_history.add_argument("--limit", type=int, default=0, help="Limit to the latest N Codex-History summaries after repo filtering.")
+    codex_history.add_argument("--embedding-provider", default=None, help="Override Codex-History embedding provider: fake/hash or hf/tei.")
+    codex_history.add_argument("--embedding-model", default=None, help="Override Codex-History embedding model name.")
+    codex_history.add_argument("--embedding-dimensions", type=int, default=None, help="Override Codex-History embedding vector dimensions.")
+    codex_history.add_argument("--embedding-endpoint", default=None, help="Override HF/TEI/OpenAI-compatible embedding endpoint.")
+    codex_history.add_argument("--embedding-api-key-env", default=None, help="Override embedding API key environment variable.")
+    codex_history.add_argument("--dry-run", action="store_true", help="Count Codex-History chunks without writing Qdrant.")
+    codex_history.set_defaults(command="codex-history-rebuild")
     return parser
 
 
@@ -256,6 +290,28 @@ def _format_bibliothekar_rebuild_result(result: object) -> str:
         detail += f" embedding_provider={embedding_provider or 'unknown'} embedding_model={embedding_model} embedding_dimensions={embedding_dimensions}"
     suffix = f" error={error}" if error else ""
     return f"{instance}: status={status}{detail}{suffix}"
+
+
+def _format_codex_history_rebuild_result(result: object) -> str:
+    instance = str(getattr(result, "instance_name", "") or "default")
+    status = str(getattr(result, "status", "") or "unknown")
+    chunk_count = int(getattr(result, "chunk_count", 0) or 0)
+    point_count = int(getattr(result, "point_count", 0) or 0)
+    qdrant_url = str(getattr(result, "qdrant_url", "") or "")
+    collection = str(getattr(result, "collection_name", "") or "")
+    embedding_provider = str(getattr(result, "embedding_provider", "") or "")
+    embedding_model = str(getattr(result, "embedding_model", "") or "")
+    embedding_dimensions = int(getattr(result, "embedding_dimensions", 0) or 0)
+    error = str(getattr(result, "error", "") or "")
+    detail = f" chunks={chunk_count} points={point_count}"
+    if qdrant_url:
+        detail += f" qdrant_url={qdrant_url}"
+    if collection:
+        detail += f" collection={collection}"
+    if embedding_model:
+        detail += f" embedding_provider={embedding_provider or 'unknown'} embedding_model={embedding_model} embedding_dimensions={embedding_dimensions}"
+    suffix = f" error={error}" if error else ""
+    return f"{instance}/codex-history: status={status}{detail}{suffix}"
 
 
 if __name__ == "__main__":  # pragma: no cover

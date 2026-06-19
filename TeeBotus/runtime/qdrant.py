@@ -18,6 +18,7 @@ QDRANT_USER_MEMORY_SIDE_COLLECTIONS = {
     1024: "teebotus_user_memory_1024d",
 }
 QDRANT_BIBLIOTHEKAR_COLLECTION = "teebotus_bibliothekar_chunks"
+QDRANT_CODEX_HISTORY_COLLECTION = "teebotus_codex_history_chunks"
 DEFAULT_QDRANT_TIMEOUT_SECONDS = 0.35
 MAX_QDRANT_RESPONSE_BYTES = 1_000_000
 USER_MEMORY_QDRANT_EMBEDDING_MODEL = "teebotus-account-memory-hash"
@@ -28,6 +29,8 @@ USER_MEMORY_QDRANT_SIDE_INDEX_MODELS = {
 }
 BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL = "BAAI/bge-m3"
 BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS = 1024
+CODEX_HISTORY_QDRANT_EMBEDDING_MODEL = BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL
+CODEX_HISTORY_QDRANT_EMBEDDING_DIMENSIONS = BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS
 DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS = BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS
 LOCAL_QDRANT_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 QDRANT_COLLECTION_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,255}$")
@@ -177,7 +180,7 @@ def default_qdrant_collection_specs(
     user_memory_embedding_model: str = USER_MEMORY_QDRANT_EMBEDDING_MODEL,
     bibliothekar_vector_size: int = DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     bibliothekar_embedding_model: str = BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
-) -> tuple[QdrantCollectionSpec, QdrantCollectionSpec]:
+) -> tuple[QdrantCollectionSpec, ...]:
     return (
         QdrantCollectionSpec(
             name=QDRANT_USER_MEMORY_COLLECTION,
@@ -206,6 +209,18 @@ def qdrant_user_memory_side_collection_spec(dimensions: int, *, embedding_model:
         name=qdrant_user_memory_side_collection(size),
         vector_size=size,
         embedding_model=str(embedding_model or USER_MEMORY_QDRANT_SIDE_INDEX_MODELS.get(size, "")).strip(),
+    )
+
+
+def qdrant_codex_history_collection_spec(
+    *,
+    vector_size: int = CODEX_HISTORY_QDRANT_EMBEDDING_DIMENSIONS,
+    embedding_model: str = CODEX_HISTORY_QDRANT_EMBEDDING_MODEL,
+) -> QdrantCollectionSpec:
+    return QdrantCollectionSpec(
+        name=QDRANT_CODEX_HISTORY_COLLECTION,
+        vector_size=_validate_vector_size(vector_size),
+        embedding_model=str(embedding_model or "").strip(),
     )
 
 

@@ -656,6 +656,28 @@ def export_codex_history_bibliothekar_docs(
     }
 
 
+def codex_history_bibliothekar_chunks(
+    store: AccountStore,
+    *,
+    instance_dir: str | Path,
+    instance_name: str,
+    repo: str = "",
+    limit: int = 0,
+) -> tuple[dict[str, Any], ...]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
+    destination = _codex_history_bibliothekar_root(safe_instance_dir)
+    rows = _filter_outbox(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), repo)
+    items = [item for item in rows if _codex_history_item_indexable(item)]
+    items = sorted(items, key=_summary_sort_key)
+    if limit > 0:
+        items = items[-int(limit) :]
+    chunks: list[dict[str, Any]] = []
+    for item in items:
+        chunks.append(_codex_history_bibliothekar_chunk(item, destination=destination, instance_name=safe_instance_name))
+    return tuple(chunks)
+
+
 def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
     root = _safe_repo_root(Path(repo_root), operation="repository root")
     git_root = _git_output(root, "rev-parse", "--show-toplevel")
@@ -2191,6 +2213,57 @@ def _codex_history_bibliothekar_markdown(item: Mapping[str, Any]) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def _codex_history_bibliothekar_chunk(item: Mapping[str, Any], *, destination: Path, instance_name: str) -> dict[str, Any]:
+    project = item.get("project", {})
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    repo_name = str(project.get("repo_name") or "project").strip() or "project"
+    text = _codex_history_bibliothekar_markdown(item)
+    filename = _codex_history_bibliothekar_filename(item)
+    relative_path = f"codex_history/{_safe_filename_component(repo_name, default='project')}/{filename}"
+    file_path = str((destination / relative_path).resolve())
+    item_id = str(item.get("id") or "").strip()
+    source_seed = item_id or hashlib.sha256(text.encode("utf-8")).hexdigest()
+    text_sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    categories = _codex_history_bibliothekar_categories(item)
+    keywords = _codex_history_bibliothekar_keywords(item, categories)
+    title = redact_codex_history_text(summary.get("title") or "Codex run summary").strip() or "Codex run summary"
+    summary_prefix = str(item.get("summary_prefix") or version.get("summary_prefix") or "").strip()
+    return {
+        "chunk_id": f"codex_history:{hashlib.sha256((instance_name + ':' + source_seed).encode('utf-8')).hexdigest()[:32]}",
+        "document_id": f"codex_history:{hashlib.sha256(source_seed.encode('utf-8')).hexdigest()[:32]}",
+        "source_id": f"codex_history:{item_id or text_sha[:32]}",
+        "title": f"{summary_prefix} {title}".strip(),
+        "author": "Codex",
+        "relative_path": relative_path,
+        "file_path": file_path,
+        "file_sha256": text_sha,
+        "file_type": "md",
+        "language": "de",
+        "locator": f"Codex-History {summary_prefix}".strip(),
+        "page_start": 1,
+        "page_end": 1,
+        "chapter": "Codex History",
+        "section": str(project.get("repo_name") or "project"),
+        "license": "private",
+        "source_quality": "admin_only",
+        "citation_quality": "generated_from_codex_history",
+        "source_requires_human_review": False,
+        "source_harvest_route": "codex_history_outbox",
+        "ingested_at": str(item.get("updated_at") or item.get("created_at") or utc_now()),
+        "chunk_index": 1,
+        "topics": keywords[:48],
+        "categories": categories,
+        "text": text,
+    }
 
 
 def _codex_history_bibliothekar_categories(item: Mapping[str, Any]) -> list[str]:

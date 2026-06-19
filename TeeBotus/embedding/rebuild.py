@@ -6,17 +6,20 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider, build_embedding_provider
+from TeeBotus.admin.codex_history import codex_history_bibliothekar_chunks
 from TeeBotus.instructions import BotInstructions, load_instructions
 from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, runtime_secret_provider, validate_sha512_token
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.qdrant import (
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
+    QDRANT_CODEX_HISTORY_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
     QdrantCollectionResult,
     QdrantCollectionSpec,
     default_qdrant_collection_specs,
     ensure_default_collections,
+    qdrant_codex_history_collection_spec,
     qdrant_user_memory_side_collection_spec,
 )
 from TeeBotus.runtime.qdrant_bibliothekar import QdrantBibliothekarIndex
@@ -59,6 +62,21 @@ class QdrantBibliothekarRebuildResult:
     point_ids: tuple[str, ...] = ()
     qdrant_url: str = ""
     collection_name: str = QDRANT_BIBLIOTHEKAR_COLLECTION
+    embedding_provider: str = ""
+    embedding_model: str = ""
+    embedding_dimensions: int = 0
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class QdrantCodexHistoryRebuildResult:
+    instance_name: str
+    status: str
+    chunk_count: int = 0
+    point_count: int = 0
+    point_ids: tuple[str, ...] = ()
+    qdrant_url: str = ""
+    collection_name: str = QDRANT_CODEX_HISTORY_COLLECTION
     embedding_provider: str = ""
     embedding_model: str = ""
     embedding_dimensions: int = 0
@@ -278,6 +296,102 @@ def rebuild_qdrant_bibliothekar_indexes(
     return tuple(results)
 
 
+def rebuild_qdrant_codex_history_indexes(
+    *,
+    instances_dir: str | Path = "instances",
+    instance_names: Iterable[str] = (),
+    qdrant_url: str | None = None,
+    collection_name: str = QDRANT_CODEX_HISTORY_COLLECTION,
+    repo: str = "",
+    limit: int = 0,
+    embedding_config: EmbeddingConfig | None = None,
+    embedding_overrides: Mapping[str, Any] | None = None,
+    dry_run: bool = False,
+    secret_provider: InstanceSecretProvider | None = None,
+    qdrant_index_factory: Callable[..., QdrantBibliothekarIndex] = QdrantBibliothekarIndex,
+) -> tuple[QdrantCodexHistoryRebuildResult, ...]:
+    root = Path(instances_dir)
+    selected_instances = _resolve_instruction_instance_names(root, instance_names)
+    results: list[QdrantCodexHistoryRebuildResult] = []
+    for instance_name in selected_instances:
+        instructions = _load_instance_memory_instructions(root, instance_name)
+        effective_qdrant_url = qdrant_url or instructions.bibliothekar_qdrant_url
+        effective_embedding_config = _resolve_bibliothekar_embedding_config(
+            embedding_config=embedding_config,
+            overrides=embedding_overrides,
+        )
+        try:
+            embedding_provider = build_embedding_provider(effective_embedding_config)
+            store = AccountStore(
+                root / instance_name / "data" / "accounts",
+                instance_name,
+                create_dirs=False,
+                secret_provider=secret_provider or runtime_secret_provider(),
+            )
+            chunks = codex_history_bibliothekar_chunks(
+                store,
+                instance_dir=root / instance_name,
+                instance_name=instance_name,
+                repo=repo,
+                limit=limit,
+            )
+            if dry_run:
+                results.append(
+                    _codex_history_rebuild_result(
+                        instance_name,
+                        "dry_run",
+                        chunk_count=len(chunks),
+                        point_count=len(chunks),
+                        qdrant_url=effective_qdrant_url,
+                        collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        embedding_config=effective_embedding_config,
+                    )
+                )
+                continue
+            if not chunks:
+                results.append(
+                    _codex_history_rebuild_result(
+                        instance_name,
+                        "skipped",
+                        qdrant_url=effective_qdrant_url,
+                        collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        embedding_config=effective_embedding_config,
+                        error="no codex history chunks",
+                    )
+                )
+                continue
+            index = qdrant_index_factory(
+                url=effective_qdrant_url,
+                collection=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                embedding_provider=embedding_provider,
+            )
+            point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
+            results.append(
+                _codex_history_rebuild_result(
+                    instance_name,
+                    "rebuilt",
+                    chunk_count=len(chunks),
+                    point_count=len(point_ids),
+                    point_ids=tuple(point_ids),
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                    embedding_config=effective_embedding_config,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - operator command should report every instance.
+            results.append(
+                _codex_history_rebuild_result(
+                    instance_name,
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                    embedding_config=effective_embedding_config,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+            )
+    return tuple(results)
+
+
 def ensure_qdrant_collections_for_instances(
     *,
     instances_dir: str | Path = "instances",
@@ -286,6 +400,7 @@ def ensure_qdrant_collections_for_instances(
     embedding_config: EmbeddingConfig | None = None,
     embedding_overrides: Mapping[str, Any] | None = None,
     include_memory_side_dimensions: Iterable[int] = (),
+    include_codex_history: bool = False,
     qdrant_ensure_factory: Callable[..., tuple[QdrantCollectionResult, ...]] = ensure_default_collections,
 ) -> tuple[QdrantCollectionEnsureResult, ...]:
     root = Path(instances_dir)
@@ -324,6 +439,8 @@ def ensure_qdrant_collections_for_instances(
     )
     for dimensions in _unique_positive_ints(include_memory_side_dimensions):
         specs.append(qdrant_user_memory_side_collection_spec(dimensions))
+    if include_codex_history:
+        specs.append(qdrant_codex_history_collection_spec())
     spec_by_name = {spec.name: spec for spec in specs}
     try:
         results = qdrant_ensure_factory(url=effective_qdrant_url, specs=tuple(specs))
@@ -398,6 +515,33 @@ def _bibliothekar_rebuild_result(
         point_ids=point_ids,
         qdrant_url=str(qdrant_url or ""),
         collection_name=str(collection_name or QDRANT_BIBLIOTHEKAR_COLLECTION),
+        embedding_provider=str(embedding_config.provider or ""),
+        embedding_model=str(embedding_config.model_name or ""),
+        embedding_dimensions=int(embedding_config.dimensions),
+        error=error,
+    )
+
+
+def _codex_history_rebuild_result(
+    instance_name: str,
+    status: str,
+    *,
+    qdrant_url: str,
+    embedding_config: EmbeddingConfig,
+    collection_name: str = QDRANT_CODEX_HISTORY_COLLECTION,
+    chunk_count: int = 0,
+    point_count: int = 0,
+    point_ids: tuple[str, ...] = (),
+    error: str = "",
+) -> QdrantCodexHistoryRebuildResult:
+    return QdrantCodexHistoryRebuildResult(
+        instance_name=instance_name,
+        status=status,
+        chunk_count=chunk_count,
+        point_count=point_count,
+        point_ids=point_ids,
+        qdrant_url=str(qdrant_url or ""),
+        collection_name=str(collection_name or QDRANT_CODEX_HISTORY_COLLECTION),
         embedding_provider=str(embedding_config.provider or ""),
         embedding_model=str(embedding_config.model_name or ""),
         embedding_dimensions=int(embedding_config.dimensions),
@@ -609,10 +753,12 @@ def _collection_ensure_result(
 
 __all__ = [
     "QdrantBibliothekarRebuildResult",
+    "QdrantCodexHistoryRebuildResult",
     "QdrantCollectionEnsureResult",
     "QdrantMemoryRebuildResult",
     "ensure_qdrant_collections_for_instances",
     "rebuild_qdrant_bibliothekar_indexes",
+    "rebuild_qdrant_codex_history_indexes",
     "rebuild_qdrant_memory_index",
     "rebuild_qdrant_memory_indexes",
 ]

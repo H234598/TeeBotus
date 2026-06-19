@@ -12,6 +12,7 @@ from TeeBotus.admin.codex_history import (
     acknowledge_codex_history_item,
     append_codex_history_summary,
     build_codex_history_report,
+    codex_history_bibliothekar_chunks,
     dispatch_codex_history_outbox,
     export_codex_history_bibliothekar_docs,
     _safe_output_path,
@@ -356,6 +357,38 @@ def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path
     assert "Qdrant und Bibliothekar" in exported_text
     assert fake_key not in exported_text
     assert "<redacted:openai-key>" in exported_text
+
+
+def test_codex_history_bibliothekar_chunks_are_admin_only_and_citeable(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "codex-chunk-demo", version="1.8.8")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Qdrant Chunk",
+        bullets=["Codex-History wird als separater Qdrant-Chunk indexierbar."],
+        changed_files=["TeeBotus/embedding/rebuild.py"],
+    )
+
+    chunks = codex_history_bibliothekar_chunks(
+        store,
+        instance_dir=instance_dir,
+        instance_name="Depressionsbot",
+    )
+
+    assert len(chunks) == 1
+    chunk = chunks[0]
+    assert chunk["chunk_id"].startswith("codex_history:")
+    assert chunk["document_id"].startswith("codex_history:")
+    assert chunk["source_id"] == f"codex_history:{item['id']}"
+    assert chunk["relative_path"].startswith("codex_history/codex-chunk-demo/")
+    assert "Codex_History_Bibliothek" in chunk["file_path"]
+    assert chunk["source_harvest_route"] == "codex_history_outbox"
+    assert "admin-only" in chunk["categories"]
+    assert "project-history" in chunk["categories"]
+    assert "codex-history" in chunk["text"]
+    assert chunk["file_sha256"]
 
 
 def test_codex_history_cli_bibliothekar_export_filters_repo(tmp_path: Path, capsys) -> None:

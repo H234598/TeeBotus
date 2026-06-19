@@ -5,9 +5,12 @@ import json
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_EMBEDDING_DIMENSIONS
 from TeeBotus.runtime.qdrant import (
     BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
+    CODEX_HISTORY_QDRANT_EMBEDDING_DIMENSIONS,
+    CODEX_HISTORY_QDRANT_EMBEDDING_MODEL,
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     MAX_QDRANT_RESPONSE_BYTES,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
+    QDRANT_CODEX_HISTORY_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
     USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS,
     USER_MEMORY_QDRANT_EMBEDDING_MODEL,
@@ -20,6 +23,7 @@ from TeeBotus.runtime.qdrant import (
     ensure_collection,
     ensure_default_collections,
     format_qdrant_collection_status_lines,
+    qdrant_codex_history_collection_spec,
 )
 
 
@@ -53,6 +57,8 @@ def _expected_collection_size_from_url(url: str) -> int:
     name = str(url).rsplit("/", 1)[-1]
     if name == QDRANT_BIBLIOTHEKAR_COLLECTION:
         return DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS
+    if name == QDRANT_CODEX_HISTORY_COLLECTION:
+        return CODEX_HISTORY_QDRANT_EMBEDDING_DIMENSIONS
     return USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
 
 
@@ -78,6 +84,16 @@ def test_default_qdrant_collection_specs_accept_usermemory_embedding_overrides()
 
     assert user_memory.vector_size == 384
     assert user_memory.embedding_model == "intfloat/multilingual-e5-small"
+
+
+def test_qdrant_codex_history_collection_spec_is_separate_admin_collection() -> None:
+    spec = qdrant_codex_history_collection_spec()
+
+    assert spec.name == QDRANT_CODEX_HISTORY_COLLECTION
+    assert spec.name != QDRANT_BIBLIOTHEKAR_COLLECTION
+    assert spec.vector_size == CODEX_HISTORY_QDRANT_EMBEDDING_DIMENSIONS
+    assert spec.embedding_model == CODEX_HISTORY_QDRANT_EMBEDDING_MODEL
+    assert spec.distance == "Cosine"
 
 
 def test_ensure_collection_creates_missing_collection_with_vector_schema() -> None:
