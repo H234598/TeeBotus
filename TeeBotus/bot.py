@@ -1717,15 +1717,8 @@ def _account_storage_preflight_broken_lines(config: Any) -> tuple[str, ...]:
     except Exception as exc:  # pragma: no cover - defensive only
         return (f"account_storage_preflight status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}",)
     project_root = config.instances_dir.parent
-    selected_raw = getattr(config, "selected_instances", ()) or ()
-    instance_names = tuple(str(name) for name in selected_raw if str(name or "").strip())
-    if instance_names:
-        selected = instance_names
-    else:
-        instances_raw = getattr(config, "instances", ()) or ()
-        selected = tuple(str(instance.instance_name) for instance in instances_raw if str(getattr(instance, "instance_name", "")).strip())
     broken: list[str] = []
-    for instance_name in selected:
+    for instance_name in _account_storage_preflight_instance_names(config):
         for line in (
             *account_secret_health_lines(instance_name=instance_name, project_root=project_root),
             *account_memory_index_health_lines(instance_name=instance_name, project_root=project_root),
@@ -1734,6 +1727,18 @@ def _account_storage_preflight_broken_lines(config: Any) -> tuple[str, ...]:
             if _account_storage_health_line_is_broken(sanitized):
                 broken.append(sanitized)
     return tuple(broken)
+
+
+def _account_storage_preflight_instance_names(config: Any) -> tuple[str, ...]:
+    instances_raw = getattr(config, "instances", None)
+    if instances_raw is not None:
+        return tuple(
+            str(getattr(instance, "instance_name", "") or "")
+            for instance in instances_raw
+            if str(getattr(instance, "instance_name", "") or "").strip() and getattr(instance, "accounts", ())
+        )
+    selected_raw = getattr(config, "selected_instances", ()) or ()
+    return tuple(str(name) for name in selected_raw if str(name or "").strip())
 
 
 def _account_storage_health_line_is_broken(line: str) -> bool:

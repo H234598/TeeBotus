@@ -407,6 +407,53 @@ def test_main_all_start_uses_runtime_instance_discovery(monkeypatch, tmp_path) -
     assert calls[0].selected_instances == ("DemoA", "DemoB")
 
 
+def test_main_all_preflight_skips_instances_without_runtime_accounts(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    for name in ("DemoA", "DemoB"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+    calls = []
+    checked_instances = []
+
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "all")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMOA", "telegram-token-a")
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN_DEMOB", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMOA", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMOA", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMOB", raising=False)
+    monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMOB", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMOA", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMOA", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMOA", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMOB", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMOB", raising=False)
+    monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMOB", raising=False)
+
+    def secret_health(*, instance_name, project_root):
+        checked_instances.append(instance_name)
+        if instance_name == "DemoB":
+            return [
+                "account_crypto=DemoB status=broken mapping=present memory=missing_required keyring=broken"
+            ]
+        return []
+
+    monkeypatch.setattr("TeeBotus.core.status.account_secret_health_lines", secret_health)
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: None)
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--all"]) == 0
+
+    assert checked_instances == ["DemoA"]
+    assert calls
+    assert calls[0].selected_instances == ("DemoA", "DemoB")
+    assert tuple(account.label for instance in calls[0].instances for account in instance.accounts) == ("telegram:1",)
+
+
 def test_main_all_start_initializes_signal_and_matrix_before_telegram(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
