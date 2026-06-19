@@ -760,7 +760,11 @@ def account_identity_health_lines(
 def account_secret_health_lines(*, instance_name: str, project_root: Path, secret_provider: object | None = None) -> list[str]:
     if not instance_name:
         return []
-    root = project_root.resolve() / "instances" / instance_name / "data" / "accounts"
+    try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return [f"account_crypto={instance_name} status=none"]
+    root = project_root.resolve() / "instances" / safe_instance_name / "data" / "accounts"
     if not root.exists():
         return [f"account_crypto={instance_name} status=none"]
     provider = secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False)
@@ -947,7 +951,7 @@ def _account_secret_mapping_required(root: Path) -> bool:
                     account_dir / "Account_Tombstone.json",
                 ]
             )
-    return any(_looks_like_teebotus_encrypted_payload(path) for path in paths)
+    return any(_looks_like_teebotus_encrypted_payload(path, allowed_roots=(root,)) for path in paths)
 
 
 def _account_secret_memory_required(root: Path, instance_name: str) -> bool:
@@ -955,7 +959,7 @@ def _account_secret_memory_required(root: Path, instance_name: str) -> bool:
     if accounts_dir.exists():
         for account_dir in _account_memory_account_dirs(accounts_dir):
             for filename in ACCOUNT_MEMORY_FILENAMES | {"LLM_State.json", "OpenAI_State.json", "Agent_State.json", "Proactive_Outbox.jsonl", "Proactive_Audit.jsonl", "Proactive_Dispatch_Results.jsonl"}:
-                if _looks_like_teebotus_encrypted_payload(account_dir / filename):
+                if _looks_like_teebotus_encrypted_payload(account_dir / filename, allowed_roots=(root,)):
                     return True
     try:
         from TeeBotus.runtime.sqlite_memory import SQLITE_DEFAULT_FALLBACK_FILENAME, SQLITE_DEFAULT_FILENAME, SQLiteMemoryConfig
@@ -1005,15 +1009,15 @@ def _account_secret_pepper_required(
     accounts_dir = root / ACCOUNTS_DIRNAME
     if accounts_dir.exists():
         for account_dir in _account_memory_account_dirs(accounts_dir):
-            if _secret_verifier_file_has_payload(account_dir / SECRET_VERIFIER_FILENAME):
+            if _secret_verifier_file_has_payload(account_dir / SECRET_VERIFIER_FILENAME, allowed_roots=(root,)):
                 return True
     secrets_path = root / ACCOUNT_SECRETS_FILENAME
     if not secrets_path.exists() or not mapping_present:
         return False
     try:
-        secrets_doc = EncryptedJsonVault(instance_name, provider).read_json(secrets_path, {})
+        secrets_doc = EncryptedJsonVault(instance_name, provider, root=root).read_json(secrets_path, {})
     except AccountStoreError:
-        return _looks_like_teebotus_encrypted_payload(secrets_path)
+        return _looks_like_teebotus_encrypted_payload(secrets_path, allowed_roots=(root,))
     return any(_account_secret_payload_has_verifier(payload) for payload in secrets_doc.values())
 
 
@@ -1079,6 +1083,17 @@ def _mcp_policy_directly_callable(policy: MCPToolPolicy) -> bool:
 
 def _status_display_name(instance_name: str) -> str:
     return str(instance_name or "").strip() or "TeeBotus"
+
+
+def _safe_instance_name_for_accounts(instance_name: str) -> str:
+    text = str(instance_name or "").strip()
+    if not text:
+        raise ValueError("instance_name must not be empty")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in text):
+        raise ValueError("instance_name contains invalid control characters")
+    if text in {".", ".."} or "/" in text or "\\" in text:
+        raise ValueError("instance_name must be a single path segment")
+    return text
 
 
 def _memory_status_text(*, account_resolved: bool, memory_size: int) -> str:
