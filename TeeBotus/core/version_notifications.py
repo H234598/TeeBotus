@@ -158,7 +158,8 @@ def notify_recent_telegram_users_for_version(
 
 
 def _notification_state_path(instances_dir: Path, instance_name: str) -> Path:
-    return Path(instances_dir) / _safe_instance_name(instance_name) / "data" / NOTIFICATION_STATE_FILENAME
+    safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
+    return safe_instances_dir / _safe_instance_name(instance_name) / "data" / NOTIFICATION_STATE_FILENAME
 
 
 def recent_telegram_recipients(

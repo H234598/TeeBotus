@@ -1219,6 +1219,19 @@ def test_version_notification_plaintext_writer_normalizes_state(tmp_path: Path) 
     }
 
 
+def test_version_notification_plaintext_writer_rejects_invalid_instances_dir(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    invalid_instances_dir = Path(f"{tmp_path}\x00invalid")
+
+    with pytest.raises(ValueError, match="instances directory"):
+        _write_state(
+            store,
+            invalid_instances_dir,
+            "Demo",
+            {"versions": {}},
+        )
+
+
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
     state = _normalize_state(
         {
