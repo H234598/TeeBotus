@@ -50,6 +50,7 @@ OPENAI_STATE_FILENAME = "OpenAI_State.json"
 AGENT_STATE_FILENAME = "Agent_State.json"
 LLM_STATE_COLLECTION = "llm_state"
 AGENT_STATE_COLLECTION = "agent_state"
+INSTANCE_STATE_ACCOUNT_ID = hashlib.sha512(b"TeeBotus:instance-state:v1").hexdigest()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
@@ -830,6 +831,14 @@ def _safe_account_filename(value: str) -> str:
     if any(ord(char) < 0x20 or ord(char) == 0x7F for char in filename):
         raise AccountStoreError("account filename contains invalid control characters")
     return filename
+
+
+def _safe_collection_name(value: str) -> str:
+    name = str(value or "").strip()
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+    if not name or any(char not in allowed for char in name):
+        raise AccountStoreError("account collection name is invalid")
+    return name
 
 
 @dataclass(frozen=True)
@@ -2427,6 +2436,39 @@ class AccountStore:
             return
         self.account_memory_vault.write_json(self.account_dir(account_id) / AGENT_STATE_FILENAME, dict(data))
 
+    def instance_json_state_backend_available(self) -> bool:
+        return self._account_memory_collection_backend_available()
+
+    def read_instance_json_state(self, filename: str, collection: str, default: dict[str, Any]) -> dict[str, Any]:
+        safe_filename = _safe_account_filename(filename)
+        collection_name = _safe_collection_name(collection)
+        backend = self.account_memory_backend
+        read_collection = getattr(backend, "read_collection", None) if backend is not None else None
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if not (callable(read_collection) and callable(write_collection)):
+            return dict(default)
+        rows = [row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)]
+        data = dict(rows[0]) if rows else dict(default)
+        path = self.root.parent / safe_filename
+        if path.exists():
+            legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+            selected = _merge_nested_json_documents(legacy_data, data)
+            if selected != data:
+                write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [selected])
+                data = selected
+            self._unlink_migrated_account_file(path)
+        return data
+
+    def write_instance_json_state(self, filename: str, collection: str, data: dict[str, Any]) -> None:
+        safe_filename = _safe_account_filename(filename)
+        collection_name = _safe_collection_name(collection)
+        backend = self.account_memory_backend
+        write_collection = getattr(backend, "write_collection", None) if backend is not None else None
+        if not callable(write_collection):
+            raise AccountStoreError("account memory SQL collection backend is not available")
+        write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [dict(data)])
+        self._unlink_migrated_account_file(self.root.parent / safe_filename)
+
     def _account_memory_collection_backend_available(self) -> bool:
         backend = self.account_memory_backend
         return callable(getattr(backend, "read_collection", None)) and callable(getattr(backend, "write_collection", None))
@@ -3395,6 +3437,16 @@ def _choose_newer_state(source_data: dict[str, Any], target_data: dict[str, Any]
         merged = {**target_data, **source_data}
     else:
         merged = {**source_data, **target_data}
+    return merged
+
+
+def _merge_nested_json_documents(source_data: dict[str, Any], target_data: dict[str, Any]) -> dict[str, Any]:
+    merged = {**source_data, **target_data}
+    for key in source_data.keys() & target_data.keys():
+        source_value = source_data[key]
+        target_value = target_data[key]
+        if isinstance(source_value, dict) and isinstance(target_value, dict):
+            merged[key] = _merge_nested_json_documents(source_value, target_value)
     return merged
 
 

@@ -11,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 
 NOTIFICATION_STATE_FILENAME = "Version_Notifications.json"
+NOTIFICATION_STATE_COLLECTION = "version_notifications"
 ACTIVE_WINDOW_DAYS = 7
 DEFAULT_REPO_URL = "https://github.com/H234598/TeeBotus"
 
@@ -45,7 +46,7 @@ def notify_recent_telegram_users_for_version(
         return 0
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
-    state = _load_state(state_path)
+    state = _load_state(account_store, state_path)
     version_state = _version_state(state, version)
     sent_identities = set(str(value) for value in version_state.get("sent_identities", []) if isinstance(value, str))
     failed_identities = version_state.get("failed_identities")
@@ -65,7 +66,10 @@ def notify_recent_telegram_users_for_version(
             send_message(recipient.chat_id, message)
         except Exception as exc:  # noqa: BLE001
             if on_error is not None:
-                on_error(recipient, exc)
+                try:
+                    on_error(recipient, exc)
+                except Exception:
+                    pass
             if _is_permanent_delivery_error(exc):
                 failed_identities[recipient.identity_key] = {
                     "adapter_slot": recipient.adapter_slot,
@@ -79,7 +83,7 @@ def notify_recent_telegram_users_for_version(
     version_state["sent_identities"] = sorted(sent_identities)
     version_state["failed_identities"] = dict(sorted(failed_identities.items()))
     version_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-    _write_state(state_path, state)
+    _write_state(account_store, state_path, state)
     return sent_count
 
 
@@ -302,21 +306,46 @@ def _version_state(state: dict[str, Any], version: str) -> dict[str, Any]:
     return raw_version_state
 
 
-def _load_state(path: Path) -> dict[str, Any]:
+def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
+    if _sql_state_backend_available(account_store):
+        return _normalize_state(
+            account_store.read_instance_json_state(
+                NOTIFICATION_STATE_FILENAME,
+                NOTIFICATION_STATE_COLLECTION,
+                {"versions": {}},
+            )
+        )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return {"versions": {}}
-    if not isinstance(data, dict):
-        return {"versions": {}}
-    versions = data.get("versions")
-    if not isinstance(versions, dict):
-        data["versions"] = {}
-    return data
+    return _normalize_state(data)
 
 
-def _write_state(path: Path, state: dict[str, Any]) -> None:
+def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any]) -> None:
+    if _sql_state_backend_available(account_store):
+        account_store.write_instance_json_state(
+            NOTIFICATION_STATE_FILENAME,
+            NOTIFICATION_STATE_COLLECTION,
+            _normalize_state(state),
+        )
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     tmp.replace(path)
+
+
+def _sql_state_backend_available(account_store: AccountStore) -> bool:
+    checker = getattr(account_store, "instance_json_state_backend_available", None)
+    return callable(checker) and bool(checker())
+
+
+def _normalize_state(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return {"versions": {}}
+    normalized = dict(data)
+    versions = normalized.get("versions")
+    if not isinstance(versions, dict):
+        normalized["versions"] = {}
+    return normalized

@@ -465,6 +465,86 @@ def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tm
     assert "chat not found" in failed["reason"]
 
 
+def test_notify_recent_telegram_users_stores_state_in_sqlite_when_available(tmp_path: Path, monkeypatch) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": ["telegram:user:111"],
+                        "failed_identities": {},
+                        "updated_at": "2026-06-14T11:59:00+00:00",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert not state_path.exists()
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    raw_db = sqlite_path.read_bytes()
+    assert b"telegram:user:111" not in raw_db
+
+
+def test_notify_recent_telegram_users_records_permanent_error_when_on_error_fails(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Broken")
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+
+    def broken_error_hook(_recipient, _exc) -> None:
+        raise RuntimeError("logger failed")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        on_error=broken_error_hook,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    count_again = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        on_error=broken_error_hook,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert count == 0
+    assert count_again == 0
+    assert attempts == [111]
+    assert "telegram:user:111" in state["versions"]["1.0.3"]["failed_identities"]
+
+
 def test_notify_recent_telegram_users_retries_transient_delivery_error(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Flaky")
