@@ -1057,6 +1057,9 @@ def _write_state(account_store: AccountStore, path: Path, state: dict[str, Any])
             _clear_sql_state_collection(account_store)
         _unlink_legacy_state_path(path)
         return
+    if not _notification_state_has_versions(normalized_state):
+        _unlink_legacy_state_path(path)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps(normalized_state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")

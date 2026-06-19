@@ -874,6 +874,41 @@ def test_notify_recent_telegram_users_skips_empty_normalized_version(tmp_path: P
     assert not state_path.exists()
 
 
+def test_notify_recent_telegram_users_removes_empty_legacy_state_on_empty_version(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "": {"sent_identities": ["telegram:user:999"], "failed_identities": {}},
+                    "v": {"sent_identities": ["telegram:user:888"], "failed_identities": {}},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+    skips: list[str] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="v",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        on_skip=skips.append,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    assert skips == ["version is empty"]
+    assert not state_path.exists()
+
+
 def test_notify_recent_telegram_users_skips_empty_normalized_version_without_sqlite_state(
     tmp_path: Path,
     monkeypatch,
