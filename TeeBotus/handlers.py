@@ -115,6 +115,8 @@ def is_program_history_request(text: str) -> bool:
         "comitt historie",
         "commithistorie",
         "comitthistorie",
+        "release log",
+        "releaselog",
         "release notes",
         "releases",
         "changelog",
