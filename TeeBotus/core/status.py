@@ -25,6 +25,7 @@ from TeeBotus.runtime.accounts import (
     INSTANCE_KEY_SIZE_BYTES,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
+    INSTANCE_STATE_ACCOUNT_ID,
     SECRET_VERIFIER_FILENAME,
     TOKEN_HEX_RE,
     AccountStore,
@@ -1280,6 +1281,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     if metadata_lines:
         lines.extend(metadata_lines)
         has_broken_metadata = True
+    instance_fallback_warning = _account_memory_fallback_warning(store, INSTANCE_STATE_ACCOUNT_ID)
+    if instance_fallback_warning:
+        lines.append(f"account_memory={instance_name}/__instance_state status=warning{instance_fallback_warning}")
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_error = ""
@@ -1458,11 +1462,14 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
         return ""
     stale_entries = set(getattr(backend, "stale_fallback_entry_account_ids", ()) or ())
     stale_indexes = set(getattr(backend, "stale_fallback_index_account_ids", ()) or ())
+    stale_collections = set(getattr(backend, "stale_fallback_collection_account_ids", ()) or ())
     stale_parts: list[str] = []
     if account_id in stale_entries:
         stale_parts.append("entries")
     if account_id in stale_indexes:
         stale_parts.append("index")
+    if account_id in stale_collections:
+        stale_parts.append("collections")
     if not stale_parts:
         return ""
     error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")

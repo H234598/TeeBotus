@@ -17,6 +17,7 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
+    INSTANCE_STATE_ACCOUNT_ID,
     AccountStore,
     AccountStoreError,
     SecretToolInstanceSecretProvider,
@@ -906,6 +907,40 @@ def test_account_memory_index_health_reports_stale_fallback_sync(tmp_path: Path,
 
     assert lines == [
         f"account_memory=Demo/{account_id} status=ok warning=fallback_sync_stale:entries:write_entries: fallback unavailable"
+    ]
+
+
+def test_account_memory_index_health_reports_stale_instance_collection_sync(tmp_path: Path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class Backend:
+        stale_fallback_entry_account_ids: tuple[str, ...] = ()
+        stale_fallback_index_account_ids: tuple[str, ...] = ()
+        stale_fallback_collection_account_ids = (INSTANCE_STATE_ACCOUNT_ID,)
+        last_fallback_sync_error = "write_collection:version_notifications: fallback unavailable"
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def _read_account_profile(self, _account_id: str) -> dict[str, object]:
+            return {"status": "active"}
+
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+            return SimpleNamespace(ok=True, errors=())
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_memory=Demo/__instance_state status=warning "
+        "warning=fallback_sync_stale:collections:write_collection:version_notifications: fallback unavailable",
+        f"account_memory=Demo/{account_id} status=ok",
     ]
 
 
