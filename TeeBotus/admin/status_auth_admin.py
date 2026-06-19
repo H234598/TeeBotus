@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -35,6 +36,34 @@ _SENSITIVE_REDACTION_KEYS = {
 }
 _SENSITIVE_REDACTION_KEY_FRAGMENTS = ("token", "secret", "apikey", "passphrase", "password", "api_key", "secret_key", "verifier", "cookie")
 _SENSITIVE_FIELD_ALLOWLIST = {"account_id", "linked_identities", "identity_key"}
+_SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
+
+
+def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
+    text = str(value).strip()
+    if not text:
+        raise ValueError(f"{operation} must not be empty")
+    if "\x00" in text or "\r" in text or "\n" in text or "\t" in text:
+        raise ValueError(f"{operation} contains invalid control characters")
+    if "\\" in text:
+        raise ValueError(f"{operation} contains invalid path separator: \\")
+    if text == "/":
+        return True, tuple()
+    is_absolute = text.startswith("/")
+    normalized = text[1:] if is_absolute else text
+    if not normalized:
+        raise ValueError(f"{operation} must not be empty")
+    raw_parts = normalized.split("/")
+    parts: list[str] = []
+    for part in raw_parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError(f"{operation} contains forbidden relative segment: {part}")
+        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
+            raise ValueError(f"{operation} contains invalid path segment: {part}")
+        parts.append(part)
+    return is_absolute, tuple(parts)
 
 
 def _sanitize_output(payload: Any) -> Any:
@@ -61,15 +90,18 @@ def _sanitize_output(payload: Any) -> Any:
 
 
 def _safe_output_path(output: str) -> Path:
-    output_path = Path(output).expanduser()
+    is_absolute, parts = _split_safe_relative_parts(output, operation="output path")
+    if is_absolute:
+        raise ValueError(f"output path must be a safe relative path: {output}")
     root = Path.cwd().resolve()
+    output_path = Path(*parts)
     target = (root / output_path).resolve()
     try:
         target.relative_to(root)
     except ValueError as exc:
         raise ValueError(f"output path escapes the working directory: {output}") from exc
-    if output_path.is_absolute():
-        raise ValueError(f"output path must be relative: {output}")
+    if target.exists() and target.is_dir():
+        raise ValueError(f"output path must be a file path: {output}")
     return target
 
 

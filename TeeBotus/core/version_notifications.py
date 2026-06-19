@@ -15,6 +15,7 @@ NOTIFICATION_STATE_FILENAME = "Version_Notifications.json"
 NOTIFICATION_STATE_COLLECTION = "version_notifications"
 ACTIVE_WINDOW_DAYS = 7
 DEFAULT_REPO_URL = "https://github.com/H234598/TeeBotus"
+_SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
 SEMVER_RE = re.compile(
     r"^(?P<major>0|[1-9]\d*)\."
     r"(?P<minor>0|[1-9]\d*)\."
@@ -37,9 +38,31 @@ def _safe_instance_name(value: str) -> str:
 
 def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
     text = str(value)
-    if "\x00" in text:
+    expanded = str(Path(text).expanduser())
+    text = expanded
+    if "\x00" in text or "\r" in text or "\n" in text or "\t" in text:
         raise ValueError(f"{operation} contains invalid control character")
-    return Path(text).expanduser().resolve()
+    if "\\" in text:
+        raise ValueError(f"{operation} contains invalid path separator")
+    if text == "/":
+        return Path("/").resolve()
+    is_absolute = text.startswith("/")
+    normalized = text[1:] if is_absolute else text
+    if not normalized:
+        raise ValueError(f"{operation} must not be empty")
+    parts: list[str] = []
+    for part in normalized.split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            parts.append(part)
+            continue
+        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
+            raise ValueError(f"{operation} contains invalid path segment")
+        parts.append(part)
+    if is_absolute:
+        return Path("/").joinpath(*parts).resolve() if parts else Path("/").resolve()
+    return Path.cwd().joinpath(*parts).resolve() if parts else Path.cwd()
 
 
 @dataclass(frozen=True)
