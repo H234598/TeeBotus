@@ -222,11 +222,13 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
     bulk_values = _nonempty(parse_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}")))
-    if bulk_values:
-        return _validate_unique_values(bulk_values, label=f"TELEGRAM_BOT_TOKENS_{token}")
-    single = source.get(f"TELEGRAM_BOT_TOKEN_{token}") or source.get("TELEGRAM_BOT_TOKEN", "")
+    single = source.get(f"TELEGRAM_BOT_TOKEN_{token}", "").strip()
     numbered = _numbered_values(source, f"TELEGRAM_BOT_TOKEN_{token}")
-    return _validate_unique_values(_nonempty((single, *numbered)), label=f"TELEGRAM_BOT_TOKEN_{token}")
+    instance_values = _nonempty((*bulk_values, single, *numbered))
+    if instance_values:
+        return _validate_unique_values(instance_values, label=f"TELEGRAM_BOT_TOKEN_{token}")
+    global_values = _nonempty((*parse_csv(source.get("TELEGRAM_BOT_TOKENS")), source.get("TELEGRAM_BOT_TOKEN", "")))
+    return _validate_unique_values(global_values, label="TELEGRAM_BOT_TOKEN")
 
 
 def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:

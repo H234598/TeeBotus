@@ -23,6 +23,24 @@ def test_channels_default_to_telegram_signal_and_matrix():
     assert resolve_channels({}, cli_channels="telegram") == ("telegram",)
 
 
+def test_telegram_token_resolution_merges_plural_single_and_numbered_instance_values():
+    env = {
+        "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_3": "token-c",
+        "TELEGRAM_BOT_TOKEN": "global-token",
+    }
+
+    assert resolve_telegram_tokens("Depressionsbot", env) == ("token-a", "token-b", "token-c")
+
+
+def test_telegram_token_resolution_supports_global_plural_fallback():
+    env = {
+        "TELEGRAM_BOT_TOKENS": "global-a, global-b",
+    }
+
+    assert resolve_telegram_tokens("Depressionsbot", env) == ("global-a", "global-b")
+
+
 def test_duplicate_channels_raise_instead_of_starting_adapter_twice():
     with pytest.raises(RuntimeConfigError):
         resolve_channels({}, cli_channels="telegram,telegram")
