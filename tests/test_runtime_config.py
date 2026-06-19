@@ -46,6 +46,21 @@ def test_runtime_config_marks_only_concrete_channel_selection_as_explicit(tmp_pa
     assert build_runtime_config(base_env, cli_channels="telegram").channels_explicit is True
 
 
+def test_runtime_config_marks_only_concrete_instance_selection_as_explicit(tmp_path: Path):
+    (tmp_path / "Depressionsbot").mkdir()
+    (tmp_path / "Depressionsbot" / "Bot_Verhalten.md").write_text("# Bot", encoding="utf-8")
+    base_env = {
+        "TELEGRAM_BOT_INSTANCES_DIR": str(tmp_path),
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "telegram-token",
+    }
+
+    assert build_runtime_config(base_env, cli_channels="telegram").instances_explicit is False
+    assert build_runtime_config({**base_env, "TEEBOTUS_INSTANCE": "all"}, cli_channels="telegram").instances_explicit is False
+    assert build_runtime_config({**base_env, "TEEBOTUS_INSTANCES": "auto"}, cli_channels="telegram").instances_explicit is False
+    assert build_runtime_config({**base_env, "TEEBOTUS_INSTANCE": "Depressionsbot"}, cli_channels="telegram").instances_explicit is True
+    assert build_runtime_config({**base_env, "TEEBOTUS_INSTANCES": "Depressionsbot"}, cli_channels="telegram").instances_explicit is True
+
+
 def test_telegram_token_resolution_merges_plural_single_and_numbered_instance_values():
     env = {
         "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",

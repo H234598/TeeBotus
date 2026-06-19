@@ -1786,6 +1786,24 @@ def _runtime_channels_explicit(config: Any) -> bool:
     return bool(getattr(config, "channels_explicit", False))
 
 
+def _runtime_instances_explicit(config: Any) -> bool:
+    return bool(getattr(config, "instances_explicit", False))
+
+
+def _runtime_missing_explicit_instance_errors(config: Any) -> tuple[str, ...]:
+    if not _runtime_instances_explicit(config):
+        return ()
+    errors: list[str] = []
+    for instance in getattr(config, "instances", ()) or ():
+        instruction_path = Path(getattr(instance, "instruction_path", ""))
+        if not instruction_path.exists():
+            errors.append(
+                f"Instanz {getattr(instance, 'instance_name', '<unknown>')} ist explizit angefordert, "
+                f"aber {instruction_path} existiert nicht."
+            )
+    return tuple(errors)
+
+
 def _runtime_missing_explicit_channel_errors(config: Any) -> tuple[str, ...]:
     if not _runtime_channels_explicit(config):
         return ()
@@ -1916,6 +1934,11 @@ def _main_impl(argv: list[str] | None = None) -> int:
 
     config = _runtime_config_from_main_args(args)
     if config is None:
+        return 2
+    missing_explicit_instances = _runtime_missing_explicit_instance_errors(config)
+    if missing_explicit_instances:
+        for message in missing_explicit_instances:
+            print(message, file=sys.stderr)
         return 2
     if "telegram" not in config.channels and len(_non_telegram_channels(config)) != 1:
         print("Mehrkanal-Start ohne Telegram braucht genau einen blockierenden Channel: signal oder matrix.", file=sys.stderr)

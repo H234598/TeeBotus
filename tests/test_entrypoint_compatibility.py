@@ -11,6 +11,16 @@ from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegr
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 
 
+def _configure_demo_instance(monkeypatch, tmp_path: Path, *, instructions: str = "# Bot\n") -> Path:
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(instructions, encoding="utf-8")
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    return demo_dir
+
+
 def test_package_entrypoint_exists_and_delegates_to_bot_main() -> None:
     module = importlib.import_module("TeeBotus.__main__")
     bot = importlib.import_module("TeeBotus.bot")
@@ -290,13 +300,13 @@ def test_runtime_qdrant_status_url_reports_conflicting_active_qdrant_urls() -> N
     assert "B/bibliothekar:http://127.0.0.1:6335" in error
 
 
-def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
+def test_main_starts_default_telegram_runtime_slot(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
     refresh_calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
@@ -310,12 +320,12 @@ def test_main_starts_default_telegram_runtime_slot(monkeypatch) -> None:
     assert calls[0].instances[0].accounts[0].label == "telegram:1"
 
 
-def test_main_refuses_to_start_when_account_storage_preflight_is_broken(monkeypatch, capsys) -> None:
+def test_main_refuses_to_start_when_account_storage_preflight_is_broken(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
@@ -335,12 +345,12 @@ def test_main_refuses_to_start_when_account_storage_preflight_is_broken(monkeypa
     assert "Emergency override: TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START=1" in captured.err
 
 
-def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsys) -> None:
+def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
 
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START", "1")
     monkeypatch.setattr(
@@ -360,12 +370,12 @@ def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsy
     assert "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START=1 allows startup" in captured.err
 
 
-def test_main_start_does_not_leak_loaded_default_environment(monkeypatch) -> None:
+def test_main_start_does_not_leak_loaded_default_environment(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
 
     monkeypatch.delenv("TELEGRAM_BOT_INSTANCE", raising=False)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
@@ -2197,19 +2207,36 @@ def test_empty_channels_equals_rejected_before_runtime_start(monkeypatch, capsys
     assert calls == []
 
 
-def test_channels_signal_without_config_fails_clearly(monkeypatch) -> None:
+def test_explicit_missing_instance_rejected_before_runtime_start(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    calls = []
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(tmp_path / "instances"))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "MissingBot")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_MISSINGBOT", "telegram-token")
+    monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
+
+    assert bot.main(["--channels", "telegram"]) == 2
+
+    captured = capsys.readouterr()
+    assert "MissingBot ist explizit angefordert" in captured.err
+    assert "Bot_Verhalten.md existiert nicht" in captured.err
+    assert calls == []
+
+
+def test_channels_signal_without_config_fails_clearly(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
     monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
     assert bot.main(["--channels", "signal"]) == 2
 
 
-def test_channels_signal_delegates_to_signal_runtime(monkeypatch) -> None:
+def test_channels_signal_delegates_to_signal_runtime(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
     monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
     monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(config) or 0)
@@ -2219,10 +2246,10 @@ def test_channels_signal_delegates_to_signal_runtime(monkeypatch) -> None:
     assert calls[0].instances[0].accounts[0].channel == "signal"
 
 
-def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> None:
+def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("SIGNAL_BOT_SERVICE_DEMO", "http://127.0.0.1:8080")
     monkeypatch.setenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", "+491234")
@@ -2233,11 +2260,11 @@ def test_channels_telegram_signal_starts_signal_before_telegram(monkeypatch) -> 
     assert [call[0] for call in calls] == ["signal", "telegram"]
 
 
-def test_explicit_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys) -> None:
+def test_explicit_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
     monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
@@ -2250,11 +2277,11 @@ def test_explicit_channels_telegram_signal_without_signal_config_fails_before_te
     assert calls == []
 
 
-def test_env_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys) -> None:
+def test_env_channels_telegram_signal_without_signal_config_fails_before_telegram(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TEEBOTUS_CHANNELS", "telegram,signal")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
@@ -2268,12 +2295,12 @@ def test_env_channels_telegram_signal_without_signal_config_fails_before_telegra
     assert calls == []
 
 
-def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch) -> None:
+def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
     monkeypatch.delenv("TEEBOTUS_CHANNELS", raising=False)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.delenv("SIGNAL_BOT_SERVICE_DEMO", raising=False)
     monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
@@ -2286,20 +2313,20 @@ def test_default_auto_channels_keep_telegram_only_start_tolerant(monkeypatch) ->
     assert [call[0] for call in calls] == ["telegram"]
 
 
-def test_channels_matrix_without_config_fails_clearly(monkeypatch) -> None:
+def test_channels_matrix_without_config_fails_clearly(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
     monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
     monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
     assert bot.main(["--channels", "matrix"]) == 2
 
 
-def test_channels_matrix_delegates_to_matrix_runtime(monkeypatch) -> None:
+def test_channels_matrix_delegates_to_matrix_runtime(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
     monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
     monkeypatch.setenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", "matrix-token")
@@ -2310,10 +2337,10 @@ def test_channels_matrix_delegates_to_matrix_runtime(monkeypatch) -> None:
     assert calls[0].instances[0].accounts[0].channel == "matrix"
 
 
-def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> None:
+def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("MATRIX_BOT_HOMESERVER_DEMO", "https://matrix.example")
     monkeypatch.setenv("MATRIX_BOT_USER_ID_DEMO", "@bot:example")
@@ -2325,11 +2352,11 @@ def test_channels_telegram_matrix_starts_matrix_before_telegram(monkeypatch) -> 
     assert [call[0] for call in calls] == ["matrix", "telegram"]
 
 
-def test_explicit_channels_telegram_matrix_without_matrix_config_fails_before_telegram(monkeypatch, capsys) -> None:
+def test_explicit_channels_telegram_matrix_without_matrix_config_fails_before_telegram(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     calls = []
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.delenv("MATRIX_BOT_HOMESERVER_DEMO", raising=False)
     monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMO", raising=False)
