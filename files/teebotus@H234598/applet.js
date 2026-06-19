@@ -750,19 +750,20 @@ TeeBotusApplet.prototype = {
 
   _quotedCharacterIndexes: function(text) {
     let indexes = {};
-    let quote = "";
     for (let i = 0; i < text.length; i++) {
       let value = text.charAt(i);
-      if (quote) {
-        indexes[i] = true;
-        if (value === quote) {
-          quote = "";
+      let nextValue = i + 1 < text.length ? text.charAt(i + 1) : "";
+      if (value === "=" && (nextValue === "\"" || nextValue === "'" || nextValue === "`")) {
+        let quote = nextValue;
+        let quoteIndex = i + 1;
+        while (quoteIndex < text.length) {
+          indexes[quoteIndex] = true;
+          if (quoteIndex > i + 1 && text.charAt(quoteIndex) === quote) {
+            break;
+          }
+          quoteIndex++;
         }
-        continue;
-      }
-      if (value === "\"" || value === "'" || value === "`") {
-        indexes[i] = true;
-        quote = value;
+        i = quoteIndex;
       }
     }
     return indexes;

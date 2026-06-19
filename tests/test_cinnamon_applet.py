@@ -951,6 +951,39 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
     assert parsed["summary"]["problem_statuses"] == "needed:1,warning:2"
 
 
+def test_cinnamon_applet_runtime_parser_keeps_apostrophes_in_free_text_neutral() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Lokale Dienste]
+        service=demo error=can't connect status=unreachable warning=retry
+
+        [Tools und Account-Memory]
+        account_memory=Demo/message status=ok message=can't load warning=real
+        account_memory=Demo/action status=ok action=don't retry warning=again
+        account_memory=Demo/note note=can't status=ok warning=note
+        """
+    )
+
+    service_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Lokale Dienste"][0])
+    message_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][0])
+    action_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][1])
+    note_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][2])
+
+    assert service_fields["error"] == "can't connect"
+    assert service_fields["status"] == "unreachable"
+    assert service_fields["warning"] == "retry"
+    assert message_fields["message"] == "can't load"
+    assert message_fields["warning"] == "real"
+    assert action_fields["action"] == "don't retry"
+    assert action_fields["warning"] == "again"
+    assert note_fields["note"] == "can't"
+    assert note_fields["status"] == "ok"
+    assert note_fields["warning"] == "note"
+    assert parsed["status_counts"]["unreachable"] == 1
+    assert parsed["status_counts"]["warning"] == 4
+    assert parsed["summary"]["problem_statuses"] == "unreachable:1,warning:4"
+
+
 def test_cinnamon_applet_runtime_parser_counts_status_field_after_free_text_error() -> None:
     parsed = parse_runtime_status(
         """

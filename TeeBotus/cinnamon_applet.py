@@ -596,16 +596,20 @@ def _status_field_matches(text: str) -> list[_StatusFieldMatch]:
 
 def _quoted_character_indexes(text: str) -> set[int]:
     quoted: set[int] = set()
-    quote = ""
-    for index, char in enumerate(text):
-        if quote:
-            quoted.add(index)
-            if char == quote:
-                quote = ""
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "=" and index + 1 < len(text) and text[index + 1] in {"'", '"', "`"}:
+            quote = text[index + 1]
+            quote_index = index + 1
+            while quote_index < len(text):
+                quoted.add(quote_index)
+                if quote_index > index + 1 and text[quote_index] == quote:
+                    break
+                quote_index += 1
+            index = quote_index + 1
             continue
-        if char in {"'", '"', "`"}:
-            quoted.add(index)
-            quote = char
+        index += 1
     return quoted
 
 
