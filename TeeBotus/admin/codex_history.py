@@ -44,7 +44,7 @@ from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_r
 CODEX_HISTORY_SCHEMA_VERSION = 1
 CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
-CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
+CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis", "codex_graph_artifact"})
 CODEX_HISTORY_INDEXABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
@@ -742,6 +742,8 @@ def export_codex_history_graph_doc(
     limit: int = 0,
     overwrite: bool = True,
     svg: bool = False,
+    queue_svg: bool = False,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     safe_instance_name = _safe_instance_name(instance_name)
     safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
@@ -771,12 +773,28 @@ def export_codex_history_graph_doc(
     svg_exported = 0
     svg_skipped = 0
     svg_target = target.with_suffix(".svg")
+    svg_text = ""
+    if svg or queue_svg:
+        svg_text = _codex_history_graph_svg(items, instance_name=safe_instance_name, repo_filter=repo)
     if svg:
         if svg_target.exists() and not overwrite:
             svg_skipped = 1
         else:
-            svg_target.write_text(_codex_history_graph_svg(items, instance_name=safe_instance_name, repo_filter=repo), encoding="utf-8")
+            svg_target.write_text(svg_text, encoding="utf-8")
             svg_exported = 1
+    queued_item: dict[str, Any] = {}
+    if queue_svg:
+        queued_item = queue_codex_history_graph_svg_artifact(
+            store,
+            instance_name=safe_instance_name,
+            repo=repo,
+            svg_text=svg_text,
+            svg_filename=svg_target.name,
+            source_path=str(svg_target if svg else target),
+            item_count=len(items),
+            repo_count=_codex_history_graph_repo_count(items),
+            now=now,
+        )
     return {
         "ok": True,
         "instance": safe_instance_name,
@@ -788,9 +806,116 @@ def export_codex_history_graph_doc(
         "svg_path": str(svg_target) if svg else "",
         "svg_exported": svg_exported,
         "svg_skipped": svg_skipped,
+        "queued_item": queued_item,
         "repo_count": _codex_history_graph_repo_count(items),
         "item_count": len(items),
     }
+
+
+def queue_codex_history_graph_svg_artifact(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    repo: str = "",
+    svg_text: str,
+    svg_filename: str = "codex_history_graph.svg",
+    source_path: str = "",
+    item_count: int = 0,
+    repo_count: int = 0,
+    status: str = "queued",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    timestamp = _iso_timestamp(now)
+    project = _codex_history_graph_project(safe_instance_name, repo=repo)
+    version = {"semver": __version__, "tag": f"v{__version__}"}
+    normalized_status = str(status or "queued").strip().casefold() or "queued"
+    safe_filename = _safe_filename_component(svg_filename, default="codex_history_graph", max_length=128)
+    if not safe_filename.endswith(".svg"):
+        safe_filename = f"{safe_filename}.svg"
+    redacted_svg = redact_codex_history_text(svg_text)
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        summary_number = _next_summary_number_for_repo(rows, project["repo_id"])
+        summary_prefix = _summary_prefix(version["semver"], summary_number)
+        markdown = _codex_history_graph_artifact_markdown(
+            summary_prefix=summary_prefix,
+            instance_name=safe_instance_name,
+            repo_filter=repo,
+            svg_filename=safe_filename,
+            source_path=source_path,
+            item_count=item_count,
+            repo_count=repo_count,
+            created_at=timestamp,
+        )
+        item = {
+            "id": _unique_history_id(rows),
+            "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+            "kind": "codex_graph_artifact",
+            "source": "codex_history_graph_export",
+            "status": normalized_status,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "project": project,
+            "version": {
+                "semver": version["semver"],
+                "tag": version["tag"],
+                "summary_number": summary_number,
+                "summary_prefix": summary_prefix,
+            },
+            "codex": {
+                "purpose": "codex_history_graph_artifact",
+                "repo_filter": str(repo or "").strip(),
+                "source_path": redact_codex_history_text(source_path).strip(),
+                "generated_at": timestamp,
+                "item_count": int(item_count or 0),
+                "repo_count": int(repo_count or 0),
+            },
+            "summary": {
+                "title": "Codex-History SVG-Graph",
+                "markdown": markdown,
+                "bullets": [
+                    f"SVG-Graph fuer {int(repo_count or 0)} Repos und {int(item_count or 0)} Summaries erzeugt.",
+                    "Als Admin-only Attachment queued.",
+                ],
+                "changed_files": [],
+                "tests": [],
+            },
+            "attachment": {
+                "filename": safe_filename,
+                "content_type": "image/svg+xml",
+                "caption": f"Codex-History Graph {safe_instance_name}",
+                "data_text": redacted_svg,
+            },
+            "delivery": {
+                "target_group": CODEX_HISTORY_TARGET_GROUP,
+                "attempts": 0,
+                "last_attempt_at": "",
+                "sent_at": "",
+                "accepted_at": "",
+                "delivered_at": "",
+                "acknowledged_at": "",
+            },
+            "indexing": {
+                "indexable": False,
+                "repo_history": True,
+                "categories": ["codex-history-graph", "impact-admin-only"],
+                "keywords": ["admin-only", "codex", "history", "graph", "svg", safe_instance_name.casefold()],
+            },
+            "status_history": [
+                {
+                    "at": timestamp,
+                    "status": normalized_status,
+                    "reason": "codex_history_graph_svg_queued",
+                }
+            ],
+            "summary_number": summary_number,
+            "summary_prefix": summary_prefix,
+        }
+        rows.append(item)
+        store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+        _upsert_project(store, INSTANCE_STATE_ACCOUNT_ID, project, item, timestamp)
+    return dict(item)
 
 
 def categorize_codex_history_outbox(
@@ -1149,6 +1274,7 @@ def run_codex_history_index(
     qdrant_ensure: bool = False,
     graph: bool = False,
     graph_svg: bool = False,
+    graph_queue_svg: bool = False,
     categorize: bool = False,
     categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
     categorize_dry_run: bool = False,
@@ -1196,7 +1322,7 @@ def run_codex_history_index(
         overwrite=overwrite,
     )
     graph_report: dict[str, Any] = {}
-    if graph:
+    if graph or graph_svg or graph_queue_svg:
         graph_report = export_codex_history_graph_doc(
             store,
             instance_dir=safe_instance_dir,
@@ -1205,6 +1331,7 @@ def run_codex_history_index(
             limit=limit,
             overwrite=overwrite,
             svg=graph_svg,
+            queue_svg=graph_queue_svg,
         )
     ensure_results: list[dict[str, Any]] = []
     qdrant_results: list[dict[str, Any]] = []
@@ -1497,18 +1624,33 @@ def _codex_history_attachment_action(item: Mapping[str, Any], chat_id: str) -> S
     summary = item.get("summary", {})
     project = item.get("project", {})
     version = item.get("version", {})
+    attachment = item.get("attachment", {})
     if not isinstance(summary, Mapping):
         summary = {}
     if not isinstance(project, Mapping):
         project = {}
     if not isinstance(version, Mapping):
         version = {}
-    markdown = str(summary.get("markdown") or "").strip()
-    if not markdown:
-        markdown = f"# {item.get('summary_prefix', 'untagged')} {summary.get('title', 'Codex run summary')}\n"
     repo_name = str(project.get("repo_name") or "project").strip() or "project"
     semver = str(version.get("semver") or "untagged").strip() or "untagged"
     caption = f"Release {repo_name} {semver}"
+    if isinstance(attachment, Mapping):
+        data_text = str(attachment.get("data_text") or "")
+        filename = _safe_filename_component(str(attachment.get("filename") or ""), default="codex-history-artifact", max_length=128)
+        content_type = str(attachment.get("content_type") or "").strip() or "application/octet-stream"
+        attachment_caption = str(attachment.get("caption") or "").strip()
+        if data_text and filename:
+            return SendAttachment(
+                str(chat_id),
+                data_text.encode("utf-8"),
+                filename,
+                content_type,
+                caption=attachment_caption or caption,
+                track=False,
+            )
+    markdown = str(summary.get("markdown") or "").strip()
+    if not markdown:
+        markdown = f"# {item.get('summary_prefix', 'untagged')} {summary.get('title', 'Codex run summary')}\n"
     filename = _codex_history_markdown_filename(repo_name, semver, item.get("summary_number") or version.get("summary_number") or 1)
     return SendAttachment(
         str(chat_id),
@@ -2136,6 +2278,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     graph_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     graph_export_parser.add_argument("--no-overwrite", action="store_true")
     graph_export_parser.add_argument("--svg", action="store_true", help="Also export a dependency-free SVG graph image.")
+    graph_export_parser.add_argument("--queue-svg", action="store_true", help="Queue the SVG graph as an admin-only dispatch attachment.")
 
     strategic_analysis_parser = subparsers.add_parser("strategic-analysis")
     strategic_analysis_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
@@ -2162,6 +2305,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--qdrant-ensure", action="store_true")
     index_parser.add_argument("--graph", action="store_true")
     index_parser.add_argument("--graph-svg", action="store_true")
+    index_parser.add_argument("--graph-queue-svg", action="store_true")
     index_parser.add_argument("--categorize", action="store_true")
     index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
     index_parser.add_argument("--categorize-dry-run", action="store_true")
@@ -2352,6 +2496,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         limit=int(args.limit or 0),
                         overwrite=not bool(args.no_overwrite),
                         svg=bool(args.svg),
+                        queue_svg=bool(args.queue_svg),
                     )
                 )
             payload = {
@@ -2363,6 +2508,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                     "skipped": sum(int(report.get("skipped") or 0) for report in reports),
                     "svg_exported": sum(int(report.get("svg_exported") or 0) for report in reports),
                     "svg_skipped": sum(int(report.get("svg_skipped") or 0) for report in reports),
+                    "queued": sum(1 for report in reports if report.get("queued_item")),
                     "repos": sum(int(report.get("repo_count") or 0) for report in reports),
                     "items": sum(int(report.get("item_count") or 0) for report in reports),
                 },
@@ -2442,6 +2588,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         qdrant_ensure=bool(args.qdrant_ensure),
                         graph=bool(args.graph),
                         graph_svg=bool(args.graph_svg),
+                        graph_queue_svg=bool(args.graph_queue_svg),
                         categorize=bool(args.categorize),
                         categorize_profile=args.categorize_profile,
                         categorize_dry_run=bool(args.categorize_dry_run),
@@ -2662,7 +2809,10 @@ def _store_for_instance(
 
 def _write_or_print(output: str, output_path: str) -> None:
     if output_path:
-        _safe_output_path(output_path).write_text(output, encoding="utf-8")
+        try:
+            _safe_output_path(output_path).write_text(output, encoding="utf-8")
+        except OSError as exc:
+            raise OSError(f"unable to write output: {exc}") from exc
     else:
         print(output, end="")
 
@@ -2761,6 +2911,7 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "skipped": 0,
         "graph_files": 0,
         "graph_svg_files": 0,
+        "graph_queued": 0,
         "graph_items": 0,
         "strategy_reports": 0,
         "strategy_analyzed": 0,
@@ -2782,6 +2933,8 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         if isinstance(graph, Mapping):
             totals["graph_files"] += int(graph.get("exported") or 0)
             totals["graph_svg_files"] += int(graph.get("svg_exported") or 0)
+            if graph.get("queued_item"):
+                totals["graph_queued"] += 1
             totals["graph_items"] += int(graph.get("item_count") or 0)
         strategy = report.get("strategic_analysis", {})
         if isinstance(strategy, Mapping):
@@ -2913,6 +3066,7 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"skipped: {totals.get('skipped', 0)}")
         lines.append(f"svg_exported: {totals.get('svg_exported', 0)}")
         lines.append(f"svg_skipped: {totals.get('svg_skipped', 0)}")
+        lines.append(f"queued: {totals.get('queued', 0)}")
         lines.append(f"repos: {totals.get('repos', 0)}")
         lines.append(f"items: {totals.get('items', 0)}")
     for instance in payload.get("instances", []) or []:
@@ -2925,6 +3079,9 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
             lines.append(f"  svg_path: {instance.get('svg_path', '')}")
         lines.append(f"  exported: {instance.get('exported', 0)}")
         lines.append(f"  svg_exported: {instance.get('svg_exported', 0)}")
+        queued_item = instance.get("queued_item", {})
+        if isinstance(queued_item, Mapping) and queued_item:
+            lines.append(f"  queued: {queued_item.get('summary_prefix', '')} {queued_item.get('id', '')}")
         lines.append(f"  skipped: {instance.get('skipped', 0)}")
         lines.append(f"  repos: {instance.get('repo_count', 0)}")
         lines.append(f"  items: {instance.get('item_count', 0)}")
@@ -2964,6 +3121,7 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"skipped: {totals.get('skipped', 0)}")
         lines.append(f"graph_files: {totals.get('graph_files', 0)}")
         lines.append(f"graph_svg_files: {totals.get('graph_svg_files', 0)}")
+        lines.append(f"graph_queued: {totals.get('graph_queued', 0)}")
         lines.append(f"graph_items: {totals.get('graph_items', 0)}")
         lines.append(f"strategy_reports: {totals.get('strategy_reports', 0)}")
         lines.append(f"strategy_analyzed: {totals.get('strategy_analyzed', 0)}")
@@ -3000,10 +3158,13 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"  exported: {export.get('exported', 0)}")
         lines.append(f"  skipped: {export.get('skipped', 0)}")
         if graph:
+            queued_item = graph.get("queued_item", {})
+            queued_prefix = queued_item.get("summary_prefix", "") if isinstance(queued_item, Mapping) else ""
             lines.append(
                 "  graph: "
                 f"path={graph.get('path', '')} "
                 f"svg_path={graph.get('svg_path', '')} "
+                f"queued={queued_prefix} "
                 f"repos={graph.get('repo_count', 0)} "
                 f"items={graph.get('item_count', 0)}"
             )
@@ -3459,6 +3620,52 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
             "",
         ]
     )
+    return "\n".join(lines)
+
+
+def _codex_history_graph_project(instance_name: str, *, repo: str = "") -> dict[str, Any]:
+    repo_filter = str(repo or "").strip()
+    repo_name = "Codex-History-Graph" if not repo_filter else f"Codex-History-Graph-{repo_filter}"
+    identity = f"codex-history-graph:v1:{instance_name}:{repo_filter}"
+    return {
+        "repo_id": "sha256:" + hashlib.sha256(identity.encode("utf-8")).hexdigest(),
+        "repo_name": repo_name,
+        "repo_root": "",
+        "remote_url": "",
+        "provider": "internal",
+        "branch": "",
+        "head_commit": "",
+        "dirty": False,
+    }
+
+
+def _codex_history_graph_artifact_markdown(
+    *,
+    summary_prefix: str,
+    instance_name: str,
+    repo_filter: str,
+    svg_filename: str,
+    source_path: str,
+    item_count: int,
+    repo_count: int,
+    created_at: str,
+) -> str:
+    lines = [
+        f"# {summary_prefix} Codex-History SVG-Graph",
+        "",
+        "> Admin-only TeeBotus Codex-History-Graph. Nicht fuer normale Nutzer-Bibliotheken freigeben.",
+        "",
+        f"- Instanz: `{redact_codex_history_text(instance_name).strip()}`",
+        f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
+        f"- SVG-Datei: `{redact_codex_history_text(svg_filename).strip()}`",
+        f"- Quelle: `{redact_codex_history_text(source_path).strip()}`",
+        f"- Repos: `{int(repo_count or 0)}`",
+        f"- Summaries: `{int(item_count or 0)}`",
+        f"- Erstellt: `{redact_codex_history_text(created_at).strip()}`",
+        "",
+        "Das zugehoerige SVG wird als Attachment dieses Codex-History-Outbox-Eintrags versendet.",
+        "",
+    ]
     return "\n".join(lines)
 
 

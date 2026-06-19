@@ -451,6 +451,8 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "graph-demo", version="1.9.3")
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(88), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(88), channel="telegram", chat_id="88", chat_type="private", adapter_slot=1)
     append_codex_history_summary(
         store,
         repo_root=repo,
@@ -463,6 +465,8 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
         instance_dir=instance_dir,
         instance_name="Depressionsbot",
         svg=True,
+        queue_svg=True,
+        now=datetime(2026, 6, 19, 15, tzinfo=timezone.utc),
     )
 
     assert result["ok"] is True
@@ -483,7 +487,33 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert "<svg" in svg_text
     assert "TeeBotus Codex-History" in svg_text
     assert "Graph Export" in svg_text
+    queued = result["queued_item"]
+    assert queued["kind"] == "codex_graph_artifact"
+    assert queued["status"] == "queued"
+    assert queued["attachment"]["filename"].endswith(".svg")
+    assert queued["attachment"]["content_type"] == "image/svg+xml"
     assert not (instance_dir / "data" / "Bibliothek").exists()
+
+    sent: list[SendAttachment] = []
+
+    def sender(_route: dict[str, object], action: SendAttachment, _metadata: dict[str, object]) -> str:
+        sent.append(action)
+        return f"telegram-graph-{len(sent)}"
+
+    dispatch = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            now=datetime(2026, 6, 19, 15, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert dispatch["status_counts"] == {"accepted": 2}
+    assert sent[-1].filename.endswith(".svg")
+    assert sent[-1].content_type == "image/svg+xml"
+    assert b"<svg" in sent[-1].data
 
 
 def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_path: Path) -> None:
@@ -561,6 +591,7 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
         categorize=True,
         graph=True,
         graph_svg=True,
+        graph_queue_svg=True,
         categorizer=lambda _item: {"categories": ["work-benchmark", "change-performance"]},
         strategic_analysis=True,
         strategist=lambda _items: {"recommendations": ["Graph und Strategie in einem Batch pruefen."]},
@@ -572,6 +603,7 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
     assert result["export"]["exported"] == 2
     assert result["graph"]["exported"] == 1
     assert result["graph"]["svg_exported"] == 1
+    assert result["graph"]["queued_item"]["kind"] == "codex_graph_artifact"
     # The strategy report is created before export, so the same batch exports both docs.
     assert len(result["export"]["files"]) == 2
     exported_texts = [Path(file["path"]).read_text(encoding="utf-8") for file in result["export"]["files"]]
@@ -1429,6 +1461,30 @@ def test_safe_output_path_rejects_parent_traversal(tmp_path: Path) -> None:
         assert "forbidden relative segment" in str(exc)
     else:
         raise AssertionError("parent traversal in output path must be rejected")
+
+
+def test_codex_history_report_cli_rejects_missing_parent_directory(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    output = tmp_path / "missing" / "dir" / "codex-report.json"
+
+    result = codex_history_main(
+        [
+            "report",
+            "--instances-dir",
+            str(tmp_path),
+            "--instances",
+            "Depressionsbot",
+            "--format",
+            "json",
+            "--output",
+            str(output),
+        ],
+        provider=provider(),
+    )
+
+    assert result == 2
+    assert "report failed:" in capsys.readouterr().err
+    assert not output.exists()
 
 
 def test_safe_output_path_rejects_windows_drive_paths(tmp_path: Path) -> None:
