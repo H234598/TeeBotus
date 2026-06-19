@@ -525,8 +525,11 @@ def _numbered_items(source: Mapping[str, str], prefix: str) -> tuple[tuple[int, 
             continue
         suffix = key[len(key_prefix) :]
         value = str(raw_value or "").strip()
-        if suffix.isdigit() and value:
-            items.append((int(suffix), value))
+        if not suffix.isdigit() or not value:
+            continue
+        if len(suffix) > 1 and suffix.startswith("0"):
+            raise RuntimeConfigError(f"{key} uses invalid slot number {suffix}; remove leading zeroes")
+        items.append((int(suffix), value))
     return tuple(sorted(items))
 
 

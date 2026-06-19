@@ -64,6 +64,16 @@ def test_telegram_token_resolution_rejects_numbered_slot_zero():
         resolve_telegram_tokens("Depressionsbot", env)
 
 
+def test_telegram_token_resolution_rejects_numbered_slot_leading_zero():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_02": "token-b",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="remove leading zeroes"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
 def test_telegram_token_resolution_rejects_empty_positional_token_slot():
     env = {"TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a,,token-c"}
 
