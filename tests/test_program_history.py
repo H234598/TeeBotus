@@ -111,6 +111,30 @@ def test_recent_history_helpers_honor_zero_limits(tmp_path: Path) -> None:
     assert recent_releases(repo, limit=0) == []
 
 
+def test_program_history_reports_intentional_zero_commit_limit(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    _commit(repo, "Initial")
+
+    reply = build_program_history_reply(repo, commit_limit=0)
+
+    assert "Letzte 0 Commits" in reply
+    assert "- Keine Eintraege angefordert." in reply
+    assert "- Keine lokalen Git-Daten gefunden." not in reply
+
+
+def test_program_history_reports_intentional_zero_release_commit_limit(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    _commit(repo, "Initial")
+    _git(repo, "tag", "v1.0.0")
+
+    reply = build_program_history_reply(repo, release_commit_limit=0)
+
+    assert "Letzte 0 Commits" in reply
+    assert "- Keine Eintraege angefordert." in reply
+    assert "Letzte 3 Releases" in reply
+    assert "- v1.0.0 Initial" in reply
+
+
 def test_recent_history_helpers_return_empty_lists_outside_git_repo(tmp_path: Path) -> None:
     assert recent_commits(tmp_path, limit=20) == []
     assert recent_releases(tmp_path, limit=3) == []

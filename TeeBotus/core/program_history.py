@@ -59,14 +59,19 @@ def build_program_history_reply(
         lines.extend(
             [
                 _section_title(release_commit_limit, singular="Commit", plural="Commits"),
-                *_item_lines(commits),
+                *_item_lines(commits, requested_limit=release_commit_limit),
                 "",
                 _section_title(release_limit, singular="Release", plural="Releases"),
-                *_item_lines(releases),
+                *_item_lines(releases, requested_limit=release_limit),
             ]
         )
     else:
-        lines.extend([_section_title(commit_limit, singular="Commit", plural="Commits"), *_item_lines(commits)])
+        lines.extend(
+            [
+                _section_title(commit_limit, singular="Commit", plural="Commits"),
+                *_item_lines(commits, requested_limit=commit_limit),
+            ]
+        )
     return "\n".join(lines).rstrip()
 
 
@@ -91,8 +96,10 @@ def recent_releases(project_root: Path, *, limit: int) -> list[GitSummaryItem]:
     return [tag.item for tag in semver_tags[:limit]]
 
 
-def _item_lines(items: list[GitSummaryItem]) -> list[str]:
+def _item_lines(items: list[GitSummaryItem], *, requested_limit: int) -> list[str]:
     if not items:
+        if requested_limit <= 0:
+            return ["- Keine Eintraege angefordert."]
         return ["- Keine lokalen Git-Daten gefunden."]
     return [item.line() for item in items]
 
