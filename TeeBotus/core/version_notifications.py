@@ -456,7 +456,7 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
     normalized: dict[str, object] = {}
     for key, payload in value.items():
         identity_key = str(key or "").strip() if isinstance(key, str) else ""
-        if not identity_key:
+        if not identity_key or not isinstance(payload, dict):
             continue
         normalized[identity_key] = payload
     return normalized

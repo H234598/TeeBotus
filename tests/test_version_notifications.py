@@ -612,6 +612,25 @@ def test_version_notification_state_normalization_cleans_nested_identity_state()
     assert list(version_state["failed_identities"]) == ["telegram:user:222"]
 
 
+def test_version_notification_state_normalization_drops_malformed_failure_payloads() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": "broken",
+                        "telegram:user:222": {"reason": "legacy route missing"},
+                    }
+                }
+            }
+        }
+    )
+
+    failures = state["versions"]["1.0.3"]["failed_identities"]
+    assert list(failures) == ["telegram:user:222"]
+    assert failures["telegram:user:222"]["reason"] == "legacy route missing"
+
+
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
