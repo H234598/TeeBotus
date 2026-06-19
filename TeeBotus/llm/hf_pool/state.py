@@ -24,18 +24,21 @@ def _safe_state_root(value: str | None, *, fallback: Path) -> Path:
     if not value:
         return fallback
     try:
-        root = Path(value).expanduser()
-        if not root.is_absolute():
-            root = Path.home() / root
-        normalized = root.resolve()
+        raw_root = os.fspath(value).strip()
+        if not raw_root:
+            return fallback
+        if raw_root.startswith("/") or raw_root.startswith("\\\\"):
+            normalized_root = Path(os.path.abspath(raw_root))
+        else:
+            normalized_root = Path(os.path.abspath(str(Path.home() / Path(raw_root))))
         home_root = Path.home().resolve()
     except (OSError, TypeError, ValueError):
         return fallback
     try:
-        normalized.relative_to(home_root)
+        normalized_root.relative_to(home_root)
     except ValueError:
         return fallback
-    return normalized
+    return normalized_root
 
 
 def hf_pool_state_key(pool_name: object, target_name: object) -> str:
