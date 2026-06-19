@@ -454,7 +454,7 @@ async def run_proactive_agent_cycle(
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:
-                            account_report["llm_planning"] = {"skipped_reason": "llm_planner_unavailable"}
+                            account_report["llm_planning"] = {"openai_role": "plan", "skipped_reason": "llm_planner_unavailable"}
                         else:
                             openai_client, instructions = planner_context
                             llm_planning = run_proactive_llm_planner(
@@ -466,6 +466,7 @@ async def run_proactive_agent_cycle(
                             )
                             account_report["llm_planning"] = {
                                 "account_id": llm_planning.account_id,
+                                "openai_role": "plan",
                                 "created_memory_ids": list(llm_planning.created_memory_ids),
                                 "queued_item_ids": list(llm_planning.queued_item_ids),
                                 "errors": list(llm_planning.errors),
@@ -479,7 +480,7 @@ async def run_proactive_agent_cycle(
                     else:
                         planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
                         if planner_context is None:
-                            account_report["tool_planning"] = {"skipped_reason": "tool_planner_unavailable"}
+                            account_report["tool_planning"] = {"openai_role": "plan", "skipped_reason": "tool_planner_unavailable"}
                         else:
                             openai_client, instructions = planner_context
                             tool_planning = run_proactive_tool_agent(
@@ -491,6 +492,7 @@ async def run_proactive_agent_cycle(
                             )
                             account_report["tool_planning"] = {
                                 "account_id": tool_planning.account_id,
+                                "openai_role": "plan",
                                 "created_memory_ids": list(tool_planning.created_memory_ids),
                                 "queued_item_ids": list(tool_planning.queued_item_ids),
                                 "errors": list(tool_planning.errors),
@@ -646,22 +648,24 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
                 print(f"    expired_items={len(account['expired_item_ids'])}")
             if "llm_planning" in account:
                 llm = account["llm_planning"]
+                role = _openai_role_suffix(llm)
                 if llm.get("skipped_reason"):
-                    print(f"    llm_planning skipped={llm['skipped_reason']}")
+                    print(f"    llm_planning{role} skipped={llm['skipped_reason']}")
                 else:
                     print(
-                        "    llm_planning "
+                        f"    llm_planning{role} "
                         f"created={len(llm.get('created_memory_ids', []))} "
                         f"queued={len(llm.get('queued_item_ids', []))} "
                         f"errors={len(llm.get('errors', []))}"
                     )
             if "tool_planning" in account:
                 tool = account["tool_planning"]
+                role = _openai_role_suffix(tool)
                 if tool.get("skipped_reason"):
-                    print(f"    tool_planning skipped={tool['skipped_reason']}")
+                    print(f"    tool_planning{role} skipped={tool['skipped_reason']}")
                 else:
                     print(
-                        "    tool_planning "
+                        f"    tool_planning{role} "
                         f"created={len(tool.get('created_memory_ids', []))} "
                         f"queued={len(tool.get('queued_item_ids', []))} "
                         f"errors={len(tool.get('errors', []))}"
@@ -674,6 +678,11 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
                     f"    dispatch item={result['item_id']} status={result['status']} "
                     f"reason={result['reason']} channel={result['channel']}"
                 )
+
+
+def _openai_role_suffix(report: Mapping[str, Any]) -> str:
+    role = str(report.get("openai_role") or "").strip()
+    return f" role={role}" if role else ""
 
 
 if __name__ == "__main__":

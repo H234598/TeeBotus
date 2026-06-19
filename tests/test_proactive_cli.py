@@ -599,6 +599,36 @@ def test_proactive_cycle_llm_plan_respects_separate_instance_gate(tmp_path) -> N
     assert account["llm_planning"] == {"skipped_reason": "llm_planner_instance_not_enabled"}
 
 
+def test_proactive_cycle_llm_plan_reports_plan_role_when_context_is_unavailable(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={
+                "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+                "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES": "Depressionsbot",
+            },
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            llm_plan=True,
+            llm_planner_factory=lambda _instance, _store, _account_id: None,
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["llm_planning"] == {"openai_role": "plan", "skipped_reason": "llm_planner_unavailable"}
+
+
 def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_path) -> None:
     class Response:
         text = '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"llm_cycle_follow_up","message_text":"Magst du kurz berichten, ob du weiterarbeiten moechtest?","reason_memory_ids":["mem_goal"],"risk_gate":"none","due_at":"2026-06-15T11:30:00+00:00"}]}'
@@ -642,6 +672,7 @@ def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_
 
     account = report["instances"][0]["accounts"][0]
     assert client.calls == 1
+    assert account["llm_planning"]["openai_role"] == "plan"
     assert account["llm_planning"]["errors"] == []
     assert len(account["llm_planning"]["queued_item_ids"]) == 1
     assert account["due_items"][0]["intent"] == "llm_cycle_follow_up"
@@ -703,6 +734,7 @@ def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp
 
     account = report["instances"][0]["accounts"][0]
     assert client.calls == 1
+    assert account["tool_planning"]["openai_role"] == "plan"
     assert account["tool_planning"]["errors"] == []
     assert len(account["tool_planning"]["queued_item_ids"]) == 1
     assert account["due_items"][0]["intent"] == "tool_cycle_follow_up"
