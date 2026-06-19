@@ -24,6 +24,7 @@ from TeeBotus.runtime.matrix_runner import (
     check_matrix_homeserver,
     _matrix_message_event_classes,
     run_matrix_accounts,
+    start_matrix_accounts_in_background,
 )
 
 
@@ -1579,6 +1580,44 @@ def test_matrix_start_rejects_duplicate_user_id_before_import(monkeypatch, tmp_p
 
     with pytest.raises(MatrixRuntimeError, match="Duplicate Matrix user ID"):
         run_matrix_accounts(config)
+
+
+def test_matrix_background_start_rejects_duplicate_user_id_before_import(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-a.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-a",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix-b.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="token-b",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("matrix",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner._import_niobot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
+
+    with pytest.raises(MatrixRuntimeError, match="Duplicate Matrix user ID"):
+        start_matrix_accounts_in_background(config)
 
 
 def test_check_matrix_accounts_reports_duplicate_user_id_without_leaking_user_id(tmp_path) -> None:

@@ -28,6 +28,7 @@ from TeeBotus.runtime.signal_runner import (
     TeeBotusSignalCommand,
     check_signal_service,
     ensure_signal_services_available,
+    start_signal_accounts_in_background,
     _ensure_signal_json_rpc_daemon,
     _patch_signalbot_signal_cli_api_about,
     _pid_file_process_is_running,
@@ -1484,6 +1485,42 @@ def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_pat
 
     with pytest.raises(SignalRuntimeError, match="Duplicate Signal phone number"):
         run_signal_accounts(config)
+
+
+def test_signal_background_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8081",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
+
+    with pytest.raises(SignalRuntimeError, match="Duplicate Signal phone number"):
+        start_signal_accounts_in_background(config)
 
 
 def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -> None:
