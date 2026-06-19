@@ -949,6 +949,56 @@ def test_notify_recent_telegram_users_retries_when_failed_route_changes(tmp_path
     assert state["versions"]["1.0.3"]["failed_identities"] == {}
 
 
+def test_notify_recent_telegram_users_clears_alias_failure_after_successful_delivery(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Moved")
+    identities = store._load_identities()
+    username_payload = dict(identities["telegram:user:111"])
+    username_payload["identity_key"] = "telegram:username:ada"
+    username_payload["account_id"] = account_id
+    identities["telegram:username:ada"] = username_payload
+    store._save_identities(identities)
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="222", chat_type="private", adapter_slot=2)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps(
+            {
+                "versions": {
+                    "1.0.3": {
+                        "sent_identities": [],
+                        "failed_identities": {
+                            "telegram:username:ada": {
+                                "adapter_slot": 1,
+                                "chat_id": 111,
+                                "reason": "chat not found",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(chat_id),
+        adapter_slot=2,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert sent == [222]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+
+
 def test_notify_recent_telegram_users_skips_failed_route_across_identity_alias(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Moved")

@@ -81,7 +81,7 @@ def notify_recent_telegram_users_for_version(
                     "reason": _delivery_error_reason(exc),
                 }
             continue
-        failed_identities.pop(recipient.identity_key, None)
+        _clear_resolved_failures(failed_identities, recipient, identities)
         sent_identities.add(recipient.identity_key)
         sent_count += 1
     version_state["sent_identities"] = sorted(sent_identities)
@@ -333,6 +333,23 @@ def _failed_delivery_matches_recipient(failed_identities: dict[str, object], rec
         if identity_key != recipient.identity_key
     )
     return any(_failed_delivery_route_matches(failure, recipient) for failure in failures)
+
+
+def _clear_resolved_failures(
+    failed_identities: dict[str, object],
+    recipient: VersionNotificationRecipient,
+    identities: dict[str, Any],
+) -> None:
+    for identity_key, failure in list(failed_identities.items()):
+        if identity_key == recipient.identity_key:
+            failed_identities.pop(identity_key, None)
+            continue
+        payload = identities.get(identity_key)
+        if isinstance(payload, dict) and str(payload.get("account_id") or "") == recipient.account_id:
+            failed_identities.pop(identity_key, None)
+            continue
+        if _failed_delivery_route_matches(failure, recipient):
+            failed_identities.pop(identity_key, None)
 
 
 def _failed_delivery_route_matches(failure: object, recipient: VersionNotificationRecipient) -> bool:
