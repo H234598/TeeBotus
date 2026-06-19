@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from TeeBotus.admin.codex_history import (
+    _normalize_remote_url,
+    _repo_provider,
     append_codex_history_summary,
     build_codex_history_report,
     dispatch_codex_history_outbox,
@@ -412,3 +414,16 @@ def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, 
     assert report["totals"]["outbox_items"] == 1
     latest = report["instances"][0]["codex_history"]["latest_by_repo"][0]
     assert latest["repo_name"] == "watch-cli-demo"
+
+
+def test_normalize_and_classify_remote_urls() -> None:
+    assert _normalize_remote_url("git@github.com:Org/Repo.git") == "ssh://git@github.com/org/repo"
+    assert _repo_provider("git@github.com:Org/Repo.git") == "github"
+    assert _normalize_remote_url("alice@github.com:Org/Repo") == "ssh://alice@github.com/org/repo"
+    assert _repo_provider("alice@github.com:Org/Repo") == "github"
+    assert _normalize_remote_url("https://github.com/Org/Repo.git") == "https://github.com/org/repo.git"
+    assert _repo_provider("https://github.com/Org/Repo.git") == "github"
+    assert _normalize_remote_url("example:foo/bar") == "example:foo/bar"
+    assert _repo_provider("example:foo/bar") == "git"
+    assert _normalize_remote_url("localhost:owner/repo") == "ssh://git@localhost/owner/repo"
+    assert _repo_provider("localhost:owner/repo") == "git"

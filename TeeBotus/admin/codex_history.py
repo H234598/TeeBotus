@@ -1206,15 +1206,19 @@ def _normalize_remote_url(remote_url: str) -> str:
     if not value:
         return ""
     value = value.removesuffix(".git")
-    if value.startswith("git@") and "://" not in value and ":" in value:
-        host, _, path = value.removeprefix("git@").partition(":")
-        if host:
-            value = f"ssh://git@{host}/{path}"
+    if "://" not in value and ":" in value:
+        host_part, _, path = value.partition(":")
+        if "/" not in host_part and ("@" in host_part or "." in host_part or host_part == "localhost"):
+            user = "git"
+            host = host_part
+            if "@" in host_part:
+                user, _, host = host_part.partition("@")
+            value = f"ssh://{user}@{host}/{path}"
     return value.casefold()
 
 
 def _repo_provider(remote_url: str) -> str:
-    parsed = urlsplit(remote_url or "")
+    parsed = urlsplit(_normalize_remote_url(remote_url))
     value = (parsed.hostname.casefold() if parsed.hostname else "").strip()
     if value == "github.com":
         return "github"
