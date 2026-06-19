@@ -68,6 +68,9 @@ class HandlerTests(unittest.TestCase):
     def test_program_history_detection_avoids_generic_commit_request(self) -> None:
         self.assertTrue(is_program_history_request("Zeig mir bitte die Commit Historie"))
         self.assertTrue(is_program_history_request("Zeig mir bitte die Commit-Historie"))
+        self.assertTrue(is_program_history_request("Zeig mir bitte die Commit History"))
+        self.assertTrue(is_program_history_request("Zeig mir die GitHub Historie"))
+        self.assertTrue(is_program_history_request("GitHub history bitte"))
         self.assertTrue(is_program_history_request("Welche Programmänderungen gab es?"))
         self.assertTrue(is_program_history_request("Welche Programm-Änderungen gab es?"))
         self.assertTrue(is_program_history_request("Welche Programmänderung gab es?"))
@@ -92,6 +95,7 @@ class HandlerTests(unittest.TestCase):
         self.assertFalse(is_program_history_request("Was sind Releases?"))
         self.assertFalse(is_program_history_request("Kannst du Releases erklären?"))
         self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))
+        self.assertFalse(is_program_history_request("What changed?"))
 
     def test_readme_history_examples_match_detection(self) -> None:
         readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
