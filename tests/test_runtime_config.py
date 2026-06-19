@@ -53,6 +53,13 @@ def test_telegram_token_resolution_rejects_numbered_slot_gap():
         resolve_telegram_tokens("Depressionsbot", env)
 
 
+def test_telegram_token_resolution_rejects_empty_positional_token_slot():
+    env = {"TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a,,token-c"}
+
+    with pytest.raises(RuntimeConfigError, match="empty value in positional slot list TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT"):
+        resolve_telegram_tokens("Depressionsbot", env)
+
+
 def test_telegram_token_resolution_supports_global_plural_fallback():
     env = {
         "TELEGRAM_BOT_TOKENS": "global-a, global-b",
@@ -161,6 +168,13 @@ def test_openai_key_resolution_background_services_list_beats_single():
     }
 
     assert resolve_openai_key("Depressionsbot", "proactive", 2, env) == "sk-background-b"
+
+
+def test_openai_key_resolution_rejects_empty_positional_key_slot():
+    env = {"OPENAI_API_KEYS_DEPRESSIONSBOT": "key-a,,key-c"}
+
+    with pytest.raises(RuntimeConfigError, match="empty value in positional slot list OPENAI_API_KEYS_DEPRESSIONSBOT"):
+        resolve_openai_key("Depressionsbot", "telegram", 2, env)
 
 
 def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
@@ -392,6 +406,13 @@ def test_matrix_single_config_requires_homeserver_user_and_token():
         resolve_matrix_accounts("Depressionsbot", env)
 
 
+def test_matrix_single_device_id_requires_complete_single_config():
+    env = {"MATRIX_BOT_DEVICE_ID_DEPRESSIONSBOT": "TEEBOTUS"}
+
+    with pytest.raises(RuntimeConfigError, match="device_id requires homeserver/user/access_token"):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
 def test_duplicate_matrix_user_ids_raise_instead_of_collapsing_slots():
     env = {
         "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://a.example,https://b.example",
@@ -400,4 +421,15 @@ def test_duplicate_matrix_user_ids_raise_instead_of_collapsing_slots():
     }
 
     with pytest.raises(RuntimeConfigError):
+        resolve_matrix_accounts("Depressionsbot", env)
+
+
+def test_matrix_account_resolution_rejects_empty_positional_token_slot():
+    env = {
+        "MATRIX_BOT_HOMESERVERS_DEPRESSIONSBOT": "https://a.example,https://b.example,https://c.example",
+        "MATRIX_BOT_USER_IDS_DEPRESSIONSBOT": "@a:example,@b:example,@c:example",
+        "MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT": "token-a,,token-c",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="empty value in positional slot list MATRIX_BOT_ACCESS_TOKENS_DEPRESSIONSBOT"):
         resolve_matrix_accounts("Depressionsbot", env)

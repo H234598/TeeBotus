@@ -75,6 +75,18 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
+def parse_slot_csv(value: str | None, *, label: str) -> tuple[str, ...]:
+    if value is None or not value.strip():
+        return ()
+    values = tuple(part.strip() for part in value.split(","))
+    empty_slots = [str(index) for index, part in enumerate(values, start=1) if not part]
+    if empty_slots:
+        raise RuntimeConfigError(
+            f"empty value in positional slot list {label}; empty slot(s): {', '.join(empty_slots)}"
+        )
+    return values
+
+
 def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | None = None) -> tuple[str, ...]:
     source = cli_channels if cli_channels is not None else (os.environ if env is None else env).get("TEEBOTUS_CHANNELS", "auto")
     value = str(source or "auto").strip().casefold()
@@ -145,7 +157,7 @@ def resolve_openai_key(
     if channel_token != "BACKGROUND":
         if source.get(candidates[0]):
             return source[candidates[0]]
-        resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
+        resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot, label=list_candidates[0])
         if resolved:
             return resolved
         if source.get(candidates[1]):
@@ -155,7 +167,7 @@ def resolve_openai_key(
         return background_key
     if source.get(candidates[2]):
         return source[candidates[2]]
-    resolved = _resolve_indexed_secret(source.get(list_candidates[1]), slot)
+    resolved = _resolve_indexed_secret(source.get(list_candidates[1]), slot, label=list_candidates[1])
     if resolved:
         return resolved
     for key in candidates[3:]:
@@ -184,7 +196,7 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
     for key in slot_candidates:
         if source.get(key):
             return source[key]
-    resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
+    resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot, label=list_candidates[0])
     if resolved:
         return resolved
     for key in candidates:
@@ -220,8 +232,8 @@ def resolve_llm_setting(
     return ""
 
 
-def _resolve_indexed_secret(value: str | None, slot: int) -> str:
-    values = parse_csv(value)
+def _resolve_indexed_secret(value: str | None, slot: int, *, label: str) -> str:
+    values = parse_slot_csv(value, label=label)
     index = slot - 1
     if index < 0 or index >= len(values):
         return ""
@@ -231,7 +243,9 @@ def _resolve_indexed_secret(value: str | None, slot: int) -> str:
 def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[str, ...]:
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
-    bulk_values = _nonempty(parse_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}")))
+    bulk_values = _nonempty(
+        parse_slot_csv(source.get(f"TELEGRAM_BOT_TOKENS_{token}"), label=f"TELEGRAM_BOT_TOKENS_{token}")
+    )
     single = source.get(f"TELEGRAM_BOT_TOKEN_{token}", "").strip()
     instance_values = _merge_numbered_values(
         source,
@@ -241,15 +255,20 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
     )
     if instance_values:
         return _validate_unique_values(instance_values, label=f"TELEGRAM_BOT_TOKEN_{token}")
-    global_values = _nonempty((*parse_csv(source.get("TELEGRAM_BOT_TOKENS")), source.get("TELEGRAM_BOT_TOKEN", "")))
+    global_values = _nonempty(
+        (
+            *parse_slot_csv(source.get("TELEGRAM_BOT_TOKENS"), label="TELEGRAM_BOT_TOKENS"),
+            source.get("TELEGRAM_BOT_TOKEN", ""),
+        )
+    )
     return _validate_unique_values(global_values, label="TELEGRAM_BOT_TOKEN")
 
 
 def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
-    services = parse_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"))
-    phones = parse_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"))
+    services = parse_slot_csv(source.get(f"SIGNAL_BOT_SERVICES_{token}"), label=f"SIGNAL_BOT_SERVICES_{token}")
+    phones = parse_slot_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"), label=f"SIGNAL_BOT_PHONE_NUMBERS_{token}")
     single_service = source.get(f"SIGNAL_BOT_SERVICE_{token}", "").strip()
     single_phone = source.get(f"SIGNAL_BOT_PHONE_NUMBER_{token}", "").strip()
     if bool(single_service) != bool(single_phone):
@@ -268,17 +287,23 @@ def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = 
 def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str, str, str], ...]:
     source = os.environ if env is None else env
     token = normalize_instance_env_token(instance_name)
-    homeservers = parse_csv(source.get(f"MATRIX_BOT_HOMESERVERS_{token}"))
-    user_ids = parse_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"))
-    access_tokens = parse_csv(source.get(f"MATRIX_BOT_ACCESS_TOKENS_{token}"))
-    device_ids = parse_csv(source.get(f"MATRIX_BOT_DEVICE_IDS_{token}"))
+    homeservers = parse_slot_csv(
+        source.get(f"MATRIX_BOT_HOMESERVERS_{token}"), label=f"MATRIX_BOT_HOMESERVERS_{token}"
+    )
+    user_ids = parse_slot_csv(source.get(f"MATRIX_BOT_USER_IDS_{token}"), label=f"MATRIX_BOT_USER_IDS_{token}")
+    access_tokens = parse_slot_csv(
+        source.get(f"MATRIX_BOT_ACCESS_TOKENS_{token}"), label=f"MATRIX_BOT_ACCESS_TOKENS_{token}"
+    )
+    device_ids = parse_slot_csv(source.get(f"MATRIX_BOT_DEVICE_IDS_{token}"), label=f"MATRIX_BOT_DEVICE_IDS_{token}")
     single_homeserver = source.get(f"MATRIX_BOT_HOMESERVER_{token}", "").strip()
     single_user_id = source.get(f"MATRIX_BOT_USER_ID_{token}", "").strip()
     single_access_token = source.get(f"MATRIX_BOT_ACCESS_TOKEN_{token}", "").strip()
     single_device_id = source.get(f"MATRIX_BOT_DEVICE_ID_{token}", "").strip()
-    singles = (single_homeserver, single_user_id, single_access_token)
-    if any(singles) and not all(singles):
+    required_singles = (single_homeserver, single_user_id, single_access_token)
+    if any(required_singles) and not all(required_singles):
         raise RuntimeConfigError(f"Matrix single homeserver/user/access_token must be configured together for instance {instance_name}")
+    if single_device_id and not all(required_singles):
+        raise RuntimeConfigError(f"Matrix single device_id requires homeserver/user/access_token for instance {instance_name}")
     if single_homeserver and single_user_id and single_access_token:
         homeservers = (*homeservers, single_homeserver)
         user_ids = (*user_ids, single_user_id)

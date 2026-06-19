@@ -481,6 +481,7 @@ Mehrere Telegram-Botnamen pro Instanz:
 - `TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT=token_a,token_b` startet Depressionsbot mit mehreren BotFather-Tokens.
 - Alternativ gehen nummerierte Variablen wie `TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT_2`.
 - Nummerierte Variablen sind echte Slotnummern: `_2` belegt Slot 2, darf keinen vorhandenen Listenwert ueberschreiben und darf keine Luecke zu Slot 1 lassen.
+- Positionsgebundene Slotlisten duerfen keine leeren Felder enthalten; `token_a,,token_c` ist ein Konfigurationsfehler, weil es Slotzuordnungen verschieben wuerde.
 - Alle Tokens einer Instanz nutzen dieselbe aktive `Bot_Verhalten.md` und denselben lokalen User-Speicher.
 - Jeder Telegram-Token-Slot braucht bei mehreren Botnamen einen eigenen OpenAI-Key im passenden Slot.
 
