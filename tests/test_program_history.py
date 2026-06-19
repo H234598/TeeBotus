@@ -71,6 +71,35 @@ def test_recent_releases_ignores_non_semver_tags(tmp_path: Path) -> None:
     assert [release.name for release in releases] == ["v1.0.0"]
 
 
+def test_program_history_uses_configured_limits_in_headings(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    for index in range(6):
+        _commit(repo, f"Change {index:02d}")
+        if index in {1, 3, 5}:
+            _git(repo, "tag", f"v1.2.{index}")
+
+    reply = build_program_history_reply(repo, release_commit_limit=2, release_limit=1)
+
+    assert "Letzte 2 Commits" in reply
+    assert "Letzte 1 Release" in reply
+    assert "Letzte 5 Commits" not in reply
+    assert "Letzte 3 Releases" not in reply
+    assert "Change 05" in reply
+    assert "Change 04" in reply
+    assert "Change 03" not in reply
+    assert "- v1.2.5 Change 05" in reply
+    assert "- v1.2.3 Change 03" not in reply
+
+
+def test_recent_history_helpers_honor_zero_limits(tmp_path: Path) -> None:
+    repo = _git_repo(tmp_path)
+    _commit(repo, "Initial")
+    _git(repo, "tag", "v1.0.0")
+
+    assert recent_commits(repo, limit=0) == []
+    assert recent_releases(repo, limit=0) == []
+
+
 def test_recent_history_helpers_return_empty_lists_outside_git_repo(tmp_path: Path) -> None:
     assert recent_commits(tmp_path, limit=20) == []
     assert recent_releases(tmp_path, limit=3) == []

@@ -56,18 +56,30 @@ def build_program_history_reply(
         "",
     ]
     if releases:
-        lines.extend(["Letzte 5 Commits", *_item_lines(commits), "", "Letzte 3 Releases", *_item_lines(releases)])
+        lines.extend(
+            [
+                _section_title(release_commit_limit, singular="Commit", plural="Commits"),
+                *_item_lines(commits),
+                "",
+                _section_title(release_limit, singular="Release", plural="Releases"),
+                *_item_lines(releases),
+            ]
+        )
     else:
-        lines.extend(["Letzte 20 Commits", *_item_lines(commits)])
+        lines.extend([_section_title(commit_limit, singular="Commit", plural="Commits"), *_item_lines(commits)])
     return "\n".join(lines).rstrip()
 
 
 def recent_commits(project_root: Path, *, limit: int) -> list[GitSummaryItem]:
-    output = _run_git(project_root, "log", "-n", str(max(1, limit)), "--pretty=format:%h%x09%s")
+    if limit <= 0:
+        return []
+    output = _run_git(project_root, "log", "-n", str(limit), "--pretty=format:%h%x09%s")
     return _parse_items(output)
 
 
 def recent_releases(project_root: Path, *, limit: int) -> list[GitSummaryItem]:
+    if limit <= 0:
+        return []
     output = _run_git(
         project_root,
         "for-each-ref",
@@ -76,13 +88,18 @@ def recent_releases(project_root: Path, *, limit: int) -> list[GitSummaryItem]:
     )
     semver_tags = [_tag for item in _parse_items(output) if (_tag := _parse_semver_tag(item)) is not None]
     semver_tags.sort(key=lambda tag: tag.sort_key, reverse=True)
-    return [tag.item for tag in semver_tags[: max(1, limit)]]
+    return [tag.item for tag in semver_tags[:limit]]
 
 
 def _item_lines(items: list[GitSummaryItem]) -> list[str]:
     if not items:
         return ["- Keine lokalen Git-Daten gefunden."]
     return [item.line() for item in items]
+
+
+def _section_title(limit: int, *, singular: str, plural: str) -> str:
+    noun = singular if limit == 1 else plural
+    return f"Letzte {max(0, limit)} {noun}"
 
 
 def _parse_items(output: str) -> list[GitSummaryItem]:
