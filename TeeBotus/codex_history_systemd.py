@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-strategic-analysis", action="store_true", help="Queue an admin-only strategic Codex-History analysis in the periodic index job.")
     parser.add_argument("--index-strategic-analysis-profile", default="local_ollama", help="LLM profile used by periodic Codex-History strategic analysis.")
     parser.add_argument("--index-strategic-analysis-allow-remote", action="store_true", help="Allow a remote strategic-analysis profile explicitly.")
+    parser.add_argument("--index-strategic-analysis-force", action="store_true", help="Bypass strategic-analysis source cache.")
     parser.add_argument("--index-strategic-analysis-dry-run", action="store_true", help="Run periodic strategic analysis without writing the outbox item.")
     parser.add_argument("--index-dispatch", action="store_true", help="Dispatch queued Codex-History items after the periodic index job.")
     parser.add_argument("--index-dispatch-limit", type=int, default=100, help="Max queued Codex-History items to dispatch after periodic indexing; 0 means all.")
@@ -156,6 +157,7 @@ def main(argv: list[str] | None = None) -> int:
                 strategic_analysis=bool(args.index_strategic_analysis),
                 strategic_analysis_profile=args.index_strategic_analysis_profile,
                 strategic_analysis_allow_remote=bool(args.index_strategic_analysis_allow_remote),
+                strategic_analysis_force=bool(args.index_strategic_analysis_force),
                 strategic_analysis_dry_run=bool(args.index_strategic_analysis_dry_run),
                 dispatch=bool(args.index_dispatch),
                 dispatch_limit=int(args.index_dispatch_limit),
@@ -324,6 +326,7 @@ def render_codex_history_index_systemd_units(
     strategic_analysis: bool = False,
     strategic_analysis_profile: str = "local_ollama",
     strategic_analysis_allow_remote: bool = False,
+    strategic_analysis_force: bool = False,
     strategic_analysis_dry_run: bool = False,
     dispatch: bool = False,
     dispatch_limit: int = 100,
@@ -388,6 +391,8 @@ def render_codex_history_index_systemd_units(
         command.extend(["--strategic-analysis-profile", _shell_quote(strategic_analysis_profile)])
         if strategic_analysis_allow_remote:
             command.append("--strategic-analysis-allow-remote")
+        if strategic_analysis_force:
+            command.append("--strategic-analysis-force")
         if strategic_analysis_dry_run:
             command.append("--strategic-analysis-dry-run")
     dispatch_command: list[str] = []

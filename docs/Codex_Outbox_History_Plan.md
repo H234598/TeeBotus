@@ -512,6 +512,7 @@ Stand 2026-06-19:
 - `codex-history graph-export --svg` schreibt zusaetzlich ein dependency-freies SVG-Bild; `--svg-engine auto|mmdc` kann optional Mermaid CLI (`mmdc`) nutzen. `codex-history index --graph --graph-svg --graph-svg-engine ...` erzeugt es im selben Low-Priority-Batch.
 - `codex-history graph-export --queue-svg` queued das SVG als `kind=codex_graph_artifact` mit `image/svg+xml` Attachment fuer den bestehenden Admin-Dispatcher.
 - `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
+- Strategische Analysen nutzen einen Quellen-Fingerprint als Cache: gleicher Repo-Filter, gleiches Profil und unveraenderte Summaries erzeugen keinen neuen LLM-Lauf; `--force` bzw. `--strategic-analysis-force` erzwingt einen neuen Bericht.
 - `teebotus-codex-history-systemd --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch` hinzu.
 - Das Cinnamon-Applet bietet Terminal-Aktionen fuer Codex-History-Report, manuellen Indexlauf, manuelle Strategieanalyse und explizite Timer-Aktivierung mit Graph/SVG/Strategie/Dispatch.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
@@ -572,7 +573,7 @@ Stand 2026-06-19:
 * Default im Timer: Aus. Remote-Profile sind nur mit `--strategic-analysis-allow-remote` bzw. `--index-strategic-analysis-allow-remote` erlaubt.
 * Teilweise erledigt: periodischer Admin-Versand ist im systemd-Index-Timer per `--index-dispatch` opt-in.
 * Erledigt: Live-Aktivierung nach expliziter Freigabe ist im Cinnamon-Applet als Terminal-Aktion angebunden; sie installiert/aktiviert den Index-Timer mit Graph-SVG, Queue-SVG, strategischer Analyse und Dispatch.
-* Offen: State-/Cache-Optimierung fuer stateful APIs.
+* Erledigt: State-/Cache-Optimierung fuer strategische Analysen; Quellen-Fingerprint, Profil und Repo-Filter verhindern doppelte LLM-Laeufe bei unveraenderten Quellen. `--force` und `--index-strategic-analysis-force` umgehen den Cache bewusst.
 ## Ungenauer Ablauf:
 
 1. Eigene `codex_history_outbox`, nicht die Status-Outbox weiter aufblasen.

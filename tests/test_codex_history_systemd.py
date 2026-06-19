@@ -127,6 +127,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
         strategic_analysis=True,
         strategic_analysis_profile="local_ollama",
         strategic_analysis_allow_remote=True,
+        strategic_analysis_force=True,
         strategic_analysis_dry_run=True,
         dispatch=True,
         dispatch_limit=7,
@@ -143,6 +144,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
     assert "--strategic-analysis" in units.service_text
     assert "--strategic-analysis-profile local_ollama" in units.service_text
     assert "--strategic-analysis-allow-remote" in units.service_text
+    assert "--strategic-analysis-force" in units.service_text
     assert "--strategic-analysis-dry-run" in units.service_text
     assert "ExecStartPost=" in units.service_text
     assert "codex-history dispatch" in units.service_text

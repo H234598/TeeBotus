@@ -1095,6 +1095,7 @@ def generate_codex_history_strategic_analysis(
     profile: str = CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
     allow_remote: bool = False,
     status: str = "queued",
+    force: bool = False,
     dry_run: bool = False,
     env: Mapping[str, str] | None = None,
     now: datetime | None = None,
@@ -1121,6 +1122,32 @@ def generate_codex_history_strategic_analysis(
             "dry_run": bool(dry_run),
             "item": {},
         }
+    profile_name = str(profile or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE
+    source_fingerprint = _codex_history_strategy_source_fingerprint(candidates)
+    if not force:
+        cached_item = _latest_codex_history_strategy_for_sources(
+            rows,
+            repo=repo,
+            profile=profile_name,
+            source_fingerprint=source_fingerprint,
+            source_ids=[str(item.get("id") or "") for item in candidates],
+        )
+        if cached_item:
+            return {
+                "ok": True,
+                "status": "skipped",
+                "reason": "source_set_unchanged",
+                "instance": safe_instance_name,
+                "repo": str(repo or "").strip(),
+                "profile": profile_name,
+                "allow_remote": bool(allow_remote),
+                "analyzed": len(candidates),
+                "dry_run": bool(dry_run),
+                "cache_hit": True,
+                "cached_item_id": str(cached_item.get("id") or ""),
+                "cached_summary_prefix": str(cached_item.get("summary_prefix") or ""),
+                "item": dict(cached_item),
+            }
     strategy_runner = strategist or build_codex_history_strategist(profile=profile, allow_remote=allow_remote, env=env)
     decision = strategy_runner(tuple(candidates))
     analysis = _normalize_codex_history_strategy_decision(decision)
@@ -1162,7 +1189,9 @@ def generate_codex_history_strategic_analysis(
                 "analyzed_summary_prefixes": [str(item.get("summary_prefix") or "") for item in candidates],
                 "generated_at": timestamp,
                 "strategy_model": _codex_history_strategist_model(strategy_runner, profile),
+                "strategy_profile": profile_name,
                 "remote_allowed": bool(allow_remote),
+                "source_fingerprint": source_fingerprint,
             },
             "summary": {
                 "title": "Strategische Codex-History-Analyse",
@@ -1205,10 +1234,11 @@ def generate_codex_history_strategic_analysis(
         "status": "dry_run" if dry_run else normalized_status,
         "instance": safe_instance_name,
         "repo": str(repo or "").strip(),
-        "profile": str(profile or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
+        "profile": profile_name,
         "allow_remote": bool(allow_remote),
         "analyzed": len(candidates),
         "dry_run": bool(dry_run),
+        "cache_hit": False,
         "item": item,
     }
 
@@ -1297,6 +1327,7 @@ def run_codex_history_index(
     strategic_analysis_profile: str = CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
     strategic_analysis_allow_remote: bool = False,
     strategic_analysis_dry_run: bool = False,
+    strategic_analysis_force: bool = False,
     strategist: CodexHistoryStrategist | None = None,
     env: Mapping[str, str] | None = None,
     secret_provider: InstanceSecretProvider | None = None,
@@ -1324,6 +1355,7 @@ def run_codex_history_index(
             strategist=strategist,
             profile=strategic_analysis_profile,
             allow_remote=strategic_analysis_allow_remote,
+            force=strategic_analysis_force,
             dry_run=strategic_analysis_dry_run,
             env=env,
         )
@@ -2309,6 +2341,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     strategic_analysis_parser.add_argument("--limit", type=int, default=20)
     strategic_analysis_parser.add_argument("--profile", default=CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE)
     strategic_analysis_parser.add_argument("--allow-remote", action="store_true")
+    strategic_analysis_parser.add_argument("--force", action="store_true", help="Generate a new strategy report even when the source set is unchanged.")
     strategic_analysis_parser.add_argument("--dry-run", action="store_true")
     strategic_analysis_parser.add_argument("--format", choices=("text", "json"), default="text")
 
@@ -2334,6 +2367,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--strategic-analysis", action="store_true")
     index_parser.add_argument("--strategic-analysis-profile", default=CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE)
     index_parser.add_argument("--strategic-analysis-allow-remote", action="store_true")
+    index_parser.add_argument("--strategic-analysis-force", action="store_true")
     index_parser.add_argument("--strategic-analysis-dry-run", action="store_true")
 
     dispatch_parser = subparsers.add_parser("dispatch")
@@ -2564,6 +2598,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         limit=int(args.limit or 0),
                         profile=args.profile,
                         allow_remote=bool(args.allow_remote),
+                        force=bool(args.force),
                         dry_run=bool(args.dry_run),
                     )
                 )
@@ -2572,9 +2607,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 "instances_dir": str(instances_dir),
                 "instances": reports,
                 "totals": {
-                    "generated": sum(1 for report in reports if report.get("item")),
+                    "generated": sum(1 for report in reports if report.get("item") and not report.get("cache_hit")),
                     "analyzed": sum(int(report.get("analyzed") or 0) for report in reports),
                     "skipped": sum(1 for report in reports if str(report.get("status") or "") == "skipped"),
+                    "cached": sum(1 for report in reports if report.get("cache_hit")),
                 },
             }
             output = (
@@ -2619,6 +2655,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         strategic_analysis=bool(args.strategic_analysis),
                         strategic_analysis_profile=args.strategic_analysis_profile,
                         strategic_analysis_allow_remote=bool(args.strategic_analysis_allow_remote),
+                        strategic_analysis_force=bool(args.strategic_analysis_force),
                         strategic_analysis_dry_run=bool(args.strategic_analysis_dry_run),
                         secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
                     )
@@ -2938,6 +2975,7 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "graph_queued": 0,
         "graph_items": 0,
         "strategy_reports": 0,
+        "strategy_cached": 0,
         "strategy_analyzed": 0,
         "qdrant_points": 0,
         "qdrant_errors": 0,
@@ -2962,7 +3000,9 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
             totals["graph_items"] += int(graph.get("item_count") or 0)
         strategy = report.get("strategic_analysis", {})
         if isinstance(strategy, Mapping):
-            if strategy.get("item"):
+            if strategy.get("cache_hit"):
+                totals["strategy_cached"] += 1
+            elif strategy.get("item"):
                 totals["strategy_reports"] += 1
             totals["strategy_analyzed"] += int(strategy.get("analyzed") or 0)
         for result in report.get("qdrant", []) or []:
@@ -3123,6 +3163,7 @@ def _render_strategic_analysis_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"generated: {totals.get('generated', 0)}")
         lines.append(f"analyzed: {totals.get('analyzed', 0)}")
         lines.append(f"skipped: {totals.get('skipped', 0)}")
+        lines.append(f"cached: {totals.get('cached', 0)}")
     for instance in payload.get("instances", []) or []:
         if not isinstance(instance, Mapping):
             continue
@@ -3133,6 +3174,9 @@ def _render_strategic_analysis_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"Instance: {instance.get('instance', '')}")
         lines.append(f"  status: {instance.get('status', '')}")
         lines.append(f"  dry_run: {bool(instance.get('dry_run', False))}")
+        lines.append(f"  cache_hit: {bool(instance.get('cache_hit', False))}")
+        if instance.get("reason"):
+            lines.append(f"  reason: {instance.get('reason', '')}")
         lines.append(f"  analyzed: {instance.get('analyzed', 0)}")
         if item:
             lines.append(f"  item: {item.get('summary_prefix', '')} {item.get('id', '')}")
@@ -3152,6 +3196,7 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"graph_queued: {totals.get('graph_queued', 0)}")
         lines.append(f"graph_items: {totals.get('graph_items', 0)}")
         lines.append(f"strategy_reports: {totals.get('strategy_reports', 0)}")
+        lines.append(f"strategy_cached: {totals.get('strategy_cached', 0)}")
         lines.append(f"strategy_analyzed: {totals.get('strategy_analyzed', 0)}")
         lines.append(f"qdrant_points: {totals.get('qdrant_points', 0)}")
         lines.append(f"qdrant_errors: {totals.get('qdrant_errors', 0)}")
@@ -3203,6 +3248,7 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
                 "  strategic_analysis: "
                 f"status={strategy.get('status', '')} "
                 f"dry_run={bool(strategy.get('dry_run', False))} "
+                f"cache_hit={bool(strategy.get('cache_hit', False))} "
                 f"analyzed={strategy.get('analyzed', 0)} "
                 f"summary={summary_prefix}"
             )
@@ -3956,6 +4002,53 @@ def _normalize_codex_history_strategy_decision(decision: Mapping[str, Any] | str
     if confidence not in {"low", "medium", "high"}:
         confidence = "medium"
     return {**sections, "confidence": confidence}
+
+
+def _codex_history_strategy_source_fingerprint(items: Sequence[Mapping[str, Any]]) -> str:
+    source = [
+        {
+            "id": str(item.get("id") or ""),
+            "summary_prefix": str(item.get("summary_prefix") or ""),
+            "updated_at": str(item.get("updated_at") or item.get("created_at") or ""),
+            "status": str(item.get("status") or ""),
+        }
+        for item in items
+        if isinstance(item, Mapping)
+    ]
+    return hashlib.sha256(json.dumps(source, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _latest_codex_history_strategy_for_sources(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    repo: str,
+    profile: str,
+    source_fingerprint: str,
+    source_ids: Sequence[str],
+) -> dict[str, Any]:
+    repo_filter = str(repo or "").strip()
+    profile_name = str(profile or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE
+    expected_ids = tuple(str(item_id or "") for item_id in source_ids)
+    for row in reversed([row for row in rows if isinstance(row, Mapping)]):
+        if str(row.get("kind") or "").strip() != "codex_strategy_analysis":
+            continue
+        codex = row.get("codex", {})
+        if not isinstance(codex, Mapping):
+            continue
+        if str(codex.get("repo_filter") or "").strip() != repo_filter:
+            continue
+        cached_profile = str(codex.get("strategy_profile") or codex.get("strategy_model") or "").strip()
+        if cached_profile and cached_profile != profile_name:
+            continue
+        cached_fingerprint = str(codex.get("source_fingerprint") or "").strip()
+        if cached_fingerprint:
+            if cached_fingerprint == source_fingerprint:
+                return dict(row)
+            continue
+        cached_ids = tuple(str(item_id or "") for item_id in (codex.get("analyzed_item_ids") or []))
+        if cached_ids == expected_ids:
+            return dict(row)
+    return {}
 
 
 def _strategy_section_values(value: object) -> list[str]:

@@ -585,6 +585,8 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     assert [row["kind"] for row in persisted] == ["codex_run_summary", "codex_run_summary", "codex_strategy_analysis"]
     strategy = persisted[-1]
     assert strategy["summary_prefix"] == "v1.8.0 #0001"
+    assert strategy["codex"]["strategy_profile"] == "local_ollama"
+    assert strategy["codex"]["source_fingerprint"]
     assert strategy["delivery"]["target_group"] == "status_admins"
     assert "Strategische Codex-History-Analyse" in strategy["summary"]["markdown"]
     assert "Admin-only Index darf nicht" in strategy["summary"]["markdown"]
@@ -610,6 +612,48 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     assert sent[-1].caption == "Release Codex-History-Strategie 1.8.0"
     assert sent[-1].filename == "Codex-History-Strategie_release_1.8.0_0001.md"
     assert b"Strategische Codex-History-Analyse" in sent[-1].data
+
+
+def test_codex_history_strategic_analysis_reuses_cached_source_set(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "strategy-cache-demo", version="1.9.4")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="Feature A", bullets=["Neues Feature gebaut."])
+    calls: list[int] = []
+
+    def strategist(_items):
+        calls.append(1)
+        return {"recommendations": ["Einmal analysieren."]}
+
+    first = generate_codex_history_strategic_analysis(
+        store,
+        instance_name="Depressionsbot",
+        strategist=strategist,
+        now=datetime(2026, 6, 19, 14, tzinfo=timezone.utc),
+    )
+    second = generate_codex_history_strategic_analysis(
+        store,
+        instance_name="Depressionsbot",
+        strategist=strategist,
+        now=datetime(2026, 6, 19, 15, tzinfo=timezone.utc),
+    )
+    forced = generate_codex_history_strategic_analysis(
+        store,
+        instance_name="Depressionsbot",
+        strategist=strategist,
+        force=True,
+        now=datetime(2026, 6, 19, 16, tzinfo=timezone.utc),
+    )
+
+    assert first["cache_hit"] is False
+    assert second["status"] == "skipped"
+    assert second["reason"] == "source_set_unchanged"
+    assert second["cache_hit"] is True
+    assert second["cached_summary_prefix"] == first["item"]["summary_prefix"]
+    assert forced["cache_hit"] is False
+    assert calls == [1, 1]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["kind"] for row in persisted].count("codex_strategy_analysis") == 2
 
 
 def test_codex_history_strategist_rejects_remote_profile_without_explicit_allow() -> None:
