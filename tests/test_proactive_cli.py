@@ -702,7 +702,7 @@ def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
 
 
-def test_runtime_llm_planner_factory_uses_proactive_key_and_instance_instructions(tmp_path, monkeypatch) -> None:
+def test_runtime_llm_planner_factory_uses_proactive_plan_key_and_instance_instructions(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
     instance_dir.mkdir(parents=True)
@@ -727,6 +727,7 @@ def test_runtime_llm_planner_factory_uses_proactive_key_and_instance_instruction
     factory = runtime_llm_planner_factory(
         instances_dir,
         env={
+            "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN": "sk-plan",
             "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
             "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
         },
@@ -737,9 +738,62 @@ def test_runtime_llm_planner_factory_uses_proactive_key_and_instance_instruction
     assert context is not None
     client, instructions = context
     assert isinstance(client, Client)
-    assert created_keys == ["sk-proactive"]
+    assert created_keys == ["sk-plan"]
     assert instructions.openai_model == "gpt-test-proactive"
     assert instructions.openai_timeout_seconds == 123
+
+
+def test_runtime_llm_planner_factory_falls_back_to_legacy_proactive_key(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## OpenAI\n- enabled: true\n", encoding="utf-8")
+    created_keys: list[str] = []
+
+    class Client:
+        def __init__(self, key: str) -> None:
+            created_keys.append(key)
+
+    monkeypatch.setattr("TeeBotus.proactive.OpenAIClient", Client)
+    factory = runtime_llm_planner_factory(
+        instances_dir,
+        env={
+            "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-proactive",
+            "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        },
+    )
+
+    context = factory("Depressionsbot", store_for(instance_dir), "account")
+
+    assert context is not None
+    assert created_keys == ["sk-proactive"]
+
+
+def test_runtime_llm_planner_factory_uses_plan_services_key_before_background_key(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## OpenAI\n- enabled: true\n", encoding="utf-8")
+    created_keys: list[str] = []
+
+    class Client:
+        def __init__(self, key: str) -> None:
+            created_keys.append(key)
+
+    monkeypatch.setattr("TeeBotus.proactive.OpenAIClient", Client)
+    factory = runtime_llm_planner_factory(
+        instances_dir,
+        env={
+            "Depressionsbot_PROACTIVE_PLAN_SERVICES": "sk-plan-services",
+            "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
+            "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        },
+    )
+
+    context = factory("Depressionsbot", store_for(instance_dir), "account")
+
+    assert context is not None
+    assert created_keys == ["sk-plan-services"]
 
 
 def test_runtime_llm_planner_factory_uses_background_key_before_instance_key(tmp_path, monkeypatch) -> None:

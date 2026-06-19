@@ -313,6 +313,45 @@ def test_openai_key_resolution_prefers_proactive_key_before_background_key():
     assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == "key-proactive"
 
 
+def test_openai_key_resolution_accepts_proactive_role_keys():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN": "key-plan",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "key-decision",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_WORKER": "key-worker",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-legacy-proactive",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-plan"
+    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == "key-decision"
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == "key-worker"
+
+
+def test_openai_key_resolution_accepts_proactive_role_services_key():
+    env = {
+        "Depressionsbot_PROACTIVE_PLAN_SERVICES": "key-plan-services",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-legacy-proactive",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == "key-plan-services"
+
+
+def test_openai_key_resolution_proactive_role_channels_do_not_fall_back_to_user_keys():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_1": "sk-instance-slot",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT": "sk-list",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        "OPENAI_API_KEY": "sk-global",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "key-legacy-proactive",
+        "Depressionsbot_BACKGROUND_SERVICES": "key-background",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive_plan", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive_decision", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "proactive_worker", 1, env) == ""
+
+
 def test_openai_key_resolution_ignores_generic_background_services_aliases():
     env = {
         "DEPRESSIONSBOT_BACKGROUND_SERVICES": "key-token-alias",

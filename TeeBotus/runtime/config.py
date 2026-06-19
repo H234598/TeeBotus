@@ -9,9 +9,15 @@ DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
 DEFAULT_INSTANCES_DIR = "instances"
 DEFAULT_CHANNELS = ("telegram", "signal", "matrix")
 SUPPORTED_CHANNELS = frozenset(DEFAULT_CHANNELS)
-BACKGROUND_OPENAI_CHANNELS = frozenset({"PROACTIVE", "BACKGROUND"})
+PROACTIVE_ROLE_OPENAI_CHANNELS = frozenset({"PROACTIVE_PLAN", "PROACTIVE_DECISION", "PROACTIVE_WORKER"})
+BACKGROUND_OPENAI_CHANNELS = frozenset({"PROACTIVE", "BACKGROUND", *PROACTIVE_ROLE_OPENAI_CHANNELS})
 BACKGROUND_SERVICES_INSTANCE_TOKEN = "DEPRESSIONSBOT"
 BACKGROUND_SERVICES_ENV_KEY = "Depressionsbot_BACKGROUND_SERVICES"
+PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES = {
+    "PROACTIVE_PLAN": "PROACTIVE_PLAN_SERVICES",
+    "PROACTIVE_DECISION": "PROACTIVE_DECISION_SERVICES",
+    "PROACTIVE_WORKER": "PROACTIVE_WORKER_SERVICES",
+}
 
 
 class RuntimeConfigError(RuntimeError):
@@ -301,13 +307,15 @@ def resolve_openai_key(
 
 def _resolve_background_openai_key(
     source: Mapping[str, str],
-    _instance_name: str,
+    instance_name: str,
     instance_token: str,
     channel_token: str,
     _slot: int,
 ) -> str:
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
+    if channel_token in PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES:
+        return _first_nonempty_env_value(source, f"{str(instance_name).strip()}_{PROACTIVE_ROLE_SERVICES_ENV_SUFFIXES[channel_token]}")
     if instance_token != BACKGROUND_SERVICES_INSTANCE_TOKEN:
         return ""
     return _first_nonempty_env_value(source, BACKGROUND_SERVICES_ENV_KEY)
