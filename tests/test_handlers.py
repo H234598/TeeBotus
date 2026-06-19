@@ -89,6 +89,21 @@ class HandlerTests(unittest.TestCase):
         self.assertFalse(is_program_history_request("Kannst du Commits erklären?"))
         self.assertFalse(is_program_history_request("Was ist neutral formuliert?"))
 
+    def test_readme_history_examples_match_detection(self) -> None:
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+
+        self.assertNotIn("`Commits`", readme)
+        for example in (
+            "Was ist neu?",
+            "Programmhistorie",
+            "Welche Commits gab es?",
+            "Release Log",
+            "Changelog",
+            "Programmänderungen",
+        ):
+            self.assertIn(f"`{example}`", readme)
+            self.assertTrue(is_program_history_request(example), example)
+
     def test_uses_exact_text_reply_before_echo(self) -> None:
         instructions = BotInstructions(text_replies={"hallo": "Hallo zurueck."})
 
