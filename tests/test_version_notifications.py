@@ -1717,6 +1717,13 @@ def test_version_notification_text_strips_repo_url_credentials() -> None:
     assert "user:" not in text
 
 
+def test_version_notification_text_normalizes_version_prefix() -> None:
+    text = build_version_notification_text(version="v1.0.3")
+
+    assert "Version 1.0.3" in text
+    assert "Version v1.0.3" not in text
+
+
 def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
 
