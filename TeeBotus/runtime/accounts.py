@@ -3475,6 +3475,10 @@ def _source_state_is_newer(source_updated: str, target_updated: str) -> bool:
     target_timestamp = _parse_state_timestamp(target_updated)
     if source_timestamp is not None and target_timestamp is not None:
         return source_timestamp > target_timestamp
+    if source_timestamp is not None:
+        return True
+    if target_timestamp is not None:
+        return False
     return source_updated > target_updated
 
 
