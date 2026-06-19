@@ -2117,15 +2117,11 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
         )
         result_lines = format_admin_notification_result_lines(results)
         print(
-            _sanitize_admin_notify_status_line(
-                f"admin_notify=runtime_status status=ok count={len(result_lines)}"
-            )
+            "admin_notify=runtime_status status=ok"
         )
     except Exception:  # noqa: BLE001 - notification must not hide runtime-status output.
         print(
-            _sanitize_admin_notify_status_line(
-                "admin_notify=runtime_status status=failed"
-            ),
+            "admin_notify=runtime_status status=failed",
             file=sys.stderr,
         )
 

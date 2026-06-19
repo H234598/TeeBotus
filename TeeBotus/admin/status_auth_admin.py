@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
 from TeeBotus.core.status import redact_status_text
@@ -113,9 +113,8 @@ def _safe_output_path(output: str) -> Path:
 
 
 def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_json: bool) -> None:
-    with output_path.open("w", encoding="utf-8") as handle:
-        output = _build_status_auth_report_output(report, as_json=as_json)
-        _emit_status_auth_report(output, stream=handle)
+    output = _build_status_auth_report_output(report, as_json=as_json)
+    output_path.write_text(output, encoding="utf-8")
 
 
 def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -> str:
@@ -132,8 +131,8 @@ def _sanitize_status_auth_output(output: str) -> str:
     return redact_status_text(str(output or ""))
 
 
-def _emit_status_auth_report(output: str, *, stream: TextIO = sys.stdout) -> None:
-    stream.write(redact_status_text(str(output or "")))
+def _emit_status_auth_report(output: str) -> None:
+    print(redact_status_text(str(output or "")), end="", file=sys.stdout)
 
 
 @dataclass(frozen=True)
