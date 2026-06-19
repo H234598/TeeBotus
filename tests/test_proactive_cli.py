@@ -128,6 +128,41 @@ def test_runtime_sender_factory_builds_telegram_sender_from_runtime_config(tmp_p
     assert sent == [("123", "token-a:Ping")]
 
 
+def test_runtime_sender_factory_can_limit_sender_channels(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+
+    class API:
+        def __init__(self, token: str) -> None:
+            self.token = token
+
+        def send_message(self, chat_id: str, text: str) -> str:
+            return f"{self.token}:{chat_id}:{text}"
+
+    def fail_signal_sender(_accounts):
+        raise AssertionError("signal sender should not be built for telegram-only factory")
+
+    monkeypatch.setattr("TeeBotus.proactive.TelegramAPI", API)
+    monkeypatch.setattr("TeeBotus.proactive._signal_bots_for_accounts", fail_signal_sender)
+    factory = runtime_sender_factory(
+        instances_dir,
+        env={
+            "TEEBOTUS_INSTANCES": "Depressionsbot",
+            "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "token-a",
+            "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
+            "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT": "+491",
+            "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+        },
+        channels=("telegram",),
+    )
+
+    senders = factory("Depressionsbot", store_for(instance_dir))
+
+    assert tuple(senders) == ("telegram",)
+    assert senders["telegram"]({"adapter_slot": 1}, SendText("123", "Ping"), {}) == "token-a:123:Ping"
+
+
 def test_runtime_sender_factory_builds_lazy_matrix_sender_from_runtime_config(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

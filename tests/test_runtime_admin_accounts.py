@@ -122,6 +122,37 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert "telegram_slot=Depressionsbot/default status=broken error=bad" in sent[0][1].text
 
 
+def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    requested_channels: list[tuple[str, ...]] = []
+
+    def fake_runtime_sender_factory(_instances_dir: Path, _env: dict[str, str], *, channels: tuple[str, ...]):
+        requested_channels.append(channels)
+        return lambda _instance, _store: {"telegram": lambda _route, _action, _metadata: "ok"}
+
+    monkeypatch.setattr("TeeBotus.runtime.admin_accounts._runtime_sender_factory", fake_runtime_sender_factory)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert requested_channels == [("telegram",)]
+    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+
+
 def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

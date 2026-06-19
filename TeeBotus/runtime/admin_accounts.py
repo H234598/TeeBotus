@@ -148,7 +148,6 @@ async def notify_runtime_status_admin_accounts(
         return (AdminNotificationResult(instance_name="runtime_status", account_id="", status="skipped", reason="no_problem_lines"),)
     source = os.environ if env is None else env
     resolved_store_factory = store_factory or _default_account_store
-    resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source)
     message = _runtime_status_admin_message(problem_lines, selected_instances=selected_instances, now=now)
     results: list[AdminNotificationResult] = []
     for instance_name in selected_instances:
@@ -180,7 +179,9 @@ async def notify_runtime_status_admin_accounts(
             candidates.append((account_id, route, channel))
         if not candidates:
             continue
+        candidate_channels = tuple(sorted({channel for _account_id, _route, channel in candidates}))
         try:
+            resolved_sender_factory = sender_factory or _runtime_sender_factory(instances_dir, source, channels=candidate_channels)
             senders = resolved_sender_factory(instance_name, store)
         except Exception as exc:  # noqa: BLE001 - runtime-status notify must keep going for other instances.
             for account_id, _route, channel in candidates:
@@ -265,10 +266,10 @@ def _runtime_status_admin_message(problem_lines: Sequence[str], *, selected_inst
     return f"{message[:3470].rstrip()}\n... gekuerzt"
 
 
-def _runtime_sender_factory(instances_dir: Path, env: Mapping[str, str]) -> SenderFactory:
+def _runtime_sender_factory(instances_dir: Path, env: Mapping[str, str], *, channels: Sequence[str]) -> SenderFactory:
     from TeeBotus.proactive import runtime_sender_factory
 
-    return runtime_sender_factory(instances_dir, env=env)
+    return runtime_sender_factory(instances_dir, env=env, channels=channels)
 
 
 def _default_account_store(root: Path, instance_name: str) -> AccountStore:

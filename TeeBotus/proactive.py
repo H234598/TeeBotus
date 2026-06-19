@@ -280,8 +280,9 @@ def runtime_planner_resolver() -> PlannerResolver:
     return resolver
 
 
-def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = None) -> SenderFactory:
+def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = None, *, channels: Iterable[str] | None = None) -> SenderFactory:
     source = os.environ if env is None else env
+    requested_channels = _normalized_sender_channels(channels)
     config = build_runtime_config(env={**source, "TEEBOTUS_INSTANCES_DIR": str(instances_dir)})
     accounts_by_instance: dict[str, list[AccountRunConfig]] = {}
     for instance in config.instances:
@@ -290,22 +291,35 @@ def runtime_sender_factory(instances_dir: Path, env: Mapping[str, str] | None = 
     def factory(instance_name: str, _store: AccountStore) -> Mapping[str, ProactiveSender]:
         accounts = accounts_by_instance.get(instance_name, [])
         senders: dict[str, ProactiveSender] = {}
-        telegram_apis = {
-            account.slot: TelegramAPI(account.telegram_token)
-            for account in accounts
-            if account.channel == "telegram" and account.telegram_token
-        }
-        if telegram_apis:
-            senders["telegram"] = telegram_proactive_sender(telegram_apis)
-        signal_bots = _signal_bots_for_accounts(accounts)
-        if signal_bots:
-            senders["signal"] = signal_proactive_sender(signal_bots)
-        matrix_clients = _matrix_clients_for_accounts(accounts)
-        if matrix_clients:
-            senders["matrix"] = matrix_proactive_sender(matrix_clients)
+        if _sender_channel_requested("telegram", requested_channels):
+            telegram_apis = {
+                account.slot: TelegramAPI(account.telegram_token)
+                for account in accounts
+                if account.channel == "telegram" and account.telegram_token
+            }
+            if telegram_apis:
+                senders["telegram"] = telegram_proactive_sender(telegram_apis)
+        if _sender_channel_requested("signal", requested_channels):
+            signal_bots = _signal_bots_for_accounts(accounts)
+            if signal_bots:
+                senders["signal"] = signal_proactive_sender(signal_bots)
+        if _sender_channel_requested("matrix", requested_channels):
+            matrix_clients = _matrix_clients_for_accounts(accounts)
+            if matrix_clients:
+                senders["matrix"] = matrix_proactive_sender(matrix_clients)
         return senders
 
     return factory
+
+
+def _normalized_sender_channels(channels: Iterable[str] | None) -> frozenset[str] | None:
+    if channels is None:
+        return None
+    return frozenset(str(channel or "").strip().casefold() for channel in channels if str(channel or "").strip())
+
+
+def _sender_channel_requested(channel: str, requested_channels: frozenset[str] | None) -> bool:
+    return requested_channels is None or channel in requested_channels
 
 
 def _signal_bots_for_accounts(accounts: Iterable[AccountRunConfig]) -> dict[int, Any]:
