@@ -187,7 +187,7 @@ def _account_payload_refs(path: Path, *, instance_name_filter: str = "") -> list
         tables = {
             str(row[0])
             for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_entries', 'memory_indexes')"
+                "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('memory_entries', 'memory_indexes', 'account_jsonl_collections')"
             ).fetchall()
         }
         refs: set[tuple[str, str]] = set()
