@@ -412,6 +412,47 @@ def test_runtime_version_notifications_use_matching_telegram_slot_token(monkeypa
     assert ("notify", 2, "telegram-token-2") in events
 
 
+def test_adapter_version_notifications_use_matching_telegram_slot_token(monkeypatch, tmp_path: Path) -> None:
+    events = []
+
+    class FakeAPI:
+        def __init__(self, token: str) -> None:
+            self.token = token
+            events.append(("api", token))
+
+        def send_message(self, chat_id: str, text: str) -> int:
+            events.append(("send", self.token, chat_id, text))
+            return 1
+
+    class FakeStore:
+        def __init__(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003 - mirrors AccountStore construction.
+            events.append(("store", args[1] if len(args) > 1 else ""))
+
+    def fake_notify(**kwargs):  # noqa: ANN001 - mirrors notification helper kwargs.
+        events.append(("notify", kwargs.get("adapter_slot"), kwargs["send_message"].__self__.token))
+        return 0
+
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "_resolve_instances_dir", lambda: tmp_path)
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "TelegramAPI", FakeAPI)
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "AccountStore", FakeStore)
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "runtime_secret_provider", lambda: object())
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "notify_recent_telegram_users_for_version", fake_notify)
+
+    instance_config = telegram_runner.telegram_runtime.InstanceRunConfig(
+        "Demo",
+        tmp_path / "Demo" / "Bot_Verhalten.md",
+        (
+            telegram_runner.telegram_runtime.BotTokenConfig("telegram:1", "telegram-token-1", ""),
+            telegram_runner.telegram_runtime.BotTokenConfig("telegram:2", "telegram-token-2", ""),
+        ),
+    )
+
+    telegram_runner.telegram_runtime._notify_recent_users_for_current_version([instance_config])
+
+    assert ("notify", 1, "telegram-token-1") in events
+    assert ("notify", 2, "telegram-token-2") in events
+
+
 def test_run_telegram_accounts_rejects_duplicate_tokens_across_instances(tmp_path: Path) -> None:
     config = RuntimeConfig(
         instances_dir=tmp_path,

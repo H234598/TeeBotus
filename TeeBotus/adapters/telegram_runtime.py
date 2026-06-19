@@ -3095,42 +3095,56 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
 def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunConfig]) -> None:
     instances_dir = _resolve_instances_dir()
     for instance_config in instance_configs:
-        if not instance_config.token_configs:
-            continue
-        api = TelegramAPI(instance_config.token_configs[0].token)
-        store = AccountStore(
-            instances_dir / instance_config.instance_name / "data" / "accounts",
-            instance_config.instance_name,
-            secret_provider=runtime_secret_provider(),
-            create_dirs=False,
-        )
-        try:
-            count = notify_recent_telegram_users_for_version(
-                version=__version__,
-                instances_dir=instances_dir,
-                instance_name=instance_config.instance_name,
-                account_store=store,
-                send_message=api.send_message,
-                repo_root=PROJECT_ROOT,
-                on_error=lambda recipient, exc: LOGGER.warning(
-                    "Version notification failed version=%s instance=%s identity=%s: %s",
-                    __version__,
-                    instance_config.instance_name,
-                    recipient.identity_key,
-                    exc,
-                ),
-                on_skip=lambda reason: LOGGER.info(
-                    "Version notification skipped version=%s instance=%s reason=%s.",
-                    __version__,
-                    instance_config.instance_name,
-                    reason,
-                ),
+        for token_config in instance_config.token_configs:
+            adapter_slot = _telegram_slot_from_label(token_config.label)
+            api = TelegramAPI(token_config.token)
+            store = AccountStore(
+                instances_dir / instance_config.instance_name / "data" / "accounts",
+                instance_config.instance_name,
+                secret_provider=runtime_secret_provider(),
+                create_dirs=False,
             )
-        except (AccountStoreError, TelegramAPIError, TelegramNetworkError, OSError) as exc:
-            LOGGER.warning("Version notification skipped for instance=%s: %s", instance_config.instance_name, exc)
-            continue
-        if count:
-            LOGGER.info("Sent version notification version=%s instance=%s recipients=%s.", __version__, instance_config.instance_name, count)
+            try:
+                count = notify_recent_telegram_users_for_version(
+                    version=__version__,
+                    instances_dir=instances_dir,
+                    instance_name=instance_config.instance_name,
+                    account_store=store,
+                    send_message=api.send_message,
+                    repo_root=PROJECT_ROOT,
+                    adapter_slot=adapter_slot,
+                    on_error=lambda recipient, exc: LOGGER.warning(
+                        "Version notification failed version=%s instance=%s slot=%s identity=%s: %s",
+                        __version__,
+                        instance_config.instance_name,
+                        recipient.adapter_slot,
+                        recipient.identity_key,
+                        exc,
+                    ),
+                    on_skip=lambda reason: LOGGER.info(
+                        "Version notification skipped version=%s instance=%s slot=%s reason=%s.",
+                        __version__,
+                        instance_config.instance_name,
+                        adapter_slot,
+                        reason,
+                    ),
+                )
+            except (AccountStoreError, TelegramAPIError, TelegramNetworkError, OSError) as exc:
+                LOGGER.warning(
+                    "Version notification skipped for instance=%s slot=%s: %s",
+                    instance_config.instance_name,
+                    adapter_slot,
+                    exc,
+                )
+                continue
+            if count:
+                LOGGER.info(
+                    "Sent version notification version=%s instance=%s slot=%s recipients=%s.",
+                    __version__,
+                    instance_config.instance_name,
+                    adapter_slot,
+                    count,
+                )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -3333,6 +3347,17 @@ def _duplicate_telegram_token_error(instance_configs: list[InstanceRunConfig]) -
         "Each Telegram name needs its own BotFather token. Duplicate slot pairs: "
         + ", ".join(duplicates)
     )
+
+
+def _telegram_slot_from_label(label: str) -> int:
+    text = str(label or "").strip()
+    if ":" in text:
+        text = text.rsplit(":", 1)[-1]
+    try:
+        slot = int(text)
+    except ValueError:
+        return 1
+    return slot if slot > 0 else 1
 
 
 def _resolve_bot_identity(api: TelegramAPI) -> BotIdentity:
