@@ -3428,32 +3428,31 @@ def _read_jsonl_plain(path: Path) -> list[dict[str, Any]]:
 
 
 def _merge_account_jsonl_rows(primary_rows: list[dict[str, Any]], legacy_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    merged = [dict(row) for row in primary_rows if isinstance(row, dict)]
-    id_index = {
-        str(row.get("id") or "").strip(): index
-        for index, row in enumerate(merged)
-        if str(row.get("id") or "").strip()
-    }
-    seen_payloads = {
-        json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        for row in merged
-    }
-    for row in legacy_rows:
+    merged: list[dict[str, Any]] = []
+    id_index: dict[str, int] = {}
+    seen_payloads: set[str] = set()
+
+    def add_row(row: dict[str, Any]) -> None:
         if not isinstance(row, dict):
-            continue
+            return
         row_id = str(row.get("id") or "").strip()
         payload_key = json.dumps(row, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         if row_id and row_id in id_index:
             index = id_index[row_id]
             merged[index] = _choose_newer_state(row, merged[index])
             seen_payloads.add(json.dumps(merged[index], ensure_ascii=False, sort_keys=True, separators=(",", ":")))
-            continue
+            return
         if payload_key in seen_payloads:
-            continue
+            return
         merged.append(dict(row))
         if row_id:
             id_index[row_id] = len(merged) - 1
         seen_payloads.add(payload_key)
+
+    for row in primary_rows:
+        add_row(row)
+    for row in legacy_rows:
+        add_row(row)
     return merged
 
 
