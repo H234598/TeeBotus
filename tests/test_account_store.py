@@ -1281,6 +1281,55 @@ def test_account_store_sqlite_backend_migrates_proactive_jsonl_collections(tmp_p
     assert b"state-geheim" not in raw_db
 
 
+def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_same",
+                "message_text": "Bitte erinnern",
+                "status": "queued",
+                "created_at": "2026-06-15T08:00:00+00:00",
+                "updated_at": "2026-06-15T08:00:00+00:00",
+            }
+        ],
+    )
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [
+            {
+                "id": "pro_same",
+                "message_text": "Bitte erinnern",
+                "status": "sent",
+                "message_ref": "telegram:42",
+                "created_at": "2026-06-15T08:00:00+00:00",
+                "updated_at": "2026-06-15T09:00:00+00:00",
+            }
+        ],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [
+        {
+            "id": "pro_same",
+            "message_text": "Bitte erinnern",
+            "status": "sent",
+            "message_ref": "telegram:42",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T09:00:00+00:00",
+        }
+    ]
+    assert not legacy_path.exists()
+    assert store.read_proactive_outbox(account_id) == rows
+
+
 def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
