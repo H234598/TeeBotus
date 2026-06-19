@@ -631,6 +631,36 @@ def test_version_notification_state_normalization_drops_malformed_failure_payloa
     assert failures["telegram:user:222"]["reason"] == "legacy route missing"
 
 
+def test_version_notification_state_normalization_keeps_complete_failure_payload() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "v1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "chat not found",
+                        }
+                    }
+                },
+                "1.0.3": {
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "reason": "legacy row without route",
+                        }
+                    }
+                },
+            }
+        }
+    )
+
+    failure = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failure["chat_id"] == 111
+    assert failure["adapter_slot"] == 1
+    assert failure["reason"] == "chat not found"
+
+
 def test_notify_recent_telegram_users_migrates_legacy_prefixed_version_key(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
