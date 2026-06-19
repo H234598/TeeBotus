@@ -152,6 +152,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._commandArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
+    assert "_safeLocalPath: function(value, fallback)" in source
+    assert "_libraryPath: function()" in source
     assert "_runtimeUnit: function()" in source
     assert "_qdrantUnit: function()" in source
     assert "_safeSystemdUnit: function(value, fallback)" in source
@@ -468,6 +470,40 @@ def test_cinnamon_applet_proactive_command_uses_argv_quoting() -> None:
     assert "'touch'" in result["command"]
     assert "'/tmp/teebotus-pwned'" in result["command"]
     assert "; touch /tmp/teebotus-pwned" not in result["command"]
+
+
+def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let opened = [];
+          applet._spawn = function(argv) {
+            opened.push(argv);
+          };
+          applet.repoPath = "relative/repo";
+          applet.libraryPath = "file:///etc/passwd";
+          applet.codexUsagePath = "--help";
+          applet._openPath(applet._repoPath());
+          applet._openPath(applet._libraryPath());
+          applet._openPath(applet._codexUsagePath());
+          return {
+            repo: applet._repoPath(),
+            library: applet._libraryPath(),
+            codex: applet._codexUsagePath(),
+            opened: opened
+          };
+        })()
+        """
+    )
+
+    assert result["repo"].endswith("/TeeBotus")
+    assert result["library"].endswith("/TeeBotus/instances/Depressionsbot/data/Bibliothek")
+    assert result["codex"].endswith("/codex-usage")
+    opened_targets = [entry[2] for entry in result["opened"]]
+    assert "relative/repo" not in opened_targets
+    assert "file:///etc/passwd" not in opened_targets
+    assert "--help" not in opened_targets
+    assert all(target.startswith("/") for target in opened_targets)
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

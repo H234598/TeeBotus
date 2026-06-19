@@ -277,7 +277,7 @@ TeeBotusApplet.prototype = {
 
     this.bibliothekarMenu.menu.removeAll();
     this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothekar-Status im Terminal"), () => this._openBibliothekarStatus()));
-    this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothek-Ordner öffnen"), () => this._openPath(this.libraryPath)));
+    this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothek-Ordner öffnen"), () => this._openPath(this._libraryPath())));
     this.bibliothekarMenu.menu.addMenuItem(this._actionItem(_("Bibliothekar-Hilfe im Terminal"), () => this._openTerminalForCommand(this._repoPath(), this._pythonArgs().concat(["-m", "TeeBotus.bibliothekar", "--help"]))));
 
     this.proactiveMenu.menu.removeAll();
@@ -1215,7 +1215,7 @@ TeeBotusApplet.prototype = {
   },
 
   _openPath: function(path) {
-    this._spawn(["gio", "open", String(path || this._repoPath())], () => {});
+    this._spawn(["gio", "open", this._safeLocalPath(path, this._repoPath())], () => {});
   },
 
   _openUri: function(uri) {
@@ -1254,7 +1254,11 @@ TeeBotusApplet.prototype = {
   },
 
   _repoPath: function() {
-    return String(this.repoPath || DEFAULT_REPO_PATH).trim() || DEFAULT_REPO_PATH;
+    return this._safeLocalPath(this.repoPath, DEFAULT_REPO_PATH);
+  },
+
+  _libraryPath: function() {
+    return this._safeLocalPath(this.libraryPath, GLib.build_filenamev([this._repoPath(), "instances", "Depressionsbot", "data", "Bibliothek"]));
   },
 
   _runtimeUnit: function() {
@@ -1280,7 +1284,7 @@ TeeBotusApplet.prototype = {
   },
 
   _codexUsagePath: function() {
-    return String(this.codexUsagePath || DEFAULT_CODEX_USAGE_PATH).trim() || DEFAULT_CODEX_USAGE_PATH;
+    return this._safeLocalPath(this.codexUsagePath, DEFAULT_CODEX_USAGE_PATH);
   },
 
   _codexUsageCommand: function() {
@@ -1364,6 +1368,18 @@ TeeBotusApplet.prototype = {
       return fallbackUnit;
     }
     return unit;
+  },
+
+  _safeLocalPath: function(value, fallback) {
+    let fallbackPath = String(fallback || DEFAULT_REPO_PATH).trim() || DEFAULT_REPO_PATH;
+    let path = String(value || fallbackPath).trim() || fallbackPath;
+    if (path.charAt(0) !== "/" || path.indexOf("\u0000") >= 0 || path.length > 4096) {
+      return fallbackPath;
+    }
+    if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(path)) {
+      return fallbackPath;
+    }
+    return path;
   },
 
   _safeShellWord: function(value) {
