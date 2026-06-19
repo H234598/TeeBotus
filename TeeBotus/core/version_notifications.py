@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
+from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, AccountStoreError
 
 NOTIFICATION_STATE_FILENAME = "Version_Notifications.json"
 NOTIFICATION_STATE_COLLECTION = "version_notifications"
@@ -52,7 +52,7 @@ def notify_recent_telegram_users_for_version(
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
-    if _sql_state_backend_available(account_store) or state_path.exists():
+    if state_path.exists() or _notification_state_has_versions(state) or _sql_state_collection_has_rows(account_store):
         _write_state(account_store, state_path, state)
     if not normalized_version:
         if on_skip is not None:
@@ -1078,6 +1078,24 @@ def _sync_version_delivery_state(
 def _sql_state_backend_available(account_store: AccountStore) -> bool:
     checker = getattr(account_store, "instance_json_state_backend_available", None)
     return callable(checker) and bool(checker())
+
+
+def _sql_state_collection_has_rows(account_store: AccountStore) -> bool:
+    if not _sql_state_backend_available(account_store):
+        return False
+    backend = getattr(account_store, "account_memory_backend", None)
+    read_collection = getattr(backend, "read_collection", None)
+    if not callable(read_collection):
+        return False
+    try:
+        return bool(read_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION))
+    except Exception:
+        return True
+
+
+def _notification_state_has_versions(state: dict[str, Any]) -> bool:
+    versions = state.get("versions")
+    return isinstance(versions, dict) and bool(versions)
 
 
 def _read_legacy_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
