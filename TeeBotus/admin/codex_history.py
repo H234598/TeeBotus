@@ -5,7 +5,6 @@ import asyncio
 import hashlib
 import json
 import re
-import os
 import subprocess
 import threading
 import time
@@ -62,9 +61,11 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
         raise ValueError(f"{operation} contains invalid control character")
     if not text:
         raise ValueError(f"{operation} must not be empty")
-    normalized = os.path.expanduser(text).replace("\\", "/")
-    is_absolute = normalized.startswith("/")
-    raw_parts = normalized.split("/")
+    if "\\" in text:
+        raise ValueError(f"{operation} contains invalid path separator: \\")
+    path = Path(text).expanduser()
+    is_absolute = path.is_absolute()
+    raw_parts = path.parts
     parts: list[str] = []
     for part in raw_parts:
         if part in {"", "."}:
