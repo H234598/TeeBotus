@@ -101,7 +101,39 @@ def test_sqlite_backup_sync_checks_collection_payloads(tmp_path: Path) -> None:
         )
 
     with pytest.raises(RuntimeError, match="payload_not_decryptable"):
-        sync_account_memory_sqlite_backup(
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
             accounts_root=accounts_root,
             provider=provider(b"a" * 32),
         )
+
+
+def test_sqlite_backup_sync_checks_collection_accounts_for_payload_count(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "Account_Memory.sqlite3"
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(b"a" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary, fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_collection(
+        account_id,
+        "proactive_outbox",
+        [
+            {
+                "id": "pro_1",
+                "message_text": "Backup zählen",
+                "status": "queued",
+                "updated_at": "2026-06-14T12:00:00+00:00",
+            }
+        ],
+    )
+
+    result = sqlite_backup_sync.sync_account_memory_sqlite_backup(
+        accounts_root=accounts_root,
+        provider=provider(b"a" * 32),
+    )
+
+    assert result.account_payloads_checked == 1
+    assert result.copied is True
