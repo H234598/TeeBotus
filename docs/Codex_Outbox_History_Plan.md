@@ -16,13 +16,14 @@ Umgesetzt:
 - Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
 - CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
 - Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
+- Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
 Offen:
 
 - Delivery-Receipts/`delivered` und aktive Bestaetigung/`acknowledged` sind noch nicht angebunden.
-- `codex-history watch` liest noch keine Codex-Sessionlogs; Dedupe, Fleet-Pfade und systemd-User-Service fehlen noch.
+- Kontinuierliches `codex-history watch` mit systemd-User-Service, Polling/Filesystem-Events und hartem Fleet-Pfad-Audit ist noch nicht umgesetzt.
 - Status/Applet-Integration, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
 ## Kurzantwort
