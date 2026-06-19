@@ -1454,6 +1454,16 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     acknowledge_parser.add_argument("--message-ref", default="")
     acknowledge_parser.add_argument("--format", choices=("text", "json"), default="text")
 
+    receipt_parser = subparsers.add_parser("receipt")
+    receipt_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    receipt_parser.add_argument("--instance", required=True)
+    receipt_parser.add_argument("--channel", required=True)
+    receipt_parser.add_argument("--chat-id", required=True)
+    receipt_parser.add_argument("--message-ref", required=True)
+    receipt_parser.add_argument("--account-id", default="")
+    receipt_parser.add_argument("--receipt-type", default="delivered")
+    receipt_parser.add_argument("--format", choices=("text", "json"), default="text")
+
     watch_parser = subparsers.add_parser("watch")
     watch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     watch_parser.add_argument("--instances", default="")
@@ -1562,6 +1572,28 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0 if payload.get("ok") else 1
         except (OSError, ValueError) as exc:
             print(f"acknowledge failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "receipt":
+        try:
+            store = _store_for_instance(Path(args.instances_dir), args.instance, provider)
+            payload = record_codex_history_delivery_receipt(
+                store,
+                instance_name=args.instance,
+                channel=args.channel,
+                chat_id=args.chat_id,
+                account_id=args.account_id,
+                message_ref=args.message_ref,
+                receipt_type=args.receipt_type,
+            )
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_receipt_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload.get("ok") else 1
+        except (OSError, ValueError) as exc:
+            print(f"receipt failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "watch" and args.once:
         try:
@@ -1723,6 +1755,16 @@ def _render_acknowledge_report(payload: Mapping[str, Any]) -> str:
     item_id = str(payload.get("item_id") or "")
     reason = str(payload.get("reason") or "")
     line = f"acknowledge {status} {item_id}".strip()
+    if reason:
+        line += f" reason={reason}"
+    return line + "\n"
+
+
+def _render_receipt_report(payload: Mapping[str, Any]) -> str:
+    status = str(payload.get("status") or "unknown")
+    item_id = str(payload.get("item_id") or "")
+    reason = str(payload.get("reason") or "")
+    line = f"receipt {status} {item_id}".strip()
     if reason:
         line += f" reason={reason}"
     return line + "\n"

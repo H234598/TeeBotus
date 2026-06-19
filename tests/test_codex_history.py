@@ -17,6 +17,7 @@ from TeeBotus.admin.codex_history import (
     _safe_repo_root,
     import_codex_session_file,
     main as codex_history_main,
+    record_codex_history_delivery_receipt,
     record_codex_history_reply,
     watch_codex_session_roots,
 )
@@ -474,6 +475,155 @@ def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tm
     assert dispatch_rows[-1]["message_ref"] == "101"
     assert dispatch_rows[-1]["reply_message_ref"] == "202"
     assert dispatch_rows[-1]["reply_text_preview"] == "ok, angekommen"
+
+
+def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-demo", version="1.8.3")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Native Receipt", bullets=["Receipts markieren Zustellung."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "matrix",
+            "chat_id": "!room:test",
+            "message_ref": "$event-1",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="matrix",
+        chat_id="!room:test",
+        account_id=admin_id,
+        message_ref="$event-1",
+        receipt_type="read",
+        now=datetime(2026, 6, 19, 14, tzinfo=timezone.utc),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "delivered"
+    assert result["item_id"] == item["id"]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    assert persisted["delivery"]["delivered_at"] == "2026-06-19T14:00:00+00:00"
+    assert persisted["delivery"]["acknowledged_at"] == ""
+    assert persisted["status_history"][-1] == {
+        "at": "2026-06-19T14:00:00+00:00",
+        "status": "delivered",
+        "reason": "matrix_read_receipt",
+    }
+    dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered"]
+    assert dispatch_rows[-1]["message_ref"] == "$event-1"
+    assert dispatch_rows[-1]["receipt_type"] == "read"
+
+
+def test_record_codex_history_delivery_receipt_does_not_downgrade_acknowledged_item(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-after-ack-demo", version="1.8.4")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(43), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Ack bleibt", bullets=["Spaete Receipts duerfen nicht downgraden."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "signal",
+            "chat_id": "+491",
+            "message_ref": "1718798400000",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+    acknowledge_codex_history_item(
+        store,
+        item["id"],
+        instance_name="Depressionsbot",
+        account_id=admin_id,
+        message_ref="1718798400000",
+        now=datetime(2026, 6, 19, 14, 15, tzinfo=timezone.utc),
+    )
+
+    result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="signal",
+        chat_id="+491",
+        account_id=admin_id,
+        message_ref="1718798400000",
+        receipt_type="viewed",
+        now=datetime(2026, 6, 19, 14, 20, tzinfo=timezone.utc),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "acknowledged"
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "acknowledged"
+    assert persisted["delivery"]["acknowledged_at"] == "2026-06-19T14:15:00+00:00"
+    assert persisted["status_history"][-1]["status"] == "acknowledged"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[-1]["receipt_type"] == "viewed"
+
+
+def test_codex_history_cli_receipt_marks_matching_dispatch_delivered(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "receipt-cli-demo", version="1.8.5")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(44), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="CLI Receipt", bullets=["Receipt CLI markiert delivered."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "matrix",
+            "chat_id": "!room:cli",
+            "message_ref": "$event-cli",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    assert (
+        codex_history_main(
+            [
+                "receipt",
+                "--instances-dir",
+                str(tmp_path),
+                "--instance",
+                "Depressionsbot",
+                "--channel",
+                "matrix",
+                "--chat-id",
+                "!room:cli",
+                "--message-ref",
+                "$event-cli",
+                "--account-id",
+                admin_id,
+                "--receipt-type",
+                "read",
+                "--format",
+                "json",
+            ],
+            provider=provider(),
+        )
+        == 0
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "delivered"
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[-1]["reason"] == "matrix_read_receipt"
 
 
 def test_record_codex_history_reply_ignores_unmatched_message_ref(tmp_path: Path) -> None:
