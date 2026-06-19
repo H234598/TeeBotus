@@ -48,9 +48,13 @@ def notify_recent_telegram_users_for_version(
     state = _load_state(state_path)
     version_state = state.setdefault("versions", {}).setdefault(version, {})
     sent_identities = set(str(value) for value in version_state.get("sent_identities", []) if isinstance(value, str))
+    failed_identities = version_state.get("failed_identities")
+    if not isinstance(failed_identities, dict):
+        failed_identities = {}
+        version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
-        if recipient.identity_key in sent_identities:
+        if recipient.identity_key in sent_identities or recipient.identity_key in failed_identities:
             continue
         message = build_version_notification_text(
             version=version,
@@ -62,10 +66,18 @@ def notify_recent_telegram_users_for_version(
         except Exception as exc:  # noqa: BLE001
             if on_error is not None:
                 on_error(recipient, exc)
+            if _is_permanent_delivery_error(exc):
+                failed_identities[recipient.identity_key] = {
+                    "adapter_slot": recipient.adapter_slot,
+                    "chat_id": recipient.chat_id,
+                    "failed_at": resolved_now.isoformat(timespec="seconds"),
+                    "reason": _delivery_error_reason(exc),
+                }
             continue
         sent_identities.add(recipient.identity_key)
         sent_count += 1
     version_state["sent_identities"] = sorted(sent_identities)
+    version_state["failed_identities"] = dict(sorted(failed_identities.items()))
     version_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
     _write_state(state_path, state)
     return sent_count
@@ -237,6 +249,25 @@ def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
     except (TypeError, ValueError):
         return default
     return slot if slot > 0 else default
+
+
+def _is_permanent_delivery_error(exc: Exception) -> bool:
+    text = str(exc).casefold()
+    return any(
+        marker in text
+        for marker in (
+            "chat not found",
+            "bot was blocked",
+            "user is deactivated",
+            "have no rights to send",
+            "forbidden: bot",
+        )
+    )
+
+
+def _delivery_error_reason(exc: Exception) -> str:
+    text = " ".join(str(exc).split())
+    return text[:240]
 
 
 def _load_state(path: Path) -> dict[str, Any]:

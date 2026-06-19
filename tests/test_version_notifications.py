@@ -429,6 +429,73 @@ def test_notify_recent_telegram_users_continues_after_send_error(tmp_path: Path)
     assert errors == ["telegram:user:111: chat not found"]
 
 
+def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Broken")
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    count_again = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert count == 0
+    assert count_again == 0
+    assert attempts == [111]
+    failed = state["versions"]["1.0.3"]["failed_identities"]["telegram:user:111"]
+    assert failed["chat_id"] == 111
+    assert failed["adapter_slot"] == 1
+    assert "chat not found" in failed["reason"]
+
+
+def test_notify_recent_telegram_users_retries_transient_delivery_error(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Flaky")
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError("temporary network timeout")
+
+    notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert attempts == [111, 111]
+    assert state["versions"]["1.0.3"]["failed_identities"] == {}
+
+
 def test_notify_recent_telegram_users_requires_github_version_when_repo_root_is_given(tmp_path: Path, monkeypatch) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
