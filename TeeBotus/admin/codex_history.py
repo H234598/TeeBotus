@@ -1205,7 +1205,6 @@ def _normalize_remote_url(remote_url: str) -> str:
     value = str(remote_url or "").strip()
     if not value:
         return ""
-    value = value.removesuffix(".git")
     if "://" not in value and ":" in value:
         host_part, _, path = value.partition(":")
         if "/" not in host_part and ("@" in host_part or "." in host_part or host_part == "localhost"):
@@ -1213,6 +1212,7 @@ def _normalize_remote_url(remote_url: str) -> str:
             host = host_part
             if "@" in host_part:
                 user, _, host = host_part.partition("@")
+            path = path.removesuffix(".git")
             value = f"ssh://{user}@{host}/{path}"
     return value.casefold()
 
