@@ -67,7 +67,7 @@ def notify_recent_telegram_users_for_version(
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
-    historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities)
+    historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities, resolved_now)
     version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
@@ -585,6 +585,7 @@ def _historical_failed_identity_map(
     state: dict[str, Any],
     current_version: str,
     identities: dict[str, Any],
+    now: datetime,
 ) -> dict[str, object]:
     versions = state.get("versions")
     if not isinstance(versions, dict):
@@ -595,7 +596,7 @@ def _historical_failed_identity_map(
         key=lambda item: _version_order_key(str(item[0] or "")),
     )
     for version_key, version_state in ordered_versions:
-        if not isinstance(version_key, str) or not _version_is_before(version_key, current_version):
+        if not isinstance(version_key, str) or not _version_state_is_historical(version_key, version_state, current_version, now):
             continue
         if isinstance(version_state, dict):
             normalized_version_state = _merge_version_notification_state({}, version_state)
@@ -612,6 +613,24 @@ def _historical_failed_identity_map(
                 identities,
             )
     return dict(sorted(failed_identities.items()))
+
+
+def _version_state_is_historical(
+    version_key: str,
+    version_state: object,
+    current_version: str,
+    now: datetime,
+) -> bool:
+    if _version_is_before(version_key, current_version):
+        return True
+    if _version_order_key(version_key) != _version_order_key(current_version):
+        return False
+    if _normalize_version_key(version_key) == current_version:
+        return False
+    if not isinstance(version_state, dict):
+        return False
+    updated_at = _parse_datetime(_valid_timestamp_string(version_state.get("updated_at")))
+    return updated_at is not None and updated_at < now
 
 
 def _clear_historical_failures_resolved_by_sent_identities(
