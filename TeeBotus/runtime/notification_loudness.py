@@ -332,7 +332,7 @@ def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reas
 
 def _event_route(event: IncomingEvent) -> dict[str, Any]:
     return {
-        "channel": event.channel,
+        "channel": _normalize_channel(event.channel),
         "chat_id": event.chat_id,
         "chat_type": _normalize_chat_type(event.chat_type),
         "adapter_slot": event.adapter_slot,
@@ -340,7 +340,7 @@ def _event_route(event: IncomingEvent) -> dict[str, Any]:
 
 
 def _route_key(event: IncomingEvent) -> str:
-    return f"{event.channel}:{event.adapter_slot}:{event.chat_id}"
+    return _route_key_for_channel_chat(event.channel, event.adapter_slot, event.chat_id)
 
 
 def _private_route(route: Any) -> bool:
@@ -391,7 +391,13 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
 
 
 def _route_key_from_route(route: Mapping[str, Any]) -> str:
-    return f"{route.get('channel')}:{_route_slot(route.get('adapter_slot'))}:{route.get('chat_id')}"
+    return _route_key_for_channel_chat(route.get("channel"), route.get("adapter_slot"), route.get("chat_id"))
+
+
+def _route_key_for_channel_chat(channel: Any, adapter_slot: Any, chat_id: Any) -> str:
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
+    return f"{normalized_channel}:{_route_slot(adapter_slot)}:{normalized_chat_id}"
 
 
 def _notification_loudness_prompt_allowed(route_state: Mapping[str, Any], now: datetime, *, require_online: bool) -> bool:
@@ -474,6 +480,10 @@ def _normalize_text(text: str) -> str:
     for char in ",.;:!?()[]{}\"'":
         normalized = normalized.replace(char, " ")
     return " ".join(normalized.split())
+
+
+def _normalize_channel(channel: Any) -> str:
+    return str(channel or "").strip().casefold()
 
 
 def _normalize_chat_type(chat_type: Any) -> str:

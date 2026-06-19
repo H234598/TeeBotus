@@ -143,6 +143,48 @@ def test_scheduler_stops_online_check_after_notification_loudness_confirmation(t
     assert route_state["checks_stop_reason"] == "confirmed"
 
 
+def test_scheduler_refreshes_route_state_for_legacy_channel_case(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-1", chat_type="private", adapter_slot=1)
+    now = datetime(2026, 6, 15, 10, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "TeLegram:1:chat-1": {
+                "status": "pending",
+                "route_key": "TeLegram:1:chat-1",
+                "route": {
+                    "channel": "TeLegram",
+                    "chat_id": "chat-1",
+                    "chat_type": "Private",
+                    "adapter_slot": 1,
+                },
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.notification_loudness.contact_timing_decision",
+        lambda *_args, **_kwargs: type("Decision", (), {"allowed": True, "reason": "test", "profile": {}})(),
+    )
+
+    due = queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+    outbox = account_store.read_proactive_outbox(account_id)
+    state = account_store.read_agent_state(account_id)
+    route_state = state["notification_loudness"]["routes"]["TeLegram:1:chat-1"]
+
+    assert due == ("1",)
+    assert outbox
+    assert outbox[0]["route"]["channel"] == "telegram"
+    assert route_state["route"]["channel"] == "telegram"
+
+
 def test_scheduler_does_not_online_check_unknown_notification_loudness_routes(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
