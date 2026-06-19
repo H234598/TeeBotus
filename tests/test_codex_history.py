@@ -6,7 +6,13 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from TeeBotus.admin.codex_history import append_codex_history_summary, build_codex_history_report, dispatch_codex_history_outbox, main as codex_history_main
+from TeeBotus.admin.codex_history import (
+    append_codex_history_summary,
+    build_codex_history_report,
+    dispatch_codex_history_outbox,
+    import_codex_session_file,
+    main as codex_history_main,
+)
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
@@ -51,6 +57,32 @@ def make_git_repo(tmp_path: Path, name: str, version: str = "1.2.3") -> Path:
     subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=repo, check=True)
     subprocess.run(["git", "remote", "add", "origin", f"git@example.invalid:{name}.git"], cwd=repo, check=True)
     return repo
+
+
+def write_codex_session(path: Path, *, repo: Path, session_id: str = "sess-1", turn_id: str = "turn-1", final_text: str = "") -> Path:
+    final_text = final_text or "\n".join(
+        [
+            "Watcher import gebaut.",
+            "- Codex-History liest Sessionlogs.",
+            "- Verifiziert mit pytest tests/test_codex_history.py.",
+        ]
+    )
+    rows = [
+        {"type": "session_meta", "timestamp": "2026-06-19T10:00:00+00:00", "payload": {"id": session_id, "cwd": str(repo)}},
+        {"type": "turn_context", "timestamp": "2026-06-19T10:01:00+00:00", "payload": {"turn_id": turn_id, "started_at": "2026-06-19T10:01:00+00:00"}},
+        {
+            "type": "response_item",
+            "timestamp": "2026-06-19T10:03:00+00:00",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": final_text}],
+            },
+        },
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+    return path
 
 
 def test_account_store_persists_codex_history_collections(tmp_path: Path) -> None:
@@ -301,3 +333,82 @@ def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_ite
     dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert dispatch["status"] == "failed"
     assert dispatch["reason"] == "missing_sender:telegram"
+
+
+def test_import_codex_session_file_creates_redacted_deduped_history_item(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-demo", version="2.1.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    fake_key = "sk-" + "svcacct-" + ("b" * 48)
+    session_file = write_codex_session(
+        tmp_path / "sessions" / "rollout-1.jsonl",
+        repo=repo,
+        final_text=f"Watcher import gebaut.\n- pytest tests/test_codex_history.py lief.\n- Secret {fake_key} darf nicht landen.",
+    )
+
+    first = import_codex_session_file(store, session_file)
+    second = import_codex_session_file(store, session_file)
+
+    assert first["status"] == "imported"
+    assert second["status"] == "duplicate"
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 1
+    item = rows[0]
+    assert item["source"] == "codex_session_watcher"
+    assert item["summary_prefix"] == "v2.1.0 #0001"
+    assert item["codex"]["session_id"] == "sess-1"
+    assert item["codex"]["turn_id"] == "turn-1"
+    assert item["codex"]["source_path_hash"].startswith("sha256:")
+    assert item["codex"]["dedupe_key"].startswith("sha256:")
+    assert fake_key not in item["summary"]["markdown"]
+    assert "<redacted:openai-key>" in item["summary"]["markdown"]
+    assert item["summary"]["tests"] == ["pytest tests/test_codex_history.py"]
+
+
+def test_import_codex_session_file_skips_when_no_assistant_final_text(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "empty-session-demo", version="1.0.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    session_file = tmp_path / "sessions" / "empty.jsonl"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text(
+        json.dumps({"type": "session_meta", "payload": {"id": "sess-empty", "cwd": str(repo)}}) + "\n",
+        encoding="utf-8",
+    )
+
+    result = import_codex_session_file(store, session_file)
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "missing_final_text"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "watch-cli-demo", version="3.0.0")
+    sessions_root = tmp_path / "sessions"
+    write_codex_session(sessions_root / "2026" / "06" / "19" / "rollout.jsonl", repo=repo, session_id="sess-cli-watch", turn_id="turn-cli")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--once",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["instances"][0]["status_counts"] == {"imported": 1}
+
+    report = build_codex_history_report(instances_dir=tmp_path, instances=("Depressionsbot",), provider=provider())
+    assert report["totals"]["outbox_items"] == 1
+    latest = report["instances"][0]["codex_history"]["latest_by_repo"][0]
+    assert latest["repo_name"] == "watch-cli-demo"

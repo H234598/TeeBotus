@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from inspect import isawaitable
 from pathlib import Path
+from urllib.parse import urlsplit
 from typing import Any
 
 from TeeBotus import __version__
@@ -41,6 +42,37 @@ _GENERIC_SECRET_ASSIGNMENT_RE = re.compile(
 )
 
 
+def _safe_instance_name(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError("instance name must not be empty")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in text):
+        raise ValueError("instance name contains invalid control characters")
+    if text in {".", ".."} or "/" in text or "\\" in text:
+        raise ValueError("instance name must be a single path segment")
+    return text
+
+
+def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
+    text = str(value)
+    if "\x00" in text:
+        raise ValueError(f"{operation} contains invalid control character")
+    return Path(text).expanduser().resolve()
+
+
+def _safe_output_path(output: str) -> Path:
+    output_path = Path(output).expanduser()
+    root = Path.cwd().resolve()
+    target = (root / output_path).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"output path escapes the working directory: {output}") from exc
+    if output_path.is_absolute():
+        raise ValueError(f"output path must be relative: {output}")
+    return target
+
+
 @dataclass(frozen=True)
 class CodexHistoryReportOptions:
     instances_dir: Path
@@ -65,6 +97,7 @@ def append_codex_history_summary(
     source: str = "manual_cli",
     status: str = "queued",
     target_group: str = CODEX_HISTORY_TARGET_GROUP,
+    codex_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     repo = build_repo_metadata(repo_root)
     version = resolve_repo_version(repo["repo_root"])
@@ -89,6 +122,13 @@ def append_codex_history_summary(
             tests=redacted_tests,
             created_at=timestamp,
         )
+        codex_payload = {
+            "session_id": redact_codex_history_text(session_id).strip(),
+            "cwd": repo["repo_root"],
+            "finished_at": timestamp,
+        }
+        if isinstance(codex_metadata, Mapping):
+            codex_payload.update({str(key): redact_codex_history_text(value).strip() for key, value in codex_metadata.items()})
         item = {
             "id": _unique_history_id(rows),
             "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
@@ -104,11 +144,7 @@ def append_codex_history_summary(
                 "summary_number": summary_number,
                 "summary_prefix": summary_prefix,
             },
-            "codex": {
-                "session_id": redact_codex_history_text(session_id).strip(),
-                "cwd": repo["repo_root"],
-                "finished_at": timestamp,
-            },
+            "codex": codex_payload,
             "summary": {
                 "title": redacted_title,
                 "markdown": markdown,
@@ -212,11 +248,66 @@ async def dispatch_codex_history_outbox(
     }
 
 
+def import_codex_session_file(store: AccountStore, session_file: str | Path) -> dict[str, Any]:
+    path = _safe_repo_root(Path(session_file), operation="session file")
+    parsed = _parse_codex_session_file(path)
+    if not parsed["final_text"]:
+        return {"status": "skipped", "reason": "missing_final_text", "path": str(path)}
+    repo_root = str(parsed["cwd"] or path.parent)
+    final_text = str(parsed["final_text"])
+    final_hash = "sha256:" + hashlib.sha256(final_text.encode("utf-8")).hexdigest()
+    session_id = str(parsed["session_id"] or path.stem)
+    turn_id = str(parsed["turn_id"] or "")
+    dedupe_key = _codex_session_dedupe_key(session_id=session_id, turn_id=turn_id, final_message_hash=final_hash)
+    existing = _find_codex_history_by_dedupe_key(store, dedupe_key)
+    if existing is not None:
+        return {"status": "duplicate", "reason": "dedupe_key", "item": existing, "path": str(path)}
+    title = _codex_session_title(final_text)
+    bullets = _codex_session_bullets(final_text)
+    tests = _codex_session_tests(final_text)
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo_root,
+        title=title,
+        bullets=bullets,
+        tests=tests,
+        session_id=session_id,
+        source="codex_session_watcher",
+        codex_metadata={
+            "turn_id": turn_id,
+            "dedupe_key": dedupe_key,
+            "final_message_hash": final_hash,
+            "source_path_hash": "sha256:" + hashlib.sha256(str(path).encode("utf-8")).hexdigest(),
+            "source_mtime": str(parsed.get("source_mtime") or ""),
+        },
+    )
+    return {"status": "imported", "item": item, "path": str(path)}
+
+
+def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path], *, limit: int = 1000) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    for session_file in _iter_codex_session_files(roots, limit=limit):
+        results.append(import_codex_session_file(store, session_file))
+    return {
+        "ok": not any(result.get("status") == "error" for result in results),
+        "items": results,
+        "status_counts": _status_counts(results),
+    }
+
+
+def default_codex_session_roots() -> tuple[Path, ...]:
+    roots = [Path.home() / ".codex" / "sessions"]
+    agents_root = Path.home() / ".codex-agents"
+    if agents_root.is_dir():
+        roots.extend(path / ".codex" / "sessions" for path in sorted(agents_root.iterdir()) if path.is_dir())
+    return tuple(roots)
+
+
 def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
-    root = Path(repo_root).expanduser().resolve()
+    root = _safe_repo_root(Path(repo_root), operation="repository root")
     git_root = _git_output(root, "rev-parse", "--show-toplevel")
     if git_root:
-        root = Path(git_root).resolve()
+        root = _safe_repo_root(Path(git_root), operation="repository root from git")
     remote_url = _git_output(root, "remote", "get-url", "origin")
     branch = _git_output(root, "rev-parse", "--abbrev-ref", "HEAD")
     head_commit = _git_output(root, "rev-parse", "HEAD")
@@ -236,7 +327,7 @@ def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
 
 
 def resolve_repo_version(repo_root: str | Path) -> dict[str, str]:
-    root = Path(repo_root).expanduser().resolve()
+    root = _safe_repo_root(Path(repo_root), operation="repository root")
     semver = _pyproject_version(root) or _version_file(root) or _git_latest_semver_tag(root) or _teebotus_version(root) or "untagged"
     tag = semver if semver.startswith("v") or semver == "untagged" else f"v{semver}"
     return {"semver": semver.removeprefix("v") if semver != "untagged" else semver, "tag": tag}
@@ -593,6 +684,145 @@ def _iso_timestamp(now: datetime | None = None) -> str:
     return (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
 
 
+def _parse_codex_session_file(path: Path) -> dict[str, Any]:
+    session_id = ""
+    turn_id = ""
+    cwd = ""
+    final_text = ""
+    try:
+        source_mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
+    except OSError:
+        source_mtime = ""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {"session_id": "", "turn_id": "", "cwd": "", "final_text": "", "source_mtime": source_mtime}
+    for raw_line in lines:
+        if not raw_line.strip():
+            continue
+        try:
+            row = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, Mapping):
+            continue
+        payload = row.get("payload", {})
+        if not isinstance(payload, Mapping):
+            payload = {}
+        row_type = str(row.get("type") or payload.get("type") or "").strip()
+        if row_type == "session_meta":
+            session_id = str(payload.get("id") or session_id or "").strip()
+            cwd = str(payload.get("cwd") or cwd or "").strip()
+        elif row_type == "turn_context":
+            turn_id = str(payload.get("turn_id") or turn_id or "").strip()
+        else:
+            cwd = str(payload.get("cwd") or cwd or "").strip()
+        text = _assistant_text_from_codex_payload(payload)
+        if text:
+            final_text = text
+    return {
+        "session_id": session_id,
+        "turn_id": turn_id,
+        "cwd": cwd,
+        "final_text": final_text,
+        "source_mtime": source_mtime,
+    }
+
+
+def _assistant_text_from_codex_payload(payload: Mapping[str, Any]) -> str:
+    role = str(payload.get("role") or "").strip()
+    payload_type = str(payload.get("type") or "").strip()
+    if role != "assistant" and payload_type not in {"message", "response_item"}:
+        return ""
+    if role and role != "assistant":
+        return ""
+    content = payload.get("content")
+    return _text_from_codex_content(content).strip()
+
+
+def _text_from_codex_content(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, Mapping):
+        if isinstance(content.get("text"), str):
+            return str(content["text"])
+        return ""
+    if isinstance(content, Sequence) and not isinstance(content, (str, bytes, bytearray)):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, Mapping):
+                text = item.get("text")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(part for part in parts if part.strip())
+    return ""
+
+
+def _codex_session_dedupe_key(*, session_id: str, turn_id: str, final_message_hash: str) -> str:
+    raw = "\n".join((str(session_id or ""), str(turn_id or ""), str(final_message_hash or "")))
+    return "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _find_codex_history_by_dedupe_key(store: AccountStore, dedupe_key: str) -> dict[str, Any] | None:
+    for item in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID):
+        if not isinstance(item, Mapping):
+            continue
+        codex = item.get("codex", {})
+        if isinstance(codex, Mapping) and str(codex.get("dedupe_key") or "") == dedupe_key:
+            return dict(item)
+    return None
+
+
+def _codex_session_title(final_text: str) -> str:
+    for line in str(final_text or "").splitlines():
+        candidate = line.strip().lstrip("-* ").strip()
+        if candidate:
+            return candidate[:120]
+    return "Codex run summary"
+
+
+def _codex_session_bullets(final_text: str, *, limit: int = 8) -> tuple[str, ...]:
+    bullets: list[str] = []
+    for line in str(final_text or "").splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        if text.startswith(("- ", "* ")):
+            text = text[2:].strip()
+        if text and text not in bullets:
+            bullets.append(text[:240])
+        if len(bullets) >= limit:
+            break
+    return tuple(bullets)
+
+
+def _codex_session_tests(final_text: str) -> tuple[str, ...]:
+    tests: list[str] = []
+    for match in re.finditer(r"\b(?:python3\s+-m\s+pytest|pytest)\s+([A-Za-z0-9_./:\-\[\]]+)", str(final_text or "")):
+        command = match.group(0).strip().rstrip(".,;:")
+        if command not in tests:
+            tests.append(command)
+    return tuple(tests)
+
+
+def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tuple[Path, ...]:
+    files: list[Path] = []
+    for root_value in roots:
+        root = _safe_repo_root(Path(root_value), operation="session root")
+        if root.is_file() and root.suffix == ".jsonl":
+            files.append(root)
+            continue
+        if not root.is_dir():
+            continue
+        files.extend(path for path in root.rglob("*.jsonl") if path.is_file())
+    files = sorted(set(files), key=lambda path: str(path))
+    if limit > 0:
+        files = files[:limit]
+    return tuple(files)
+
+
 def build_codex_history_report(
     *,
     instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
@@ -601,7 +831,7 @@ def build_codex_history_report(
     provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
     options = CodexHistoryReportOptions(
-        instances_dir=Path(instances_dir),
+        instances_dir=_safe_repo_root(Path(instances_dir), operation="instances directory"),
         instances=tuple(instances),
         repo=str(repo or "").strip(),
         provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
@@ -640,10 +870,11 @@ def build_instance_codex_history_report(
     provider: InstanceSecretProvider,
     repo: str = "",
 ) -> dict[str, Any]:
-    accounts_root = instances_dir / instance_name / "data" / "accounts"
+    safe_instance_name = _safe_instance_name(instance_name)
+    accounts_root = instances_dir / safe_instance_name / "data" / "accounts"
     store = AccountStore(
         accounts_root,
-        instance_name,
+        safe_instance_name,
         secret_provider=provider,
         create_dirs=False,
         secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
@@ -673,7 +904,7 @@ def build_instance_codex_history_report(
     codex_history["dispatch_status_counts"] = _status_counts(dispatch_results)
     codex_history["latest_by_repo"] = _latest_by_repo(outbox)
     return {
-        "instance": instance_name,
+        "instance": safe_instance_name,
         "accounts_root": str(accounts_root),
         "accounts_root_exists": accounts_root.exists(),
         "codex_history": codex_history,
@@ -747,77 +978,120 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     dispatch_parser.add_argument("--dry-run", action="store_true")
 
     watch_parser = subparsers.add_parser("watch")
+    watch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    watch_parser.add_argument("--instances", default="")
+    watch_parser.add_argument("--instance", default="")
+    watch_parser.add_argument("--sessions-root", action="append", default=[])
+    watch_parser.add_argument("--limit", type=int, default=1000)
     watch_parser.add_argument("--format", choices=("text", "json"), default="text")
     watch_parser.add_argument("--once", action="store_true")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "append":
-        store = _store_for_instance(Path(args.instances_dir), args.instance, provider)
-        item = append_codex_history_summary(
-            store,
-            repo_root=args.repo_root,
-            title=args.title,
-            bullets=tuple(args.bullet or ()),
-            changed_files=tuple(args.changed_file or ()),
-            tests=tuple(args.test or ()),
-            session_id=args.session_id,
-            source=args.source,
-        )
-        output_payload = {"ok": True, "item": item}
-        output = (
-            json.dumps(output_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-            if args.format == "json"
-            else f"queued {item['summary_prefix']} {item['project']['repo_name']} {item['id']}\n"
-        )
-        _write_or_print(output, args.output)
-        return 0
+        try:
+            store = _store_for_instance(Path(args.instances_dir), args.instance, provider)
+            item = append_codex_history_summary(
+                store,
+                repo_root=args.repo_root,
+                title=args.title,
+                bullets=tuple(args.bullet or ()),
+                changed_files=tuple(args.changed_file or ()),
+                tests=tuple(args.test or ()),
+                session_id=args.session_id,
+                source=args.source,
+            )
+            output_payload = {"ok": True, "item": item}
+            output = (
+                json.dumps(output_payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else f"queued {item['summary_prefix']} {item['project']['repo_name']} {item['id']}\n"
+            )
+            _write_or_print(output, args.output)
+            return 0
+        except (OSError, ValueError) as exc:
+            print(f"append failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "report":
-        report = build_codex_history_report(
-            instances_dir=args.instances_dir,
-            instances=parse_csv(getattr(args, "instances", None)),
-            repo=args.repo,
-            provider=provider,
-        )
-        output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
-        _write_or_print(output, args.output)
-        return 0
+        try:
+            report = build_codex_history_report(
+                instances_dir=args.instances_dir,
+                instances=parse_csv(getattr(args, "instances", None)),
+                repo=args.repo,
+                provider=provider,
+            )
+            output = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else render_text_report(report)
+            _write_or_print(output, args.output)
+            return 0
+        except (OSError, ValueError) as exc:
+            print(f"report failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "dispatch":
-        selected_instances = parse_csv(getattr(args, "instances", None))
-        if args.instance:
-            selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
-        instances_dir = Path(args.instances_dir)
-        dispatch_reports: list[dict[str, Any]] = []
-        selected = discover_instances(instances_dir, selected_instances)
-        sender_factory = None if args.dry_run else _runtime_sender_factory(instances_dir)
-        for instance_name in selected:
-            store = _store_for_instance(instances_dir, instance_name, provider)
-            senders = {} if args.dry_run else dict(sender_factory(instance_name, store))  # type: ignore[operator]
-            dispatch_reports.append(
-                asyncio.run(
-                    dispatch_codex_history_outbox(
-                        store,
-                        instance_name=instance_name,
-                        senders=senders,
-                        dry_run=bool(args.dry_run),
-                        limit=int(args.limit or 0),
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            dispatch_reports: list[dict[str, Any]] = []
+            selected = discover_instances(instances_dir, selected_instances)
+            sender_factory = None if args.dry_run else _runtime_sender_factory(instances_dir)
+            for instance_name in selected:
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                senders = {} if args.dry_run else dict(sender_factory(instance_name, store))  # type: ignore[operator]
+                dispatch_reports.append(
+                    asyncio.run(
+                        dispatch_codex_history_outbox(
+                            store,
+                            instance_name=instance_name,
+                            senders=senders,
+                            dry_run=bool(args.dry_run),
+                            limit=int(args.limit or 0),
+                        )
                     )
                 )
-            )
-        payload = {
-            "ok": not any(not report.get("ok") for report in dispatch_reports),
-            "dry_run": bool(args.dry_run),
-            "instances_dir": str(instances_dir),
-            "instances": dispatch_reports,
-        }
-        output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_dispatch_report(payload)
-        print(output, end="")
-        return 0 if payload["ok"] else 1
+            payload = {
+                "ok": not any(not report.get("ok") for report in dispatch_reports),
+                "dry_run": bool(args.dry_run),
+                "instances_dir": str(instances_dir),
+                "instances": dispatch_reports,
+            }
+            output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_dispatch_report(payload)
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"dispatch failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "watch" and args.once:
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            selected = discover_instances(instances_dir, selected_instances)
+            safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
+            instance_reports: list[dict[str, Any]] = []
+            for instance_name in selected:
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                import_report = import_codex_session_roots(store, safe_roots, limit=int(args.limit or 0))
+                instance_reports.append({"instance": instance_name, **import_report})
+            payload = {
+                "ok": not any(not report.get("ok") for report in instance_reports),
+                "mode": "once",
+                "sessions_roots": [str(root) for root in safe_roots],
+                "instances_dir": str(instances_dir),
+                "instances": instance_reports,
+            }
+            output = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n" if args.format == "json" else _render_watch_report(payload)
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"watch failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "watch":
         payload = {
             "ok": False,
             "status": "not_implemented",
             "command": args.command,
-            "message": "Codex history storage/reporting/dispatch is implemented; watch will be wired in a later phase.",
+            "message": "Use --once for Codex history session import; continuous watching will be wired in a later phase.",
         }
         output = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n" if args.format == "json" else payload["message"] + "\n"
         print(output, end="")
@@ -827,9 +1101,11 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
 
 
 def _store_for_instance(instances_dir: Path, instance_name: str, provider: InstanceSecretProvider | None) -> AccountStore:
+    safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
+    safe_instance_name = _safe_instance_name(instance_name)
     return AccountStore(
-        instances_dir / instance_name / "data" / "accounts",
-        instance_name,
+        safe_instances_dir / safe_instance_name / "data" / "accounts",
+        safe_instance_name,
         secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
         create_dirs=True,
     )
@@ -837,7 +1113,7 @@ def _store_for_instance(instances_dir: Path, instance_name: str, provider: Insta
 
 def _write_or_print(output: str, output_path: str) -> None:
     if output_path:
-        Path(output_path).write_text(output, encoding="utf-8")
+        _safe_output_path(output_path).write_text(output, encoding="utf-8")
     else:
         print(output, end="")
 
@@ -867,6 +1143,33 @@ def _render_dispatch_report(payload: Mapping[str, Any]) -> str:
                 f"account={item.get('account_id', '')} "
                 f"status={item.get('status', '')} "
                 f"reason={item.get('reason', '')}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _render_watch_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Watch", "", f"mode: {payload.get('mode', '')}"]
+    roots = payload.get("sessions_roots", [])
+    if isinstance(roots, Sequence) and not isinstance(roots, (str, bytes, bytearray)):
+        lines.append("sessions_roots: " + ", ".join(str(root) for root in roots))
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        status_counts = instance.get("status_counts", {})
+        if isinstance(status_counts, Mapping):
+            lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
+        for item in instance.get("items", []):
+            if not isinstance(item, Mapping):
+                continue
+            item_payload = item.get("item", {})
+            summary_prefix = item_payload.get("summary_prefix", "") if isinstance(item_payload, Mapping) else ""
+            lines.append(
+                "  import: "
+                f"status={item.get('status', '')} "
+                f"reason={item.get('reason', '')} "
+                f"summary={summary_prefix}"
             )
     return "\n".join(lines) + "\n"
 
@@ -903,15 +1206,19 @@ def _normalize_remote_url(remote_url: str) -> str:
     if not value:
         return ""
     value = value.removesuffix(".git")
-    value = re.sub(r"^git@", "ssh://git@", value)
+    if value.startswith("git@") and "://" not in value and ":" in value:
+        host, _, path = value.removeprefix("git@").partition(":")
+        if host:
+            value = f"ssh://git@{host}/{path}"
     return value.casefold()
 
 
 def _repo_provider(remote_url: str) -> str:
-    value = remote_url.casefold()
-    if "github.com" in value:
+    parsed = urlsplit(remote_url or "")
+    value = (parsed.hostname.casefold() if parsed.hostname else "").strip()
+    if value == "github.com":
         return "github"
-    if value:
+    if value or remote_url.strip():
         return "git"
     return "local"
 
