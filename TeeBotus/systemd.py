@@ -21,7 +21,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print TeeBotus user systemd service.")
     parser.add_argument("--check-env-file", default="", help=argparse.SUPPRESS)
     parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
-    parser.add_argument("--python", default="", help="Python executable. Defaults to .venv/bin/python if present, else python3.")
+    parser.add_argument(
+        "--python",
+        default="",
+        help="Python executable. Defaults to .venv-py313/bin/python if present, then .venv/bin/python, else python3.",
+    )
     parser.add_argument("--service-name", default="teebotus.service", help="User systemd service filename.")
     parser.add_argument("--env-file", default=".env", help="EnvironmentFile path, relative to repo root unless absolute.")
     parser.add_argument("--channels", default=DEFAULT_CHANNELS, help="Comma-separated channels for python -m TeeBotus.")
@@ -127,9 +131,10 @@ def _python_path(repo_root: Path, value: str) -> Path | str:
                 raise ValueError("systemd python executable must not start with a special ExecStart prefix")
             return raw
         return path if path.is_absolute() else (repo_root / path).resolve()
-    venv_python = repo_root / ".venv" / "bin" / "python"
-    if venv_python.exists():
-        return venv_python.resolve()
+    for venv_name in (".venv-py313", ".venv"):
+        venv_python = repo_root / venv_name / "bin" / "python"
+        if venv_python.exists():
+            return venv_python.resolve()
     return Path("python3")
 
 

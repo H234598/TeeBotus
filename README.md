@@ -176,6 +176,8 @@ python3 scripts/setup_python313_runtime.py
 python3 -m TeeBotus.systemd --python .venv-py313/bin/python --print
 ```
 
+Wenn `.venv-py313/bin/python` existiert, verwendet `python3 -m TeeBotus.systemd` diese Runtime automatisch vor `.venv/bin/python` und `python3`, solange kein explizites `--python` gesetzt ist.
+
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 
 ```bash

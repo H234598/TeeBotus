@@ -33,6 +33,21 @@ def test_render_teebotus_systemd_unit_uses_venv_python_when_present(tmp_path: Pa
     assert f"ExecStartPre={venv_python.resolve()} -m TeeBotus.systemd --check-env-file {tmp_path.resolve() / '.env'}" in unit.service_text
 
 
+def test_render_teebotus_systemd_unit_prefers_python313_venv_when_present(tmp_path: Path) -> None:
+    legacy_venv_python = tmp_path / ".venv" / "bin" / "python"
+    legacy_venv_python.parent.mkdir(parents=True)
+    legacy_venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+    py313_venv_python = tmp_path / ".venv-py313" / "bin" / "python"
+    py313_venv_python.parent.mkdir(parents=True)
+    py313_venv_python.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    unit = render_teebotus_systemd_unit(repo_root=tmp_path)
+
+    assert f"ExecStart={py313_venv_python.resolve()} -m TeeBotus --all --channels telegram,signal,matrix" in unit.service_text
+    assert f"ExecStartPre={py313_venv_python.resolve()} -m TeeBotus.systemd --check-env-file {tmp_path.resolve() / '.env'}" in unit.service_text
+    assert str(legacy_venv_python.resolve()) not in unit.service_text
+
+
 def test_render_teebotus_systemd_unit_keeps_bare_python_executable_on_path(tmp_path: Path) -> None:
     unit = render_teebotus_systemd_unit(repo_root=tmp_path, python_executable="python3")
 
