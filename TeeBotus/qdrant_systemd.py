@@ -31,14 +31,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the service after writing.")
     args = parser.parse_args(argv)
 
-    unit = render_qdrant_systemd_unit(
-        image=args.image,
-        container_name=args.container_name,
-        volume_name=args.volume_name,
-        bind_host=args.bind_host,
-        port=args.port,
-        podman=args.podman,
-    )
+    try:
+        unit = render_qdrant_systemd_unit(
+            image=args.image,
+            container_name=args.container_name,
+            volume_name=args.volume_name,
+            bind_host=args.bind_host,
+            port=args.port,
+            podman=args.podman,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.print_only:
         print(f"# {unit.service_name}")
         print(unit.service_text, end="")

@@ -106,6 +106,19 @@ def test_qdrant_systemd_print_mode_outputs_unit(capsys) -> None:
     assert "127.0.0.1:6333:6333" in captured.out
 
 
+def test_qdrant_systemd_cli_reports_invalid_render_options_without_traceback(capsys) -> None:
+    try:
+        main(["--image=-bad:v1", "--print"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("expected invalid image to exit with argparse error")
+
+    captured = capsys.readouterr()
+    assert "Qdrant image must not start with '-'" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_qdrant_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path) -> None:
     calls: list[list[str]] = []
 

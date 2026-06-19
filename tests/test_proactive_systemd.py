@@ -146,11 +146,12 @@ def test_proactive_systemd_rejects_instance_traversal_before_bot_verhalten_looku
 
     try:
         main(["--repo-root", str(tmp_path), "--instances-dir", "instances", "--instance", "../outside", "--print"])
-    except ValueError as exc:
-        assert "single path segment" in str(exc)
+    except SystemExit as exc:
+        assert exc.code == 2
     else:
-        raise AssertionError("expected traversal instance to fail before reading Bot_Verhalten.md")
+        raise AssertionError("expected traversal instance to exit before reading Bot_Verhalten.md")
     captured = capsys.readouterr()
+    assert "single path segment" in captured.err
     assert "--llm-plan" not in captured.out
 
 
@@ -182,6 +183,19 @@ def test_proactive_systemd_print_mode_outputs_both_units(tmp_path, capsys) -> No
     assert "# teebotus-proactive-depressionsbot.service" in captured.out
     assert "# teebotus-proactive-depressionsbot.timer" in captured.out
     assert "--dispatch --plan --tool-plan" in captured.out
+
+
+def test_proactive_systemd_cli_reports_invalid_render_options_without_traceback(tmp_path, capsys) -> None:
+    try:
+        main(["--repo-root", str(tmp_path), "--instances-dir", "instances", "--instance", "../outside", "--print"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("expected invalid instance to exit with argparse error")
+
+    captured = capsys.readouterr()
+    assert "single path segment" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_proactive_systemd_print_mode_reads_llm_planner_from_bot_verhalten(tmp_path, capsys) -> None:

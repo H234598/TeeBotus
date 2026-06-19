@@ -109,6 +109,19 @@ def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> 
     assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in captured.out
 
 
+def test_teebotus_systemd_cli_reports_invalid_render_options_without_traceback(tmp_path: Path, capsys) -> None:
+    try:
+        main(["--repo-root", str(tmp_path), "--channels", "telegram,irc", "--print"])
+    except SystemExit as exc:
+        assert exc.code == 2
+    else:
+        raise AssertionError("expected invalid channels to exit with argparse error")
+
+    captured = capsys.readouterr()
+    assert "unsupported TeeBotus channels" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_teebotus_systemd_env_file_permission_check(tmp_path: Path, capsys) -> None:
     env_file = tmp_path / ".env"
 

@@ -31,14 +31,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_env_file:
         return _check_env_file_permissions(Path(args.check_env_file))
 
-    unit = render_teebotus_systemd_unit(
-        repo_root=Path(args.repo_root),
-        python_executable=args.python,
-        service_name=args.service_name,
-        env_file=args.env_file,
-        channels=args.channels,
-        all_instances=not args.no_all,
-    )
+    try:
+        unit = render_teebotus_systemd_unit(
+            repo_root=Path(args.repo_root),
+            python_executable=args.python,
+            service_name=args.service_name,
+            env_file=args.env_file,
+            channels=args.channels,
+            all_instances=not args.no_all,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.print_only:
         print(f"# {unit.service_name}")
         print(unit.service_text, end="")

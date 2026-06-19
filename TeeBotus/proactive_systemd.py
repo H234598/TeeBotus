@@ -44,21 +44,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the timer after writing.")
     args = parser.parse_args(argv)
     repo_root = Path(args.repo_root)
-    planner = args.planner
-    if planner == "auto":
-        planner = _planner_from_instance_instructions(
+    try:
+        planner = args.planner
+        if planner == "auto":
+            planner = _planner_from_instance_instructions(
+                repo_root=repo_root,
+                instances_dir=args.instances_dir,
+                instance_name=args.instance,
+            )
+        unit = render_proactive_systemd_unit(
             repo_root=repo_root,
             instances_dir=args.instances_dir,
             instance_name=args.instance,
+            interval=args.interval,
+            llm_plan=planner == "llm",
+            tool_plan=planner == "tool",
         )
-    unit = render_proactive_systemd_unit(
-        repo_root=repo_root,
-        instances_dir=args.instances_dir,
-        instance_name=args.instance,
-        interval=args.interval,
-        llm_plan=planner == "llm",
-        tool_plan=planner == "tool",
-    )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.print_only:
         print(f"# {unit.service_name}")
         print(unit.service_text, end="")
