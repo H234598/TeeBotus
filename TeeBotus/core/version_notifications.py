@@ -23,6 +23,7 @@ class VersionNotificationRecipient:
     identity_key: str
     chat_id: int
     adapter_slot: int = 1
+    last_seen_at: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def notify_recent_telegram_users_for_version(
@@ -147,6 +148,7 @@ def recent_telegram_recipients(
                 identity_key=identity_key,
                 chat_id=int(chat_id_text),
                 adapter_slot=route_slot,
+                last_seen_at=last_seen,
             )
         )
     return _deduplicate_telegram_recipients(recipients)
@@ -290,11 +292,27 @@ def _normalize_adapter_slot(value: object, *, default: int = 1) -> int:
 
 
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
-    unique: dict[tuple[str, int, int], VersionNotificationRecipient] = {}
+    unique: dict[tuple[str, int], VersionNotificationRecipient] = {}
     for recipient in sorted(recipients, key=lambda item: item.identity_key):
-        route_key = (recipient.account_id, recipient.chat_id, recipient.adapter_slot)
-        unique.setdefault(route_key, recipient)
+        route_key = (recipient.account_id, recipient.adapter_slot)
+        existing = unique.get(route_key)
+        if existing is None or _recipient_route_preferred(recipient, existing):
+            unique[route_key] = recipient
     return sorted(unique.values(), key=lambda item: item.identity_key)
+
+
+def _recipient_route_preferred(candidate: VersionNotificationRecipient, current: VersionNotificationRecipient) -> bool:
+    if candidate.chat_id == current.chat_id:
+        return _recipient_identity_rank(candidate.identity_key) > _recipient_identity_rank(current.identity_key)
+    return _recipient_freshness_key(candidate) > _recipient_freshness_key(current)
+
+
+def _recipient_freshness_key(recipient: VersionNotificationRecipient) -> tuple[datetime, int, str]:
+    return (recipient.last_seen_at, _recipient_identity_rank(recipient.identity_key), recipient.identity_key)
+
+
+def _recipient_identity_rank(identity_key: str) -> int:
+    return 1 if identity_key.startswith("telegram:user:") else 0
 
 
 def _sent_delivery_matches_recipient(

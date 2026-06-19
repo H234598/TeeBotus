@@ -445,6 +445,42 @@ def test_recent_telegram_recipients_deduplicates_same_account_route(tmp_path: Pa
     ]
 
 
+def test_recent_telegram_recipients_deduplicates_account_slot_to_newest_route(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    identities = store._load_identities()
+    user_payload = dict(identities["telegram:user:111"])
+    user_payload["last_seen_at"] = "2026-06-13T12:00:00+00:00"
+    user_payload["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "111",
+        "chat_type": "private",
+        "adapter_slot": 1,
+    }
+    username_payload = dict(user_payload)
+    username_payload["identity_key"] = "telegram:username:ada"
+    username_payload["last_seen_at"] = "2026-06-14T11:59:00+00:00"
+    username_payload["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "222",
+        "chat_type": "private",
+        "adapter_slot": 1,
+    }
+    identities["telegram:user:111"] = user_payload
+    identities["telegram:username:ada"] = username_payload
+    store._save_identities(identities)
+
+    recipients = recent_telegram_recipients(
+        store,
+        instance_name="Demo",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert [(recipient.identity_key, recipient.account_id, recipient.chat_id) for recipient in recipients] == [
+        ("telegram:username:ada", account_id, 222)
+    ]
+
+
 def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
