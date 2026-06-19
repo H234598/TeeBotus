@@ -538,6 +538,27 @@ def test_codex_history_dispatch_rejects_missing_instance(tmp_path: Path, capsys)
     assert "requested instances not found: NichtVorhanden" in captured.err
 
 
+def test_codex_history_dispatch_rejects_invalid_instance_name(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path, "Depressionsbot")
+
+    result = codex_history_main(
+        [
+            "dispatch",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "../Depressionsbot",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "instance name must be a single path segment" in captured.err
+
+
 def test_normalize_and_classify_remote_urls() -> None:
     assert _normalize_remote_url("git@github.com:Org/Repo.git") == "ssh://git@github.com/org/repo"
     assert _repo_provider("git@github.com:Org/Repo.git") == "github"
