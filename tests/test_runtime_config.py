@@ -106,6 +106,25 @@ def test_openai_key_resolution_supports_indexed_background_keys():
     assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background-b"
 
 
+def test_openai_key_resolution_background_services_prefers_slot_before_list():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES_2": "sk-background-slot",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-single",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "background", 2, env) == "sk-background-slot"
+
+
+def test_openai_key_resolution_background_services_list_beats_single():
+    env = {
+        "OPENAI_API_KEYS_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-a, sk-background-b",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_BACKGROUND_SERVICES": "sk-background-single",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 2, env) == "sk-background-b"
+
+
 def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     env = {
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",

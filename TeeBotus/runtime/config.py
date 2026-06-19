@@ -158,10 +158,12 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
     if channel_token not in BACKGROUND_OPENAI_CHANNELS:
         return ""
     raw_instance = str(instance_name or "").strip()
-    candidates = [
+    slot_candidates = [
         f"{raw_instance}_BACKGROUND_SERVICES_{slot}",
         f"{instance_token}_BACKGROUND_SERVICES_{slot}",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES_{slot}",
+    ]
+    candidates = [
         f"{raw_instance}_BACKGROUND_SERVICES",
         f"{instance_token}_BACKGROUND_SERVICES",
         f"OPENAI_API_KEY_{instance_token}_BACKGROUND_SERVICES",
@@ -169,12 +171,13 @@ def _resolve_background_openai_key(source: Mapping[str, str], instance_name: str
     list_candidates = [
         f"OPENAI_API_KEYS_{instance_token}_BACKGROUND_SERVICES",
     ]
-    if source.get(candidates[0]):
-        return source[candidates[0]]
+    for key in slot_candidates:
+        if source.get(key):
+            return source[key]
     resolved = _resolve_indexed_secret(source.get(list_candidates[0]), slot)
     if resolved:
         return resolved
-    for key in candidates[1:]:
+    for key in candidates:
         if source.get(key):
             return source[key]
     return ""
