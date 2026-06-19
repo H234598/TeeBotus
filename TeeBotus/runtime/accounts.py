@@ -2460,7 +2460,14 @@ class AccountStore:
     def instance_json_state_backend_available(self) -> bool:
         return self._account_memory_collection_backend_available()
 
-    def read_instance_json_state(self, filename: str, collection: str, default: dict[str, Any]) -> dict[str, Any]:
+    def read_instance_json_state(
+        self,
+        filename: str,
+        collection: str,
+        default: dict[str, Any],
+        *,
+        fallback_to_legacy_on_read_error: bool = True,
+    ) -> dict[str, Any]:
         safe_filename = _safe_account_filename(filename)
         collection_name = _safe_collection_name(collection)
         backend = self.account_memory_backend
@@ -2472,9 +2479,15 @@ class AccountStore:
         try:
             rows = [row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)]
         except Exception:
-            if path.exists():
+            if fallback_to_legacy_on_read_error and path.exists():
                 return self._read_legacy_instance_json_state(path, dict(default))
             raise
+        if not fallback_to_legacy_on_read_error:
+            collection_error = str(getattr(backend, "last_collection_read_error", "") or "")
+            collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
+            if collection_error or collection_skipped:
+                detail = collection_error or f"skipped={collection_skipped}"
+                raise AccountStoreError(f"account memory SQL collection {collection_name} could not be read: {detail}")
         data = _merge_json_document_rows(rows, dict(default))
         should_compact = len(rows) > 1
         should_unlink_legacy = False

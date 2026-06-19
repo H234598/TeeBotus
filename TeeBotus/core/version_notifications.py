@@ -775,6 +775,7 @@ def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
                 NOTIFICATION_STATE_FILENAME,
                 NOTIFICATION_STATE_COLLECTION,
                 {"versions": {}},
+                fallback_to_legacy_on_read_error=False,
             )
         )
         if path.exists():

@@ -1966,6 +1966,51 @@ def test_notify_recent_telegram_users_refuses_unrecoverable_corrupt_sqlite_state
     assert sent == []
 
 
+def test_notify_recent_telegram_users_does_not_use_legacy_state_when_sqlite_state_is_unreadable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    fallback_path = tmp_path / "memory.backup.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}},
+    )
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({"versions": {}}), encoding="utf-8")
+    for path in (sqlite_path, fallback_path):
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                """
+                UPDATE account_jsonl_collections
+                SET payload_ciphertext = ?
+                WHERE account_id = ? AND collection = ?
+                """,
+                (b"broken", INSTANCE_STATE_ACCOUNT_ID, "version_notifications"),
+            )
+    sent: list[int] = []
+
+    with pytest.raises(AccountStoreError, match="version_notifications"):
+        notify_recent_telegram_users_for_version(
+            version="1.0.3",
+            instances_dir=tmp_path / "instances",
+            instance_name="Demo",
+            account_store=store,
+            send_message=lambda chat_id, _text: sent.append(chat_id),
+            now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+        )
+
+    assert sent == []
+    assert state_path.exists()
+
+
 def test_notify_recent_telegram_users_ignores_malformed_plaintext_legacy_state_when_sqlite_is_available(
     tmp_path: Path,
     monkeypatch,
