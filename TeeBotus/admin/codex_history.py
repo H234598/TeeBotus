@@ -3815,10 +3815,24 @@ def _codex_history_graph_svg_mmdc(
 
 def _codex_history_graph_mermaid_source(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
     markdown = _codex_history_graph_markdown(items, instance_name=instance_name, repo_filter=repo_filter)
-    match = re.search(r"```mermaid\n(?P<body>.*?)\n```", markdown, re.DOTALL)
-    if not match:
+    lines = markdown.splitlines()
+    in_block = False
+    found_block = False
+    ended_block = False
+    body_lines: list[str] = []
+    for line in lines:
+        if not in_block:
+            if line == "```mermaid":
+                in_block = True
+                found_block = True
+            continue
+        if line.strip() == "```":
+            ended_block = True
+            break
+        body_lines.append(line)
+    if not found_block or not ended_block:
         raise ValueError("codex history graph markdown does not contain a mermaid block")
-    return match.group("body").strip() + "\n"
+    return "\n".join(body_lines).strip() + "\n"
 
 
 def _codex_history_graph_svg(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
