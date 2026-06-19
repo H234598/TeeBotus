@@ -366,6 +366,8 @@ def _sent_delivery_matches_recipient(
     if recipient.identity_key in sent_identities:
         return True
     for identity_key in sent_identities:
+        if _encoded_telegram_user_route_matches_recipient(identity_key, recipient):
+            return True
         payload = identities.get(identity_key)
         if not isinstance(payload, dict):
             continue
@@ -387,6 +389,13 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
         return False
     chat_id = _route_chat_id(route, identity_key)
     return chat_id == recipient.chat_id and route_slot == recipient.adapter_slot
+
+
+def _encoded_telegram_user_route_matches_recipient(identity_key: str, recipient: VersionNotificationRecipient) -> bool:
+    if not identity_key.startswith("telegram:user:"):
+        return False
+    chat_id = _optional_int(identity_key.removeprefix("telegram:user:"))
+    return chat_id == recipient.chat_id and recipient.adapter_slot == 1
 
 
 def _is_permanent_delivery_error(exc: Exception) -> bool:
