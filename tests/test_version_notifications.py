@@ -1049,6 +1049,34 @@ def test_version_notification_state_normalization_drops_empty_telegram_identity_
     assert list(version_state["failed_identities"]) == ["telegram:user:222"]
 
 
+def test_version_notification_state_normalization_drops_control_character_identity_keys() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "sent_identities": ["telegram:user:111\x00bad", "telegram:user:222"],
+                    "failed_identities": {
+                        "telegram:user:111\x00bad": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "reason": "chat not found",
+                        },
+                        "telegram:user:333": {
+                            "adapter_slot": 1,
+                            "chat_id": 333,
+                            "reason": "chat not found",
+                        },
+                    },
+                }
+            }
+        }
+    )
+
+    version_state = state["versions"]["1.0.3"]
+    assert version_state["sent_identities"] == ["telegram:user:222"]
+    assert list(version_state["failed_identities"]) == ["telegram:user:333"]
+
+
 def test_version_notification_state_normalization_keeps_complete_failure_payload() -> None:
     state = _normalize_state(
         {

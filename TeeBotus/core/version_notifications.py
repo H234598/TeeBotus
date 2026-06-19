@@ -603,6 +603,8 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
 
 
 def _is_telegram_identity_key(identity_key: str) -> bool:
+    if any(ord(char) < 32 or ord(char) == 127 for char in identity_key):
+        return False
     return identity_key.startswith("telegram:") and bool(identity_key.removeprefix("telegram:").strip())
 
 
