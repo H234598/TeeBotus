@@ -34,7 +34,11 @@ from TeeBotus.runtime.proactive_agent import (
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
 PROACTIVE_LLM_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_LLM_PLANNER_"
-PROACTIVE_PLAN_OPENAI_CHANNEL = "proactive_plan"
+PROACTIVE_ROLE_OPENAI_CHANNELS = {
+    "plan": "proactive_plan",
+    "decision": "proactive_decision",
+    "worker": "proactive_worker",
+}
 PROACTIVE_LEGACY_OPENAI_CHANNEL = "proactive"
 MATRIX_LAZY_READY_TIMEOUT_SECONDS = 35.0
 LOGGER = logging.getLogger("TeeBotus.proactive")
@@ -124,18 +128,25 @@ def runtime_llm_planner_factory(instances_dir: Path, env: Mapping[str, str] | No
     source = os.environ if env is None else env
 
     def factory(instance_name: str, _store: AccountStore, _account_id: str) -> tuple[Any, Any] | None:
-        key = resolve_openai_key(instance_name, PROACTIVE_PLAN_OPENAI_CHANNEL, 1, source) or resolve_openai_key(
-            instance_name,
-            PROACTIVE_LEGACY_OPENAI_CHANNEL,
-            1,
-            source,
-        )
+        key = resolve_proactive_role_openai_key(instance_name, "plan", source)
         if not key:
             return None
         instructions = load_instructions(instances_dir / instance_name / "Bot_Verhalten.md")
         return OpenAIClient(key), instructions
 
     return factory
+
+
+def resolve_proactive_role_openai_key(instance_name: str, role: str, env: Mapping[str, str] | None = None) -> str:
+    source = os.environ if env is None else env
+    normalized_role = str(role or "").strip().casefold()
+    channel = PROACTIVE_ROLE_OPENAI_CHANNELS.get(normalized_role)
+    if channel is None:
+        raise ValueError(f"unsupported proactive OpenAI role: {role}")
+    key = resolve_openai_key(instance_name, channel, 1, source)
+    if key or normalized_role != "plan":
+        return key
+    return resolve_openai_key(instance_name, PROACTIVE_LEGACY_OPENAI_CHANNEL, 1, source)
 
 
 def runtime_planner_resolver() -> PlannerResolver:

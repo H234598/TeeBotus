@@ -3,7 +3,14 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from TeeBotus.proactive import main, run_proactive_agent_cycle, run_proactive_agent_dry_run, runtime_llm_planner_factory, runtime_sender_factory
+from TeeBotus.proactive import (
+    main,
+    resolve_proactive_role_openai_key,
+    run_proactive_agent_cycle,
+    run_proactive_agent_dry_run,
+    runtime_llm_planner_factory,
+    runtime_sender_factory,
+)
 from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
@@ -700,6 +707,39 @@ def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp
     assert len(account["tool_planning"]["queued_item_ids"]) == 1
     assert account["due_items"][0]["intent"] == "tool_cycle_follow_up"
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
+
+
+def test_resolve_proactive_role_openai_key_keeps_roles_separate() -> None:
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_PLAN": "sk-plan",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "sk-decision",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_WORKER": "sk-worker",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-legacy",
+    }
+
+    assert resolve_proactive_role_openai_key("Depressionsbot", "plan", env) == "sk-plan"
+    assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == "sk-decision"
+    assert resolve_proactive_role_openai_key("Depressionsbot", "worker", env) == "sk-worker"
+
+
+def test_resolve_proactive_role_openai_key_allows_legacy_fallback_only_for_plan() -> None:
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE": "sk-legacy",
+        "Depressionsbot_BACKGROUND_SERVICES": "sk-background",
+    }
+
+    assert resolve_proactive_role_openai_key("Depressionsbot", "plan", env) == "sk-legacy"
+    assert resolve_proactive_role_openai_key("Depressionsbot", "decision", env) == ""
+    assert resolve_proactive_role_openai_key("Depressionsbot", "worker", env) == ""
+
+
+def test_resolve_proactive_role_openai_key_rejects_unknown_role() -> None:
+    try:
+        resolve_proactive_role_openai_key("Depressionsbot", "sender", {})
+    except ValueError as exc:
+        assert "unsupported proactive OpenAI role" in str(exc)
+    else:
+        raise AssertionError("expected unsupported proactive role to fail")
 
 
 def test_runtime_llm_planner_factory_uses_proactive_plan_key_and_instance_instructions(tmp_path, monkeypatch) -> None:
