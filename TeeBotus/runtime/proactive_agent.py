@@ -151,7 +151,7 @@ def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, 
     parts = str(event.text or "").strip().split()
     if not parts or parts[0].casefold() not in PROACTIVE_COMMANDS:
         return None
-    if event.chat_type != "private":
+    if str(event.chat_type or "").strip().casefold() != "private":
         return (SendText(event.chat_id, "Bitte privat.", track=False),)
     if not proactive_agent_instance_enabled(event.instance):
         return (
@@ -903,7 +903,7 @@ def proactive_policy_decision(
 ) -> ProactiveDecision:
     if is_notification_loudness_outbox_item(item):
         route = _item_route(item or {})
-        if route.get("chat_type") != "private":
+        if str(route.get("chat_type") or "").strip().casefold() != "private":
             return ProactiveDecision(False, "invalid_route")
         if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
             return ProactiveDecision(False, "invalid_route")
@@ -2218,33 +2218,37 @@ def select_proactive_route(account_store: AccountStore, account_id: str) -> dict
     routes: list[dict[str, Any]] = []
     for identity in identities:
         route = account_store.get_identity_route(str(identity))
-        if not route or route.get("chat_type") != "private":
+        if not isinstance(route, Mapping) or str(route.get("chat_type") or "").strip().casefold() != "private":
             continue
-        channel = str(route.get("channel") or "").strip()
+        channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
         if not channel or not chat_id:
             continue
         routes.append(dict(route))
     if not routes:
         return None
-    return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel")), 99), -_route_seen_timestamp(route)))[0]
+    return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel") or "").strip().casefold(), 99), -_route_seen_timestamp(route)))[0]
 
 
 def _account_has_matching_proactive_route(account_store: AccountStore, account_id: str, route: Mapping[str, Any]) -> bool:
-    expected_channel = str(route.get("channel") or "").strip()
+    expected_channel = str(route.get("channel") or "").strip().casefold()
     expected_chat_id = str(route.get("chat_id") or "").strip()
-    if not expected_channel or not expected_chat_id or route.get("chat_type") != "private":
+    if (
+        not expected_channel
+        or not expected_chat_id
+        or str(route.get("chat_type") or "").strip().casefold() != "private"
+    ):
         return False
     expected_slot = route.get("adapter_slot")
     for identity_key in account_store.list_identities_for_account(account_id):
         current = account_store.get_identity_route(identity_key)
         if not current:
             continue
-        if str(current.get("channel") or "").strip() != expected_channel:
+        if str(current.get("channel") or "").strip().casefold() != expected_channel:
             continue
         if str(current.get("chat_id") or "").strip() != expected_chat_id:
             continue
-        if current.get("chat_type") != "private":
+        if str(current.get("chat_type") or "").strip().casefold() != "private":
             continue
         if expected_slot is not None and _normalize_route_slot(current.get("adapter_slot")) != _normalize_route_slot(expected_slot):
             continue

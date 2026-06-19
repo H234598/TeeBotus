@@ -915,6 +915,48 @@ def test_proactive_agent_route_matching_uses_normalized_channel_and_chat_type(tm
     assert route["chat_type"] == "private"
 
 
+def test_select_proactive_route_accepts_case_variant_route_fields(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    def fake_get_identity_route(_identity: str) -> dict[str, object]:
+        return {"channel": "Signal", "chat_id": "+491", "chat_type": "Private", "adapter_slot": 1}
+
+    monkeypatch.setattr(account_store, "get_identity_route", fake_get_identity_route)
+
+    route = select_proactive_route(account_store, account_id)
+
+    assert route is not None
+    assert route["channel"] == "Signal"
+    assert route["chat_type"] == "Private"
+
+
+def test_check_proactive_agent_account_allows_uppercase_route_values_in_outbox(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["route"] = {"channel": "Signal", "chat_id": "+491", "chat_type": "Private", "adapter_slot": 1}
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is True
+
+
 def test_proactive_risk_gate_queues_for_human_review_without_dispatch(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
