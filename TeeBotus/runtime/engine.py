@@ -45,6 +45,7 @@ from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchServi
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 from TeeBotus.runtime.state import RuntimeState
+from TeeBotus.runtime.status_auth import evaluate_status_auth_gate
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     handle_tts_voice_model_command,
@@ -149,6 +150,16 @@ class TeeBotusEngine:
         return self.process_result(event).actions
 
     def process_result(self, event: IncomingEvent) -> EngineResult:
+        from TeeBotus.runtime.actions import SendText
+
+        status_auth = evaluate_status_auth_gate(self.account_store, event)
+        if not status_auth.allowed:
+            actions: list[OutgoingAction] = []
+            if status_auth.action_text:
+                actions.append(SendText(event.chat_id, status_auth.action_text, track=False))
+            return EngineResult(status_auth.account_id or event.account_id, actions, handled=True)
+        if status_auth.account_id and status_auth.account_id != event.account_id:
+            event = event.with_account(status_auth.account_id)
         return self._with_notification_loudness_prompt(event, self._process_result_inner(event))
 
     def _process_result_inner(self, event: IncomingEvent) -> EngineResult:
