@@ -63,6 +63,12 @@ STATUS_DISPATCH_RESULTS_FILENAME = "Status_Dispatch_Results.jsonl"
 STATUS_AUTH_STATE_COLLECTION = "status_auth"
 STATUS_OUTBOX_COLLECTION = "status_outbox"
 STATUS_DISPATCH_RESULTS_COLLECTION = "status_dispatch_results"
+CODEX_HISTORY_OUTBOX_FILENAME = "Codex_History_Outbox.jsonl"
+CODEX_HISTORY_DISPATCH_RESULTS_FILENAME = "Codex_History_Dispatch_Results.jsonl"
+CODEX_HISTORY_PROJECTS_FILENAME = "Codex_History_Projects.jsonl"
+CODEX_HISTORY_OUTBOX_COLLECTION = "codex_history_outbox"
+CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION = "codex_history_dispatch_results"
+CODEX_HISTORY_PROJECTS_COLLECTION = "codex_history_projects"
 INSTANCE_MEMORY_STATE_FILENAMES = ("Version_Notifications.json",)
 SECRET_TOOL_COMMAND = "secret-tool"
 SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
@@ -1049,7 +1055,12 @@ class AccountStore:
 
     @property
     def account_memory_vault(self) -> EncryptedJsonVault:
-        return self.vault_for_purpose(ACCOUNT_MEMORY_KEY_PURPOSE)
+        return EncryptedJsonVault(
+            self.instance_name,
+            self.secret_provider,
+            purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+            root=self.root.parent,
+        )
 
     @property
     def account_memory_backend(self) -> Any | None:
@@ -1464,6 +1475,25 @@ class AccountStore:
         account_dir = self.account_dir(account_id)
         account_dir.mkdir(parents=True, exist_ok=True)
         lock_path = account_dir / f".{STATUS_OUTBOX_FILENAME}.lock"
+        with lock_path.open("a+b") as handle:
+            try:
+                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    @contextmanager
+    def codex_history_outbox_lock(self, account_id: str) -> Iterator[None]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        account_dir = self.account_dir(account_id)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = account_dir / f".{CODEX_HISTORY_OUTBOX_FILENAME}.lock"
         with lock_path.open("a+b") as handle:
             try:
                 os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
@@ -2901,6 +2931,86 @@ class AccountStore:
                 created_ids.append(result_id)
             self.write_status_dispatch_results(account_id, rows)
             return tuple(created_ids)
+
+    def read_codex_history_outbox(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION)
+
+    def write_codex_history_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION, list(rows))
+
+    def append_codex_history_item(self, account_id: str, item: dict[str, Any]) -> str:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        with self.codex_history_outbox_lock(account_id):
+            rows = self.read_codex_history_outbox(account_id)
+            normalized = dict(item)
+            item_id = str(normalized.get("id") or f"hist_{uuid.uuid4().hex}").strip()
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            while not item_id or item_id in existing_ids:
+                item_id = f"hist_{uuid.uuid4().hex}"
+            timestamp = utc_now()
+            normalized["id"] = item_id
+            normalized.setdefault("schema_version", 1)
+            normalized.setdefault("created_at", timestamp)
+            normalized.setdefault("updated_at", normalized["created_at"])
+            normalized.setdefault("kind", "codex_run_summary")
+            normalized.setdefault("status", "queued")
+            rows.append(normalized)
+            self.write_codex_history_outbox(account_id, rows)
+            return item_id
+
+    def read_codex_history_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(
+            account_id,
+            CODEX_HISTORY_DISPATCH_RESULTS_FILENAME,
+            CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION,
+        )
+
+    def write_codex_history_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(
+            account_id,
+            CODEX_HISTORY_DISPATCH_RESULTS_FILENAME,
+            CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION,
+            list(rows),
+        )
+
+    def append_codex_history_dispatch_result(self, account_id: str, result: dict[str, Any]) -> str:
+        return self.append_codex_history_dispatch_results(account_id, [result])[0]
+
+    def append_codex_history_dispatch_results(self, account_id: str, results: Iterable[dict[str, Any]]) -> tuple[str, ...]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        normalized_results = [dict(result) for result in results if isinstance(result, dict)]
+        if not normalized_results:
+            return ()
+        with self.codex_history_outbox_lock(account_id):
+            rows = self.read_codex_history_dispatch_results(account_id)
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            timestamp = utc_now()
+            created_ids: list[str] = []
+            for result in normalized_results:
+                result_id = str(result.get("id") or f"chdisp_{uuid.uuid4().hex}").strip()
+                while not result_id or result_id in existing_ids:
+                    result_id = f"chdisp_{uuid.uuid4().hex}"
+                result["id"] = result_id
+                result.setdefault("schema_version", 1)
+                result.setdefault("created_at", timestamp)
+                result.setdefault("updated_at", result["created_at"])
+                rows.append(result)
+                existing_ids.add(result_id)
+                created_ids.append(result_id)
+            self.write_codex_history_dispatch_results(account_id, rows)
+            return tuple(created_ids)
+
+    def read_codex_history_projects(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(account_id, CODEX_HISTORY_PROJECTS_FILENAME, CODEX_HISTORY_PROJECTS_COLLECTION)
+
+    def write_codex_history_projects(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(account_id, CODEX_HISTORY_PROJECTS_FILENAME, CODEX_HISTORY_PROJECTS_COLLECTION, list(rows))
 
     def read_account_text(self, account_id: str, filename: str) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")

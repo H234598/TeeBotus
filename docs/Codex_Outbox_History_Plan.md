@@ -2,6 +2,27 @@
 
 Datum: 2026-06-19
 
+## Implementierungsstand
+
+Stand: 2026-06-19
+
+Umgesetzt:
+
+- Phase 1 Datenmodell: `codex_history_outbox`, `codex_history_dispatch_results` und `codex_history_projects` sind als eigene AccountStore-Collections mit JSONL-Fallback angebunden.
+- Instanzweiter Speicher nutzt den technischen `INSTANCE_STATE_ACCOUNT_ID`, nicht User-Memory.
+- History-Summaries bleiben append-only und starten mit `status=queued`.
+- Summary-Nummern laufen pro Repo und verwenden `v<semver> #0001` als Praefix.
+- Repo-Metadaten enthalten `repo_id`, Name, Root, Remote, Provider, Branch, Head-Commit und Dirty-Status.
+- Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
+- CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
+- Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
+
+Offen:
+
+- `codex-history dispatch` verschickt noch nicht; die CLI-Kante existiert erst als expliziter Platzhalter.
+- `codex-history watch` liest noch keine Codex-Sessionlogs; Dedupe, Fleet-Pfade und systemd-User-Service fehlen noch.
+- Status/Applet-Integration, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
+
 ## Kurzantwort
 
 Ja, das koennen wir so bauen.

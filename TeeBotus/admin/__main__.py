@@ -25,6 +25,12 @@ def main(argv: list[str] | None = None) -> int:
         except ModuleNotFoundError as exc:
             return _dependency_error(args[1:], exc)
         return module.main(args[1:])
+    if args[0] == "codex-history":
+        try:
+            module = importlib.import_module("TeeBotus.admin.codex_history")
+        except ModuleNotFoundError as exc:
+            return _dependency_error(args[1:], exc)
+        return module.main(args[1:])
     try:
         module = importlib.import_module("TeeBotus.admin.accounts_report")
     except ModuleNotFoundError as exc:
@@ -33,12 +39,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _print_usage(stream) -> None:  # noqa: ANN001
-    print("Usage: python -m TeeBotus.admin {accounts|memory-recovery|status-auth} ...", file=stream)
+    print("Usage: python -m TeeBotus.admin {accounts|memory-recovery|status-auth|codex-history} ...", file=stream)
     print("", file=stream)
     print("Admin areas:", file=stream)
     print("  accounts         Account-store report commands", file=stream)
     print("  memory-recovery  Account-memory recovery report and quarantine commands", file=stream)
     print("  status-auth      Status-auth recipients, summaries, and dispatch report", file=stream)
+    print("  codex-history    Codex run history outbox and project reports", file=stream)
 
 
 def _dependency_error(args: list[str], exc: ModuleNotFoundError) -> int:
