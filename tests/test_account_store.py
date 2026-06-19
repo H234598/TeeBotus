@@ -1511,6 +1511,48 @@ def test_account_store_sqlite_backend_uses_valid_created_at_when_updated_at_is_i
     assert rows[0]["created_at"] == "2026-06-15T09:00:00+00:00"
 
 
+def test_account_jsonl_collection_keeps_merged_rows_when_verify_read_reports_diagnostics(tmp_path):
+    class DiagnosticAfterWriteBackend:
+        def __init__(self) -> None:
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+            self.rows = [{"id": "pro_sql", "message_text": "SQL", "status": "queued"}]
+            self.read_count = 0
+            self.written_rows: list[dict[str, object]] = []
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            self.read_count += 1
+            if self.read_count == 1:
+                self.last_collection_read_error = ""
+                self.last_collection_skipped = 0
+                return [dict(row) for row in self.rows]
+            self.last_collection_read_error = "payload could not be decrypted"
+            self.last_collection_skipped = 1
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, rows: list[dict[str, object]]) -> None:
+            self.written_rows = [dict(row) for row in rows]
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = DiagnosticAfterWriteBackend()
+    store._account_memory_backend = backend
+    legacy_path = store.account_dir(account_id) / "Proactive_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "pro_legacy", "message_text": "Legacy", "status": "queued"}],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [
+        {"id": "pro_sql", "message_text": "SQL", "status": "queued"},
+        {"id": "pro_legacy", "message_text": "Legacy", "status": "queued"},
+    ]
+    assert backend.written_rows == rows
+    assert legacy_path.exists()
+
+
 def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

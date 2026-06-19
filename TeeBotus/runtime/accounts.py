@@ -2624,7 +2624,7 @@ class AccountStore:
                     rows = list(read_collection(account_id, collection))
                     detail = self._collection_read_diagnostic_error(backend)
                     if detail:
-                        return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+                        return merged_rows
                 self._unlink_migrated_account_file(path)
             return rows
         return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
