@@ -420,6 +420,15 @@ def test_signal_account_resolution_accepts_single_plus_numbered_slots():
     assert resolve_signal_accounts("Depressionsbot", env) == (("127.0.0.1:8080", "+491"), ("127.0.0.1:8081", "+492"))
 
 
+def test_signal_account_resolution_accepts_mixed_slot_one_shorthand():
+    env = {
+        "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
+        "SIGNAL_BOT_PHONE_NUMBER_DEPRESSIONSBOT_1": "+491",
+    }
+
+    assert resolve_signal_accounts("Depressionsbot", env) == (("127.0.0.1:8080", "+491"),)
+
+
 def test_signal_account_resolution_rejects_numbered_slot_mismatch():
     env = {
         "SIGNAL_BOT_SERVICE_DEPRESSIONSBOT": "127.0.0.1:8080",
@@ -545,6 +554,18 @@ def test_matrix_account_resolution_allows_single_device_id_with_plural_required_
     assert resolve_matrix_accounts("Depressionsbot", env) == (
         ("https://matrix-a.example", "@a:example", "token-a", "dev-a"),
         ("https://matrix-b.example", "@b:example", "token-b", ""),
+    )
+
+
+def test_matrix_account_resolution_accepts_mixed_slot_one_required_shorthand():
+    env = {
+        "MATRIX_BOT_HOMESERVER_DEPRESSIONSBOT": "https://matrix-a.example",
+        "MATRIX_BOT_USER_ID_DEPRESSIONSBOT_1": "@a:example",
+        "MATRIX_BOT_ACCESS_TOKEN_DEPRESSIONSBOT_1": "token-a",
+    }
+
+    assert resolve_matrix_accounts("Depressionsbot", env) == (
+        ("https://matrix-a.example", "@a:example", "token-a", ""),
     )
 
 

@@ -380,8 +380,6 @@ def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = 
     base_phones = parse_slot_csv(source.get(f"SIGNAL_BOT_PHONE_NUMBERS_{token}"), label=f"SIGNAL_BOT_PHONE_NUMBERS_{token}")
     single_service = source.get(f"SIGNAL_BOT_SERVICE_{token}", "").strip()
     single_phone = source.get(f"SIGNAL_BOT_PHONE_NUMBER_{token}", "").strip()
-    if bool(single_service) != bool(single_phone):
-        raise RuntimeConfigError(f"Signal single service/phone must be configured together for instance {instance_name}")
     services = _merge_numbered_values(
         source,
         (*base_services, single_service),
@@ -418,8 +416,6 @@ def resolve_matrix_accounts(instance_name: str, env: Mapping[str, str] | None = 
     single_access_token = source.get(f"MATRIX_BOT_ACCESS_TOKEN_{token}", "").strip()
     single_device_id = source.get(f"MATRIX_BOT_DEVICE_ID_{token}", "").strip()
     required_singles = (single_homeserver, single_user_id, single_access_token)
-    if any(required_singles) and not all(required_singles):
-        raise RuntimeConfigError(f"Matrix single homeserver/user/access_token must be configured together for instance {instance_name}")
     homeservers = _merge_numbered_values(
         source,
         (*base_homeservers, single_homeserver),
