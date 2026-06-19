@@ -1157,8 +1157,8 @@ async def dispatch_due_proactive_outbox_items(
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
             continue
-        sender = senders.get(channel)
-        if sender is None:
+        sender = _sender_for_channel(senders, channel)
+        if sender is _SENDER_NOT_FOUND:
             update_proactive_outbox_item_status(
                 account_store,
                 account_id,
@@ -1169,6 +1169,18 @@ async def dispatch_due_proactive_outbox_items(
                 expected_status="queued",
             )
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_sender", channel))
+            continue
+        if not callable(sender):
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="failed",
+                reason="invalid_sender",
+                now=resolved_now,
+                expected_status="queued",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_sender", channel))
             continue
         message_text = str(item.get("message_text") or "").strip()
         if not message_text:
@@ -1221,6 +1233,31 @@ async def dispatch_due_proactive_outbox_items(
         )
         results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
     return tuple(results)
+
+
+_SENDER_NOT_FOUND = object()
+
+
+def _sender_for_channel(senders: Mapping[str, ProactiveSender] | object, channel: str) -> Any | object:
+    normalized_channel = str(channel or "").strip().casefold()
+    try:
+        sender = senders.get(normalized_channel)
+    except Exception:
+        if not isinstance(senders, Mapping):
+            return _SENDER_NOT_FOUND
+        sender = _SENDER_NOT_FOUND
+    else:
+        if sender is not None:
+            return sender
+        if not isinstance(senders, Mapping):
+            return _SENDER_NOT_FOUND
+        sender = _SENDER_NOT_FOUND
+    if isinstance(senders, Mapping):
+        for sender_channel, sender_value in senders.items():
+            if str(sender_channel or "").strip().casefold() == normalized_channel:
+                sender = sender_value
+                break
+    return sender
 
 
 def _current_due_proactive_outbox_item(
