@@ -2379,6 +2379,21 @@ def test_github_repo_url_strips_ssh_remote_query_and_fragment(tmp_path: Path, mo
     assert leaked_token not in repo_url
 
 
+def test_github_repo_url_strips_scp_like_remote_query_and_fragment(tmp_path: Path, monkeypatch) -> None:
+    leaked_token = "github_pat_" + "C" * 24
+
+    class Result:
+        returncode = 0
+        stdout = f"git@github.com:H234598/TeeBotus.git?token={leaked_token}#{leaked_token}\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    repo_url = github_repo_url(tmp_path)
+
+    assert repo_url == "https://github.com/H234598/TeeBotus"
+    assert leaked_token not in repo_url
+
+
 def test_github_repo_url_normalizes_ssh_remote_with_port(tmp_path: Path, monkeypatch) -> None:
     class Result:
         returncode = 0
@@ -2423,6 +2438,32 @@ def test_github_repo_url_uses_default_for_invalid_remote_port(tmp_path: Path, mo
     monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
 
     assert github_repo_url(tmp_path) == "https://github.com/H234598/TeeBotus"
+
+
+def test_github_repo_url_uses_default_for_path_traversal_remote(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "https://github.com/../private.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    repo_url = github_repo_url(tmp_path)
+
+    assert repo_url == "https://github.com/H234598/TeeBotus"
+    assert ".." not in repo_url
+
+
+def test_github_repo_url_uses_default_for_encoded_control_remote(tmp_path: Path, monkeypatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "https://github.com/H234598/TeeBotus%0AInjected.git\n"
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.subprocess.run", lambda *args, **kwargs: Result())
+
+    repo_url = github_repo_url(tmp_path)
+
+    assert repo_url == "https://github.com/H234598/TeeBotus"
+    assert "%0A" not in repo_url
 
 
 def test_version_notification_text_strips_repo_url_credentials() -> None:

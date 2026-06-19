@@ -230,6 +230,12 @@ def _normalize_github_url(value: str) -> str:
         path_parts = [part for part in parsed.path.split("/") if part]
         if len(path_parts) < 2:
             return ""
+        owner = path_parts[0]
+        repo = path_parts[1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+        if not _valid_github_path_part(owner) or not _valid_github_path_part(repo):
+            return ""
         netloc = parsed.hostname
         try:
             port = parsed.port
@@ -237,12 +243,16 @@ def _normalize_github_url(value: str) -> str:
             return ""
         if port is not None and parsed.scheme in {"http", "https"}:
             netloc = f"{netloc}:{port}"
-        raw = urlunsplit(("https", netloc, "/" + "/".join(path_parts[:2]), "", ""))
+        raw = urlunsplit(("https", netloc, f"/{owner}/{repo}", "", ""))
     else:
         return ""
-    if raw.endswith(".git"):
-        raw = raw[:-4]
     return raw
+
+
+def _valid_github_path_part(value: str) -> bool:
+    if not value or value in {".", ".."}:
+        return False
+    return all(char.isascii() and (char.isalnum() or char in "._-") for char in value)
 
 
 def _memory_signal_text(account_store: AccountStore, account_id: str) -> str:
