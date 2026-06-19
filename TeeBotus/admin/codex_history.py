@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import html
 import json
 import os
 import re
@@ -740,6 +741,7 @@ def export_codex_history_graph_doc(
     repo: str = "",
     limit: int = 0,
     overwrite: bool = True,
+    svg: bool = False,
 ) -> dict[str, Any]:
     safe_instance_name = _safe_instance_name(instance_name)
     safe_instance_dir = _safe_repo_root(Path(instance_dir), operation="instance directory")
@@ -757,24 +759,35 @@ def export_codex_history_graph_doc(
     graph_dir.mkdir(parents=True, exist_ok=True)
     filename = "codex_history_graph.md" if not str(repo or "").strip() else f"codex_history_graph_{_safe_filename_component(repo, default='repo')}.md"
     target = (graph_dir / filename).resolve()
+    exported = 0
+    skipped = 0
+    reason = ""
     if target.exists() and not overwrite:
-        return {
-            "ok": True,
-            "instance": safe_instance_name,
-            "path": str(target),
-            "exported": 0,
-            "skipped": 1,
-            "reason": "exists",
-            "repo_count": _codex_history_graph_repo_count(items),
-            "item_count": len(items),
-        }
-    target.write_text(_codex_history_graph_markdown(items, instance_name=safe_instance_name, repo_filter=repo), encoding="utf-8")
+        skipped = 1
+        reason = "exists"
+    else:
+        target.write_text(_codex_history_graph_markdown(items, instance_name=safe_instance_name, repo_filter=repo), encoding="utf-8")
+        exported = 1
+    svg_exported = 0
+    svg_skipped = 0
+    svg_target = target.with_suffix(".svg")
+    if svg:
+        if svg_target.exists() and not overwrite:
+            svg_skipped = 1
+        else:
+            svg_target.write_text(_codex_history_graph_svg(items, instance_name=safe_instance_name, repo_filter=repo), encoding="utf-8")
+            svg_exported = 1
     return {
         "ok": True,
         "instance": safe_instance_name,
         "path": str(target),
-        "exported": 1,
-        "skipped": 0,
+        "exported": exported,
+        "skipped": skipped,
+        "reason": reason,
+        "svg": bool(svg),
+        "svg_path": str(svg_target) if svg else "",
+        "svg_exported": svg_exported,
+        "svg_skipped": svg_skipped,
         "repo_count": _codex_history_graph_repo_count(items),
         "item_count": len(items),
     }
@@ -1135,6 +1148,7 @@ def run_codex_history_index(
     qdrant_dry_run: bool = False,
     qdrant_ensure: bool = False,
     graph: bool = False,
+    graph_svg: bool = False,
     categorize: bool = False,
     categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
     categorize_dry_run: bool = False,
@@ -1190,6 +1204,7 @@ def run_codex_history_index(
             repo=repo,
             limit=limit,
             overwrite=overwrite,
+            svg=graph_svg,
         )
     ensure_results: list[dict[str, Any]] = []
     qdrant_results: list[dict[str, Any]] = []
@@ -2120,6 +2135,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     graph_export_parser.add_argument("--limit", type=int, default=0)
     graph_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     graph_export_parser.add_argument("--no-overwrite", action="store_true")
+    graph_export_parser.add_argument("--svg", action="store_true", help="Also export a dependency-free SVG graph image.")
 
     strategic_analysis_parser = subparsers.add_parser("strategic-analysis")
     strategic_analysis_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
@@ -2145,6 +2161,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--qdrant-dry-run", action="store_true")
     index_parser.add_argument("--qdrant-ensure", action="store_true")
     index_parser.add_argument("--graph", action="store_true")
+    index_parser.add_argument("--graph-svg", action="store_true")
     index_parser.add_argument("--categorize", action="store_true")
     index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
     index_parser.add_argument("--categorize-dry-run", action="store_true")
@@ -2334,6 +2351,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         repo=args.repo,
                         limit=int(args.limit or 0),
                         overwrite=not bool(args.no_overwrite),
+                        svg=bool(args.svg),
                     )
                 )
             payload = {
@@ -2343,6 +2361,8 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 "totals": {
                     "exported": sum(int(report.get("exported") or 0) for report in reports),
                     "skipped": sum(int(report.get("skipped") or 0) for report in reports),
+                    "svg_exported": sum(int(report.get("svg_exported") or 0) for report in reports),
+                    "svg_skipped": sum(int(report.get("svg_skipped") or 0) for report in reports),
                     "repos": sum(int(report.get("repo_count") or 0) for report in reports),
                     "items": sum(int(report.get("item_count") or 0) for report in reports),
                 },
@@ -2421,6 +2441,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         qdrant_dry_run=bool(args.qdrant_dry_run),
                         qdrant_ensure=bool(args.qdrant_ensure),
                         graph=bool(args.graph),
+                        graph_svg=bool(args.graph_svg),
                         categorize=bool(args.categorize),
                         categorize_profile=args.categorize_profile,
                         categorize_dry_run=bool(args.categorize_dry_run),
@@ -2739,6 +2760,7 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "exported": 0,
         "skipped": 0,
         "graph_files": 0,
+        "graph_svg_files": 0,
         "graph_items": 0,
         "strategy_reports": 0,
         "strategy_analyzed": 0,
@@ -2759,6 +2781,7 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         graph = report.get("graph", {})
         if isinstance(graph, Mapping):
             totals["graph_files"] += int(graph.get("exported") or 0)
+            totals["graph_svg_files"] += int(graph.get("svg_exported") or 0)
             totals["graph_items"] += int(graph.get("item_count") or 0)
         strategy = report.get("strategic_analysis", {})
         if isinstance(strategy, Mapping):
@@ -2888,6 +2911,8 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
     if isinstance(totals, Mapping):
         lines.append(f"exported: {totals.get('exported', 0)}")
         lines.append(f"skipped: {totals.get('skipped', 0)}")
+        lines.append(f"svg_exported: {totals.get('svg_exported', 0)}")
+        lines.append(f"svg_skipped: {totals.get('svg_skipped', 0)}")
         lines.append(f"repos: {totals.get('repos', 0)}")
         lines.append(f"items: {totals.get('items', 0)}")
     for instance in payload.get("instances", []) or []:
@@ -2896,7 +2921,10 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
         lines.append("")
         lines.append(f"Instance: {instance.get('instance', '')}")
         lines.append(f"  path: {instance.get('path', '')}")
+        if instance.get("svg_path"):
+            lines.append(f"  svg_path: {instance.get('svg_path', '')}")
         lines.append(f"  exported: {instance.get('exported', 0)}")
+        lines.append(f"  svg_exported: {instance.get('svg_exported', 0)}")
         lines.append(f"  skipped: {instance.get('skipped', 0)}")
         lines.append(f"  repos: {instance.get('repo_count', 0)}")
         lines.append(f"  items: {instance.get('item_count', 0)}")
@@ -2935,6 +2963,7 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"exported: {totals.get('exported', 0)}")
         lines.append(f"skipped: {totals.get('skipped', 0)}")
         lines.append(f"graph_files: {totals.get('graph_files', 0)}")
+        lines.append(f"graph_svg_files: {totals.get('graph_svg_files', 0)}")
         lines.append(f"graph_items: {totals.get('graph_items', 0)}")
         lines.append(f"strategy_reports: {totals.get('strategy_reports', 0)}")
         lines.append(f"strategy_analyzed: {totals.get('strategy_analyzed', 0)}")
@@ -2974,6 +3003,7 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
             lines.append(
                 "  graph: "
                 f"path={graph.get('path', '')} "
+                f"svg_path={graph.get('svg_path', '')} "
                 f"repos={graph.get('repo_count', 0)} "
                 f"items={graph.get('item_count', 0)}"
             )
@@ -3430,6 +3460,93 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
         ]
     )
     return "\n".join(lines)
+
+
+def _codex_history_graph_svg(items: Sequence[Mapping[str, Any]], *, instance_name: str, repo_filter: str = "") -> str:
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for item in items:
+        project = item.get("project", {}) if isinstance(item, Mapping) else {}
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_name = str(project.get("repo_name") or "project").strip() or "project"
+        grouped.setdefault(repo_name, []).append(item)
+    repo_rows = [(repo, sorted(rows, key=_summary_sort_key)[-8:]) for repo, rows in sorted(grouped.items(), key=lambda entry: entry[0].casefold())]
+    width = 1400
+    row_height = 132
+    height = 180 + max(1, len(repo_rows)) * row_height
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img" aria-label="TeeBotus Codex History Graph">',
+        "<style>",
+        "text{font-family:Inter,Arial,sans-serif;fill:#111827}",
+        ".title{font-size:28px;font-weight:700}",
+        ".meta{font-size:14px;fill:#4b5563}",
+        ".repo{font-size:18px;font-weight:700}",
+        ".small{font-size:12px;fill:#374151}",
+        ".card{fill:#ecfdf5;stroke:#059669;stroke-width:1.2}",
+        ".repoBox{fill:#dbeafe;stroke:#2563eb;stroke-width:1.2}",
+        ".pill{fill:#f3e8ff;stroke:#7c3aed;stroke-width:1}",
+        ".status{fill:#fef3c7;stroke:#d97706;stroke-width:1}",
+        "</style>",
+        '<rect x="0" y="0" width="1400" height="' + str(height) + '" fill="#f9fafb"/>',
+        f'<text class="title" x="36" y="48">{_svg_text("TeeBotus Codex-History")}</text>',
+        f'<text class="meta" x="36" y="76">Instanz: {_svg_text(instance_name)} | Repo-Filter: {_svg_text(repo_filter or "<alle>")} | Repos: {len(repo_rows)} | Summaries: {len(items)}</text>',
+        '<text class="meta" x="36" y="102">Admin-only. Nicht in normale Nutzerbibliotheken freigeben.</text>',
+    ]
+    if not repo_rows:
+        lines.extend(
+            [
+                '<rect class="repoBox" x="36" y="132" width="1328" height="72" rx="8"/>',
+                '<text class="repo" x="60" y="176">Keine indexierbaren Codex-History-Eintraege</text>',
+            ]
+        )
+    for repo_index, (repo_name, rows) in enumerate(repo_rows):
+        y = 132 + repo_index * row_height
+        lines.append(f'<rect class="repoBox" x="36" y="{y}" width="250" height="92" rx="8"/>')
+        lines.append(f'<text class="repo" x="56" y="{y + 32}">{_svg_text(_truncate(repo_name, 28))}</text>')
+        lines.append(f'<text class="small" x="56" y="{y + 56}">{len(rows)} letzte Summaries</text>')
+        card_width = 126
+        gap = 12
+        for item_index, item in enumerate(rows):
+            x = 314 + item_index * (card_width + gap)
+            if x + card_width > width - 36:
+                break
+            summary = item.get("summary", {})
+            if not isinstance(summary, Mapping):
+                summary = {}
+            title = _truncate(str(summary.get("title") or "Codex run summary"), 18)
+            prefix = _truncate(str(item.get("summary_prefix") or ""), 16)
+            status = _truncate(str(item.get("status") or "unknown"), 14)
+            category = _truncate(_first_graph_category(item), 18)
+            lines.append(f'<rect class="card" x="{x}" y="{y}" width="{card_width}" height="92" rx="8"/>')
+            lines.append(f'<text class="small" x="{x + 10}" y="{y + 22}">{_svg_text(prefix)}</text>')
+            lines.append(f'<text class="small" x="{x + 10}" y="{y + 44}">{_svg_text(title)}</text>')
+            lines.append(f'<rect class="status" x="{x + 10}" y="{y + 56}" width="{card_width - 20}" height="18" rx="9"/>')
+            lines.append(f'<text class="small" x="{x + 18}" y="{y + 69}">{_svg_text(status)}</text>')
+            lines.append(f'<text class="small" x="{x + 10}" y="{y + 88}">{_svg_text(category)}</text>')
+            if item_index > 0:
+                prev_x = x - gap
+                lines.append(f'<line x1="{prev_x}" y1="{y + 46}" x2="{x}" y2="{y + 46}" stroke="#059669" stroke-width="1.4"/>')
+    lines.append("</svg>")
+    return "\n".join(lines) + "\n"
+
+
+def _first_graph_category(item: Mapping[str, Any]) -> str:
+    for category in _codex_history_bibliothekar_categories(item):
+        if category.startswith(("change-", "risk-", "impact-", "work-", "codex-strategy")):
+            return category
+    return "project-history"
+
+
+def _svg_text(value: object) -> str:
+    return html.escape(redact_codex_history_text(value).strip(), quote=True)
+
+
+def _truncate(value: str, max_length: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= max_length:
+        return text
+    return text[: max(3, max_length - 3)].rstrip() + "..."
 
 
 def _codex_history_graph_category_nodes(item: Mapping[str, Any], *, repo_index: int, item_index: int) -> list[tuple[str, str]]:

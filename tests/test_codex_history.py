@@ -462,6 +462,7 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
         store,
         instance_dir=instance_dir,
         instance_name="Depressionsbot",
+        svg=True,
     )
 
     assert result["ok"] is True
@@ -475,6 +476,13 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert "flowchart LR" in graph_text
     assert "Admin-only TeeBotus Codex-History-Graph" in graph_text
     assert "Graph Export" in graph_text
+    assert result["svg_exported"] == 1
+    svg_path = Path(result["svg_path"])
+    assert svg_path.suffix == ".svg"
+    svg_text = svg_path.read_text(encoding="utf-8")
+    assert "<svg" in svg_text
+    assert "TeeBotus Codex-History" in svg_text
+    assert "Graph Export" in svg_text
     assert not (instance_dir / "data" / "Bibliothek").exists()
 
 
@@ -552,6 +560,7 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
         instance_name="Depressionsbot",
         categorize=True,
         graph=True,
+        graph_svg=True,
         categorizer=lambda _item: {"categories": ["work-benchmark", "change-performance"]},
         strategic_analysis=True,
         strategist=lambda _items: {"recommendations": ["Graph und Strategie in einem Batch pruefen."]},
@@ -562,6 +571,7 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
     assert result["strategic_analysis"]["analyzed"] == 1
     assert result["export"]["exported"] == 2
     assert result["graph"]["exported"] == 1
+    assert result["graph"]["svg_exported"] == 1
     # The strategy report is created before export, so the same batch exports both docs.
     assert len(result["export"]["files"]) == 2
     exported_texts = [Path(file["path"]).read_text(encoding="utf-8") for file in result["export"]["files"]]
