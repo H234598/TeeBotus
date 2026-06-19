@@ -1354,6 +1354,21 @@ def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collectio
     assert payload["health"]["total_problem_count"] == 1
 
 
+def test_cinnamon_applet_qdrant_status_redacts_invalid_url_secrets() -> None:
+    secret_url = "https://user:plainpass@example.test/path?api_key=plain-secret#access_token=fragment-secret"
+
+    status = cinnamon_applet._qdrant_status(secret_url)
+
+    rendered = json.dumps(status, sort_keys=True)
+    assert status["error"] == "invalid local qdrant url"
+    assert status["collections"] == {}
+    assert "plainpass" not in rendered
+    assert "plain-secret" not in rendered
+    assert "fragment-secret" not in rendered
+    assert status["url"].startswith("https://<redacted>@example.test/path")
+    assert "api_key=<redacted>" in status["url"]
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
     class FakeResponse:
         status = 200

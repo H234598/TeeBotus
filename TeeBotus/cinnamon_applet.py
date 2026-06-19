@@ -458,7 +458,7 @@ def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
 def _qdrant_status(url: str) -> dict[str, Any]:
     target = _safe_local_qdrant_url(url)
     if not target:
-        return {"url": str(url or ""), "collections": {}, "error": "invalid local qdrant url"}
+        return {"url": _redact(str(url or "")), "collections": {}, "error": "invalid local qdrant url"}
     collections: dict[str, Any] = {}
     errors: list[str] = []
     for collection in (QDRANT_USER_MEMORY_COLLECTION, QDRANT_BIBLIOTHEKAR_COLLECTION):
