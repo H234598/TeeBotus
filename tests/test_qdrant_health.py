@@ -126,3 +126,25 @@ def test_check_qdrant_health_reports_invalid_as_nonfatal_fallback() -> None:
     assert health.status == "invalid"
     assert "local" in health.error
     assert "fallback=keyword_memory_search" in format_qdrant_status_line(health)
+
+
+def test_format_qdrant_status_line_handles_malformed_invalid_targets() -> None:
+    malformed = check_qdrant_health("http://[::1")
+    bad_port = check_qdrant_health("http://127.0.0.1:99999")
+
+    malformed_line = format_qdrant_status_line(malformed)
+    bad_port_line = format_qdrant_status_line(bad_port)
+
+    assert malformed.status == "invalid"
+    assert bad_port.status == "invalid"
+    assert malformed_line.startswith("qdrant=[::1 status=invalid fallback=keyword_memory_search")
+    assert bad_port_line.startswith("qdrant=127.0.0.1 status=invalid fallback=keyword_memory_search")
+
+
+def test_format_qdrant_status_line_redacts_invalid_target_credentials() -> None:
+    health = check_qdrant_health("http://user:plain-secret@127.0.0.1:6333")
+    line = format_qdrant_status_line(health)
+
+    assert health.status == "invalid"
+    assert "plain-secret" not in line
+    assert line.startswith("qdrant=127.0.0.1:6333 status=invalid fallback=keyword_memory_search")

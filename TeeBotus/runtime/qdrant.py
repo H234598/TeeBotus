@@ -92,12 +92,32 @@ def resolve_qdrant_url(value: object | None = None, *, env: Mapping[str, str] | 
 
 
 def qdrant_display_target(target: str) -> str:
-    parsed = urlparse(target)
-    host = parsed.hostname or target
-    port = f":{parsed.port}" if parsed.port is not None else ""
+    raw = str(target or "").strip()
+    try:
+        parsed = urlparse(raw)
+    except ValueError:
+        return _fallback_qdrant_display_target(raw)
+    host = parsed.hostname
+    if not host:
+        return _fallback_qdrant_display_target(raw)
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        parsed_port = None
+    port = f":{parsed_port}" if parsed_port is not None else ""
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
     return f"{host}{port}"
+
+
+def _fallback_qdrant_display_target(raw: str) -> str:
+    text = str(raw or "").strip()
+    if "://" in text:
+        text = text.split("://", 1)[1]
+    text = text.split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+    if "@" in text:
+        text = "<redacted>@" + text.rsplit("@", 1)[1]
+    return text or "invalid"
 
 
 def check_qdrant_health(
