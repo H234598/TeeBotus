@@ -379,6 +379,8 @@ def _sent_delivery_matches_recipient(
         payload = identities.get(identity_key)
         if not isinstance(payload, dict):
             continue
+        if str(payload.get("account_id") or "") == recipient.account_id:
+            return True
         if _identity_route_matches_recipient(identity_key, payload, recipient):
             return True
     return False

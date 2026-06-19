@@ -2033,6 +2033,74 @@ def test_notify_recent_telegram_users_skips_sent_account_across_identity_alias(t
     assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:username:ada"]
 
 
+def test_notify_recent_telegram_users_skips_sent_account_after_route_change(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Ada")
+    identities = store._load_identities()
+    username_payload = dict(identities["telegram:user:111"])
+    username_payload["identity_key"] = "telegram:username:ada"
+    username_payload["account_id"] = account_id
+    identities["telegram:username:ada"] = username_payload
+    store._save_identities(identities)
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:username:ada", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    identities = store._load_identities()
+    identities["telegram:user:111"]["last_seen_at"] = "2026-06-13T12:00:00+00:00"
+    identities["telegram:username:ada"]["last_seen_at"] = "2026-06-14T11:59:00+00:00"
+    store._save_identities(identities)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"], "failed_identities": {}}}}),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert attempts == []
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:username:ada"]
+
+
+def test_notify_recent_telegram_users_does_not_skip_sent_different_account_on_different_route(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    sent_account_id = store.resolve_or_create_account("telegram:user:111", display_label="Already Sent")
+    current_account_id = store.resolve_or_create_account("telegram:user:222", display_label="Current")
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="111", chat_type="private", adapter_slot=1)
+    store.update_identity_route("telegram:user:222", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    state_path = tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json"
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
+        json.dumps({"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"], "failed_identities": {}}}}),
+        encoding="utf-8",
+    )
+    attempts: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: attempts.append(chat_id),
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert attempts == [222]
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111", "telegram:user:222"]
+    assert sent_account_id != current_account_id
+
+
 def test_notify_recent_telegram_users_skips_stale_sent_user_identity_key_by_route(tmp_path: Path) -> None:
     store = _store(tmp_path)
     account_id = store.resolve_or_create_account("telegram:username:ada", display_label="Ada")
