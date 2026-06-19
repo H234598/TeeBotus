@@ -115,11 +115,15 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
     source = os.environ if env is None else env
     explicit = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCES", "TELEGRAM_BOT_INSTANCES")
     if explicit:
-        selected = parse_config_list(explicit, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
-        if _selected_instances_requests_discovery(selected):
+        raw_selected = parse_config_list(explicit, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
+        if _selected_instances_requests_discovery(raw_selected):
             return _discover_selected_instances(instances_dir)
-        if _selected_instances_contains_discovery_token(selected):
+        if _selected_instances_contains_discovery_token(raw_selected):
             raise RuntimeConfigError("TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES cannot combine all/auto with explicit instance names")
+        selected = tuple(
+            _validate_instance_name_segment(name, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
+            for name in raw_selected
+        )
         if selected:
             return _validate_unique_values(selected, label="TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES")
     single = _first_nonempty_env_value(source, "TEEBOTUS_INSTANCE", "TELEGRAM_BOT_INSTANCE")
@@ -130,7 +134,7 @@ def resolve_selected_instances(instances_dir: Path, env: Mapping[str, str] | Non
                 "use TEEBOTUS_INSTANCES/TELEGRAM_BOT_INSTANCES for multiple instances"
             )
         if single.casefold() not in {"all", "auto"}:
-            return (single,)
+            return (_validate_instance_name_segment(single, label="TEEBOTUS_INSTANCE/TELEGRAM_BOT_INSTANCE"),)
     return _discover_selected_instances(instances_dir)
 
 
@@ -152,6 +156,23 @@ def _discover_selected_instances(instances_dir: Path) -> tuple[str, ...]:
             if path.is_dir() and (path / "Bot_Verhalten.md").exists()
         )
     )
+
+
+def _validate_instance_name_segment(name: str, *, label: str) -> str:
+    value = str(name or "").strip()
+    if not value:
+        raise RuntimeConfigError(f"empty instance name in {label}")
+    path = Path(value)
+    if (
+        value in {".", ".."}
+        or path.is_absolute()
+        or path.name != value
+        or "/" in value
+        or "\\" in value
+        or "\0" in value
+    ):
+        raise RuntimeConfigError(f"invalid instance name in {label}: {value}; instance names must be folder names, not paths")
+    return value
 
 
 def _first_nonempty_env_value(source: Mapping[str, str], *keys: str) -> str:

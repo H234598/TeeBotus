@@ -521,6 +521,26 @@ def test_selected_instances_reject_duplicate_names(tmp_path: Path):
         resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "Depressionsbot,Depressionsbot"})
 
 
+def test_selected_instances_reject_path_like_explicit_names(tmp_path: Path):
+    invalid_values = (
+        "../escape",
+        "Demo/Nested",
+        "/tmp/evil",
+        ".",
+        "..",
+        "Demo\\Nested",
+    )
+
+    for value in invalid_values:
+        with pytest.raises(RuntimeConfigError, match="instance names must be folder names"):
+            resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCE": value})
+
+
+def test_plural_selected_instances_reject_path_like_explicit_names(tmp_path: Path):
+    with pytest.raises(RuntimeConfigError, match="instance names must be folder names"):
+        resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCES": "Depressionsbot,../escape"})
+
+
 def test_single_instance_alias_rejects_comma_separated_values(tmp_path: Path):
     with pytest.raises(RuntimeConfigError, match="accepts one instance only"):
         resolve_selected_instances(tmp_path, {"TEEBOTUS_INSTANCE": "Depressionsbot,Bote_der_Wahrheit"})
