@@ -127,7 +127,7 @@ def recent_telegram_recipients(
         if not account_id or last_seen is None or last_seen < threshold:
             continue
         route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
-        route_channel = str(route.get("channel") or "telegram").strip().casefold()
+        route_channel = _route_channel(route)
         route_chat_type = str(route.get("chat_type") or "").strip().casefold()
         route_slot = _route_adapter_slot(route)
         if route_slot is None:
@@ -302,6 +302,13 @@ def _route_adapter_slot(route: dict[str, Any]) -> int | None:
     return _optional_positive_int(value)
 
 
+def _route_channel(route: dict[str, Any]) -> str | None:
+    if "channel" not in route:
+        return "telegram"
+    text = str(route.get("channel") or "").strip().casefold()
+    return text or None
+
+
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
     unique_by_account_slot: dict[tuple[str, int], VersionNotificationRecipient] = {}
     for recipient in sorted(recipients, key=lambda item: item.identity_key):
@@ -350,7 +357,7 @@ def _sent_delivery_matches_recipient(
 
 def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any], recipient: VersionNotificationRecipient) -> bool:
     route = payload.get("last_route") if isinstance(payload.get("last_route"), dict) else {}
-    route_channel = str(route.get("channel") or "telegram").strip().casefold()
+    route_channel = _route_channel(route)
     if route_channel != "telegram":
         return False
     route_chat_type = str(route.get("chat_type") or "").strip().casefold()
