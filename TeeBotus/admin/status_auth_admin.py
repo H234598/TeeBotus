@@ -115,8 +115,9 @@ def _safe_output_path(output: str) -> Path:
 def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_json: bool) -> None:
     output = _build_status_auth_report_output(report, as_json=as_json)
     safe_output = redact_status_text(output)
-    with output_path.open("w", encoding="utf-8") as handle:
-        handle.write(safe_output)
+    data = safe_output.encode("utf-8")
+    with output_path.open("wb") as handle:
+        os.write(handle.fileno(), data)
 
 
 def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -> str:
