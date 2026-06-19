@@ -758,6 +758,11 @@ TeeBotusApplet.prototype = {
         let quoteIndex = i + 1;
         while (quoteIndex < text.length) {
           indexes[quoteIndex] = true;
+          if (text.charAt(quoteIndex) === "\\" && quoteIndex + 1 < text.length) {
+            indexes[quoteIndex + 1] = true;
+            quoteIndex += 2;
+            continue;
+          }
           if (quoteIndex > i + 1 && text.charAt(quoteIndex) === quote) {
             break;
           }

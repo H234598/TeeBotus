@@ -604,6 +604,10 @@ def _quoted_character_indexes(text: str) -> set[int]:
             quote_index = index + 1
             while quote_index < len(text):
                 quoted.add(quote_index)
+                if text[quote_index] == "\\" and quote_index + 1 < len(text):
+                    quoted.add(quote_index + 1)
+                    quote_index += 2
+                    continue
                 if quote_index > index + 1 and text[quote_index] == quote:
                     break
                 quote_index += 1

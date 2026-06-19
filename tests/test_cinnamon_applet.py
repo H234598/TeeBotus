@@ -923,6 +923,8 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
         account_memory_recovery=Demo status=needed command="python tool.py --note status=broken warning=fake" apply_command="python tool.py --apply"
         account_memory=Demo/single note='status=broken warning=fake' status=ok
         account_memory=Demo/backtick note=`warning=fake` status=ok warning=real
+        account_memory=Demo/escaped path="/tmp/\\" status=broken warning=fake" status=ok warning=real
+        account_memory=Demo/escaped-single note='it\\'s status=broken warning=fake' status=ok warning=real
         """
     )
 
@@ -931,6 +933,8 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
     recovery_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][2])
     single_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][3])
     backtick_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][4])
+    escaped_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][5])
+    escaped_single_fields = cinnamon_applet._parse_status_fields(parsed["sections"]["Tools und Account-Memory"][6])
 
     assert path_fields["path"] == '"/tmp/status=broken warning=fake"'
     assert path_fields["status"] == "ok"
@@ -943,12 +947,18 @@ def test_cinnamon_applet_runtime_parser_ignores_fields_inside_quotes() -> None:
     assert single_fields["status"] == "ok"
     assert backtick_fields["note"] == "`warning=fake`"
     assert backtick_fields["warning"] == "real"
-    assert parsed["status_counts"]["ok"] == 4
+    assert escaped_fields["path"] == '"/tmp/\\" status=broken warning=fake"'
+    assert escaped_fields["status"] == "ok"
+    assert escaped_fields["warning"] == "real"
+    assert escaped_single_fields["note"] == "'it\\'s status=broken warning=fake'"
+    assert escaped_single_fields["status"] == "ok"
+    assert escaped_single_fields["warning"] == "real"
+    assert parsed["status_counts"]["ok"] == 6
     assert parsed["status_counts"]["needed"] == 1
-    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["status_counts"]["warning"] == 4
     assert "broken" not in parsed["status_counts"]
-    assert parsed["summary"]["problem_status_count"] == 3
-    assert parsed["summary"]["problem_statuses"] == "needed:1,warning:2"
+    assert parsed["summary"]["problem_status_count"] == 5
+    assert parsed["summary"]["problem_statuses"] == "needed:1,warning:4"
 
 
 def test_cinnamon_applet_runtime_parser_keeps_apostrophes_in_free_text_neutral() -> None:
