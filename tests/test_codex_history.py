@@ -9,6 +9,7 @@ from pathlib import Path
 from TeeBotus.admin.codex_history import (
     _normalize_remote_url,
     _repo_provider,
+    acknowledge_codex_history_item,
     append_codex_history_summary,
     build_codex_history_report,
     dispatch_codex_history_outbox,
@@ -361,6 +362,69 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp
     assert dispatch["account_id"] == admin_id
     assert dispatch["status"] == "accepted"
     assert dispatch["message_ref"] == "telegram-msg-1"
+
+
+def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path, capsys) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "ack-demo", version="1.8.1")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    item = append_codex_history_summary(store, repo_root=repo, title="Ack gebaut", bullets=["Bestaetigung wird auditierbar."])
+
+    acknowledged = acknowledge_codex_history_item(
+        store,
+        item["id"],
+        instance_name="Depressionsbot",
+        account_id="acc-admin",
+        message_ref="telegram-msg-1",
+        now=datetime(2026, 6, 19, 12, 30, tzinfo=timezone.utc),
+    )
+
+    assert acknowledged["ok"] is True
+    assert acknowledged["item_id"] == item["id"]
+    assert acknowledged["status"] == "acknowledged"
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "acknowledged"
+    assert persisted["delivery"]["acknowledged_at"] == "2026-06-19T12:30:00+00:00"
+    assert persisted["status_history"][-1] == {
+        "at": "2026-06-19T12:30:00+00:00",
+        "status": "acknowledged",
+        "reason": "manual_acknowledgement",
+    }
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["codex_history_item_id"] == item["id"]
+    assert dispatch["account_id"] == "acc-admin"
+    assert dispatch["status"] == "acknowledged"
+    assert dispatch["reason"] == "manual_acknowledgement"
+    assert dispatch["message_ref"] == "telegram-msg-1"
+
+    assert (
+        codex_history_main(
+            [
+                "acknowledge",
+                "--instances-dir",
+                str(tmp_path),
+                "--instance",
+                "Depressionsbot",
+                "--item-id",
+                item["id"],
+                "--account-id",
+                "acc-admin",
+                "--message-ref",
+                "telegram-msg-2",
+                "--format",
+                "json",
+            ],
+            provider=provider(),
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["status"] == "acknowledged"
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "acknowledged"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[-1]["message_ref"] == "telegram-msg-2"
 
 
 def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -> None:

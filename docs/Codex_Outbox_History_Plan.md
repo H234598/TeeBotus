@@ -16,6 +16,7 @@ Umgesetzt:
 - Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
 - CLI Phase 2 teilweise: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
 - Phase 4 Dispatcher teilweise: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
+- Phase 4 Ack-Basis teilweise: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result; echte Messenger-Reply-Hooks/Receipts sind noch separat.
 - Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
 - Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen; der systemd-User-Service `teebotus-codex-history.service` wird ueber `teebotus-codex-history-systemd` erzeugt und pollt restart-getrieben mit `Restart=always`/`RestartSec`, damit pro Runde alle Instanzen gescannt werden.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
@@ -25,7 +26,7 @@ Umgesetzt:
 
 Offen:
 
-- Delivery-Receipts/`delivered` und aktive Bestaetigung/`acknowledged` sind noch nicht angebunden.
+- Delivery-Receipts/`delivered` und automatische Reply-/Messenger-Bestaetigung fuer `acknowledged` sind noch nicht angebunden.
 - Filesystem-Events statt restart-getriebenem Polling sind noch nicht umgesetzt.
 - Tieferer grafischer Applet-Drilldown, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
@@ -461,6 +462,12 @@ python3 -m TeeBotus.admin codex-history watch
 - markiert `sent/accepted/failed`
 - loescht nie
 - schreibt Dispatch-Results
+
+Stand 2026-06-19:
+
+- `codex-history dispatch` markiert Transportannahme als `accepted` und schreibt Dispatch-Results.
+- `codex-history acknowledge --item-id ...` kann aktive Bestaetigung manuell/administrativ setzen, ohne die Summary zu loeschen.
+- Offen: echte Kanal-Receipts fuer `delivered` und ein Messenger-/Reply-Hook, der Admin-Bestaetigungen automatisch auf `acknowledged` mappt.
 
 ### Phase 5: Applet/Status
 

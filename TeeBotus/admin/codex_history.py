@@ -274,6 +274,49 @@ async def dispatch_codex_history_outbox(
     }
 
 
+def acknowledge_codex_history_item(
+    store: AccountStore,
+    item_id: str,
+    *,
+    instance_name: str,
+    account_id: str = "",
+    message_ref: str = "",
+    now: datetime | None = None,
+    reason: str = "manual_acknowledgement",
+) -> dict[str, Any]:
+    timestamp = _iso_timestamp(now)
+    normalized_item_id = str(item_id or "").strip()
+    if not normalized_item_id:
+        return {"ok": False, "status": "not_found", "item_id": "", "reason": "missing_item_id"}
+    item = _find_codex_history_item_by_id(store, normalized_item_id)
+    if item is None:
+        return {"ok": False, "status": "not_found", "item_id": normalized_item_id, "reason": "missing_item"}
+    dispatch_result = _record_codex_history_dispatch_result(
+        store,
+        item,
+        str(account_id or "").strip(),
+        status="acknowledged",
+        reason=reason,
+        now=timestamp,
+        instance_name=instance_name,
+        message_ref=message_ref,
+    )
+    _update_codex_history_item_status(
+        store,
+        normalized_item_id,
+        "acknowledged",
+        reason=reason,
+        now=timestamp,
+        dispatch_results=[dispatch_result],
+    )
+    return {
+        "ok": True,
+        "status": "acknowledged",
+        "item_id": normalized_item_id,
+        "dispatch_result": dispatch_result,
+    }
+
+
 def import_codex_session_file(store: AccountStore, session_file: str | Path) -> dict[str, Any]:
     path = _safe_repo_root(Path(session_file), operation="session file")
     parsed = _parse_codex_session_file(path)
@@ -706,6 +749,8 @@ def _update_codex_history_item_status(
             if normalized_status == "accepted":
                 delivery.setdefault("sent_at", now)
                 delivery["accepted_at"] = now
+            if normalized_status == "acknowledged":
+                delivery["acknowledged_at"] = now
             if normalized_reason:
                 item["last_reason"] = normalized_reason
             if dispatch_results:
@@ -830,6 +875,15 @@ def _find_codex_history_by_dedupe_key(store: AccountStore, dedupe_key: str) -> d
             continue
         codex = item.get("codex", {})
         if isinstance(codex, Mapping) and str(codex.get("dedupe_key") or "") == dedupe_key:
+            return dict(item)
+    return None
+
+
+def _find_codex_history_item_by_id(store: AccountStore, item_id: str) -> dict[str, Any] | None:
+    for item in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID):
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("id") or "").strip() == str(item_id or "").strip():
             return dict(item)
     return None
 
@@ -1069,6 +1123,14 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     dispatch_parser.add_argument("--format", choices=("text", "json"), default="text")
     dispatch_parser.add_argument("--dry-run", action="store_true")
 
+    acknowledge_parser = subparsers.add_parser("acknowledge")
+    acknowledge_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    acknowledge_parser.add_argument("--instance", required=True)
+    acknowledge_parser.add_argument("--item-id", required=True)
+    acknowledge_parser.add_argument("--account-id", default="")
+    acknowledge_parser.add_argument("--message-ref", default="")
+    acknowledge_parser.add_argument("--format", choices=("text", "json"), default="text")
+
     watch_parser = subparsers.add_parser("watch")
     watch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     watch_parser.add_argument("--instances", default="")
@@ -1155,6 +1217,26 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0 if payload["ok"] else 1
         except (OSError, ValueError) as exc:
             print(f"dispatch failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "acknowledge":
+        try:
+            store = _store_for_instance(Path(args.instances_dir), args.instance, provider)
+            payload = acknowledge_codex_history_item(
+                store,
+                args.item_id,
+                instance_name=args.instance,
+                account_id=args.account_id,
+                message_ref=args.message_ref,
+            )
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_acknowledge_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload.get("ok") else 1
+        except (OSError, ValueError) as exc:
+            print(f"acknowledge failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "watch" and args.once:
         try:
@@ -1302,6 +1384,16 @@ def _render_dispatch_report(payload: Mapping[str, Any]) -> str:
                 f"reason={item.get('reason', '')}"
             )
     return "\n".join(lines) + "\n"
+
+
+def _render_acknowledge_report(payload: Mapping[str, Any]) -> str:
+    status = str(payload.get("status") or "unknown")
+    item_id = str(payload.get("item_id") or "")
+    reason = str(payload.get("reason") or "")
+    line = f"acknowledge {status} {item_id}".strip()
+    if reason:
+        line += f" reason={reason}"
+    return line + "\n"
 
 
 def _render_watch_report(payload: Mapping[str, Any]) -> str:
