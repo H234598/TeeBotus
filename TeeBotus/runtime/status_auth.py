@@ -27,6 +27,10 @@ class StatusAuthGateResult:
     reason: str = ""
 
 
+def _normalize_status_auth_state(state: Any) -> dict[str, Any]:
+    return dict(state) if isinstance(state, Mapping) else {}
+
+
 def status_auth_codes(*, instance_name: str = "", env: Mapping[str, str] | None = None) -> tuple[str, ...]:
     source = os.environ if env is None else env
     codes: list[str] = []
@@ -62,7 +66,7 @@ def status_auth_state_authorized(account_store: AccountStore, account_id: str) -
     if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
         return False
     try:
-        state = account_store.read_status_auth_state(account_id)
+        state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
         return False
     return bool(state.get("authorized") is True)
@@ -114,7 +118,7 @@ def authorize_status_recipient(
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     try:
-        current = account_store.read_status_auth_state(account_id)
+        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
         current = {}
     state = dict(current)

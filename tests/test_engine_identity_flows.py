@@ -13,6 +13,7 @@ from TeeBotus.llm.capabilities import GEMINI_INTERACTIONS_CAPABILITIES, LITELLM_
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
+from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.qdrant import QdrantError
@@ -111,6 +112,26 @@ def test_status_auth_gate_silences_user_until_code_seen(tmp_path, monkeypatch):
     help_actions = engine.process(event(identity, "/help"))
     assert help_actions
     assert "Befehle" in help_actions[0].text
+
+
+def test_status_auth_state_authorized_tolerates_non_mapping_state(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    monkeypatch.setattr(account_store, "read_status_auth_state", lambda _account_id: [])
+
+    assert status_auth_state_authorized(account_store, account_id) is False
+
+
+def test_authorize_status_recipient_overwrites_non_mapping_state(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setattr(account_store, "read_status_auth_state", lambda _account_id: [])
+
+    state = authorize_status_recipient(account_store, account_id, event(identity, "Statuszugang aktivieren"))
+
+    assert state.get("authorized") is True
+    assert account_store.read_status_auth_state(account_id).get("authorized") is True
 
 
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):

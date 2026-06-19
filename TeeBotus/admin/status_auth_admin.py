@@ -193,6 +193,8 @@ def _build_account_status_auth_report(store: AccountStore, account_id: str) -> d
             "outbox_items": 0,
             "dispatch_results": 0,
         }
+    if not isinstance(state, Mapping):
+        state = {}
     authorized = bool(state.get("authorized") is True)
     if not authorized and not outbox and not dispatch_results:
         return None

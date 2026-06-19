@@ -277,6 +277,33 @@ def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path
     assert account_report["route_error"] == "AccountStoreError:route lookup failed"
 
 
+def test_status_auth_report_handles_non_mapping_state(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    store.append_status_outbox_item(
+        account_id,
+        {
+            "kind": "runtime_status_summary",
+            "summary_number": 1,
+            "summary_prefix": "v1.0.0 #0001",
+            "status": "sent",
+            "message_text": "release",
+        },
+    )
+
+    monkeypatch.setattr(store, "read_status_auth_state", lambda _account_id: [])
+
+    report = build_status_auth_report(instances_dir=tmp_path, provider=provider())
+
+    status_auth = report["instances"][0]["status_auth"]
+    assert status_auth["authorized_accounts"] == 0
+    assert status_auth["outbox_items"] == 1
+    assert len(status_auth["accounts"]) == 1
+    assert status_auth["accounts"][0]["account_id"] == account_id
+    assert status_auth["accounts"][0]["authorized"] is False
+
+
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
