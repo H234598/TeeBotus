@@ -155,7 +155,7 @@ def recent_telegram_recipients(
 
 
 def build_version_notification_text(*, version: str, repo_url: str = DEFAULT_REPO_URL, memory_text: str = "") -> str:
-    display_version = _normalize_version_key(version) or str(version or "").strip()
+    display_version = _normalize_version_key(version) or _inline_text(version) or "unbekannt"
     safe_repo_url = _normalize_github_url(repo_url) or DEFAULT_REPO_URL
     return "\n".join(
         [

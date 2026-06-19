@@ -2566,6 +2566,12 @@ def test_version_notification_text_keeps_version_on_one_line() -> None:
     assert "\nRepo: https://evil.example" not in text
 
 
+def test_version_notification_text_sanitizes_empty_version_fallback() -> None:
+    text = build_version_notification_text(version="\x00")
+
+    assert "\x00" not in text
+
+
 def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
 
