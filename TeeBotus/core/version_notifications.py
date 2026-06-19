@@ -59,6 +59,7 @@ def notify_recent_telegram_users_for_version(
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
+    historical_failed_identities = _historical_failed_identity_map(state, normalized_version)
     version_state["failed_identities"] = failed_identities
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
@@ -72,8 +73,12 @@ def notify_recent_telegram_users_for_version(
                 _write_state_incrementally(account_store, state_path, state)
             continue
         matched_failure = _matched_failed_delivery(failed_identities, recipient, identities)
+        historical_failure = False
+        if matched_failure is None:
+            matched_failure = _matched_failed_delivery(historical_failed_identities, recipient, identities)
+            historical_failure = matched_failure is not None
         if matched_failure is not None:
-            if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure):
+            if _record_skipped_failed_delivery(failed_identities, recipient, matched_failure, force_record=historical_failure):
                 _sync_version_delivery_state(version_state, sent_identities, failed_identities, resolved_now)
                 _write_state_incrementally(account_store, state_path, state)
             continue
@@ -496,10 +501,12 @@ def _record_skipped_failed_delivery(
     failed_identities: dict[str, object],
     recipient: VersionNotificationRecipient,
     matched_failure: tuple[str, dict[str, object]],
+    *,
+    force_record: bool = False,
 ) -> bool:
     previous_failures = dict(failed_identities)
     matched_identity, source_failure = matched_failure
-    if matched_identity == recipient.identity_key:
+    if matched_identity == recipient.identity_key and not force_record:
         return False
     canonical_failure: dict[str, object] = {
         "account_id": recipient.account_id,
@@ -519,6 +526,19 @@ def _record_skipped_failed_delivery(
     if normalized_failure:
         failed_identities[recipient.identity_key] = normalized_failure
     return failed_identities != previous_failures
+
+
+def _historical_failed_identity_map(state: dict[str, Any], current_version: str) -> dict[str, object]:
+    versions = state.get("versions")
+    if not isinstance(versions, dict):
+        return {}
+    merged: dict[str, Any] = {}
+    for version_key, version_state in versions.items():
+        if not isinstance(version_key, str) or _normalize_version_key(version_key) == current_version:
+            continue
+        if isinstance(version_state, dict):
+            merged = _merge_version_notification_state(merged, version_state)
+    return _failed_identity_map(merged.get("failed_identities"))
 
 
 def _clear_resolved_failures(

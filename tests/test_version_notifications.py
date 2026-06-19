@@ -1593,6 +1593,74 @@ def test_notify_recent_telegram_users_does_not_retry_cannot_initiate_conversatio
     assert attempts == [111]
 
 
+def test_notify_recent_telegram_users_does_not_retry_permanent_delivery_error_across_versions(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Broken")
+    attempts: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+
+    first_count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    next_count = notify_recent_telegram_users_for_version(
+        version="1.0.4",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+    state = json.loads((tmp_path / "instances" / "Demo" / "data" / "Version_Notifications.json").read_text(encoding="utf-8"))
+
+    assert first_count == 0
+    assert next_count == 0
+    assert attempts == [111]
+    assert state["versions"]["1.0.4"]["failed_identities"]["telegram:user:111"]["chat_id"] == 111
+
+
+def test_notify_recent_telegram_users_retries_cross_version_failure_after_route_change(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Moved")
+    attempts: list[int] = []
+    sent: list[int] = []
+
+    def send_message(chat_id: int, text: str) -> None:
+        attempts.append(chat_id)
+        if chat_id == 111:
+            raise RuntimeError('Telegram HTTP error 400: {"description":"Bad Request: chat not found"}')
+        sent.append(chat_id)
+
+    notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+    store.update_identity_route("telegram:user:111", channel="telegram", chat_id="222", chat_type="private", adapter_slot=1)
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.4",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=send_message,
+        now=datetime(2026, 6, 14, 12, 1, tzinfo=timezone.utc),
+    )
+
+    assert attempts == [111, 222]
+    assert sent == [222]
+    assert count == 1
+
+
 def test_notify_recent_telegram_users_normalizes_sent_identity_state(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
