@@ -1025,7 +1025,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "append":
         try:
-            store = _store_for_instance(Path(args.instances_dir), args.instance, provider)
+            store = _store_for_instance(Path(args.instances_dir), args.instance, provider, create_dirs=True)
             item = append_codex_history_summary(
                 store,
                 repo_root=args.repo_root,
@@ -1069,6 +1069,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
             dispatch_reports: list[dict[str, Any]] = []
             selected = discover_instances(instances_dir, selected_instances)
+            if selected_instances:
+                missing = tuple(dict.fromkeys(name for name in selected_instances if name not in selected))
+                if missing:
+                    raise ValueError("requested instances not found: " + ", ".join(missing))
             sender_factory = None if args.dry_run else _runtime_sender_factory(instances_dir)
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
@@ -1103,6 +1107,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
             instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
             selected = discover_instances(instances_dir, selected_instances)
+            if selected_instances:
+                missing = tuple(dict.fromkeys(name for name in selected_instances if name not in selected))
+                if missing:
+                    raise ValueError("requested instances not found: " + ", ".join(missing))
             safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
             instance_reports: list[dict[str, Any]] = []
             for instance_name in selected:
@@ -1137,6 +1145,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 poll_interval_seconds = 0.0
             instance_reports: list[dict[str, Any]] = []
             selected = discover_instances(instances_dir, selected_instances)
+            if selected_instances:
+                missing = tuple(dict.fromkeys(name for name in selected_instances if name not in selected))
+                if missing:
+                    raise ValueError("requested instances not found: " + ", ".join(missing))
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
                 watch_report = watch_codex_session_roots(
@@ -1174,14 +1186,20 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     return 2
 
 
-def _store_for_instance(instances_dir: Path, instance_name: str, provider: InstanceSecretProvider | None) -> AccountStore:
+def _store_for_instance(
+    instances_dir: Path,
+    instance_name: str,
+    provider: InstanceSecretProvider | None,
+    *,
+    create_dirs: bool = False,
+) -> AccountStore:
     safe_instances_dir = _safe_repo_root(instances_dir, operation="instances directory")
     safe_instance_name = _safe_instance_name(instance_name)
     return AccountStore(
         safe_instances_dir / safe_instance_name / "data" / "accounts",
         safe_instance_name,
         secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
-        create_dirs=True,
+        create_dirs=create_dirs,
     )
 
 

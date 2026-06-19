@@ -495,6 +495,49 @@ def test_watch_codex_session_roots_normalizes_iteration_options(tmp_path: Path) 
     assert result["status_counts"] == {"imported": 1}
 
 
+def test_codex_history_watch_once_rejects_missing_instance(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path, "Depressionsbot")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "NichtVorhanden",
+            "--once",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "requested instances not found: NichtVorhanden" in captured.err
+
+
+def test_codex_history_dispatch_rejects_missing_instance(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path, "Depressionsbot")
+
+    result = codex_history_main(
+        [
+            "dispatch",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "NichtVorhanden",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    captured = capsys.readouterr()
+    assert result == 2
+    assert "requested instances not found: NichtVorhanden" in captured.err
+
+
 def test_normalize_and_classify_remote_urls() -> None:
     assert _normalize_remote_url("git@github.com:Org/Repo.git") == "ssh://git@github.com/org/repo"
     assert _repo_provider("git@github.com:Org/Repo.git") == "github"
