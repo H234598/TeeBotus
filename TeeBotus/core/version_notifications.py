@@ -612,7 +612,10 @@ def _failed_identity_map(value: Any) -> dict[str, object]:
         identity_key = str(key or "").strip() if isinstance(key, str) else ""
         if not _is_telegram_identity_key(identity_key) or not isinstance(payload, dict):
             continue
-        normalized[identity_key] = _normalized_failure_payload(payload)
+        normalized_payload = _normalized_failure_payload(payload)
+        if not normalized_payload:
+            continue
+        normalized[identity_key] = normalized_payload
     return normalized
 
 
