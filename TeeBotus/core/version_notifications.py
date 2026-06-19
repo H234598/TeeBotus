@@ -275,11 +275,11 @@ def _failed_delivery_matches_recipient(failed_identities: dict[str, object], rec
     if failure is None:
         return False
     if not isinstance(failure, dict):
-        return True
+        return False
     failed_chat_id = _optional_int(failure.get("chat_id"))
     failed_slot = _optional_int(failure.get("adapter_slot"))
     if failed_chat_id is None or failed_slot is None:
-        return True
+        return False
     return failed_chat_id == recipient.chat_id and failed_slot == recipient.adapter_slot
 
 
