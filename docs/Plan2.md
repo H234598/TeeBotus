@@ -321,9 +321,8 @@ Extras:
 ```toml
 [project]
 name = "teebotus"
-version = "1.4.28"
+dynamic = ["version"]
 requires-python = ">=3.11"
-dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -335,9 +334,10 @@ dev = [
 ]
 
 llm = [
-  "litellm!=1.82.7,!=1.82.8",
-  "openai",
-  "ollama",
+  "litellm==1.89.2",
+  "openai==2.43.0; python_version < '3.14'",
+  "openai==2.30.0; python_version >= '3.14'",
+  "ollama==0.6.2",
 ]
 
 rag = [
@@ -1933,235 +1933,48 @@ Tag 11+:
 
 
 
-Kurzurteil:
-Plan v2 ist der bessere Arbeitsplan, aber er muss an den aktuellen Repo-Stand angepasst werden. Der wichtigste neue Befund: TeeBotus hat inzwischen bereits einen eigenen Bibliothekar-Store (TeeBotus/runtime/bibliothekar.py) mit Dokumentenordner, Index, Chunks, PDF/DOCX/EPUB/TXT/MD-Unterstützung und eigenem CLI-Script. Haystack sollte daher nicht als komplett neuer Bibliothekar gebaut, sondern als Backend-Upgrade hinter dem bestehenden Bibliothekar eingeführt werden.
+## 25. Repo-Abgleich 2026-06-19
 
-Aktueller TeeBotus-Stand
+Plan v2 bleibt der Hauptarbeitsplan, aber der Repo-Stand ist weiter als der
+urspruengliche Download-Text. Dieser Abschnitt ersetzt den alten Nachtrag und
+haelt die aktuellen Leitplanken fest.
 
-Das Repo ist weiter H234598/TeeBotus, private, Branch main; der installierte Repo-Sucher findet es sauber als TeeBotus.
+Aktueller `pyproject.toml`-Vertrag:
 
-Der Entry-Point ist aktuell gesund: TeeBotus/__main__.py delegiert bewusst an TeeBotus.bot.main, damit python3 -m TeeBotus und python3 -m TeeBotus --all stabil bleiben.
-TeeBotus.bot bleibt vorerst der stabile öffentliche Einstieg. Telegram liegt aktuell noch in TeeBotus.adapters.telegram_runtime und nutzt Long-Polling; das ist aber nur noch als Transport-Kompatibilität zu verstehen. Ziel ist, Telegram wie Signal und Matrix als additiven Runtime-Slot zu behandeln.
-
-Die Engine ist inzwischen klar kanalneutral und größer geworden: Sie verarbeitet Account-/Registration-Flows, Cleanup, Proactive-Kommandos, Privacy-Bestätigung, Memory-Reset, Reminder, Export, Status, Voice, YouTube, OpenAI-Actions, WorkingMemory und Bibliothekar-Kontext. Sie hängt aber weiterhin direkt an openai_client; ein neutraler llm_client existiert im aktuellen Stand noch nicht.
-
-Der OpenAI-Client ist weiter ein Spezialclient, nicht nur ein simpler Chat-Aufruf: Responses API, Image Generation, Tool Calls, Speech und Transcription hängen dort zusammen.
-Auch BotInstructions sind noch stark openai_*-zentriert: Modell, Reasoning, Websuche, Voice, Image, Transcription, Fehlertexte und Reset-Texte laufen unter OpenAI-Namen.
-Die Runtime-Konfiguration trägt pro Account ebenfalls noch openai_api_key, nicht llm_provider/llm_model.
-
-Wichtig: pyproject.toml existiert bereits, aber ist minimal. Es nutzt setuptools, requires-python >=3.10, dynamische Version und bereits Scripts für teebotus-bibliothekar, teebotus-proactive, teebotus-proactive-review und teebotus-proactive-systemd.
-
-Vergleich der Pläne
-
-Plan 1 ist etwas vorsichtiger und erklärt besser, warum OpenAIClient bleiben muss. Er hat die sauberere Begründung für den Wrapper-Ansatz und die klarere Security-/Supply-Chain-Sektion.
-
-Plan v2 ist operativ besser: Er hat die bessere Codex-Kurzfassung, bessere Reihenfolge, klarere Phasen, CI-Plan, Rollback, Providerprofile und eine deutlich rundere Haystack/Bibliothekar-Sektion.
-
-Aber beide Pläne haben nach aktuellem TeeBotus-Stand denselben Fehler: Sie behandeln den Haystack-Bibliothekar zu sehr wie einen Neubau. Tatsächlich existiert bereits TeeBotus.runtime.bibliothekar.BibliothekarStore. Der Plan muss also lauten:
-
-Nicht:
-  TeeBotus/bibliothekar komplett neu neben runtime/bibliothekar.py bauen
-
-Sondern:
-  bestehenden BibliothekarStore als Legacy/Local Backend behalten
-  + HaystackBibliothekarBackend ergänzen
-  + gemeinsames BibliothekarService-Interface einziehen
-Beurteilung nach TeeBotus-Priorität
-1. LLM-Router: richtig und jetzt höchste Priorität
-
-Das passt perfekt. TeeBotus ist funktional schon breit, aber der Provider-Kern ist noch OpenAI-verdrahtet. Die Pläne liegen hier richtig: Erst llm_client/LLMRouter, dann OpenAI als Provider wrappen, dann LiteLLM/Ollama/HF/Groq/Gemini.
-
-Ich würde aber die Migration noch kleiner schneiden:
-
-P1:
-- BaseLLMClient Protocol
-- LLMResponse / LLMVoice / LLMImage
-- OpenAIProvider wrapper
-- TeeBotusEngine bekommt llm_client, openai_client bleibt Alias
-
-P2:
-- RuntimeConfig bekommt llm_provider/llm_model/llm_base_url/llm_api_key
-- openai_api_key bleibt Legacy
-
-P3:
-- LiteLLMTextClient nur für Text
-- Voice/Image/Transcription bleiben OpenAI oder lokal
-
-Nicht zuerst pyproject groß umbauen, nicht zuerst Haystack, nicht zuerst Pydantic AI.
-
-2. Bibliothekar/Haystack: ja, aber anders
-
-Der aktuelle Bibliothekar ist schon mehr als ein Stub: Er hat BibliothekarStore, BibliothekarSelection, .bibliothekar/index.json, chunks.jsonl, unterstützte Formate, Chunking, Ranking und CLI.
-
-Darum sollte Haystack so eingebaut werden:
-
-TeeBotus.runtime.bibliothekar
-  ├─ BibliothekarStoreLegacyBackend
-  ├─ HaystackBibliothekarBackend
-  ├─ BibliothekarService
-  └─ gemeinsames select(query) -> BibliothekarSelection
-
-Die bestehende Engine erwartet bereits BibliothekarStore und baut daraus Prompt-Kontext. Diesen Anschluss darf man nicht zerreißen.
-
-Korrigierte Entscheidung:
-Haystack ist nicht Phase 6 „neues Paket“, sondern Phase 6 „Backend unter bestehendem Bibliothekar“.
-
-3. pyproject: Plan v2 überschreibt zu viel
-
-Plan v2 schlägt ein neues pyproject.toml mit Python >=3.11/3.12-Fokus und Extras vor. Das ist grundsätzlich gut, aber TeeBotus hat aktuell requires-python >=3.10.
-
-Ich würde nicht ohne Not auf >=3.11 erhöhen, außer eine neue Abhängigkeit erzwingt es. Besser:
-
-requires-python = ">=3.10"
-
-und Extras ergänzen:
-
-[project.optional-dependencies]
-dev = [...]
-llm = [...]
-rag = [...]
-agents = [...]
-tools = [...]
-
-Die vorhandenen [project.scripts] müssen bleiben.
-
-4. Pydantic AI: ja, aber später
-
-Die Pläne bewerten Pydantic AI richtig: nicht als Bot-Kern, sondern für strukturierte Entscheidungen. Für TeeBotus ist das besonders passend bei:
-
-- Memory-Kandidaten
-- Reminder-Parsing
-- Bibliothekar-Frageklassifikation
-- YouTube-Optionsparser
-- Tool-Plan-Validierung
-
-Aber erst nach dem LLM-Router. Sonst baut man strukturierte LLM-Subtasks auf einer noch OpenAI-zentrierten Grundlage.
-
-5. LangGraph: richtig eingeordnet
-
-LangGraph sollte nicht die Engine ersetzen. Der Plan v2 sagt das gut. In TeeBotus gehören dorthin:
-
-- Proactive-Agent
-- Bibliothekar Deep Query
-- Codex Task
-- YouTube Pipeline
-- Account-Linking Security
-
-Nicht dorthin gehören /ping, /help, /status, einfache Textantworten oder Standardchat.
-
-6. LiteLLM-Security: behalten
-
-Die Supply-Chain-Warnung aus beiden Plänen ist sinnvoll. LiteLLM bleibt fachlich richtig, aber bitte nur gepinnt und mit Ausschluss kompromittierter Versionen. Das gehört zwingend in pyproject/Constraints und CI-Audit.
-
-Konkrete korrigierte Reihenfolge
-
-Ich würde den Plan jetzt so umstellen:
-
-Phase 0 — Baseline
-- aktuellen main sichern
-- Tests laufen lassen
-- pyproject nur minimal um Extras erweitern
-- Python >=3.10 beibehalten
-
-Phase 1 — LLM-Interface
-- TeeBotus/llm/base.py
-- OpenAIProvider wrapper
-- Engine: llm_client hinzufügen, openai_client Alias behalten
-- keine Funktionsänderung
-
-Phase 2 — LLM-Config
-- RuntimeConfig um llm_* ergänzen
-- openai_api_key bleibt
-- BotInstructions um llm_* ergänzen
-- ## OpenAI bleibt Legacy
-- ## LLM neu
-
-Phase 3 — LiteLLM/Ollama
-- LiteLLMTextClient
-- Ollama lokal
-- keine Voice/Image/Transcription-Migration
-
-Phase 4 — Providerprofile
-- HF/Groq/Gemini/OpenAI/Ollama
-- kein automatischer Remote-Fallback ohne Flag
-
-Phase 5 — Bibliothekar-Backend-Abstraktion
-- bestehenden BibliothekarStore nicht löschen
-- Interface/Service davor setzen
-- LegacyBackend = aktueller Store
-- HaystackBackend = neues optionales Backend
-
-Phase 6 — Haystack/Qdrant
-- nur für große Bibliothek
-- bestehendes CLI erweitern statt neues paralleles CLI
-- `teebotus-bibliothekar` Script weiterverwenden
-
-Phase 7 — Pydantic AI
-- strukturierte Subtasks
-- FakeModel/TestModel in Unit-Tests
-
-Phase 8 — LangGraph Pilot
-- genau ein Flow, z.B. Bibliothekar Deep Query oder Proactive-Agent
-
-Phase 9 — MCP/FastMCP
-- erst read-only
-- keine freie Shell
-Was aus Plan v2 gestrichen oder geändert werden sollte
-
-Ändern:
-
+```toml
+[project]
+name = "teebotus"
+dynamic = ["version"]
 requires-python = ">=3.11"
 
-zu:
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
+llm = ["litellm==1.89.2", "openai==2.43.0; python_version < '3.14'", "openai==2.30.0; python_version >= '3.14'", "ollama==0.6.2"]
+rag = ["haystack-ai==2.30.2", "qdrant-haystack==10.3.0", "sentence-transformers==5.6.0", "pypdf==6.13.3", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.15.0", "llama-index-core==0.14.22"]
+agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.6"]
+tools = ["fastmcp==3.4.2", "python-dotenv==1.2.2", "watchdog==6.0.0"]
+```
 
-requires-python = ">=3.10"
+Aktueller Architekturstand:
 
-solange TeeBotus nicht bewusst angehoben wird.
+- Der Entry-Point bleibt gesund: `TeeBotus/__main__.py` delegiert an `TeeBotus.bot.main`; `TeeBotus.bot` bleibt die Kompatibilitaetsbruecke.
+- Telegram, Signal und Matrix werden als additive Runtime-Slots behandelt; Telegram-Long-Polling ist Transport, nicht Kernarchitektur.
+- Die neutrale Text-LLM-Schicht existiert: `TeeBotus/llm/base.py`, `TeeBotus/llm/openai_provider.py`, `TeeBotus/llm/litellm_provider.py`, Profile unter `config/` und Runtime-Routing.
+- `llm_provider`, `llm_model`, `llm_base_url`, `llm_api_key` und Purpose-Routing sind die neutralen Text-LLM-Konfigurationsachsen.
+- `OpenAIClient` bleibt Spezialclient fuer Responses, Websuche, Tool Calls, Speech, Bilder und Transkription; er wird nicht geloescht.
+- `missing_key`, `error` und `reset` im `## LLM`-Block sind die neutralen Texte fuer Text-LLM-Antworten und Reset. OpenAI-spezifische Spezialfunktionen wie Voice, Bilder und OpenAI-Transkription behalten eigene `openai_*`-/`voice_*`-/`image_*`-/`transcription_*`-Texte.
+- Der Bibliothekar ist kein Neubau mehr: bestehende lokale Store-/Service-Strukturen bleiben die Kompatibilitaetsbasis; Haystack/Qdrant werden als optionale Backends angebunden.
 
-Ändern:
+Aktuelle Prioritaeten:
 
-TeeBotus/bibliothekar/ neues Paket
+1. LLM-Router und Profile haerten, nicht ersetzen.
+2. Lokale und Remote-Provider ueber Tests, Runtime-Status und Benchmarks verifizieren.
+3. Bibliothekar-Backend-Abstraktion pflegen und Haystack/Qdrant dahinter setzen.
+4. Pydantic AI fuer strukturierte Entscheidungen einsetzen.
+5. LangGraph nur fuer lange, kontrollierte Workflows nutzen.
+6. MCP/FastMCP nur allowlisted und read-only zuerst freigeben.
 
-zu:
-
-TeeBotus/runtime/bibliothekar.py refactoren
-oder TeeBotus/bibliothekar/ als Backend-Paket einführen,
-aber TeeBotus.runtime.bibliothekar als Kompatibilitätsfassade behalten.
-
-Ändern:
-
-Phase 6 Haystack Bibliothekar Skeleton
-
-zu:
-
-Phase 5 Bibliothekar-Backend-Abstraktion
-Phase 6 HaystackBackend
-
-Behalten:
-
-- Keine Big-Bang-Migration
-- OpenAIClient nicht löschen
-- Account-Memory nicht in Haystack
-- LiteLLM zuerst
-- Ollama als erster Testprovider
-- Pydantic AI nur für Subtasks
-- LangGraph nur für lange Workflows
-- MCP später und allowlisted
-Endurteil
-
-Plan v2 ist die bessere Grundlage, aber Plan 1 enthält ein paar wichtigere Sicherheits- und Kompatibilitätsgedanken. Der finale TeeBotus-Plan sollte daher sein:
-
-Plan v2 als Hauptplan nehmen,
-Plan 1s OpenAIClient-/Security-Vorsicht übernehmen,
-und beide an den aktuellen BibliothekarStore anpassen.
-
-Mein wichtigster Satz für Codex wäre:
-
-Baue TeeBotus nicht um ein Framework herum. Baue Frameworks als austauschbare Organe in TeeBotus ein.
-
-Und der wichtigste technische Korrekturpunkt:
-
-Haystack ersetzt nicht den vorhandenen Bibliothekar; Haystack wird ein optionales Bibliothekar-Backend hinter der bestehenden TeeBotus-Schnittstelle.
+Merksatz: TeeBotus wird nicht um ein Framework herum neu gebaut; Frameworks und Provider werden als austauschbare Module in TeeBotus eingebaut.
 
 ---
 
