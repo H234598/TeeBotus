@@ -4759,6 +4759,32 @@ def test_notify_recent_telegram_users_includes_normalized_github_repo_link(tmp_p
     assert "Repo: https://github.com/example/project" in sent[0]
 
 
+def test_notify_recent_telegram_users_treats_empty_repo_url_as_remote_lookup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    sent: list[str] = []
+
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda repo_root, version: True)
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_repo_url", lambda repo_root: "https://github.com/example/project")
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.99",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, text: sent.append(text),
+        repo_root=tmp_path,
+        repo_url="",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 1
+    assert "Repo: https://github.com/example/project" in sent[0]
+
+
 def test_github_has_version_normalizes_uppercase_version_prefix(tmp_path: Path, monkeypatch) -> None:
     calls: list[list[str]] = []
 

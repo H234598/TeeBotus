@@ -65,7 +65,7 @@ def notify_recent_telegram_users_for_version(
     historical_sent_identities = _historical_sent_identity_set(state, normalized_version, resolved_now)
     historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities, resolved_now)
     version_state["failed_identities"] = failed_identities
-    resolved_repo_url = repo_url
+    resolved_repo_url = repo_url or None
     github_version_checked = False
     sent_count = 0
     for recipient in recent_telegram_recipients(account_store, instance_name=instance_name, adapter_slot=adapter_slot, now=resolved_now):
