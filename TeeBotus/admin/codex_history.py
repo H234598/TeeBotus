@@ -63,15 +63,17 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
         raise ValueError(f"{operation} must not be empty")
     if "\\" in text:
         raise ValueError(f"{operation} contains invalid path separator: \\")
-    path = Path(text).expanduser()
-    is_absolute = path.is_absolute()
-    raw_parts = path.parts
+    is_absolute = text.startswith("/")
+    normalized = text[1:] if is_absolute else text
+    raw_parts = normalized.split("/")
     parts: list[str] = []
     for part in raw_parts:
         if part in {"", "."}:
             continue
         if part == "..":
             raise ValueError(f"{operation} contains forbidden relative segment: ..")
+        if ":" in part:
+            raise ValueError(f"{operation} contains invalid path segment: {part}")
         parts.append(part)
     return is_absolute, tuple(parts)
 
@@ -405,6 +407,73 @@ def record_codex_history_reply(
         "item_id": item_id,
         "delivered_result": delivered,
         "acknowledged_result": acknowledged,
+    }
+
+
+def record_codex_history_delivery_receipt(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    channel: str,
+    chat_id: str,
+    message_ref: str,
+    account_id: str = "",
+    receipt_type: str = "delivered",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Mark a dispatched history item as delivered from a native channel receipt."""
+
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
+    normalized_message_ref = str(message_ref or "").strip()
+    normalized_receipt_type = _normalize_delivery_receipt_type(receipt_type)
+    if not normalized_channel or not normalized_chat_id or not normalized_message_ref:
+        return {"ok": False, "status": "not_found", "reason": "missing_receipt_target"}
+    match = _find_codex_history_dispatch_for_message(
+        store,
+        instance_name=instance_name,
+        channel=normalized_channel,
+        chat_id=normalized_chat_id,
+        message_ref=normalized_message_ref,
+        account_id=account_id,
+    )
+    if match is None:
+        return {"ok": False, "status": "not_found", "reason": "no_matching_dispatch"}
+    item_id = str(match.get("codex_history_item_id") or "").strip()
+    item = _find_codex_history_item_by_id(store, item_id)
+    if item is None:
+        return {"ok": False, "status": "not_found", "reason": "missing_history_item", "item_id": item_id}
+    timestamp = _iso_timestamp(now)
+    route = {"channel": normalized_channel, "chat_id": normalized_chat_id}
+    matched_account_id = str(match.get("account_id") or account_id or "").strip()
+    reason = f"{normalized_channel}_{normalized_receipt_type}_receipt"
+    delivered = _record_codex_history_dispatch_result(
+        store,
+        item,
+        matched_account_id,
+        status="delivered",
+        reason=reason,
+        now=timestamp,
+        instance_name=instance_name,
+        route=route,
+        message_ref=normalized_message_ref,
+        receipt_type=normalized_receipt_type,
+    )
+    current_status = str(item.get("status") or "").strip().casefold()
+    if current_status != "acknowledged":
+        _update_codex_history_item_status(
+            store,
+            item_id,
+            "delivered",
+            reason=reason,
+            now=timestamp,
+            dispatch_results=[delivered],
+        )
+    return {
+        "ok": True,
+        "status": "delivered" if current_status != "acknowledged" else "acknowledged",
+        "item_id": item_id,
+        "delivered_result": delivered,
     }
 
 
@@ -804,6 +873,7 @@ def _record_codex_history_dispatch_result(
     message_ref: str = "",
     reply_message_ref: str = "",
     reply_text_preview: str = "",
+    receipt_type: str = "",
 ) -> dict[str, Any]:
     route = route if isinstance(route, Mapping) else {}
     version = item.get("version", {})
@@ -830,8 +900,18 @@ def _record_codex_history_dispatch_result(
     normalized_reply_preview = redact_codex_history_text(reply_text_preview).strip()
     if normalized_reply_preview:
         row["reply_text_preview"] = normalized_reply_preview[:240]
+    normalized_receipt_type = _normalize_delivery_receipt_type(receipt_type) if str(receipt_type or "").strip() else ""
+    if normalized_receipt_type:
+        row["receipt_type"] = normalized_receipt_type
     store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
     return row
+
+
+def _normalize_delivery_receipt_type(value: str) -> str:
+    normalized = str(value or "delivered").strip().casefold()
+    if normalized in {"read", "viewed", "delivered"}:
+        return normalized
+    return "delivered"
 
 
 def _update_codex_history_item_status(
