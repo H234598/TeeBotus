@@ -56,7 +56,7 @@ def notify_recent_telegram_users_for_version(
             on_skip(f"GitHub tag v{normalized_version} not found on remote")
         return 0
     version_state = _version_state(state, normalized_version)
-    sent_identities = set(_string_list(version_state.get("sent_identities")))
+    sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
     identities = account_store._load_identities()
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
     version_state["failed_identities"] = failed_identities
@@ -556,8 +556,8 @@ def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, 
     updated_at = _newest_timestamp_string(base.get("updated_at"), incoming.get("updated_at"))
     if updated_at:
         merged["updated_at"] = updated_at
-    sent_identities = set(_string_list(base.get("sent_identities")))
-    sent_identities.update(_string_list(incoming.get("sent_identities")))
+    sent_identities = set(_telegram_identity_list(base.get("sent_identities")))
+    sent_identities.update(_telegram_identity_list(incoming.get("sent_identities")))
     if sent_identities or "sent_identities" in base or "sent_identities" in incoming:
         merged["sent_identities"] = sorted(sent_identities)
     failed_identities = _failed_identity_map(base.get("failed_identities"))
@@ -584,6 +584,10 @@ def _string_list(value: Any) -> list[str]:
         if text:
             values.append(text)
     return values
+
+
+def _telegram_identity_list(value: Any) -> list[str]:
+    return [identity_key for identity_key in _string_list(value) if _is_telegram_identity_key(identity_key)]
 
 
 def _failed_identity_map(value: Any) -> dict[str, object]:
