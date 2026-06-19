@@ -86,6 +86,28 @@ def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, 
     assert "telegram-secret-token" not in captured.out
 
 
+def test_runtime_status_all_uses_runtime_instance_discovery(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    for name in ("DemoA", "DemoB"):
+        instance_dir = instances_dir / name
+        instance_dir.mkdir(parents=True)
+        (instance_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "IgnoredByAll")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMOA", "telegram-token-a")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMOB", "telegram-token-b")
+
+    assert bot.main(["--runtime-status", "--all", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "instances=DemoA,DemoB" in captured.out
+    assert "telegram_slot=DemoA/telegram:1 status=configured token=configured" in captured.out
+    assert "telegram_slot=DemoB/telegram:1 status=configured token=configured" in captured.out
+    assert os.environ["TEEBOTUS_INSTANCE"] == "IgnoredByAll"
+
+
 def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

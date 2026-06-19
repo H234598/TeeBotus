@@ -125,7 +125,8 @@ def _runtime_status(argv: Sequence[str]) -> int:
         return 2
 
     try:
-        config = resolve_runtime_config(argv=list(argv))
+        runtime_args, runtime_env = _runtime_status_config_args(argv)
+        config = resolve_runtime_config(argv=runtime_args, env=runtime_env)
     except RuntimeConfigError as exc:
         print(f"TeeBotus runtime configuration error: {exc}", file=sys.stderr)
         return 2
@@ -313,6 +314,22 @@ def _runtime_status(argv: Sequence[str]) -> int:
             tool_lines.append(_sanitize_status_text(line))
     _print_runtime_status_section("Tools und Account-Memory", tool_lines)
     return 0
+
+
+def _runtime_status_config_args(argv: Sequence[str]) -> tuple[list[str], dict[str, str] | None]:
+    args = []
+    runtime_env = None
+    for arg in argv:
+        if arg == "--all":
+            if runtime_env is None:
+                runtime_env = dict(os.environ)
+            runtime_env.pop("TEEBOTUS_INSTANCES", None)
+            runtime_env.pop("TELEGRAM_BOT_INSTANCES", None)
+            runtime_env["TEEBOTUS_INSTANCE"] = "all"
+            runtime_env["TELEGRAM_BOT_INSTANCE"] = "all"
+            continue
+        args.append(str(arg))
+    return args, runtime_env
 
 
 def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
