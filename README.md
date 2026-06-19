@@ -172,11 +172,10 @@ Empfohlene lokale 3.13-Runtime ohne Aenderung des Systemdefaults:
 
 ```bash
 sudo dnf install -y python3.13 python3.13-devel
-python3 scripts/setup_python313_runtime.py
-python3 -m TeeBotus.systemd --python .venv-py313/bin/python --print
+python3 scripts/setup_python313_runtime.py --install-systemd --enable-systemd --channels telegram,signal
 ```
 
-Wenn `.venv-py313/bin/python` existiert, verwendet `python3 -m TeeBotus.systemd` diese Runtime automatisch vor `.venv/bin/python` und `python3`, solange kein explizites `--python` gesetzt ist.
+Wenn `.venv-py313/bin/python` existiert, verwendet `python3 -m TeeBotus.systemd` diese Runtime automatisch vor `.venv/bin/python` und `python3`, solange kein explizites `--python` gesetzt ist. Der Helper-Aufruf schreibt und aktiviert die User-Unit explizit mit dieser Runtime.
 
 Pro Instanz muessen Service-URL und Telefonnummer zusammen gesetzt sein:
 

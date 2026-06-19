@@ -23,6 +23,10 @@ def main(argv: list[str] | None = None, *, runner: Runner = subprocess.run) -> i
     parser.add_argument("--dry-run", action="store_true", help="Print commands without creating the venv.")
     parser.add_argument("--skip-editable", action="store_true", help="Do not install TeeBotus itself into the venv.")
     parser.add_argument("--skip-adapter-deps", action="store_true", help="Do not install pinned Python adapter dependencies.")
+    parser.add_argument("--install-systemd", action="store_true", help="Render and write teebotus.service for the new venv.")
+    parser.add_argument("--enable-systemd", action="store_true", help="Also enable --now teebotus.service after writing it.")
+    parser.add_argument("--service-name", default="teebotus.service", help="User systemd service filename.")
+    parser.add_argument("--channels", default="telegram,signal,matrix", help="Comma-separated channels for the systemd unit.")
     args = parser.parse_args(argv)
 
     python = _resolve_python(args.python)
@@ -50,11 +54,24 @@ def main(argv: list[str] | None = None, *, runner: Runner = subprocess.run) -> i
         install_adapter_deps=not args.skip_adapter_deps,
         dry_run=args.dry_run,
     )
+    if args.enable_systemd and not args.install_systemd:
+        print("--enable-systemd requires --install-systemd.", file=sys.stderr)
+        return 2
     for command in commands:
-        print(shlex.join(command))
+        print(shlex.join(command), flush=True)
         if not args.dry_run:
             runner(command, check=True, cwd=REPO_ROOT, text=True)
-    print(f"python313_runtime=ready venv={venv} python={venv / 'bin' / 'python'}")
+    if args.install_systemd:
+        systemd_command = _systemd_command(
+            venv=venv,
+            service_name=args.service_name,
+            channels=args.channels,
+            enable=args.enable_systemd,
+        )
+        print(shlex.join(systemd_command), flush=True)
+        if not args.dry_run:
+            runner(systemd_command, check=True, cwd=REPO_ROOT, text=True)
+    print(f"python313_runtime=ready venv={venv} python={venv / 'bin' / 'python'}", flush=True)
     return 0
 
 
@@ -97,6 +114,7 @@ def _setup_commands(
     commands: list[list[str]] = [
         [python, "-m", "venv", str(venv)],
         [venv_python, "-m", "pip", "install", "--upgrade", "pip"],
+        [venv_python, "-m", "pip", "install", "--upgrade", "packaging"],
     ]
     if install_editable:
         commands.append([venv_python, "-m", "pip", "install", "--no-deps", "-e", str(REPO_ROOT)])
@@ -115,6 +133,25 @@ def _setup_commands(
     if dry_run or not install_adapter_deps:
         commands.append([venv_python, str(REPO_ROOT / "scripts" / "check_adapter_deps.py"), "--python-only"])
     return commands
+
+
+def _systemd_command(*, venv: Path, service_name: str, channels: str, enable: bool) -> list[str]:
+    command = [
+        str(venv / "bin" / "python"),
+        "-m",
+        "TeeBotus.systemd",
+        "--repo-root",
+        str(REPO_ROOT),
+        "--python",
+        str(venv / "bin" / "python"),
+        "--service-name",
+        str(service_name or "teebotus.service"),
+        "--channels",
+        str(channels or "telegram,signal,matrix"),
+    ]
+    if enable:
+        command.append("--enable")
+    return command
 
 
 if __name__ == "__main__":

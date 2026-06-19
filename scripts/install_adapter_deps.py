@@ -88,6 +88,10 @@ def build_python_install_commands(pins: dict[str, str], *, python: str, user: bo
             "marko==2.*",
             "python-magic>=0.4.27",
             "aiofiles>=23.1.0",
+            "beautifulsoup4~=4.12",
+            "aiosqlite~=0.20",
+            "orjson~=3.10",
+            "Pillow>=9.3.0",
         ],
         [
             *pip_base,

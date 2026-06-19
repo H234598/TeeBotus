@@ -35,6 +35,10 @@ def test_adapter_dependency_installer_keeps_matrix_override_outside_niobot_deps(
 
     assert len(commands) == 4
     assert "matrix-nio==0.25.2" in commands[0]
+    assert "aiosqlite~=0.20" in commands[0]
+    assert "orjson~=3.10" in commands[0]
+    assert "beautifulsoup4~=4.12" in commands[0]
+    assert "Pillow>=9.3.0" in commands[0]
     assert "h11==0.16.0" not in commands[0]
     assert "faster-whisper==1.2.1" in commands[0]
     assert "litellm==1.83.7" not in commands[0]
