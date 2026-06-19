@@ -6,7 +6,7 @@ import socket
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_message_to_event, send_matrix_actions
@@ -375,10 +375,14 @@ def _raise_matrix_runtime_response_error(response: Any) -> None:
 
 
 def start_matrix_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
+    accounts = _matrix_accounts(config)
+    duplicate_error = _duplicate_matrix_user_error(accounts)
+    if duplicate_error:
+        raise MatrixRuntimeError(duplicate_error)
     _import_niobot()
     _require_matrix_homeservers_reachable(config)
     threads: list[threading.Thread] = []
-    for account in _matrix_accounts(config):
+    for account in accounts:
         thread = _matrix_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
         threads.append(thread)
@@ -391,6 +395,9 @@ def run_matrix_accounts(config: RuntimeConfig) -> int:
         raise MatrixRuntimeError(
             "Matrix ist angefordert, aber kein MATRIX_BOT_HOMESERVER_<INSTANCE> plus MATRIX_BOT_USER_ID_<INSTANCE> plus MATRIX_BOT_ACCESS_TOKEN_<INSTANCE> ist konfiguriert."
         )
+    duplicate_error = _duplicate_matrix_user_error(accounts)
+    if duplicate_error:
+        raise MatrixRuntimeError(duplicate_error)
     _import_niobot()
     _require_matrix_homeservers_reachable(config)
     for account in accounts[1:]:
@@ -424,6 +431,28 @@ async def _run_matrix_account_async(*, account: AccountRunConfig, instances_dir:
 
 def _matrix_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "matrix")
+
+
+def _duplicate_matrix_user_error(accounts: Sequence[AccountRunConfig]) -> str:
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    for account in accounts:
+        user_id = str(account.matrix_user_id or "").strip()
+        if not user_id:
+            continue
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen.get(user_id)
+        if previous_label is None:
+            seen[user_id] = label
+        else:
+            duplicates.append(f"{previous_label} / {label}")
+    if not duplicates:
+        return ""
+    return (
+        "Duplicate Matrix user ID configured across bot slots. "
+        "Each Matrix runtime slot needs its own user ID. Duplicate slot pairs: "
+        + ", ".join(duplicates)
+    )
 
 
 def _matrix_bot_address_names(account: AccountRunConfig) -> tuple[str, ...]:

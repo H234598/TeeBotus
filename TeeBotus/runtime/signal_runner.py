@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from inspect import isawaitable
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
@@ -413,10 +413,14 @@ class TeeBotusSignalCommand(_SignalBotCommand):
 
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
+    accounts = _signal_accounts(config)
+    duplicate_error = _duplicate_signal_phone_error(accounts)
+    if duplicate_error:
+        raise SignalRuntimeError(duplicate_error)
     _import_signalbot()
     ensure_signal_services_available(config)
     threads: list[threading.Thread] = []
-    for account in _signal_accounts(config):
+    for account in accounts:
         thread = _signal_account_thread(account=account, instances_dir=config.instances_dir)
         thread.start()
         threads.append(thread)
@@ -429,6 +433,9 @@ def run_signal_accounts(config: RuntimeConfig) -> int:
         raise SignalRuntimeError(
             "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
         )
+    duplicate_error = _duplicate_signal_phone_error(accounts)
+    if duplicate_error:
+        raise SignalRuntimeError(duplicate_error)
     _import_signalbot()
     ensure_signal_services_available(config)
     for account in accounts[1:]:
@@ -454,6 +461,28 @@ def run_signal_account(*, account: AccountRunConfig, instances_dir: str | Path) 
 
 def _signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "signal")
+
+
+def _duplicate_signal_phone_error(accounts: Sequence[AccountRunConfig]) -> str:
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    for account in accounts:
+        phone = str(account.signal_phone_number or "").strip()
+        if not phone:
+            continue
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen.get(phone)
+        if previous_label is None:
+            seen[phone] = label
+        else:
+            duplicates.append(f"{previous_label} / {label}")
+    if not duplicates:
+        return ""
+    return (
+        "Duplicate Signal phone number configured across bot slots. "
+        "Each Signal runtime slot needs its own registered phone number. Duplicate slot pairs: "
+        + ", ".join(duplicates)
+    )
 
 
 def _with_signal_reply_context(actions: list[Any], event: Any) -> list[Any]:
@@ -576,6 +605,7 @@ def check_signal_service(account: AccountRunConfig, *, timeout_seconds: float = 
 
 def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, ...]:
     healths: list[SignalAccountHealth] = []
+    seen_phones: dict[str, str] = {}
     service_accounts_cache: dict[str, tuple[bool, list[Any], str]] = {}
     for account in _signal_accounts(config):
         try:
@@ -583,6 +613,14 @@ def check_signal_accounts(config: RuntimeConfig) -> tuple[SignalAccountHealth, .
         except SignalRuntimeError as exc:
             healths.append(SignalAccountHealth(account=account, ok=False, target=account.signal_service, error=str(exc)))
             continue
+        phone = str(account.signal_phone_number or "").strip()
+        label = f"{account.instance_name}/{account.label}"
+        previous_label = seen_phones.get(phone)
+        if phone and previous_label is not None:
+            healths.append(SignalAccountHealth(account=account, ok=False, target=target, error=f"duplicate phone number with {previous_label}"))
+            continue
+        if phone:
+            seen_phones[phone] = label
         service_key = _signal_service_cache_key(account.signal_service)
         if service_key not in service_accounts_cache:
             try:

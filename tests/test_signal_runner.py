@@ -1408,6 +1408,84 @@ def test_signal_start_fails_before_threads_when_service_unreachable(monkeypatch,
     assert calls == []
 
 
+def test_check_signal_accounts_reports_duplicate_phone_without_leaking_number(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8081",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", lambda _account: ["+491234"])
+
+    health = check_signal_accounts(config)
+
+    assert health[0].ok is True
+    assert health[1].ok is False
+    assert health[1].target == "127.0.0.1:8081"
+    assert health[1].error == "duplicate phone number with DemoA/signal:1"
+    assert "+491234" not in health[1].error
+
+
+def test_signal_start_rejects_duplicate_phone_before_import(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="DemoA",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        AccountRunConfig(
+            instance_name="DemoB",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8081",
+            signal_phone_number="+491234",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("DemoA", "DemoB"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("DemoA", tmp_path / "DemoA.md", (accounts[0],)),
+            InstanceRunConfig("DemoB", tmp_path / "DemoB.md", (accounts[1],)),
+        ),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
+
+    with pytest.raises(SignalRuntimeError, match="Duplicate Signal phone number"):
+        run_signal_accounts(config)
+
+
 def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -> None:
     account = AccountRunConfig(
         instance_name="Demo",
