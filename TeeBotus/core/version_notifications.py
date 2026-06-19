@@ -138,17 +138,15 @@ def recent_telegram_recipients(
             continue
         if route_chat_type is None or (route_chat_type and route_chat_type != "private"):
             continue
-        chat_id_text = str(route.get("chat_id") or "").strip()
-        if not chat_id_text and identity_key.startswith("telegram:user:"):
-            chat_id_text = identity_key.removeprefix("telegram:user:")
-        if not chat_id_text.isdigit():
+        chat_id = _route_chat_id(route, identity_key)
+        if chat_id is None:
             continue
         recipients.append(
             VersionNotificationRecipient(
                 instance_name=instance_name,
                 account_id=account_id,
                 identity_key=identity_key,
-                chat_id=int(chat_id_text),
+                chat_id=chat_id,
                 adapter_slot=route_slot,
                 last_seen_at=last_seen,
             )
@@ -316,6 +314,20 @@ def _route_chat_type(route: dict[str, Any]) -> str | None:
     return text or None
 
 
+def _route_chat_id(route: dict[str, Any], identity_key: str) -> int | None:
+    if "chat_id" not in route:
+        if identity_key.startswith("telegram:user:"):
+            return _optional_int(identity_key.removeprefix("telegram:user:"))
+        return None
+    value = route.get("chat_id")
+    if isinstance(value, bool):
+        return None
+    chat_id_text = str(value or "").strip()
+    if not chat_id_text or not chat_id_text.isdigit():
+        return None
+    return int(chat_id_text)
+
+
 def _deduplicate_telegram_recipients(recipients: list[VersionNotificationRecipient]) -> list[VersionNotificationRecipient]:
     unique_by_account_slot: dict[tuple[str, int], VersionNotificationRecipient] = {}
     for recipient in sorted(recipients, key=lambda item: item.identity_key):
@@ -373,10 +385,7 @@ def _identity_route_matches_recipient(identity_key: str, payload: dict[str, Any]
     route_slot = _route_adapter_slot(route)
     if route_slot is None:
         return False
-    chat_id_text = str(route.get("chat_id") or "").strip()
-    if not chat_id_text and identity_key.startswith("telegram:user:"):
-        chat_id_text = identity_key.removeprefix("telegram:user:")
-    chat_id = _optional_int(chat_id_text)
+    chat_id = _route_chat_id(route, identity_key)
     return chat_id == recipient.chat_id and route_slot == recipient.adapter_slot
 
 
