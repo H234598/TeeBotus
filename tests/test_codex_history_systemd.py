@@ -15,10 +15,13 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert f"EnvironmentFile=-{tmp_path.resolve() / '.env'}" in unit.service_text
     assert "ExecStart=python3 -m TeeBotus.admin codex-history watch" in unit.service_text
     assert f"--instances-dir {tmp_path.resolve() / 'instances'}" in unit.service_text
-    assert "--max-iterations 1" in unit.service_text
+    assert "--follow" in unit.service_text
+    assert "--event-mode auto" in unit.service_text
+    assert "--poll-interval 5" in unit.service_text
+    assert "--max-iterations" not in unit.service_text
     assert "--limit 1000" in unit.service_text
     assert "--once" not in unit.service_text
-    assert "Restart=always" in unit.service_text
+    assert "Restart=on-failure" in unit.service_text
     assert "RestartSec=5s" in unit.service_text
     assert "NoNewPrivileges=true" in unit.service_text
     assert "PrivateTmp=true" in unit.service_text
@@ -34,14 +37,26 @@ def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots
         restart_sec="30s",
         python_executable="/usr/bin/python3",
         limit=250,
+        event_mode="snapshot",
+        poll_interval_seconds=2.5,
     )
 
     assert "ExecStart=/usr/bin/python3 -m TeeBotus.admin codex-history watch" in unit.service_text
     assert "--instance=Depressionsbot" in unit.service_text
     assert f"--sessions-root {tmp_path / 'sessions'}" in unit.service_text
     assert f"--sessions-root {tmp_path / 'agents' / 'a1' / '.codex' / 'sessions'}" in unit.service_text
+    assert "--event-mode snapshot" in unit.service_text
+    assert "--poll-interval 2.5" in unit.service_text
     assert "--limit 250" in unit.service_text
     assert "RestartSec=30s" in unit.service_text
+
+
+def test_render_codex_history_systemd_unit_can_use_legacy_bounded_restart_loop(tmp_path: Path) -> None:
+    unit = render_codex_history_systemd_unit(repo_root=tmp_path, follow=False, max_iterations=3)
+
+    assert "--follow" not in unit.service_text
+    assert "--max-iterations 3" in unit.service_text
+    assert "Restart=always" in unit.service_text
 
 
 def test_render_codex_history_systemd_unit_prefers_python313_venv_when_present(tmp_path: Path) -> None:
@@ -79,6 +94,15 @@ def test_render_codex_history_systemd_unit_rejects_control_characters(tmp_path: 
             assert "invalid control characters" in str(exc)
         else:
             raise AssertionError(f"expected control character rejection for {kwargs}")
+
+
+def test_render_codex_history_systemd_unit_rejects_invalid_event_mode(tmp_path: Path) -> None:
+    try:
+        render_codex_history_systemd_unit(repo_root=tmp_path, event_mode="nonsense")
+    except ValueError as exc:
+        assert "event mode" in str(exc)
+    else:
+        raise AssertionError("expected invalid event mode rejection")
 
 
 def test_render_codex_history_systemd_unit_escapes_systemd_percent_specifiers(tmp_path: Path) -> None:

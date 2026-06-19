@@ -19,7 +19,8 @@ Umgesetzt:
 - Phase 4 Ack-Basis teilweise: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result.
 - Phase 4 Telegram-Reply-Hook teilweise: Antworten auf ein versendetes Codex-History-Markdown werden ueber `codex_history_dispatch_results.message_ref` erkannt, setzen `delivered_at`/`acknowledged_at` und schreiben append-only Dispatch-Results fuer `delivered` und `acknowledged`.
 - Phase 3 Watcher teilweise: `codex-history watch --once` importiert Codex-Session-JSONL aus `~/.codex/sessions` oder angegebenen Roots, erkennt `cwd`/Repo, erzeugt redigierte Summaries und dedupliziert ueber `session_id + turn_id + final_message_hash`.
-- Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen; der systemd-User-Service `teebotus-codex-history.service` wird ueber `teebotus-codex-history-systemd` erzeugt und pollt restart-getrieben mit `Restart=always`/`RestartSec`, damit pro Runde alle Instanzen gescannt werden.
+- Phase 3 Watcher teilweise: `codex-history watch` kann bounded pollend laufen oder mit `--follow --event-mode auto` persistent beobachten; `auto` nutzt optional `watchdog`-Filesystem-Events und faellt ohne Zusatzdependency auf Snapshot/Poll-Warten zurueck.
+- Phase 3 systemd teilweise: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
 - Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen; das Cinnamon-Applet parst diese Zeilen und zeigt Instanz- und Repo-Details im Projekt-Menue; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
@@ -29,7 +30,7 @@ Offen:
 
 - Native Kanal-Receipts fuer `delivered` ausserhalb reply-beobachteter Telegram-Bestaetigung sind noch nicht angebunden.
 - Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind noch nicht angebunden.
-- Filesystem-Events statt restart-getriebenem Polling sind noch nicht umgesetzt.
+- Native Filesystem-Events sind optional angebunden, aber noch nicht als harte Dependency installiert; ohne `watchdog` laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
 - Tieferer grafischer Applet-Drilldown, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
 
 ## Kurzantwort
@@ -286,11 +287,12 @@ python3 -m TeeBotus.codex_history_systemd --repo-root /home/teladi/TeeBotus --pr
 python3 -m TeeBotus.codex_history_systemd --repo-root /home/teladi/TeeBotus --enable
 ```
 
-Die systemd-Variante nutzt bewusst einen bounded Scan pro Service-Start und
-laesst systemd ueber `Restart=always`/`RestartSec` pollen. So blockiert eine
-endlose Watch-Schleife nicht die weiteren TeeBotus-Instanzen; jede Runde ruft
-`codex-history watch` fuer die ausgewaehlten Instanzen auf und beendet sich
-danach sauber.
+Die systemd-Variante nutzt inzwischen standardmaessig einen persistenten
+Watcher mit `--follow --event-mode auto`. Wenn das optionale Python-Paket
+`watchdog` installiert ist, wartet der Watcher auf echte Filesystem-Events fuer
+Codex-Session-JSONL-Dateien; ohne `watchdog` bleibt er robust und nutzt
+Snapshot/Poll-Warten. Der alte bounded Scan pro Service-Start ist weiter ueber
+`teebotus-codex-history-systemd --no-follow` verfuegbar.
 
 Der Watcher:
 
@@ -457,6 +459,14 @@ python3 -m TeeBotus.admin codex-history watch
 - erkennt abgeschlossene Sessions
 - schreibt Summary in Outbox
 - dedupliziert stabil
+
+Stand 2026-06-19:
+
+- `codex-history watch --once` importiert Sessionroots einmalig und dedupliziert ueber Session-/Turn-/Final-Hash.
+- `codex-history watch` kann bounded laufen oder mit `--follow` persistent bleiben.
+- `--event-mode auto` nutzt optional `watchdog` fuer echte Filesystem-Events und faellt ohne Zusatzdependency auf Snapshot/Poll-Warten zurueck.
+- Die systemd-User-Unit nutzt standardmaessig `--follow --event-mode auto`; `--no-follow` erzeugt weiter den alten restart-getriebenen Bounded-Scan.
+- Offen: `watchdog` ist noch keine installierte/gepruefte optionale Tool-Abhaengigkeit.
 
 ### Phase 4: Dispatcher
 

@@ -655,6 +655,31 @@ def test_watch_codex_session_roots_polls_and_deduplicates_between_iterations(tmp
     assert [row["summary_prefix"] for row in rows] == ["v3.1.0 #0001", "v3.1.0 #0002"]
 
 
+def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-snapshot-demo", version="3.1.1")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-snapshot-1", turn_id="turn-1")
+    sleep_calls: list[float] = []
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        event_mode="snapshot",
+        sleep=lambda seconds: sleep_calls.append(seconds),
+    )
+
+    assert sleep_calls == [0.25]
+    assert result["iterations"] == 2
+    assert result["event_mode"] == "snapshot"
+    assert result["skipped_unchanged_iterations"] == 1
+    assert result["status_counts"] == {"imported": 1}
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 1
+
+
 def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsys) -> None:
     make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "watch-loop-cli-demo", version="3.2.0")
@@ -674,6 +699,8 @@ def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsy
             "1",
             "--poll-interval",
             "0",
+            "--event-mode",
+            "snapshot",
             "--format",
             "json",
         ],
@@ -684,7 +711,10 @@ def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsy
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["mode"] == "watch"
+    assert payload["follow"] is False
+    assert payload["event_mode"] == "snapshot"
     assert payload["instances"][0]["iterations"] == 1
+    assert payload["instances"][0]["event_mode"] == "snapshot"
     assert payload["instances"][0]["status_counts"] == {"imported": 1}
 
 
@@ -704,6 +734,17 @@ def test_watch_codex_session_roots_normalizes_iteration_options(tmp_path: Path) 
 
     assert result["iterations"] == 1
     assert result["status_counts"] == {"imported": 1}
+
+
+def test_watch_codex_session_roots_rejects_unknown_event_mode(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    try:
+        watch_codex_session_roots(store, (tmp_path / "sessions",), event_mode="bogus")
+    except ValueError as exc:
+        assert "event mode" in str(exc)
+    else:
+        raise AssertionError("expected invalid event mode rejection")
 
 
 def test_codex_history_watch_once_rejects_missing_instance(tmp_path: Path, capsys) -> None:

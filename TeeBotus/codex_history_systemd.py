@@ -17,6 +17,7 @@ from TeeBotus.systemd import (
 DEFAULT_SERVICE_NAME = "teebotus-codex-history.service"
 DEFAULT_INSTANCES_DIR = "instances"
 DEFAULT_RESTART_SEC = "5s"
+DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 DEFAULT_LIMIT = 1000
 DEFAULT_MAX_ITERATIONS = 1
 
@@ -42,11 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instance", default="", help="Single instance passed to codex-history watch.")
     parser.add_argument("--sessions-root", action="append", default=[], help="Codex session root passed to codex-history watch; repeatable.")
     parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Max session JSONL files per scan.")
+    parser.add_argument("--event-mode", choices=("auto", "watchdog", "snapshot", "poll"), default="auto", help="Codex history watch backend.")
+    parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS, help="Fallback wait interval for watch mode.")
+    parser.add_argument("--follow", dest="follow", action="store_true", default=True, help="Run the watcher persistently in the systemd service.")
+    parser.add_argument("--no-follow", dest="follow", action="store_false", help="Use the legacy bounded scan plus systemd restart loop.")
     parser.add_argument(
         "--max-iterations",
         type=int,
         default=DEFAULT_MAX_ITERATIONS,
-        help="Bounded watch iterations per service start. Keep >0; RestartSec provides continuous polling.",
+        help="Bounded watch iterations per service start when --no-follow is used.",
     )
     parser.add_argument("--restart-sec", default=DEFAULT_RESTART_SEC, help="systemd RestartSec interval.")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit file instead of writing it.")
@@ -64,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
             instance=args.instance,
             sessions_roots=tuple(args.sessions_root or ()),
             limit=int(args.limit),
+            event_mode=args.event_mode,
+            poll_interval_seconds=float(args.poll_interval),
+            follow=bool(args.follow),
             max_iterations=int(args.max_iterations),
             restart_sec=args.restart_sec,
         )
@@ -96,6 +104,9 @@ def render_codex_history_systemd_unit(
     instance: str = "",
     sessions_roots: tuple[str | Path, ...] = (),
     limit: int = DEFAULT_LIMIT,
+    event_mode: str = "auto",
+    poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
+    follow: bool = True,
     max_iterations: int = DEFAULT_MAX_ITERATIONS,
     restart_sec: str = DEFAULT_RESTART_SEC,
 ) -> CodexHistorySystemdUnit:
@@ -109,6 +120,8 @@ def render_codex_history_systemd_unit(
     session_args = _session_root_args(repo, sessions_roots)
     limit = _positive_int(limit, label="limit")
     max_iterations = _positive_int(max_iterations, label="max iterations")
+    event_mode = _event_mode(event_mode)
+    poll_interval_seconds = _non_negative_float(poll_interval_seconds, label="poll interval")
     restart_sec = _systemd_interval(restart_sec)
 
     command = [
@@ -119,11 +132,17 @@ def render_codex_history_systemd_unit(
         "watch",
         "--instances-dir",
         _shell_quote(instances_arg),
-        "--max-iterations",
-        str(max_iterations),
+        "--event-mode",
+        event_mode,
+        "--poll-interval",
+        _format_seconds(poll_interval_seconds),
         "--limit",
         str(limit),
     ]
+    if follow:
+        command.append("--follow")
+    else:
+        command.extend(["--max-iterations", str(max_iterations)])
     if instances:
         command.append(_shell_quote(f"--instances={instances}"))
     if instance:
@@ -143,7 +162,7 @@ def render_codex_history_systemd_unit(
             f"WorkingDirectory={_systemd_unit_value(str(repo), label='repo root')}",
             f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
             "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
-            "Restart=always",
+            "Restart=on-failure" if follow else "Restart=always",
             f"RestartSec={_systemd_unit_value(restart_sec, label='restart interval')}",
             "NoNewPrivileges=true",
             "PrivateTmp=true",
@@ -201,6 +220,26 @@ def _positive_int(value: int, *, label: str) -> int:
     if number < 1:
         raise ValueError(f"Codex history {label} must be >= 1 for the restart-driven watcher service")
     return number
+
+
+def _non_negative_float(value: float, *, label: str) -> float:
+    number = float(value)
+    if number < 0:
+        raise ValueError(f"Codex history {label} must be >= 0")
+    return number
+
+
+def _format_seconds(value: float) -> str:
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _event_mode(value: str) -> str:
+    text = _validate_systemd_unit_value(str(value or "auto").strip().casefold(), label="event mode")
+    if text not in {"auto", "watchdog", "snapshot", "poll"}:
+        raise ValueError("Codex history event mode must be one of auto, watchdog, snapshot or poll")
+    return text
 
 
 def _systemd_interval(value: str) -> str:

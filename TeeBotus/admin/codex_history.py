@@ -7,6 +7,7 @@ import json
 import re
 import os
 import subprocess
+import threading
 import time
 import sys
 import tomllib
@@ -459,28 +460,48 @@ def watch_codex_session_roots(
     *,
     poll_interval_seconds: float = 1.0,
     max_iterations: int = 1,
+    follow: bool = False,
+    event_mode: str = "poll",
     limit: int = 1000,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     iterations = 0
-    if max_iterations < 1:
+    if not follow and max_iterations < 1:
         max_iterations = 1
     if poll_interval_seconds < 0:
         poll_interval_seconds = 0.0
+    normalized_event_mode = _normalize_watch_event_mode(event_mode)
     items: list[dict[str, Any]] = []
+    skipped_unchanged = 0
+    last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     while True:
         iterations += 1
-        report = import_codex_session_roots(store, roots, limit=limit)
-        iteration_items = report.get("items", [])
-        if isinstance(iteration_items, list):
-            items.extend(iteration_items)
-        if max_iterations > 0 and iterations >= max_iterations:
+        current_snapshot = _codex_session_roots_snapshot(roots, limit=limit) if normalized_event_mode != "poll" else None
+        should_scan = normalized_event_mode == "poll" or last_snapshot is None or current_snapshot != last_snapshot
+        if should_scan:
+            report = import_codex_session_roots(store, roots, limit=limit)
+            iteration_items = report.get("items", [])
+            if isinstance(iteration_items, list):
+                items.extend(iteration_items)
+        else:
+            skipped_unchanged += 1
+        if current_snapshot is not None:
+            last_snapshot = current_snapshot
+        if not follow and max_iterations > 0 and iterations >= max_iterations:
             break
         if poll_interval_seconds > 0:
-            sleep(float(poll_interval_seconds))
+            _wait_for_codex_session_change(
+                roots,
+                poll_interval_seconds=float(poll_interval_seconds),
+                event_mode=normalized_event_mode,
+                sleep=sleep,
+            )
     return {
         "ok": not any(item.get("status") == "error" for item in items),
         "iterations": iterations,
+        "follow": bool(follow),
+        "event_mode": normalized_event_mode,
+        "skipped_unchanged_iterations": skipped_unchanged,
         "items": items,
         "status_counts": _status_counts(items),
     }
@@ -1080,6 +1101,83 @@ def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tup
     return tuple(files)
 
 
+def _normalize_watch_event_mode(value: str) -> str:
+    normalized = str(value or "poll").strip().casefold()
+    if normalized not in {"poll", "snapshot", "watchdog", "auto"}:
+        raise ValueError(f"unsupported Codex history watch event mode: {value}")
+    return normalized
+
+
+def _codex_session_roots_snapshot(roots: Sequence[str | Path], *, limit: int) -> tuple[tuple[str, int, int], ...]:
+    snapshot: list[tuple[str, int, int]] = []
+    for path in _iter_codex_session_files(roots, limit=limit):
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        snapshot.append((str(path), int(stat.st_size), int(stat.st_mtime_ns)))
+    return tuple(snapshot)
+
+
+def _wait_for_codex_session_change(
+    roots: Sequence[str | Path],
+    *,
+    poll_interval_seconds: float,
+    event_mode: str,
+    sleep: Callable[[float], None],
+) -> None:
+    if poll_interval_seconds <= 0:
+        return
+    normalized_event_mode = _normalize_watch_event_mode(event_mode)
+    if normalized_event_mode in {"auto", "watchdog"}:
+        if _wait_for_watchdog_codex_session_change(roots, timeout_seconds=poll_interval_seconds):
+            return
+        if normalized_event_mode == "watchdog":
+            return
+    sleep(float(poll_interval_seconds))
+
+
+def _wait_for_watchdog_codex_session_change(roots: Sequence[str | Path], *, timeout_seconds: float) -> bool:
+    try:
+        from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
+        from watchdog.observers import Observer  # type: ignore[import-not-found]
+    except ImportError:
+        return False
+
+    changed = threading.Event()
+
+    class _CodexSessionEventHandler(FileSystemEventHandler):  # type: ignore[misc, valid-type]
+        def on_any_event(self, event: Any) -> None:  # noqa: ANN401 - watchdog event type is optional.
+            if getattr(event, "is_directory", False):
+                return
+            src_path = str(getattr(event, "src_path", "") or "")
+            dest_path = str(getattr(event, "dest_path", "") or "")
+            if src_path.endswith(".jsonl") or dest_path.endswith(".jsonl"):
+                changed.set()
+
+    observer = Observer()
+    scheduled = False
+    handler = _CodexSessionEventHandler()
+    for root_value in roots:
+        try:
+            root = _safe_repo_root(Path(root_value), operation="sessions root")
+        except ValueError:
+            continue
+        watch_root = root.parent if root.is_file() else root
+        if not watch_root.exists() or not watch_root.is_dir():
+            continue
+        observer.schedule(handler, str(watch_root), recursive=True)
+        scheduled = True
+    if not scheduled:
+        return False
+    try:
+        observer.start()
+        return bool(changed.wait(max(0.0, float(timeout_seconds))))
+    finally:
+        observer.stop()
+        observer.join(timeout=5.0)
+
+
 def build_codex_history_report(
     *,
     instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
@@ -1283,6 +1381,8 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--limit", type=int, default=1000)
     watch_parser.add_argument("--max-iterations", type=int, default=1)
     watch_parser.add_argument("--poll-interval", type=float, default=1.0)
+    watch_parser.add_argument("--event-mode", choices=("poll", "snapshot", "watchdog", "auto"), default="poll")
+    watch_parser.add_argument("--follow", action="store_true", help="Run until the process is stopped instead of exiting after max iterations.")
     watch_parser.add_argument("--format", choices=("text", "json"), default="text")
     watch_parser.add_argument("--once", action="store_true")
 
@@ -1432,12 +1532,16 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                     safe_roots,
                     poll_interval_seconds=poll_interval_seconds,
                     max_iterations=max_iterations,
+                    follow=bool(args.follow),
+                    event_mode=str(args.event_mode or "poll"),
                     limit=int(args.limit or 0),
                 )
                 instance_reports.append({"instance": instance_name, **watch_report})
             payload = {
                 "ok": not any(not report.get("ok") for report in instance_reports),
                 "mode": "watch",
+                "follow": bool(args.follow),
+                "event_mode": str(args.event_mode or "poll"),
                 "sessions_roots": [str(root) for root in safe_roots],
                 "instances_dir": str(instances_dir),
                 "instances": instance_reports,
