@@ -150,17 +150,22 @@ def test_export_from_store_decrypts_structured_memory(tmp_path, monkeypatch):
     assert "User_Habbits_and_behave.md" not in payload["files"]
 
 
-def test_export_from_store_decrypts_proactive_agent_files(tmp_path):
+def test_export_from_store_decrypts_proactive_agent_collections(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
     store = AccountStore(tmp_path / "accounts", "Bot", StaticSecretProvider(b"f" * 32))
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     store.write_agent_state(account_id, {"proactive": {"enabled": True}})
     store.append_proactive_outbox_item(account_id, {"message_text": "Erinnerung spaeter", "category": "reminder"})
     store.append_proactive_audit_event(account_id, {"event_type": "llm_decision_rejected", "reason": "unsafe_message_text"})
 
-    raw = (store.account_dir(account_id) / "Proactive_Outbox.jsonl").read_text(encoding="utf-8")
-    assert "Erinnerung spaeter" not in raw
-    raw_audit = (store.account_dir(account_id) / "Proactive_Audit.jsonl").read_text(encoding="utf-8")
-    assert "unsafe_message_text" not in raw_audit
+    assert not (store.account_dir(account_id) / "Proactive_Outbox.jsonl").exists()
+    assert not (store.account_dir(account_id) / "Proactive_Audit.jsonl").exists()
+    raw_db = sqlite_path.read_bytes()
+    assert b"Erinnerung spaeter" not in raw_db
+    assert b"unsafe_message_text" not in raw_db
     result = export_account_data_from_store(store, account_id, "json")
     payload = json.loads(result.data.decode("utf-8"))
 
