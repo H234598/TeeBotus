@@ -505,6 +505,7 @@ Stand 2026-06-19:
 - `codex-history index` fuehrt Export und optionalen Qdrant-Rebuild in einem Admin-Lauf zusammen.
 - `codex-history watch --post-index` aktualisiert den admin-only Bibliothekar-Export nach Watcher-Scans; `--post-index-qdrant` haengt optional den separaten Qdrant-Rebuild an.
 - `teebotus-codex-history-systemd` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
+- `teebotus-codex-history-systemd --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -522,7 +523,11 @@ Stand 2026-06-19:
 	* `codex-history watch --post-index` aktualisiert die admin-only Markdown-Quelle nach jedem Scan, auch im persistenten `--follow`-Modus.
 	* `codex-history watch --post-index-qdrant` aktualisiert optional auch die separate Qdrant-Collection nach jedem Scan.
 	* `teebotus-codex-history-systemd` setzt `--post-index` standardmaessig, Qdrant bewusst nur explizit.
-* Offen: Ein separater Timer/Low-Priority-Batch fuer Qdrant-Rebuild und spaetere lokale LLM-Kategorisierung.
+* Teilweise erledigt: separater Timer/Low-Priority-Batch fuer Qdrant-Rebuild.
+	* `teebotus-codex-history-systemd --index-timer` erzeugt `teebotus-codex-history-index.service` und `teebotus-codex-history-index.timer`.
+	* Der Service ist `Type=oneshot` und laeuft mit `Nice=10`, `IOSchedulingClass=best-effort`, `IOSchedulingPriority=7`, `CPUWeight=10`, `IOWeight=10`.
+	* Default-Timer: `OnUnitActiveSec=6h`, `RandomizedDelaySec=15min`, `Persistent=true`.
+* Offen: lokale LLM-Kategorisierung im Low-Priority-Batch.
 * Kategorien fuer Qdrant sind eingebaut, aber noch deterministisch/statisch.
 * Ein geeignetes, Int8, lokales LLM darf die Kategorien für die Nachricht(en) festlegen.
 	* Es ist es klug, das alle paar Stunden als konsolidierten Lauf (niedrigste Prozessprio) laufen zu lassen, statt jede Nachricht einzeln zu kategorisieren.

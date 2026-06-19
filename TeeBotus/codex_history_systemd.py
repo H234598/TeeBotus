@@ -15,17 +15,29 @@ from TeeBotus.systemd import (
 
 
 DEFAULT_SERVICE_NAME = "teebotus-codex-history.service"
+DEFAULT_INDEX_SERVICE_NAME = "teebotus-codex-history-index.service"
+DEFAULT_INDEX_TIMER_NAME = "teebotus-codex-history-index.timer"
 DEFAULT_INSTANCES_DIR = "instances"
 DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 DEFAULT_LIMIT = 1000
 DEFAULT_MAX_ITERATIONS = 1
+DEFAULT_INDEX_INTERVAL = "6h"
+DEFAULT_INDEX_RANDOMIZED_DELAY = "15min"
 
 
 @dataclass(frozen=True)
 class CodexHistorySystemdUnit:
     service_name: str
     service_text: str
+
+
+@dataclass(frozen=True)
+class CodexHistoryIndexSystemdUnits:
+    service_name: str
+    service_text: str
+    timer_name: str
+    timer_text: str
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -53,6 +65,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
     parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
     parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
+    parser.add_argument("--index-timer", action="store_true", help="Also render/install a low-priority periodic Codex-History admin index timer.")
+    parser.add_argument("--index-service-name", default=DEFAULT_INDEX_SERVICE_NAME, help="User systemd service filename for periodic Codex-History indexing.")
+    parser.add_argument("--index-timer-name", default=DEFAULT_INDEX_TIMER_NAME, help="User systemd timer filename for periodic Codex-History indexing.")
+    parser.add_argument("--index-interval", default=DEFAULT_INDEX_INTERVAL, help="Timer OnUnitActiveSec interval for periodic Codex-History indexing.")
+    parser.add_argument(
+        "--index-randomized-delay",
+        default=DEFAULT_INDEX_RANDOMIZED_DELAY,
+        help="Timer RandomizedDelaySec for periodic Codex-History indexing.",
+    )
+    parser.add_argument("--index-repo", default="", help="Repo filter passed to codex-history index.")
+    parser.add_argument("--index-limit", type=int, default=0, help="Limit codex-history index to latest N summaries after filtering; 0 means all.")
+    parser.add_argument("--index-qdrant-url", default="", help="Override Qdrant URL for periodic index rebuild.")
+    parser.add_argument("--index-qdrant-dry-run", action="store_true", help="Count periodic Qdrant chunks without writing Qdrant.")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -86,21 +111,59 @@ def main(argv: list[str] | None = None) -> int:
             max_iterations=int(args.max_iterations),
             restart_sec=args.restart_sec,
         )
+        index_units = (
+            render_codex_history_index_systemd_units(
+                repo_root=Path(args.repo_root),
+                python_executable=args.python,
+                service_name=args.index_service_name,
+                timer_name=args.index_timer_name,
+                env_file=args.env_file,
+                instances_dir=args.instances_dir,
+                instances=args.instances,
+                instance=args.instance,
+                interval=args.index_interval,
+                randomized_delay=args.index_randomized_delay,
+                repo=args.index_repo,
+                limit=int(args.index_limit),
+                qdrant_url=args.index_qdrant_url,
+                qdrant_dry_run=bool(args.index_qdrant_dry_run),
+            )
+            if args.index_timer
+            else None
+        )
     except ValueError as exc:
         parser.error(str(exc))
     if args.print_only:
         print(f"# {unit.service_name}")
         print(unit.service_text, end="")
+        if index_units is not None:
+            print(f"# {index_units.service_name}")
+            print(index_units.service_text, end="")
+            print(f"# {index_units.timer_name}")
+            print(index_units.timer_text, end="")
         return 0
     user_dir = Path.home() / ".config" / "systemd" / "user"
     user_dir.mkdir(parents=True, exist_ok=True)
-    target = user_dir / unit.service_name
-    target.write_text(unit.service_text, encoding="utf-8")
-    print(f"wrote {target}")
+    targets = [(unit.service_name, unit.service_text)]
+    if index_units is not None:
+        targets.extend(
+            [
+                (index_units.service_name, index_units.service_text),
+                (index_units.timer_name, index_units.timer_text),
+            ]
+        )
+    for name, text in targets:
+        target = user_dir / name
+        target.write_text(text, encoding="utf-8")
+        print(f"wrote {target}")
     if args.enable:
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
         subprocess.run(["systemctl", "--user", "enable", "--now", unit.service_name], check=True)
+        if index_units is not None:
+            subprocess.run(["systemctl", "--user", "enable", "--now", index_units.timer_name], check=True)
         print(f"enabled {unit.service_name}")
+        if index_units is not None:
+            print(f"enabled {index_units.timer_name}")
     return 0
 
 
@@ -202,6 +265,109 @@ def render_codex_history_systemd_unit(
     return CodexHistorySystemdUnit(service_name=service_name, service_text=service_text)
 
 
+def render_codex_history_index_systemd_units(
+    *,
+    repo_root: Path,
+    python_executable: str = "",
+    service_name: str = DEFAULT_INDEX_SERVICE_NAME,
+    timer_name: str = DEFAULT_INDEX_TIMER_NAME,
+    env_file: str = ".env",
+    instances_dir: str = DEFAULT_INSTANCES_DIR,
+    instances: str = "",
+    instance: str = "",
+    interval: str = DEFAULT_INDEX_INTERVAL,
+    randomized_delay: str = DEFAULT_INDEX_RANDOMIZED_DELAY,
+    repo: str = "",
+    limit: int = 0,
+    qdrant_url: str = "",
+    qdrant_dry_run: bool = False,
+) -> CodexHistoryIndexSystemdUnits:
+    service_name = _service_name(service_name)
+    timer_name = _timer_name(timer_name)
+    repo_root = repo_root.expanduser().resolve()
+    python_path = _python_path(repo_root, python_executable)
+    env_path = _env_path(repo_root, env_file)
+    instances_arg = _instances_path(repo_root, instances_dir)
+    instances = _csv_argument(instances, label="instances")
+    instance = _optional_instance_name(instance)
+    interval = _systemd_interval(interval)
+    randomized_delay = _systemd_interval(randomized_delay)
+    repo_filter = _optional_systemd_argument(repo, label="index repo filter")
+    qdrant_url = _optional_systemd_argument(qdrant_url, label="index qdrant url")
+    index_limit = _non_negative_int(limit, label="index limit")
+
+    command = [
+        _shell_quote(str(python_path)),
+        "-m",
+        "TeeBotus.admin",
+        "codex-history",
+        "index",
+        "--instances-dir",
+        _shell_quote(instances_arg),
+        "--qdrant",
+        "--qdrant-ensure",
+    ]
+    if instances:
+        command.append(_shell_quote(f"--instances={instances}"))
+    if instance:
+        command.append(_shell_quote(f"--instance={instance}"))
+    if repo_filter:
+        command.extend(["--repo", _shell_quote(repo_filter)])
+    if index_limit > 0:
+        command.extend(["--limit", str(index_limit)])
+    if qdrant_url:
+        command.extend(["--qdrant-url", _shell_quote(qdrant_url)])
+    if qdrant_dry_run:
+        command.append("--qdrant-dry-run")
+
+    service_text = "\n".join(
+        [
+            "[Unit]",
+            "Description=TeeBotus Codex history admin index refresh",
+            "Documentation=https://github.com/H234598/TeeBotus",
+            "Wants=network-online.target",
+            "After=network-online.target",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            f"WorkingDirectory={_systemd_unit_value(str(repo_root), label='repo root')}",
+            f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
+            "Nice=10",
+            "IOSchedulingClass=best-effort",
+            "IOSchedulingPriority=7",
+            "CPUWeight=10",
+            "IOWeight=10",
+            "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
+            "NoNewPrivileges=true",
+            "PrivateTmp=true",
+            "",
+        ]
+    )
+    timer_text = "\n".join(
+        [
+            "[Unit]",
+            "Description=Run TeeBotus Codex history admin index refresh",
+            "",
+            "[Timer]",
+            "OnBootSec=5min",
+            f"OnUnitActiveSec={_systemd_unit_value(interval, label='index interval')}",
+            f"RandomizedDelaySec={_systemd_unit_value(randomized_delay, label='index randomized delay')}",
+            "Persistent=true",
+            f"Unit={_systemd_unit_value(service_name, label='index service name')}",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+            "",
+        ]
+    )
+    return CodexHistoryIndexSystemdUnits(
+        service_name=service_name,
+        service_text=service_text,
+        timer_name=timer_name,
+        timer_text=timer_text,
+    )
+
+
 def _env_path(repo_root: Path, value: str) -> Path:
     raw = str(value or "").strip() or ".env"
     path = Path(raw).expanduser()
@@ -246,10 +412,31 @@ def _optional_systemd_argument(value: str, *, label: str) -> str:
     return _validate_systemd_unit_value(str(value or "").strip(), label=label)
 
 
+def _timer_name(value: str) -> str:
+    name = str(value or "").strip()
+    if not name:
+        raise ValueError("systemd timer name must not be empty")
+    if not name.endswith(".timer"):
+        name = f"{name}.timer"
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.@-")
+    if any(char not in allowed for char in name):
+        raise ValueError("systemd timer name contains unsupported characters")
+    if not name[0].isalnum():
+        raise ValueError("systemd timer name must start with an ASCII letter or digit")
+    return name
+
+
 def _positive_int(value: int, *, label: str) -> int:
     number = int(value)
     if number < 1:
         raise ValueError(f"Codex history {label} must be >= 1 for the restart-driven watcher service")
+    return number
+
+
+def _non_negative_int(value: int, *, label: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise ValueError(f"Codex history {label} must be >= 0")
     return number
 
 

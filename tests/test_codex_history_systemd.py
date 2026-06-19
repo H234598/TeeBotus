@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from TeeBotus.codex_history_systemd import main, render_codex_history_systemd_unit
+from TeeBotus.codex_history_systemd import main, render_codex_history_index_systemd_units, render_codex_history_systemd_unit
 
 
 def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) -> None:
@@ -74,6 +74,52 @@ def test_render_codex_history_systemd_unit_can_enable_qdrant_post_index(tmp_path
     assert "--post-index-qdrant-url http://127.0.0.1:6333" in unit.service_text
     assert "--post-index-qdrant-dry-run" in unit.service_text
     assert "--post-index-qdrant-ensure" in unit.service_text
+
+
+def test_render_codex_history_index_systemd_units_builds_low_priority_timer(tmp_path: Path) -> None:
+    units = render_codex_history_index_systemd_units(
+        repo_root=tmp_path,
+        python_executable="/usr/bin/python3",
+        instances_dir="instances",
+        instance="Depressionsbot",
+        interval="4h",
+        randomized_delay="20min",
+        repo="TeeBotus",
+        limit=25,
+        qdrant_url="http://127.0.0.1:6333",
+    )
+
+    assert units.service_name == "teebotus-codex-history-index.service"
+    assert units.timer_name == "teebotus-codex-history-index.timer"
+    assert "Type=oneshot" in units.service_text
+    assert "Nice=10" in units.service_text
+    assert "IOSchedulingClass=best-effort" in units.service_text
+    assert "IOSchedulingPriority=7" in units.service_text
+    assert "CPUWeight=10" in units.service_text
+    assert "IOWeight=10" in units.service_text
+    assert "ExecStart=/usr/bin/python3 -m TeeBotus.admin codex-history index" in units.service_text
+    assert f"--instances-dir {tmp_path.resolve() / 'instances'}" in units.service_text
+    assert "--instance=Depressionsbot" in units.service_text
+    assert "--qdrant" in units.service_text
+    assert "--qdrant-ensure" in units.service_text
+    assert "--repo TeeBotus" in units.service_text
+    assert "--limit 25" in units.service_text
+    assert "--qdrant-url http://127.0.0.1:6333" in units.service_text
+    assert "OnBootSec=5min" in units.timer_text
+    assert "OnUnitActiveSec=4h" in units.timer_text
+    assert "RandomizedDelaySec=20min" in units.timer_text
+    assert "Persistent=true" in units.timer_text
+    assert "Unit=teebotus-codex-history-index.service" in units.timer_text
+    assert "WantedBy=timers.target" in units.timer_text
+
+
+def test_render_codex_history_index_systemd_units_rejects_unsafe_timer_name(tmp_path: Path) -> None:
+    try:
+        render_codex_history_index_systemd_units(repo_root=tmp_path, timer_name="../bad.timer")
+    except ValueError as exc:
+        assert "timer name" in str(exc)
+    else:
+        raise AssertionError("expected unsafe timer name rejection")
 
 
 def test_render_codex_history_systemd_unit_can_use_legacy_bounded_restart_loop(tmp_path: Path) -> None:
@@ -154,6 +200,18 @@ def test_codex_history_systemd_print_mode_outputs_service(tmp_path: Path, capsys
     assert "ExecStart=python3 -m TeeBotus.admin codex-history watch" in captured.out
 
 
+def test_codex_history_systemd_print_mode_can_output_index_timer(tmp_path: Path, capsys) -> None:
+    result = main(["--repo-root", str(tmp_path), "--index-timer", "--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "# teebotus-codex-history.service" in captured.out
+    assert "# teebotus-codex-history-index.service" in captured.out
+    assert "# teebotus-codex-history-index.timer" in captured.out
+    assert "ExecStart=python3 -m TeeBotus.admin codex-history index" in captured.out
+    assert "OnUnitActiveSec=6h" in captured.out
+
+
 def test_codex_history_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path: Path) -> None:
     calls: list[list[str]] = []
 
@@ -171,4 +229,28 @@ def test_codex_history_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path:
     assert calls == [
         ["systemctl", "--user", "daemon-reload"],
         ["systemctl", "--user", "enable", "--now", "teebotus-codex-history.service"],
+    ]
+
+
+def test_codex_history_systemd_enable_with_index_timer_writes_and_enables_timer(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, check=False, **_kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("TeeBotus.codex_history_systemd.Path.home", lambda: tmp_path)
+    monkeypatch.setattr("TeeBotus.codex_history_systemd.subprocess.run", fake_run)
+
+    result = main(["--repo-root", str(tmp_path), "--index-timer", "--enable"])
+
+    assert result == 0
+    user_dir = tmp_path / ".config" / "systemd" / "user"
+    assert (user_dir / "teebotus-codex-history.service").exists()
+    assert (user_dir / "teebotus-codex-history-index.service").exists()
+    assert (user_dir / "teebotus-codex-history-index.timer").exists()
+    assert calls == [
+        ["systemctl", "--user", "daemon-reload"],
+        ["systemctl", "--user", "enable", "--now", "teebotus-codex-history.service"],
+        ["systemctl", "--user", "enable", "--now", "teebotus-codex-history-index.timer"],
     ]
