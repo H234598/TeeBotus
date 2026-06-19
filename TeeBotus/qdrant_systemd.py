@@ -142,7 +142,9 @@ def _systemd_token(value: str, *, label: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise ValueError(f"Qdrant {label} must not be empty")
-    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.@-")
+    if not text[0].isalnum():
+        raise ValueError(f"Qdrant {label} must start with an alphanumeric character")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-")
     if any(char not in allowed for char in text):
         raise ValueError(f"Qdrant {label} contains unsupported characters")
     return text

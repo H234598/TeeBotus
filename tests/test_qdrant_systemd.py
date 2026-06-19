@@ -38,6 +38,33 @@ def test_render_qdrant_systemd_unit_rejects_non_local_bind() -> None:
         raise AssertionError("expected public Qdrant bind to fail")
 
 
+def test_render_qdrant_systemd_unit_rejects_unsafe_names() -> None:
+    cases = [
+        {"container_name": "."},
+        {"container_name": ".."},
+        {"container_name": "---"},
+        {"container_name": "@bad"},
+        {"container_name": "bad@name"},
+        {"volume_name": "."},
+        {"volume_name": "---"},
+    ]
+    for kwargs in cases:
+        try:
+            render_qdrant_systemd_unit(**kwargs)
+        except ValueError as exc:
+            assert "Qdrant" in str(exc)
+        else:
+            raise AssertionError(f"expected unsafe name rejection for {kwargs}")
+
+
+def test_render_qdrant_systemd_unit_allows_dotted_safe_names() -> None:
+    unit = render_qdrant_systemd_unit(container_name="qdrant.store", volume_name="qdrant-store_1")
+
+    assert unit.service_name == "qdrant.store.service"
+    assert "--name qdrant.store" in unit.service_text
+    assert "-v qdrant-store_1:/qdrant/storage" in unit.service_text
+
+
 def test_render_qdrant_systemd_unit_rejects_control_characters() -> None:
     cases = [
         {"image": "docker.io/qdrant/qdrant:v1.18.2\nExecStart=/bin/false"},
