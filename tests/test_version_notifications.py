@@ -953,6 +953,32 @@ def test_version_notification_state_normalization_keeps_newest_updated_at() -> N
     assert state["versions"]["1.0.3"]["updated_at"] == "2026-06-14T12:00:00+00:00"
 
 
+def test_version_notification_state_normalization_drops_invalid_timestamps() -> None:
+    state = _normalize_state(
+        {
+            "versions": {
+                "1.0.3": {
+                    "updated_at": "2026-06-14T12:00:00+00:00\nBAD",
+                    "failed_identities": {
+                        "telegram:user:111": {
+                            "adapter_slot": 1,
+                            "chat_id": 111,
+                            "failed_at": "not-a-date\nBAD",
+                            "reason": "chat not found",
+                        }
+                    },
+                }
+            }
+        }
+    )
+
+    version_state = state["versions"]["1.0.3"]
+    failure = version_state["failed_identities"]["telegram:user:111"]
+    assert "updated_at" not in version_state
+    assert "failed_at" not in failure
+    assert failure["chat_id"] == 111
+
+
 def test_version_notification_state_normalization_cleans_nested_identity_state() -> None:
     state = _normalize_state(
         {

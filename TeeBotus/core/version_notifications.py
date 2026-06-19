@@ -556,6 +556,8 @@ def _merge_version_notification_state(base: dict[str, Any], incoming: dict[str, 
     updated_at = _newest_timestamp_string(base.get("updated_at"), incoming.get("updated_at"))
     if updated_at:
         merged["updated_at"] = updated_at
+    else:
+        merged.pop("updated_at", None)
     sent_identities = set(_telegram_identity_list(base.get("sent_identities")))
     sent_identities.update(_telegram_identity_list(incoming.get("sent_identities")))
     if sent_identities or "sent_identities" in base or "sent_identities" in incoming:
@@ -615,6 +617,11 @@ def _normalized_failure_payload(payload: dict[str, Any]) -> dict[str, object]:
         normalized["account_id"] = account_id
     else:
         normalized.pop("account_id", None)
+    failed_at = _valid_timestamp_string(normalized.get("failed_at"))
+    if failed_at:
+        normalized["failed_at"] = failed_at
+    else:
+        normalized.pop("failed_at", None)
     return normalized
 
 
@@ -648,8 +655,8 @@ def _merge_failure_payload(base: object, incoming: object) -> dict[str, object]:
 
 
 def _newest_timestamp_string(base: object, incoming: object) -> str:
-    base_text = str(base or "").strip() if isinstance(base, str) else ""
-    incoming_text = str(incoming or "").strip() if isinstance(incoming, str) else ""
+    base_text = _valid_timestamp_string(base)
+    incoming_text = _valid_timestamp_string(incoming)
     base_timestamp = _parse_datetime(base_text)
     incoming_timestamp = _parse_datetime(incoming_text)
     if base_timestamp is not None and incoming_timestamp is not None:
@@ -658,7 +665,12 @@ def _newest_timestamp_string(base: object, incoming: object) -> str:
         return incoming_text
     if base_timestamp is not None:
         return base_text
-    return incoming_text or base_text
+    return ""
+
+
+def _valid_timestamp_string(value: object) -> str:
+    text = str(value or "").strip() if isinstance(value, str) else ""
+    return text if _parse_datetime(text) is not None else ""
 
 
 def _load_state(account_store: AccountStore, path: Path) -> dict[str, Any]:
