@@ -264,6 +264,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._safeExecutableArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
+    assert "_terminalCommandHasEmbeddedCommand: function(argv)" in source
     assert "_safeExecutableArgs: function(value, fallback)" in source
     assert "_safePythonArgs: function(value, fallback)" in source
     assert "_isSafeExecutable: function(value)" in source
@@ -684,6 +685,11 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
           applet.codexUsageCommand = "codex-usage --profile daily";
           applet.terminalCommand = "xterm -hold";
           let validStatusCommand = applet._statusCommand();
+          let validTerminal = applet._terminalArgs();
+          applet.terminalCommand = "xterm -hold -e";
+          let validTerminalWithFinalMarker = applet._terminalArgs();
+          applet.terminalCommand = "gnome-terminal -- bash -lc bad";
+          let embeddedCommandTerminal = applet._terminalArgs();
           return {
             invalidStatusCommand: invalidStatusCommand,
             invalidCodex: invalidCodex,
@@ -692,7 +698,9 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
             moduleOverrideCommand: moduleOverrideCommand,
             validStatusCommand: validStatusCommand,
             validCodex: applet._codexUsageArgs(),
-            validTerminal: applet._terminalArgs(),
+            validTerminal: validTerminal,
+            validTerminalWithFinalMarker: validTerminalWithFinalMarker,
+            embeddedCommandTerminal: embeddedCommandTerminal,
             unsafeChecks: [
               applet._isSafeExecutable("--help"),
               applet._isSafeExecutable("file:///tmp/tool"),
@@ -717,6 +725,8 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
     assert result["validStatusCommand"][result["validStatusCommand"].index("--python") + 1] == "'/usr/bin/python3' '-B'"
     assert result["validCodex"] == ["codex-usage", "--profile", "daily"]
     assert result["validTerminal"] == ["xterm", "-hold", "-e"]
+    assert result["validTerminalWithFinalMarker"] == ["xterm", "-hold", "-e"]
+    assert result["embeddedCommandTerminal"] == ["gnome-terminal", "--"]
     assert result["unsafeChecks"] == [False, False, False, True]
 
 

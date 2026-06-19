@@ -1292,7 +1292,10 @@ TeeBotusApplet.prototype = {
     if (configured) {
       let parsed = this._safeExecutableArgs(configured, []);
       if (parsed.length > 0) {
-        return this._terminalCommandArgs(parsed);
+        let terminalArgs = this._terminalCommandArgs(parsed);
+        if (terminalArgs) {
+          return terminalArgs;
+        }
       }
     }
     for (let candidate of TERMINAL_CANDIDATES) {
@@ -1315,6 +1318,9 @@ TeeBotusApplet.prototype = {
     if (argv.length === 0) {
       return null;
     }
+    if (this._terminalCommandHasEmbeddedCommand(argv)) {
+      return null;
+    }
     let last = String(argv[argv.length - 1] || "");
     if (last === "--" || last === "-e") {
       return argv;
@@ -1324,6 +1330,20 @@ TeeBotusApplet.prototype = {
       return argv.concat(["-e"]);
     }
     return argv.concat(["--"]);
+  },
+
+  _terminalCommandHasEmbeddedCommand: function(argv) {
+    for (let index = 1; index < (argv || []).length; index++) {
+      let value = String(argv[index] || "");
+      let isFinal = index === argv.length - 1;
+      if ((value === "--" || value === "-e") && isFinal) {
+        continue;
+      }
+      if (value === "--" || value === "-e" || value === "-x" || value === "--execute" || value === "--command" || value.indexOf("--command=") === 0) {
+        return true;
+      }
+    }
+    return false;
   },
 
   _copyStatusJson: function() {
