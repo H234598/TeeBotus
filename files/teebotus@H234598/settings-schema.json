@@ -310,7 +310,7 @@
   "codex-usage-command": {
     "type": "entry",
     "description": "codex-usage command",
-    "tooltip": "Command used for codex-usage terminal actions; leave as codex-usage when it is on PATH.",
+    "tooltip": "Command used for codex-usage terminal actions; leave as codex-usage when it is installed in ~/.local/bin or a trusted system bin directory.",
     "default": "codex-usage"
   },
   "github-url": {

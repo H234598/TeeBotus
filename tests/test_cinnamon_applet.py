@@ -74,7 +74,7 @@ const context = {{
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
-            file_test: (path, flag) => flag === 1 && ["/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/xterm"].includes(path),
+            file_test: (path, flag) => flag === 1 && ["/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/systemctl", "/usr/bin/xterm", "/tmp/.local/bin/codex-usage"].includes(path),
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -599,6 +599,46 @@ def test_cinnamon_applet_proactive_command_uses_argv_quoting() -> None:
     assert "; touch /tmp/teebotus-pwned" not in result["command"]
 
 
+def test_cinnamon_applet_terminal_commands_use_resolved_executables() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let captured = [];
+          applet._openTerminalShell = function(cwd, command) {
+            captured.push({cwd: cwd, command: command, statusText: applet.statusText || ""});
+          };
+          applet.repoPath = "/repo";
+          applet.codexUsagePath = "/repo/codex-usage";
+          applet.codexUsageCommand = "codex-usage";
+          applet._setStatusText = function(text) {
+            this.statusText = String(text || "");
+          };
+          applet._openTerminalForCommand("/repo", ["systemctl", "--user", "status", "teebotus.service"]);
+          applet._openCodexUsage(["latest"]);
+          applet._openTerminalForCommand("/repo", ["missing-tool", "--help"]);
+          return {
+            captured: captured,
+            statusText: applet.statusText
+          };
+        })()
+        """
+    )
+
+    assert result["captured"] == [
+        {
+            "cwd": "/repo",
+            "command": "'/usr/bin/systemctl' '--user' 'status' 'teebotus.service'",
+            "statusText": "",
+        },
+        {
+            "cwd": "/repo/codex-usage",
+            "command": "'/tmp/.local/bin/codex-usage' 'latest'",
+            "statusText": "",
+        },
+    ]
+    assert result["statusText"] == "Terminal command unavailable: Error: Command is not in a trusted system path"
+
+
 def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
     result = _run_js_applet_expression(
         """
@@ -768,6 +808,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             bare: applet._resolveSpawnArgv(["gnome-terminal", "--"]),
             absolute: applet._resolveSpawnArgv(["/usr/bin/python3", "-m", "TeeBotus"]),
             trustedBare: applet._trustedExecutablePath("gnome-terminal"),
+            userLocalBare: applet._trustedExecutablePath("codex-usage"),
             trustedAbsolute: applet._trustedExecutablePath("/usr/bin/python3"),
             missingAbsolute: applet._trustedExecutablePath("/tmp/missing-python"),
             trusted: applet._findTrustedProgramInPath("gnome-terminal"),
@@ -783,6 +824,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "bare": ["/usr/bin/gnome-terminal", "--"],
         "absolute": ["/usr/bin/python3", "-m", "TeeBotus"],
         "trustedBare": "/usr/bin/gnome-terminal",
+        "userLocalBare": "/tmp/.local/bin/codex-usage",
         "trustedAbsolute": "/usr/bin/python3",
         "missingAbsolute": None,
         "trusted": "/usr/bin/gnome-terminal",

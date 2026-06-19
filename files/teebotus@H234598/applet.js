@@ -125,7 +125,7 @@ const QUICK_COMMANDS = [
   "/register",
   "/memory_reset"
 ];
-const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin"];
+const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin", GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"])];
 const TERMINAL_CANDIDATES = [
   "gnome-terminal",
   "x-terminal-emulator",
@@ -1275,7 +1275,14 @@ TeeBotusApplet.prototype = {
   },
 
   _openTerminalForCommand: function(cwd, argv) {
-    this._openTerminalShell(cwd, argv.map((part) => this._safeShellWord(part)).join(" "));
+    let resolvedArgv;
+    try {
+      resolvedArgv = this._resolveSpawnArgv(argv);
+    } catch (err) {
+      this._setStatusText(_("Terminal command unavailable: ") + String(err));
+      return;
+    }
+    this._openTerminalShell(cwd, resolvedArgv.map((part) => this._safeShellWord(part)).join(" "));
   },
 
   _openTerminalShell: function(cwd, command) {
