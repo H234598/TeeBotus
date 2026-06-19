@@ -133,7 +133,7 @@ def _sanitize_status_auth_output(output: str) -> str:
 
 
 def _emit_status_auth_report(output: str, *, stream: TextIO = sys.stdout) -> None:
-    stream.write(output)
+    stream.write(redact_status_text(str(output or "")))
 
 
 @dataclass(frozen=True)

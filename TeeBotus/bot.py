@@ -2120,7 +2120,7 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
     except Exception as exc:  # noqa: BLE001 - notification must not hide runtime-status output.
         print(
             _sanitize_admin_notify_status_line(
-                f"admin_notify=runtime_status status=failed reason={type(exc).__name__}: {exc}"
+                f"admin_notify=runtime_status status=failed reason={type(exc).__name__}"
             ),
             file=sys.stderr,
         )
