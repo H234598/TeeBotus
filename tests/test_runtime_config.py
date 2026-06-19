@@ -286,6 +286,29 @@ def test_openai_key_resolution_background_services_is_depressionsbot_only():
     assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
 
 
+def test_openai_key_resolution_non_user_channels_do_not_fall_back_to_user_keys():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_1": "sk-instance-slot",
+        "OPENAI_API_KEYS_DEPRESSIONSBOT": "sk-list",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-instance",
+        "OPENAI_API_KEY": "sk-global",
+    }
+
+    assert resolve_openai_key("Depressionsbot", "proactive", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "background", 1, env) == ""
+    assert resolve_openai_key("Depressionsbot", "telegram", 1, env) == "sk-instance-slot"
+
+
+def test_openai_key_resolution_other_instances_do_not_use_global_key_for_proactive():
+    env = {
+        "OPENAI_API_KEY_BOT_DER_WAHRHEIT": "sk-instance",
+        "OPENAI_API_KEY": "sk-global",
+    }
+
+    assert resolve_openai_key("Bot_der_Wahrheit", "proactive", 1, env) == ""
+    assert resolve_openai_key("Bot_der_Wahrheit", "telegram", 1, env) == "sk-instance"
+
+
 def test_openai_key_resolution_rejects_empty_positional_key_slot():
     env = {"OPENAI_API_KEYS_DEPRESSIONSBOT": "key-a,,key-c"}
 

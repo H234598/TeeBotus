@@ -284,6 +284,8 @@ def resolve_openai_key(
     background_key = _resolve_background_openai_key(source, instance_name, instance_token, channel_token, slot)
     if background_key:
         return background_key
+    if channel_token in BACKGROUND_OPENAI_CHANNELS:
+        return ""
     value = _first_nonempty_env_value(source, candidates[2])
     if value:
         return value
