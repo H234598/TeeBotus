@@ -44,7 +44,7 @@ def notify_recent_telegram_users_for_version(
     resolved_now = now or datetime.now(timezone.utc)
     state_path = Path(instances_dir) / instance_name / "data" / NOTIFICATION_STATE_FILENAME
     state = _load_state(account_store, state_path)
-    if _sql_state_backend_available(account_store) and _state_has_versions(state):
+    if _sql_state_backend_available(account_store):
         _write_state(account_store, state_path, state)
     if not normalized_version:
         if on_skip is not None:
@@ -560,8 +560,3 @@ def _normalize_state(data: Any) -> dict[str, Any]:
 def _version_state_normalization_order(item: tuple[Any, Any]) -> bool:
     key = item[0]
     return isinstance(key, str) and bool(_normalize_version_key(key)) and _normalize_version_key(key) == key
-
-
-def _state_has_versions(state: dict[str, Any]) -> bool:
-    versions = state.get("versions")
-    return isinstance(versions, dict) and bool(versions)

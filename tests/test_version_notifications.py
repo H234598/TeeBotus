@@ -957,6 +957,40 @@ def test_notify_recent_telegram_users_migrates_legacy_state_to_sqlite_before_git
     assert b"telegram:user:111" not in raw_db
 
 
+def test_notify_recent_telegram_users_cleans_invalid_sqlite_state_before_github_tag_gate(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setattr("TeeBotus.core.version_notifications.github_has_version", lambda _repo_root, _version: False)
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    store.write_instance_json_state(
+        "Version_Notifications.json",
+        "version_notifications",
+        {"versions": {"": {"sent_identities": ["telegram:user:111"]}, "v": {"failed_identities": {}}}},
+    )
+    sent: list[int] = []
+
+    count = notify_recent_telegram_users_for_version(
+        version="1.0.3",
+        instances_dir=tmp_path / "instances",
+        instance_name="Demo",
+        account_store=store,
+        send_message=lambda chat_id, _text: sent.append(chat_id),
+        repo_root=tmp_path,
+        repo_url="https://github.com/example/project",
+        now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert count == 0
+    assert sent == []
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+    assert state == {"versions": {}}
+
+
 def test_notify_recent_telegram_users_ignores_malformed_plaintext_legacy_state_when_sqlite_is_available(
     tmp_path: Path,
     monkeypatch,
