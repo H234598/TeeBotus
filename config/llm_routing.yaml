@@ -28,3 +28,7 @@ purposes:
   codex_history_categorization:
     profile: local_ollama
     fallback: null
+
+  codex_history_strategic_analysis:
+    profile: local_ollama
+    fallback: null

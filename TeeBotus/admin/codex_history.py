@@ -43,11 +43,15 @@ from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_r
 CODEX_HISTORY_SCHEMA_VERSION = 1
 CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
+CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
+CODEX_HISTORY_INDEXABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
 CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
+CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
+CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
 CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
     {
         "change-feature",
@@ -78,6 +82,7 @@ CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
         "work-planning",
         "work-release",
         "work-benchmark",
+        "work-strategy",
     }
 )
 
@@ -163,6 +168,7 @@ class CodexHistoryReportOptions:
 
 
 CodexHistoryCategorizer = Callable[[Mapping[str, Any]], Mapping[str, Any] | Sequence[str] | str]
+CodexHistoryStrategist = Callable[[Sequence[Mapping[str, Any]]], Mapping[str, Any] | str]
 
 
 def utc_now() -> str:
@@ -928,6 +934,194 @@ def build_local_codex_history_categorizer(
     return _categorize
 
 
+def generate_codex_history_strategic_analysis(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    repo: str = "",
+    limit: int = 20,
+    strategist: CodexHistoryStrategist | None = None,
+    profile: str = CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
+    allow_remote: bool = False,
+    status: str = "queued",
+    dry_run: bool = False,
+    env: Mapping[str, str] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    timestamp = _iso_timestamp(now)
+    rows = _filter_outbox(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), repo)
+    candidates = [
+        item
+        for item in rows
+        if isinstance(item, Mapping) and str(item.get("kind") or "").strip() == "codex_run_summary"
+    ]
+    candidates = sorted(candidates, key=_summary_sort_key)
+    if limit > 0:
+        candidates = candidates[-int(limit) :]
+    if not candidates:
+        return {
+            "ok": True,
+            "status": "skipped",
+            "reason": "no_codex_run_summaries",
+            "instance": safe_instance_name,
+            "repo": str(repo or "").strip(),
+            "analyzed": 0,
+            "dry_run": bool(dry_run),
+            "item": {},
+        }
+    strategy_runner = strategist or build_codex_history_strategist(profile=profile, allow_remote=allow_remote, env=env)
+    decision = strategy_runner(tuple(candidates))
+    analysis = _normalize_codex_history_strategy_decision(decision)
+    project = _codex_history_strategy_project(safe_instance_name, repo=repo)
+    version = {"semver": __version__, "tag": f"v{__version__}"}
+    normalized_status = str(status or "queued").strip().casefold() or "queued"
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        existing_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        summary_number = _next_summary_number_for_repo(existing_rows, project["repo_id"])
+        summary_prefix = _summary_prefix(version["semver"], summary_number)
+        markdown = _codex_history_strategy_markdown(
+            summary_prefix=summary_prefix,
+            instance_name=safe_instance_name,
+            repo_filter=repo,
+            analysis=analysis,
+            source_items=candidates,
+            created_at=timestamp,
+        )
+        bullets = _codex_history_strategy_bullets(analysis)
+        item = {
+            "id": _unique_history_id(existing_rows),
+            "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+            "kind": "codex_strategy_analysis",
+            "source": "codex_history_strategy_analysis",
+            "status": normalized_status,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "project": project,
+            "version": {
+                "semver": version["semver"],
+                "tag": version["tag"],
+                "summary_number": summary_number,
+                "summary_prefix": summary_prefix,
+            },
+            "codex": {
+                "purpose": CODEX_HISTORY_STRATEGY_PURPOSE,
+                "repo_filter": str(repo or "").strip(),
+                "analyzed_item_ids": [str(item.get("id") or "") for item in candidates],
+                "analyzed_summary_prefixes": [str(item.get("summary_prefix") or "") for item in candidates],
+                "generated_at": timestamp,
+                "strategy_model": _codex_history_strategist_model(strategy_runner, profile),
+                "remote_allowed": bool(allow_remote),
+            },
+            "summary": {
+                "title": "Strategische Codex-History-Analyse",
+                "markdown": markdown,
+                "bullets": bullets,
+                "changed_files": [],
+                "tests": [],
+            },
+            "delivery": {
+                "target_group": CODEX_HISTORY_TARGET_GROUP,
+                "attempts": 0,
+                "last_attempt_at": "",
+                "sent_at": "",
+                "accepted_at": "",
+                "delivered_at": "",
+                "acknowledged_at": "",
+            },
+            "indexing": {
+                "indexable": True,
+                "repo_history": True,
+                "categories": ["codex-strategy-analysis", "impact-admin-only", "work-strategy"],
+                "keywords": _codex_history_strategy_keywords(project, analysis, candidates),
+            },
+            "status_history": [
+                {
+                    "at": timestamp,
+                    "status": normalized_status,
+                    "reason": "codex_history_strategy_analysis_created",
+                }
+            ],
+            "summary_number": summary_number,
+            "summary_prefix": summary_prefix,
+        }
+        if not dry_run:
+            existing_rows.append(item)
+            store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, existing_rows)
+            _upsert_project(store, INSTANCE_STATE_ACCOUNT_ID, project, item, timestamp)
+    return {
+        "ok": True,
+        "status": "dry_run" if dry_run else normalized_status,
+        "instance": safe_instance_name,
+        "repo": str(repo or "").strip(),
+        "profile": str(profile or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
+        "allow_remote": bool(allow_remote),
+        "analyzed": len(candidates),
+        "dry_run": bool(dry_run),
+        "item": item,
+    }
+
+
+def build_codex_history_strategist(
+    *,
+    profile: str = CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
+    allow_remote: bool = False,
+    env: Mapping[str, str] | None = None,
+) -> CodexHistoryStrategist:
+    from TeeBotus.instructions import BotInstructions
+    from TeeBotus.llm.config import build_text_llm_client, load_llm_profiles, normalize_llm_provider
+
+    profile_name = str(profile or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE).strip() or CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE
+    profiles = load_llm_profiles()
+    if profile_name not in profiles:
+        raise ValueError(f"unknown Codex-History strategy profile: {profile_name}")
+    llm_profile = profiles[profile_name]
+    if llm_profile.is_remote and not allow_remote:
+        raise ValueError(f"Codex-History strategy profile is remote; pass allow_remote=True explicitly: {profile_name}")
+    instructions = BotInstructions(
+        openai_enabled=False,
+        llm_enabled=True,
+        llm_provider=normalize_llm_provider(llm_profile.provider),
+        llm_model=llm_profile.model,
+        llm_base_url=llm_profile.base_url,
+        llm_timeout_seconds=180,
+        llm_max_output_tokens=1400,
+        llm_temperature=0.2,
+        openai_timeout_seconds=180,
+        openai_max_output_tokens=1400,
+        openai_rule_text=(
+            "Du analysierst ausschliesslich admin-only Codex-History-Summaries. "
+            "Antworte als JSON mit future_improvements, strategic_goals, pitfalls_logic_errors, "
+            "attack_surface, recommendations und confidence."
+        ),
+    )
+    source = os.environ if env is None else env
+    api_key = str(source.get(llm_profile.api_key_env, "") or "").strip() if llm_profile.api_key_env else ""
+    client = build_text_llm_client(
+        instructions=instructions,
+        openai_client=None,
+        provider=llm_profile.provider,
+        model=llm_profile.model,
+        api_key=api_key,
+        api_base=llm_profile.base_url,
+        temperature=0.2,
+        max_tokens=1400,
+        timeout=180,
+        use_instruction_fallback_models=False,
+        env=source,
+    )
+    if client is None or not hasattr(client, "create_reply"):
+        raise ValueError(f"Codex-History strategy profile is not usable: {profile_name}")
+
+    def _strategize(items: Sequence[Mapping[str, Any]]) -> Mapping[str, Any]:
+        response = client.create_reply(_codex_history_strategy_prompt(items), instructions)  # type: ignore[attr-defined]
+        return _parse_codex_history_strategy_response(str(getattr(response, "text", "") or ""))
+
+    setattr(_strategize, "strategy_model", llm_profile.model)
+    setattr(_strategize, "strategy_profile", profile_name)
+    return _strategize
+
+
 def run_codex_history_index(
     store: AccountStore,
     *,
@@ -945,6 +1139,11 @@ def run_codex_history_index(
     categorize_profile: str = CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE,
     categorize_dry_run: bool = False,
     categorizer: CodexHistoryCategorizer | None = None,
+    strategic_analysis: bool = False,
+    strategic_analysis_profile: str = CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE,
+    strategic_analysis_allow_remote: bool = False,
+    strategic_analysis_dry_run: bool = False,
+    strategist: CodexHistoryStrategist | None = None,
     env: Mapping[str, str] | None = None,
     secret_provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
@@ -960,6 +1159,19 @@ def run_codex_history_index(
             profile=categorize_profile,
             env=env,
             dry_run=categorize_dry_run,
+        )
+    strategy_report: dict[str, Any] = {}
+    if strategic_analysis:
+        strategy_report = generate_codex_history_strategic_analysis(
+            store,
+            instance_name=safe_instance_name,
+            repo=repo,
+            limit=limit if limit > 0 else 20,
+            strategist=strategist,
+            profile=strategic_analysis_profile,
+            allow_remote=strategic_analysis_allow_remote,
+            dry_run=strategic_analysis_dry_run,
+            env=env,
         )
     export_report = export_codex_history_bibliothekar_docs(
         store,
@@ -1012,11 +1224,17 @@ def run_codex_history_index(
     ensure_ok = not ensure_results or all(bool(result.get("ok")) for result in ensure_results)
     qdrant_ok = not qdrant_results or not any(str(result.get("status") or "").casefold() == "error" for result in qdrant_results)
     return {
-        "ok": bool(export_report.get("ok", True)) and bool(category_report.get("ok", True)) and bool(graph_report.get("ok", True)) and ensure_ok and qdrant_ok,
+        "ok": bool(export_report.get("ok", True))
+        and bool(category_report.get("ok", True))
+        and bool(graph_report.get("ok", True))
+        and bool(strategy_report.get("ok", True))
+        and ensure_ok
+        and qdrant_ok,
         "instance": safe_instance_name,
         "categorize": category_report,
         "export": export_report,
         "graph": graph_report,
+        "strategic_analysis": strategy_report,
         "qdrant_ensure": ensure_results,
         "qdrant": qdrant_results,
     }
@@ -1127,7 +1345,7 @@ def _codex_history_dispatch_account_ids(
 def _codex_history_item_dispatchable(item: Mapping[str, Any]) -> bool:
     if not isinstance(item, Mapping):
         return False
-    if str(item.get("kind") or "").strip() != "codex_run_summary":
+    if str(item.get("kind") or "").strip() not in CODEX_HISTORY_DISPATCHABLE_KINDS:
         return False
     status = str(item.get("status") or "queued").strip().casefold()
     return status in CODEX_HISTORY_DISPATCHABLE_STATUSES
@@ -1903,6 +2121,17 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     graph_export_parser.add_argument("--format", choices=("text", "json"), default="text")
     graph_export_parser.add_argument("--no-overwrite", action="store_true")
 
+    strategic_analysis_parser = subparsers.add_parser("strategic-analysis")
+    strategic_analysis_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    strategic_analysis_parser.add_argument("--instances", default="")
+    strategic_analysis_parser.add_argument("--instance", default="")
+    strategic_analysis_parser.add_argument("--repo", default="")
+    strategic_analysis_parser.add_argument("--limit", type=int, default=20)
+    strategic_analysis_parser.add_argument("--profile", default=CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE)
+    strategic_analysis_parser.add_argument("--allow-remote", action="store_true")
+    strategic_analysis_parser.add_argument("--dry-run", action="store_true")
+    strategic_analysis_parser.add_argument("--format", choices=("text", "json"), default="text")
+
     index_parser = subparsers.add_parser("index")
     index_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     index_parser.add_argument("--instances", default="")
@@ -1919,6 +2148,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     index_parser.add_argument("--categorize", action="store_true")
     index_parser.add_argument("--categorize-profile", default=CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE)
     index_parser.add_argument("--categorize-dry-run", action="store_true")
+    index_parser.add_argument("--strategic-analysis", action="store_true")
+    index_parser.add_argument("--strategic-analysis-profile", default=CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE)
+    index_parser.add_argument("--strategic-analysis-allow-remote", action="store_true")
+    index_parser.add_argument("--strategic-analysis-dry-run", action="store_true")
 
     dispatch_parser = subparsers.add_parser("dispatch")
     dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
@@ -2124,6 +2357,47 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
         except (OSError, ValueError) as exc:
             print(f"graph-export failed: {exc}", file=sys.stderr)
             return 2
+    if args.command == "strategic-analysis":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
+            _ensure_explicit_instances_exist(instances_dir, selected_instances)
+            reports: list[dict[str, Any]] = []
+            for instance_name in discover_instances(instances_dir, selected_instances):
+                store = _store_for_instance(instances_dir, instance_name, provider)
+                reports.append(
+                    generate_codex_history_strategic_analysis(
+                        store,
+                        instance_name=instance_name,
+                        repo=args.repo,
+                        limit=int(args.limit or 0),
+                        profile=args.profile,
+                        allow_remote=bool(args.allow_remote),
+                        dry_run=bool(args.dry_run),
+                    )
+                )
+            payload = {
+                "ok": not any(not report.get("ok") for report in reports),
+                "instances_dir": str(instances_dir),
+                "instances": reports,
+                "totals": {
+                    "generated": sum(1 for report in reports if report.get("item")),
+                    "analyzed": sum(int(report.get("analyzed") or 0) for report in reports),
+                    "skipped": sum(1 for report in reports if str(report.get("status") or "") == "skipped"),
+                },
+            }
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_strategic_analysis_report(payload)
+            )
+            print(output, end="")
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"strategic-analysis failed: {exc}", file=sys.stderr)
+            return 2
     if args.command == "index":
         try:
             selected_instances = parse_csv(getattr(args, "instances", None))
@@ -2150,6 +2424,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         categorize=bool(args.categorize),
                         categorize_profile=args.categorize_profile,
                         categorize_dry_run=bool(args.categorize_dry_run),
+                        strategic_analysis=bool(args.strategic_analysis),
+                        strategic_analysis_profile=args.strategic_analysis_profile,
+                        strategic_analysis_allow_remote=bool(args.strategic_analysis_allow_remote),
+                        strategic_analysis_dry_run=bool(args.strategic_analysis_dry_run),
                         secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
                     )
                 )
@@ -2462,6 +2740,8 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "skipped": 0,
         "graph_files": 0,
         "graph_items": 0,
+        "strategy_reports": 0,
+        "strategy_analyzed": 0,
         "qdrant_points": 0,
         "qdrant_errors": 0,
     }
@@ -2480,6 +2760,11 @@ def _index_totals(reports: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         if isinstance(graph, Mapping):
             totals["graph_files"] += int(graph.get("exported") or 0)
             totals["graph_items"] += int(graph.get("item_count") or 0)
+        strategy = report.get("strategic_analysis", {})
+        if isinstance(strategy, Mapping):
+            if strategy.get("item"):
+                totals["strategy_reports"] += 1
+            totals["strategy_analyzed"] += int(strategy.get("analyzed") or 0)
         for result in report.get("qdrant", []) or []:
             if not isinstance(result, Mapping):
                 continue
@@ -2618,6 +2903,29 @@ def _render_graph_export_report(payload: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _render_strategic_analysis_report(payload: Mapping[str, Any]) -> str:
+    lines = ["TeeBotus Codex-History Strategic Analysis", ""]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.append(f"generated: {totals.get('generated', 0)}")
+        lines.append(f"analyzed: {totals.get('analyzed', 0)}")
+        lines.append(f"skipped: {totals.get('skipped', 0)}")
+    for instance in payload.get("instances", []) or []:
+        if not isinstance(instance, Mapping):
+            continue
+        item = instance.get("item", {})
+        if not isinstance(item, Mapping):
+            item = {}
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        lines.append(f"  status: {instance.get('status', '')}")
+        lines.append(f"  dry_run: {bool(instance.get('dry_run', False))}")
+        lines.append(f"  analyzed: {instance.get('analyzed', 0)}")
+        if item:
+            lines.append(f"  item: {item.get('summary_prefix', '')} {item.get('id', '')}")
+    return "\n".join(lines) + "\n"
+
+
 def _render_index_report(payload: Mapping[str, Any]) -> str:
     lines = ["TeeBotus Codex-History Index", ""]
     totals = payload.get("totals", {})
@@ -2628,6 +2936,8 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         lines.append(f"skipped: {totals.get('skipped', 0)}")
         lines.append(f"graph_files: {totals.get('graph_files', 0)}")
         lines.append(f"graph_items: {totals.get('graph_items', 0)}")
+        lines.append(f"strategy_reports: {totals.get('strategy_reports', 0)}")
+        lines.append(f"strategy_analyzed: {totals.get('strategy_analyzed', 0)}")
         lines.append(f"qdrant_points: {totals.get('qdrant_points', 0)}")
         lines.append(f"qdrant_errors: {totals.get('qdrant_errors', 0)}")
     for instance in payload.get("instances", []):
@@ -2642,6 +2952,9 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
         graph = instance.get("graph", {})
         if not isinstance(graph, Mapping):
             graph = {}
+        strategy = instance.get("strategic_analysis", {})
+        if not isinstance(strategy, Mapping):
+            strategy = {}
         lines.append("")
         lines.append(f"Instance: {instance.get('instance', '')}")
         lines.append(f"  ok: {bool(instance.get('ok', False))}")
@@ -2663,6 +2976,16 @@ def _render_index_report(payload: Mapping[str, Any]) -> str:
                 f"path={graph.get('path', '')} "
                 f"repos={graph.get('repo_count', 0)} "
                 f"items={graph.get('item_count', 0)}"
+            )
+        if strategy:
+            item = strategy.get("item", {})
+            summary_prefix = item.get("summary_prefix", "") if isinstance(item, Mapping) else ""
+            lines.append(
+                "  strategic_analysis: "
+                f"status={strategy.get('status', '')} "
+                f"dry_run={bool(strategy.get('dry_run', False))} "
+                f"analyzed={strategy.get('analyzed', 0)} "
+                f"summary={summary_prefix}"
             )
         for result in instance.get("qdrant_ensure", []) or []:
             if isinstance(result, Mapping):
@@ -2887,7 +3210,7 @@ def _codex_history_bibliothekar_root(instance_dir: Path) -> Path:
 def _codex_history_item_indexable(item: Mapping[str, Any]) -> bool:
     if not isinstance(item, Mapping):
         return False
-    if str(item.get("kind") or "").strip() != "codex_run_summary":
+    if str(item.get("kind") or "").strip() not in CODEX_HISTORY_INDEXABLE_KINDS:
         return False
     indexing = item.get("indexing", {})
     if isinstance(indexing, Mapping) and indexing.get("indexable") is False:
@@ -3136,6 +3459,217 @@ def _mermaid_label(value: str, *, max_length: int) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _codex_history_strategy_project(instance_name: str, *, repo: str = "") -> dict[str, Any]:
+    repo_filter = str(repo or "").strip()
+    repo_name = "Codex-History-Strategie" if not repo_filter else f"Codex-History-Strategie-{repo_filter}"
+    identity = f"codex-history-strategy:v1:{instance_name}:{repo_filter}"
+    return {
+        "repo_id": "sha256:" + hashlib.sha256(identity.encode("utf-8")).hexdigest(),
+        "repo_name": repo_name,
+        "repo_root": "",
+        "remote_url": "",
+        "provider": "internal",
+        "branch": "",
+        "head_commit": "",
+        "dirty": False,
+    }
+
+
+def _codex_history_strategy_prompt(items: Sequence[Mapping[str, Any]]) -> str:
+    payload = {
+        "task": "Analysiere die letzten TeeBotus Codex-History-Summaries strategisch.",
+        "rules": [
+            "Return only JSON.",
+            "Keine Secrets, Tokens oder privaten Rohdaten ausgeben.",
+            "Fokussiere Feature-/Bugfix-Vergleich, Risiken, naechste sinnvolle Ziele und Angriffsoberflaechen.",
+            "Jede Liste 2 bis 8 kurze Punkte.",
+        ],
+        "schema": {
+            "future_improvements": ["..."],
+            "strategic_goals": ["..."],
+            "pitfalls_logic_errors": ["..."],
+            "attack_surface": ["..."],
+            "recommendations": ["..."],
+            "confidence": "low|medium|high",
+        },
+        "summaries": [_codex_history_strategy_source_summary(item) for item in items[-40:]],
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _parse_codex_history_strategy_response(text: str) -> dict[str, Any]:
+    payload = _json_object_from_text(text)
+    if not payload:
+        raise ValueError("strategy model returned no JSON object")
+    return _normalize_codex_history_strategy_decision(payload)
+
+
+def _normalize_codex_history_strategy_decision(decision: Mapping[str, Any] | str) -> dict[str, Any]:
+    if isinstance(decision, str):
+        payload = _json_object_from_text(decision)
+        if payload:
+            decision = payload
+        else:
+            decision = {"recommendations": [decision]}
+    if not isinstance(decision, Mapping):
+        decision = {}
+    sections = {
+        "future_improvements": _strategy_section_values(decision.get("future_improvements", [])),
+        "strategic_goals": _strategy_section_values(decision.get("strategic_goals", [])),
+        "pitfalls_logic_errors": _strategy_section_values(decision.get("pitfalls_logic_errors", [])),
+        "attack_surface": _strategy_section_values(decision.get("attack_surface", [])),
+        "recommendations": _strategy_section_values(decision.get("recommendations", [])),
+    }
+    if not any(sections.values()):
+        sections["recommendations"] = ["Keine verwertbaren Strategiepunkte erzeugt; Rohantwort pruefen."]
+    confidence = str(decision.get("confidence") or "medium").strip().casefold()
+    if confidence not in {"low", "medium", "high"}:
+        confidence = "medium"
+    return {**sections, "confidence": confidence}
+
+
+def _strategy_section_values(value: object) -> list[str]:
+    if isinstance(value, str):
+        raw_values = [part.strip() for part in re.split(r"[\n;]+", value) if part.strip()]
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        raw_values = [str(item or "").strip() for item in value if str(item or "").strip()]
+    else:
+        raw_values = []
+    result: list[str] = []
+    seen: set[str] = set()
+    for raw in raw_values:
+        text = redact_codex_history_text(raw)
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            continue
+        text = text[:360]
+        marker = text.casefold()
+        if marker in seen:
+            continue
+        seen.add(marker)
+        result.append(text)
+        if len(result) >= 8:
+            break
+    return result
+
+
+def _codex_history_strategy_markdown(
+    *,
+    summary_prefix: str,
+    instance_name: str,
+    repo_filter: str,
+    analysis: Mapping[str, Any],
+    source_items: Sequence[Mapping[str, Any]],
+    created_at: str,
+) -> str:
+    lines = [
+        f"# {summary_prefix} Strategische Codex-History-Analyse",
+        "",
+        "> Admin-only TeeBotus Codex-History-Analyse. Nicht fuer normale Nutzer-Bibliotheken freigeben.",
+        "",
+        f"- Instanz: `{redact_codex_history_text(instance_name).strip()}`",
+        f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
+        f"- Analysierte Summaries: `{len(source_items)}`",
+        f"- Erstellt: `{redact_codex_history_text(created_at).strip()}`",
+        f"- Confidence: `{redact_codex_history_text(analysis.get('confidence', '')).strip()}`",
+        "",
+    ]
+    section_titles = (
+        ("future_improvements", "Zukunft und Verbesserungen"),
+        ("strategic_goals", "Strategische Ziele"),
+        ("pitfalls_logic_errors", "Fallstricke und Logikfehler"),
+        ("attack_surface", "Neue Angriffsoberflaechen"),
+        ("recommendations", "Empfehlungen"),
+    )
+    for key, title in section_titles:
+        lines.append(f"## {title}")
+        values = analysis.get(key, [])
+        if isinstance(values, Sequence) and not isinstance(values, (str, bytes, bytearray)) and values:
+            lines.extend(f"- {value}" for value in values)
+        else:
+            lines.append("- Keine belastbaren Punkte erzeugt.")
+        lines.append("")
+    lines.append("## Quellen-Summaries")
+    for item in source_items[-40:]:
+        source = _codex_history_strategy_source_summary(item)
+        lines.append(
+            "- "
+            f"`{source.get('summary_prefix', '')}` "
+            f"`{source.get('repo_name', '')}` "
+            f"{source.get('title', '')}"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _codex_history_strategy_source_summary(item: Mapping[str, Any]) -> dict[str, Any]:
+    project = item.get("project", {})
+    summary = item.get("summary", {})
+    version = item.get("version", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    return {
+        "id": str(item.get("id") or ""),
+        "summary_prefix": redact_codex_history_text(item.get("summary_prefix") or version.get("summary_prefix") or "").strip(),
+        "repo_name": redact_codex_history_text(project.get("repo_name", "")).strip(),
+        "status": redact_codex_history_text(item.get("status", "")).strip(),
+        "created_at": redact_codex_history_text(item.get("created_at", "")).strip(),
+        "title": redact_codex_history_text(summary.get("title", "")).strip()[:180],
+        "bullets": [redact_codex_history_text(value)[:220] for value in _sequence_values(summary.get("bullets", []))[:6]],
+        "changed_files": [redact_codex_history_text(value)[:180] for value in _sequence_values(summary.get("changed_files", []))[:8]],
+        "tests": [redact_codex_history_text(value)[:180] for value in _sequence_values(summary.get("tests", []))[:6]],
+    }
+
+
+def _codex_history_strategy_bullets(analysis: Mapping[str, Any]) -> list[str]:
+    bullets: list[str] = []
+    for key in ("recommendations", "strategic_goals", "pitfalls_logic_errors", "attack_surface", "future_improvements"):
+        values = analysis.get(key, [])
+        if isinstance(values, Sequence) and not isinstance(values, (str, bytes, bytearray)):
+            for value in values:
+                text = str(value or "").strip()
+                if text:
+                    bullets.append(text[:240])
+                if len(bullets) >= 8:
+                    return bullets
+    return bullets or ["Strategische Analyse erzeugt."]
+
+
+def _codex_history_strategy_keywords(project: Mapping[str, Any], analysis: Mapping[str, Any], source_items: Sequence[Mapping[str, Any]]) -> list[str]:
+    words: set[str] = {
+        "codex",
+        "history",
+        "strategy",
+        "analysis",
+        "strategic-analysis",
+        "admin-only",
+        str(project.get("repo_name") or "").casefold(),
+    }
+    for item in source_items:
+        source = _codex_history_strategy_source_summary(item)
+        for value in (source.get("repo_name", ""), source.get("summary_prefix", ""), source.get("title", "")):
+            for token in re.findall(r"[A-Za-z0-9_.-]{3,}", str(value or "")):
+                words.add(token.casefold())
+    for key in ("future_improvements", "strategic_goals", "pitfalls_logic_errors", "attack_surface", "recommendations"):
+        values = analysis.get(key, [])
+        if isinstance(values, Sequence) and not isinstance(values, (str, bytes, bytearray)):
+            for value in values:
+                for token in re.findall(r"[A-Za-z0-9_.-]{3,}", str(value or "")):
+                    words.add(token.casefold())
+    return sorted(word for word in words if word)[:160]
+
+
+def _codex_history_strategist_model(strategist: object, profile: str) -> str:
+    model = str(getattr(strategist, "strategy_model", "") or "").strip()
+    if model:
+        return model
+    return str(getattr(strategist, "strategy_profile", "") or profile or "").strip()
+
+
 def _codex_history_category_prompt(item: Mapping[str, Any]) -> str:
     project = item.get("project", {})
     summary = item.get("summary", {})
@@ -3250,6 +3784,8 @@ def _codex_history_bibliothekar_categories(item: Mapping[str, Any], *, include_p
         f"repo-{repo_name}",
         f"status-{_safe_filename_component(status, default='unknown').casefold()}",
     }
+    if str(item.get("kind") or "").strip() == "codex_strategy_analysis":
+        categories.update({"codex-strategy-analysis", "impact-admin-only", "work-strategy"})
     text_parts = [
         str(summary.get("title") or ""),
         _join_codex_history_summary_values(summary.get("bullets", [])),

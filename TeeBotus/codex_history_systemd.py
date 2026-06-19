@@ -82,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-categorize", action="store_true", help="Run optional local Codex-History categorization in the periodic index job.")
     parser.add_argument("--index-categorize-profile", default="local_ollama", help="Local-only LLM profile used by periodic Codex-History categorization.")
     parser.add_argument("--index-categorize-dry-run", action="store_true", help="Run periodic categorization without persisting category updates.")
+    parser.add_argument("--index-strategic-analysis", action="store_true", help="Queue an admin-only strategic Codex-History analysis in the periodic index job.")
+    parser.add_argument("--index-strategic-analysis-profile", default="local_ollama", help="LLM profile used by periodic Codex-History strategic analysis.")
+    parser.add_argument("--index-strategic-analysis-allow-remote", action="store_true", help="Allow a remote strategic-analysis profile explicitly.")
+    parser.add_argument("--index-strategic-analysis-dry-run", action="store_true", help="Run periodic strategic analysis without writing the outbox item.")
     parser.add_argument(
         "--max-iterations",
         type=int,
@@ -135,6 +139,10 @@ def main(argv: list[str] | None = None) -> int:
                 categorize=bool(args.index_categorize),
                 categorize_profile=args.index_categorize_profile,
                 categorize_dry_run=bool(args.index_categorize_dry_run),
+                strategic_analysis=bool(args.index_strategic_analysis),
+                strategic_analysis_profile=args.index_strategic_analysis_profile,
+                strategic_analysis_allow_remote=bool(args.index_strategic_analysis_allow_remote),
+                strategic_analysis_dry_run=bool(args.index_strategic_analysis_dry_run),
             )
             if args.index_timer
             else None
@@ -293,6 +301,10 @@ def render_codex_history_index_systemd_units(
     categorize: bool = False,
     categorize_profile: str = "local_ollama",
     categorize_dry_run: bool = False,
+    strategic_analysis: bool = False,
+    strategic_analysis_profile: str = "local_ollama",
+    strategic_analysis_allow_remote: bool = False,
+    strategic_analysis_dry_run: bool = False,
 ) -> CodexHistoryIndexSystemdUnits:
     service_name = _service_name(service_name)
     timer_name = _timer_name(timer_name)
@@ -307,6 +319,7 @@ def render_codex_history_index_systemd_units(
     repo_filter = _optional_systemd_argument(repo, label="index repo filter")
     qdrant_url = _optional_systemd_argument(qdrant_url, label="index qdrant url")
     categorize_profile = _optional_systemd_argument(categorize_profile, label="index categorize profile") or "local_ollama"
+    strategic_analysis_profile = _optional_systemd_argument(strategic_analysis_profile, label="index strategic analysis profile") or "local_ollama"
     index_limit = _non_negative_int(limit, label="index limit")
 
     command = [
@@ -339,6 +352,13 @@ def render_codex_history_index_systemd_units(
         command.extend(["--categorize-profile", _shell_quote(categorize_profile)])
         if categorize_dry_run:
             command.append("--categorize-dry-run")
+    if strategic_analysis:
+        command.append("--strategic-analysis")
+        command.extend(["--strategic-analysis-profile", _shell_quote(strategic_analysis_profile)])
+        if strategic_analysis_allow_remote:
+            command.append("--strategic-analysis-allow-remote")
+        if strategic_analysis_dry_run:
+            command.append("--strategic-analysis-dry-run")
 
     service_text = "\n".join(
         [

@@ -25,6 +25,7 @@ Umgesetzt:
 - Phase 3 systemd teilweise: `teebotus-codex-history-systemd` erzeugt standardmaessig eine persistente User-Unit mit `--follow --event-mode auto` und `Restart=on-failure`; der alte restart-getriebene Bounded-Scan bleibt ueber `--no-follow` verfuegbar.
 - Der Watcher bezieht neben `~/.codex/sessions` automatisch vorhandene Agenten-Sessionroots unter `~/.codex-agents/*/.codex/sessions` ein, solange keine expliziten `--sessions-root` Werte gesetzt werden.
 - Phase 5 Status/Applet/Report teilweise: Chat-`/status` zeigt `Codex-History` mit `queued`, `failed`, `total` und letztem Repo/Praefix; `--runtime-status` liefert maschinenlesbare `codex_history=<Instanz>`- und `codex_history_repo=<Instanz>`-Zeilen; das Cinnamon-Applet parst diese Zeilen und zeigt Instanz- und Repo-Details im Projekt-Menue; der Admin-CLI-Report liefert pro Repo Status-/Dispatch-Zaehler und letzte Summaries mit Repo-Filter.
+- Phase 6/7/8 teilweise: admin-only Bibliothekar-/Qdrant-Export, lokale Kategorisierung, Mermaid-Graph und queuebarer strategischer Analysebericht sind angebunden.
 - Recovery-/Migrationslisten kennen die neuen JSONL-Fallback-Dateien.
 - Der Logger-Bot-Token steht nur noch als Env-Platzhalter im Plan, nicht als tokenfoermiger Klartext.
 
@@ -33,7 +34,7 @@ Offen:
 - Native Kanal-Receipts haben eine zentrale API/CLI-Basis; Matrix-Receipts sind angebunden, weitere echte Adapter-Event-Hooks fuer eingehende Plattform-Receipts sind noch offen.
 - Signal-/Matrix-Reply-Hooks fuer automatische Messenger-Bestaetigung sind angebunden, aber native Plattform-Receipts bleiben separat offen.
 - Native Filesystem-Events sind ueber `watchdog==6.0.0` als gepinnte und gepruefte `[tools]`-Dependency angebunden; ohne installiertes Extra laeuft der Watcher weiter ueber Snapshot/Poll-Fallback.
-- Tieferer grafischer Applet-Drilldown, Qdrant/Bibliothekar-Indexierung, grafische Repo-Aufbereitung und strategische Analyse sind noch nicht umgesetzt.
+- Tieferer grafischer Applet-Drilldown, echtes Bild-Rendering/Versand der Graphen und Live-Aktivierung der strategischen Analyse-Automatik sind noch offen.
 
 ## Kurzantwort
 
@@ -508,6 +509,7 @@ Stand 2026-06-19:
 - `teebotus-codex-history-systemd --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`.
 - `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
 - `codex-history graph-export` schreibt eine admin-only Mermaid-Projekthistory nach `data/Codex_History_Bibliothek/graphs`; `codex-history index --graph` kann sie im selben Batch erzeugen.
+- `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Offen: tieferer grafischer Drilldown/Separate Detailansicht im Applet.
 
@@ -548,9 +550,17 @@ Stand 2026-06-19:
 * Default: 1x am Tag
 
 ### Phase 8: Strategische Analyse
-* baue einen automatismus der die summaries einem LLM übergiebt, das sich im Kontaxt mit den letzten summaries (hier bieten sich Cache und stateful APIS an) Gedanken über: Zukunft/Verbesserungen, mögliche strategische Ziele, Fallstricke/Logikfehler und mögliche neue Angriffsvektoren/fläche durch die Commits, macht. Das soll dann auch an die Admins ausgegeben werden.
-* Default: Aus
-* Nach dem Bau: An
+* Teilweise erledigt: `codex-history strategic-analysis` uebergibt die letzten Codex-History-Summaries an ein LLM und erzeugt einen Markdown-Bericht mit:
+	* Zukunft/Verbesserungen
+	* strategischen Zielen
+	* Fallstricken/Logikfehlern
+	* neuen Angriffsoberflaechen
+	* Empfehlungen
+* Der Bericht wird als `kind=codex_strategy_analysis` in `codex_history_outbox` queued und ist damit ueber den bestehenden Admin-Dispatcher als Markdown-Datei versendbar.
+* `codex-history index --strategic-analysis` erzeugt den Bericht vor Export/Qdrant, damit er im selben Batch in Bibliothekar/Qdrant landen kann.
+* `teebotus-codex-history-systemd --index-timer --index-strategic-analysis` haengt die Analyse an den Low-Priority-Index-Timer.
+* Default im Timer: Aus. Remote-Profile sind nur mit `--strategic-analysis-allow-remote` bzw. `--index-strategic-analysis-allow-remote` erlaubt.
+* Offen: Live-Aktivierung nach expliziter Freigabe, State-/Cache-Optimierung fuer stateful APIs, periodischer Admin-Versand im fertig installierten Timer-Setup.
 ## Ungenauer Ablauf:
 
 1. Eigene `codex_history_outbox`, nicht die Status-Outbox weiter aufblasen.

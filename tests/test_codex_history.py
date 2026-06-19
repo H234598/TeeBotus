@@ -14,12 +14,14 @@ from TeeBotus.admin.codex_history import (
     acknowledge_codex_history_item,
     append_codex_history_summary,
     build_local_codex_history_categorizer,
+    build_codex_history_strategist,
     build_codex_history_report,
     categorize_codex_history_outbox,
     codex_history_bibliothekar_chunks,
     dispatch_codex_history_outbox,
     export_codex_history_bibliothekar_docs,
     export_codex_history_graph_doc,
+    generate_codex_history_strategic_analysis,
     _safe_output_path,
     _safe_repo_root,
     import_codex_session_file,
@@ -476,6 +478,68 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert not (instance_dir / "data" / "Bibliothek").exists()
 
 
+def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "strategy-demo", version="1.9.4")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(77), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(77), channel="telegram", chat_id="77", chat_type="private", adapter_slot=1)
+    append_codex_history_summary(store, repo_root=repo, title="Feature A", bullets=["Neues Feature gebaut."])
+    append_codex_history_summary(store, repo_root=repo, title="Bugfix B", bullets=["Runtime-Fehler repariert."])
+
+    result = generate_codex_history_strategic_analysis(
+        store,
+        instance_name="Depressionsbot",
+        strategist=lambda _items: {
+            "future_improvements": ["Qdrant-Graph rendern."],
+            "strategic_goals": ["Admin-History als Projektnerv nutzen."],
+            "pitfalls_logic_errors": ["Dispatch-Status nicht mit echter Zustellung verwechseln."],
+            "attack_surface": ["Admin-only Index darf nicht in Nutzerbibliothek leaken."],
+            "recommendations": ["Receipts weiter haerten."],
+            "confidence": "high",
+        },
+        now=datetime(2026, 6, 19, 14, tzinfo=timezone.utc),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "queued"
+    assert result["analyzed"] == 2
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["kind"] for row in persisted] == ["codex_run_summary", "codex_run_summary", "codex_strategy_analysis"]
+    strategy = persisted[-1]
+    assert strategy["summary_prefix"] == "v1.8.0 #0001"
+    assert strategy["delivery"]["target_group"] == "status_admins"
+    assert "Strategische Codex-History-Analyse" in strategy["summary"]["markdown"]
+    assert "Admin-only Index darf nicht" in strategy["summary"]["markdown"]
+    assert "codex-strategy-analysis" in strategy["indexing"]["categories"]
+
+    sent: list[SendAttachment] = []
+
+    def sender(_route: dict[str, object], action: SendAttachment, _metadata: dict[str, object]) -> str:
+        sent.append(action)
+        return "telegram-strategy-1"
+
+    dispatch = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            now=datetime(2026, 6, 19, 14, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert dispatch["status_counts"] == {"accepted": 3}
+    assert sent[-1].caption == "Release Codex-History-Strategie 1.8.0"
+    assert sent[-1].filename == "Codex-History-Strategie_release_1.8.0_0001.md"
+    assert b"Strategische Codex-History-Analyse" in sent[-1].data
+
+
+def test_codex_history_strategist_rejects_remote_profile_without_explicit_allow() -> None:
+    with pytest.raises(ValueError, match="remote"):
+        build_codex_history_strategist(profile="openai_premium", env={})
+
+
 def test_codex_history_index_can_categorize_before_export_without_provider_call(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "categorize-index-demo", version="1.9.2")
@@ -489,17 +553,24 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
         categorize=True,
         graph=True,
         categorizer=lambda _item: {"categories": ["work-benchmark", "change-performance"]},
+        strategic_analysis=True,
+        strategist=lambda _items: {"recommendations": ["Graph und Strategie in einem Batch pruefen."]},
     )
 
     assert result["ok"] is True
     assert result["categorize"]["categorized"] == 1
-    assert result["export"]["exported"] == 1
+    assert result["strategic_analysis"]["analyzed"] == 1
+    assert result["export"]["exported"] == 2
     assert result["graph"]["exported"] == 1
-    exported_text = Path(result["export"]["files"][0]["path"]).read_text(encoding="utf-8")
-    assert "work-benchmark" in exported_text
-    assert "change-performance" in exported_text
+    # The strategy report is created before export, so the same batch exports both docs.
+    assert len(result["export"]["files"]) == 2
+    exported_texts = [Path(file["path"]).read_text(encoding="utf-8") for file in result["export"]["files"]]
+    assert any("work-benchmark" in text for text in exported_texts)
+    assert any("change-performance" in text for text in exported_texts)
+    assert any("Strategische Codex-History-Analyse" in text for text in exported_texts)
     graph_text = Path(result["graph"]["path"]).read_text(encoding="utf-8")
     assert "work-benchmark" in graph_text
+    assert "Strategische Codex-History-Analyse" in graph_text
 
 
 def test_codex_history_local_categorizer_rejects_remote_profiles() -> None:

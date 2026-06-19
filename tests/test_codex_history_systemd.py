@@ -121,12 +121,20 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
         categorize=True,
         categorize_profile="local_ollama",
         categorize_dry_run=True,
+        strategic_analysis=True,
+        strategic_analysis_profile="local_ollama",
+        strategic_analysis_allow_remote=True,
+        strategic_analysis_dry_run=True,
     )
 
     assert "--graph" in units.service_text
     assert "--categorize" in units.service_text
     assert "--categorize-profile local_ollama" in units.service_text
     assert "--categorize-dry-run" in units.service_text
+    assert "--strategic-analysis" in units.service_text
+    assert "--strategic-analysis-profile local_ollama" in units.service_text
+    assert "--strategic-analysis-allow-remote" in units.service_text
+    assert "--strategic-analysis-dry-run" in units.service_text
 
 
 def test_render_codex_history_index_systemd_units_rejects_unsafe_timer_name(tmp_path: Path) -> None:
