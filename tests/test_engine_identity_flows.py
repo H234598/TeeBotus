@@ -91,6 +91,28 @@ def _tokens(text: str) -> list[str]:
     return re.findall(r"\b[0-9a-f]{128}\b", text)
 
 
+def test_status_auth_gate_silences_user_until_code_seen(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    assert engine.process(event(identity, "/help")) == []
+    assert account_store.get_account_for_identity(identity) is None
+
+    actions = engine.process(event(identity, "Mondbot, 18hhGfuu3 bitte Statuszugang aktivieren."))
+
+    assert len(actions) == 1
+    assert "Statuszugang aktiviert" in actions[0].text
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert account_store.read_status_auth_state(account_id)["authorized"] is True
+
+    help_actions = engine.process(event(identity, "/help"))
+    assert help_actions
+    assert "Befehle" in help_actions[0].text
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

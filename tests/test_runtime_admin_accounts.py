@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 
+from TeeBotus import __version__
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.admin_accounts import (
@@ -159,6 +160,77 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert sent[0][1].chat_id == "123"
     assert "TeeBotus Runtime-Status Warnungen" in sent[0][1].text
     assert "telegram_slot=Depressionsbot/default status=broken error=bad" in sent[0][1].text
+    outbox = account_store.read_status_outbox(account_id)
+    assert outbox[0]["status"] == "sent"
+    assert outbox[0]["summary_number"] == 1
+    assert outbox[0]["summary_prefix"] == f"v{__version__} #0001"
+    assert outbox[0]["message_text"].startswith(f"v{__version__} #0001 TeeBotus Runtime-Status Warnungen")
+    assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
+
+
+def test_runtime_status_admin_notify_includes_code_authenticated_status_recipients(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    account_store.write_status_auth_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "authorized": True,
+            "authorized_at": "2026-06-19T12:00:00+00:00",
+            "source": "runtime_code",
+        },
+    )
+    sent: list[SendText] = []
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="signal_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: ""},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": lambda _route, action, _metadata: sent.append(action) or "ok"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert len(sent) == 1
+    assert sent[0].text.startswith(f"v{__version__} #0001 TeeBotus Runtime-Status Warnungen")
+    assert "signal_slot=Depressionsbot/default status=broken error=bad" in sent[0].text
+    assert account_store.read_status_outbox(account_id)[0]["status"] == "sent"
+
+
+def test_runtime_status_admin_notify_numbers_status_summaries_per_account(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    account_store = store_for(instance_dir / "data")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    async def notify_once(error: str) -> None:
+        await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output=f"telegram_slot=Depressionsbot/default status=broken error={error}",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": lambda _route, _action, _metadata: "ok"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+
+    asyncio.run(notify_once("first"))
+    asyncio.run(notify_once("second"))
+
+    outbox = account_store.read_status_outbox(account_id)
+    assert [row["summary_prefix"] for row in outbox] == [f"v{__version__} #0001", f"v{__version__} #0002"]
 
 
 def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_path, monkeypatch) -> None:

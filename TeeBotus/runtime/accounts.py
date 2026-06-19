@@ -57,6 +57,12 @@ PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
 PROACTIVE_OUTBOX_COLLECTION = "proactive_outbox"
 PROACTIVE_AUDIT_COLLECTION = "proactive_audit"
 PROACTIVE_DISPATCH_RESULTS_COLLECTION = "proactive_dispatch_results"
+STATUS_AUTH_STATE_FILENAME = "Status_Auth.json"
+STATUS_OUTBOX_FILENAME = "Status_Outbox.jsonl"
+STATUS_DISPATCH_RESULTS_FILENAME = "Status_Dispatch_Results.jsonl"
+STATUS_AUTH_STATE_COLLECTION = "status_auth"
+STATUS_OUTBOX_COLLECTION = "status_outbox"
+STATUS_DISPATCH_RESULTS_COLLECTION = "status_dispatch_results"
 INSTANCE_MEMORY_STATE_FILENAMES = ("Version_Notifications.json",)
 SECRET_TOOL_COMMAND = "secret-tool"
 SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
@@ -1452,6 +1458,25 @@ class AccountStore:
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
+    @contextmanager
+    def status_outbox_lock(self, account_id: str) -> Iterator[None]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        account_dir = self.account_dir(account_id)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = account_dir / f".{STATUS_OUTBOX_FILENAME}.lock"
+        with lock_path.open("a+b") as handle:
+            try:
+                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
@@ -2789,6 +2814,92 @@ class AccountStore:
                 existing_ids.add(result_id)
                 created_ids.append(result_id)
             self.write_proactive_dispatch_results(account_id, rows)
+            return tuple(created_ids)
+
+    def read_status_auth_state(self, account_id: str) -> dict[str, Any]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_json_document(
+            account_id,
+            STATUS_AUTH_STATE_FILENAME,
+            STATUS_AUTH_STATE_COLLECTION,
+            {"schema_version": 1, "authorized": False},
+        )
+
+    def write_status_auth_state(self, account_id: str, data: dict[str, Any]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        normalized = dict(data)
+        normalized.setdefault("schema_version", 1)
+        self._write_account_json_document(account_id, STATUS_AUTH_STATE_FILENAME, STATUS_AUTH_STATE_COLLECTION, normalized)
+
+    def read_status_outbox(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(account_id, STATUS_OUTBOX_FILENAME, STATUS_OUTBOX_COLLECTION)
+
+    def write_status_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(account_id, STATUS_OUTBOX_FILENAME, STATUS_OUTBOX_COLLECTION, list(rows))
+
+    def append_status_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        with self.status_outbox_lock(account_id):
+            rows = self.read_status_outbox(account_id)
+            normalized = dict(item)
+            item_id = str(normalized.get("id") or f"stat_{uuid.uuid4().hex}").strip()
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            while not item_id or item_id in existing_ids:
+                item_id = f"stat_{uuid.uuid4().hex}"
+            timestamp = utc_now()
+            normalized["id"] = item_id
+            normalized.setdefault("schema_version", 1)
+            normalized.setdefault("created_at", timestamp)
+            normalized.setdefault("updated_at", normalized["created_at"])
+            normalized.setdefault("status", "queued")
+            rows.append(normalized)
+            self.write_status_outbox(account_id, rows)
+            return item_id
+
+    def read_status_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(
+            account_id,
+            STATUS_DISPATCH_RESULTS_FILENAME,
+            STATUS_DISPATCH_RESULTS_COLLECTION,
+        )
+
+    def write_status_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._write_account_jsonl_collection(
+            account_id,
+            STATUS_DISPATCH_RESULTS_FILENAME,
+            STATUS_DISPATCH_RESULTS_COLLECTION,
+            list(rows),
+        )
+
+    def append_status_dispatch_result(self, account_id: str, result: dict[str, Any]) -> str:
+        return self.append_status_dispatch_results(account_id, [result])[0]
+
+    def append_status_dispatch_results(self, account_id: str, results: Iterable[dict[str, Any]]) -> tuple[str, ...]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        normalized_results = [dict(result) for result in results if isinstance(result, dict)]
+        if not normalized_results:
+            return ()
+        with self.status_outbox_lock(account_id):
+            rows = self.read_status_dispatch_results(account_id)
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            timestamp = utc_now()
+            created_ids: list[str] = []
+            for result in normalized_results:
+                result_id = str(result.get("id") or f"sdisp_{uuid.uuid4().hex}").strip()
+                while not result_id or result_id in existing_ids:
+                    result_id = f"sdisp_{uuid.uuid4().hex}"
+                result["id"] = result_id
+                result.setdefault("schema_version", 1)
+                result.setdefault("created_at", timestamp)
+                result.setdefault("updated_at", result["created_at"])
+                rows.append(result)
+                existing_ids.add(result_id)
+                created_ids.append(result_id)
+            self.write_status_dispatch_results(account_id, rows)
             return tuple(created_ids)
 
     def read_account_text(self, account_id: str, filename: str) -> str:
