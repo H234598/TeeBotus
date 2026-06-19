@@ -212,16 +212,15 @@ def _normalize_github_url(value: str) -> str:
         raw = "https://github.com/" + raw.removeprefix("git@github.com:")
     elif raw.startswith("ssh://git@github.com/"):
         raw = "https://github.com/" + raw.removeprefix("ssh://git@github.com/")
-    else:
-        try:
-            parsed = urlsplit(raw)
-        except ValueError:
-            return ""
-        if parsed.scheme in {"http", "https"} and parsed.hostname:
-            netloc = parsed.hostname
-            if parsed.port is not None:
-                netloc = f"{netloc}:{parsed.port}"
-            raw = urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+    try:
+        parsed = urlsplit(raw)
+    except ValueError:
+        return ""
+    if parsed.scheme in {"http", "https"} and parsed.hostname:
+        netloc = parsed.hostname
+        if parsed.port is not None:
+            netloc = f"{netloc}:{parsed.port}"
+        raw = urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
     if raw.endswith(".git"):
         raw = raw[:-4]
     return raw
