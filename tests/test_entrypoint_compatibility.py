@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from TeeBotus import __version__
 from TeeBotus.core.status import account_memory_index_health_lines
-from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
+from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
 
 
@@ -127,6 +127,7 @@ def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch,
     for section in (
         "[Accounts und Entscheidungen]",
         "[LLM-Routen und Backends]",
+        "[Projekt-History]",
         "[Agenten-Piloten]",
         "[Memory und semantische Suche]",
         "[Messenger]",
@@ -137,7 +138,32 @@ def test_runtime_status_groups_output_without_wrapping_status_lines(monkeypatch,
     lines = captured.out.splitlines()
     assert any(line.startswith("llm=Demo/telegram:1 ") for line in lines)
     assert any(line.startswith("gemini_free_tier_limits status=never ") for line in lines)
+    assert any(line.startswith("codex_history=Demo ") for line in lines)
     assert any(line.startswith("telegram_slot=Demo/telegram:1 ") for line in lines)
+
+
+def test_runtime_status_reports_codex_history_counts(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"c" * 32))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    store = AccountStore(demo_dir / "data" / "accounts", "Demo", StaticSecretProvider(b"c" * 32))
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Noch offen"},
+        },
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "[Projekt-History]" in captured.out
+    assert "codex_history=Demo status=warning queued=1 failed=0 total=1 latest_repo=TeeBotus latest_prefix=v1.8.0_#0001" in captured.out
 
 
 def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, tmp_path) -> None:

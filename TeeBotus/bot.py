@@ -105,7 +105,13 @@ def _load_runtime_environment() -> None:
 def _runtime_status(argv: Sequence[str]) -> int:
     _load_runtime_environment()
     try:
-        from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines, mcp_tool_runtime_status_line
+        from TeeBotus.core.status import (
+            account_identity_health_lines,
+            account_memory_index_health_lines,
+            account_secret_health_lines,
+            codex_history_status_lines,
+            mcp_tool_runtime_status_line,
+        )
         from TeeBotus.core.local_transcription import check_local_transcription_backend
         from TeeBotus.instructions import InstructionStore
         from TeeBotus.llm.gemini_limits_refresh import gemini_free_tier_limit_status_line
@@ -181,6 +187,11 @@ def _runtime_status(argv: Sequence[str]) -> int:
         "API Keys, Limits und Kosten",
         _runtime_status_api_budget_lines(config, route_instance_names),
     )
+    project_history_lines: list[str] = []
+    for instance_name in config.selected_instances:
+        for line in codex_history_status_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+            project_history_lines.append(_sanitize_status_text(line))
+    _print_runtime_status_section("Projekt-History", project_history_lines)
 
     crew_lines: list[str] = []
     try:

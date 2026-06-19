@@ -11,7 +11,14 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
 from TeeBotus.llm.capabilities import GEMINI_INTERACTIONS_CAPABILITIES, LITELLM_TEXT_CAPABILITIES
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
+from TeeBotus.runtime.accounts import (
+    INSTANCE_STATE_ACCOUNT_ID,
+    AccountStore,
+    AccountStoreError,
+    StaticSecretProvider,
+    signal_identity_key,
+    telegram_identity_key,
+)
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
@@ -415,6 +422,38 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Read-only allowlist: bibliothekar.search" in actions[0].text
     assert "- Deaktiviert: codex.exec (nicht read-only), export.account, memory.search, youtube.transcribe" in actions[0].text
     assert "Configured status." not in actions[0].text
+
+
+def test_status_reports_codex_history_queue_and_failures(tmp_path):
+    account_store = store(tmp_path)
+    account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Watcher import"},
+        },
+    )
+    account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "failed",
+            "summary_prefix": "v1.8.0 #0002",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Dispatch fehlgeschlagen"},
+        },
+    )
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=account_store,
+    )
+
+    assert "[Projekt-History]" in text
+    assert "- Codex-History: status=warning queued=1 failed=1 total=2 latest=TeeBotus v1.8.0 #0002" in text
 
 
 def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_path):

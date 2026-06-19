@@ -157,6 +157,7 @@ SECTION_PROBLEM_SUMMARY_KEYS = {
     "LLM-Routen und Backends": "llm_problem_status_count",
     "Lokale Dienste": "llm_problem_status_count",
     "API Keys, Limits und Kosten": "api_problem_status_count",
+    "Projekt-History": "codex_history_problem_status_count",
     "Memory und semantische Suche": "memory_problem_status_count",
     "Tools und Account-Memory": "memory_problem_status_count",
 }
@@ -314,6 +315,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "api_problem_status_count": 0,
         "codex_usage": "",
         "codex_usage_accounts": 0,
+        "codex_history": "",
+        "codex_history_instances": 0,
+        "codex_history_problem_status_count": 0,
         "gemini_free_tier": "",
         "qdrant": "",
         "qdrant_collections": 0,
@@ -362,6 +366,12 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["codex_usage"] = line
         elif line.startswith("codex_usage_account="):
             summary["codex_usage_accounts"] += 1
+        elif line.startswith("codex_history="):
+            summary["codex_history_instances"] += 1
+            if fields.get("status") in PROBLEM_STATUSES and not summary["codex_history"]:
+                summary["codex_history"] = line
+            elif not summary["codex_history"]:
+                summary["codex_history"] = line
         elif line.startswith("gemini_free_tier_limits "):
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):

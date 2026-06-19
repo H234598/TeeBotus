@@ -18,7 +18,13 @@ from TeeBotus.core.version_notifications import (
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
 )
-from TeeBotus.core.status import account_identity_health_lines, account_memory_index_health_lines, account_secret_health_lines, github_commit_history_url
+from TeeBotus.core.status import (
+    account_identity_health_lines,
+    account_memory_index_health_lines,
+    account_secret_health_lines,
+    codex_history_status_lines,
+    github_commit_history_url,
+)
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
@@ -5065,6 +5071,41 @@ def test_github_commit_history_url_appends_commits_main(tmp_path: Path, monkeypa
     monkeypatch.setattr("TeeBotus.core.status.github_repo_url", lambda _repo_root: "https://github.com/H234598/TeeBotus")
 
     assert github_commit_history_url(tmp_path) == "https://github.com/H234598/TeeBotus/commits/main"
+
+
+def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "accepted",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Erster Lauf"},
+        },
+    )
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "failed",
+            "summary_prefix": "v1.8.0 #0002",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Dispatch Fehler"},
+        },
+    )
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued",
+            "summary_prefix": "v1.8.0 #0003",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Noch offen"},
+        },
+    )
+
+    assert codex_history_status_lines(instance_name="Demo", account_store=store) == [
+        "codex_history=Demo status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus latest_prefix=v1.8.0_#0003"
+    ]
 
 
 def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path, monkeypatch) -> None:

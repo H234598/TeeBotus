@@ -433,6 +433,17 @@ TeeBotusApplet.prototype = {
       this._appendCodexUsageActions();
     }
 
+    if (this.showProjectSection && (summary.codex_history_instances || (sections["Projekt-History"] || []).length)) {
+      let projectHistoryLines = [];
+      projectHistoryLines.push(
+        "Uebersicht: Codex-History Instanzen " + String(summary.codex_history_instances || 0)
+        + this._sectionProblemText(summary.codex_history_problem_status_count)
+      );
+      projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
+      this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+      this._appendLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
+    }
+
     let memoryLines = [];
     let qdrant = payload.qdrant || {};
     let qdrantCollections = qdrant.collections || {};
@@ -651,6 +662,20 @@ TeeBotusApplet.prototype = {
     }
     if (fields.codex_usage_account) {
       return "codex-usage " + fields.codex_usage_account + ": " + this._statusWord(fields.status) + "; 5h " + String(fields.five_hour || "?") + "; Woche " + String(fields.weekly || "?");
+    }
+    return line;
+  },
+
+  _formatProjectHistoryLine: function(line) {
+    let fields = this._parseFields(line);
+    if (fields.codex_history) {
+      let latestRepo = fields.latest_repo ? "; zuletzt " + fields.latest_repo : "";
+      let latestPrefix = fields.latest_prefix ? " " + String(fields.latest_prefix).replace(/_/g, " ") : "";
+      return "Codex-History " + fields.codex_history + ": " + this._statusWord(fields.status)
+        + "; offen " + String(fields.queued || "0")
+        + "; fehlgeschlagen " + String(fields.failed || "0")
+        + "; gesamt " + String(fields.total || "0")
+        + latestRepo + latestPrefix + this._errorText(fields);
     }
     return line;
   },

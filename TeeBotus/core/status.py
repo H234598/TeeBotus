@@ -168,6 +168,8 @@ def build_status_reply(
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
             "",
+            *_codex_history_chat_status_lines(account_store=account_store),
+            "",
             *mcp_tool_status_lines(mcp_tools or {}),
             "",
             *_proactive_agent_status_lines(
@@ -687,6 +689,118 @@ def mcp_tool_runtime_status_line(instance_name: str, mcp_tools: Mapping[str, Map
     lines = mcp_tool_status_lines(mcp_tools)
     details = " ".join(line.removeprefix("- ") for line in lines[1:])
     return f"mcp_tools={instance_name} {details}"
+
+
+def codex_history_status_lines(
+    *,
+    instance_name: str,
+    account_store: AccountStore | None = None,
+    project_root: Path | None = None,
+    secret_provider: object | None = None,
+) -> list[str]:
+    if account_store is None:
+        if project_root is None:
+            return []
+        try:
+            safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+        except ValueError:
+            return [f"codex_history={_status_field_value(instance_name)} status=unknown error=invalid_instance_name"]
+        root = project_root.resolve() / "instances" / safe_instance_name / "data" / "accounts"
+        if not root.exists():
+            return [
+                (
+                    f"codex_history={_status_field_value(instance_name)} status=ok "
+                    "queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none>"
+                )
+            ]
+        try:
+            account_store = AccountStore(
+                root,
+                safe_instance_name,
+                secret_provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
+                create_dirs=False,
+            )
+        except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose store/key mismatches.
+            return [
+                (
+                    f"codex_history={_status_field_value(instance_name)} status=unknown "
+                    f"error={_status_field_value(f'{type(exc).__name__}: {exc}')}"
+                )
+            ]
+    summary = _codex_history_summary(account_store)
+    if summary.get("error"):
+        return [
+            (
+                f"codex_history={_status_field_value(instance_name)} status=unknown "
+                f"error={_status_field_value(summary['error'])}"
+            )
+        ]
+    return [
+        (
+            f"codex_history={_status_field_value(instance_name)} status={summary['status']} "
+            f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
+            f"latest_repo={_status_field_value(summary['latest_repo'])} "
+            f"latest_prefix={_status_field_value(summary['latest_prefix'])}"
+        )
+    ]
+
+
+def _codex_history_chat_status_lines(*, account_store: AccountStore | None) -> list[str]:
+    if account_store is None:
+        return []
+    summary = _codex_history_summary(account_store)
+    if summary.get("error"):
+        return [
+            "[Projekt-History]",
+            f"- Codex-History: status=unknown error={redact_status_text(summary['error'])}",
+        ]
+    latest = ""
+    if summary["latest_repo"] != "<none>" or summary["latest_prefix"] != "<none>":
+        latest = f" latest={summary['latest_repo']} {summary['latest_prefix']}"
+    return [
+        "[Projekt-History]",
+        (
+            f"- Codex-History: status={summary['status']} queued={summary['queued']} "
+            f"failed={summary['failed']} total={summary['total']}{latest}"
+        ),
+    ]
+
+
+def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
+    try:
+        rows = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    except Exception as exc:  # noqa: BLE001 - status should diagnose unreadable history without crashing.
+        return {"error": redact_status_text(f"{type(exc).__name__}: {exc}")}
+    valid_rows = [row for row in rows if isinstance(row, Mapping)]
+    status_counts: dict[str, int] = {}
+    for row in valid_rows:
+        status = str(row.get("status") or "unknown").strip().casefold() or "unknown"
+        status_counts[status] = status_counts.get(status, 0) + 1
+    queued = status_counts.get("queued", 0)
+    failed = status_counts.get("failed", 0)
+    latest = valid_rows[-1] if valid_rows else {}
+    project = latest.get("project", {}) if isinstance(latest, Mapping) else {}
+    if not isinstance(project, Mapping):
+        project = {}
+    latest_repo = redact_status_text(project.get("repo_name") or "<none>") or "<none>"
+    latest_prefix = redact_status_text(latest.get("summary_prefix") or "<none>") if isinstance(latest, Mapping) else "<none>"
+    if not latest_prefix:
+        latest_prefix = "<none>"
+    return {
+        "status": "warning" if queued or failed else "ok",
+        "queued": queued,
+        "failed": failed,
+        "total": len(valid_rows),
+        "latest_repo": latest_repo,
+        "latest_prefix": latest_prefix,
+    }
+
+
+def _status_field_value(value: object) -> str:
+    text = redact_status_text(value).strip()
+    if not text:
+        return "<none>"
+    return re.sub(r"\s+", "_", text)
 
 
 def account_identity_health_lines(
