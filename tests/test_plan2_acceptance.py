@@ -483,6 +483,8 @@ def test_plan2_acceptance_commands_cover_non_invasive_plan2_paths(tmp_path: Path
     assert set(pytest_args[4:]) == set(expected_plan2_tests)
     assert "tests/test_legacy_user_memory_import.py" not in pytest_args
     assert "tests/test_account_memory_migration.py" in pytest_args
+    assert "tests/test_runtime_admin_accounts.py" in pytest_args
+    assert "tests/test_python313_runtime_setup.py" in pytest_args
     assert "tests/test_proactive_backends.py" in pytest_args
     assert "tests/test_proactive_cli.py" in pytest_args
     assert "tests/test_readme_plan2_docs.py" in pytest_args
@@ -746,6 +748,68 @@ def test_plan2_acceptance_prepares_legacy_rehearsal_copy_dir(tmp_path: Path) -> 
     assert not rehearsal_dir.exists()
 
 
+def test_plan2_acceptance_resolves_relative_rehearsal_copy_dir_against_repo_root(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "teebotus-plan2-repo"
+    repo_root.mkdir()
+    monkeypatch.setattr(check_plan2_acceptance, "REPO_ROOT", repo_root)
+    original_cwd = tmp_path / "not-repo"
+    original_cwd.mkdir()
+    monkeypatch.chdir(original_cwd)
+    rehearsal_file = repo_root / "teebotus-plan2-rehearsal"
+    rehearsal_file.write_text("old", encoding="utf-8")
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            "teebotus-plan2-rehearsal",
+        ),
+    )
+
+    check_plan2_acceptance._prepare_acceptance_command(command)
+
+    assert not rehearsal_file.exists()
+
+
+def test_plan2_acceptance_prepares_legacy_rehearsal_copy_file(tmp_path: Path) -> None:
+    rehearsal_file = tmp_path / "teebotus-plan2-rehearsal"
+    rehearsal_file.write_text("old", encoding="utf-8")
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            str(rehearsal_file),
+        ),
+    )
+
+    check_plan2_acceptance._prepare_acceptance_command(command)
+
+    assert not rehearsal_file.exists()
+
+
+def test_plan2_acceptance_prepares_legacy_rehearsal_broken_symlink(tmp_path: Path) -> None:
+    rehearsal_dir = tmp_path / "teebotus-rehearsal-target"
+    broken_link = tmp_path / "teebotus-rehearsal-link"
+    broken_link.symlink_to(rehearsal_dir)
+
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            str(broken_link),
+        ),
+    )
+
+    check_plan2_acceptance._prepare_acceptance_command(command)
+
+    assert not broken_link.exists()
+
+
 def test_plan2_acceptance_rejects_unsafe_legacy_rehearsal_copy_dir() -> None:
     command = check_plan2_acceptance.AcceptanceCommand(
         "legacy-import-rehearsal",
@@ -763,6 +827,52 @@ def test_plan2_acceptance_rejects_unsafe_legacy_rehearsal_copy_dir() -> None:
         assert "unsafe legacy rehearsal copy dir" in str(exc)
     else:
         raise AssertionError("unsafe rehearsal copy dir was accepted")
+
+
+def test_plan2_acceptance_rejects_rehearsal_copy_dir_that_contains_target_instances(tmp_path: Path, monkeypatch) -> None:
+    repo_root = tmp_path / "teebotus-plan2-repo"
+    repo_root.mkdir()
+    instances_dir = repo_root / "instances"
+    instances_dir.mkdir(parents=True)
+    rehearsal_root = repo_root
+    monkeypatch.setattr(check_plan2_acceptance, "REPO_ROOT", repo_root)
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--legacy-instances-dir",
+            str(tmp_path / "legacy"),
+            "--target-instances-dir",
+            "instances",
+            "--rehearsal-copy-dir",
+            str(rehearsal_root),
+        ),
+    )
+
+    try:
+        check_plan2_acceptance._prepare_acceptance_command(command)
+    except RuntimeError as exc:
+        assert "must not contain source instances directory" in str(exc)
+    else:
+        raise AssertionError("legacy rehearsal copy directory containing source instances directory was accepted")
+
+
+def test_plan2_acceptance_accepts_nested_safe_legacy_rehearsal_copy_dir(tmp_path: Path) -> None:
+    rehearsal_root = tmp_path / "teebotus" / "rehearsal"
+    command = check_plan2_acceptance.AcceptanceCommand(
+        "legacy-import-rehearsal",
+        (
+            "python-test",
+            "scripts/import_legacy_user_memory.py",
+            "--rehearsal-copy-dir",
+            str(rehearsal_root),
+        ),
+    )
+
+    check_plan2_acceptance._prepare_acceptance_command(command)
+
+    assert not rehearsal_root.exists()
 
 
 def test_plan2_acceptance_instance_artifact_paths_are_stable(tmp_path: Path) -> None:

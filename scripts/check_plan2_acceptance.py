@@ -180,6 +180,8 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_registration_parser.py",
     "tests/test_runtime_config.py",
     "tests/test_runtime_maintenance.py",
+    "tests/test_runtime_admin_accounts.py",
+    "tests/test_python313_runtime_setup.py",
     "tests/test_runtime_state.py",
     "tests/test_signal_runner.py",
     "tests/test_sqlite_backup_sync.py",
@@ -606,16 +608,37 @@ def _prepare_acceptance_command(command: AcceptanceCommand) -> None:
     if rehearsal_copy_dir is None:
         return
     path = rehearsal_copy_dir.expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    path = path.resolve(strict=False)
     if not _is_safe_rehearsal_copy_dir(path):
         raise RuntimeError(f"unsafe legacy rehearsal copy dir: {path}")
-    if path.exists():
-        shutil.rmtree(path)
+    target_instances_arg = _option_path(command.argv, "--target-instances-dir")
+    target_instances_dir = target_instances_arg if target_instances_arg is not None else Path("instances")
+    target_instances_dir = target_instances_dir.expanduser()
+    if not target_instances_dir.is_absolute():
+        target_instances_dir = REPO_ROOT / target_instances_dir
+    resolved_target_instances_dir = target_instances_dir.resolve(strict=False)
+    resolved_path = path
+    if resolved_path == resolved_target_instances_dir:
+        raise RuntimeError("legacy rehearsal copy directory must not be the same as source instances directory")
+    if resolved_target_instances_dir in resolved_path.parents:
+        raise RuntimeError("legacy rehearsal copy directory must not be inside source instances directory")
+    if resolved_path in resolved_target_instances_dir.parents:
+        raise RuntimeError("legacy rehearsal copy directory must not contain source instances directory")
+    if path.exists() or path.is_symlink():
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
 
 
 def _is_safe_rehearsal_copy_dir(path: Path) -> bool:
     resolved = path.resolve(strict=False)
     tmp_root = Path("/tmp").resolve()
-    return resolved != tmp_root and tmp_root in resolved.parents and "teebotus" in resolved.name.casefold()
+    return resolved != tmp_root and tmp_root in resolved.parents and any(
+        "teebotus" in node.name.casefold() for node in [resolved, *resolved.parents]
+    )
 
 
 def run_acceptance_commands(commands: Sequence[AcceptanceCommand]) -> int:
