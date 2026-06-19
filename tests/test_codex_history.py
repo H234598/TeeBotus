@@ -13,6 +13,8 @@ from TeeBotus.admin.codex_history import (
     append_codex_history_summary,
     build_codex_history_report,
     dispatch_codex_history_outbox,
+    _safe_output_path,
+    _safe_repo_root,
     import_codex_session_file,
     main as codex_history_main,
     record_codex_history_reply,
@@ -788,6 +790,33 @@ def test_codex_history_dispatch_rejects_missing_instance_list(tmp_path: Path, ca
     captured = capsys.readouterr()
     assert result == 2
     assert "requested instances not found: NichtVorhanden" in captured.err
+
+
+def test_safe_output_path_rejects_absolute_path(tmp_path: Path) -> None:
+    try:
+        _safe_output_path("/tmp/codex-output.json")
+    except ValueError as exc:
+        assert "safe relative path" in str(exc)
+    else:
+        raise AssertionError("absolute output path must be rejected")
+
+
+def test_safe_output_path_rejects_parent_traversal(tmp_path: Path) -> None:
+    try:
+        _safe_output_path("../codex-output.json")
+    except ValueError as exc:
+        assert "forbidden relative segment" in str(exc)
+    else:
+        raise AssertionError("parent traversal in output path must be rejected")
+
+
+def test_safe_repo_root_rejects_parent_traversal(tmp_path: Path) -> None:
+    try:
+        _safe_repo_root(tmp_path / "../other")
+    except ValueError as exc:
+        assert "forbidden relative segment" in str(exc)
+    else:
+        raise AssertionError("parent traversal in repo root must be rejected")
 
 
 def test_normalize_and_classify_remote_urls() -> None:
