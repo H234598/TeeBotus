@@ -99,6 +99,27 @@ def test_channels_reject_empty_list_items_instead_of_silently_shifting_selection
         resolve_channels({}, cli_channels="telegram,,signal")
 
 
+def test_build_account_configs_normalizes_direct_channel_values():
+    env = {
+        "TELEGRAM_BOT_TOKEN_DEPRESSIONSBOT": "telegram-token",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared",
+    }
+
+    accounts = build_account_run_configs("Depressionsbot", (" Telegram ",), env)
+
+    assert [account.channel for account in accounts] == ["telegram"]
+
+
+def test_build_account_configs_rejects_unknown_direct_channel():
+    with pytest.raises(RuntimeConfigError, match="unsupported channel"):
+        build_account_run_configs("Depressionsbot", ("irc",), {})
+
+
+def test_build_account_configs_rejects_duplicate_direct_channels():
+    with pytest.raises(RuntimeConfigError, match="duplicate values in runtime channels"):
+        build_account_run_configs("Depressionsbot", ("telegram", " Telegram "), {})
+
+
 def test_openai_key_resolution_allows_shared_instance_key():
     env = {"OPENAI_API_KEY_DEPRESSIONSBOT": "sk-shared"}
 
@@ -223,6 +244,24 @@ def test_openai_key_resolution_rejects_empty_positional_key_slot():
         resolve_openai_key("Depressionsbot", "telegram", 2, env)
 
 
+def test_openai_key_resolution_rejects_invalid_direct_slot_number():
+    env = {
+        "OPENAI_API_KEY_DEPRESSIONSBOT_0": "sk-zero",
+        "OPENAI_API_KEY_DEPRESSIONSBOT_-1": "sk-minus",
+        "OPENAI_API_KEY_DEPRESSIONSBOT": "sk-fallback",
+    }
+
+    with pytest.raises(RuntimeConfigError, match="OpenAI key slot must be >= 1"):
+        resolve_openai_key("Depressionsbot", "telegram", 0, env)
+    with pytest.raises(RuntimeConfigError, match="OpenAI key slot must be >= 1"):
+        resolve_openai_key("Depressionsbot", "telegram", -1, env)
+
+
+def test_openai_key_resolution_rejects_unknown_direct_channel():
+    with pytest.raises(RuntimeConfigError, match="unsupported OpenAI key channel"):
+        resolve_openai_key("Depressionsbot", "irc", 1, {"OPENAI_API_KEY_DEPRESSIONSBOT": "sk-fallback"})
+
+
 def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     env = {
         "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama",
@@ -258,6 +297,15 @@ def test_llm_setting_resolution_prefers_channel_slot_over_instance() -> None:
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "TIMEOUT_SECONDS", env) == "180"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "MAX_OUTPUT_TOKENS", env) == "700"
     assert resolve_llm_setting("Depressionsbot", "telegram", 1, "TEMPERATURE", env) == "0.7"
+
+
+def test_llm_setting_resolution_rejects_invalid_direct_channel_and_slot() -> None:
+    env = {"TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "ollama"}
+
+    with pytest.raises(RuntimeConfigError, match="unsupported channel"):
+        resolve_llm_setting("Depressionsbot", "irc", 1, "PROVIDER", env)
+    with pytest.raises(RuntimeConfigError, match="LLM runtime slot must be >= 1"):
+        resolve_llm_setting("Depressionsbot", "telegram", 0, "PROVIDER", env)
 
 
 def test_signal_account_resolution_pairs_services_and_numbers():

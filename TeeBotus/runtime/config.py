@@ -98,10 +98,7 @@ def resolve_channels(env: Mapping[str, str] | None = None, cli_channels: str | N
     if value in {"", "auto", "all"}:
         return DEFAULT_CHANNELS
     channels = parse_config_list(value, label="TEEBOTUS_CHANNELS")
-    invalid = [channel for channel in channels if channel not in SUPPORTED_CHANNELS]
-    if invalid:
-        raise RuntimeConfigError(f"unsupported channel(s): {', '.join(invalid)}")
-    return _validate_unique_values(channels, label="TEEBOTUS_CHANNELS")
+    return _normalize_runtime_channels(channels, label="TEEBOTUS_CHANNELS")
 
 
 def resolve_instances_dir(env: Mapping[str, str] | None = None) -> Path:
@@ -155,6 +152,39 @@ def _first_nonempty_env_value(source: Mapping[str, str], *keys: str) -> str:
     return ""
 
 
+def _validate_slot_number(slot: int, *, label: str) -> int:
+    try:
+        resolved = int(slot)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeConfigError(f"{label} must be a positive integer slot number") from exc
+    if resolved < 1:
+        raise RuntimeConfigError(f"{label} must be >= 1")
+    return resolved
+
+
+def _normalize_runtime_channel(channel: str, *, label: str) -> str:
+    normalized = str(channel or "").strip().casefold()
+    if not normalized:
+        raise RuntimeConfigError(f"empty channel in {label}")
+    if normalized not in SUPPORTED_CHANNELS:
+        raise RuntimeConfigError(f"unsupported channel(s): {normalized}")
+    return normalized
+
+
+def _normalize_runtime_channels(channels: Sequence[str], *, label: str) -> tuple[str, ...]:
+    normalized = tuple(_normalize_runtime_channel(channel, label=label) for channel in channels)
+    return _validate_unique_values(normalized, label=label)
+
+
+def _normalize_openai_channel_token(channel: str) -> str:
+    normalized = str(channel or "").strip().casefold()
+    if not normalized:
+        raise RuntimeConfigError("OpenAI key channel must not be empty")
+    if normalized not in SUPPORTED_CHANNELS and normalized.upper() not in BACKGROUND_OPENAI_CHANNELS:
+        raise RuntimeConfigError(f"unsupported OpenAI key channel: {normalized}")
+    return normalized.upper()
+
+
 def resolve_openai_key(
     instance_name: str,
     channel: str,
@@ -162,8 +192,9 @@ def resolve_openai_key(
     env: Mapping[str, str] | None = None,
 ) -> str:
     source = os.environ if env is None else env
+    slot = _validate_slot_number(slot, label="OpenAI key slot")
     instance_token = normalize_instance_env_token(instance_name)
-    channel_token = str(channel).strip().upper()
+    channel_token = _normalize_openai_channel_token(channel)
     candidates = [
         f"OPENAI_API_KEY_{instance_token}_{channel_token}_{slot}",
         f"OPENAI_API_KEY_{instance_token}_{channel_token}",
@@ -223,11 +254,12 @@ def resolve_llm_setting(
     env: Mapping[str, str] | None = None,
 ) -> str:
     source = os.environ if env is None else env
+    slot = _validate_slot_number(slot, label="LLM runtime slot")
     setting = "_".join(part for part in str(name or "").strip().upper().split("_") if part)
     if not setting:
         raise RuntimeConfigError("LLM setting name must not be empty")
     instance_token = normalize_instance_env_token(instance_name)
-    channel_token = str(channel).strip().upper()
+    channel_token = _normalize_runtime_channel(channel, label="LLM runtime channel").upper()
     candidates = [
         f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}_{slot}",
         f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}",
@@ -339,6 +371,7 @@ def build_account_run_configs(
     channels: Sequence[str],
     env: Mapping[str, str] | None = None,
 ) -> tuple[AccountRunConfig, ...]:
+    channels = _normalize_runtime_channels(channels, label="runtime channels")
     accounts: list[AccountRunConfig] = []
     telegram_accounts: list[AccountRunConfig] = []
     if "telegram" in channels:
