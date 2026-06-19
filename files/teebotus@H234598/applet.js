@@ -1738,7 +1738,7 @@ TeeBotusApplet.prototype = {
   _safeLocalPath: function(value, fallback) {
     let fallbackPath = String(fallback || DEFAULT_REPO_PATH).trim() || DEFAULT_REPO_PATH;
     let path = String(value || fallbackPath).trim() || fallbackPath;
-    if (path.charAt(0) !== "/" || path.indexOf("\u0000") >= 0 || path.length > 4096) {
+    if (path.charAt(0) !== "/" || /[\u0000-\u001F\u007F]/.test(path) || path.length > 4096) {
       return fallbackPath;
     }
     if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(path)) {

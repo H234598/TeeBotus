@@ -713,6 +713,9 @@ def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
           applet.repoPath = "relative/repo";
           applet.libraryPath = "file:///etc/passwd";
           applet.codexUsagePath = "--help";
+          let newlinePath = applet._safeLocalPath("/tmp/good\\nbad", "fallback");
+          let tabPath = applet._safeLocalPath("/tmp/good\\tbad", "fallback");
+          let spacePath = applet._safeLocalPath("/tmp/good path", "fallback");
           applet._openPath(applet._repoPath());
           applet._openPath(applet._libraryPath());
           applet._openPath(applet._codexUsagePath());
@@ -720,6 +723,9 @@ def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
             repo: applet._repoPath(),
             library: applet._libraryPath(),
             codex: applet._codexUsagePath(),
+            newlinePath: newlinePath,
+            tabPath: tabPath,
+            spacePath: spacePath,
             opened: opened
           };
         })()
@@ -729,6 +735,9 @@ def test_cinnamon_applet_sanitizes_local_paths_from_settings() -> None:
     assert result["repo"].endswith("/TeeBotus")
     assert result["library"].endswith("/TeeBotus/instances/Depressionsbot/data/Bibliothek")
     assert result["codex"].endswith("/codex-usage")
+    assert result["newlinePath"] == "fallback"
+    assert result["tabPath"] == "fallback"
+    assert result["spacePath"] == "/tmp/good path"
     opened_targets = [entry[2] for entry in result["opened"]]
     assert "relative/repo" not in opened_targets
     assert "file:///etc/passwd" not in opened_targets
