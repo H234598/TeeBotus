@@ -26,6 +26,7 @@ BAD_LITELLM_VERSIONS = frozenset({"1.82.7", "1.82.8"})
 MIN_SAFE_LITELLM_VERSION = "1.84.0"
 PY313_LITELLM_VERSION = "1.89.2"
 PY314_COMPATIBLE_LITELLM_VERSION = "1.83.7"
+PSYCOPG_VERSION = "3.3.4"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -53,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
                 _check_python_package("litellm", pins["litellm"]),
                 _check_python_package("python-dotenv", "1.2.2"),
                 _check_python_package("fastmcp", "3.4.2"),
+                _check_python_package("psycopg", PSYCOPG_VERSION),
+                _check_python_package("psycopg-binary", PSYCOPG_VERSION),
                 _check_litellm_supply_chain_guard(pins["litellm"]),
                 _check_litellm_dotenv_contract(pins["litellm"]),
                 _check_local_transcription_contract(),
@@ -60,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
                 _check_matrix_file_contract(),
                 _check_signalbot_context_contract(),
                 _check_pyproject_plan2_contract(),
+                _check_requirements_runtime_contract(),
                 _check_llm_profiles_plan2_contract(),
                 _check_local_secret_file_permissions(),
             ]
@@ -266,6 +270,28 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     if errors:
         return False, "pyproject plan2 contract failed: " + "; ".join(errors)
     return True, "pyproject plan2 contract=ok extras=dev,llm,rag,agents,tools requires-python=>=3.11"
+
+
+def _check_requirements_runtime_contract(path: Path = REPO_ROOT / "requirements.txt") -> tuple[bool, str]:
+    try:
+        requirements = {
+            line.strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+    except OSError as exc:
+        return False, f"requirements runtime contract unreadable: {type(exc).__name__}: {exc}"
+    errors: list[str] = []
+    required = f"psycopg[binary]=={PSYCOPG_VERSION}"
+    if required not in requirements:
+        errors.append(f"missing {required}")
+    blocked_prefixes = ("litellm", "openai", "python-dotenv", "fastmcp", "nio-bot", "matrix-nio", "h11")
+    blocked = sorted(dependency for dependency in requirements if dependency.startswith(blocked_prefixes))
+    if blocked:
+        errors.append("sequenced dependencies must stay out of requirements.txt: " + ",".join(blocked))
+    if errors:
+        return False, "requirements runtime contract failed: " + "; ".join(errors)
+    return True, f"requirements runtime contract=ok base={required} sequenced_deps=deferred"
 
 
 def _version_tuple(value: str) -> tuple[int, ...]:

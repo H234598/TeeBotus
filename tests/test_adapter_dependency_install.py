@@ -109,6 +109,7 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     monkeypatch.setattr(check_adapter_deps, "_check_matrix_file_contract", ok("matrix_file"))
     monkeypatch.setattr(check_adapter_deps, "_check_signalbot_context_contract", ok("signalbot_context"))
     monkeypatch.setattr(check_adapter_deps, "_check_pyproject_plan2_contract", ok("pyproject_contract"))
+    monkeypatch.setattr(check_adapter_deps, "_check_requirements_runtime_contract", ok("requirements_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_llm_profiles_plan2_contract", ok("llm_profiles_contract"))
     monkeypatch.setattr(check_adapter_deps, "_check_local_secret_file_permissions", ok("secret_permissions"))
     monkeypatch.setattr(check_adapter_deps, "_check_executable_version", ok("signal_cli"))
@@ -121,9 +122,12 @@ def test_check_adapter_deps_python_only_skips_native_checks(monkeypatch: pytest.
     assert "package:signalbot" in called
     assert "package:python-dotenv" in called
     assert "package:fastmcp" in called
+    assert "package:psycopg" in called
+    assert "package:psycopg-binary" in called
     assert "python_runtime_choice" in called
     assert "litellm_dotenv" in called
     assert "pyproject_contract" in called
+    assert "requirements_contract" in called
     assert "llm_profiles_contract" in called
     assert "secret_permissions" in called
 
@@ -133,6 +137,47 @@ def test_pyproject_plan2_contract_accepts_current_project_metadata() -> None:
 
     assert ok
     assert "extras=dev,llm,rag,agents,tools" in message
+
+
+def test_requirements_runtime_contract_accepts_current_requirements() -> None:
+    ok, message = check_adapter_deps._check_requirements_runtime_contract()
+
+    assert ok
+    assert "psycopg[binary]==3.3.4" in message
+    assert "sequenced_deps=deferred" in message
+
+
+def test_requirements_runtime_contract_rejects_resolver_unsafe_dependencies(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text(
+        "\n".join(
+            [
+                "psycopg[binary]==3.3.4",
+                "litellm==1.83.7",
+                "openai==2.30.0",
+                "python-dotenv==1.2.2",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    ok, message = check_adapter_deps._check_requirements_runtime_contract(requirements)
+
+    assert not ok
+    assert "sequenced dependencies must stay out of requirements.txt" in message
+    assert "litellm==1.83.7" in message
+    assert "openai==2.30.0" in message
+
+
+def test_requirements_runtime_contract_requires_postgres_driver_pin(tmp_path: Path) -> None:
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("# intentionally empty\n", encoding="utf-8")
+
+    ok, message = check_adapter_deps._check_requirements_runtime_contract(requirements)
+
+    assert not ok
+    assert "missing psycopg[binary]==3.3.4" in message
 
 
 def test_python_runtime_choice_prefers_python313_for_clean_llm_resolver() -> None:
