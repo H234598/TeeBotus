@@ -1415,6 +1415,7 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(
         {"status": "ok", "result": {"count": 7}},
         {"status": "ok", "result": {}},
         {"status": "ok", "result": {"count": "not-a-number"}},
+        {"status": "ok", "result": {"count": -1}},
         {"status": "error", "result": {"count": 0}},
         ["not", "a", "dict"],
     ]
@@ -1428,12 +1429,14 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(
     ready = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
     missing_count = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
     invalid_count = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+    negative_count = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
     error_status = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
     non_object = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
 
     assert ready == {"status": "ready", "count": 7, "error": ""}
     assert missing_count == {"status": "broken", "count": 0, "error": "missing Qdrant count result"}
     assert invalid_count == {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
+    assert negative_count == {"status": "broken", "count": 0, "error": "negative Qdrant count result"}
     assert error_status == {"status": "broken", "count": 0, "error": "unexpected Qdrant status: error"}
     assert non_object == {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
 

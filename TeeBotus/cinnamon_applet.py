@@ -528,9 +528,11 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         return {"status": "broken", "count": 0, "error": "missing Qdrant count result"}
     count = result.get("count")
     try:
-        parsed_count = max(0, int(count))
+        parsed_count = int(count)
     except (TypeError, ValueError):
         return {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
+    if parsed_count < 0:
+        return {"status": "broken", "count": 0, "error": "negative Qdrant count result"}
     return {"status": "ready", "count": parsed_count, "error": ""}
 
 
