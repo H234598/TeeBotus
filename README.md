@@ -97,9 +97,12 @@ python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix
 ```
 
 Mit `--notify-admins` filtert der Runtime-Status Warnungen und Fehler aus
-der Diagnoseausgabe und schickt sie an die konfigurierte Admin-Account-Gruppe.
-Die Gruppe ist account-basiert, nicht transport-basiert; verschickt wird ueber
-die gespeicherte private Route des jeweiligen Admin-Accounts:
+der Diagnoseausgabe und schickt sie als Markdown-Datei an die konfigurierte
+Admin-Account-Gruppe der Logger-Instanz `TeeBotus_Logger`. Die geprueften
+Problemzeilen koennen aus allen ausgewaehlten Instanzen stammen; ausgegeben
+und in `Status_Outbox` protokolliert werden Runtime-Status-Summaries aber nur
+ueber TBL. Die Gruppe ist account-basiert, nicht transport-basiert; verschickt
+wird ueber die gespeicherte private Route des jeweiligen TBL-Admin-Accounts:
 
 ```bash
 python3 -m TeeBotus --runtime-status --channels telegram,signal,matrix --notify-admins
@@ -304,6 +307,7 @@ Zum Verbinden eines bestehenden TeeBotus-Accounts im Matrix-Privatraum:
 ```
 
 Der neue Account-Layer speichert Kommunikationswege wie `telegram:user:<id>`, `signal:uuid:<id>` oder `matrix:user:<id>` als Identities eines instanzinternen Accounts. Account-Secrets werden nicht im Klartext gespeichert, sondern als HMAC-SHA512-Verifier mit instanzgebundenem Secret-Service-Pepper.
+Normales `/login <account_id> <secret>` bleibt instanzgebunden. Runtime-Admins duerfen denselben Login-Befehl auch mit Account-ID und Secret einer anderen lokalen Instanz nutzen; der Bot prueft das Secret gegen die Quellinstanz und legt erst danach einen lokalen externen Account-Link an.
 
 Strukturierter Account-Memory kann auf SQLite oder PostgreSQL umgestellt werden. Auf diesem Host ist SQLite der gemessene lokale Primary-Backend; PostgreSQL bleibt optional und muss per DSN erreichbar sein:
 

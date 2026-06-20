@@ -19,6 +19,7 @@ from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids, stat
 
 ADMIN_ACCOUNT_IDS_ENV = "TEEBOTUS_ADMIN_ACCOUNT_IDS"
 ADMIN_ACCOUNT_IDS_INSTANCE_ENV_PREFIX = "TEEBOTUS_ADMIN_ACCOUNT_IDS_"
+STATUS_SUMMARY_INSTANCE_NAME = "TeeBotus_Logger"
 DEFAULT_ADMIN_ACCOUNT_IDS = (
     "1013d6b22588708b4ea30ce8fcd7fe877e937adbfec740621b2ec2fe47fb2db343cac2181652efb27e55fb268693acd4782eb5c6f5e923c0e53fe3141a410790",
     "799c5b02f5e92c5a19ead998b6a4b42064c6e2827039249e1bc98ef7423ccd81ad0452f4f63b8424d5654455a069384717d5a5d8a4f3ad8905d42f768411a390",
@@ -189,6 +190,7 @@ async def notify_runtime_status_admin_accounts(
     store_factory: StoreFactory | None = None,
     sender_factory: SenderFactory | None = None,
     now: datetime | None = None,
+    summary_instance_name: str = STATUS_SUMMARY_INSTANCE_NAME,
 ) -> tuple[AdminNotificationResult, ...]:
     if problem_lines is None:
         problem_lines = runtime_status_problem_lines(status_output)
@@ -197,82 +199,61 @@ async def notify_runtime_status_admin_accounts(
     source = os.environ if env is None else env
     resolved_store_factory = store_factory or _default_account_store
     results: list[AdminNotificationResult] = []
-    for instance_name in selected_instances:
+    instance_name = _summary_instance_name(summary_instance_name)
+    try:
+        store = resolved_store_factory(instances_dir / instance_name / "data" / "accounts", instance_name)
+    except Exception as exc:  # noqa: BLE001 - runtime-status notify must not hide status output.
+        return (AdminNotificationResult(instance_name, "", "failed", f"store:{type(exc).__name__}"),)
+    group = resolve_admin_account_group(instance_name=instance_name, env=source)
+    for invalid_id in group.invalid_ids:
+        results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
+    candidates: list[tuple[str, dict[str, Any], str, RuntimeStatusSummaryPayload]] = []
+    for account_id in _status_notification_candidate_account_ids(
+        store,
+        configured_account_ids=group.account_ids,
+        include_status_auth_accounts=True,
+    ):
+        if not _account_dir_exists(store, account_id):
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
+            continue
         try:
-            store = resolved_store_factory(instances_dir / instance_name / "data" / "accounts", instance_name)
-        except Exception as exc:  # noqa: BLE001 - runtime-status notify must not hide status output.
-            results.append(AdminNotificationResult(instance_name, "", "failed", f"store:{type(exc).__name__}"))
+            route = select_proactive_route(store, account_id)
+        except (AccountStoreError, OSError) as exc:
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
             continue
-        group = resolve_admin_account_group(instance_name=instance_name, env=source)
-        for invalid_id in group.invalid_ids:
-            results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
-        candidates: list[tuple[str, dict[str, Any], str, RuntimeStatusSummaryPayload]] = []
-        for account_id in _status_notification_candidate_account_ids(
-            store,
-            configured_account_ids=group.account_ids,
-            include_status_auth_accounts=True,
-        ):
-            if not _account_dir_exists(store, account_id):
-                results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
-                continue
-            try:
-                route = select_proactive_route(store, account_id)
-            except (AccountStoreError, OSError) as exc:
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
-                continue
-            if route is None:
-                results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_private_route"))
-                continue
-            channel = str(route.get("channel") or "").strip().casefold()
-            if not channel:
-                results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
-                continue
-            try:
-                summary_payload = _queue_runtime_status_summary(
-                    store,
-                    account_id,
-                    problem_lines=problem_lines,
-                    selected_instances=selected_instances,
-                    route=route,
-                    now=now,
-                )
-            except Exception as exc:  # noqa: BLE001 - one broken status store must not hide runtime-status output.
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", f"outbox:{type(exc).__name__}", channel=channel))
-                continue
-            candidates.append((account_id, route, channel, summary_payload))
-        if not candidates:
+        if route is None:
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_private_route"))
             continue
-        senders_by_channel: dict[str, ProactiveSender] = {}
-        sender_errors_by_channel: dict[str, str] = {}
-        candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _summary_payload in candidates))
-        if sender_factory is not None:
-            try:
-                senders = sender_factory(instance_name, store)
-            except Exception as exc:  # noqa: BLE001 - injected factories have no per-channel selector.
-                for channel in candidate_channels:
-                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
-            else:
-                for channel in candidate_channels:
-                    try:
-                        sender = _sender_for_channel(senders, channel)
-                    except Exception as exc:
-                        sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
-                        continue
-                    if sender is None or sender is _SENDER_NOT_FOUND:
-                        sender_errors_by_channel[channel] = "no_sender"
-                        continue
-                    if not callable(sender):
-                        sender_errors_by_channel[channel] = "sender_factory:non_callable"
-                        continue
-                    senders_by_channel[channel] = sender
+        channel = str(route.get("channel") or "").strip().casefold()
+        if not channel:
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
+            continue
+        try:
+            summary_payload = _queue_runtime_status_summary(
+                store,
+                account_id,
+                problem_lines=problem_lines,
+                selected_instances=selected_instances,
+                route=route,
+                now=now,
+            )
+        except Exception as exc:  # noqa: BLE001 - one broken status store must not hide runtime-status output.
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", f"outbox:{type(exc).__name__}", channel=channel))
+            continue
+        candidates.append((account_id, route, channel, summary_payload))
+    if not candidates:
+        return tuple(results)
+    senders_by_channel: dict[str, ProactiveSender] = {}
+    sender_errors_by_channel: dict[str, str] = {}
+    candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _summary_payload in candidates))
+    if sender_factory is not None:
+        try:
+            senders = sender_factory(instance_name, store)
+        except Exception as exc:  # noqa: BLE001 - injected factories have no per-channel selector.
+            for channel in candidate_channels:
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
         else:
             for channel in candidate_channels:
-                try:
-                    resolved_sender_factory = _runtime_sender_factory(instances_dir, source, channels=(channel,))
-                    senders = resolved_sender_factory(instance_name, store)
-                except Exception as exc:  # noqa: BLE001 - one runtime channel must not block other admin channels.
-                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
-                    continue
                 try:
                     sender = _sender_for_channel(senders, channel)
                 except Exception as exc:
@@ -285,37 +266,57 @@ async def notify_runtime_status_admin_accounts(
                     sender_errors_by_channel[channel] = "sender_factory:non_callable"
                     continue
                 senders_by_channel[channel] = sender
-        for account_id, route, channel, summary_payload in candidates:
-            sender_error = sender_errors_by_channel.get(channel)
-            if sender_error == "no_sender":
-                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="skipped", reason=sender_error, channel=channel, now=now)
-                results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
-                continue
-            if sender_error:
-                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=sender_error, channel=channel, now=now)
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
-                continue
-            sender = senders_by_channel[channel]
-            chat_id = str(route.get("chat_id") or "").strip()
-            action = SendAttachment(
-                chat_id,
-                summary_payload.markdown_document.encode("utf-8"),
-                summary_payload.markdown_filename,
-                "text/markdown",
-                caption=summary_payload.message_text,
-                track=False,
-            )
+    else:
+        for channel in candidate_channels:
             try:
-                outcome = sender(route, action, {"source": "runtime_status_admin", "account_id": account_id})
-                if isawaitable(outcome):
-                    await outcome
-            except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
-                reason = f"send:{type(exc).__name__}"
-                _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=reason, channel=channel, now=now)
-                results.append(AdminNotificationResult(instance_name, account_id, "failed", reason, channel=channel))
+                resolved_sender_factory = _runtime_sender_factory(instances_dir, source, channels=(channel,))
+                senders = resolved_sender_factory(instance_name, store)
+            except Exception as exc:  # noqa: BLE001 - one runtime channel must not block other admin channels.
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
                 continue
-            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="sent", channel=channel, now=now)
-            results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
+            try:
+                sender = _sender_for_channel(senders, channel)
+            except Exception as exc:
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                continue
+            if sender is None or sender is _SENDER_NOT_FOUND:
+                sender_errors_by_channel[channel] = "no_sender"
+                continue
+            if not callable(sender):
+                sender_errors_by_channel[channel] = "sender_factory:non_callable"
+                continue
+            senders_by_channel[channel] = sender
+    for account_id, route, channel, summary_payload in candidates:
+        sender_error = sender_errors_by_channel.get(channel)
+        if sender_error == "no_sender":
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="skipped", reason=sender_error, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
+            continue
+        if sender_error:
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=sender_error, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
+            continue
+        sender = senders_by_channel[channel]
+        chat_id = str(route.get("chat_id") or "").strip()
+        action = SendAttachment(
+            chat_id,
+            summary_payload.markdown_document.encode("utf-8"),
+            summary_payload.markdown_filename,
+            "text/markdown",
+            caption=summary_payload.message_text,
+            track=False,
+        )
+        try:
+            outcome = sender(route, action, {"source": "runtime_status_admin", "account_id": account_id})
+            if isawaitable(outcome):
+                await outcome
+        except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
+            reason = f"send:{type(exc).__name__}"
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=reason, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", reason, channel=channel))
+            continue
+        _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="sent", channel=channel, now=now)
+        results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
     return tuple(results)
 
 
@@ -556,6 +557,13 @@ def _parse_admin_account_ids(values: Iterable[str]) -> tuple[tuple[str, ...], tu
 
 def _runtime_status_admin_message_text() -> str:
     return f"Release TeeBotus {__version__}"
+
+
+def _summary_instance_name(value: str) -> str:
+    text = str(value or "").strip() or STATUS_SUMMARY_INSTANCE_NAME
+    if "/" in text or "\\" in text or text in {".", ".."}:
+        raise ValueError("status summary instance must be a single path segment")
+    return text
 
 
 def _runtime_status_admin_markdown(

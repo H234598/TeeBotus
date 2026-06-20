@@ -10,6 +10,7 @@ from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.admin_accounts import (
     ADMIN_ACCOUNT_IDS_ENV,
     DEFAULT_ADMIN_ACCOUNT_IDS,
+    STATUS_SUMMARY_INSTANCE_NAME,
     admin_account_group_status_lines,
     format_admin_notification_result_lines,
     notify_runtime_status_admin_accounts,
@@ -20,6 +21,10 @@ from TeeBotus.runtime.admin_accounts import (
 
 def store_for(root: Path, instance_name: str = "Depressionsbot") -> AccountStore:
     return AccountStore(root / "accounts", instance_name, StaticSecretProvider(b"a" * 32))
+
+
+def status_summary_store_for(instances_dir: Path) -> AccountStore:
+    return store_for(instances_dir / STATUS_SUMMARY_INSTANCE_NAME / "data", STATUS_SUMMARY_INSTANCE_NAME)
 
 
 def test_default_admin_group_contains_configured_account_ids() -> None:
@@ -130,8 +135,7 @@ def test_runtime_status_problem_lines_redacts_secrets() -> None:
 
 def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -155,7 +159,7 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
     assert len(sent) == 1
     action = sent[0][1]
     assert isinstance(action, SendAttachment)
@@ -180,8 +184,7 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
 
 def test_runtime_status_admin_notify_includes_code_authenticated_status_recipients(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -210,7 +213,7 @@ def test_runtime_status_admin_notify_includes_code_authenticated_status_recipien
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
     assert len(sent) == 1
     assert sent[0].caption == f"Release TeeBotus {__version__}"
     assert "signal_slot=Depressionsbot/default status=broken error=bad" in sent[0].data.decode("utf-8")
@@ -219,8 +222,7 @@ def test_runtime_status_admin_notify_includes_code_authenticated_status_recipien
 
 def test_runtime_status_admin_notify_numbers_status_summaries_per_account(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -245,8 +247,7 @@ def test_runtime_status_admin_notify_numbers_status_summaries_per_account(tmp_pa
 
 def test_runtime_status_admin_notify_includes_status_auth_recipients_when_admin_ids_are_set(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     admin_identity = telegram_identity_key(111)
     status_identity = telegram_identity_key(222)
     admin_account_id = account_store.resolve_or_create_account(admin_identity)
@@ -277,8 +278,8 @@ def test_runtime_status_admin_notify_includes_status_auth_recipients_when_admin_
     lines = asyncio.run(run_notify())
 
     assert lines == (
-        f"admin_notify=Depressionsbot status=sent account_id={admin_account_id} channel=telegram",
-        f"admin_notify=Depressionsbot status=sent account_id={status_account_id} channel=telegram",
+        f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={admin_account_id} channel=telegram",
+        f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={status_account_id} channel=telegram",
     )
     assert len(account_store.read_status_outbox(admin_account_id)) == 1
     assert len(account_store.read_status_outbox(status_account_id)) == 1
@@ -286,8 +287,7 @@ def test_runtime_status_admin_notify_includes_status_auth_recipients_when_admin_
 
 def test_runtime_status_admin_notify_skips_opted_out_configured_admin(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -321,8 +321,7 @@ def test_runtime_status_admin_notify_skips_opted_out_configured_admin(tmp_path) 
 
 def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -347,13 +346,12 @@ def test_runtime_status_admin_notify_builds_only_required_sender_channels(tmp_pa
     lines = asyncio.run(run_notify())
 
     assert requested_channels == [("telegram",)]
-    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
 
 
 def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     telegram_identity = telegram_identity_key(123)
     telegram_account_id = account_store.resolve_or_create_account(telegram_identity)
     account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -388,14 +386,13 @@ def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_pat
     assert requested_channels == [("telegram",), ("signal",)]
     assert len(sent) == 1
     assert sent[0].chat_id == "123"
-    assert f"admin_notify=Depressionsbot status=sent account_id={telegram_account_id} channel=telegram" in lines
-    assert f"admin_notify=Depressionsbot status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={telegram_account_id} channel=telegram" in lines
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
 
 
 def test_runtime_status_admin_notify_handles_broken_sender_factory_return_value(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -413,13 +410,12 @@ def test_runtime_status_admin_notify_handles_broken_sender_factory_return_value(
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:AttributeError",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=failed account_id={account_id} channel=telegram reason=sender_factory:AttributeError",)
 
 
 def test_runtime_status_admin_notify_treats_non_callable_sender_as_failure(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -437,13 +433,12 @@ def test_runtime_status_admin_notify_treats_non_callable_sender_as_failure(tmp_p
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
 
 
 def test_runtime_status_admin_notify_handles_sender_keys_without_case_sensitivity(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -462,14 +457,13 @@ def test_runtime_status_admin_notify_handles_sender_keys_without_case_sensitivit
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=sent account_id={account_id} channel=telegram",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
     assert len(sent) == 1
 
 
 def test_runtime_status_admin_notify_handles_broken_default_runtime_sender_factory(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     identity = telegram_identity_key(123)
     account_id = account_store.resolve_or_create_account(identity)
     account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -491,13 +485,12 @@ def test_runtime_status_admin_notify_handles_broken_default_runtime_sender_facto
 
     lines = asyncio.run(run_notify())
 
-    assert lines == (f"admin_notify=Depressionsbot status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=failed account_id={account_id} channel=telegram reason=sender_factory:non_callable",)
 
 
 def test_runtime_status_admin_notify_calls_injected_sender_factory_once_per_instance(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     telegram_identity = telegram_identity_key(123)
     telegram_account_id = account_store.resolve_or_create_account(telegram_identity)
     account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
@@ -526,15 +519,14 @@ def test_runtime_status_admin_notify_calls_injected_sender_factory_once_per_inst
 
     lines = asyncio.run(run_notify())
 
-    assert calls == ["Depressionsbot"]
-    assert f"admin_notify=Depressionsbot status=sent account_id={telegram_account_id} channel=telegram" in lines
-    assert f"admin_notify=Depressionsbot status=sent account_id={signal_account_id} channel=signal" in lines
+    assert calls == [STATUS_SUMMARY_INSTANCE_NAME]
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={telegram_account_id} channel=telegram" in lines
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={signal_account_id} channel=signal" in lines
 
 
 def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
-    instance_dir = instances_dir / "Depressionsbot"
-    account_store = store_for(instance_dir / "data")
+    account_store = status_summary_store_for(instances_dir)
     called = False
 
     def sender_factory(_instance: str, _store: AccountStore):
@@ -557,5 +549,5 @@ def test_runtime_status_admin_notify_does_not_build_senders_without_local_admin(
 
     assert called is False
     assert lines == (
-        f"admin_notify=Depressionsbot status=skipped account_id={DEFAULT_ADMIN_ACCOUNT_IDS[0]} reason=not_local",
+        f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=skipped account_id={DEFAULT_ADMIN_ACCOUNT_IDS[0]} reason=not_local",
     )

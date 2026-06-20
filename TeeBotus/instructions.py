@@ -53,6 +53,7 @@ DEFAULT_HELP_LINES = (
 )
 
 DEFAULT_ADMIN_HELP_LINES = (
+    "/login <account_id> <secret> - Admin: Falls Account-ID/Secret in einer anderen Instanz gueltig sind, wird der aktuelle Weg instanzuebergreifend verknuepft.",
     "/codex <Prompt> - Admin: Codex CLI lokal im TeeBotus-Repo ausfuehren.",
     "/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini <Prompt> - Admin: Prompt direkt an ein LLM-Backend oder Profil senden.",
     "/proactive|/agent status,on,off,pause,resume,... - proaktiven Agenten fuer den eigenen Account steuern.",

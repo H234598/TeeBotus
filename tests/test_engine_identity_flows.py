@@ -287,6 +287,68 @@ def test_admin_command_no_overrides_pending_admin_secret_flow(tmp_path, monkeypa
     assert account_store.read_status_auth_state(account_id)["admin_opt_out"] is True
 
 
+def test_admin_can_link_account_from_other_instance(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    provider = StaticSecretProvider(b"e" * 32)
+    source_store = AccountStore(
+        tmp_path / "instances" / "Bote_der_Wahrheit" / "data" / "accounts",
+        "Bote_der_Wahrheit",
+        provider,
+    )
+    source_account_id = source_store.resolve_or_create_account(telegram_identity_key(999))
+    _, source_secret = source_store.register_account(source_account_id)
+    target_store = AccountStore(
+        tmp_path / "instances" / "Depressionsbot" / "data" / "accounts",
+        "Depressionsbot",
+        provider,
+    )
+    engine = TeeBotusEngine(
+        account_store=target_store,
+        project_root=tmp_path,
+        cross_instance_store_factory=lambda root, instance: AccountStore(root, instance, provider, create_dirs=False),
+    )
+    admin_identity = telegram_identity_key(1)
+
+    engine.process(event(admin_identity, "/admin yes 18hhGfuu3"))
+    actions = engine.process(event(admin_identity, f"/login {source_account_id} {source_secret}"))
+
+    assert len(actions) == 1
+    assert "instanzübergreifend" in actions[0].text
+    assert "Bote_der_Wahrheit" in actions[0].text
+    assert target_store.get_account_for_identity(admin_identity) == source_account_id
+    summary = target_store.account_summary(source_account_id)
+    assert summary["linked_identities"] == [admin_identity]
+    assert summary["secret_exists"] is False
+
+
+def test_non_admin_cannot_link_account_from_other_instance(tmp_path) -> None:
+    provider = StaticSecretProvider(b"e" * 32)
+    source_store = AccountStore(
+        tmp_path / "instances" / "Bote_der_Wahrheit" / "data" / "accounts",
+        "Bote_der_Wahrheit",
+        provider,
+    )
+    source_account_id = source_store.resolve_or_create_account(telegram_identity_key(999))
+    _, source_secret = source_store.register_account(source_account_id)
+    target_store = AccountStore(
+        tmp_path / "instances" / "Depressionsbot" / "data" / "accounts",
+        "Depressionsbot",
+        provider,
+    )
+    engine = TeeBotusEngine(
+        account_store=target_store,
+        project_root=tmp_path,
+        cross_instance_store_factory=lambda root, instance: AccountStore(root, instance, provider, create_dirs=False),
+    )
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, f"/login {source_account_id} {source_secret}"))
+
+    assert len(actions) == 1
+    assert "ID oder Secret stimmt nicht" in actions[0].text
+    assert target_store.get_account_for_identity(identity) != source_account_id
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

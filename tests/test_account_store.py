@@ -1003,6 +1003,24 @@ def test_link_identity_refuses_to_silently_merge_registered_source_account(tmp_p
     assert store.get_account_for_identity("signal:uuid:abc") == source
 
 
+def test_external_account_can_be_created_and_linked_without_local_secret(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = "a" * 128
+    identity = telegram_identity_key(1)
+
+    store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit")
+    result = store.link_identity_to_account(identity, account_id, display_label="Admin")
+
+    assert result["account_id"] == account_id
+    assert store.get_account_for_identity(identity) == account_id
+    summary = store.account_summary(account_id)
+    assert summary["registered"] is False
+    assert summary["secret_exists"] is False
+    assert summary["linked_identities"] == [identity]
+    profile = store._read_account_profile(account_id)
+    assert profile["external_links"][0]["source_instance"] == "Bote_der_Wahrheit"
+
+
 def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelope(tmp_path):
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
     account_id = first.resolve_or_create_account(telegram_identity_key(77))

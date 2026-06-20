@@ -1689,6 +1689,44 @@ class AccountStore:
         self._ensure_account_resolvable(target_account_id)
         if not self.verify_secret(target_account_id, account_secret):
             raise AccountStoreError("ID or secret is invalid")
+        return self.link_identity_to_account(identity_key, target_account_id, display_label=display_label)
+
+    def ensure_external_account(self, account_id: str, *, source_instance: str, source_account_id: str = "") -> None:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        source_account_id = source_account_id.strip().casefold() if source_account_id else account_id
+        source_instance = str(source_instance or "").strip()
+        profile_path = self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME
+        if profile_path.exists():
+            profile = self._read_account_profile(account_id)
+            if profile.get("status") == "tombstoned":
+                raise AccountStoreError("target account is tombstoned")
+            if self._account_is_resolvable(account_id):
+                return
+        now = utc_now()
+        profile = {
+            "schema_version": ACCOUNT_SCHEMA_VERSION,
+            "instance": self.instance_name,
+            "account_id": account_id,
+            "created_at": now,
+            "updated_at": now,
+            "registered": False,
+            "secret_exists": False,
+            "linked_identities": [],
+            "status": "active",
+            "external_links": [
+                {
+                    "source_instance": source_instance,
+                    "source_account_id": source_account_id,
+                    "linked_at": now,
+                }
+            ],
+        }
+        self._write_account_profile(account_id, profile)
+        self._upsert_account_index(profile)
+
+    def link_identity_to_account(self, identity_key: str, account_id: str, *, display_label: str = "") -> dict[str, Any]:
+        target_account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._ensure_account_resolvable(target_account_id)
         key = self._normalize_identity_key(identity_key)
         current_account_id = self.get_account_for_identity(key)
         old_identity_keys = self.list_identities_for_account(target_account_id)

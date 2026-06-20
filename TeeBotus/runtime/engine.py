@@ -44,7 +44,7 @@ from TeeBotus.runtime.action_buttons import (
 )
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, runtime_secret_provider, utc_now
 from TeeBotus.runtime.actions import ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
@@ -152,6 +152,7 @@ class TeeBotusEngine:
         background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
         structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
         route_to_client_factory: Callable[..., object | None] | None = None,
+        cross_instance_store_factory: Callable[[Path, str], AccountStore] | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -168,6 +169,7 @@ class TeeBotusEngine:
         self.background_action_dispatcher = background_action_dispatcher
         self.structured_decision_runner = structured_decision_runner
         self.route_to_client_factory = route_to_client_factory or build_runtime_text_llm_client
+        self.cross_instance_store_factory = cross_instance_store_factory
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
@@ -574,6 +576,14 @@ class TeeBotusEngine:
         try:
             result = self.account_store.link_identity(event.identity_key, target_account_id, secret, display_label=event.sender_name)
         except AccountStoreError as exc:
+            cross_instance_result = self._handle_cross_instance_admin_login(
+                event,
+                current_account_id=current_account_id,
+                target_account_id=target_account_id,
+                secret=secret,
+            )
+            if cross_instance_result is not None:
+                return cross_instance_result
             if "already linked" in str(exc) or "account_edit" in str(exc):
                 return EngineResult(current_account_id, [SendText(event.chat_id, "Dieser Kommunikationsweg ist bereits mit einem anderen Account verbunden. Sende /account_edit, wenn du wechseln möchtest.", track=False)], handled=True)
             return EngineResult(
@@ -614,6 +624,95 @@ class TeeBotusEngine:
                 )
             )
         return EngineResult(linked_account_id, actions, handled=True)
+
+    def _handle_cross_instance_admin_login(
+        self,
+        event: IncomingEvent,
+        *,
+        current_account_id: str,
+        target_account_id: str,
+        secret: str,
+    ) -> EngineResult | None:
+        if not self._account_is_help_admin(event.instance, current_account_id):
+            return None
+        matches = self._cross_instance_login_matches(event.instance, target_account_id, secret)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            instances = ", ".join(instance_name for instance_name, _store in matches)
+            return EngineResult(
+                current_account_id,
+                [SendText(event.chat_id, f"Account-ID und Secret passen in mehreren Instanzen: {instances}. Bitte erst die Zielinstanz eindeutig bereinigen.", track=False)],
+                handled=True,
+            )
+        source_instance, _source_store = matches[0]
+        try:
+            self.account_store.ensure_external_account(
+                target_account_id,
+                source_instance=source_instance,
+                source_account_id=target_account_id,
+            )
+            result = self.account_store.link_identity_to_account(
+                event.identity_key,
+                target_account_id,
+                display_label=event.sender_name,
+            )
+        except (AccountStoreError, OSError, ValueError):
+            return EngineResult(
+                current_account_id,
+                [SendText(event.chat_id, "Instanzübergreifendes Admin-Login konnte gerade nicht gespeichert werden.", track=False)],
+                handled=True,
+            )
+        linked_account_id = str(result["account_id"])
+        return EngineResult(
+            linked_account_id,
+            [
+                SendText(
+                    event.chat_id,
+                    f"Dieser Kommunikationsweg wurde als Admin instanzübergreifend mit dem Account aus {source_instance} verbunden.",
+                    track=False,
+                )
+            ],
+            handled=True,
+        )
+
+    def _cross_instance_login_matches(self, current_instance: str, account_id: str, secret: str) -> list[tuple[str, AccountStore]]:
+        matches: list[tuple[str, AccountStore]] = []
+        for instance_name in self._cross_instance_source_names(current_instance):
+            try:
+                store = self._cross_instance_store(instance_name)
+                if store.verify_secret(account_id, secret):
+                    matches.append((instance_name, store))
+            except (AccountStoreError, OSError, ValueError):
+                continue
+        return matches
+
+    def _cross_instance_source_names(self, current_instance: str) -> tuple[str, ...]:
+        instances_dir = self.project_root / "instances"
+        if not instances_dir.is_dir():
+            return ()
+        current = str(current_instance or "").strip()
+        names: list[str] = []
+        for path in sorted(instances_dir.iterdir(), key=lambda item: item.name.casefold()):
+            if not path.is_dir() or path.name == current:
+                continue
+            if "/" in path.name or path.name in {"", ".", ".."}:
+                continue
+            if not (path / "data" / "accounts").exists():
+                continue
+            names.append(path.name)
+        return tuple(names)
+
+    def _cross_instance_store(self, instance_name: str) -> AccountStore:
+        root = self.project_root / "instances" / instance_name / "data" / "accounts"
+        if self.cross_instance_store_factory is not None:
+            return self.cross_instance_store_factory(root, instance_name)
+        return AccountStore(
+            root,
+            instance_name,
+            secret_provider=runtime_secret_provider(),
+            create_dirs=False,
+        )
 
     def _handle_wtf(self, event: IncomingEvent, account_id: str) -> EngineResult:
         notification = self.state.pop_link_notification(
