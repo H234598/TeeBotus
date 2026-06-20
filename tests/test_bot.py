@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import call, patch
 
 from TeeBotus.bot import (
@@ -59,6 +60,7 @@ from TeeBotus.bot import (
     transcribe_youtube_video,
 )
 from TeeBotus import __version__
+from TeeBotus.adapters.telegram_runtime import _handle_update_with_runtime_context
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider, telegram_identity_key
@@ -148,6 +150,11 @@ class FakeOpenAIClient:
 
 
 class FailingAccountMemoryStore:
+    instance_name = "Depressionsbot"
+
+    def get_account_for_identity(self, *args, **kwargs):
+        raise AccountStoreError("account memory backend unavailable")
+
     def resolve_or_create_account(self, *args, **kwargs):
         raise AccountStoreError("account memory backend unavailable")
 
@@ -312,6 +319,72 @@ class BotTests(unittest.TestCase):
 
         self.assertIsNone(record)
         self.assertEqual(api.sent_messages, [(123, instructions.user_memory_error)])
+
+    def test_logger_status_auth_silences_legacy_telegram_memory_errors_before_secret(self) -> None:
+        message = {
+            "message": {
+                "message_id": 1,
+                "text": "/help",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            }
+        }
+        api = FakeAPI()
+        instructions = BotInstructions(user_memory_enabled=True)
+        store = FailingAccountMemoryStore()
+        store.instance_name = "TeeBotus_Logger"
+
+        with patch.dict(os.environ, {"TEEBOTUS_STATUS_AUTH_CODE": "18hhGfuu3"}, clear=True):
+            handle_update(api, message, instructions, None, ChatState(), store)
+
+        self.assertEqual(api.sent_messages, [])
+
+    def test_logger_status_auth_silences_runtime_context_memory_errors_before_secret(self) -> None:
+        message = {
+            "message": {
+                "message_id": 1,
+                "text": "/help",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            }
+        }
+        api = FakeAPI()
+        store = FailingAccountMemoryStore()
+        store.instance_name = "TeeBotus_Logger"
+        context = SimpleNamespace(
+            instance_name="TeeBotus_Logger",
+            adapter_slot=1,
+            api=api,
+            account_store=store,
+        )
+
+        with patch.dict(os.environ, {"TEEBOTUS_STATUS_AUTH_CODE": "18hhGfuu3"}, clear=True):
+            handled = _handle_update_with_runtime_context(context, message, ChatState())
+
+        self.assertTrue(handled)
+        self.assertEqual(api.sent_messages, [])
+
+    def test_logger_status_auth_pre_gate_authorizes_secret_in_legacy_telegram_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            store = account_memory_store(directory, instance_name="TeeBotus_Logger")
+            instructions = BotInstructions(user_memory_enabled=True)
+            message = {
+                "message": {
+                    "message_id": 1,
+                    "text": "tl 18hhGfuu3 bitte freischalten",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            }
+
+            with patch.dict(os.environ, {"TEEBOTUS_STATUS_AUTH_CODE": "18hhGfuu3"}, clear=True):
+                handle_update(api, message, instructions, None, ChatState(), store)
+
+            self.assertEqual(api.sent_messages, [("123", "Statuszugang aktiviert.")])
+            account_id = store.get_account_for_identity(telegram_identity_key(456))
+            self.assertIsNotNone(account_id)
+            self.assertTrue(store.read_status_auth_state(account_id or "").get("authorized"))
 
     def test_record_user_memory_handles_crypto_errors_without_crashing(self) -> None:
         record = UserMemoryRecord(

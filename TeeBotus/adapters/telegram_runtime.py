@@ -58,6 +58,7 @@ from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
+from TeeBotus.runtime.status_auth import StatusAuthGateResult, evaluate_status_auth_gate, status_auth_enabled
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     handle_tts_voice_model_command,
@@ -813,6 +814,9 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
     )
     if event is None:
         return False
+    status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
+    if status_auth is not None:
+        return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
     event = _with_telegram_reply_text(event, message)
     event = _with_telegram_attachments(context.api, event, message)
     try:
@@ -895,6 +899,39 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         instance_name=context.instance_name,
     )
     return bool(engine_result.handled or engine_result.actions)
+
+
+def _telegram_status_auth_pre_gate(account_store: AccountStore, event: IncomingEvent) -> StatusAuthGateResult | None:
+    try:
+        status_auth = evaluate_status_auth_gate(account_store, event)
+    except (AccountStoreError, OSError, ValueError, AttributeError):
+        if not status_auth_enabled(instance_name=event.instance):
+            raise
+        LOGGER.exception(
+            "Telegram status auth gate failed before routing instance=%s chat_id=%s message_id=%s.",
+            event.instance,
+            event.chat_id,
+            event.message_ref or "unknown",
+        )
+        return StatusAuthGateResult(False, event.account_id, reason="status_auth_store_error")
+    if status_auth.allowed:
+        return None
+    return status_auth
+
+
+def _dispatch_telegram_status_auth_pre_gate(api: TelegramAPI, event: IncomingEvent, status_auth: StatusAuthGateResult) -> bool:
+    if not status_auth.action_text:
+        return True
+    try:
+        api.send_message(str(event.chat_id), status_auth.action_text)
+    except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+        LOGGER.exception(
+            "Telegram status auth confirmation failed instance=%s chat_id=%s message_id=%s.",
+            event.instance,
+            event.chat_id,
+            event.message_ref or "unknown",
+        )
+    return True
 
 
 def _record_codex_history_telegram_reply(
@@ -1222,6 +1259,18 @@ def handle_update(
     chat_state.record_received_message(chat_id, _message_id_or_none(message))
 
     text = str(message.get("text") or "").strip()
+    if user_memory_store is not None:
+        event = telegram_message_to_event(
+            message,
+            update=update,
+            instance=instance_name,
+            adapter_slot=1,
+        )
+        if event is not None:
+            status_auth = _telegram_status_auth_pre_gate(user_memory_store, event)
+            if status_auth is not None:
+                _dispatch_telegram_status_auth_pre_gate(api, event, status_auth)
+                return
     first_contact = _is_first_contact(chat_state, user_memory_store, message, instructions)
     if _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity, user_memory_store):
         return
