@@ -16,6 +16,7 @@ def build_reply(
     instructions: BotInstructions | None = None,
     include_fallback: bool = True,
     project_root: Path | None = None,
+    include_admin_help: bool = False,
 ) -> str | None:
     instructions = instructions or DEFAULT_INSTRUCTIONS
     text = str(message.get("text") or "").strip()
@@ -26,7 +27,7 @@ def build_reply(
     if command == "/start":
         return render_template(instructions.start, message, text)
     if command == "/help":
-        return instructions.help_text()
+        return instructions.help_text(include_admin=include_admin_help)
     if command == "/chatid":
         chat_id = message.get("chat", {}).get("id")
         template = instructions.chatid if chat_id is not None else instructions.chatid_missing

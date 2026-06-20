@@ -115,7 +115,7 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - /rotate_secret - neues Account-Secret erzeugen
 - /linked_accounts - verknuepfte Kommunikationswege anzeigen
 - /account_edit - Account-Verknuepfungen bearbeiten
-- /codex Prompt - Fuehrt Codex CLI lokal aus
+- /admin yes|no - Adminzugang per Secret aktivieren oder fuer diesen Account abmelden
 - /voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.
 - /youtube_transcript URL - YouTube-Untertitel laden oder per lokalem Whisper transkribieren
 - /chatid - Aaktuelle Chat-ID anzeigen
@@ -123,6 +123,7 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - /reset_memorys - Loescht deine gesammten eigenen User-Memory-Eintraege.OpenAI-Verlauf dieses Chats bleibt erhalten.
 - /Call_a_Teladi - Send Teladi a emergency message
 - /cleanup N - Loescht die letzten N Nachrichten in diesem Chat. Parameter "all" tut was man denkt.
+- /export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren.
 
 ## Prompt
 

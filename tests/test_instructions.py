@@ -170,6 +170,7 @@ class InstructionTests(unittest.TestCase):
             - teladi_call_sent: Nachricht gesendet.
             - teladi_call_cooldown: Warte {remaining}.
             - teladi_call_error: Versand fehlgeschlagen.
+            - admin_help_title: Operator:
             - codex_usage: Nutzung: /codex Text.
             - codex_unauthorized: Kein Zugriff.
             - codex_not_found: Codex fehlt.
@@ -191,6 +192,10 @@ class InstructionTests(unittest.TestCase):
 
             ## Hilfe
             - /status - Status anzeigen
+
+            ## Admin Hilfe
+            - /codex <Prompt> - Codex lokal.
+            - codex-history index - History exportieren.
             """
             .replace("__ACCOUNT_A__", account_a)
             .replace("__ACCOUNT_B__", account_b)
@@ -277,6 +282,7 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.teladi_call_sent, "Nachricht gesendet.")
         self.assertEqual(instructions.teladi_call_cooldown, "Warte {remaining}.")
         self.assertEqual(instructions.teladi_call_error, "Versand fehlgeschlagen.")
+        self.assertEqual(instructions.admin_help_title, "Operator:")
         self.assertEqual(instructions.codex_usage, "Nutzung: /codex Text.")
         self.assertEqual(instructions.codex_unauthorized, "Kein Zugriff.")
         self.assertEqual(instructions.codex_not_found, "Codex fehlt.")
@@ -286,6 +292,10 @@ class InstructionTests(unittest.TestCase):
         self.assertEqual(instructions.text_replies["hallo"], "Hey.")
         self.assertEqual(instructions.contains_replies["hilfe"], "Sende /help.")
         self.assertEqual(instructions.help_text(), "Befehle:\n/status - Status anzeigen")
+        self.assertEqual(
+            instructions.help_text(include_admin=True),
+            "Befehle:\n/status - Status anzeigen\n\nOperator:\n/codex <Prompt> - Codex lokal.\ncodex-history index - History exportieren.",
+        )
 
     def test_codex_whitelist_accepts_only_account_ids(self) -> None:
         account_id = "c" * 128

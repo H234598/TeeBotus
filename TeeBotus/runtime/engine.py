@@ -329,7 +329,13 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
-        reply = build_reply(_event_to_handler_message(event), instructions, include_fallback=not self._text_llm_enabled(instructions))
+        include_admin_help = command == "/help" and self._account_is_help_admin(event.instance, result.account_id)
+        reply = build_reply(
+            _event_to_handler_message(event),
+            instructions,
+            include_fallback=not self._text_llm_enabled(instructions),
+            include_admin_help=include_admin_help,
+        )
         if reply is None:
             llm_actions = self._llm_actions(event, result.account_id, instructions)
             if llm_actions:
@@ -859,6 +865,14 @@ class TeeBotusEngine:
         if not account_id:
             return False
         return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
+
+    def _account_is_help_admin(self, instance_name: str, account_id: str) -> bool:
+        if not account_id:
+            return False
+        try:
+            return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
+        except (AccountStoreError, OSError, ValueError):
+            return False
 
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         """Compatibility alias for tests and older callers.

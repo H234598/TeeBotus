@@ -48,6 +48,7 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
 from TeeBotus.runtime.action_buttons import LEGAL_CONSENT_BUTTONS, MEMORY_RESET_BUTTONS, YOUTUBE_LOCAL_OPTIONS_BUTTONS
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, MessageButton, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
@@ -1487,7 +1488,18 @@ def _process_text_message(
     ):
         return
 
-    reply = build_reply(message, instructions, include_fallback=not instructions.text_llm_enabled())
+    include_admin_help = _normalize_command(text) == "/help" and _legacy_admin_help_allowed(
+        user_memory_store,
+        user_memory,
+        message,
+        instance_name,
+    )
+    reply = build_reply(
+        message,
+        instructions,
+        include_fallback=not instructions.text_llm_enabled(),
+        include_admin_help=include_admin_help,
+    )
     if reply:
         if _normalize_command(text) == "/start":
             reply = _with_bot_identity_intro(reply, bot_identity)
@@ -4663,6 +4675,24 @@ def _codex_account_id_for_message(
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to resolve Codex account_id for identity_key=%s.", identity_key)
         return ""
+
+
+def _legacy_admin_help_allowed(
+    user_memory_store: AccountStore | None,
+    user_memory: UserMemoryRecord | None,
+    message: dict[str, Any],
+    instance_name: str,
+) -> bool:
+    if user_memory_store is None:
+        return False
+    account_id = _codex_account_id_for_message(user_memory_store, user_memory, message)
+    if not account_id:
+        return False
+    try:
+        return is_runtime_admin_account(user_memory_store, account_id, instance_name=instance_name)
+    except (AccountStoreError, OSError, AttributeError, ValueError):
+        LOGGER.exception("Failed to resolve legacy admin help visibility for account_id=%s.", account_id)
+        return False
 
 
 def _is_allowed_codex_account(account_id: str, instructions: BotInstructions) -> bool:

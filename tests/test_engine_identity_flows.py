@@ -137,6 +137,38 @@ def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path,
     assert account_store.get_account_for_identity(identity) is not None
 
 
+def test_help_hides_admin_section_for_regular_accounts(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "/help"))
+
+    assert len(actions) == 1
+    assert "Befehle:" in actions[0].text
+    assert "Admin-Befehle:" not in actions[0].text
+    assert "/codex <Prompt>" not in actions[0].text
+    assert "/RouteToOpenAI" not in actions[0].text
+
+
+def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/admin yes 18hhGfuu3"))
+    actions = engine.process(event(identity, "/help"))
+
+    assert len(actions) == 1
+    assert "Admin-Befehle:" in actions[0].text
+    assert "/codex <Prompt> - Admin: Codex CLI lokal" in actions[0].text
+    assert "/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini" in actions[0].text
+    assert "teebotus-proactive-review list|approve|reject" in actions[0].text
+    assert "codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis" in actions[0].text
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")

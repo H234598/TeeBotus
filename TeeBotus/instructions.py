@@ -39,7 +39,6 @@ DEFAULT_HELP_LINES = (
     "/linked_accounts - verknuepfte Kommunikationswege anzeigen",
     "/account_edit - Account-Verknuepfungen bearbeiten",
     "/admin yes|no - Adminzugang per Secret aktivieren oder fuer diesen Account abmelden",
-    "/codex Prompt - fuehrt Codex CLI lokal aus",
     "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
     "/voicemodel <stimme> - Stimme fuer deine Sprachnachrichten waehlen. OpenAI-Voices: https://platform.openai.com/docs/guides/text-to-speech#voice-options",
     "/mimic_voice on|off|before|after - Sprechweise aus deinen Sprachnachrichten fuer TTS leicht nachahmen",
@@ -50,7 +49,24 @@ DEFAULT_HELP_LINES = (
     "/Call_a_Teladi - Send Teladi a emergency message",
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
-    "/RouteToOpenAI <Prompt> - Admin: Prompt direkt an ein LLM-Backend oder Backendprofil senden; Aliase z.B. /RouteToOAI, /RouteToHF, /RouteToGemini.",
+    "/export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren.",
+)
+
+DEFAULT_ADMIN_HELP_LINES = (
+    "/codex <Prompt> - Admin: Codex CLI lokal im TeeBotus-Repo ausfuehren.",
+    "/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini <Prompt> - Admin: Prompt direkt an ein LLM-Backend oder Profil senden.",
+    "/proactive|/agent status,on,off,pause,resume,... - proaktiven Agenten fuer den eigenen Account steuern.",
+    "teebotus-proactive --dispatch --plan --tool-plan - Proactive-Agent planen, pruefen und faellige Outbox senden.",
+    "teebotus-proactive-review list|approve|reject - Proactive-Human-Review-Queue verwalten.",
+    "python3 -m TeeBotus.admin accounts report - Account-/Identity-/Store-Report erzeugen.",
+    "python3 -m TeeBotus.admin memory-recovery - Memory-Artefakte pruefen, importieren oder quarantainieren.",
+    "python3 -m TeeBotus.admin status-auth report|bootstrap - Admin-/Status-Empfaenger und Versandstatus pruefen.",
+    "python3 -m TeeBotus.admin codex-history watch|append|report|dispatch|acknowledge|receipt - Codex-History-Outbox verwalten.",
+    "python3 -m TeeBotus.admin codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis - Codex-History exportieren, indexieren und analysieren.",
+    "teebotus-codex-history-systemd --enable|--index-timer - Codex-History-Watcher und Index-Timer verwalten.",
+    "teebotus-embedding collections-ensure|memory-rebuild|bibliothekar-rebuild|codex-history-rebuild - Qdrant-/Embedding-Indizes warten.",
+    "teebotus-bibliothekar status|index|harvest|promote|query - Bibliothekar-Quellen pruefen, uebernehmen und abfragen.",
+    "python3 scripts/run_benchmarks.py --quick ... - Benchmarks und Exportberichte nach /Downloads erzeugen.",
 )
 
 
@@ -62,6 +78,7 @@ def format_help_text_html(text: str) -> str:
 class BotInstructions:
     start: str = "Hallo{name_suffix}. Ich bin bereit. Sende /help fuer die Befehle."
     help_title: str = "Befehle:"
+    admin_help_title: str = "Admin-Befehle:"
     chatid: str = "Chat-ID: {chat_id}"
     chatid_missing: str = "Keine Chat-ID gefunden."
     unknown_command: str = "Diesen Befehl kenne ich nicht. Sende /help fuer die verfuegbaren Befehle."
@@ -227,9 +244,13 @@ class BotInstructions:
     text_replies: dict[str, str] = field(default_factory=dict)
     contains_replies: dict[str, str] = field(default_factory=dict)
     help_lines: tuple[str, ...] = DEFAULT_HELP_LINES
+    admin_help_lines: tuple[str, ...] = DEFAULT_ADMIN_HELP_LINES
 
-    def help_text(self) -> str:
-        return "\n".join([self.help_title, *self.help_lines])
+    def help_text(self, *, include_admin: bool = False) -> str:
+        lines = [self.help_title, *self.help_lines]
+        if include_admin and self.admin_help_lines:
+            lines.extend(["", self.admin_help_title, *self.admin_help_lines])
+        return "\n".join(lines)
 
     def help_text_html(self, text: str | None = None) -> str:
         return format_help_text_html(self.help_text() if text is None else text)
@@ -374,6 +395,7 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     text_replies: dict[str, str] = dict(instructions.text_replies)
     contains_replies: dict[str, str] = dict(instructions.contains_replies)
     help_lines: list[str] | None = None
+    admin_help_lines: list[str] | None = None
     shared_prompt_lines: list[str] | None = None
     system_prompt_lines: list[str] | None = None
     section = ""
@@ -381,7 +403,7 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     explicit_llm_reply_keys: set[str] = set()
 
     def apply_pending_item() -> None:
-        nonlocal pending_item, help_lines, explicit_llm_reply_keys
+        nonlocal pending_item, help_lines, admin_help_lines, explicit_llm_reply_keys
         if pending_item is None:
             return
         item = pending_item
@@ -393,6 +415,11 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
             if help_lines is None:
                 help_lines = []
             help_lines.append(item)
+            return
+        if section == "admin_help":
+            if admin_help_lines is None:
+                admin_help_lines = []
+            admin_help_lines.append(item)
             return
 
         pair = _parse_pair(item)
@@ -463,7 +490,7 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
         if not item:
             apply_pending_item()
             continue
-        if pending_item is not None and not _line_starts_bullet(line) and (section == "help" or _parse_pair(item) is None):
+        if pending_item is not None and not _line_starts_bullet(line) and (section in {"help", "admin_help"} or _parse_pair(item) is None):
             pending_item = f"{pending_item} {item}"
             continue
         apply_pending_item()
@@ -475,6 +502,8 @@ def parse_instructions(markdown: str, *, base: BotInstructions | None = None) ->
     instructions.contains_replies = contains_replies
     if help_lines is not None:
         instructions.help_lines = tuple(help_lines)
+    if admin_help_lines is not None:
+        instructions.admin_help_lines = tuple(admin_help_lines)
     if shared_prompt_lines is not None:
         instructions.openai_shared_prompt = "\n".join(shared_prompt_lines).strip()
     if system_prompt_lines is not None:
@@ -577,6 +606,14 @@ def _section_name(line: str) -> str:
         "contains replies": "contains_replies",
         "hilfe": "help",
         "help": "help",
+        "adminhilfe": "admin_help",
+        "admin hilfe": "admin_help",
+        "admin_help": "admin_help",
+        "admin help": "admin_help",
+        "adminbefehle": "admin_help",
+        "admin befehle": "admin_help",
+        "admin-befehle": "admin_help",
+        "admin commands": "admin_help",
     }
     return aliases.get(heading, "")
 
@@ -641,6 +678,8 @@ def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
         instructions.start = value
     elif normalized == "help_title":
         instructions.help_title = value
+    elif normalized in {"admin_help_title", "admin_help_heading"}:
+        instructions.admin_help_title = value
     elif normalized == "chatid":
         instructions.chatid = value
     elif normalized == "chatid_missing":

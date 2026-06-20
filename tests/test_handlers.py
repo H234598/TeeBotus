@@ -19,9 +19,24 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/reset - setzt nur den Text-LLM-Kontext", reply)
         self.assertIn("/reset_memorys - fragt nach und loescht danach nur deine eigenen User-Memory-Eintraege", reply)
         self.assertIn("/Call_a_Teladi - Send Teladi a emergency message", reply)
-        self.assertIn("/codex Prompt - fuehrt Codex CLI lokal aus", reply)
+        self.assertIn("/export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren", reply)
         self.assertIn("/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
         self.assertIn("/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
+        self.assertNotIn("Admin-Befehle:", reply)
+        self.assertNotIn("/codex <Prompt>", reply)
+        self.assertNotIn("/RouteToOpenAI", reply)
+
+    def test_help_can_include_admin_section(self) -> None:
+        reply = build_reply({"text": "/help"}, include_admin_help=True)
+
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertIn("Admin-Befehle:", reply)
+        self.assertIn("/codex <Prompt> - Admin: Codex CLI lokal", reply)
+        self.assertIn("/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini", reply)
+        self.assertIn("teebotus-proactive-review list|approve|reject", reply)
+        self.assertIn("codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis", reply)
+        self.assertIn("teebotus-embedding collections-ensure|memory-rebuild|bibliothekar-rebuild|codex-history-rebuild", reply)
 
     def test_ping(self) -> None:
         self.assertEqual(build_reply({"text": "/ping"}), "pong")
