@@ -164,6 +164,20 @@ Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --
 
 Fuer nicht-user-getriggerte Proactive-Aufrufe sind drei Rollen vorgesehen: `PROACTIVE_PLAN`, `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. OpenAI bleibt ueber `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_PLAN`, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_DECISION` und `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_WORKER` kompatibel; die jeweiligen `_SERVICES`-Varianten werden ebenfalls akzeptiert. Providerneutrale Rollen-LLMs werden ueber dieselben Runtime-LLM-Settings wie normale Kanaele konfiguriert, z.B. `TEEBOTUS_LLM_PROFILE_<INSTANCE>_PROACTIVE_PLAN=gemini_flash_stateful`, `TEEBOTUS_LLM_API_KEY_<INSTANCE>_PROACTIVE_PLAN=...`, analog fuer `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. Fuer Gemini-Keyrotation sind zusaetzlich rollenspezifische Ringe/Buckets moeglich, z.B. `TEEBOTUS_GEMINI_API_KEY_RING_<INSTANCE>_PROACTIVE_WORKER` oder `TEEBOTUS_GEMINI_API_KEYS_<INSTANCE>_PROACTIVE_WORKER_ACCOUNT_1`. Ohne explizite rollenbezogene LLM-Settings nutzt jede Rolle die Kette: Rollen-Key, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_<INSTANCE>_BACKGROUND` oder `_BACKGROUND_SERVICES`, danach `OPENAI_API_KEY_BACKGROUND` oder `_BACKGROUND_SERVICES`. Die alte sichtbare Instanzform wie `Depressionsbot_BACKGROUND_SERVICES` bleibt kompatibel. Normale instanzweite oder globale Userantwort-Keys (`OPENAI_API_KEY_<INSTANCE>`, `OPENAI_API_KEY`) werden fuer `proactive`/`background` weiterhin nicht als Fallback genutzt; Telegram-/Signal-/Matrix-Userantworten bleiben davon getrennt.
 
+Alte Memory-Rettungsartefakte werden nicht geloescht. `scripts/maintain_instance_quarantine.py` verschiebt nur bekannte Altpfade wie `.pre-*`, `*.unreadable-*`, alte `Account_*_Quarantine`-Ordner, `accounts.pre-*`-Snapshots und Pseudo-Instanzen ohne `Bot_Verhalten.md` in eine zentrale datierte Quarantaene unter `instances/.quarantine/cleanup-<timestamp>` und schreibt dort ein `manifest.json`. Aktive Stores bleiben ausgeschlossen: `data/accounts/accounts`, `Account_Memory.sqlite3`, `Account_Memory.backup.sqlite3` und WAL/SHM-Dateien unter dem aktiven `data/accounts` werden nicht bewegt.
+
+```bash
+python3 scripts/maintain_instance_quarantine.py quarantine --instances-dir instances
+python3 scripts/maintain_instance_quarantine.py quarantine --instances-dir instances --apply
+python3 scripts/maintain_instance_quarantine.py install-systemd --instances-dir instances --enable
+```
+
+Der installierte User-systemd-Timer startet taeglich nur den Retention-Pfad. Er archiviert rohe `cleanup-*`-Bundles erst nach sieben Tagen oder nachdem eine SQL-Backup-Bestaetigung geschrieben wurde; danach kann er die rohe Bundle-Kopie entfernen, das `.tar.gz`-Archiv bleibt erhalten. Die Bestaetigung wird lokal so gesetzt:
+
+```bash
+python3 scripts/maintain_instance_quarantine.py confirm-sql-backup --instances-dir instances --backup-label "postgresql daily backup" --apply
+```
+
 Usergewuenschte Erinnerungen laufen ebenfalls ueber die Proactive-Outbox. Klassische Formulierungen werden lokal erkannt; bei optionaler strukturierter `ReminderDecision` kann `recurrence` als `daily`, `weekly`, `monthly` oder `every N minutes/hours/days/weeks` gespeichert werden. Nach erfolgreichem Versand wird ein wiederkehrendes Reminder-Item mit naechstem `due_at` erneut gequeued.
 
 Signal braucht das Python-Paket `signalbot`, die native `signal-cli-rest-api` und `signal-cli`. Die festen Versionen stehen in `adapter-dependencies.lock`; die komplette gepinnte Adapter-Schicht kann reproduzierbar installiert und danach geprueft werden mit:
