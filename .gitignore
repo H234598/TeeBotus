@@ -15,6 +15,9 @@ __pycache__/
 venv/
 *.bak
 
+# Local editor workspaces.
+docs/.obsidian/
+
 # Local code-analysis artifacts.
 authors.json
 cohorts.json
