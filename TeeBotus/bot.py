@@ -929,34 +929,10 @@ def _status_api_key_state(route: Any, *, provider: str, model: str, instance_nam
     return "missing"
 
 
-def _status_safe_path(value: str | os.PathLike[str] | os.PathLike[bytes], *, fallback: Path, allowed_root: Path) -> Path:
-    try:
-        candidate = Path(value).expanduser()
-        allowed_root = allowed_root.resolve()
-    except (OSError, TypeError, ValueError):
-        return fallback
-    if not candidate.is_absolute():
-        candidate = allowed_root / candidate
-    try:
-        resolved = candidate.resolve()
-        resolved.relative_to(allowed_root)
-    except ValueError:
-        return fallback
-    return resolved
-
-
 def _runtime_status_codex_usage_lines() -> tuple[str, ...]:
     home_root = Path.home().resolve()
-    repo = _status_safe_path(
-        os.environ.get("TEEBOTUS_CODEX_USAGE_REPO", str(home_root / "codex-usage")),
-        fallback=home_root / "codex-usage",
-        allowed_root=home_root,
-    )
-    snapshot_root = _status_safe_path(
-        os.environ.get("CODEX_USAGE_STATE_ROOT", str(home_root / ".local" / "share" / "codex-usage")),
-        fallback=home_root / ".local" / "share" / "codex-usage",
-        allowed_root=home_root,
-    )
+    repo = home_root / "codex-usage"
+    snapshot_root = home_root / ".local" / "share" / "codex-usage"
     snapshot_dir = (snapshot_root / "snapshots").resolve()
     cli = shutil.which("codex-usage") or str(Path.home() / ".local" / "bin" / "codex-usage")
     cli_path = Path(cli)
@@ -1103,11 +1079,7 @@ def _runtime_status_hf_pool_state_store() -> Any | None:
     try:
         from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 
-        state_path = _status_safe_path(
-            default_hf_pool_state_path(),
-            fallback=Path.home() / ".local" / "state" / "teebotus" / "hf_pool_state.sqlite3",
-            allowed_root=Path.home(),
-        )
+        state_path = default_hf_pool_state_path()
         if not state_path.exists():
             return None
         return SQLiteHFPoolRuntimeStateStore(state_path)
