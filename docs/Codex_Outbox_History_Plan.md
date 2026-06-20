@@ -291,8 +291,12 @@ Erzeugung:
 
 ```bash
 teebotus-codex-history-collector --repo-root /home/teladi/TeeBotus --print
-sudo -E teebotus-codex-history-collector --repo-root /home/teladi/TeeBotus --enable
+sudo env PYTHONPATH=/home/teladi/TeeBotus /home/teladi/TeeBotus/.venv-py313/bin/python -m TeeBotus.codex_history_systemd --repo-root /home/teladi/TeeBotus --enable
 ```
+
+Der Enable-Aufruf nutzt absichtlich den Repo-/venv-Python-`-m`-Pfad. Ein
+user-lokaler Entry-Point aus `/home/teladi/.local/bin` kann unter `sudo`
+sonst roots Python-Umgebung sehen und das editable User-Paket nicht importieren.
 
 Die systemd-Variante nutzt inzwischen standardmaessig einen persistenten
 Watcher mit `--follow --event-mode auto`. Wenn das optionale Python-Paket

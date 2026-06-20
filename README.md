@@ -176,14 +176,16 @@ er war nie der Service-Name selbst.
 
 ```bash
 teebotus-codex-history-collector --repo-root "$PWD" --print
-sudo -E teebotus-codex-history-collector --repo-root "$PWD" --enable
+sudo env PYTHONPATH="$PWD" "$PWD/.venv-py313/bin/python" -m TeeBotus.codex_history_systemd --repo-root "$PWD" --enable
 ```
 
 Die Unit startet `codex-history watch --follow --event-mode auto
 --poll-interval 300 --limit 1000 --post-index`, nutzt die lokale `.env` als
 optionales EnvironmentFile und installiert nach `/etc/systemd/system`. Fuer den
 alten User-Unit-Modus gibt es explizit `--user-unit`; der Default ist bewusst
-der root-Collector.
+der root-Collector. Der Enable-Aufruf nutzt bewusst den Modulpfad mit
+`PYTHONPATH`, weil ein user-lokal installierter Entry-Point unter `sudo` sonst
+aus roots Python-Umgebung importiert.
 
 Fuer nicht-user-getriggerte Proactive-Aufrufe sind drei Rollen vorgesehen: `PROACTIVE_PLAN`, `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. OpenAI bleibt ueber `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_PLAN`, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_DECISION` und `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_WORKER` kompatibel; die jeweiligen `_SERVICES`-Varianten werden ebenfalls akzeptiert. Providerneutrale Rollen-LLMs werden ueber dieselben Runtime-LLM-Settings wie normale Kanaele konfiguriert, z.B. `TEEBOTUS_LLM_PROFILE_<INSTANCE>_PROACTIVE_PLAN=gemini_flash_stateful`, `TEEBOTUS_LLM_API_KEY_<INSTANCE>_PROACTIVE_PLAN=...`, analog fuer `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. Fuer Gemini-Keyrotation sind zusaetzlich rollenspezifische Ringe/Buckets moeglich, z.B. `TEEBOTUS_GEMINI_API_KEY_RING_<INSTANCE>_PROACTIVE_WORKER` oder `TEEBOTUS_GEMINI_API_KEYS_<INSTANCE>_PROACTIVE_WORKER_ACCOUNT_1`. Ohne explizite rollenbezogene LLM-Settings nutzt jede Rolle die Kette: Rollen-Key, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_<INSTANCE>_BACKGROUND` oder `_BACKGROUND_SERVICES`, danach `OPENAI_API_KEY_BACKGROUND` oder `_BACKGROUND_SERVICES`. Die alte sichtbare Instanzform wie `Depressionsbot_BACKGROUND_SERVICES` bleibt kompatibel. Normale instanzweite oder globale Userantwort-Keys (`OPENAI_API_KEY_<INSTANCE>`, `OPENAI_API_KEY`) werden fuer `proactive`/`background` weiterhin nicht als Fallback genutzt; Telegram-/Signal-/Matrix-Userantworten bleiben davon getrennt.
 
