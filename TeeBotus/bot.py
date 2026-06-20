@@ -1080,8 +1080,6 @@ def _runtime_status_hf_pool_state_store() -> Any | None:
         from TeeBotus.llm.hf_pool.state import SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
 
         state_path = default_hf_pool_state_path()
-        if not state_path.exists():
-            return None
         return SQLiteHFPoolRuntimeStateStore(state_path)
     except Exception:
         return None
