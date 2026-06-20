@@ -356,7 +356,8 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        print(_sanitize_admin_status_output(line))
+        sys.stdout.write(_sanitize_admin_status_output(line))
+        sys.stdout.write("\n")
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
