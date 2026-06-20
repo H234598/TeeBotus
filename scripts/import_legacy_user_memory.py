@@ -118,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Move the unreadable active account store aside before importing legacy users: Account_* metadata, accounts/, SQLite DBs, WAL and SHM.",
     )
     parser.add_argument("--no-backup-current", action="store_true", help="Do not copy current SQLite files before --apply.")
+    parser.add_argument("--keep-imported-sources", action="store_true", help="Keep verified imported source artifacts instead of deleting them.")
     parser.add_argument("--json-output", default="", help="Write a machine-readable import/preflight report.")
     parser.add_argument("--markdown-output", default="", help="Write a human-readable import/preflight report.")
     parser.add_argument(
@@ -160,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                         replace_unreadable=args.replace_unreadable,
                         replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
                         backup_current=not args.no_backup_current,
+                        delete_imported_sources=not args.keep_imported_sources,
                     )
                 finally:
                     _restore_env(previous_env)
@@ -195,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             replace_unreadable=args.replace_unreadable,
             replace_unreadable_account_metadata=args.replace_unreadable_account_metadata,
             backup_current=not args.no_backup_current,
+            delete_imported_sources=not args.keep_imported_sources,
         )
     finally:
         _restore_env(previous_env)
@@ -251,6 +254,7 @@ def import_legacy_user_memory(
     replace_unreadable: bool = False,
     replace_unreadable_account_metadata: bool = False,
     backup_current: bool = True,
+    delete_imported_sources: bool = True,
     provider: Any | None = None,
 ) -> ImportStats:
     provider = provider or SecretToolInstanceSecretProvider(create_if_missing=False)
@@ -495,7 +499,8 @@ def import_legacy_user_memory(
                 instance_name=instance_name,
                 legacy_user_id=user_dir.name,
             )
-            _delete_imported_source_artifact_after_success(stats, event, user_dir)
+            if delete_imported_sources:
+                _delete_imported_source_artifact_after_success(stats, event, user_dir)
         stats.imported_sources += 1
         stats.entries_imported += imported_count
     if apply:
@@ -516,7 +521,8 @@ def import_legacy_user_memory(
             health = strict_store.check_structured_memory_index(account_id)
             if not health.ok:
                 raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
-            _delete_imported_source_artifact_after_success(stats, event, user_dir)
+            if delete_imported_sources:
+                _delete_imported_source_artifact_after_success(stats, event, user_dir)
     return stats
 
 
