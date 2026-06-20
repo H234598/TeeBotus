@@ -49,6 +49,7 @@ DEFAULT_HELP_LINES = (
     "/Call_a_Teladi - Send Teladi a emergency message",
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
+    "/RouteToOpenAI <Prompt> - Admin: Prompt direkt an ein LLM-Backend oder Backendprofil senden; Aliase z.B. /RouteToOAI, /RouteToHF, /RouteToGemini.",
 )
 
 

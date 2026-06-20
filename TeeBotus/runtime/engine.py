@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -34,6 +34,7 @@ from TeeBotus.llm_client import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
 from TeeBotus.runtime.activity_profile import record_account_activity
+from TeeBotus.runtime.admin_accounts import resolve_admin_account_group
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
@@ -41,6 +42,8 @@ from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttac
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
+from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
+from TeeBotus.runtime.llm_route_command import ROUTE_TO_FLOW, parse_route_to_command, resolve_route_to_target, route_to_known_targets
 from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchService
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
@@ -127,6 +130,7 @@ class TeeBotusEngine:
         youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
         background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
         structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
+        route_to_client_factory: Callable[..., object | None] | None = None,
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -142,6 +146,7 @@ class TeeBotusEngine:
         self.youtube_job_runner = youtube_job_runner
         self.background_action_dispatcher = background_action_dispatcher
         self.structured_decision_runner = structured_decision_runner
+        self.route_to_client_factory = route_to_client_factory or build_runtime_text_llm_client
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
@@ -202,6 +207,26 @@ class TeeBotusEngine:
                 return EngineResult(result.account_id, [SendText(event.chat_id, dialect_update.reply_text, track=False)], handled=True)
         if result.handled or result.actions:
             return result
+        instructions = self._current_instructions()
+        route_to_command = parse_route_to_command(text)
+        if route_to_command is not None:
+            return EngineResult(
+                result.account_id,
+                self._route_to_llm_actions(event, result.account_id, route_to_command.target, route_to_command.prompt, instructions),
+                handled=True,
+            )
+        pending_route_to = self.state.get_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+        if pending_route_to is not None:
+            if command == "/cancel":
+                self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+                return EngineResult(result.account_id, [SendText(event.chat_id, "RouteTo abgebrochen.", track=False)], handled=True)
+            if not command and text:
+                self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+                return EngineResult(
+                    result.account_id,
+                    self._route_to_llm_actions(event, result.account_id, str(pending_route_to.get("target") or ""), text, instructions),
+                    handled=True,
+                )
         if command in PROACTIVE_COMMANDS:
             actions = handle_proactive_command(event.with_account(result.account_id), self.account_store, result.account_id)
             if actions is not None:
@@ -222,7 +247,6 @@ class TeeBotusEngine:
         notification_response = maybe_handle_notification_loudness_response(event.with_account(result.account_id), self.account_store, result.account_id)
         if notification_response is not None:
             return EngineResult(result.account_id, list(notification_response), handled=True)
-        instructions = self._current_instructions()
         youtube_pending_actions = self._pending_youtube_actions(event, result.account_id, instructions)
         if youtube_pending_actions is not None:
             return EngineResult(result.account_id, youtube_pending_actions, handled=True)
@@ -641,6 +665,81 @@ class TeeBotusEngine:
         if len(actions) == 1:
             actions.append(SendText(event.chat_id, response_text))
         return actions
+
+    def _route_to_llm_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        target_name: str,
+        prompt: str,
+        instructions: BotInstructions,
+    ) -> list[OutgoingAction]:
+        if not self._account_is_route_to_admin(event.instance, account_id):
+            return [SendText(event.chat_id, "Nur Admin-Accounts duerfen /RouteTo<LLM> nutzen.", track=False)]
+        try:
+            target = resolve_route_to_target(target_name, allow_remote_fallback=True)
+        except KeyError:
+            known = ", ".join(route_to_known_targets()[:18])
+            return [
+                SendText(
+                    event.chat_id,
+                    f"Unbekanntes RouteTo-Ziel: {target_name}. Bekannte Ziele/Aliase: {known}",
+                    track=False,
+                )
+            ]
+        if not prompt.strip():
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                ROUTE_TO_FLOW,
+                {"target": target_name, "target_label": target.label, "provider": target.provider, "model": target.model},
+            )
+            return [
+                SendText(
+                    event.chat_id,
+                    f"Route bereit: {target.label} ({target.provider} / {target.model}). Sende jetzt die naechste Nachricht oder /cancel.",
+                    track=False,
+                )
+            ]
+        direct_instructions = _direct_route_to_instructions(instructions)
+        try:
+            client = self.route_to_client_factory(
+                instructions=direct_instructions,
+                openai_client=self.openai_client,
+                enabled=True,
+                profile=target.name if target.kind == "profile" else "",
+                purpose=target.name if target.kind == "purpose" else "",
+                allow_remote_fallback=True,
+                instance_name=event.instance,
+            )
+        except (KeyError, LLMAPIError, OpenAIAPIError, ValueError) as exc:
+            return [
+                SendText(
+                    event.chat_id,
+                    f"Route {target.label} konnte nicht initialisiert werden: {type(exc).__name__}: {exc}",
+                    track=False,
+                )
+            ]
+        if client is None:
+            return [SendText(event.chat_id, f"Route {target.label} ist nicht verfuegbar.", track=False)]
+        create_reply = getattr(client, "create_reply", None)
+        if not callable(create_reply):
+            return [SendText(event.chat_id, f"Route {target.label} hat keine Textantwort-Schnittstelle.", track=False)]
+        try:
+            response = create_reply(prompt.strip(), direct_instructions, None)
+        except Exception as exc:  # noqa: BLE001 - admin direct routing must not crash the runtime on provider-specific failures.
+            return [SendTyping(event.chat_id), SendText(event.chat_id, f"Route {target.label} fehlgeschlagen: {type(exc).__name__}: {exc}", track=False)]
+        response_text = str(getattr(response, "text", "") or "").strip()
+        if not response_text:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, f"Route {target.label} lieferte keine Textantwort.", track=False)]
+        header = f"[{target.label} | {target.provider} / {target.model}]"
+        return [SendTyping(event.chat_id), SendText(event.chat_id, f"{header}\n\n{response_text}", track=False)]
+
+    def _account_is_route_to_admin(self, instance_name: str, account_id: str) -> bool:
+        if not account_id:
+            return False
+        group = resolve_admin_account_group(instance_name=instance_name)
+        return account_id in set(group.account_ids)
 
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         """Compatibility alias for tests and older callers.
@@ -2123,6 +2222,18 @@ def _parse_optional_bool(value: bool | str | None) -> bool | None:
     if text in {"0", "false", "no", "nein", "off", "disabled", "aus"}:
         return False
     return None
+
+
+def _direct_route_to_instructions(instructions: BotInstructions) -> BotInstructions:
+    return replace(
+        instructions,
+        openai_shared_prompt="",
+        openai_system_prompt="",
+        openai_rule_text="",
+        openai_web_search=False,
+        openai_web_search_required=False,
+        openai_image_enabled=False,
+    )
 
 
 def _is_yes(text: str) -> bool:
