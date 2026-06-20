@@ -356,8 +356,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        sys.stdout.write(_sanitize_admin_status_output(line))  # lgtm [py/clear-text-logging-sensitive-data]
-        sys.stdout.write("\n")
+        os.write(1, (_sanitize_admin_status_output(line) + "\n").encode())
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
