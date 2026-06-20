@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
+from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
@@ -63,7 +64,7 @@ def maybe_notification_loudness_prompt_action(
         return None
     _mark_notification_loudness_prompted(route_state, event, resolved_now)
     account_store.write_agent_state(account_id, state)
-    return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False)
+    return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
 
 
 def queue_due_notification_loudness_prompts(
@@ -383,11 +384,18 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
         route = account_store.get_identity_route(candidate)
         if not _private_route(route):
             continue
-        if _route_key_from_route(route) != route_key:
+        if _route_key_from_route(route) != _normalize_route_key(route_key):
             continue
         route_state["identity_key"] = candidate
         route_state["route"] = route
         return
+
+
+def _normalize_route_key(route_key: Any) -> str:
+    parts = str(route_key or "").strip().split(":", 2)
+    if len(parts) != 3:
+        return str(route_key or "").strip()
+    return _route_key_for_channel_chat(parts[0], parts[1], parts[2])
 
 
 def _route_key_from_route(route: Mapping[str, Any]) -> str:

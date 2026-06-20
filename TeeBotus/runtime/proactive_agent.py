@@ -16,6 +16,7 @@ from pydantic import ValidationError
 
 from TeeBotus.decisions.proactive import parse_proactive_tool_call_decision
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
+from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
@@ -1129,6 +1130,18 @@ async def dispatch_due_proactive_outbox_items(
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_outbox_item", _item_channel(item)))
             continue
         item = current_item
+        if "route" in item and not isinstance(item.get("route"), Mapping):
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="failed",
+                reason="invalid_route",
+                now=resolved_now,
+                expected_status="queued",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_route", _item_channel(item)))
+            continue
         category = str(item.get("category") or "").strip().casefold()
         decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
@@ -1309,7 +1322,8 @@ def _proactive_item_action(chat_id: str, message_text: str, item: Mapping[str, A
             caption=generated_file.caption or message_text,
             track=True,
         )
-    return SendText(chat_id, message_text, track=True)
+    buttons = NOTIFICATION_LOUDNESS_BUTTONS if is_notification_loudness_outbox_item(item) else ()
+    return SendText(chat_id, message_text, track=True, buttons=buttons)
 
 
 def _append_proactive_safety_audit_event(
@@ -1468,6 +1482,8 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
 def _proactive_outbox_item_has_provenance(item: Mapping[str, Any]) -> bool:
     reason_memory_ids = item.get("reason_memory_ids")
     if isinstance(reason_memory_ids, list) and any(str(memory_id or "").strip() for memory_id in reason_memory_ids):
+        return True
+    if isinstance(item.get("route"), Mapping) and str(item.get("policy_reason") or "").strip():
         return True
     planner = item.get("planner")
     if isinstance(planner, Mapping):

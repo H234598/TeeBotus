@@ -7,6 +7,7 @@ from inspect import isawaitable
 from typing import Any
 
 from TeeBotus.runtime.accounts import signal_identity_key
+from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
     DeleteTrackedMessages,
     ExportFile,
@@ -104,7 +105,7 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                     _signal_required_timestamp(
                         await _send_signal_text(
                             context,
-                            action.text,
+                            text_with_button_fallback(action.text, action.buttons),
                             chat_id=action.chat_id,
                             reply_to_ref=action.reply_to_ref,
                             mentions=list(action.mentions) or None,

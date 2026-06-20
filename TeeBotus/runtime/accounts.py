@@ -1947,7 +1947,14 @@ class AccountStore:
             return False
         return bool(privacy.get("confirmed"))
 
-    def confirm_privacy(self, account_id: str, *, source: str = "") -> None:
+    def confirm_privacy(
+        self,
+        account_id: str,
+        *,
+        source: str = "",
+        age_over_16: bool = False,
+        terms_accepted: bool = False,
+    ) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         profile = self._read_account_profile(account_id)
@@ -1958,6 +1965,12 @@ class AccountStore:
         privacy["confirmed"] = True
         privacy["confirmed_at"] = str(privacy.get("confirmed_at") or timestamp)
         privacy["updated_at"] = timestamp
+        if age_over_16:
+            privacy["age_over_16_confirmed"] = True
+            privacy["age_over_16_confirmed_at"] = str(privacy.get("age_over_16_confirmed_at") or timestamp)
+        if terms_accepted:
+            privacy["terms_accepted"] = True
+            privacy["terms_accepted_at"] = str(privacy.get("terms_accepted_at") or timestamp)
         if source:
             privacy["source"] = str(source or "").strip()[:120]
         profile["privacy"] = privacy

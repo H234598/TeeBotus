@@ -75,6 +75,7 @@ class FakeAPI:
         self.deleted_messages: list[tuple[int, int]] = []
         self.copied_messages: list[tuple[int, int, int]] = []
         self.sent_voices: list[tuple[int, bytes, str, str]] = []
+        self.callback_answers: list[tuple[str, str]] = []
         self.file_paths: dict[str, str] = {}
         self.file_data: dict[str, bytes] = {}
         self.file_path_requests: list[str] = []
@@ -87,6 +88,9 @@ class FakeAPI:
         self.sent_messages.append((chat_id, text))
         self.next_message_id += 1
         return self.next_message_id
+
+    def answer_callback_query(self, callback_query_id: str, text: str = "") -> None:
+        self.callback_answers.append((callback_query_id, text))
 
     def send_chat_action(self, chat_id: int, action: str) -> None:
         self.chat_actions.append((chat_id, action))
@@ -1810,6 +1814,61 @@ class BotTests(unittest.TestCase):
         self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[1][1])
         self.assertIsNotNone(account_id)
         self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
+
+    def test_handle_update_with_runtime_context_answers_callback_query(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+                event.account_id,
+                [SendText(event.chat_id, f"got {event.text}")],
+                handled=True,
+            )
+
+            handle_update(
+                api,
+                {
+                    "callback_query": {
+                        "id": "cb-1",
+                        "from": {"id": 456, "first_name": "Ada"},
+                        "data": "ja",
+                        "message": {
+                            "message_id": 1,
+                            "chat": {"id": 123, "type": "private"},
+                            "text": "Bitte waehlen",
+                        },
+                    }
+                },
+                chat_state=ChatState(),
+                runtime_context=context,
+            )
+
+        self.assertEqual(api.callback_answers, [("cb-1", "")])
+        self.assertEqual(api.sent_messages, [("123", "got ja")])
 
     def test_handle_update_with_runtime_context_logs_tracking_errors(self) -> None:
         from TeeBotus.runtime.actions import SendText

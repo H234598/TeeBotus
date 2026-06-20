@@ -6,6 +6,7 @@ from io import BytesIO
 from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import matrix_identity_key
+from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
     DeleteTrackedMessages,
     ExportFile,
@@ -77,7 +78,10 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
             response = await _send_matrix_text(
                 client,
                 action.chat_id,
-                action.formatted_text if _matrix_is_html_text_mode(action.text_mode) and action.formatted_text else action.text,
+                text_with_button_fallback(
+                    action.formatted_text if _matrix_is_html_text_mode(action.text_mode) and action.formatted_text else action.text,
+                    action.buttons,
+                ),
                 reply_to_ref=action.reply_to_ref,
                 mentions=list(action.mentions),
                 text_mode=action.text_mode,

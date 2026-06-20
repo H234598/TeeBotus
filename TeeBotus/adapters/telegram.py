@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from TeeBotus.runtime.accounts import telegram_identity_key
+from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
     DeleteTrackedMessages,
     ExportFile,
+    MessageButton,
     NotifyLinkedIdentity,
     SendAttachment,
     SendEdit,
@@ -74,7 +76,27 @@ def telegram_update_message(update: dict[str, Any]) -> dict[str, Any] | None:
         value = update.get(key)
         if isinstance(value, dict):
             return value
-    return None
+    callback_query = update.get("callback_query")
+    if not isinstance(callback_query, dict):
+        return None
+    message = callback_query.get("message")
+    sender = callback_query.get("from")
+    data = str(callback_query.get("data") or "").strip()
+    if not isinstance(message, dict) or not isinstance(sender, dict) or not data:
+        return None
+    synthetic = dict(message)
+    synthetic["from"] = sender
+    synthetic["text"] = data
+    synthetic["caption"] = ""
+    synthetic["callback_query_id"] = str(callback_query.get("id") or "").strip()
+    return synthetic
+
+
+def telegram_update_callback_query_id(update: dict[str, Any]) -> str:
+    callback_query = update.get("callback_query")
+    if not isinstance(callback_query, dict):
+        return ""
+    return str(callback_query.get("id") or "").strip()
 
 
 def _telegram_sender_name(sender: dict[str, Any], sender_chat: dict[str, Any]) -> str:
@@ -94,6 +116,7 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                     action.text,
                     text_mode=action.text_mode,
                     formatted_text=action.formatted_text,
+                    buttons=action.buttons,
                 )
             )
         elif isinstance(action, SendTyping):
@@ -149,15 +172,73 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
     return sent
 
 
-def _send_telegram_text(api: Any, chat_id: Any, text: str, *, text_mode: str = "", formatted_text: str = "") -> int | None:
+def _send_telegram_text(
+    api: Any,
+    chat_id: Any,
+    text: str,
+    *,
+    text_mode: str = "",
+    formatted_text: str = "",
+    buttons: tuple[MessageButton, ...] = (),
+) -> int | None:
+    reply_markup = _telegram_reply_markup(buttons)
     if text_mode or formatted_text:
         try:
-            return api.send_message(chat_id, text, text_mode=text_mode, formatted_text=formatted_text)
+            kwargs = {"text_mode": text_mode, "formatted_text": formatted_text}
+            if reply_markup:
+                kwargs["reply_markup"] = reply_markup
+            return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "text_mode" not in str(exc) and "formatted_text" not in str(exc):
+            if "text_mode" not in str(exc) and "formatted_text" not in str(exc) and "reply_markup" not in str(exc):
                 raise
-            return api.send_message(chat_id, text)
+            return api.send_message(chat_id, text_with_button_fallback(text, buttons))
+    if reply_markup:
+        try:
+            return api.send_message(chat_id, text, reply_markup=reply_markup)
+        except TypeError as exc:
+            if "reply_markup" not in str(exc):
+                raise
+            return api.send_message(chat_id, text_with_button_fallback(text, buttons))
     return api.send_message(chat_id, text)
+
+
+def _telegram_reply_markup(buttons: tuple[MessageButton, ...]) -> str:
+    rows: list[list[dict[str, str]]] = []
+    row: list[dict[str, str]] = []
+    for button in buttons:
+        label = str(button.label or "").strip()
+        if not label:
+            continue
+        url = str(button.url or "").strip()
+        text = str(button.text or "").strip()
+        if url:
+            payload = {"text": label, "url": url}
+        elif text:
+            payload = {"text": label, "callback_data": _telegram_callback_data(text)}
+        else:
+            continue
+        row.append(payload)
+        if len(row) >= 2:
+            rows.append(row)
+            row = []
+    if row:
+        rows.append(row)
+    if not rows:
+        return ""
+    return json_dumps({"inline_keyboard": rows})
+
+
+def _telegram_callback_data(text: str) -> str:
+    encoded = str(text or "").encode("utf-8")
+    if len(encoded) <= 64:
+        return str(text or "")
+    return encoded[:64].decode("utf-8", errors="ignore").rstrip()
+
+
+def json_dumps(value: Any) -> str:
+    import json
+
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
 
 def _normalize_telegram_chat_type(value: str) -> str:

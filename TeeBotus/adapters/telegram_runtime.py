@@ -46,13 +46,20 @@ from TeeBotus.handlers import build_reply, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.action_buttons import LEGAL_CONSENT_BUTTONS, MEMORY_RESET_BUTTONS, YOUTUBE_LOCAL_OPTIONS_BUTTONS
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, MessageButton, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
-from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
+from TeeBotus.adapters.telegram import (
+    _telegram_reply_markup,
+    send_telegram_actions,
+    telegram_message_to_event,
+    telegram_update_callback_query_id,
+    telegram_update_message,
+)
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
@@ -269,7 +276,7 @@ class TelegramAPI:
     def get_updates(self, offset: int | None, timeout: int = 50) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "timeout": timeout,
-            "allowed_updates": json.dumps(["message"]),
+            "allowed_updates": json.dumps(["message", "callback_query"]),
         }
         if offset is not None:
             params["offset"] = offset
@@ -288,7 +295,23 @@ class TelegramAPI:
             username=str(result.get("username") or "").strip().lstrip("@"),
         )
 
-    def send_message(self, chat_id: int, text: str, *, text_mode: str = "", formatted_text: str = "") -> int | None:
+    def answer_callback_query(self, callback_query_id: str, text: str = "") -> None:
+        if not str(callback_query_id or "").strip():
+            return
+        params: dict[str, Any] = {"callback_query_id": callback_query_id}
+        if text:
+            params["text"] = text
+        self.request("answerCallbackQuery", params)
+
+    def send_message(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        text_mode: str = "",
+        formatted_text: str = "",
+        reply_markup: str = "",
+    ) -> int | None:
         parse_mode = _telegram_parse_mode(text_mode)
         body = formatted_text if parse_mode and formatted_text else text
         params: dict[str, Any] = {
@@ -298,6 +321,8 @@ class TelegramAPI:
         }
         if parse_mode:
             params["parse_mode"] = parse_mode
+        if reply_markup:
+            params["reply_markup"] = reply_markup
         payload = self.request(
             "sendMessage",
             params,
@@ -801,6 +826,12 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
     message = telegram_update_message(update)
     if not isinstance(message, dict):
         return False
+    callback_query_id = telegram_update_callback_query_id(update)
+    if callback_query_id:
+        try:
+            context.api.answer_callback_query(callback_query_id)
+        except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+            LOGGER.exception("Telegram callback_query answer failed instance=%s callback_query_id=%s.", context.instance_name, callback_query_id)
     chat = message.get("chat")
     if not isinstance(chat, dict) or "id" not in chat:
         return False
@@ -1226,9 +1257,17 @@ def handle_update(
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
     bot_identity = bot_identity or BotIdentity()
-    message = update.get("message")
+    message = telegram_update_message(update)
     if not isinstance(message, dict):
         return
+    callback_query_id = telegram_update_callback_query_id(update)
+    if callback_query_id and runtime_context is None:
+        answer_callback_query = getattr(api, "answer_callback_query", None)
+        if callable(answer_callback_query):
+            try:
+                answer_callback_query(callback_query_id)
+            except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
+                LOGGER.exception("Telegram callback_query answer failed instance=%s callback_query_id=%s.", instance_name, callback_query_id)
 
     provided_instance_name = instance_name
     instance_name = ""
@@ -1458,7 +1497,13 @@ def _process_text_message(
         if _normalize_command(text) == "/help":
             _send_tracked_message(api, chat_state, chat_id, reply, text_mode="html", formatted_text=format_help_text_html(reply))
         else:
-            _send_tracked_message(api, chat_state, chat_id, reply)
+            _send_tracked_message(
+                api,
+                chat_state,
+                chat_id,
+                reply,
+                buttons=_legal_consent_buttons_for_message(user_memory_store, instructions, message) if _normalize_command(text) == "/start" else (),
+            )
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
@@ -1980,7 +2025,7 @@ def _handle_user_memory_reset_flow(
                 _send_tracked_message(api, chat_state, chat_id, reply)
                 return True
             reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
-            _send_tracked_message(api, chat_state, chat_id, reply)
+            _send_tracked_message(api, chat_state, chat_id, reply, buttons=MEMORY_RESET_BUTTONS)
             return True
         chat_state.clear_pending_user_memory_reset(chat_id, sender_key)
         return False
@@ -2000,7 +2045,7 @@ def _handle_user_memory_reset_flow(
 
     chat_state.request_user_memory_reset(chat_id, sender_key)
     reply = _with_first_contact_intro(instructions.user_memory_reset_confirm, first_contact, bot_identity)
-    _send_tracked_message(api, chat_state, chat_id, reply)
+    _send_tracked_message(api, chat_state, chat_id, reply, buttons=MEMORY_RESET_BUTTONS)
     return True
 
 
@@ -2025,7 +2070,13 @@ def _handle_privacy_confirmation_flow(
             chat_id=str(_message_chat_id(message) or ""),
             chat_type=_telegram_chat_type(message),
         )
-        user_memory_store.confirm_privacy(account_id, source="telegram")
+        age_over_16, terms_accepted = _privacy_consent_flags(text)
+        user_memory_store.confirm_privacy(
+            account_id,
+            source="telegram",
+            age_over_16=age_over_16,
+            terms_accepted=terms_accepted,
+        )
     except (AccountStoreError, OSError, AttributeError):
         LOGGER.exception("Failed to persist privacy confirmation for identity_key=%s.", identity_key)
         return False
@@ -2069,6 +2120,13 @@ def _is_privacy_confirmation(text: str) -> bool:
         re.search(r"\b(datenschutz|privacy|datenverarbeitung|datennutzung)\b", normalized)
         and re.search(r"\b(bestaetig(?:e|t|en)?|bestatigt|akzeptier(?:e|t|en)?|ok|okay|einverstanden|zustimm(?:e|t|en)?)\b", normalized)
     )
+
+
+def _privacy_consent_flags(text: str) -> tuple[bool, bool]:
+    normalized = _normalize_memory_reset_text(text)
+    age_over_16 = bool(re.search(r"\b(?:ueber|mindestens|ab)\s*16\b|\b16\s*\+", normalized))
+    terms_accepted = bool(re.search(r"\b(agb|nutzungsbedingungen|terms|terms of service)\b", normalized))
+    return age_over_16, terms_accepted
 
 
 def _is_user_memory_reset_cancellation(text: str) -> bool:
@@ -2546,6 +2604,25 @@ def _is_first_contact(
         except (AccountStoreError, OSError, AttributeError):
             return False
     return True
+
+
+def _legal_consent_buttons_for_message(
+    user_memory_store: AccountStore | None,
+    instructions: BotInstructions,
+    message: dict[str, Any],
+) -> tuple[MessageButton, ...]:
+    if user_memory_store is None or not instructions.user_memory_enabled:
+        return ()
+    identity_key = _telegram_identity_key_from_message(message)
+    if not identity_key:
+        return ()
+    try:
+        account_id = user_memory_store.get_account_for_identity(identity_key)
+        if account_id and user_memory_store.has_privacy_confirmation(account_id):
+            return ()
+    except (AccountStoreError, OSError, AttributeError):
+        return ()
+    return LEGAL_CONSENT_BUTTONS
 
 
 def _should_process_for_bot(
@@ -3695,12 +3772,23 @@ def _send_telegram_message(
     *,
     text_mode: str = "",
     formatted_text: str = "",
+    reply_markup: str = "",
 ) -> int | None:
     if text_mode or formatted_text:
         try:
-            return api.send_message(chat_id, text, text_mode=text_mode, formatted_text=formatted_text)
+            kwargs = {"text_mode": text_mode, "formatted_text": formatted_text}
+            if reply_markup:
+                kwargs["reply_markup"] = reply_markup
+            return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "text_mode" not in str(exc) and "formatted_text" not in str(exc):
+            if "text_mode" not in str(exc) and "formatted_text" not in str(exc) and "reply_markup" not in str(exc):
+                raise
+            return api.send_message(chat_id, text)
+    if reply_markup:
+        try:
+            return api.send_message(chat_id, text, reply_markup=reply_markup)
+        except TypeError as exc:
+            if "reply_markup" not in str(exc):
                 raise
             return api.send_message(chat_id, text)
     return api.send_message(chat_id, text)
@@ -3725,15 +3813,18 @@ def _send_tracked_message(
     *,
     text_mode: str = "",
     formatted_text: str = "",
+    buttons: tuple[MessageButton, ...] = (),
 ) -> None:
     chunk_pairs = _telegram_text_chunks(text, formatted_text=formatted_text)
     for index, (chunk, formatted_chunk) in enumerate(chunk_pairs, start=1):
+        chunk_buttons = buttons if index == len(chunk_pairs) else ()
         message_id = _send_telegram_message(
             api,
             chat_id,
             chunk,
             text_mode=text_mode if formatted_chunk else "",
             formatted_text=formatted_chunk,
+            reply_markup=_telegram_reply_markup(chunk_buttons),
         )
         chat_state.record_sent_message(chat_id, message_id)
         LOGGER.info(
@@ -4116,7 +4207,7 @@ def _handle_pending_youtube_local_options(
             llm_enabled = llm_enabled if llm_enabled is not None else inferred_options[1]
     if live_enabled is None or llm_enabled is None:
         reply = "Bitte antworte z. B. mit: live ja, llm ja"
-        _send_tracked_message(api, chat_state, chat_id, reply)
+        _send_tracked_message(api, chat_state, chat_id, reply, buttons=YOUTUBE_LOCAL_OPTIONS_BUTTONS)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return True
 

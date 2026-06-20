@@ -35,10 +35,17 @@ from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
+from TeeBotus.runtime.action_buttons import (
+    ACCOUNT_EDIT_BUTTONS,
+    ACCOUNT_UNLINK_CONFIRM_BUTTONS,
+    LEGAL_CONSENT_BUTTONS,
+    MEMORY_RESET_BUTTONS,
+    YOUTUBE_LOCAL_OPTIONS_BUTTONS,
+)
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
-from TeeBotus.runtime.actions import ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
+from TeeBotus.runtime.actions import ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
@@ -251,7 +258,13 @@ class TeeBotusEngine:
                 return EngineResult(result.account_id, list(actions), handled=True)
         if _is_privacy_confirmation(event.text):
             try:
-                self.account_store.confirm_privacy(result.account_id, source=event.channel)
+                age_over_16, terms_accepted = _privacy_consent_flags(event.text)
+                self.account_store.confirm_privacy(
+                    result.account_id,
+                    source=event.channel,
+                    age_over_16=age_over_16,
+                    terms_accepted=terms_accepted,
+                )
             except (AccountStoreError, OSError):
                 return EngineResult(result.account_id, [], handled=False)
             return EngineResult(
@@ -328,7 +341,11 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, reply, text_mode="html", formatted_text=instructions.help_text_html(reply))],
                 handled=True,
             )
-        return EngineResult(result.account_id, [SendText(event.chat_id, reply)], handled=True)
+        return EngineResult(
+            result.account_id,
+            [SendText(event.chat_id, reply, buttons=self._reply_buttons(command, result.account_id, instructions))],
+            handled=True,
+        )
 
     def _natural_reminder_reply(self, event: IncomingEvent, account_id: str) -> str | None:
         try:
@@ -341,6 +358,16 @@ class TeeBotusEngine:
             )
         except (AccountStoreError, OSError, ValueError):
             return "Ich konnte die Erinnerung gerade nicht speichern."
+
+    def _reply_buttons(self, command: str, account_id: str, instructions: BotInstructions) -> tuple[MessageButton, ...]:
+        if command != "/start" or not account_id or not instructions.user_memory_enabled:
+            return ()
+        try:
+            if self.account_store.has_privacy_confirmation(account_id):
+                return ()
+        except (AccountStoreError, OSError, ValueError):
+            return ()
+        return LEGAL_CONSENT_BUTTONS
 
     def _admin_membership_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction] | None:
         text = str(event.text or "").strip()
@@ -448,7 +475,14 @@ class TeeBotusEngine:
             self.state.set_pending_flow(event.instance, account_id, "account_edit", {"step": "start"})
             return EngineResult(
                 account_id,
-                [SendText(event.chat_id, "Account-Bearbeitung gestartet. Was möchtest du ändern: unlink, link oder rotate_secret?", track=False)],
+                [
+                    SendText(
+                        event.chat_id,
+                        "Account-Bearbeitung gestartet. Was möchtest du ändern?",
+                        track=False,
+                        buttons=ACCOUNT_EDIT_BUTTONS,
+                    )
+                ],
                 handled=True,
             )
         return EngineResult(account_id, [], handled=False)
@@ -474,7 +508,14 @@ class TeeBotusEngine:
                 self.state.set_pending_flow(event.instance, account_id, "account_edit", {"step": "confirm_unlink"})
                 return EngineResult(
                     account_id,
-                    [SendText(event.chat_id, "Soll ich diesen Kommunikationsweg wirklich vom Account trennen? Antworte mit ja oder nein.", track=False)],
+                    [
+                        SendText(
+                            event.chat_id,
+                            "Soll ich diesen Kommunikationsweg wirklich vom Account trennen?",
+                            track=False,
+                            buttons=ACCOUNT_UNLINK_CONFIRM_BUTTONS,
+                        )
+                    ],
                     handled=True,
                 )
             if text in {"rotate", "rotate_secret", "secret", "secret rotieren"}:
@@ -483,7 +524,7 @@ class TeeBotusEngine:
                 return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
             return EngineResult(
                 account_id,
-                [SendText(event.chat_id, "Bitte antworte mit unlink, rotate_secret oder abbrechen.", track=False)],
+                [SendText(event.chat_id, "Bitte waehle eine Account-Aktion.", track=False, buttons=ACCOUNT_EDIT_BUTTONS)],
                 handled=True,
             )
         if step == "confirm_unlink":
@@ -491,7 +532,11 @@ class TeeBotusEngine:
                 unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
                 self.state.pop_pending_flow(event.instance, account_id, "account_edit")
                 return EngineResult(unlinked_account, [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt.", track=False)], handled=True)
-            return EngineResult(account_id, [SendText(event.chat_id, "Bitte antworte mit ja oder nein.", track=False)], handled=True)
+            return EngineResult(
+                account_id,
+                [SendText(event.chat_id, "Bitte bestaetige oder brich ab.", track=False, buttons=ACCOUNT_UNLINK_CONFIRM_BUTTONS)],
+                handled=True,
+            )
         self.state.pop_pending_flow(event.instance, account_id, "account_edit")
         return EngineResult(account_id, [SendText(event.chat_id, "Account-Bearbeitung wurde zurückgesetzt.", track=False)], handled=True)
 
@@ -844,7 +889,7 @@ class TeeBotusEngine:
                 if _memory_reset_targets_forbidden(event.text):
                     self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
                     return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
-                return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
+                return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
             self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
             return None
         if not _is_memory_reset_intent(event.text):
@@ -859,7 +904,7 @@ class TeeBotusEngine:
             "memory_reset",
             {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
         )
-        return [SendText(event.chat_id, instructions.user_memory_reset_confirm)]
+        return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
 
     def _export_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction]:
         if not event.is_private:
@@ -977,7 +1022,7 @@ class TeeBotusEngine:
             if live_enabled is None or llm_enabled is None:
                 reply = "Bitte antworte z. B. mit: live ja, llm ja"
                 self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
-                return [SendText(event.chat_id, reply)]
+                return [SendText(event.chat_id, reply, buttons=YOUTUBE_LOCAL_OPTIONS_BUTTONS)]
             self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
             original_text = str(pending_options.get("original_text") or event.text)
             return self._youtube_run_local_transcript_actions(
@@ -2121,6 +2166,13 @@ def _is_privacy_confirmation(text: str) -> bool:
         re.search(r"\b(datenschutz|privacy|datenverarbeitung|datennutzung)\b", normalized)
         and re.search(r"\b(bestaetig(?:e|t|en)?|bestatigt|akzeptier(?:e|t|en)?|ok|okay|einverstanden|zustimm(?:e|t|en)?)\b", normalized)
     )
+
+
+def _privacy_consent_flags(text: str) -> tuple[bool, bool]:
+    normalized = _normalize_memory_reset_text(text)
+    age_over_16 = bool(re.search(r"\b(?:ueber|mindestens|ab)\s*16\b|\b16\s*\+", normalized))
+    terms_accepted = bool(re.search(r"\b(agb|nutzungsbedingungen|terms|terms of service)\b", normalized))
+    return age_over_16, terms_accepted
 
 
 def _is_memory_reset_cancellation(text: str) -> bool:

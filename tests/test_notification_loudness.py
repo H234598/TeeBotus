@@ -91,6 +91,7 @@ def test_engine_asks_user_to_unmute_bot_messages_once_route_exists(tmp_path, mon
     assert len(actions) == 2
     assert actions[0].text == "pong"
     assert actions[1].text == NOTIFICATION_LOUDNESS_PROMPT
+    assert [button.label for button in actions[1].buttons] == ["Ja, ist laut", "Nein"]
     state = account_store.read_agent_state(account_store.get_account_for_identity(identity) or "")
     route_state = state["notification_loudness"]["routes"]["telegram:1:chat-1"]
     assert route_state["status"] == "pending"
@@ -179,8 +180,8 @@ def test_scheduler_refreshes_route_state_for_legacy_channel_case(tmp_path, monke
     state = account_store.read_agent_state(account_id)
     route_state = state["notification_loudness"]["routes"]["TeLegram:1:chat-1"]
 
-    assert due == ("1",)
     assert outbox
+    assert due == (outbox[0]["id"],)
     assert outbox[0]["route"]["channel"] == "telegram"
     assert route_state["route"]["channel"] == "telegram"
 

@@ -9,9 +9,10 @@ from signalbot.message import MessageType
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
-from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event
+from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
 from TeeBotus.runtime.actions import (
     ExportFile,
+    MessageButton,
     SendAttachment,
     SendEdit,
     SendPoll,
@@ -569,6 +570,25 @@ def test_signal_send_uses_context_when_current_recipient_lookup_fails():
 
     assert sent == [123]
     assert context.calls == [("send", "hi", {"base64_attachments": None})]
+
+
+def test_signal_send_text_appends_button_fallback():
+    class Context:
+        message = FakeSignalMessage(source="+491")
+
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, text, **kwargs):
+            self.calls.append(("send", text, kwargs))
+            return 124
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "Frage?", buttons=(MessageButton("Ja", "ja"),))]))
+
+    assert sent == [124]
+    assert context.calls == [("send", "Frage?\n\nOptionen:\n- Ja: ja", {"base64_attachments": None})]
 
 
 def test_signal_send_text_rejects_missing_timestamp():
@@ -1495,6 +1515,76 @@ def test_telegram_send_text_passes_formatted_text_when_supported():
     ]
 
 
+def test_telegram_send_text_passes_inline_buttons_when_supported():
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, dict[str, str]]] = []
+
+        def send_message(self, chat_id, text, **kwargs):
+            self.calls.append((chat_id, text, kwargs))
+            return 7
+
+    api = API()
+
+    sent = send_telegram_actions(
+        api,
+        [
+            SendText(
+                "@my_channel",
+                "Bitte waehlen",
+                buttons=(
+                    MessageButton("Ja", "ja"),
+                    MessageButton("AGB", url="https://example.test/agb"),
+                ),
+            )
+        ],
+    )
+
+    assert sent == [7]
+    assert api.calls[0][0:2] == ("@my_channel", "Bitte waehlen")
+    reply_markup = json.loads(api.calls[0][2]["reply_markup"])
+    assert reply_markup == {
+        "inline_keyboard": [[{"text": "Ja", "callback_data": "ja"}, {"text": "AGB", "url": "https://example.test/agb"}]]
+    }
+
+
+def test_telegram_send_text_appends_button_fallback_when_reply_markup_is_not_supported():
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def send_message(self, chat_id, text):
+            self.calls.append((chat_id, text))
+            return 8
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendText("@my_channel", "Bitte waehlen", buttons=(MessageButton("Ja", "ja"),))])
+
+    assert sent == [8]
+    assert api.calls == [("@my_channel", "Bitte waehlen\n\nOptionen:\n- Ja: ja")]
+
+
+def test_telegram_callback_query_maps_button_data_to_event_text():
+    update = {
+        "callback_query": {
+            "id": "cb-1",
+            "from": {"id": 456, "first_name": "Ada", "username": "ada"},
+            "data": "ja",
+            "message": {"message_id": 99, "chat": {"id": 123, "type": "private"}, "text": "Bitte waehlen"},
+        }
+    }
+
+    message = telegram_update_message(update)
+    event = telegram_message_to_event(update=update, instance="Depressionsbot", adapter_slot=1)
+
+    assert message is not None
+    assert message["callback_query_id"] == "cb-1"
+    assert event is not None
+    assert event.text == "ja"
+    assert event.sender_id == "456"
+
+
 def test_telegram_send_edit_uses_optional_edit_message_text():
     class API:
         def __init__(self) -> None:
@@ -2012,6 +2102,26 @@ def test_matrix_send_text_prefers_niobot_send_message():
 
     assert sent == ["$sent"]
     assert client.calls == [("!room:example", "hi", {"message_type": "m.text", "clean_mentions": True})]
+
+
+def test_matrix_send_text_appends_button_fallback():
+    class Response:
+        event_id = "$sent"
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send_message(self, room_id, text, **kwargs):
+            self.calls.append((room_id, text, kwargs))
+            return Response()
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "Frage?", buttons=(MessageButton("Ja", "ja"),))]))
+
+    assert sent == ["$sent"]
+    assert client.calls == [("!room:example", "Frage?\n\nOptionen:\n- Ja: ja", {"message_type": "m.text", "clean_mentions": True})]
 
 
 def test_matrix_send_text_can_reply_with_niobot_send_message():

@@ -5,6 +5,13 @@ from typing import Any, Literal
 
 
 @dataclass(frozen=True)
+class MessageButton:
+    label: str
+    text: str = ""
+    url: str = ""
+
+
+@dataclass(frozen=True)
 class SendText:
     chat_id: str
     text: str
@@ -15,6 +22,7 @@ class SendText:
     formatted_text: str = ""
     view_once: bool = False
     link_preview: Any | None = None
+    buttons: tuple[MessageButton, ...] = ()
 
 
 @dataclass(frozen=True)

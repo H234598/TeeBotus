@@ -2273,6 +2273,7 @@ def test_engine_account_memory_reset_requires_confirmation_and_resets_structured
     done_actions = engine.process(event(identity, "ja", channel="signal"))
 
     assert confirm_actions[0].text == BotInstructions().user_memory_reset_confirm
+    assert [button.label for button in confirm_actions[0].buttons] == ["Ja, loeschen", "Nein"]
     assert done_actions[0].text == BotInstructions().user_memory_reset_success
     reset_index = account_store.read_memory_index(account_id)
     assert reset_index["scope"] == "account"
@@ -2363,6 +2364,33 @@ def test_engine_privacy_confirmation_is_persistent_until_memory_reset(tmp_path):
 
     assert reset_done[0].text == BotInstructions().user_memory_reset_success
     assert account_store.has_privacy_confirmation(account_id) is False
+
+
+def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="legal-buttons")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    start_actions = engine.process(event(identity, "/start", channel="signal"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert [button.label for button in start_actions[0].buttons] == [
+        "Alter 16+ bestaetigen",
+        "AGB",
+        "Datenschutz bestaetigen",
+    ]
+    confirmed = engine.process(event(identity, start_actions[0].buttons[0].text, channel="signal"))
+    profile = account_store._read_account_profile(account_id)
+
+    assert confirmed[0].text.startswith("Datenschutz ist bestätigt.")
+    assert profile["privacy"]["confirmed"] is True
+    assert profile["privacy"]["age_over_16_confirmed"] is True
+    assert profile["privacy"]["terms_accepted"] is True
+
+    later_start = engine.process(event(identity, "/start", channel="signal"))
+
+    assert later_start[0].buttons == ()
 
 
 def test_engine_account_memory_reset_can_be_cancelled(tmp_path):
