@@ -356,7 +356,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        print(_sanitize_admin_notify_status_line(line))  # lgtm [py/clear-text-logging-sensitive-data]
+        print(_sanitize_admin_status_output(line))
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -1081,6 +1081,8 @@ def _runtime_status_hf_pool_state_store() -> Any | None:
 
         # Prefer the static runtime state path for status checks to avoid env-derived path flow into file access.
         state_path = Path.home() / ".local" / "state" / "teebotus" / "hf_pool_state.sqlite3"
+        if not state_path.exists():
+            return None
         return SQLiteHFPoolRuntimeStateStore(state_path)  # lgtm [py/path-injection]
     except Exception:
         return None
