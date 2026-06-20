@@ -32,18 +32,19 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     directory.mkdir(parents=True, exist_ok=True)
     maintain_runtime_directory(directory)
     log_path = runtime_log_path(directory)
+    stdout_targets_log = _stdout_targets_path(log_path)
+    if tee_stdio:
+        install_stdio_tee(directory / STDIO_LOG_FILENAME)
 
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
     handlers: list[logging.Handler] = [stream_handler]
-    if not _stdout_targets_path(log_path):
+    if not stdout_targets_log:
         file_handler = RuntimeTimedRotatingFileHandler(log_path)
         file_handler.setFormatter(formatter)
         handlers.append(file_handler)
     logging.basicConfig(level=level, handlers=handlers, force=True)
-    if tee_stdio:
-        install_stdio_tee(directory / STDIO_LOG_FILENAME)
 
 
 def install_stdio_tee(path: Path) -> None:
