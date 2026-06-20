@@ -14,7 +14,9 @@ STATUS_AUTH_CODE_ENV = "TEEBOTUS_STATUS_AUTH_CODE"
 STATUS_AUTH_CODES_ENV = "TEEBOTUS_STATUS_AUTH_CODES"
 STATUS_AUTH_CODE_INSTANCE_ENV_PREFIX = "TEEBOTUS_STATUS_AUTH_CODE_"
 STATUS_AUTH_CODES_INSTANCE_ENV_PREFIX = "TEEBOTUS_STATUS_AUTH_CODES_"
+STATUS_AUTH_INSTANCES_ENV = "TEEBOTUS_STATUS_AUTH_INSTANCES"
 STATUS_AUTH_CONFIRMATION_TEXT = "Statuszugang aktiviert."
+DEFAULT_STATUS_AUTH_INSTANCES = ("TeeBotus_Logger",)
 
 _AUTH_CODE_SEPARATOR_RE = re.compile(r"[\s,;]+")
 
@@ -52,7 +54,19 @@ def status_auth_codes(*, instance_name: str = "", env: Mapping[str, str] | None 
 
 
 def status_auth_enabled(*, instance_name: str = "", env: Mapping[str, str] | None = None) -> bool:
-    return bool(status_auth_codes(instance_name=instance_name, env=env))
+    return status_auth_instance_protected(instance_name, env=env) and bool(status_auth_codes(instance_name=instance_name, env=env))
+
+
+def status_auth_instance_protected(instance_name: str, *, env: Mapping[str, str] | None = None) -> bool:
+    source = os.environ if env is None else env
+    raw_instances = source.get(STATUS_AUTH_INSTANCES_ENV)
+    if raw_instances is None:
+        protected = DEFAULT_STATUS_AUTH_INSTANCES
+    else:
+        protected = tuple(value for value in _AUTH_CODE_SEPARATOR_RE.split(str(raw_instances or "")) if value)
+    instance_token = _env_instance_token(instance_name)
+    protected_tokens = {_env_instance_token(value) for value in protected if _env_instance_token(value)}
+    return "*" in protected_tokens or "ALL" in protected_tokens or instance_token in protected_tokens
 
 
 def text_contains_status_auth_code(text: str, *, instance_name: str = "", env: Mapping[str, str] | None = None) -> bool:

@@ -29,8 +29,8 @@ from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
-def store(tmp_path):
-    return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"e" * 32))
+def store(tmp_path, instance_name: str = "Depressionsbot"):
+    return AccountStore(tmp_path / "accounts", instance_name, StaticSecretProvider(b"e" * 32))
 
 
 def event(
@@ -39,12 +39,13 @@ def event(
     *,
     channel: str = "telegram",
     chat_type: str = "private",
+    instance: str = "Depressionsbot",
     attachments: tuple[IncomingAttachment, ...] = (),
     link_previews: tuple[IncomingLinkPreview, ...] = (),
 ) -> IncomingEvent:
     return IncomingEvent(
         event_id=f"{channel}:1",
-        instance="Depressionsbot",
+        instance=instance,
         channel=channel,  # type: ignore[arg-type]
         adapter_slot=1,
         account_id="",
@@ -100,16 +101,16 @@ def _tokens(text: str) -> list[str]:
     return re.findall(r"\b[0-9a-f]{128}\b", text)
 
 
-def test_status_auth_gate_silences_user_until_code_seen(tmp_path, monkeypatch):
+def test_status_auth_gate_silences_logger_user_until_code_seen(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
-    account_store = store(tmp_path)
+    account_store = store(tmp_path, "TeeBotus_Logger")
     engine = TeeBotusEngine(account_store=account_store)
     identity = telegram_identity_key(1)
 
-    assert engine.process(event(identity, "/help")) == []
+    assert engine.process(event(identity, "/help", instance="TeeBotus_Logger")) == []
     assert account_store.get_account_for_identity(identity) is None
 
-    actions = engine.process(event(identity, "Mondbot, 18hhGfuu3 bitte Statuszugang aktivieren."))
+    actions = engine.process(event(identity, "TBL, 18hhGfuu3 bitte Statuszugang aktivieren.", instance="TeeBotus_Logger"))
 
     assert len(actions) == 1
     assert "Statuszugang aktiviert" in actions[0].text
@@ -117,18 +118,33 @@ def test_status_auth_gate_silences_user_until_code_seen(tmp_path, monkeypatch):
     assert account_id is not None
     assert account_store.read_status_auth_state(account_id)["authorized"] is True
 
-    help_actions = engine.process(event(identity, "/help"))
+    help_actions = engine.process(event(identity, "/help", instance="TeeBotus_Logger"))
     assert help_actions
     assert "Befehle" in help_actions[0].text
 
 
-def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
+def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
     identity = telegram_identity_key(1)
 
-    actions = engine.process(event(identity, "Mondbot, 18hhGfuu3 bitte Statuszugang aktivieren.", chat_type="Private"))
+    actions = engine.process(event(identity, "/help"))
+
+    assert actions
+    assert "Befehle" in actions[0].text
+    assert account_store.get_account_for_identity(identity) is not None
+
+
+def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path, "TeeBotus_Logger")
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(
+        event(identity, "TBL, 18hhGfuu3 bitte Statuszugang aktivieren.", chat_type="Private", instance="TeeBotus_Logger")
+    )
 
     assert len(actions) == 1
     assert "Statuszugang aktiviert" in actions[0].text
@@ -151,7 +167,8 @@ def test_authorize_status_recipient_overwrites_non_mapping_state(tmp_path, monke
     state = authorize_status_recipient(account_store, account_id, event(identity, "Statuszugang aktivieren"))
 
     assert state.get("authorized") is True
-    assert account_store.read_status_auth_state(account_id).get("authorized") is True
+    persisted_store = AccountStore(account_store.root, account_store.instance_name, account_store.secret_provider)
+    assert persisted_store.read_status_auth_state(account_id).get("authorized") is True
 
 
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
