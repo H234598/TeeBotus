@@ -67,11 +67,11 @@ class InstructionTests(unittest.TestCase):
         instructions = parse_instructions(
             """
             ## Einstellungen
-            - bot_aliases: TBL, TeeBotus Logger, TeeBotus-Logger
+            - bot_aliases: TBL, tl, telo, TeeBotus Logger, TeeBotus-Logger
             """
         )
 
-        self.assertEqual(instructions.bot_aliases, ("TBL", "TeeBotus Logger", "TeeBotus-Logger"))
+        self.assertEqual(instructions.bot_aliases, ("TBL", "tl", "telo", "TeeBotus Logger", "TeeBotus-Logger"))
 
     def test_parse_markdown_instructions(self) -> None:
         account_a = "a" * 128

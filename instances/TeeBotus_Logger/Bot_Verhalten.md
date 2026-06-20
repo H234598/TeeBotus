@@ -4,7 +4,7 @@ Diese Datei steuert das Laufzeitverhalten der Instanz TeeBotus_Logger.
 
 ## Einstellungen
 
-- bot_aliases: TBL, TeeBotus Logger, TeeBotus-Logger
+- bot_aliases: TBL, tl, telo, TeeBotus Logger, TeeBotus-Logger
 - user_memory_enabled: true
 - user_memory_max_prompt_chars: 12000
 - user_memory_max_entry_chars: 2000
