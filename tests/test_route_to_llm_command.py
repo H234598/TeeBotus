@@ -109,6 +109,36 @@ def test_route_to_llm_rejects_non_admin(tmp_path) -> None:
     assert "Nur Admin-Accounts" in actions[0].text
 
 
+def test_route_to_llm_accepts_status_auth_admin(tmp_path) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_status_auth_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "authorized": True,
+            "admin_opt_out": False,
+            "source": "runtime_admin_command",
+        },
+    )
+
+    class FakeClient:
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            return LLMResponse(f"direkt: {user_text}", provider="fake", model="fake-model")
+
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(llm_enabled=True),
+        route_to_client_factory=lambda **_kwargs: FakeClient(),
+    )
+
+    actions = engine.process(_event(identity, "/RouteToOAI Hallo"))
+
+    assert len(actions) == 2
+    assert "direkt: Hallo" in actions[1].text
+
+
 def test_route_to_llm_without_prompt_routes_next_admin_message_once(tmp_path, monkeypatch) -> None:
     account_store = _store(tmp_path)
     identity = telegram_identity_key(1)

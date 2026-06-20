@@ -15,7 +15,7 @@ from TeeBotus import __version__
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, TOKEN_HEX_RE
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
-from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids
+from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids, status_auth_state_admin_opted_out
 
 ADMIN_ACCOUNT_IDS_ENV = "TEEBOTUS_ADMIN_ACCOUNT_IDS"
 ADMIN_ACCOUNT_IDS_INSTANCE_ENV_PREFIX = "TEEBOTUS_ADMIN_ACCOUNT_IDS_"
@@ -69,6 +69,33 @@ def resolve_admin_account_group(*, instance_name: str = "", env: Mapping[str, st
     return AdminAccountGroup(account_ids=DEFAULT_ADMIN_ACCOUNT_IDS, source="default")
 
 
+def runtime_admin_account_ids(
+    account_store: AccountStore,
+    *,
+    instance_name: str = "",
+    env: Mapping[str, str] | None = None,
+) -> tuple[str, ...]:
+    group = resolve_admin_account_group(instance_name=instance_name, env=env)
+    return _status_notification_candidate_account_ids(
+        account_store,
+        configured_account_ids=group.account_ids,
+        include_status_auth_accounts=True,
+    )
+
+
+def is_runtime_admin_account(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    instance_name: str = "",
+    env: Mapping[str, str] | None = None,
+) -> bool:
+    normalized = str(account_id or "").strip().casefold()
+    if not normalized:
+        return False
+    return normalized in set(runtime_admin_account_ids(account_store, instance_name=instance_name, env=env))
+
+
 def admin_account_group_status_lines(
     *,
     instance_name: str,
@@ -86,13 +113,18 @@ def admin_account_group_status_lines(
             f"admin_accounts={instance_name} status=broken source={group.source} accounts={len(group.account_ids)} "
             f"invalid={len(group.invalid_ids)} error={_status_token(f'{type(exc).__name__}:{exc}')}",
         )
+    account_ids = _status_notification_candidate_account_ids(
+        resolved_store,
+        configured_account_ids=group.account_ids,
+        include_status_auth_accounts=True,
+    )
 
     account_lines: list[str] = []
     local_count = 0
     routable_count = 0
     not_local_count = 0
     warning_count = 0
-    for account_id in group.account_ids:
+    for account_id in account_ids:
         account_dir = resolved_store.account_dir(account_id)
         if not account_dir.is_dir():
             not_local_count += 1
@@ -118,7 +150,7 @@ def admin_account_group_status_lines(
 
     status = "broken" if group.invalid_ids else "configured"
     lines = [
-        f"admin_accounts={instance_name} status={status} source={group.source} accounts={len(group.account_ids)} "
+        f"admin_accounts={instance_name} status={status} source={group.source} accounts={len(account_ids)} "
         f"local={local_count} not_local={not_local_count} routable={routable_count} warnings={warning_count} invalid={len(group.invalid_ids)}"
     ]
     for invalid_id in group.invalid_ids:
@@ -175,14 +207,10 @@ async def notify_runtime_status_admin_accounts(
         for invalid_id in group.invalid_ids:
             results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
         candidates: list[tuple[str, dict[str, Any], str, RuntimeStatusSummaryPayload]] = []
-        include_status_auth_accounts = False
-        if not group.account_ids and not group.invalid_ids and group.source != "default":
-            env_value = str(source.get(group.source, "") if isinstance(source, Mapping) else "").strip()
-            include_status_auth_accounts = not env_value
         for account_id in _status_notification_candidate_account_ids(
             store,
             configured_account_ids=group.account_ids,
-            include_status_auth_accounts=include_status_auth_accounts,
+            include_status_auth_accounts=True,
         ):
             if not _account_dir_exists(store, account_id):
                 results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
@@ -309,6 +337,12 @@ def _status_notification_candidate_account_ids(
     for account_id in candidate_ids:
         normalized = str(account_id or "").strip().casefold()
         if not normalized or normalized in seen:
+            continue
+        try:
+            opted_out = status_auth_state_admin_opted_out(store, normalized)
+        except Exception:  # noqa: BLE001 - configured admins should still be diagnosable when opt-out lookup fails.
+            opted_out = False
+        if opted_out:
             continue
         seen.add(normalized)
         candidates.append(normalized)

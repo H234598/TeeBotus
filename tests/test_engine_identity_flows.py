@@ -20,6 +20,7 @@ from TeeBotus.runtime.accounts import (
     telegram_identity_key,
 )
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
+from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
@@ -169,6 +170,89 @@ def test_authorize_status_recipient_overwrites_non_mapping_state(tmp_path, monke
     assert state.get("authorized") is True
     persisted_store = AccountStore(account_store.root, account_store.instance_name, account_store.secret_provider)
     assert persisted_store.read_status_auth_state(account_id).get("authorized") is True
+
+
+def test_admin_command_direct_secret_authorizes_runtime_admin(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "/admin yes 18hhGfuu3"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert len(actions) == 1
+    assert "Adminzugang aktiviert" in actions[0].text
+    assert status_auth_state_authorized(account_store, account_id) is True
+    assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot", env={}) is True
+    assert account_store.read_status_auth_state(account_id)["source"] == "runtime_admin_command"
+
+
+def test_admin_command_yes_waits_for_secret_and_accepts_next_private_message(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    armed = engine.process(event(identity, "/admin yes"))
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert "Admin-Secret bitte senden" in armed[0].text
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "admin_auth") is not None
+
+    completed = engine.process(event(identity, "das secret ist 18hhGfuu3"))
+
+    assert "Adminzugang aktiviert" in completed[0].text
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "admin_auth") is None
+    assert status_auth_state_authorized(account_store, account_id) is True
+
+
+def test_admin_command_wrong_secret_does_not_authorize(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "/admin yes falsch"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert "Admin-Secret stimmt nicht" in actions[0].text
+    assert status_auth_state_authorized(account_store, account_id) is False
+    assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot", env={}) is False
+
+
+def test_admin_command_no_opts_out_static_admin(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+
+    assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot") is True
+
+    actions = engine.process(event(identity, "/admin no"))
+
+    assert "Adminzugang deaktiviert" in actions[0].text
+    assert account_store.read_status_auth_state(account_id)["admin_opt_out"] is True
+    assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot") is False
+
+
+def test_admin_command_no_overrides_pending_admin_secret_flow(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/admin yes"))
+    actions = engine.process(event(identity, "/admin no"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert "Adminzugang deaktiviert" in actions[0].text
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "admin_auth") is None
+    assert account_store.read_status_auth_state(account_id)["admin_opt_out"] is True
 
 
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):

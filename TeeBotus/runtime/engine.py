@@ -34,7 +34,7 @@ from TeeBotus.llm_client import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
 from TeeBotus.runtime.activity_profile import record_account_activity
-from TeeBotus.runtime.admin_accounts import resolve_admin_account_group
+from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, utc_now
@@ -48,7 +48,13 @@ from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchServi
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 from TeeBotus.runtime.state import RuntimeState
-from TeeBotus.runtime.status_auth import evaluate_status_auth_gate
+from TeeBotus.runtime.status_auth import (
+    authorize_status_recipient,
+    deauthorize_status_recipient,
+    evaluate_status_auth_gate,
+    status_auth_codes,
+    text_contains_status_auth_code,
+)
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     handle_tts_voice_model_command,
@@ -69,6 +75,14 @@ EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 YOUTUBE_LINK_FLOW = "youtube_link"
 YOUTUBE_OPTIONS_FLOW = "youtube_options"
+ADMIN_AUTH_FLOW = "admin_auth"
+ADMIN_AUTH_USAGE = "Nutzung: /admin yes <secret> oder /admin no."
+ADMIN_AUTH_PROMPT = "Admin-Secret bitte senden. /cancel bricht ab."
+ADMIN_AUTH_CANCELLED = "Admin-Anmeldung abgebrochen."
+ADMIN_AUTH_ENABLED = "Adminzugang aktiviert."
+ADMIN_AUTH_DISABLED = "Adminzugang deaktiviert. Dieser Account bekommt keine Adminmeldungen mehr."
+ADMIN_AUTH_WRONG_SECRET = "Admin-Secret stimmt nicht."
+ADMIN_AUTH_NO_SECRET_CONFIGURED = "Kein Admin-Secret konfiguriert."
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
 MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
 OPENAI_IMAGE_STATE_KEY = "openai_image_generation"
@@ -205,6 +219,10 @@ class TeeBotusEngine:
                 dialect_update = None
             if dialect_update is not None and dialect_update.reply_text:
                 return EngineResult(result.account_id, [SendText(event.chat_id, dialect_update.reply_text, track=False)], handled=True)
+        if result.account_id:
+            admin_actions = self._admin_membership_actions(event, result.account_id)
+            if admin_actions is not None:
+                return EngineResult(result.account_id, admin_actions, handled=True)
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
@@ -323,6 +341,63 @@ class TeeBotusEngine:
             )
         except (AccountStoreError, OSError, ValueError):
             return "Ich konnte die Erinnerung gerade nicht speichern."
+
+    def _admin_membership_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction] | None:
+        text = str(event.text or "").strip()
+        command = _command_name(text)
+        pending = self.state.get_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+        if pending is not None and _pending_flow_matches_event(pending, event):
+            if command == "/cancel":
+                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
+            if command == "/admin":
+                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+            elif command:
+                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
+            elif text:
+                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                return self._admin_authorize_actions(event, account_id, text)
+        if command != "/admin":
+            return None
+        if not event.is_private:
+            return [SendText(event.chat_id, PRIVATE_ONLY, track=False)]
+        mode, secret_text = _parse_admin_command_args(text)
+        if _admin_mode_is_yes(mode):
+            if not status_auth_codes(instance_name=event.instance):
+                return [SendText(event.chat_id, ADMIN_AUTH_NO_SECRET_CONFIGURED, track=False)]
+            if secret_text:
+                return self._admin_authorize_actions(event, account_id, secret_text)
+            self.state.set_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW, {"chat_id": event.chat_id, "channel": event.channel})
+            return [SendText(event.chat_id, ADMIN_AUTH_PROMPT, track=False)]
+        if _admin_mode_is_no(mode):
+            try:
+                deauthorize_status_recipient(self.account_store, account_id, event)
+            except (AccountStoreError, OSError, ValueError):
+                return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
+            return [SendText(event.chat_id, ADMIN_AUTH_DISABLED, track=False)]
+        return [SendText(event.chat_id, ADMIN_AUTH_USAGE, track=False)]
+
+    def _admin_authorize_actions(self, event: IncomingEvent, account_id: str, secret_text: str) -> list[OutgoingAction]:
+        if not event.is_private:
+            return [SendText(event.chat_id, PRIVATE_ONLY, track=False)]
+        if not status_auth_codes(instance_name=event.instance):
+            return [SendText(event.chat_id, ADMIN_AUTH_NO_SECRET_CONFIGURED, track=False)]
+        if not text_contains_status_auth_code(secret_text, instance_name=event.instance):
+            return [SendText(event.chat_id, ADMIN_AUTH_WRONG_SECRET, track=False)]
+        try:
+            if event.chat_id:
+                self.account_store.update_identity_route(
+                    event.identity_key,
+                    channel=event.channel,
+                    chat_id=event.chat_id,
+                    chat_type=str(event.chat_type or "").strip().casefold(),
+                    adapter_slot=event.adapter_slot,
+                )
+            authorize_status_recipient(self.account_store, account_id, event, source="runtime_admin_command")
+        except (AccountStoreError, OSError, ValueError):
+            return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
+        return [SendText(event.chat_id, ADMIN_AUTH_ENABLED, track=False)]
 
     def process_identity_flows(self, event: IncomingEvent) -> EngineResult:
         account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
@@ -738,8 +813,7 @@ class TeeBotusEngine:
     def _account_is_route_to_admin(self, instance_name: str, account_id: str) -> bool:
         if not account_id:
             return False
-        group = resolve_admin_account_group(instance_name=instance_name)
-        return account_id in set(group.account_ids)
+        return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
 
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         """Compatibility alias for tests and older callers.
@@ -1295,6 +1369,23 @@ def _command_name(text: str) -> str:
     if "@" in first:
         first = first.split("@", maxsplit=1)[0]
     return first
+
+
+def _parse_admin_command_args(text: str) -> tuple[str, str]:
+    parts = str(text or "").strip().split(maxsplit=2)
+    if len(parts) < 2:
+        return "", ""
+    mode = parts[1].strip().casefold()
+    secret_text = parts[2].strip() if len(parts) > 2 else ""
+    return mode, secret_text
+
+
+def _admin_mode_is_yes(value: str) -> bool:
+    return str(value or "").strip().casefold() in {"yes", "y", "ja", "j", "on", "true", "1"}
+
+
+def _admin_mode_is_no(value: str) -> bool:
+    return str(value or "").strip().casefold() in {"no", "n", "nein", "aus", "off", "false", "0"}
 
 
 def _command_targets_other_bot(text: str, bot_address_names: frozenset[str]) -> bool:

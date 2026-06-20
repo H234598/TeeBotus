@@ -86,6 +86,16 @@ def status_auth_state_authorized(account_store: AccountStore, account_id: str) -
     return bool(state.get("authorized") is True)
 
 
+def status_auth_state_admin_opted_out(account_store: AccountStore, account_id: str) -> bool:
+    if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
+        return False
+    try:
+        state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    return bool(state.get("admin_opt_out") is True)
+
+
 def status_auth_recipient_account_ids(account_store: AccountStore) -> tuple[str, ...]:
     account_ids: list[str] = []
     for account_id in account_store.list_account_ids(include_unresolvable=False):
@@ -129,6 +139,7 @@ def authorize_status_recipient(
     event: IncomingEvent,
     *,
     now: datetime | None = None,
+    source: str = "runtime_code",
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     try:
@@ -142,7 +153,41 @@ def authorize_status_recipient(
             "authorized": True,
             "authorized_at": state.get("authorized_at") or timestamp,
             "updated_at": timestamp,
-            "source": "runtime_code",
+            "source": source,
+            "admin_opt_out": False,
+            "last_identity_key": event.identity_key,
+            "last_channel": event.channel,
+            "last_chat_id": event.chat_id,
+            "last_chat_type": event.chat_type,
+            "last_adapter_slot": event.adapter_slot,
+        }
+    )
+    account_store.write_status_auth_state(account_id, state)
+    return state
+
+
+def deauthorize_status_recipient(
+    account_store: AccountStore,
+    account_id: str,
+    event: IncomingEvent,
+    *,
+    now: datetime | None = None,
+    source: str = "runtime_admin_command",
+) -> dict[str, Any]:
+    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
+    try:
+        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+    except (AccountStoreError, OSError, ValueError):
+        current = {}
+    state = dict(current)
+    state.update(
+        {
+            "schema_version": 1,
+            "authorized": False,
+            "admin_opt_out": True,
+            "deauthorized_at": timestamp,
+            "updated_at": timestamp,
+            "source": source,
             "last_identity_key": event.identity_key,
             "last_channel": event.channel,
             "last_chat_id": event.chat_id,

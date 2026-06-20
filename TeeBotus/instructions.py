@@ -38,6 +38,7 @@ DEFAULT_HELP_LINES = (
     "/rotate_secret - neues Account-Secret erzeugen",
     "/linked_accounts - verknuepfte Kommunikationswege anzeigen",
     "/account_edit - Account-Verknuepfungen bearbeiten",
+    "/admin yes|no - Adminzugang per Secret aktivieren oder fuer diesen Account abmelden",
     "/codex Prompt - fuehrt Codex CLI lokal aus",
     "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
     "/voicemodel <stimme> - Stimme fuer deine Sprachnachrichten waehlen. OpenAI-Voices: https://platform.openai.com/docs/guides/text-to-speech#voice-options",
