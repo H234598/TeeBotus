@@ -26,6 +26,7 @@ from TeeBotus.admin.codex_history import (
     _safe_output_path,
     _safe_repo_root,
     import_codex_session_file,
+    import_codex_session_roots,
     main as codex_history_main,
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
@@ -1228,6 +1229,27 @@ def test_import_codex_session_file_skips_when_no_assistant_final_text(tmp_path: 
 
     assert result["status"] == "skipped"
     assert result["reason"] == "missing_final_text"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_import_codex_session_roots_skips_invalid_repo_root_without_aborting(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    sessions_root = tmp_path / "sessions"
+    session_file = sessions_root / "agent-session.jsonl"
+    write_codex_session(
+        session_file,
+        repo=tmp_path / ".codex-agents" / "agent" / "work",
+        session_id="sess-hidden-agent",
+        turn_id="turn-hidden-agent",
+    )
+
+    report = import_codex_session_roots(store, (sessions_root,), limit=10)
+
+    assert report["ok"] is True
+    assert report["status_counts"] == {"skipped": 1}
+    assert report["items"][0]["status"] == "skipped"
+    assert report["items"][0]["reason"] == "invalid_repo_root"
+    assert ".codex-agents" in report["items"][0]["error"]
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
 
 

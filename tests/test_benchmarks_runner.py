@@ -14,6 +14,7 @@ from scripts.run_benchmarks import main, render_markdown, run_benchmarks
 def test_plan3_benchmark_core_lives_in_package() -> None:
     adapters = importlib.import_module("TeeBotus.benchmarks.adapters")
     bibliothekar = importlib.import_module("TeeBotus.benchmarks.bibliothekar")
+    codex_history = importlib.import_module("TeeBotus.benchmarks.codex_history")
     core = importlib.import_module("TeeBotus.benchmarks.core")
     hf_pool = importlib.import_module("TeeBotus.benchmarks.hf_pool")
     langgraph_flows = importlib.import_module("TeeBotus.benchmarks.langgraph_flows")
@@ -33,6 +34,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert (package_dir / "__init__.py").exists()
     assert (package_dir / "adapters.py").exists()
     assert (package_dir / "bibliothekar.py").exists()
+    assert (package_dir / "codex_history.py").exists()
     assert (package_dir / "core.py").exists()
     assert (package_dir / "hf_pool.py").exists()
     assert (package_dir / "langgraph_flows.py").exists()
@@ -98,6 +100,7 @@ def test_plan3_benchmark_core_lives_in_package() -> None:
     assert benchmark_module.render_markdown is reporting.render_markdown
     assert benchmark_module.run_benchmarks is suite.run_benchmarks
     assert benchmark_module._benchmark_status_doctor is runtime_health.benchmark_status_doctor
+    assert benchmark_module._benchmark_codex_history_collector_timer_render is codex_history.benchmark_codex_history_collector_timer_render
     assert benchmark_module._benchmark_database_fallback_policy is runtime_health.benchmark_database_fallback_policy
     assert benchmark_module._benchmark_source_harvester_quality_gate is source_quality.benchmark_source_harvester_quality_gate
     assert benchmark_module._benchmark_source_harvester_promote_index_flow is source_quality.benchmark_source_harvester_promote_index_flow

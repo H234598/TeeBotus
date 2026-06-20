@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -130,12 +131,16 @@ def _python_path(repo_root: Path, value: str) -> Path | str:
             if raw[0] in SYSTEMD_EXEC_PREFIX_CHARS:
                 raise ValueError("systemd python executable must not start with a special ExecStart prefix")
             return raw
-        return path if path.is_absolute() else (repo_root / path).resolve()
+        return _absolute_without_symlink_resolution(path if path.is_absolute() else repo_root / path)
     for venv_name in (".venv-py313", ".venv"):
         venv_python = repo_root / venv_name / "bin" / "python"
         if venv_python.exists():
-            return venv_python.resolve()
+            return _absolute_without_symlink_resolution(venv_python)
     return Path("python3")
+
+
+def _absolute_without_symlink_resolution(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path.expanduser())))
 
 
 def _env_path(repo_root: Path, value: str) -> Path:

@@ -7,7 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -40,8 +40,13 @@ class ReadOnlySecretToolInstanceSecretProvider:
     """Read-only Secret Service provider for admin reports."""
 
     command: str = SECRET_TOOL_COMMAND
+    _cache: dict[tuple[str, str], bytes] = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
+        cache_key = (str(instance_name), str(purpose))
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
         binary = shutil.which(self.command)
         if binary is None:
             raise AccountStoreError("secret-tool is not installed")
@@ -68,6 +73,7 @@ class ReadOnlySecretToolInstanceSecretProvider:
             raise AccountStoreError("secret-tool returned invalid instance secret data") from exc
         if len(secret) != INSTANCE_KEY_SIZE_BYTES:
             raise AccountStoreError("instance secret has invalid length")
+        self._cache[cache_key] = secret
         return secret
 
 

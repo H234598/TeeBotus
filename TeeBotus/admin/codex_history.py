@@ -180,6 +180,96 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _build_codex_history_summary_item(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    repo_root: str | Path,
+    title: str,
+    bullets: Sequence[str] = (),
+    changed_files: Sequence[str] = (),
+    tests: Sequence[str] = (),
+    session_id: str = "",
+    source: str = "manual_cli",
+    status: str = "queued",
+    target_group: str = CODEX_HISTORY_TARGET_GROUP,
+    codex_metadata: Mapping[str, Any] | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
+    repo = build_repo_metadata(repo_root)
+    version = resolve_repo_version(repo["repo_root"])
+    created_at = timestamp or utc_now()
+    redacted_title = redact_codex_history_text(title).strip() or "Codex run summary"
+    redacted_bullets = [redact_codex_history_text(item).strip() for item in bullets if str(item or "").strip()]
+    redacted_changed_files = [redact_codex_history_text(item).strip() for item in changed_files if str(item or "").strip()]
+    redacted_tests = [redact_codex_history_text(item).strip() for item in tests if str(item or "").strip()]
+    summary_number = _next_summary_number_for_repo(rows, repo["repo_id"])
+    summary_prefix = _summary_prefix(version["semver"], summary_number)
+    markdown = build_codex_history_markdown(
+        summary_prefix=summary_prefix,
+        title=redacted_title,
+        repo=repo,
+        version=version,
+        bullets=redacted_bullets,
+        changed_files=redacted_changed_files,
+        tests=redacted_tests,
+        created_at=created_at,
+    )
+    codex_payload = {
+        "session_id": redact_codex_history_text(session_id).strip(),
+        "cwd": repo["repo_root"],
+        "finished_at": created_at,
+    }
+    if isinstance(codex_metadata, Mapping):
+        codex_payload.update({str(key): redact_codex_history_text(value).strip() for key, value in codex_metadata.items()})
+    return {
+        "id": _unique_history_id(rows),
+        "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+        "kind": "codex_run_summary",
+        "source": source,
+        "status": status,
+        "created_at": created_at,
+        "updated_at": created_at,
+        "project": repo,
+        "version": {
+            "semver": version["semver"],
+            "tag": version["tag"],
+            "summary_number": summary_number,
+            "summary_prefix": summary_prefix,
+        },
+        "codex": codex_payload,
+        "summary": {
+            "title": redacted_title,
+            "markdown": markdown,
+            "bullets": redacted_bullets,
+            "changed_files": redacted_changed_files,
+            "tests": redacted_tests,
+        },
+        "delivery": {
+            "target_group": target_group,
+            "attempts": 0,
+            "last_attempt_at": "",
+            "sent_at": "",
+            "accepted_at": "",
+            "delivered_at": "",
+            "acknowledged_at": "",
+        },
+        "indexing": {
+            "indexable": True,
+            "repo_history": True,
+            "keywords": _history_keywords(repo, version, redacted_title, redacted_bullets, redacted_changed_files, redacted_tests),
+        },
+        "status_history": [
+            {
+                "at": created_at,
+                "status": status,
+                "reason": "codex_history_summary_created",
+            }
+        ],
+        "summary_number": summary_number,
+        "summary_prefix": summary_prefix,
+    }
+
+
 def append_codex_history_summary(
     store: AccountStore,
     *,
@@ -194,86 +284,29 @@ def append_codex_history_summary(
     target_group: str = CODEX_HISTORY_TARGET_GROUP,
     codex_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    repo = build_repo_metadata(repo_root)
-    version = resolve_repo_version(repo["repo_root"])
-    timestamp = utc_now()
     account_id = INSTANCE_STATE_ACCOUNT_ID
-    redacted_title = redact_codex_history_text(title).strip() or "Codex run summary"
-    redacted_bullets = [redact_codex_history_text(item).strip() for item in bullets if str(item or "").strip()]
-    redacted_changed_files = [redact_codex_history_text(item).strip() for item in changed_files if str(item or "").strip()]
-    redacted_tests = [redact_codex_history_text(item).strip() for item in tests if str(item or "").strip()]
-
     with store.codex_history_outbox_lock(account_id):
         rows = store.read_codex_history_outbox(account_id)
-        summary_number = _next_summary_number_for_repo(rows, repo["repo_id"])
-        summary_prefix = _summary_prefix(version["semver"], summary_number)
-        markdown = build_codex_history_markdown(
-            summary_prefix=summary_prefix,
-            title=redacted_title,
-            repo=repo,
-            version=version,
-            bullets=redacted_bullets,
-            changed_files=redacted_changed_files,
-            tests=redacted_tests,
-            created_at=timestamp,
+        timestamp = utc_now()
+        item = _build_codex_history_summary_item(
+            rows,
+            repo_root=repo_root,
+            title=title,
+            bullets=bullets,
+            changed_files=changed_files,
+            tests=tests,
+            session_id=session_id,
+            source=source,
+            status=status,
+            target_group=target_group,
+            codex_metadata=codex_metadata,
+            timestamp=timestamp,
         )
-        codex_payload = {
-            "session_id": redact_codex_history_text(session_id).strip(),
-            "cwd": repo["repo_root"],
-            "finished_at": timestamp,
-        }
-        if isinstance(codex_metadata, Mapping):
-            codex_payload.update({str(key): redact_codex_history_text(value).strip() for key, value in codex_metadata.items()})
-        item = {
-            "id": _unique_history_id(rows),
-            "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
-            "kind": "codex_run_summary",
-            "source": source,
-            "status": status,
-            "created_at": timestamp,
-            "updated_at": timestamp,
-            "project": repo,
-            "version": {
-                "semver": version["semver"],
-                "tag": version["tag"],
-                "summary_number": summary_number,
-                "summary_prefix": summary_prefix,
-            },
-            "codex": codex_payload,
-            "summary": {
-                "title": redacted_title,
-                "markdown": markdown,
-                "bullets": redacted_bullets,
-                "changed_files": redacted_changed_files,
-                "tests": redacted_tests,
-            },
-            "delivery": {
-                "target_group": target_group,
-                "attempts": 0,
-                "last_attempt_at": "",
-                "sent_at": "",
-                "accepted_at": "",
-                "delivered_at": "",
-                "acknowledged_at": "",
-            },
-            "indexing": {
-                "indexable": True,
-                "repo_history": True,
-                "keywords": _history_keywords(repo, version, redacted_title, redacted_bullets, redacted_changed_files, redacted_tests),
-            },
-            "status_history": [
-                {
-                    "at": timestamp,
-                    "status": status,
-                    "reason": "codex_history_summary_created",
-                }
-            ],
-            "summary_number": summary_number,
-            "summary_prefix": summary_prefix,
-        }
         rows.append(item)
         store.write_codex_history_outbox(account_id, rows)
-        _upsert_project(store, account_id, repo, item, timestamp)
+        project = item.get("project", {})
+        if isinstance(project, Mapping):
+            _upsert_project(store, account_id, project, item, timestamp)
         return dict(item)
 
 
@@ -541,6 +574,56 @@ def record_codex_history_delivery_receipt(
 
 
 def import_codex_session_file(store: AccountStore, session_file: str | Path) -> dict[str, Any]:
+    account_id = INSTANCE_STATE_ACCOUNT_ID
+    imported: list[dict[str, Any]] = []
+    with store.codex_history_outbox_lock(account_id):
+        rows = store.read_codex_history_outbox(account_id)
+        result = _build_codex_session_import_result(rows, session_file)
+        if result.get("status") == "imported" and isinstance(result.get("item"), Mapping):
+            item = dict(result["item"])
+            store.write_codex_history_outbox(account_id, rows)
+            imported.append(item)
+    for item in imported:
+        project = item.get("project", {})
+        if isinstance(project, Mapping):
+            _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
+    return result
+
+
+def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path], *, limit: int = 1000) -> dict[str, Any]:
+    results: list[dict[str, Any]] = []
+    imported_items: list[dict[str, Any]] = []
+    account_id = INSTANCE_STATE_ACCOUNT_ID
+    session_files = _iter_codex_session_files(roots, limit=limit)
+    with store.codex_history_outbox_lock(account_id):
+        rows = store.read_codex_history_outbox(account_id)
+        for session_file in session_files:
+            try:
+                result = _build_codex_session_import_result(rows, session_file)
+            except (OSError, ValueError, AccountStoreError) as exc:
+                result = {
+                    "status": "error",
+                    "reason": type(exc).__name__,
+                    "error": redact_codex_history_text(str(exc)).strip(),
+                    "path": str(session_file),
+                }
+            if result.get("status") == "imported" and isinstance(result.get("item"), Mapping):
+                imported_items.append(dict(result["item"]))
+            results.append(result)
+        if imported_items:
+            store.write_codex_history_outbox(account_id, rows)
+    for item in imported_items:
+        project = item.get("project", {})
+        if isinstance(project, Mapping):
+            _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
+    return {
+        "ok": not any(result.get("status") == "error" for result in results),
+        "items": results,
+        "status_counts": _status_counts(results),
+    }
+
+
+def _build_codex_session_import_result(rows: list[dict[str, Any]], session_file: str | Path) -> dict[str, Any]:
     path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
     parsed = _parse_codex_session_file(path)
     if not parsed["final_text"]:
@@ -551,40 +634,45 @@ def import_codex_session_file(store: AccountStore, session_file: str | Path) -> 
     session_id = str(parsed["session_id"] or path.stem)
     turn_id = str(parsed["turn_id"] or "")
     dedupe_key = _codex_session_dedupe_key(session_id=session_id, turn_id=turn_id, final_message_hash=final_hash)
-    existing = _find_codex_history_by_dedupe_key(store, dedupe_key)
+    existing = _find_codex_history_by_dedupe_key_in_rows(rows, dedupe_key)
     if existing is not None:
         return {"status": "duplicate", "reason": "dedupe_key", "item": existing, "path": str(path)}
-    title = _codex_session_title(final_text)
-    bullets = _codex_session_bullets(final_text)
-    tests = _codex_session_tests(final_text)
-    item = append_codex_history_summary(
-        store,
-        repo_root=repo_root,
-        title=title,
-        bullets=bullets,
-        tests=tests,
-        session_id=session_id,
-        source="codex_session_watcher",
-        codex_metadata={
-            "turn_id": turn_id,
-            "dedupe_key": dedupe_key,
-            "final_message_hash": final_hash,
-            "source_path_hash": "sha256:" + hashlib.sha256(str(path).encode("utf-8")).hexdigest(),
-            "source_mtime": str(parsed.get("source_mtime") or ""),
-        },
-    )
-    return {"status": "imported", "item": item, "path": str(path)}
+    try:
+        item = _build_codex_history_summary_item(
+            rows,
+            repo_root=repo_root,
+            title=_codex_session_title(final_text),
+            bullets=_codex_session_bullets(final_text),
+            tests=_codex_session_tests(final_text),
+            session_id=session_id,
+            source="codex_session_watcher",
+            codex_metadata={
+                "turn_id": turn_id,
+                "dedupe_key": dedupe_key,
+                "final_message_hash": final_hash,
+                "source_path_hash": "sha256:" + hashlib.sha256(str(path).encode("utf-8")).hexdigest(),
+                "source_mtime": str(parsed.get("source_mtime") or ""),
+            },
+        )
+    except ValueError as exc:
+        return {
+            "status": "skipped",
+            "reason": "invalid_repo_root",
+            "error": redact_codex_history_text(str(exc)).strip(),
+            "path": str(path),
+        }
+    rows.append(item)
+    return {"status": "imported", "item": dict(item), "path": str(path)}
 
 
-def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path], *, limit: int = 1000) -> dict[str, Any]:
-    results: list[dict[str, Any]] = []
-    for session_file in _iter_codex_session_files(roots, limit=limit):
-        results.append(import_codex_session_file(store, session_file))
-    return {
-        "ok": not any(result.get("status") == "error" for result in results),
-        "items": results,
-        "status_counts": _status_counts(results),
-    }
+def _find_codex_history_by_dedupe_key_in_rows(rows: Sequence[Mapping[str, Any]], dedupe_key: str) -> dict[str, Any] | None:
+    for item in rows:
+        if not isinstance(item, Mapping):
+            continue
+        codex = item.get("codex", {})
+        if isinstance(codex, Mapping) and str(codex.get("dedupe_key") or "") == dedupe_key:
+            return dict(item)
+    return None
 
 
 def watch_codex_session_roots(
@@ -1940,13 +2028,7 @@ def _codex_session_dedupe_key(*, session_id: str, turn_id: str, final_message_ha
 
 
 def _find_codex_history_by_dedupe_key(store: AccountStore, dedupe_key: str) -> dict[str, Any] | None:
-    for item in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID):
-        if not isinstance(item, Mapping):
-            continue
-        codex = item.get("codex", {})
-        if isinstance(codex, Mapping) and str(codex.get("dedupe_key") or "") == dedupe_key:
-            return dict(item)
-    return None
+    return _find_codex_history_by_dedupe_key_in_rows(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID), dedupe_key)
 
 
 def _find_codex_history_item_by_id(store: AccountStore, item_id: str) -> dict[str, Any] | None:

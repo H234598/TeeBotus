@@ -8,12 +8,60 @@ from typing import Any, Callable, Mapping
 
 from TeeBotus.admin.codex_history import import_codex_session_roots, watch_codex_session_roots
 from TeeBotus.benchmarks.core import BenchmarkResult, result
+from TeeBotus.codex_history_systemd import render_codex_history_collector_timer_units
 from TeeBotus.runtime.accounts import (
     CODEX_HISTORY_OUTBOX_FILENAME,
     INSTANCE_STATE_ACCOUNT_ID,
     AccountStore,
     StaticSecretProvider,
 )
+
+
+def benchmark_codex_history_collector_timer_render(*, iterations: int) -> BenchmarkResult:
+    render_count = max(1, int(iterations or 0))
+    with tempfile.TemporaryDirectory(prefix="teebotus-bench-codex-timer-") as tmp:
+        root = Path(tmp)
+        latest: Any = None
+
+        def _render() -> None:
+            nonlocal latest
+            for _ in range(render_count):
+                latest = render_codex_history_collector_timer_units(
+                    repo_root=root / "repo",
+                    run_user="",
+                    sessions_roots=(root / "sessions",),
+                    interval="5min",
+                    event_mode="snapshot",
+                    poll_interval_seconds=0,
+                )
+
+        elapsed_ms = _timed_ms(_render)
+        service_text = getattr(latest, "service_text", "")
+        timer_text = getattr(latest, "timer_text", "")
+        ok = (
+            "Type=oneshot" in service_text
+            and "--once" in service_text
+            and "Restart=" not in service_text
+            and "OnUnitActiveSec=5min" in timer_text
+        )
+        return result(
+            name="codex_history_collector_timer_render",
+            category="codex_history",
+            iterations=render_count,
+            total_ms=elapsed_ms,
+            ok=bool(ok),
+            errors=0 if ok else 1,
+            payload_bytes=len(service_text) + len(timer_text),
+            index_bytes=0,
+            note="systemd collector timer render",
+            details={
+                "timer_name": getattr(latest, "timer_name", ""),
+                "service_name": getattr(latest, "service_name", ""),
+                "interval": "5min",
+                "event_mode": "snapshot",
+                "network_calls": 0,
+            },
+        )
 
 
 def benchmark_codex_history_session_importer(*, iterations: int) -> BenchmarkResult:
@@ -197,4 +245,8 @@ def _timed_ms(func: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-__all__ = ["benchmark_codex_history_session_importer", "benchmark_codex_history_watcher_poll_loop"]
+__all__ = [
+    "benchmark_codex_history_collector_timer_render",
+    "benchmark_codex_history_session_importer",
+    "benchmark_codex_history_watcher_poll_loop",
+]

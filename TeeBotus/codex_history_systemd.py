@@ -15,6 +15,7 @@ from TeeBotus.systemd import (
 
 
 DEFAULT_SERVICE_NAME = "teebotus-codex-history-collector.service"
+DEFAULT_COLLECTOR_TIMER_NAME = "teebotus-codex-history-collector.timer"
 DEFAULT_INDEX_SERVICE_NAME = "teebotus-codex-history-index.service"
 DEFAULT_INDEX_TIMER_NAME = "teebotus-codex-history-index.timer"
 DEFAULT_INSTANCES_DIR = "instances"
@@ -24,6 +25,8 @@ DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
 DEFAULT_MAX_ITERATIONS = 1
+DEFAULT_COLLECTOR_INTERVAL = "5min"
+DEFAULT_COLLECTOR_RANDOMIZED_DELAY = "0"
 DEFAULT_INDEX_INTERVAL = "24h"
 DEFAULT_INDEX_RANDOMIZED_DELAY = "15min"
 
@@ -32,6 +35,14 @@ DEFAULT_INDEX_RANDOMIZED_DELAY = "15min"
 class CodexHistorySystemdUnit:
     service_name: str
     service_text: str
+
+
+@dataclass(frozen=True)
+class CodexHistoryCollectorTimerUnits:
+    service_name: str
+    service_text: str
+    timer_name: str
+    timer_text: str
 
 
 @dataclass(frozen=True)
@@ -70,6 +81,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
     parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
     parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
+    parser.add_argument("--collector-timer", action="store_true", help="Render/install the collector as a bounded oneshot service plus timer.")
+    parser.add_argument("--collector-timer-name", default=DEFAULT_COLLECTOR_TIMER_NAME, help="systemd timer filename for the collector timer.")
+    parser.add_argument("--collector-interval", default=DEFAULT_COLLECTOR_INTERVAL, help="Timer OnUnitActiveSec interval for the collector timer.")
+    parser.add_argument(
+        "--collector-randomized-delay",
+        default=DEFAULT_COLLECTOR_RANDOMIZED_DELAY,
+        help="Timer RandomizedDelaySec for the collector timer.",
+    )
     parser.add_argument("--index-timer", action="store_true", help="Also render/install a low-priority periodic Codex-History admin index timer.")
     parser.add_argument("--index-service-name", default=DEFAULT_INDEX_SERVICE_NAME, help="systemd service filename for periodic Codex-History indexing.")
     parser.add_argument("--index-timer-name", default=DEFAULT_INDEX_TIMER_NAME, help="systemd timer filename for periodic Codex-History indexing.")
@@ -116,7 +135,33 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         run_user = "" if args.user_unit else args.run_user
-        unit = render_codex_history_systemd_unit(
+        collector_timer_units = (
+            render_codex_history_collector_timer_units(
+                repo_root=Path(args.repo_root),
+                python_executable=args.python,
+                service_name=args.service_name,
+                timer_name=args.collector_timer_name,
+                run_user=run_user,
+                env_file=args.env_file,
+                instances_dir=args.instances_dir,
+                instances=args.instances,
+                instance=args.instance,
+                sessions_roots=tuple(args.sessions_root or ()),
+                limit=int(args.limit),
+                event_mode=args.event_mode,
+                poll_interval_seconds=float(args.poll_interval),
+                post_index=bool(args.post_index),
+                post_index_qdrant=bool(args.post_index_qdrant),
+                post_index_qdrant_url=args.post_index_qdrant_url,
+                post_index_qdrant_dry_run=bool(args.post_index_qdrant_dry_run),
+                post_index_qdrant_ensure=bool(args.post_index_qdrant_ensure),
+                interval=args.collector_interval,
+                randomized_delay=args.collector_randomized_delay,
+            )
+            if args.collector_timer
+            else None
+        )
+        unit = None if collector_timer_units is not None else render_codex_history_systemd_unit(
             repo_root=Path(args.repo_root),
             python_executable=args.python,
             service_name=args.service_name,
@@ -177,8 +222,14 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     if args.print_only:
-        print(f"# {unit.service_name}")
-        print(unit.service_text, end="")
+        if unit is not None:
+            print(f"# {unit.service_name}")
+            print(unit.service_text, end="")
+        if collector_timer_units is not None:
+            print(f"# {collector_timer_units.service_name}")
+            print(collector_timer_units.service_text, end="")
+            print(f"# {collector_timer_units.timer_name}")
+            print(collector_timer_units.timer_text, end="")
         if index_units is not None:
             print(f"# {index_units.service_name}")
             print(index_units.service_text, end="")
@@ -187,7 +238,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     unit_dir = Path.home() / ".config" / "systemd" / "user" if args.user_unit else Path(args.system_dir).expanduser()
     unit_dir.mkdir(parents=True, exist_ok=True)
-    targets = [(unit.service_name, unit.service_text)]
+    targets: list[tuple[str, str]] = []
+    if unit is not None:
+        targets.append((unit.service_name, unit.service_text))
+    if collector_timer_units is not None:
+        targets.extend(
+            [
+                (collector_timer_units.service_name, collector_timer_units.service_text),
+                (collector_timer_units.timer_name, collector_timer_units.timer_text),
+            ]
+        )
     if index_units is not None:
         targets.extend(
             [
@@ -202,10 +262,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.enable:
         systemctl = ["systemctl", "--user"] if args.user_unit else ["systemctl"]
         subprocess.run([*systemctl, "daemon-reload"], check=True)
-        subprocess.run([*systemctl, "enable", "--now", unit.service_name], check=True)
+        if collector_timer_units is not None:
+            subprocess.run([*systemctl, "enable", "--now", collector_timer_units.timer_name], check=True)
+        elif unit is not None:
+            subprocess.run([*systemctl, "enable", "--now", unit.service_name], check=True)
         if index_units is not None:
             subprocess.run([*systemctl, "enable", "--now", index_units.timer_name], check=True)
-        print(f"enabled {unit.service_name}")
+        if collector_timer_units is not None:
+            print(f"enabled {collector_timer_units.timer_name}")
+        elif unit is not None:
+            print(f"enabled {unit.service_name}")
         if index_units is not None:
             print(f"enabled {index_units.timer_name}")
     return 0
@@ -251,40 +317,24 @@ def render_codex_history_systemd_unit(
     post_index_qdrant_url = _optional_systemd_argument(post_index_qdrant_url, label="post-index qdrant url")
     restart_sec = _systemd_interval(restart_sec)
 
-    command = [
-        _shell_quote(str(python_path)),
-        "-m",
-        "TeeBotus.admin",
-        "codex-history",
-        "watch",
-        "--instances-dir",
-        _shell_quote(instances_arg),
-        "--event-mode",
-        event_mode,
-        "--poll-interval",
-        _format_seconds(poll_interval_seconds),
-        "--limit",
-        str(limit),
-    ]
-    if follow:
-        command.append("--follow")
-    else:
-        command.extend(["--max-iterations", str(max_iterations)])
-    if instances:
-        command.append(_shell_quote(f"--instances={instances}"))
-    if instance:
-        command.append(_shell_quote(f"--instance={instance}"))
-    command.extend(session_args)
-    if post_index or post_index_qdrant or post_index_qdrant_ensure:
-        command.append("--post-index")
-    if post_index_qdrant:
-        command.append("--post-index-qdrant")
-    if post_index_qdrant_url:
-        command.extend(["--post-index-qdrant-url", _shell_quote(post_index_qdrant_url)])
-    if post_index_qdrant_dry_run:
-        command.append("--post-index-qdrant-dry-run")
-    if post_index_qdrant_ensure:
-        command.append("--post-index-qdrant-ensure")
+    command = _collector_watch_command(
+        python_path=python_path,
+        instances_arg=instances_arg,
+        event_mode=event_mode,
+        poll_interval_seconds=poll_interval_seconds,
+        limit=limit,
+        follow=follow,
+        once=False,
+        max_iterations=max_iterations,
+        instances=instances,
+        instance=instance,
+        session_args=session_args,
+        post_index=post_index,
+        post_index_qdrant=post_index_qdrant,
+        post_index_qdrant_url=post_index_qdrant_url,
+        post_index_qdrant_dry_run=post_index_qdrant_dry_run,
+        post_index_qdrant_ensure=post_index_qdrant_ensure,
+    )
 
     service_text = "\n".join(
         [
@@ -312,6 +362,115 @@ def render_codex_history_systemd_unit(
         ]
     )
     return CodexHistorySystemdUnit(service_name=service_name, service_text=service_text)
+
+
+def render_codex_history_collector_timer_units(
+    *,
+    repo_root: Path,
+    python_executable: str = "",
+    service_name: str = DEFAULT_SERVICE_NAME,
+    timer_name: str = DEFAULT_COLLECTOR_TIMER_NAME,
+    run_user: str = DEFAULT_RUN_USER,
+    env_file: str = ".env",
+    instances_dir: str = DEFAULT_INSTANCES_DIR,
+    instances: str = "",
+    instance: str = "",
+    sessions_roots: tuple[str | Path, ...] = (),
+    limit: int = DEFAULT_LIMIT,
+    event_mode: str = "snapshot",
+    poll_interval_seconds: float = 0,
+    post_index: bool = True,
+    post_index_qdrant: bool = False,
+    post_index_qdrant_url: str = "",
+    post_index_qdrant_dry_run: bool = False,
+    post_index_qdrant_ensure: bool = False,
+    interval: str = DEFAULT_COLLECTOR_INTERVAL,
+    randomized_delay: str = DEFAULT_COLLECTOR_RANDOMIZED_DELAY,
+) -> CodexHistoryCollectorTimerUnits:
+    service_name = _service_name(service_name)
+    timer_name = _timer_name(timer_name)
+    repo = repo_root.expanduser().resolve()
+    python_path = _python_path(repo, python_executable)
+    run_user = _run_user(run_user)
+    env_path = _env_path(repo, env_file)
+    instances_arg = _instances_path(repo, instances_dir)
+    instance = _optional_instance_name(instance)
+    instances = _csv_argument(instances, label="instances")
+    effective_sessions_roots = sessions_roots or _default_collector_session_roots(repo, run_user=run_user)
+    session_args = _session_root_args(repo, effective_sessions_roots)
+    limit = _positive_int(limit, label="limit")
+    event_mode = _event_mode(event_mode)
+    poll_interval_seconds = _non_negative_float(poll_interval_seconds, label="poll interval")
+    post_index_qdrant_url = _optional_systemd_argument(post_index_qdrant_url, label="post-index qdrant url")
+    interval = _systemd_interval(interval)
+    randomized_delay = _systemd_interval(randomized_delay)
+
+    command = _collector_watch_command(
+        python_path=python_path,
+        instances_arg=instances_arg,
+        event_mode=event_mode,
+        poll_interval_seconds=poll_interval_seconds,
+        limit=limit,
+        follow=False,
+        once=True,
+        max_iterations=1,
+        instances=instances,
+        instance=instance,
+        session_args=session_args,
+        post_index=post_index,
+        post_index_qdrant=post_index_qdrant,
+        post_index_qdrant_url=post_index_qdrant_url,
+        post_index_qdrant_dry_run=post_index_qdrant_dry_run,
+        post_index_qdrant_ensure=post_index_qdrant_ensure,
+    )
+    service_text = "\n".join(
+        [
+            "[Unit]",
+            "Description=TeeBotus Codex history collector scan",
+            "Documentation=https://github.com/H234598/TeeBotus",
+            "Wants=network-online.target",
+            "After=network-online.target",
+            "",
+            "[Service]",
+            "Type=oneshot",
+            *( [f"User={_systemd_unit_value(run_user, label='run user')}"] if run_user else [] ),
+            f"WorkingDirectory={_systemd_unit_value(str(repo), label='repo root')}",
+            f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
+            "Nice=10",
+            "IOSchedulingClass=best-effort",
+            "IOSchedulingPriority=7",
+            "CPUWeight=10",
+            "IOWeight=10",
+            "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
+            "UMask=0077",
+            "NoNewPrivileges=true",
+            "PrivateTmp=true",
+            "",
+        ]
+    )
+    timer_text = "\n".join(
+        [
+            "[Unit]",
+            "Description=Run TeeBotus Codex history collector scan",
+            "",
+            "[Timer]",
+            "OnBootSec=1min",
+            f"OnUnitActiveSec={_systemd_unit_value(interval, label='collector interval')}",
+            f"RandomizedDelaySec={_systemd_unit_value(randomized_delay, label='collector randomized delay')}",
+            "Persistent=true",
+            f"Unit={_systemd_unit_value(service_name, label='collector service name')}",
+            "",
+            "[Install]",
+            "WantedBy=timers.target",
+            "",
+        ]
+    )
+    return CodexHistoryCollectorTimerUnits(
+        service_name=service_name,
+        service_text=service_text,
+        timer_name=timer_name,
+        timer_text=timer_text,
+    )
 
 
 def render_codex_history_index_systemd_units(
@@ -483,6 +642,64 @@ def render_codex_history_index_systemd_units(
         timer_name=timer_name,
         timer_text=timer_text,
     )
+
+
+def _collector_watch_command(
+    *,
+    python_path: Path,
+    instances_arg: str,
+    event_mode: str,
+    poll_interval_seconds: float,
+    limit: int,
+    follow: bool,
+    once: bool,
+    max_iterations: int,
+    instances: str,
+    instance: str,
+    session_args: list[str],
+    post_index: bool,
+    post_index_qdrant: bool,
+    post_index_qdrant_url: str,
+    post_index_qdrant_dry_run: bool,
+    post_index_qdrant_ensure: bool,
+) -> list[str]:
+    command = [
+        _shell_quote(str(python_path)),
+        "-m",
+        "TeeBotus.admin",
+        "codex-history",
+        "watch",
+        "--instances-dir",
+        _shell_quote(instances_arg),
+        "--event-mode",
+        event_mode,
+        "--poll-interval",
+        _format_seconds(poll_interval_seconds),
+        "--limit",
+        str(limit),
+    ]
+    if once:
+        command.append("--once")
+    elif follow:
+        command.append("--follow")
+    else:
+        command.extend(["--max-iterations", str(max_iterations)])
+    if instances:
+        command.append(_shell_quote(f"--instances={instances}"))
+    if instance:
+        command.append(_shell_quote(f"--instance={instance}"))
+    command.extend(session_args)
+    if post_index or post_index_qdrant or post_index_qdrant_ensure:
+        command.append("--post-index")
+    if post_index_qdrant:
+        command.append("--post-index-qdrant")
+    if post_index_qdrant_url:
+        command.extend(["--post-index-qdrant-url", _shell_quote(post_index_qdrant_url)])
+    if post_index_qdrant_dry_run:
+        command.append("--post-index-qdrant-dry-run")
+    if post_index_qdrant_ensure:
+        command.append("--post-index-qdrant-ensure")
+    return command
 
 
 def _env_path(repo_root: Path, value: str) -> Path:

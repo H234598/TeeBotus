@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import subprocess
@@ -21,7 +22,13 @@ from TeeBotus.admin.account_memory_recovery import (
     quarantine_unrecoverable_account_memory,
 )
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
-from TeeBotus.admin.accounts_report import build_accounts_admin_report, main as accounts_report_main, render_text_report, runtime_report_env
+from TeeBotus.admin.accounts_report import (
+    ReadOnlySecretToolInstanceSecretProvider,
+    build_accounts_admin_report,
+    main as accounts_report_main,
+    render_text_report,
+    runtime_report_env,
+)
 from TeeBotus.admin.status_auth_admin import bootstrap_status_auth_secrets, build_status_auth_report, main as status_auth_admin_main
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
@@ -66,6 +73,24 @@ def make_instance(tmp_path: Path, name: str = "Depressionsbot") -> Path:
     instance_dir.mkdir(parents=True)
     (instance_dir / "Bot_Verhalten.md").write_text("## Hilfe\n", encoding="utf-8")
     return instance_dir
+
+
+def test_readonly_secret_provider_caches_secret_tool_lookup(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    encoded_secret = base64.urlsafe_b64encode(b"a" * 32).decode("ascii") + "\n"
+    monkeypatch.setattr("TeeBotus.admin.accounts_report.shutil.which", lambda _command: "/usr/bin/secret-tool")
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout=encoded_secret, stderr="")
+
+    monkeypatch.setattr("TeeBotus.admin.accounts_report.subprocess.run", fake_run)
+    provider = ReadOnlySecretToolInstanceSecretProvider()
+
+    for _ in range(3):
+        assert provider.get_secret("TeeBotus_Logger", ACCOUNT_MEMORY_KEY_PURPOSE) == b"a" * 32
+
+    assert len(calls) == 1
 
 
 def test_account_memory_recovery_runtime_detection_includes_module_proactive() -> None:

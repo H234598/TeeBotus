@@ -3,7 +3,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from TeeBotus.codex_history_systemd import main, render_codex_history_index_systemd_units, render_codex_history_systemd_unit
+from TeeBotus.codex_history_systemd import (
+    main,
+    render_codex_history_collector_timer_units,
+    render_codex_history_index_systemd_units,
+    render_codex_history_systemd_unit,
+)
 
 
 def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) -> None:
@@ -122,6 +127,35 @@ def test_render_codex_history_index_systemd_units_builds_low_priority_timer(tmp_
     assert "Persistent=true" in units.timer_text
     assert "Unit=teebotus-codex-history-index.service" in units.timer_text
     assert "WantedBy=timers.target" in units.timer_text
+
+
+def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(tmp_path: Path) -> None:
+    units = render_codex_history_collector_timer_units(
+        repo_root=tmp_path,
+        python_executable="/usr/bin/python3",
+        run_user="",
+        sessions_roots=(tmp_path / "sessions",),
+        interval="5min",
+        event_mode="snapshot",
+        poll_interval_seconds=0,
+    )
+
+    assert units.service_name == "teebotus-codex-history-collector.service"
+    assert units.timer_name == "teebotus-codex-history-collector.timer"
+    assert "Type=oneshot" in units.service_text
+    assert "User=" not in units.service_text
+    assert "ExecStart=/usr/bin/python3 -m TeeBotus.admin codex-history watch" in units.service_text
+    assert "--once" in units.service_text
+    assert "--follow" not in units.service_text
+    assert "--max-iterations" not in units.service_text
+    assert "--event-mode snapshot" in units.service_text
+    assert "--poll-interval 0" in units.service_text
+    assert f"--sessions-root {tmp_path / 'sessions'}" in units.service_text
+    assert "Restart=" not in units.service_text
+    assert "OnUnitActiveSec=5min" in units.timer_text
+    assert "RandomizedDelaySec=0" in units.timer_text
+    assert "Persistent=true" in units.timer_text
+    assert "Unit=teebotus-codex-history-collector.service" in units.timer_text
 
 
 def test_render_codex_history_index_systemd_units_can_enable_local_categorization(tmp_path: Path) -> None:
@@ -258,7 +292,18 @@ def test_codex_history_systemd_print_mode_can_output_index_timer(tmp_path: Path,
     assert "# teebotus-codex-history-index.service" in captured.out
     assert "# teebotus-codex-history-index.timer" in captured.out
     assert "ExecStart=python3 -m TeeBotus.admin codex-history index" in captured.out
-    assert "OnUnitActiveSec=24h" in captured.out
+
+
+def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: Path, capsys) -> None:
+    result = main(["--repo-root", str(tmp_path), "--collector-timer", "--user-unit", "--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "# teebotus-codex-history-collector.service" in captured.out
+    assert "# teebotus-codex-history-collector.timer" in captured.out
+    assert "Type=oneshot" in captured.out
+    assert "--once" in captured.out
+    assert "OnUnitActiveSec=5min" in captured.out
 
 
 def test_codex_history_systemd_enable_runs_system_systemctl(monkeypatch, tmp_path: Path) -> None:

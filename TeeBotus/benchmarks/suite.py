@@ -26,6 +26,7 @@ from TeeBotus.benchmarks.core import (
     stable_backend_ranking as _stable_backend_ranking,
 )
 from TeeBotus.benchmarks.codex_history import (
+    benchmark_codex_history_collector_timer_render as _benchmark_codex_history_collector_timer_render,
     benchmark_codex_history_session_importer as _benchmark_codex_history_session_importer,
     benchmark_codex_history_watcher_poll_loop as _benchmark_codex_history_watcher_poll_loop,
 )
@@ -155,6 +156,7 @@ def run_benchmarks(
     results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
     results.append(_benchmark_langgraph_source_harvester_workflow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
+    results.append(_benchmark_codex_history_collector_timer_render(iterations=iterations))
     results.append(_benchmark_codex_history_session_importer(iterations=iterations))
     results.append(_benchmark_codex_history_watcher_poll_loop(iterations=iterations))
     comparisons = _build_comparisons(results)
@@ -274,6 +276,7 @@ __all__ = [
     "_benchmark_youtube_local_job_queue",
     "_benchmark_youtube_local_pipeline_cache",
     "_benchmark_youtube_parser",
+    "_benchmark_codex_history_collector_timer_render",
     "_benchmark_codex_history_session_importer",
     "_benchmark_codex_history_watcher_poll_loop",
     "_build_comparisons",
