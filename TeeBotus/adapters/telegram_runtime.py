@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from TeeBotus import __version__
 from TeeBotus.admin.codex_history import record_codex_history_reply
@@ -752,6 +752,7 @@ def build_telegram_runtime_context(
     llm_enabled_override: bool | str | None = None,
     structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> TelegramRuntimeContext:
+    instructions = instruction_store.get()
     engine = TeeBotusEngine(
         account_store,
         state=state_store,
@@ -760,7 +761,15 @@ def build_telegram_runtime_context(
         openai_client=openai_client,
         llm_client=llm_client,
         llm_enabled_override=llm_enabled_override,
-        bot_address_names=tuple(name for name in (bot_identity.display_name, bot_identity.mention) if name),
+        bot_address_names=tuple(
+            name
+            for name in (
+                bot_identity.display_name,
+                bot_identity.mention,
+                *instructions.bot_aliases,
+            )
+            if name
+        ),
         working_memory_store=working_memory_store,
         bibliothekar_store=bibliothekar_store,
         youtube_job_runner=youtube_job_runner,
@@ -1232,7 +1241,7 @@ def handle_update(
         )
         return
 
-    if not _should_process_for_bot(message, text, bot_identity, first_contact, user_memory_store):
+    if not _should_process_for_bot(message, text, bot_identity, first_contact, user_memory_store, instructions.bot_aliases):
         LOGGER.info(
             "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
             chat_id,
@@ -1543,7 +1552,14 @@ def _handle_incoming_voice_message(
     transcribed_message = dict(message)
     transcribed_message["text"] = transcribed_text
     first_contact = _is_first_contact(chat_state, user_memory_store, transcribed_message, instructions)
-    if not _should_process_for_bot(transcribed_message, transcribed_text, bot_identity, first_contact, user_memory_store):
+    if not _should_process_for_bot(
+        transcribed_message,
+        transcribed_text,
+        bot_identity,
+        first_contact,
+        user_memory_store,
+        instructions.bot_aliases,
+    ):
         LOGGER.info(
             "Ignoring Telegram voice message chat_id=%s message_id=%s reason=not_addressed_to_bot",
             chat_id,
@@ -2489,10 +2505,12 @@ def _should_process_for_bot(
     bot_identity: BotIdentity,
     first_contact: bool,
     user_memory_store: AccountStore | None = None,
+    instruction_aliases: Iterable[str] = (),
 ) -> bool:
     if not bot_identity.has_identity():
         return True
     extra_names = _telegram_account_bot_address_names(user_memory_store, message)
+    extra_names.update(str(alias).strip() for alias in instruction_aliases if str(alias).strip())
     if _command_targets_other_bot(text, bot_identity, extra_names):
         return False
     if _is_private_chat(message):

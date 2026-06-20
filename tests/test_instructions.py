@@ -63,6 +63,16 @@ class InstructionTests(unittest.TestCase):
         self.assertFalse(disabled.structured_decision_enabled)
         self.assertTrue(enabled.structured_decision_enabled)
 
+    def test_bot_aliases_can_be_configured(self) -> None:
+        instructions = parse_instructions(
+            """
+            ## Einstellungen
+            - bot_aliases: TBL, TeeBotus Logger, TeeBotus-Logger
+            """
+        )
+
+        self.assertEqual(instructions.bot_aliases, ("TBL", "TeeBotus Logger", "TeeBotus-Logger"))
+
     def test_parse_markdown_instructions(self) -> None:
         account_a = "a" * 128
         account_b = "b" * 128

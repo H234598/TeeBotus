@@ -114,6 +114,24 @@ def test_telegram_token_resolution_merges_plural_single_and_numbered_instance_va
     assert resolve_telegram_tokens("Depressionsbot", env) == ("token-a", "token-b", "token-c")
 
 
+def test_telegram_token_resolution_accepts_teebotus_logger_plan_alias():
+    env = {
+        "TEEBOTUS_LOGGER_TELEGRAM_TOKEN": "logger-token",
+        "TELEGRAM_BOT_TOKEN": "global-token",
+    }
+
+    assert resolve_telegram_tokens("TeeBotus_Logger", env) == ("logger-token",)
+
+
+def test_telegram_token_resolution_accepts_teebotus_logger_plan_alias_slots():
+    env = {
+        "TEEBOTUS_LOGGER_TELEGRAM_TOKENS": "logger-a, logger-b",
+        "TEEBOTUS_LOGGER_TELEGRAM_TOKEN_3": "logger-c",
+    }
+
+    assert resolve_telegram_tokens("TeeBotus_Logger", env) == ("logger-a", "logger-b", "logger-c")
+
+
 def test_telegram_token_resolution_rejects_numbered_slot_conflict():
     env = {
         "TELEGRAM_BOT_TOKENS_DEPRESSIONSBOT": "token-a, token-b",

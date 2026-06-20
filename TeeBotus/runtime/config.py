@@ -465,6 +465,9 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
     )
     if instance_values:
         return _validate_unique_values(instance_values, label=f"TELEGRAM_BOT_TOKEN_{token}")
+    compat_values = _resolve_telegram_token_compat_aliases(token, source)
+    if compat_values:
+        return compat_values
     global_values = _nonempty(
         (
             *parse_slot_csv(source.get("TELEGRAM_BOT_TOKENS"), label="TELEGRAM_BOT_TOKENS"),
@@ -472,6 +475,22 @@ def resolve_telegram_tokens(instance_name: str, env: Mapping[str, str] | None = 
         )
     )
     return _validate_unique_values(global_values, label="TELEGRAM_BOT_TOKEN")
+
+
+def _resolve_telegram_token_compat_aliases(token: str, source: Mapping[str, str]) -> tuple[str, ...]:
+    if token != "TEEBOTUS_LOGGER":
+        return ()
+    label = "TEEBOTUS_LOGGER_TELEGRAM_TOKEN"
+    values = _merge_numbered_values(
+        source,
+        (
+            *parse_slot_csv(source.get("TEEBOTUS_LOGGER_TELEGRAM_TOKENS"), label="TEEBOTUS_LOGGER_TELEGRAM_TOKENS"),
+            source.get("TEEBOTUS_LOGGER_TELEGRAM_TOKEN", ""),
+        ),
+        "TEEBOTUS_LOGGER_TELEGRAM_TOKEN",
+        label=label,
+    )
+    return _validate_unique_values(values, label=label)
 
 
 def resolve_signal_accounts(instance_name: str, env: Mapping[str, str] | None = None) -> tuple[tuple[str, str], ...]:

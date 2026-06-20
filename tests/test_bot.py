@@ -2727,6 +2727,32 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: BdW, bitte antworte.")])
 
+    def test_group_first_contact_can_address_bot_by_configured_alias(self) -> None:
+        api = FakeAPI()
+        openai_client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True, bot_aliases=("TBL",))
+        bot_identity = BotIdentity(id=99, first_name="TeeBotus - Logger", username="TeeBotusLoggerBot")
+
+        handle_update(
+            api,
+            {
+                "message": {
+                    "message_id": 74,
+                    "text": "TBL, bitte Status.",
+                    "chat": {"id": -100123, "type": "group", "title": "Admin"},
+                    "from": {"id": 456, "first_name": "Ada"},
+                }
+            },
+            instructions,
+            openai_client,
+            chat_state,
+            None,
+            bot_identity,
+        )
+
+        self.assertEqual(api.sent_messages, [(-100123, "Ich bin TeeBotus Logger.\n\nAI: TBL, bitte Status.")])
+
     def test_first_contact_start_removes_configured_instance_identity(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

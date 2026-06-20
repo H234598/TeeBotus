@@ -219,6 +219,7 @@ class BotInstructions:
     security_answer_full: str = ""
     security_answer_easter_egg: str = ""
     proactive_model_planner: str = "tool"
+    bot_aliases: tuple[str, ...] = ()
     mcp_tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     commands: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_COMMANDS))
     text_replies: dict[str, str] = field(default_factory=dict)
@@ -628,6 +629,8 @@ def _apply_setting(instructions: BotInstructions, key: str, value: str) -> None:
         _apply_memory_search_setting(instructions, normalized.removeprefix("memory_search_"), value)
     elif normalized in {"structured_decision_enabled", "structured_decisions_enabled", "pydantic_decision_enabled", "pydantic_decisions_enabled"}:
         instructions.structured_decision_enabled = _parse_optional_bool(value, default=instructions.structured_decision_enabled)
+    elif normalized in {"bot_alias", "bot_aliases", "bot_names", "address_names", "ansprachen", "kurznamen"}:
+        instructions.bot_aliases = tuple(_parse_id_list(value))
 
 
 def _apply_reply(instructions: BotInstructions, key: str, value: str) -> None:
