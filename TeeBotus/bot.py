@@ -2040,7 +2040,7 @@ def _main_impl(argv: list[str] | None = None) -> int:
     try:
         from TeeBotus.runtime.maintenance import configure_runtime_logging
 
-        configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"))
+        configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     except Exception:  # noqa: BLE001 - logging setup must not block startup.
         print("TeeBotus runtime logging setup failed", file=sys.stderr)
 

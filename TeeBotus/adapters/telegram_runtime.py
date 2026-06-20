@@ -3206,7 +3206,7 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
 def main(argv: list[str] | None = None) -> int:
     _load_dotenv(PROJECT_ROOT / ".env")
     _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
-    configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"))
+    configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
 
     args = list(sys.argv[1:] if argv is None else argv)
     if any(arg != "--all" for arg in args):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import io
 import logging
 import os
 import sys
@@ -9,6 +10,7 @@ import time
 
 from TeeBotus.runtime.maintenance import (
     RuntimeTimedRotatingFileHandler,
+    STDIO_LOG_FILENAME,
     configure_runtime_logging,
     maintain_runtime_directory,
     rotate_runtime_text_file_if_needed,
@@ -92,3 +94,18 @@ def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_
 
     handlers = logging.getLogger().handlers
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+
+
+def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    configure_runtime_logging(base_dir=tmp_path, tee_stdio=True)
+    print("stdout probe")
+    print("stderr probe", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    stdio_log = tmp_path / STDIO_LOG_FILENAME
+    assert "stdout probe" in stdio_log.read_text(encoding="utf-8")
+    assert "stderr probe" in stdio_log.read_text(encoding="utf-8")

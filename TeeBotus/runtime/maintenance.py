@@ -13,6 +13,7 @@ from pathlib import Path
 
 RUNTIME_DIR = Path("data/runtime")
 PRODUCTION_LOG_FILENAME = "teebotus-production.log"
+STDIO_LOG_FILENAME = "teebotus-stdio.log"
 MAX_RUNTIME_TEXT_FILE_BYTES = 2 * 1024 * 1024
 COMPRESS_AFTER_SECONDS = 7 * 24 * 60 * 60
 MONTHLY_ARCHIVE_AFTER_SECONDS = 60 * 24 * 60 * 60
@@ -26,7 +27,7 @@ def runtime_log_path(base_dir: Path | None = None) -> Path:
     return (base_dir or runtime_dir()) / PRODUCTION_LOG_FILENAME
 
 
-def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | None = None) -> None:
+def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | None = None, tee_stdio: bool = False) -> None:
     directory = base_dir or runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
     maintain_runtime_directory(directory)
@@ -41,6 +42,58 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
         file_handler.setFormatter(formatter)
         handlers.append(file_handler)
     logging.basicConfig(level=level, handlers=handlers, force=True)
+    if tee_stdio:
+        install_stdio_tee(directory / STDIO_LOG_FILENAME)
+
+
+def install_stdio_tee(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path = path.resolve()
+    if _stream_tee_target(sys.stdout) == resolved_path and _stream_tee_target(sys.stderr) == resolved_path:
+        return
+    handle = resolved_path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = TeeStream(sys.stdout, handle, resolved_path)  # type: ignore[assignment]
+    sys.stderr = TeeStream(sys.stderr, handle, resolved_path)  # type: ignore[assignment]
+
+
+class TeeStream:
+    def __init__(self, primary: object, secondary: object, target: Path) -> None:
+        self.primary = primary
+        self.secondary = secondary
+        self._teebotus_tee_target = target
+        self.encoding = getattr(primary, "encoding", "utf-8")
+        self.errors = getattr(primary, "errors", "strict")
+
+    def write(self, text: str) -> int:
+        primary_write = getattr(self.primary, "write")
+        secondary_write = getattr(self.secondary, "write")
+        primary_write(text)
+        secondary_write(text)
+        return len(text)
+
+    def flush(self) -> None:
+        for stream in (self.primary, self.secondary):
+            flush = getattr(stream, "flush", None)
+            if callable(flush):
+                flush()
+
+    def fileno(self) -> int:
+        fileno = getattr(self.primary, "fileno")
+        return int(fileno())
+
+    def isatty(self) -> bool:
+        isatty = getattr(self.primary, "isatty", None)
+        return bool(isatty()) if callable(isatty) else False
+
+    def writable(self) -> bool:
+        return True
+
+
+def _stream_tee_target(stream: object) -> Path | None:
+    target = getattr(stream, "_teebotus_tee_target", None)
+    if isinstance(target, Path):
+        return target.resolve()
+    return None
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
