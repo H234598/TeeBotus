@@ -76,6 +76,9 @@ class ImportStats:
     metadata_backups_created: int = 0
     memory_keyring_repairs: int = 0
     account_store_resets: int = 0
+    imported_source_artifacts_deleted: int = 0
+    imported_source_artifacts_kept_external: int = 0
+    imported_source_artifact_delete_failures: int = 0
     requested_legacy_instances_dir: str = ""
     effective_legacy_instances_dir: str = ""
     events: list[dict[str, Any]] = field(default_factory=list)
@@ -220,7 +223,10 @@ def main(argv: list[str] | None = None) -> int:
         f"accounts_existing={stats.accounts_existing} accounts_created={stats.accounts_created} "
         f"unreadable_targets={stats.unreadable_targets} unreadable_metadata={stats.unreadable_metadata} "
         f"backups_created={stats.backups_created} metadata_backups_created={stats.metadata_backups_created} "
-        f"memory_keyring_repairs={stats.memory_keyring_repairs} account_store_resets={stats.account_store_resets}"
+        f"memory_keyring_repairs={stats.memory_keyring_repairs} account_store_resets={stats.account_store_resets} "
+        f"imported_source_artifacts_deleted={stats.imported_source_artifacts_deleted} "
+        f"imported_source_artifacts_kept_external={stats.imported_source_artifacts_kept_external} "
+        f"imported_source_artifact_delete_failures={stats.imported_source_artifact_delete_failures}"
     )
     return 0
 
@@ -259,7 +265,7 @@ def import_legacy_user_memory(
     selected = set(_normalize_instance_selection(instances))
     reset_account_stores: set[Path] = set()
     memory_keyring_repair_roots: dict[Path, str] = {}
-    deferred_strict_verifications: list[tuple[Path, str, str, str, str]] = []
+    deferred_strict_verifications: list[tuple[Path, str, str, str, str, dict[str, Any], Path]] = []
     metadata_reset_accounts_by_root: dict[Path, list[str]] = {}
     user_dirs = _legacy_user_dirs(legacy_instances_dir, selected)
     entries_by_user_dir: dict[Path, list[dict[str, Any]]] = {}
@@ -442,20 +448,19 @@ def import_legacy_user_memory(
         action = "would-import" if not apply else "import"
         if metadata_unreadable_for_source and replace_unreadable_account_metadata:
             action = "would-import-after-metadata-reset" if not apply else "import-after-metadata-reset"
-        stats.events.append(
-            _event(
-                instance_name=instance_name,
-                legacy_user_id=user_dir.name,
-                account_id=account_id,
-                entries=len(entries),
-                imported=imported_count,
-                action=action,
-                target_unreadable=target_unreadable,
-                metadata_unreadable=metadata_unreadable_for_source,
-                metadata_reset_existing_accounts=metadata_reset_accounts_by_root.get(target_root, []),
-                account_created=not bool(existing_account_id),
-            )
+        event = _event(
+            instance_name=instance_name,
+            legacy_user_id=user_dir.name,
+            account_id=account_id,
+            entries=len(entries),
+            imported=imported_count,
+            action=action,
+            target_unreadable=target_unreadable,
+            metadata_unreadable=metadata_unreadable_for_source,
+            metadata_reset_existing_accounts=metadata_reset_accounts_by_root.get(target_root, []),
+            account_created=not bool(existing_account_id),
         )
+        stats.events.append(event)
         print(
             f"instance={instance_name} legacy_user={user_dir.name} account={account_id} "
             f"entries={len(entries)} imported={imported_count} action={action}"
@@ -481,7 +486,7 @@ def import_legacy_user_memory(
         if not health.ok:
             raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
         if target_root in memory_keyring_repair_roots:
-            deferred_strict_verifications.append((target_root, instance_name, identity, account_id, user_dir.name))
+            deferred_strict_verifications.append((target_root, instance_name, identity, account_id, user_dir.name, event, user_dir))
         else:
             _verify_imported_account_identity(
                 target_store,
@@ -490,6 +495,7 @@ def import_legacy_user_memory(
                 instance_name=instance_name,
                 legacy_user_id=user_dir.name,
             )
+            _delete_imported_source_artifact_after_success(stats, event, user_dir)
         stats.imported_sources += 1
         stats.entries_imported += imported_count
     if apply:
@@ -498,7 +504,7 @@ def import_legacy_user_memory(
             if _drop_account_keyring_purpose(target_root, ACCOUNT_MEMORY_KEY_PURPOSE):
                 stats.memory_keyring_repairs += 1
             strict_stores[target_root] = AccountStore(target_root, instance_name, secret_provider=provider, create_dirs=False)
-        for target_root, instance_name, identity, account_id, legacy_user_id in deferred_strict_verifications:
+        for target_root, instance_name, identity, account_id, legacy_user_id, event, user_dir in deferred_strict_verifications:
             strict_store = strict_stores[target_root]
             _verify_imported_account_identity(
                 strict_store,
@@ -510,6 +516,7 @@ def import_legacy_user_memory(
             health = strict_store.check_structured_memory_index(account_id)
             if not health.ok:
                 raise SystemExit(f"import verification failed for {instance_name}/{account_id}: {'; '.join(health.errors)}")
+            _delete_imported_source_artifact_after_success(stats, event, user_dir)
     return stats
 
 
@@ -544,6 +551,82 @@ def _event(
     if reset_accounts:
         event["metadata_reset_existing_accounts"] = reset_accounts
     return event
+
+
+def _delete_imported_source_artifact_after_success(stats: ImportStats, event: dict[str, Any], user_dir: Path) -> None:
+    cleanup = _delete_imported_source_artifact(user_dir)
+    event["source_cleanup"] = cleanup
+    status = str(cleanup.get("status") or "")
+    if status == "deleted":
+        stats.imported_source_artifacts_deleted += 1
+    elif status == "kept-external":
+        stats.imported_source_artifacts_kept_external += 1
+    else:
+        stats.imported_source_artifact_delete_failures += 1
+
+
+def _delete_imported_source_artifact(user_dir: Path) -> dict[str, Any]:
+    source = Path(user_dir)
+    result: dict[str, Any] = {
+        "path": str(source),
+        "repo_root": str(REPO_ROOT),
+        "status": "pending",
+        "deleted": False,
+        "reason": "",
+    }
+    try:
+        repo_root = REPO_ROOT.expanduser().resolve(strict=False)
+        resolved_source = source.expanduser().resolve(strict=False)
+    except OSError as exc:
+        result.update({"status": "failed", "reason": f"resolve:{type(exc).__name__}:{exc}"})
+        return result
+    result["resolved_path"] = str(resolved_source)
+    result["repo_root"] = str(repo_root)
+    if resolved_source == repo_root or not _path_is_inside(resolved_source, repo_root):
+        result.update({"status": "kept-external", "reason": "outside_teebotus_repo"})
+        return result
+    if source.is_symlink():
+        result.update({"status": "failed", "reason": "source_is_symlink"})
+        return result
+    if not source.exists():
+        result.update({"status": "failed", "reason": "source_missing"})
+        return result
+    if not source.is_dir():
+        result.update({"status": "failed", "reason": "source_not_directory"})
+        return result
+    try:
+        shutil.rmtree(source)
+        _prune_empty_source_parents(source.parent, stop_at=repo_root)
+    except OSError as exc:
+        result.update({"status": "failed", "reason": f"delete:{type(exc).__name__}:{exc}"})
+        return result
+    result.update({"status": "deleted", "deleted": True, "reason": "import_verified"})
+    return result
+
+
+def _path_is_inside(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _prune_empty_source_parents(path: Path, *, stop_at: Path) -> None:
+    current = path.expanduser()
+    stop = stop_at.expanduser().resolve(strict=False)
+    while True:
+        try:
+            resolved = current.resolve(strict=False)
+        except OSError:
+            return
+        if resolved == stop or not _path_is_inside(resolved, stop):
+            return
+        try:
+            current.rmdir()
+        except OSError:
+            return
+        current = current.parent
 
 
 def _verify_imported_account_identity(
@@ -635,6 +718,9 @@ def _build_import_report(
             "metadata_backups_created": stats.metadata_backups_created,
             "memory_keyring_repairs": stats.memory_keyring_repairs,
             "account_store_resets": stats.account_store_resets,
+            "imported_source_artifacts_deleted": stats.imported_source_artifacts_deleted,
+            "imported_source_artifacts_kept_external": stats.imported_source_artifacts_kept_external,
+            "imported_source_artifact_delete_failures": stats.imported_source_artifact_delete_failures,
         },
         "events": list(stats.events),
     }

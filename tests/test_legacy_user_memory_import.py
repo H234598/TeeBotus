@@ -184,7 +184,10 @@ def test_legacy_user_memory_import_main_expands_tilde_legacy_instances_path(tmp_
     assert result == 0
     assert (tmp_path / "import.json").exists()
     assert (tmp_path / "import.md").exists()
-    assert (tmp_path / "target" / "Depressionsbot").exists()
+    payload = json.loads((tmp_path / "import.json").read_text(encoding="utf-8"))
+    assert payload["requested_legacy_instances_dir"] == str(legacy_root)
+    assert payload["legacy_instances_dir"] == str(legacy_root)
+    assert not (tmp_path / "target" / "Depressionsbot").exists()
 
 
 def test_legacy_user_memory_import_main_expands_tilde_report_outputs_and_creates_parents(tmp_path: Path, monkeypatch) -> None:
@@ -406,6 +409,73 @@ def test_legacy_user_memory_import_apply_creates_encrypted_account_memory(tmp_pa
     assert entries[0]["source"]["legacy_import"] is True
     health = store.check_structured_memory_index(account_id)
     assert health.ok
+
+
+def test_legacy_user_memory_import_deletes_verified_source_artifact_inside_repo(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    repo_root = tmp_path / "TeeBotus"
+    monkeypatch.setattr(legacy_import, "REPO_ROOT", repo_root)
+    legacy_root = repo_root / "instances.bak"
+    target_root = repo_root / "instances"
+    user_dir = write_legacy_entries(legacy_root)
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        provider=provider(),
+    )
+
+    assert stats.imported_sources == 1
+    assert stats.imported_source_artifacts_deleted == 1
+    assert stats.imported_source_artifacts_kept_external == 0
+    assert stats.imported_source_artifact_delete_failures == 0
+    assert not user_dir.exists()
+    assert stats.events[0]["source_cleanup"]["status"] == "deleted"
+
+
+def test_legacy_user_memory_import_keeps_verified_source_artifact_outside_repo(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    repo_root = tmp_path / "TeeBotus"
+    monkeypatch.setattr(legacy_import, "REPO_ROOT", repo_root)
+    legacy_root = tmp_path / "external-backup"
+    target_root = repo_root / "instances"
+    user_dir = write_legacy_entries(legacy_root)
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=True,
+        provider=provider(),
+    )
+
+    assert stats.imported_sources == 1
+    assert stats.imported_source_artifacts_deleted == 0
+    assert stats.imported_source_artifacts_kept_external == 1
+    assert stats.imported_source_artifact_delete_failures == 0
+    assert user_dir.exists()
+    assert stats.events[0]["source_cleanup"]["status"] == "kept-external"
+
+
+def test_legacy_user_memory_import_dry_run_keeps_source_artifact_inside_repo(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    repo_root = tmp_path / "TeeBotus"
+    monkeypatch.setattr(legacy_import, "REPO_ROOT", repo_root)
+    legacy_root = repo_root / "instances.bak"
+    target_root = repo_root / "instances"
+    user_dir = write_legacy_entries(legacy_root)
+
+    stats = import_legacy_user_memory(
+        legacy_instances_dir=legacy_root,
+        target_instances_dir=target_root,
+        apply=False,
+        provider=provider(),
+    )
+
+    assert stats.imported_sources == 1
+    assert stats.imported_source_artifacts_deleted == 0
+    assert user_dir.exists()
+    assert "source_cleanup" not in stats.events[0]
 
 
 def test_legacy_user_memory_import_scopes_colliding_legacy_ids_in_same_account(tmp_path: Path, monkeypatch) -> None:
