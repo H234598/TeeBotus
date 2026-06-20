@@ -22,9 +22,10 @@ from TeeBotus.admin.account_memory_recovery import (
 )
 from TeeBotus.admin.account_memory_recovery import render_text_report as render_memory_recovery_text_report
 from TeeBotus.admin.accounts_report import build_accounts_admin_report, main as accounts_report_main, render_text_report, runtime_report_env
-from TeeBotus.admin.status_auth_admin import build_status_auth_report, main as status_auth_admin_main
+from TeeBotus.admin.status_auth_admin import bootstrap_status_auth_secrets, build_status_auth_report, main as status_auth_admin_main
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
+    INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
     AccountStore,
     AccountStoreError,
@@ -36,6 +37,28 @@ from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMem
 
 def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"a" * 32)
+
+
+class RecordingBootstrapProvider:
+    def __init__(self) -> None:
+        self.secrets: dict[tuple[str, str], bytes] = {}
+        self.created: list[tuple[str, str]] = []
+
+    def get_secret(self, instance_name: str, purpose: str) -> bytes:
+        key = (instance_name, purpose)
+        if key not in self.secrets:
+            raise AccountStoreError(f"missing {purpose}")
+        return self.secrets[key]
+
+    def has_secret(self, instance_name: str, purpose: str) -> bool:
+        return (instance_name, purpose) in self.secrets
+
+    def get_or_create_secret(self, instance_name: str, purpose: str, *, reason: str = "") -> bytes:
+        key = (instance_name, purpose)
+        if key not in self.secrets:
+            self.secrets[key] = bytes([len(self.secrets) + 1]) * 32
+            self.created.append(key)
+        return self.secrets[key]
 
 
 def make_instance(tmp_path: Path, name: str = "Depressionsbot") -> Path:
@@ -280,6 +303,75 @@ def test_status_auth_report_cli_outputs_json(tmp_path: Path, capsys) -> None:
     assert result == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["totals"]["authorized_accounts"] == 1
+
+
+def test_status_auth_bootstrap_creates_mapping_and_memory_purposes(tmp_path: Path) -> None:
+    make_instance(tmp_path, "TeeBotus_Logger")
+    bootstrap_provider = RecordingBootstrapProvider()
+
+    report = bootstrap_status_auth_secrets(
+        instances_dir=tmp_path,
+        instances=("TeeBotus_Logger",),
+        provider=bootstrap_provider,
+    )
+
+    bootstrap = report["instances"][0]["bootstrap"]
+    assert bootstrap["created_purposes"] == 2
+    assert bootstrap["existing_purposes"] == 0
+    assert bootstrap_provider.created == [
+        ("TeeBotus_Logger", INSTANCE_MAPPING_KEY_PURPOSE),
+        ("TeeBotus_Logger", ACCOUNT_MEMORY_KEY_PURPOSE),
+    ]
+    assert {row["status"] for row in bootstrap["purposes"]} == {"created"}
+
+
+def test_status_auth_bootstrap_reuses_existing_purposes(tmp_path: Path) -> None:
+    make_instance(tmp_path, "TeeBotus_Logger")
+    bootstrap_provider = RecordingBootstrapProvider()
+    bootstrap_provider.secrets[("TeeBotus_Logger", INSTANCE_MAPPING_KEY_PURPOSE)] = b"m" * 32
+    bootstrap_provider.secrets[("TeeBotus_Logger", ACCOUNT_MEMORY_KEY_PURPOSE)] = b"s" * 32
+
+    report = bootstrap_status_auth_secrets(
+        instances_dir=tmp_path,
+        instances=("TeeBotus_Logger",),
+        provider=bootstrap_provider,
+    )
+
+    bootstrap = report["instances"][0]["bootstrap"]
+    assert bootstrap["created_purposes"] == 0
+    assert bootstrap["existing_purposes"] == 2
+    assert bootstrap_provider.created == []
+    assert {row["status"] for row in bootstrap["purposes"]} == {"existing"}
+
+
+def test_status_auth_bootstrap_cli_outputs_json(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path, "TeeBotus_Logger")
+    bootstrap_provider = RecordingBootstrapProvider()
+
+    result = status_auth_admin_main(
+        ["bootstrap", "--instances-dir", str(tmp_path), "--instances", "TeeBotus_Logger", "--format", "json"],
+        provider=bootstrap_provider,
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["scope"] == "status_auth_bootstrap"
+    assert payload["totals"]["created_purposes"] == 2
+
+
+def test_status_auth_bootstrap_does_not_create_missing_instance_dir(tmp_path: Path) -> None:
+    bootstrap_provider = RecordingBootstrapProvider()
+
+    report = bootstrap_status_auth_secrets(
+        instances_dir=tmp_path,
+        instances=("TeeBotus_Logger",),
+        provider=bootstrap_provider,
+    )
+
+    assert report["totals"]["missing_instances"] == 1
+    assert report["totals"]["created_purposes"] == 0
+    assert bootstrap_provider.created == []
+    assert not (tmp_path / "TeeBotus_Logger").exists()
 
 
 def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch) -> None:

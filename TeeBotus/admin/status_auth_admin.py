@@ -14,10 +14,19 @@ from typing import Any
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
 from TeeBotus.core.status import redact_status_text
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider, runtime_secret_provider
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_MEMORY_KEY_PURPOSE,
+    AccountStore,
+    AccountStoreError,
+    INSTANCE_MAPPING_KEY_PURPOSE,
+    InstanceSecretProvider,
+    runtime_secret_provider,
+)
 from TeeBotus.runtime.proactive_agent import select_proactive_route
+from TeeBotus.runtime.status_auth import DEFAULT_STATUS_AUTH_INSTANCES
 
 REPORT_SCHEMA_VERSION = 1
+STATUS_AUTH_BOOTSTRAP_PURPOSES = (INSTANCE_MAPPING_KEY_PURPOSE, ACCOUNT_MEMORY_KEY_PURPOSE)
 _REDACTED_VALUE = "<redacted>"
 _SENSITIVE_REDACTION_KEYS = {
     "secret",
@@ -189,6 +198,91 @@ def build_status_auth_report(
     return report
 
 
+def bootstrap_status_auth_secrets(
+    *,
+    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
+    instances: Sequence[str] = (),
+    provider: InstanceSecretProvider | None = None,
+) -> dict[str, Any]:
+    resolved_instances_dir = Path(instances_dir)
+    selected_instances = tuple(instances) if tuple(instances) else DEFAULT_STATUS_AUTH_INSTANCES
+    selected_instances = tuple(dict.fromkeys(str(name).strip() for name in selected_instances if str(name).strip()))
+    bootstrap_provider = provider or runtime_secret_provider()
+    report: dict[str, Any] = {
+        "schema_version": REPORT_SCHEMA_VERSION,
+        "scope": "status_auth_bootstrap",
+        "generated_at": utc_now(),
+        "instances_dir": str(resolved_instances_dir),
+        "instance_count": len(selected_instances),
+        "purposes": list(STATUS_AUTH_BOOTSTRAP_PURPOSES),
+        "instances": [],
+        "totals": {
+            "created_purposes": 0,
+            "existing_purposes": 0,
+            "failed_purposes": 0,
+            "missing_instances": 0,
+        },
+    }
+    for instance_name in selected_instances:
+        instance_report = bootstrap_instance_status_auth_secrets(
+            instances_dir=resolved_instances_dir,
+            instance_name=instance_name,
+            provider=bootstrap_provider,
+        )
+        report["instances"].append(instance_report)
+        _add_bootstrap_totals(report["totals"], instance_report)
+    return report
+
+
+def bootstrap_instance_status_auth_secrets(
+    *,
+    instances_dir: Path,
+    instance_name: str,
+    provider: InstanceSecretProvider,
+) -> dict[str, Any]:
+    instance_dir = instances_dir / instance_name
+    accounts_root = instance_dir / "data" / "accounts"
+    bootstrap: dict[str, Any] = {
+        "purposes": [],
+        "created_purposes": 0,
+        "existing_purposes": 0,
+        "failed_purposes": 0,
+        "errors": [],
+    }
+    instance_report: dict[str, Any] = {
+        "instance": instance_name,
+        "instance_dir": str(instance_dir),
+        "instance_dir_exists": instance_dir.exists(),
+        "accounts_root": str(accounts_root),
+        "bootstrap": bootstrap,
+    }
+    if not instance_dir.exists():
+        bootstrap["errors"].append("missing_instance_dir")
+        return instance_report
+    try:
+        store = AccountStore(
+            accounts_root,
+            instance_name,
+            secret_provider=provider,
+            create_dirs=True,
+            secret_guard_purposes=STATUS_AUTH_BOOTSTRAP_PURPOSES,
+        )
+    except (AccountStoreError, OSError, ValueError) as exc:
+        bootstrap["errors"].append(f"store:{type(exc).__name__}:{exc}")
+        return instance_report
+    for purpose in STATUS_AUTH_BOOTSTRAP_PURPOSES:
+        purpose_report = _bootstrap_purpose(store.secret_provider, instance_name, purpose)
+        bootstrap["purposes"].append(purpose_report)
+        status = str(purpose_report.get("status") or "")
+        if status == "created":
+            bootstrap["created_purposes"] += 1
+        elif status == "existing":
+            bootstrap["existing_purposes"] += 1
+        elif status == "failed":
+            bootstrap["failed_purposes"] += 1
+    return instance_report
+
+
 def build_instance_status_auth_report(
     *,
     instances_dir: Path,
@@ -243,6 +337,8 @@ def build_instance_status_auth_report(
 
 
 def render_text_report(report: Mapping[str, Any]) -> str:
+    if report.get("scope") == "status_auth_bootstrap":
+        return render_bootstrap_text_report(report)
     lines = [
         "TeeBotus Status-Auth Admin Report",
         "",
@@ -279,6 +375,39 @@ def render_text_report(report: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_bootstrap_text_report(report: Mapping[str, Any]) -> str:
+    lines = [
+        "TeeBotus Status-Auth Bootstrap Report",
+        "",
+        f"generated_at: {report.get('generated_at', '')}",
+        f"instances_dir: {report.get('instances_dir', '')}",
+        "",
+        "Totals:",
+    ]
+    totals = report.get("totals", {})
+    if isinstance(totals, Mapping):
+        for key in sorted(totals):
+            lines.append(f"  {key}: {totals[key]}")
+    for instance in report.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        bootstrap = instance.get("bootstrap", {})
+        if not isinstance(bootstrap, Mapping):
+            bootstrap = {}
+        lines.extend(["", f"Instance: {instance.get('instance', '')}"])
+        lines.append(f"  instance_dir_exists: {_yes_no(instance.get('instance_dir_exists'))}")
+        lines.append(f"  created_purposes: {bootstrap.get('created_purposes', 0)}")
+        lines.append(f"  existing_purposes: {bootstrap.get('existing_purposes', 0)}")
+        lines.append(f"  failed_purposes: {bootstrap.get('failed_purposes', 0)}")
+        for purpose in bootstrap.get("purposes", []):
+            if not isinstance(purpose, Mapping):
+                continue
+            lines.append(f"  purpose: {purpose.get('purpose', '')} status={purpose.get('status', '')}")
+        for error in bootstrap.get("errors", []):
+            lines.append(f"  error: {error}")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider | None = None) -> int:
     if provider is None:
         try:
@@ -294,14 +423,26 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report_parser.add_argument("--instances", default="", help="Comma-separated instance list. Defaults to all folders with Bot_Verhalten.md.")
     report_parser.add_argument("--format", choices=("text", "json"), default="text")
     report_parser.add_argument("--output", default="")
+    bootstrap_parser = subparsers.add_parser("bootstrap")
+    bootstrap_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    bootstrap_parser.add_argument("--instances", default="", help="Comma-separated instance list. Defaults to protected status-auth instances.")
+    bootstrap_parser.add_argument("--format", choices=("text", "json"), default="text")
+    bootstrap_parser.add_argument("--output", default="")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     instances = parse_csv(getattr(args, "instances", None))
-    report = build_status_auth_report(
-        instances_dir=args.instances_dir,
-        instances=instances,
-        provider=provider or runtime_secret_provider(),
-    )
+    if args.command == "bootstrap":
+        report = bootstrap_status_auth_secrets(
+            instances_dir=args.instances_dir,
+            instances=instances,
+            provider=provider or runtime_secret_provider(),
+        )
+    else:
+        report = build_status_auth_report(
+            instances_dir=args.instances_dir,
+            instances=instances,
+            provider=provider or runtime_secret_provider(),
+        )
     if args.output:
         try:
             output_path = _safe_output_path(args.output, base_dir=args.instances_dir)
@@ -392,6 +533,55 @@ def _add_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> N
     totals["dispatch_results"] += int(status_auth.get("dispatch_results", 0) or 0)
     if status_auth.get("errors"):
         totals["store_errors"] += 1
+
+
+def _bootstrap_purpose(provider: InstanceSecretProvider, instance_name: str, purpose: str) -> dict[str, Any]:
+    existed_before = _provider_has_secret(provider, instance_name, purpose)
+    try:
+        _provider_get_or_create_secret(provider, instance_name, purpose)
+    except (AccountStoreError, OSError, ValueError) as exc:
+        return {
+            "purpose": purpose,
+            "status": "failed",
+            "error": f"{type(exc).__name__}:{exc}",
+        }
+    exists_after = _provider_has_secret(provider, instance_name, purpose)
+    return {
+        "purpose": purpose,
+        "status": "existing" if existed_before else ("created" if exists_after else "available"),
+    }
+
+
+def _provider_get_or_create_secret(provider: InstanceSecretProvider, instance_name: str, purpose: str) -> bytes:
+    creator = getattr(provider, "get_or_create_secret", None)
+    if callable(creator):
+        return creator(instance_name, purpose, reason="status-auth bootstrap")
+    return provider.get_secret(instance_name, purpose)
+
+
+def _provider_has_secret(provider: InstanceSecretProvider, instance_name: str, purpose: str) -> bool:
+    has_secret = getattr(provider, "has_secret", None)
+    if callable(has_secret):
+        try:
+            return bool(has_secret(instance_name, purpose))
+        except (AccountStoreError, OSError, ValueError):
+            return False
+    try:
+        provider.get_secret(instance_name, purpose)
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    return True
+
+
+def _add_bootstrap_totals(totals: dict[str, int], instance_report: Mapping[str, Any]) -> None:
+    bootstrap = instance_report.get("bootstrap", {})
+    if not isinstance(bootstrap, Mapping):
+        return
+    if not instance_report.get("instance_dir_exists"):
+        totals["missing_instances"] += 1
+    totals["created_purposes"] += int(bootstrap.get("created_purposes", 0) or 0)
+    totals["existing_purposes"] += int(bootstrap.get("existing_purposes", 0) or 0)
+    totals["failed_purposes"] += int(bootstrap.get("failed_purposes", 0) or 0)
 
 
 def _yes_no(value: object) -> str:
