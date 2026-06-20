@@ -1264,6 +1264,35 @@ def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, 
     assert latest["repo_name"] == "watch-cli-demo"
 
 
+def test_codex_history_watch_once_cli_accepts_hidden_codex_session_root(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "watch-hidden-root-demo", version="3.0.0")
+    sessions_root = tmp_path / ".codex" / "sessions"
+    write_codex_session(sessions_root / "rollout.jsonl", repo=repo, session_id="sess-hidden-watch", turn_id="turn-hidden")
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--once",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["sessions_roots"] == [str(sessions_root.resolve())]
+    assert payload["instances"][0]["status_counts"] == {"imported": 1}
+
+
 def test_codex_history_watch_once_can_post_index_after_import(tmp_path: Path, capsys) -> None:
     make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "watch-post-index-demo", version="3.0.1")

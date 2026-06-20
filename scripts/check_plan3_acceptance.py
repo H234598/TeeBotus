@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -19,8 +21,18 @@ from TeeBotus.llm.router import normalize_llm_provider  # noqa: E402
 
 DEFAULT_BENCHMARK_MD = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest.md"
 DEFAULT_BENCHMARK_JSON = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest.json"
+DEFAULT_STATE_EVALUATION_MD = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest-2.md"
 DEFAULT_PROFILES_PATH = REPO_ROOT / "config" / "llm_profiles.yaml"
 DEFAULT_ROUTING_PATH = REPO_ROOT / "config" / "llm_routing.yaml"
+
+STATE_EVALUATION_BENCHMARKS: tuple[tuple[str, str, str], ...] = (
+    ("2", "database_fallback_policy", "STATE-2: primary-fallback write/index policy"),
+    (
+        "3",
+        "database_fallback_collection_corruption",
+        "STATE-3: collection decrypt-corruption recovery",
+    ),
+)
 
 PLAN3_TEST_FILES: tuple[str, ...] = (
     "tests/test_hf_pool_config.py",
@@ -70,6 +82,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--runtime-channels", default="telegram,signal,matrix", help="Channels for --runtime-status.")
     parser.add_argument("--benchmark-output", default=str(DEFAULT_BENCHMARK_MD), help="Markdown benchmark output path.")
     parser.add_argument("--benchmark-json-output", default=str(DEFAULT_BENCHMARK_JSON), help="JSON benchmark output path.")
+    parser.add_argument(
+        "--state-eval-output",
+        default="",
+        help=(
+            "Optional markdown path for the small state-evaluation document (default: benchmark-output plus -2 suffix), "
+            "e.g. ...-latest-2.md"
+        ),
+    )
     parser.add_argument("--entries", type=int, default=2, help="Synthetic benchmark entries.")
     parser.add_argument("--iterations", type=int, default=1, help="Quick benchmark iterations.")
     parser.add_argument("--skip-runtime-status", action="store_true", help="Skip live runtime-status checks.")
@@ -88,10 +108,21 @@ def main(argv: list[str] | None = None) -> int:
         print("Plan3 safe-rollout configuration checks passed.")
         return 0
 
+    benchmark_output = Path(args.benchmark_output)
+    state_eval_output = (
+        Path(args.state_eval_output)
+        if args.state_eval_output
+        else (
+            DEFAULT_STATE_EVALUATION_MD
+            if benchmark_output == DEFAULT_BENCHMARK_MD
+            else _default_state_evaluation_output(benchmark_output)
+        )
+    )
+
     commands = build_acceptance_commands(
         python=args.python,
         runtime_channels=args.runtime_channels,
-        benchmark_output=Path(args.benchmark_output),
+        benchmark_output=benchmark_output,
         benchmark_json_output=Path(args.benchmark_json_output),
         entries=args.entries,
         iterations=args.iterations,
@@ -104,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             suffix = " (nonfatal)" if command.nonfatal else ""
             print(f"{command.label}: {_format_command(command.argv)}{suffix}")
         return 0
-    return run_acceptance_commands(commands)
+    return run_acceptance_commands(commands, state_evaluation_output=state_eval_output)
 
 
 def build_acceptance_commands(
@@ -176,7 +207,7 @@ def build_acceptance_commands(
     return commands
 
 
-def run_acceptance_commands(commands: Sequence[Plan3Command]) -> int:
+def run_acceptance_commands(commands: Sequence[Plan3Command], *, state_evaluation_output: Path | None = None) -> int:
     for index, command in enumerate(commands, start=1):
         print(f"\n[{index}/{len(commands)}] {command.label}: {_format_command(command.argv)}", flush=True)
         capture_output = command.validate_runtime_status
@@ -212,6 +243,20 @@ def run_acceptance_commands(commands: Sequence[Plan3Command]) -> int:
                 for error in artifact_errors:
                     print(f"  {check_plan2_acceptance._redact_console_text(error)}", file=sys.stderr)
                 return 1
+            if not artifact_errors and state_evaluation_output is not None:
+                benchmark_json_output = check_plan2_acceptance._option_path(command.argv, "--json-output")
+                eval_errors = _write_state_evaluation_document(
+                    benchmark_json_output=benchmark_json_output,
+                    state_evaluation_output=state_evaluation_output,
+                )
+                if eval_errors and not command.nonfatal:
+                    print(
+                        f"\nPlan3 acceptance failed at {command.label}: state evaluation document could not be written.",
+                        file=sys.stderr,
+                    )
+                    for error in eval_errors:
+                        print(f"  {check_plan2_acceptance._redact_console_text(error)}", file=sys.stderr)
+                    return 1
     print("\nPlan3 acceptance checks passed.")
     return 0
 
@@ -257,6 +302,146 @@ def _profile_provider(profiles: object, profile_name: str) -> str:
     profile = profiles.get(str(profile_name or "").strip())
     provider = getattr(profile, "provider", "")
     return normalize_llm_provider(provider) if provider else ""
+
+
+def _default_state_evaluation_output(benchmark_output: Path) -> Path:
+    suffix = benchmark_output.suffix
+    if not suffix:
+        return benchmark_output.with_name(f"{benchmark_output.name}-2")
+    return benchmark_output.with_name(f"{benchmark_output.name[:-len(suffix)]}-2{suffix}")
+
+
+def _write_state_evaluation_document(
+    *,
+    benchmark_json_output: Path | None,
+    state_evaluation_output: Path,
+) -> list[str]:
+    errors: list[str] = []
+    payload: Any | None = None
+
+    if benchmark_json_output is None:
+        errors.append("benchmark_json_output is missing; cannot evaluate STATE-2/STATE-3")
+    else:
+        try:
+            raw = benchmark_json_output.read_text(encoding="utf-8")
+        except OSError as exc:  # noqa: BLE001
+            errors.append(f"failed to read benchmark JSON artifact: {benchmark_json_output}: {exc}")
+        else:
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                errors.append(f"invalid benchmark JSON artifact: {benchmark_json_output}: {exc}")
+
+    benchmark_payload = payload if isinstance(payload, Mapping) else {}
+    results_by_name = _index_benchmark_results(benchmark_payload.get("results") if isinstance(benchmark_payload, Mapping) else None)
+    lines: list[str] = [
+        "# TeeBotus Plan3 Benchmark State Evaluation (Dokument 2)",
+        "",
+        f"- source_json: {benchmark_json_output}",
+        f"- generated_at: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        "",
+    ]
+
+    for state_no, benchmark_name, headline in STATE_EVALUATION_BENCHMARKS:
+        marker = f"STATE-{state_no}"
+        lines.append(f"<!-- {marker}:START -->")
+        lines.extend(_state_evaluation_lines(marker=marker, headline=headline, benchmark_name=benchmark_name, result=results_by_name.get(benchmark_name)))
+        lines.append(f"<!-- {marker}:END -->")
+        lines.append("")
+
+    for state_no, benchmark_name, _headline in STATE_EVALUATION_BENCHMARKS:
+        marker = f"STATE-{state_no}"
+        if benchmark_name not in results_by_name:
+            errors.append(f"{marker} missing benchmark result: {benchmark_name}")
+
+    try:
+        state_evaluation_output.parent.mkdir(parents=True, exist_ok=True)
+        state_evaluation_output.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    except OSError as exc:  # noqa: BLE001
+        errors.append(f"failed to write state evaluation document: {state_evaluation_output}: {exc}")
+    return errors
+
+
+def _index_benchmark_results(results: Any) -> dict[str, Mapping[str, Any]]:
+    if not isinstance(results, list):
+        return {}
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for item in results:
+        if not isinstance(item, Mapping):
+            continue
+        name = str(item.get("name") or "").strip()
+        if name:
+            indexed[name] = item
+    return indexed
+
+
+def _state_evaluation_lines(
+    *,
+    marker: str,
+    headline: str,
+    benchmark_name: str,
+    result: Mapping[str, Any] | None,
+) -> list[str]:
+    lines: list[str] = [f"## {headline}", f"- marker: {marker}", f"- benchmark: `{benchmark_name}`"]
+    if not isinstance(result, Mapping):
+        lines.append("- status: NO_DATA")
+        lines.append("- note: benchmark result not present in JSON payload")
+        return lines
+
+    ok = bool(result.get("ok", False))
+    lines.append(f"- status: {'OK' if ok else 'FAIL'}")
+    lines.append(f"- errors: {result.get('errors', 'n/a')}")
+    lines.append(f"- iterations: {result.get('iterations', 'n/a')}")
+    lines.append(f"- total_ms: {result.get('total_ms', 'n/a')}")
+    details = result.get("details")
+    if not isinstance(details, Mapping):
+        details = {}
+
+    detail_keys = _state_detail_keys_for(marker)
+    if detail_keys:
+        lines.append("### Kennzahlen")
+        lines.append("| Kennzahl | Wert |")
+        lines.append("| --- | --- |")
+        for key in detail_keys:
+            value = details.get(key)
+            if value is None:
+                continue
+            lines.append(f"| {key} | {value} |")
+    else:
+        lines.append("### Kennzahlen")
+        lines.append("- no detail keys configured")
+    if isinstance(result.get("note"), str):
+        lines.append(f"- note: {result.get('note')}")
+    if "details" in result:
+        # Keep this list short; avoid dumping the full nested payload.
+        if not detail_keys:
+            for key in sorted(details.keys()):
+                lines.append(f"- {key}: {details.get(key)}")
+    return lines
+
+
+def _state_detail_keys_for(marker: str) -> tuple[str, ...]:
+    if marker == "STATE-2":
+        return (
+            "fallback_warnings",
+            "recovery_warnings",
+            "synced_entries",
+            "synced_index",
+            "primary_entry_writes",
+            "secondary_entry_writes",
+            "primary_index_writes",
+            "secondary_index_writes",
+        )
+    if marker == "STATE-3":
+        return (
+            "fallback_warnings",
+            "recovery_warnings",
+            "corrupted_rows_injected",
+            "collection_rows_seen",
+            "collection_rows_skipped",
+            "corrupt_collection_rows_detected",
+        )
+    return ()
 
 
 if __name__ == "__main__":  # pragma: no cover

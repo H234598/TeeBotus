@@ -93,6 +93,7 @@ CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
 _OPENAI_KEY_RE = re.compile(r"\bsk-[A-Za-z0-9_\-]{20,}\b")
 _TELEGRAM_TOKEN_RE = re.compile(r"\b\d{7,12}:[A-Za-z0-9_\-]{25,}\b")
 _SAFE_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
+_SAFE_HIDDEN_PATH_SEGMENT_RE = re.compile(r"\.[A-Za-z0-9](?:[A-Za-z0-9._-]*)")
 _GENERIC_SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(api[_-]?key|token|secret|password|cookie)\b\s*[:=]\s*([^\s,;]{12,})"
 )
@@ -109,7 +110,7 @@ def _safe_instance_name(value: str) -> str:
     return text
 
 
-def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tuple[str, ...]]:
+def _split_safe_relative_parts(value: str, *, operation: str, allow_hidden_segments: bool = False) -> tuple[bool, tuple[str, ...]]:
     text = str(value).strip()
     if "\x00" in text:
         raise ValueError(f"{operation} contains invalid control character")
@@ -130,17 +131,17 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
             continue
         if part == "..":
             raise ValueError(f"{operation} contains forbidden relative segment: {part}")
-        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part):
+        if not _SAFE_PATH_SEGMENT_RE.fullmatch(part) and not (allow_hidden_segments and _SAFE_HIDDEN_PATH_SEGMENT_RE.fullmatch(part)):
             raise ValueError(f"{operation} contains invalid path segment: {part}")
         parts.append(part)
     return is_absolute, tuple(parts)
 
 
-def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
+def _safe_repo_root(value: Path, *, operation: str = "repo access", allow_hidden_segments: bool = False) -> Path:
     text = str(value)
     if "\x00" in text:
         raise ValueError(f"{operation} contains invalid control character")
-    is_absolute, parts = _split_safe_relative_parts(text, operation=operation)
+    is_absolute, parts = _split_safe_relative_parts(text, operation=operation, allow_hidden_segments=allow_hidden_segments)
     if is_absolute:
         return Path("/").joinpath(*parts).resolve() if parts else Path("/").resolve()
     if not parts:
@@ -540,7 +541,7 @@ def record_codex_history_delivery_receipt(
 
 
 def import_codex_session_file(store: AccountStore, session_file: str | Path) -> dict[str, Any]:
-    path = _safe_repo_root(Path(session_file), operation="session file")
+    path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
     parsed = _parse_codex_session_file(path)
     if not parsed["final_text"]:
         return {"status": "skipped", "reason": "missing_final_text", "path": str(path)}
@@ -646,7 +647,7 @@ def default_codex_session_roots() -> tuple[Path, ...]:
     roots = [Path.home() / ".codex" / "sessions"]
     agents_root = Path.home() / ".codex-agents"
     if agents_root.is_dir():
-        roots.extend(path / ".codex" / "sessions" for path in sorted(agents_root.iterdir()) if path.is_dir())
+        roots.extend(path / "sessions" for path in sorted(agents_root.iterdir()) if path.is_dir())
     return tuple(roots)
 
 
@@ -2028,7 +2029,7 @@ def _codex_session_tests(final_text: str) -> tuple[str, ...]:
 def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tuple[Path, ...]:
     files: list[Path] = []
     for root_value in roots:
-        root = _safe_repo_root(Path(root_value), operation="session root")
+        root = _safe_repo_root(Path(root_value), operation="session root", allow_hidden_segments=True)
         if root.is_file() and root.suffix == ".jsonl":
             files.append(root)
             continue
@@ -2100,7 +2101,7 @@ def _wait_for_watchdog_codex_session_change(roots: Sequence[str | Path], *, time
     handler = _CodexSessionEventHandler()
     for root_value in roots:
         try:
-            root = _safe_repo_root(Path(root_value), operation="sessions root")
+            root = _safe_repo_root(Path(root_value), operation="sessions root", allow_hidden_segments=True)
         except ValueError:
             continue
         watch_root = root.parent if root.is_file() else root
@@ -2403,7 +2404,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--sessions-root", action="append", default=[])
     watch_parser.add_argument("--limit", type=int, default=1000)
     watch_parser.add_argument("--max-iterations", type=int, default=1)
-    watch_parser.add_argument("--poll-interval", type=float, default=1.0)
+    watch_parser.add_argument("--poll-interval", type=float, default=300.0)
     watch_parser.add_argument("--event-mode", choices=("poll", "snapshot", "watchdog", "auto"), default="poll")
     watch_parser.add_argument("--follow", action="store_true", help="Run until the process is stopped instead of exiting after max iterations.")
     watch_parser.add_argument("--format", choices=("text", "json"), default="text")
@@ -2758,7 +2759,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
             _ensure_explicit_instances_exist(instances_dir, selected_instances)
             selected = discover_instances(instances_dir, selected_instances)
-            safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
+            safe_roots = [
+                _safe_repo_root(Path(root), operation="sessions root", allow_hidden_segments=True)
+                for root in tuple(args.sessions_root or ()) or default_codex_session_roots()
+            ]
             instance_reports: list[dict[str, Any]] = []
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
@@ -2788,7 +2792,10 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
             instances_dir = _safe_repo_root(Path(args.instances_dir), operation="instances directory")
             _ensure_explicit_instances_exist(instances_dir, selected_instances)
-            safe_roots = [_safe_repo_root(Path(root), operation="sessions root") for root in tuple(args.sessions_root or ()) or default_codex_session_roots()]
+            safe_roots = [
+                _safe_repo_root(Path(root), operation="sessions root", allow_hidden_segments=True)
+                for root in tuple(args.sessions_root or ()) or default_codex_session_roots()
+            ]
             max_iterations = int(args.max_iterations or 0)
             if max_iterations < 1:
                 max_iterations = 1

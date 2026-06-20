@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import statistics
 import tempfile
 import time
@@ -33,6 +34,7 @@ from TeeBotus.runtime.accounts import (
     telegram_identity_key,
     utc_now,
 )
+from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 from TeeBotus.runtime.bibliothekar_service import check_bibliothekar_service
 from TeeBotus.runtime.config import build_runtime_config
 from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
@@ -330,10 +332,128 @@ def benchmark_database_fallback_policy(*, iterations: int) -> BenchmarkResult:
     )
 
 
+def benchmark_database_fallback_collection_corruption(*, iterations: int) -> BenchmarkResult:
+    class CountingCriticalHandler(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__(level=logging.CRITICAL)
+            self.messages: list[str] = []
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.messages.append(record.getMessage())
+
+    def _inject_corrupt_collection_row(path: Path, *, account_id: str, collection: str, item_key: str) -> None:
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                "UPDATE account_jsonl_collections SET payload_ciphertext = ? WHERE instance_name = ? AND account_id = ? AND collection = ? AND item_key = ?",
+                (b"not-an-encrypted-value", "Bench", account_id, collection, item_key),
+            )
+
+    iterations = max(1, int(iterations))
+    handler = CountingCriticalHandler()
+    logger = logging.getLogger("TeeBotus")
+    previous_level = logger.level
+    provider = StaticSecretProvider(b"x" * 32)
+    timings: list[float] = []
+    rows_seen = 0
+    try:
+        logger.addHandler(handler)
+        logger.setLevel(min(previous_level, logging.CRITICAL) if previous_level else logging.CRITICAL)
+        with tempfile.TemporaryDirectory(prefix="teebotus-bench-decrypt-") as tmp:
+            root = Path(tmp)
+            account_id = "b" * 128
+            primary = SQLiteAccountMemoryBackend(
+                instance_name="Bench",
+                provider=provider,
+                purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                config=SQLiteMemoryConfig(path=root / "Account_Memory.sqlite3"),
+            )
+            secondary = SQLiteAccountMemoryBackend(
+                instance_name="Bench",
+                provider=provider,
+                purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                config=SQLiteMemoryConfig(path=root / "Account_Memory.sqlite3.fallback"),
+            )
+            backend = WarningFallbackAccountMemoryBackend(primary, secondary, label="Bench:sqlite-collection")
+            payload_example = json.dumps({"id": "example", "value": "value"}, ensure_ascii=False)
+            for iteration in range(iterations):
+                collection = "agent_state"
+                rows = [
+                    {"id": f"corrupt-{iteration:04d}", "value": "state for corruption"},
+                    {"id": f"valid-{iteration:04d}", "value": "valid-state"},
+                ]
+                backend.write_collection(account_id, collection, rows)
+                _inject_corrupt_collection_row(root / "Account_Memory.sqlite3", account_id=account_id, collection=collection, item_key=f"corrupt-{iteration:04d}")
+                start_lenient = time.perf_counter()
+                read_rows = backend.read_collection(account_id, collection)
+                timings.append((time.perf_counter() - start_lenient) * 1000)
+                rows_seen += len(read_rows)
+            fallback_warnings = sum(1 for message in handler.messages if "ACCOUNT MEMORY PRIMARY DATABASE FAILED. USING FALLBACK DATABASE." in message)
+            recovery_warnings = sum(1 for message in handler.messages if "primary backend recovered" in message)
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+
+    corruption_messages = [message for message in handler.messages if "skipped corrupt collection rows" in message]
+    corruption_hits = len(corruption_messages)
+    rows_skipped = 0
+    for message in corruption_messages:
+        marker = "skipped="
+        marker_index = message.find(marker)
+        if marker_index == -1:
+            rows_skipped += 1
+            continue
+        value_start = marker_index + len(marker)
+        value = ""
+        while value_start < len(message) and message[value_start].isdigit() is False:
+            value_start += 1
+        while value_start < len(message) and message[value_start].isdigit():
+            value += message[value_start]
+            value_start += 1
+        if value:
+            rows_skipped += int(value)
+        else:
+            rows_skipped += 1
+
+    errors = 0
+    if corruption_hits < 1:
+        errors += 1
+    if not fallback_warnings:
+        errors += 1
+    if corruption_hits and not rows_skipped:
+        errors += 1
+    if rows_seen < iterations:
+        errors += 1
+
+    return result(
+        name="database_fallback_collection_corruption",
+        category="database_fallback",
+        iterations=iterations,
+        total_ms=sum(timings),
+        ok=errors == 0,
+        errors=errors,
+        payload_bytes=len(payload_example),
+        note="database_fallback_collection_corruption_warning",
+        details={
+            "primary": "sqlite-primary",
+            "secondary": "sqlite-fallback",
+            "fallback_warnings": fallback_warnings,
+            "recovery_warnings": recovery_warnings,
+            "corrupted_rows_injected": iterations,
+            "collection_rows_seen": rows_seen,
+            "collection_rows_skipped": rows_skipped,
+            "corrupt_collection_rows_detected": corruption_hits,
+        },
+    )
+
+
 def _timed_ms(func: Callable[[], Any]) -> float:
     start = time.perf_counter()
     func()
     return (time.perf_counter() - start) * 1000
 
 
-__all__ = ["benchmark_database_fallback_policy", "benchmark_status_doctor"]
+__all__ = [
+    "benchmark_database_fallback_collection_corruption",
+    "benchmark_database_fallback_policy",
+    "benchmark_status_doctor",
+]

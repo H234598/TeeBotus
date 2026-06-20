@@ -33,6 +33,8 @@ from TeeBotus.benchmarks.suite import (  # noqa: E402,F401
     _benchmark_langgraph_flow,
     _benchmark_langgraph_linear_flow,
     _benchmark_langgraph_source_harvester_workflow,
+    _benchmark_codex_history_session_importer,
+    _benchmark_codex_history_watcher_poll_loop,
     _benchmark_mcp_tools,
     benchmark_jsonl_backend,
     _benchmark_memory_jsonl_to_sqlite_migration,

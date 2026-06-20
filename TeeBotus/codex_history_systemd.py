@@ -14,12 +14,14 @@ from TeeBotus.systemd import (
 )
 
 
-DEFAULT_SERVICE_NAME = "teebotus-codex-history.service"
+DEFAULT_SERVICE_NAME = "teebotus-codex-history-collector.service"
 DEFAULT_INDEX_SERVICE_NAME = "teebotus-codex-history-index.service"
 DEFAULT_INDEX_TIMER_NAME = "teebotus-codex-history-index.timer"
 DEFAULT_INSTANCES_DIR = "instances"
+DEFAULT_SYSTEMD_SYSTEM_DIR = "/etc/systemd/system"
+DEFAULT_RUN_USER = "root"
 DEFAULT_RESTART_SEC = "5s"
-DEFAULT_POLL_INTERVAL_SECONDS = 5.0
+DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
 DEFAULT_MAX_ITERATIONS = 1
 DEFAULT_INDEX_INTERVAL = "24h"
@@ -41,14 +43,17 @@ class CodexHistoryIndexSystemdUnits:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Install or print TeeBotus Codex history watcher user systemd service.")
+    parser = argparse.ArgumentParser(description="Install or print the TeeBotus Codex history collector systemd service.")
     parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument(
         "--python",
         default="",
         help="Python executable. Defaults to .venv-py313/bin/python if present, then .venv/bin/python, else python3.",
     )
-    parser.add_argument("--service-name", default=DEFAULT_SERVICE_NAME, help="User systemd service filename.")
+    parser.add_argument("--service-name", default=DEFAULT_SERVICE_NAME, help="systemd service filename.")
+    parser.add_argument("--run-user", default=DEFAULT_RUN_USER, help="System service User value. Empty omits User=.")
+    parser.add_argument("--system-dir", default=DEFAULT_SYSTEMD_SYSTEM_DIR, help="Systemd system unit directory used outside --user-unit.")
+    parser.add_argument("--user-unit", action="store_true", help="Install as the invoking user's user-systemd unit instead of a system/root unit.")
     parser.add_argument("--env-file", default=".env", help="EnvironmentFile path, relative to repo root unless absolute.")
     parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR, help="Instances directory passed to codex-history watch.")
     parser.add_argument("--instances", default="", help="Comma-separated instance filter passed to codex-history watch.")
@@ -66,8 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
     parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
     parser.add_argument("--index-timer", action="store_true", help="Also render/install a low-priority periodic Codex-History admin index timer.")
-    parser.add_argument("--index-service-name", default=DEFAULT_INDEX_SERVICE_NAME, help="User systemd service filename for periodic Codex-History indexing.")
-    parser.add_argument("--index-timer-name", default=DEFAULT_INDEX_TIMER_NAME, help="User systemd timer filename for periodic Codex-History indexing.")
+    parser.add_argument("--index-service-name", default=DEFAULT_INDEX_SERVICE_NAME, help="systemd service filename for periodic Codex-History indexing.")
+    parser.add_argument("--index-timer-name", default=DEFAULT_INDEX_TIMER_NAME, help="systemd timer filename for periodic Codex-History indexing.")
     parser.add_argument("--index-interval", default=DEFAULT_INDEX_INTERVAL, help="Timer OnUnitActiveSec interval for periodic Codex-History indexing.")
     parser.add_argument(
         "--index-randomized-delay",
@@ -106,14 +111,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--restart-sec", default=DEFAULT_RESTART_SEC, help="systemd RestartSec interval.")
     parser.add_argument("--print", action="store_true", dest="print_only", help="Print unit file instead of writing it.")
-    parser.add_argument("--enable", action="store_true", help="Run systemctl --user daemon-reload and enable --now the service after writing.")
+    parser.add_argument("--enable", action="store_true", help="Run systemctl daemon-reload and enable --now the service after writing.")
     args = parser.parse_args(argv)
 
     try:
+        run_user = "" if args.user_unit else args.run_user
         unit = render_codex_history_systemd_unit(
             repo_root=Path(args.repo_root),
             python_executable=args.python,
             service_name=args.service_name,
+            run_user=run_user,
             env_file=args.env_file,
             instances_dir=args.instances_dir,
             instances=args.instances,
@@ -137,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
                 python_executable=args.python,
                 service_name=args.index_service_name,
                 timer_name=args.index_timer_name,
+                run_user=run_user,
                 env_file=args.env_file,
                 instances_dir=args.instances_dir,
                 instances=args.instances,
@@ -177,8 +185,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"# {index_units.timer_name}")
             print(index_units.timer_text, end="")
         return 0
-    user_dir = Path.home() / ".config" / "systemd" / "user"
-    user_dir.mkdir(parents=True, exist_ok=True)
+    unit_dir = Path.home() / ".config" / "systemd" / "user" if args.user_unit else Path(args.system_dir).expanduser()
+    unit_dir.mkdir(parents=True, exist_ok=True)
     targets = [(unit.service_name, unit.service_text)]
     if index_units is not None:
         targets.extend(
@@ -188,14 +196,15 @@ def main(argv: list[str] | None = None) -> int:
             ]
         )
     for name, text in targets:
-        target = user_dir / name
+        target = unit_dir / name
         target.write_text(text, encoding="utf-8")
         print(f"wrote {target}")
     if args.enable:
-        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
-        subprocess.run(["systemctl", "--user", "enable", "--now", unit.service_name], check=True)
+        systemctl = ["systemctl", "--user"] if args.user_unit else ["systemctl"]
+        subprocess.run([*systemctl, "daemon-reload"], check=True)
+        subprocess.run([*systemctl, "enable", "--now", unit.service_name], check=True)
         if index_units is not None:
-            subprocess.run(["systemctl", "--user", "enable", "--now", index_units.timer_name], check=True)
+            subprocess.run([*systemctl, "enable", "--now", index_units.timer_name], check=True)
         print(f"enabled {unit.service_name}")
         if index_units is not None:
             print(f"enabled {index_units.timer_name}")
@@ -207,6 +216,7 @@ def render_codex_history_systemd_unit(
     repo_root: Path,
     python_executable: str = "",
     service_name: str = DEFAULT_SERVICE_NAME,
+    run_user: str = DEFAULT_RUN_USER,
     env_file: str = ".env",
     instances_dir: str = DEFAULT_INSTANCES_DIR,
     instances: str = "",
@@ -227,11 +237,13 @@ def render_codex_history_systemd_unit(
     service_name = _service_name(service_name)
     repo = repo_root.expanduser().resolve()
     python_path = _python_path(repo, python_executable)
+    run_user = _run_user(run_user)
     env_path = _env_path(repo, env_file)
     instances_arg = _instances_path(repo, instances_dir)
     instance = _optional_instance_name(instance)
     instances = _csv_argument(instances, label="instances")
-    session_args = _session_root_args(repo, sessions_roots)
+    effective_sessions_roots = sessions_roots or _default_collector_session_roots(repo, run_user=run_user)
+    session_args = _session_root_args(repo, effective_sessions_roots)
     limit = _positive_int(limit, label="limit")
     max_iterations = _positive_int(max_iterations, label="max iterations")
     event_mode = _event_mode(event_mode)
@@ -277,23 +289,25 @@ def render_codex_history_systemd_unit(
     service_text = "\n".join(
         [
             "[Unit]",
-            "Description=TeeBotus Codex history watcher",
+            "Description=TeeBotus Codex history collector",
             "Documentation=https://github.com/H234598/TeeBotus",
             "Wants=network-online.target",
             "After=network-online.target",
             "",
             "[Service]",
             "Type=simple",
+            *( [f"User={_systemd_unit_value(run_user, label='run user')}"] if run_user else [] ),
             f"WorkingDirectory={_systemd_unit_value(str(repo), label='repo root')}",
             f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
             "ExecStart=" + _systemd_unit_value(" ".join(command), label="command line"),
             "Restart=on-failure" if follow else "Restart=always",
             f"RestartSec={_systemd_unit_value(restart_sec, label='restart interval')}",
+            "UMask=0077",
             "NoNewPrivileges=true",
             "PrivateTmp=true",
             "",
             "[Install]",
-            "WantedBy=default.target",
+            "WantedBy=multi-user.target" if run_user else "WantedBy=default.target",
             "",
         ]
     )
@@ -306,6 +320,7 @@ def render_codex_history_index_systemd_units(
     python_executable: str = "",
     service_name: str = DEFAULT_INDEX_SERVICE_NAME,
     timer_name: str = DEFAULT_INDEX_TIMER_NAME,
+    run_user: str = DEFAULT_RUN_USER,
     env_file: str = ".env",
     instances_dir: str = DEFAULT_INSTANCES_DIR,
     instances: str = "",
@@ -336,6 +351,7 @@ def render_codex_history_index_systemd_units(
     timer_name = _timer_name(timer_name)
     repo_root = repo_root.expanduser().resolve()
     python_path = _python_path(repo_root, python_executable)
+    run_user = _run_user(run_user)
     env_path = _env_path(repo_root, env_file)
     instances_arg = _instances_path(repo_root, instances_dir)
     instances = _csv_argument(instances, label="instances")
@@ -424,6 +440,7 @@ def render_codex_history_index_systemd_units(
         "",
         "[Service]",
         "Type=oneshot",
+        *( [f"User={_systemd_unit_value(run_user, label='run user')}"] if run_user else [] ),
         f"WorkingDirectory={_systemd_unit_value(str(repo_root), label='repo root')}",
         f"EnvironmentFile=-{_systemd_unit_value(str(env_path), label='env file')}",
         "Nice=10",
@@ -490,6 +507,31 @@ def _session_root_args(repo_root: Path, roots: tuple[str | Path, ...]) -> list[s
         resolved = path.resolve() if path.is_absolute() else (repo_root / path).resolve()
         args.extend(["--sessions-root", _shell_quote(str(resolved))])
     return args
+
+
+def _default_collector_session_roots(repo_root: Path, *, run_user: str) -> tuple[Path, ...]:
+    if run_user != "root":
+        return ()
+    owner_home = _home_from_repo_root(repo_root)
+    if owner_home is None:
+        return ()
+    return (owner_home / ".codex" / "sessions", owner_home / ".codex-agents")
+
+
+def _home_from_repo_root(repo_root: Path) -> Path | None:
+    parts = repo_root.parts
+    if len(parts) >= 3 and parts[0] == "/" and parts[1] == "home" and parts[2]:
+        return Path("/", "home", parts[2])
+    return None
+
+
+def _run_user(value: str) -> str:
+    text = _validate_systemd_unit_value(str(value or "").strip(), label="run user")
+    if not text:
+        return ""
+    if any(char.isspace() for char in text):
+        raise ValueError("Codex history run user must not contain whitespace")
+    return text
 
 
 def _optional_instance_name(value: str) -> str:

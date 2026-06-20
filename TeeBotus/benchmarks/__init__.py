@@ -7,6 +7,10 @@ from TeeBotus.benchmarks.bibliothekar import (
     benchmark_bibliothekar_local_query,
     benchmark_retrieval_embedding_reranker_matrix,
 )
+from TeeBotus.benchmarks.codex_history import (
+    benchmark_codex_history_session_importer,
+    benchmark_codex_history_watcher_poll_loop,
+)
 from TeeBotus.benchmarks.core import (
     BENCHMARK_CONTEXT_DEPENDENCIES,
     BENCHMARK_RANKING_NAME_SETS,
@@ -105,6 +109,8 @@ __all__ = [
     "benchmark_retrieval_embedding_reranker_matrix",
     "benchmark_source_harvester_promote_index_flow",
     "benchmark_source_harvester_quality_gate",
+    "benchmark_codex_history_session_importer",
+    "benchmark_codex_history_watcher_poll_loop",
     "benchmark_youtube_local_job_queue",
     "benchmark_youtube_local_pipeline_cache",
     "benchmark_youtube_parser",

@@ -25,6 +25,10 @@ from TeeBotus.benchmarks.core import (
     result as _result,
     stable_backend_ranking as _stable_backend_ranking,
 )
+from TeeBotus.benchmarks.codex_history import (
+    benchmark_codex_history_session_importer as _benchmark_codex_history_session_importer,
+    benchmark_codex_history_watcher_poll_loop as _benchmark_codex_history_watcher_poll_loop,
+)
 from TeeBotus.benchmarks.hf_pool import (
     benchmark_hf_pool_eval_matrix as _benchmark_hf_pool_eval_matrix,
     benchmark_hf_pool_live as _benchmark_hf_pool_live,
@@ -71,6 +75,7 @@ from TeeBotus.benchmarks.reporting import (
 )
 from TeeBotus.benchmarks.runtime_health import (
     benchmark_database_fallback_policy as _benchmark_database_fallback_policy,
+    benchmark_database_fallback_collection_corruption as _benchmark_database_fallback_collection_corruption,
     benchmark_status_doctor as _benchmark_status_doctor,
 )
 from TeeBotus.benchmarks.source_quality import (
@@ -144,11 +149,14 @@ def run_benchmarks(
     results.append(_benchmark_youtube_local_pipeline_cache(iterations=iterations))
     results.append(_benchmark_status_doctor(iterations=iterations))
     results.append(_benchmark_database_fallback_policy(iterations=iterations))
+    results.append(_benchmark_database_fallback_collection_corruption(iterations=iterations))
     results.append(_benchmark_langgraph_flow(iterations=iterations))
     results.append(_benchmark_langgraph_linear_flow(iterations=iterations))
     results.append(_benchmark_langgraph_fake_installed_flow(iterations=iterations))
     results.append(_benchmark_langgraph_source_harvester_workflow(iterations=iterations))
     results.append(_benchmark_mcp_tools(iterations=iterations))
+    results.append(_benchmark_codex_history_session_importer(iterations=iterations))
+    results.append(_benchmark_codex_history_watcher_poll_loop(iterations=iterations))
     comparisons = _build_comparisons(results)
     regression = _build_regression_report(results, baseline_json=baseline_json)
     live_requested = bool(include_live or live_hf or live_qdrant or live_llm)
@@ -240,6 +248,7 @@ __all__ = [
     "_benchmark_bibliothekar_haystack_fake",
     "_benchmark_bibliothekar_llamaindex_fake",
     "_benchmark_database_fallback_policy",
+    "_benchmark_database_fallback_collection_corruption",
     "_benchmark_decision_fake_model",
     "_benchmark_hf_pool_eval_matrix",
     "_benchmark_hf_pool_live",
@@ -265,6 +274,8 @@ __all__ = [
     "_benchmark_youtube_local_job_queue",
     "_benchmark_youtube_local_pipeline_cache",
     "_benchmark_youtube_parser",
+    "_benchmark_codex_history_session_importer",
+    "_benchmark_codex_history_watcher_poll_loop",
     "_build_comparisons",
     "_build_quality_gate",
     "_build_regression_report",

@@ -9,15 +9,16 @@ from TeeBotus.codex_history_systemd import main, render_codex_history_index_syst
 def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) -> None:
     unit = render_codex_history_systemd_unit(repo_root=tmp_path)
 
-    assert unit.service_name == "teebotus-codex-history.service"
-    assert "Description=TeeBotus Codex history watcher" in unit.service_text
+    assert unit.service_name == "teebotus-codex-history-collector.service"
+    assert "Description=TeeBotus Codex history collector" in unit.service_text
+    assert "User=root" in unit.service_text
     assert f"WorkingDirectory={tmp_path.resolve()}" in unit.service_text
     assert f"EnvironmentFile=-{tmp_path.resolve() / '.env'}" in unit.service_text
     assert "ExecStart=python3 -m TeeBotus.admin codex-history watch" in unit.service_text
     assert f"--instances-dir {tmp_path.resolve() / 'instances'}" in unit.service_text
     assert "--follow" in unit.service_text
     assert "--event-mode auto" in unit.service_text
-    assert "--poll-interval 5" in unit.service_text
+    assert "--poll-interval 300" in unit.service_text
     assert "--max-iterations" not in unit.service_text
     assert "--limit 1000" in unit.service_text
     assert "--post-index" in unit.service_text
@@ -25,9 +26,17 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "--once" not in unit.service_text
     assert "Restart=on-failure" in unit.service_text
     assert "RestartSec=5s" in unit.service_text
+    assert "UMask=0077" in unit.service_text
     assert "NoNewPrivileges=true" in unit.service_text
     assert "PrivateTmp=true" in unit.service_text
-    assert "WantedBy=default.target" in unit.service_text
+    assert "WantedBy=multi-user.target" in unit.service_text
+
+
+def test_render_codex_history_systemd_unit_root_collector_uses_repo_owner_session_roots() -> None:
+    unit = render_codex_history_systemd_unit(repo_root=Path("/home/teladi/TeeBotus"))
+
+    assert "--sessions-root /home/teladi/.codex/sessions" in unit.service_text
+    assert "--sessions-root /home/teladi/.codex-agents" in unit.service_text
 
 
 def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots(tmp_path: Path) -> None:
@@ -92,6 +101,7 @@ def test_render_codex_history_index_systemd_units_builds_low_priority_timer(tmp_
     assert units.service_name == "teebotus-codex-history-index.service"
     assert units.timer_name == "teebotus-codex-history-index.timer"
     assert "Type=oneshot" in units.service_text
+    assert "User=root" in units.service_text
     assert "Nice=10" in units.service_text
     assert "IOSchedulingClass=best-effort" in units.service_text
     assert "IOSchedulingPriority=7" in units.service_text
@@ -235,7 +245,7 @@ def test_codex_history_systemd_print_mode_outputs_service(tmp_path: Path, capsys
 
     captured = capsys.readouterr()
     assert result == 0
-    assert "# teebotus-codex-history.service" in captured.out
+    assert "# teebotus-codex-history-collector.service" in captured.out
     assert "ExecStart=python3 -m TeeBotus.admin codex-history watch" in captured.out
 
 
@@ -244,14 +254,34 @@ def test_codex_history_systemd_print_mode_can_output_index_timer(tmp_path: Path,
 
     captured = capsys.readouterr()
     assert result == 0
-    assert "# teebotus-codex-history.service" in captured.out
+    assert "# teebotus-codex-history-collector.service" in captured.out
     assert "# teebotus-codex-history-index.service" in captured.out
     assert "# teebotus-codex-history-index.timer" in captured.out
     assert "ExecStart=python3 -m TeeBotus.admin codex-history index" in captured.out
     assert "OnUnitActiveSec=24h" in captured.out
 
 
-def test_codex_history_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path: Path) -> None:
+def test_codex_history_systemd_enable_runs_system_systemctl(monkeypatch, tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command, check=False, **_kwargs):
+        calls.append(list(command))
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("TeeBotus.codex_history_systemd.subprocess.run", fake_run)
+    system_dir = tmp_path / "system"
+
+    result = main(["--repo-root", str(tmp_path), "--system-dir", str(system_dir), "--enable"])
+
+    assert result == 0
+    assert (system_dir / "teebotus-codex-history-collector.service").exists()
+    assert calls == [
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", "teebotus-codex-history-collector.service"],
+    ]
+
+
+def test_codex_history_systemd_user_unit_keeps_legacy_user_manager_mode(monkeypatch, tmp_path: Path) -> None:
     calls: list[list[str]] = []
 
     def fake_run(command, check=False, **_kwargs):
@@ -261,10 +291,12 @@ def test_codex_history_systemd_enable_runs_user_systemctl(monkeypatch, tmp_path:
     monkeypatch.setattr("TeeBotus.codex_history_systemd.Path.home", lambda: tmp_path)
     monkeypatch.setattr("TeeBotus.codex_history_systemd.subprocess.run", fake_run)
 
-    result = main(["--repo-root", str(tmp_path), "--enable"])
+    result = main(["--repo-root", str(tmp_path), "--user-unit", "--service-name", "teebotus-codex-history.service", "--enable"])
 
     assert result == 0
-    assert (tmp_path / ".config" / "systemd" / "user" / "teebotus-codex-history.service").exists()
+    user_service = tmp_path / ".config" / "systemd" / "user" / "teebotus-codex-history.service"
+    assert user_service.exists()
+    assert "User=root" not in user_service.read_text(encoding="utf-8")
     assert calls == [
         ["systemctl", "--user", "daemon-reload"],
         ["systemctl", "--user", "enable", "--now", "teebotus-codex-history.service"],
@@ -278,18 +310,17 @@ def test_codex_history_systemd_enable_with_index_timer_writes_and_enables_timer(
         calls.append(list(command))
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("TeeBotus.codex_history_systemd.Path.home", lambda: tmp_path)
     monkeypatch.setattr("TeeBotus.codex_history_systemd.subprocess.run", fake_run)
+    system_dir = tmp_path / "system"
 
-    result = main(["--repo-root", str(tmp_path), "--index-timer", "--enable"])
+    result = main(["--repo-root", str(tmp_path), "--system-dir", str(system_dir), "--index-timer", "--enable"])
 
     assert result == 0
-    user_dir = tmp_path / ".config" / "systemd" / "user"
-    assert (user_dir / "teebotus-codex-history.service").exists()
-    assert (user_dir / "teebotus-codex-history-index.service").exists()
-    assert (user_dir / "teebotus-codex-history-index.timer").exists()
+    assert (system_dir / "teebotus-codex-history-collector.service").exists()
+    assert (system_dir / "teebotus-codex-history-index.service").exists()
+    assert (system_dir / "teebotus-codex-history-index.timer").exists()
     assert calls == [
-        ["systemctl", "--user", "daemon-reload"],
-        ["systemctl", "--user", "enable", "--now", "teebotus-codex-history.service"],
-        ["systemctl", "--user", "enable", "--now", "teebotus-codex-history-index.timer"],
+        ["systemctl", "daemon-reload"],
+        ["systemctl", "enable", "--now", "teebotus-codex-history-collector.service"],
+        ["systemctl", "enable", "--now", "teebotus-codex-history-index.timer"],
     ]

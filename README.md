@@ -165,6 +165,26 @@ teebotus-proactive-systemd --repo-root "$PWD" --instance Depressionsbot --enable
 
 Der erzeugte Timer ruft standardmaessig `teebotus-proactive --dispatch --plan --tool-plan` auf. Das fuehrt lokale Reflection-Planung, Due-Selection und Versand ueber die konfigurierten Proactive-Backends aus. LLM-Planung ist mit `--llm-plan` verfuegbar; die native Tool-Agent-Planung mit lokal validierten Memory-/Outbox-Toolcalls ist mit `--tool-plan` im systemd-Renderer der Default. Toolcalls laufen zusaetzlich durch `ProactiveToolCallDecision`, damit bekannte Tools nur mit Pflichtargumenten und erlaubten Argumenten in die Plananwendung kommen. Beide Pfade bleiben hinter `TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES` beziehungsweise Instanz-Flag und passender Rollen-LLM-Konfiguration aktiv.
 
+Der Codex-History-Collector ist eine eigene systemweite systemd-Unit. Der neue
+primaere Renderer heisst `teebotus-codex-history-collector` und erzeugt
+standardmaessig `teebotus-codex-history-collector.service` mit `User=root`,
+damit Sessiondaten unter `/home/teladi/.codex/sessions` und
+`/home/teladi/.codex-agents` auch dann gelesen werden, wenn mehrere
+Codex-Homes beteiligt sind. Der alte Entry-Point
+`teebotus-codex-history-systemd` bleibt nur als Kompatibilitaetsalias erhalten;
+er war nie der Service-Name selbst.
+
+```bash
+teebotus-codex-history-collector --repo-root "$PWD" --print
+sudo -E teebotus-codex-history-collector --repo-root "$PWD" --enable
+```
+
+Die Unit startet `codex-history watch --follow --event-mode auto
+--poll-interval 300 --limit 1000 --post-index`, nutzt die lokale `.env` als
+optionales EnvironmentFile und installiert nach `/etc/systemd/system`. Fuer den
+alten User-Unit-Modus gibt es explizit `--user-unit`; der Default ist bewusst
+der root-Collector.
+
 Fuer nicht-user-getriggerte Proactive-Aufrufe sind drei Rollen vorgesehen: `PROACTIVE_PLAN`, `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. OpenAI bleibt ueber `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_PLAN`, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_DECISION` und `OPENAI_API_KEY_<INSTANCE>_PROACTIVE_WORKER` kompatibel; die jeweiligen `_SERVICES`-Varianten werden ebenfalls akzeptiert. Providerneutrale Rollen-LLMs werden ueber dieselben Runtime-LLM-Settings wie normale Kanaele konfiguriert, z.B. `TEEBOTUS_LLM_PROFILE_<INSTANCE>_PROACTIVE_PLAN=gemini_flash_stateful`, `TEEBOTUS_LLM_API_KEY_<INSTANCE>_PROACTIVE_PLAN=...`, analog fuer `PROACTIVE_DECISION` und `PROACTIVE_WORKER`. Fuer Gemini-Keyrotation sind zusaetzlich rollenspezifische Ringe/Buckets moeglich, z.B. `TEEBOTUS_GEMINI_API_KEY_RING_<INSTANCE>_PROACTIVE_WORKER` oder `TEEBOTUS_GEMINI_API_KEYS_<INSTANCE>_PROACTIVE_WORKER_ACCOUNT_1`. Ohne explizite rollenbezogene LLM-Settings nutzt jede Rolle die Kette: Rollen-Key, `OPENAI_API_KEY_<INSTANCE>_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_PROACTIVE` oder `_PROACTIVE_SERVICES`, `OPENAI_API_KEY_<INSTANCE>_BACKGROUND` oder `_BACKGROUND_SERVICES`, danach `OPENAI_API_KEY_BACKGROUND` oder `_BACKGROUND_SERVICES`. Die alte sichtbare Instanzform wie `Depressionsbot_BACKGROUND_SERVICES` bleibt kompatibel. Normale instanzweite oder globale Userantwort-Keys (`OPENAI_API_KEY_<INSTANCE>`, `OPENAI_API_KEY`) werden fuer `proactive`/`background` weiterhin nicht als Fallback genutzt; Telegram-/Signal-/Matrix-Userantworten bleiben davon getrennt.
 
 Alte Memory-Rettungsartefakte werden nicht geloescht. `scripts/maintain_instance_quarantine.py` verschiebt nur bekannte Altpfade wie `.pre-*`, `*.unreadable-*`, alte `Account_*_Quarantine`-Ordner, `accounts.pre-*`-Snapshots und Pseudo-Instanzen ohne `Bot_Verhalten.md` in eine zentrale datierte Quarantaene unter `instances/.quarantine/cleanup-<timestamp>` und schreibt dort ein `manifest.json`. Aktive Stores bleiben ausgeschlossen: `data/accounts/accounts`, `Account_Memory.sqlite3`, `Account_Memory.backup.sqlite3` und WAL/SHM-Dateien unter dem aktiven `data/accounts` werden nicht bewegt.
