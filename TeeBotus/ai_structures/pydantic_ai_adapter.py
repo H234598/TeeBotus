@@ -234,6 +234,8 @@ def _openai_compatible_base_url(base_url: str) -> str:
 def _hf_pool_runtime_state(env: Mapping[str, str] | None) -> HFPoolRuntimeState | None:
     source = os.environ if env is None else env
     state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
+    if env is not None and not state_db:
+        return None
     state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
     if not state_path.exists():
         return None
