@@ -121,6 +121,7 @@ def build_status_reply(
     commit_history_url = github_commit_history_url(project_root)
     status_name = _status_display_name(instance_name)
     api_budget_lines = _llm_api_budget_status_lines(
+        instance_name=instance_name,
         llm_enabled=llm_enabled,
         llm_provider=llm_provider,
         llm_model=llm_model,
@@ -219,6 +220,7 @@ def _llm_category_status_lines(
 
 def _llm_api_budget_status_lines(
     *,
+    instance_name: str,
     llm_enabled: bool | None,
     llm_provider: str,
     llm_model: str,
@@ -238,9 +240,15 @@ def _llm_api_budget_status_lines(
         env=values,
         enabled=llm_enabled,
         service_tier=_first_status_attr(llm_client, "service_tier"),
+        instance_name=instance_name,
     )
     decision_label = _api_budget_label_for_runner(structured_decision_runner, env=values)
-    bibliothekar_label = _api_budget_label_for_route("bibliothekar_answer", enabled=bibliothekar_enabled, env=values)
+    bibliothekar_label = _api_budget_label_for_route(
+        "bibliothekar_answer",
+        enabled=bibliothekar_enabled,
+        env=values,
+        instance_name=instance_name,
+    )
     return [
         redact_status_text(f"- Chat/Text: {chat_label}"),
         redact_status_text(f"- Entscheidungen/Planner: {decision_label}"),
@@ -398,7 +406,7 @@ def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str
     return _api_budget_label(provider=provider, model=model, env=env, enabled=True)
 
 
-def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapping[str, str]) -> str:
+def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapping[str, str], instance_name: str = "") -> str:
     if enabled is False:
         return "aus"
     try:
@@ -419,6 +427,7 @@ def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapp
             enabled=True,
             api_key_env=route.api_key_env,
             service_tier=service_tier,
+            instance_name=instance_name,
         )
     except Exception as exc:  # noqa: BLE001 - status should stay diagnostic.
         return f"unbekannt - {type(exc).__name__}: {exc}"
@@ -432,13 +441,20 @@ def _api_budget_label(
     enabled: bool | None,
     api_key_env: str = "",
     service_tier: str = "",
+    instance_name: str = "",
 ) -> str:
     if enabled is False:
         return "aus"
     resolved_provider = _normalize_status_provider(provider)
     resolved_model = str(model or "").strip()
     key_env = str(api_key_env or "").strip() or _default_api_key_env(resolved_provider, resolved_model)
-    key_label = _api_key_status_label(key_env, env=env, provider=resolved_provider, model=resolved_model)
+    key_label = _api_key_status_label(
+        key_env,
+        env=env,
+        provider=resolved_provider,
+        model=resolved_model,
+        instance_name=instance_name,
+    )
     usage_label = _api_usage_label(provider=resolved_provider, model=resolved_model)
     mode = ""
     if _model_uses_google(resolved_provider, resolved_model):
@@ -449,14 +465,29 @@ def _api_budget_label(
     return f"{resolved_provider} / {resolved_model or 'openai-default'}; Key: {key_label}; {usage_label}{mode}"
 
 
-def _api_key_status_label(key_env: str, *, env: Mapping[str, str], provider: str, model: str) -> str:
+def _api_key_status_label(key_env: str, *, env: Mapping[str, str], provider: str, model: str, instance_name: str = "") -> str:
     if _model_is_local(provider, model):
         return "nicht noetig"
     if provider == "hf_pool":
         return "ueber Pool/Target"
+    if key_env and str(env.get(key_env, "") or "").strip():
+        return f"{key_env} gesetzt"
+    if _model_uses_google(provider, model):
+        key_ring_size = _gemini_key_ring_size(env, instance_name=instance_name)
+        if key_ring_size:
+            return f"Gemini-Keyring gesetzt ({key_ring_size})"
     if not key_env:
         return "providerabhaengig"
-    return f"{key_env} " + ("gesetzt" if str(env.get(key_env, "") or "").strip() else "fehlt")
+    return f"{key_env} fehlt"
+
+
+def _gemini_key_ring_size(env: Mapping[str, str], *, instance_name: str = "") -> int:
+    try:
+        from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
+
+        return len(resolve_gemini_api_key_ring(env, instance_name=instance_name))
+    except Exception:  # noqa: BLE001 - status output must not fail because optional keyring parsing changed.
+        return 0
 
 
 def _api_usage_label(*, provider: str, model: str) -> str:
