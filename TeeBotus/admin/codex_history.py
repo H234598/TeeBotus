@@ -17,7 +17,7 @@ import sys
 import tomllib
 import uuid
 from collections import Counter
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timedelta, timezone
 from inspect import isawaitable
@@ -36,7 +36,7 @@ from TeeBotus.admin.accounts_report import (
     parse_csv,
 )
 from TeeBotus.runtime.actions import SendAttachment
-from TeeBotus.runtime.admin_accounts import runtime_admin_account_ids
+from TeeBotus.runtime.admin_accounts import _resolve_admin_notification_route, runtime_admin_account_ids
 from TeeBotus.runtime.accounts import (
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
@@ -69,6 +69,11 @@ CODEX_HISTORY_MANAGED_SUMMARY_SECTIONS = (
     CODEX_HISTORY_LINKS_SECTION_TITLE,
     CODEX_HISTORY_MERMAID_SECTION_TITLE,
 )
+CODEX_SESSION_ACTIVE_GRACE_SECONDS = 5 * 60
+CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES = 8 * 1024 * 1024
+CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES = 16 * 1024 * 1024
+CODEX_SESSION_LARGE_FILE_HEAD_BYTES = 512 * 1024
+CODEX_SESSION_LARGE_FILE_TAIL_BYTES = 1024 * 1024
 CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
     {
         "change-feature",
@@ -370,6 +375,8 @@ async def dispatch_codex_history_outbox(
     account_ids: Sequence[str] = (),
     senders: Mapping[str, ProactiveSender] | None = None,
     env: Mapping[str, str] | None = None,
+    instances_dir: str | Path | None = None,
+    secret_provider: InstanceSecretProvider | None = None,
     now: datetime | None = None,
     dry_run: bool = False,
     limit: int = 100,
@@ -389,7 +396,14 @@ async def dispatch_codex_history_outbox(
         if not item_id:
             continue
         if dry_run:
-            dry_rows = _dry_run_dispatch_rows(item, candidate_account_ids, store)
+            dry_rows = _dry_run_dispatch_rows(
+                item,
+                candidate_account_ids,
+                store,
+                instance_name=instance_name,
+                instances_dir=instances_dir,
+                secret_provider=secret_provider,
+            )
             result_rows.extend(dry_rows)
             continue
         _update_codex_history_item_status(store, item_id, "dispatching", reason="worker_claimed", now=timestamp, increment_attempt=True)
@@ -398,12 +412,14 @@ async def dispatch_codex_history_outbox(
             item_results.append(
                 await _dispatch_codex_history_item_to_account(
                     store,
-                    item,
-                    account_id,
-                    instance_name=instance_name,
-                    senders=resolved_senders,
-                    now=timestamp,
-                )
+                item,
+                account_id,
+                instance_name=instance_name,
+                senders=resolved_senders,
+                instances_dir=instances_dir,
+                secret_provider=secret_provider,
+                now=timestamp,
+            )
             )
         if not item_results:
             item_results.append(
@@ -662,6 +678,7 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
                     rows,
                     session_file,
                     final_message_limit=0 if session_file in explicit_session_files else 1,
+                    skip_active_large=session_file not in explicit_session_files,
                 )
             except (OSError, ValueError, AccountStoreError) as exc:
                 file_results = [
@@ -717,9 +734,11 @@ def _aggregate_codex_session_import_results(results: Sequence[Mapping[str, Any]]
 
 
 def _build_codex_session_import_results(
-    rows: list[dict[str, Any]], session_file: str | Path, *, final_message_limit: int = 0
+    rows: list[dict[str, Any]], session_file: str | Path, *, final_message_limit: int = 0, skip_active_large: bool = False
 ) -> list[dict[str, Any]]:
     path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
+    if skip_active_large and _codex_session_file_is_active_large(path):
+        return [{"status": "skipped", "reason": "active_large_session", "path": str(path)}]
     parsed = _parse_codex_session_file(path)
     final_messages = parsed.get("final_messages", ())
     if not isinstance(final_messages, Sequence) or isinstance(final_messages, (str, bytes, bytearray)):
@@ -2418,18 +2437,32 @@ def _codex_history_dispatch_sort_key(item: Mapping[str, Any], *, now: datetime |
     )
 
 
-def _dry_run_dispatch_rows(item: Mapping[str, Any], account_ids: Sequence[str], store: AccountStore) -> list[dict[str, Any]]:
+def _dry_run_dispatch_rows(
+    item: Mapping[str, Any],
+    account_ids: Sequence[str],
+    store: AccountStore,
+    *,
+    instance_name: str,
+    instances_dir: str | Path | None,
+    secret_provider: InstanceSecretProvider | None,
+) -> list[dict[str, Any]]:
     item_id = str(item.get("id") or "").strip()
     rows: list[dict[str, Any]] = []
     for account_id in account_ids:
-        route = _safe_select_route(store, account_id)
+        route, reason = _resolve_codex_history_dispatch_route(
+            store,
+            account_id,
+            instance_name=instance_name,
+            instances_dir=instances_dir,
+            secret_provider=secret_provider,
+        )
         channel = str(route.get("channel") or "").strip().casefold() if isinstance(route, Mapping) else ""
         rows.append(
             {
                 "codex_history_item_id": item_id,
                 "account_id": account_id,
                 "status": "would_send" if route is not None else "would_skip",
-                "reason": "" if route is not None else "no_private_route",
+                "reason": "" if route is not None else (reason or "no_private_route"),
                 "channel": channel,
                 "summary_prefix": item.get("summary_prefix", ""),
             }
@@ -2455,16 +2488,24 @@ async def _dispatch_codex_history_item_to_account(
     *,
     instance_name: str,
     senders: Mapping[str, ProactiveSender],
+    instances_dir: str | Path | None,
+    secret_provider: InstanceSecretProvider | None,
     now: str,
 ) -> dict[str, Any]:
-    route = _safe_select_route(store, account_id)
+    route, route_reason = _resolve_codex_history_dispatch_route(
+        store,
+        account_id,
+        instance_name=instance_name,
+        instances_dir=instances_dir,
+        secret_provider=secret_provider,
+    )
     if route is None:
         return _record_codex_history_dispatch_result(
             store,
             item,
             account_id,
             status="skipped",
-            reason="no_private_route",
+            reason=route_reason or "no_private_route",
             now=now,
             instance_name=instance_name,
         )
@@ -2538,6 +2579,42 @@ def _safe_select_route(store: AccountStore, account_id: str) -> dict[str, Any] |
         return select_proactive_route(store, account_id)
     except (AccountStoreError, OSError, ValueError):
         return None
+
+
+def _resolve_codex_history_dispatch_route(
+    store: AccountStore,
+    account_id: str,
+    *,
+    instance_name: str,
+    instances_dir: str | Path | None,
+    secret_provider: InstanceSecretProvider | None,
+) -> tuple[dict[str, Any] | None, str]:
+    if instances_dir is not None:
+        try:
+            safe_instances_dir = _safe_repo_root(Path(instances_dir), operation="instances directory")
+            resolution = _resolve_admin_notification_route(
+                store,
+                account_id,
+                instances_dir=safe_instances_dir,
+                summary_instance_name=_safe_instance_name(instance_name),
+                store_factory=lambda accounts_root, source_instance_name: AccountStore(
+                    accounts_root,
+                    source_instance_name,
+                    secret_provider=secret_provider or ReadOnlySecretToolInstanceSecretProvider(),
+                    create_dirs=False,
+                ),
+            )
+        except (AccountStoreError, OSError, ValueError):
+            resolution = None
+        if resolution is not None:
+            if resolution.route is not None:
+                return dict(resolution.route), str(resolution.reason or "")
+            if resolution.status != "not_local":
+                return None, str(resolution.reason or resolution.status or "no_private_route")
+    route = _safe_select_route(store, account_id)
+    if route is not None:
+        return route, ""
+    return None, "no_private_route"
 
 
 def _sender_for_channel(senders: Mapping[str, ProactiveSender], channel: str) -> ProactiveSender | None:
@@ -2803,7 +2880,63 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
     except OSError:
         source_mtime = ""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = _iter_codex_session_text_lines(path)
+        for raw_line in lines:
+            if not raw_line.strip():
+                continue
+            try:
+                row = json.loads(raw_line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(row, Mapping):
+                continue
+            payload = row.get("payload", {})
+            if not isinstance(payload, Mapping):
+                payload = {}
+            row_type = str(row.get("type") or payload.get("type") or "").strip()
+            if row_type == "session_meta":
+                session_id = str(payload.get("id") or session_id or "").strip()
+                cwd = str(payload.get("cwd") or cwd or "").strip()
+            elif row_type == "turn_context":
+                turn_id = str(payload.get("turn_id") or turn_id or "").strip()
+            else:
+                cwd = str(payload.get("cwd") or cwd or "").strip()
+            role = str(payload.get("role") or "").strip()
+            phase = str(payload.get("phase") or "").strip().casefold()
+            payload_text = _codex_payload_text(payload)
+            if role == "user" and payload_text:
+                extracted_goal = _extract_codex_goal(payload_text)
+                if extracted_goal:
+                    latest_goal = extracted_goal
+                    goals_by_turn[turn_id] = extracted_goal
+                visible_text = _visible_codex_user_text(payload_text)
+                if visible_text:
+                    latest_auftrag = visible_text
+                    user_messages_by_turn.setdefault(turn_id, []).append(visible_text)
+            elif role == "assistant" and payload_text and phase and phase not in {"final", "final_answer"}:
+                intermediate_by_turn.setdefault(turn_id, []).append(
+                    {
+                        "turn_id": turn_id,
+                        "phase": phase,
+                        "text": _truncate(redact_codex_history_text(payload_text).strip(), 1000),
+                    }
+                )
+            text = _assistant_text_from_codex_payload(payload)
+            if text:
+                final_text = text
+                turn_user_messages = user_messages_by_turn.get(turn_id) or []
+                message_goal = goals_by_turn.get(turn_id) or latest_goal
+                message_auftrag = turn_user_messages[-1] if turn_user_messages else latest_auftrag
+                final_messages.append(
+                    {
+                        "turn_id": turn_id,
+                        "final_text": text,
+                        "goal": message_goal,
+                        "auftrag": message_auftrag,
+                        "current_task": message_auftrag,
+                        "intermediate_messages": intermediate_by_turn.get(turn_id, []),
+                    }
+                )
     except OSError:
         return {
             "session_id": "",
@@ -2815,62 +2948,6 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
             "goal": "",
             "auftrag": "",
         }
-    for raw_line in lines:
-        if not raw_line.strip():
-            continue
-        try:
-            row = json.loads(raw_line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(row, Mapping):
-            continue
-        payload = row.get("payload", {})
-        if not isinstance(payload, Mapping):
-            payload = {}
-        row_type = str(row.get("type") or payload.get("type") or "").strip()
-        if row_type == "session_meta":
-            session_id = str(payload.get("id") or session_id or "").strip()
-            cwd = str(payload.get("cwd") or cwd or "").strip()
-        elif row_type == "turn_context":
-            turn_id = str(payload.get("turn_id") or turn_id or "").strip()
-        else:
-            cwd = str(payload.get("cwd") or cwd or "").strip()
-        role = str(payload.get("role") or "").strip()
-        phase = str(payload.get("phase") or "").strip().casefold()
-        payload_text = _codex_payload_text(payload)
-        if role == "user" and payload_text:
-            extracted_goal = _extract_codex_goal(payload_text)
-            if extracted_goal:
-                latest_goal = extracted_goal
-                goals_by_turn[turn_id] = extracted_goal
-            visible_text = _visible_codex_user_text(payload_text)
-            if visible_text:
-                latest_auftrag = visible_text
-                user_messages_by_turn.setdefault(turn_id, []).append(visible_text)
-        elif role == "assistant" and payload_text and phase and phase not in {"final", "final_answer"}:
-            intermediate_by_turn.setdefault(turn_id, []).append(
-                {
-                    "turn_id": turn_id,
-                    "phase": phase,
-                    "text": _truncate(redact_codex_history_text(payload_text).strip(), 1000),
-                }
-            )
-        text = _assistant_text_from_codex_payload(payload)
-        if text:
-            final_text = text
-            turn_user_messages = user_messages_by_turn.get(turn_id) or []
-            message_goal = goals_by_turn.get(turn_id) or latest_goal
-            message_auftrag = turn_user_messages[-1] if turn_user_messages else latest_auftrag
-            final_messages.append(
-                {
-                    "turn_id": turn_id,
-                    "final_text": text,
-                    "goal": message_goal,
-                    "auftrag": message_auftrag,
-                    "current_task": message_auftrag,
-                    "intermediate_messages": intermediate_by_turn.get(turn_id, []),
-                }
-            )
     return {
         "session_id": session_id,
         "turn_id": turn_id,
@@ -2881,6 +2958,48 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
         "goal": latest_goal,
         "auftrag": latest_auftrag,
     }
+
+
+def _codex_session_file_is_active_large(path: Path) -> bool:
+    try:
+        stat = path.stat()
+    except OSError:
+        return False
+    if stat.st_size < CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES:
+        return False
+    age_seconds = max(0.0, time.time() - float(stat.st_mtime))
+    return age_seconds < CODEX_SESSION_ACTIVE_GRACE_SECONDS
+
+
+def _iter_codex_session_text_lines(path: Path) -> Iterator[str]:
+    stat = path.stat()
+    if stat.st_size <= CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            yield from handle
+        return
+    head_bytes = max(0, int(CODEX_SESSION_LARGE_FILE_HEAD_BYTES))
+    tail_bytes = max(0, int(CODEX_SESSION_LARGE_FILE_TAIL_BYTES))
+    with path.open("rb") as handle:
+        if head_bytes:
+            head = handle.read(head_bytes)
+            yield from _complete_text_lines_from_bytes(head, keep_last_partial=False)
+        if tail_bytes:
+            tail_start = max(head_bytes, stat.st_size - tail_bytes)
+            handle.seek(tail_start)
+            if tail_start > 0:
+                handle.readline()
+            tail = handle.read(tail_bytes)
+            yield from _complete_text_lines_from_bytes(tail, keep_last_partial=True)
+
+
+def _complete_text_lines_from_bytes(data: bytes, *, keep_last_partial: bool) -> Iterator[str]:
+    if not data:
+        return
+    lines = data.splitlines(keepends=True)
+    if not keep_last_partial and lines and not lines[-1].endswith((b"\n", b"\r")):
+        lines = lines[:-1]
+    for line in lines:
+        yield line.decode("utf-8", errors="replace")
 
 
 def _assistant_text_from_codex_payload(payload: Mapping[str, Any]) -> str:
@@ -3778,6 +3897,8 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                             store,
                             instance_name=instance_name,
                             senders=senders,
+                            instances_dir=instances_dir,
+                            secret_provider=provider,
                             dry_run=bool(args.dry_run),
                             limit=int(args.limit or 0),
                         )
@@ -4152,6 +4273,8 @@ def _watch_dispatch_report(
             store,
             instance_name=instance_name,
             senders=senders,
+            instances_dir=instances_dir,
+            secret_provider=ReadOnlySecretToolInstanceSecretProvider(),
             dry_run=dry_run,
             limit=int(getattr(args, "dispatch_limit", 0) or 0),
         )

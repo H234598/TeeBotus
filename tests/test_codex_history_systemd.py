@@ -197,6 +197,7 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
     assert "--max-iterations" not in units.service_text
     assert "--event-mode snapshot" in units.service_text
     assert "--poll-interval 0" in units.service_text
+    assert "--limit 10" in units.service_text
     assert f"--sessions-root {tmp_path / 'sessions'}" in units.service_text
     assert "--dispatch" in units.service_text
     assert "--dispatch-limit 50" in units.service_text
@@ -394,6 +395,7 @@ def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: P
     assert "--once" in captured.out
     assert captured.out.count("--sessions-root") == 1
     assert f"--sessions-root {tmp_path / 'sessions'}" in captured.out
+    assert "--limit 10" in captured.out
     assert "--dispatch-limit 50" in captured.out
     assert "OnUnitActiveSec=1min" in captured.out
 

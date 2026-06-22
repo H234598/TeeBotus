@@ -1068,6 +1068,58 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(
     assert Path(dispatch["obsidian_path"]).name.startswith("20260619T140000_")
 
 
+def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) -> None:
+    instances_dir = tmp_path / "instances"
+    logger_dir = make_instance(instances_dir, "TeeBotus_Logger")
+    source_dir = make_instance(instances_dir, "Bote_der_Wahrheit")
+    repo = make_git_repo(tmp_path, "cross-route-demo", version="1.9.1")
+    logger_store = AccountStore(logger_dir / "data" / "accounts", "TeeBotus_Logger", provider())
+    source_store = AccountStore(source_dir / "data" / "accounts", "Bote_der_Wahrheit", provider())
+    identity = telegram_identity_key(123)
+    admin_id = source_store.resolve_or_create_account(identity, display_label="Admin")
+    source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(
+        logger_store,
+        repo_root=repo,
+        title="Cross Route",
+        bullets=["TBL nutzt Adminroute aus Quellinstanz."],
+        session_id="sess-cross-route",
+    )
+    sent: list[tuple[dict[str, object], SendAttachment, dict[str, object]]] = []
+
+    def sender(route: dict[str, object], action: SendAttachment, metadata: dict[str, object]) -> str:
+        sent.append((route, action, metadata))
+        return "telegram-cross-1"
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            logger_store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            instances_dir=instances_dir,
+            secret_provider=provider(),
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"accepted": 1}
+    assert sent
+    route, action, metadata = sent[0]
+    assert route["channel"] == "telegram"
+    assert route["chat_id"] == "123"
+    assert route["route_source_instance"] == "Bote_der_Wahrheit"
+    assert action.chat_id == "123"
+    assert metadata["codex_history_item_id"] == item["id"]
+    persisted = logger_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "accepted"
+    dispatch = logger_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["status"] == "accepted"
+    assert dispatch["channel"] == "telegram"
+    assert dispatch["chat_id"] == "123"
+    assert dispatch["message_ref"] == "telegram-cross-1"
+
+
 def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path, capsys) -> None:
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "ack-demo", version="1.8.1")
@@ -1593,6 +1645,66 @@ def test_import_codex_session_file_skips_when_no_assistant_final_text(tmp_path: 
     assert result["status"] == "skipped"
     assert result["reason"] == "missing_final_text"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_import_codex_session_roots_skips_recent_large_directory_session_but_explicit_import_can_read_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "active-large-session-demo", version="1.0.0")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = write_codex_session(
+        tmp_path / "sessions" / "active-large.jsonl",
+        repo=repo,
+        final_text="Aktive grosse Summary soll explizit importierbar bleiben.",
+    )
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES", 1)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_ACTIVE_GRACE_SECONDS", 3600)
+
+    directory_result = import_codex_session_roots(store, (session_file.parent,), limit=10)
+
+    assert directory_result["status_counts"] == {"skipped": 1}
+    assert directory_result["items"][0]["reason"] == "active_large_session"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+    explicit_result = import_codex_session_file(store, session_file)
+
+    assert explicit_result["status"] == "imported"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary"]["title"] == (
+        "Aktive grosse Summary soll explizit importierbar bleiben."
+    )
+
+
+def test_import_codex_session_file_reads_large_logs_from_head_and_tail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = make_git_repo(tmp_path, "large-tail-session-demo", version="1.0.0")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = tmp_path / "sessions" / "large-tail.jsonl"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-large-tail", "cwd": str(repo)}},
+        {"type": "response_item", "payload": {"type": "function_call_output", "call_id": "call-1", "output": "x" * 2048}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-large-tail"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "Tail Summary importiert."}],
+            },
+        },
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES", 128)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_HEAD_BYTES", 256)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_TAIL_BYTES", 1024)
+
+    result = import_codex_session_file(store, session_file)
+
+    assert result["status"] == "imported"
+    item = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert item["codex"]["session_id"] == "sess-large-tail"
+    assert item["codex"]["turn_id"] == "turn-large-tail"
+    assert item["summary"]["title"] == "Tail Summary importiert."
 
 
 def test_import_codex_session_file_skips_commentary_only_assistant_updates(tmp_path: Path) -> None:

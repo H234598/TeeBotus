@@ -24,6 +24,7 @@ DEFAULT_RUN_USER = "root"
 DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
+DEFAULT_COLLECTOR_TIMER_LIMIT = 10
 DEFAULT_DISPATCH_LIMIT = 50
 DEFAULT_MAX_ITERATIONS = 1
 DEFAULT_COLLECTOR_INTERVAL = "1min"
@@ -71,7 +72,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--instances", default="", help="Comma-separated instance filter passed to codex-history watch.")
     parser.add_argument("--instance", default="", help="Single instance passed to codex-history watch.")
     parser.add_argument("--sessions-root", action="append", default=[], help="Codex session root passed to codex-history watch; repeatable.")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Max session JSONL files per scan.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help=(
+            "Max session JSONL files per scan. Defaults to "
+            f"{DEFAULT_LIMIT} for the persistent collector and {DEFAULT_COLLECTOR_TIMER_LIMIT} for --collector-timer."
+        ),
+    )
     parser.add_argument("--event-mode", choices=("auto", "watchdog", "snapshot", "poll"), default="auto", help="Codex history watch backend.")
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS, help="Fallback wait interval for watch mode.")
     parser.add_argument("--follow", dest="follow", action="store_true", default=True, help="Run the watcher persistently in the systemd service.")
@@ -150,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         run_user = "" if args.user_unit else args.run_user
+        scan_limit = int(args.limit) if args.limit is not None else (DEFAULT_COLLECTOR_TIMER_LIMIT if args.collector_timer else DEFAULT_LIMIT)
         collector_timer_units = (
             render_codex_history_collector_timer_units(
                 repo_root=Path(args.repo_root),
@@ -162,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
                 instances=args.instances,
                 instance=args.instance,
                 sessions_roots=tuple(args.sessions_root or ()),
-                limit=int(args.limit),
+                limit=scan_limit,
                 event_mode=args.event_mode,
                 poll_interval_seconds=float(args.poll_interval),
                 post_index=bool(args.post_index),
@@ -189,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             instances=args.instances,
             instance=args.instance,
             sessions_roots=tuple(args.sessions_root or ()),
-            limit=int(args.limit),
+            limit=scan_limit,
             event_mode=args.event_mode,
             poll_interval_seconds=float(args.poll_interval),
             follow=bool(args.follow),
@@ -403,7 +413,7 @@ def render_codex_history_collector_timer_units(
     instances: str = "",
     instance: str = "",
     sessions_roots: tuple[str | Path, ...] = (),
-    limit: int = DEFAULT_LIMIT,
+    limit: int = DEFAULT_COLLECTOR_TIMER_LIMIT,
     event_mode: str = "snapshot",
     poll_interval_seconds: float = 0,
     post_index: bool = True,
