@@ -431,7 +431,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "gemini_2_5_flash_paid_stateful": ("litellm_gemini_paid_stateful", "gemini/", "gemini/gemini-2.5-flash"),
         "vertex_gemini_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-3.5-flash"),
         "vertex_gemini_2_5_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-2.5-flash"),
-        "openai_premium": ("openai", "", ""),
+        "openai_premium": ("litellm", "openai/", "openai/gpt-5.5"),
     }
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
