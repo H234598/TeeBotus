@@ -418,7 +418,6 @@ class LlamaIndexBibliothekarBackend:
         self._query_engine_factory = query_engine_factory
         self._query_engine_cache: Any | None = None
         self._query_engine_cache_signature: tuple[int, int, int, int] | None = None
-        self._query_engine_top_k = DEFAULT_MAX_CHUNKS
 
     @property
     def available(self) -> bool:
@@ -453,8 +452,7 @@ class LlamaIndexBibliothekarBackend:
             self._query_engine_cache = self._query_engine_factory(self.fallback_store)
             self._query_engine_cache_signature = (*self._chunk_store_signature(), 0)
             return self._query_engine_cache
-        self._query_engine_top_k = top_k
-        self._query_engine_cache = self._build_default_query_engine()
+        self._query_engine_cache = self._build_default_query_engine(top_k)
         self._query_engine_cache_signature = signature
         return self._query_engine_cache
 
@@ -465,9 +463,8 @@ class LlamaIndexBibliothekarBackend:
             return (-1, -1, -1)
         return (int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ino))
 
-    def _build_default_query_engine(self) -> Any:
+    def _build_default_query_engine(self, max_chunks: int = DEFAULT_MAX_CHUNKS) -> Any:
         self.fallback_store.ensure_current()
-        max_chunks = self._query_engine_top_k
         chunks = _read_chunks(self.fallback_store.chunks_path)
         documents = [_llamaindex_document_from_chunk(chunk) for chunk in chunks if _chunk_has_required_citation_metadata(chunk)]
         if not documents:
