@@ -5,7 +5,7 @@ import os
 from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
+from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_gemini_api, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
 from TeeBotus.llm.service_tier import resolve_gemini_service_tier
@@ -508,16 +508,7 @@ def _gemini_service_tier_for_route(
 
 
 def _route_uses_gemini_api(*, provider: str, model: str) -> bool:
-    normalized_provider = normalize_llm_provider(provider)
-    normalized_model = str(model or "").strip().casefold()
-    return normalized_provider in {
-        "gemini",
-        "gemini_interactions",
-        "litellm_gemini_stateless",
-        "litellm_gemini_stateful",
-        "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_stateful",
-    } or normalized_model.startswith("gemini/")
+    return route_uses_gemini_api(provider=provider, model=model)
 
 
 def _parse_bool(value: bool | str) -> bool:

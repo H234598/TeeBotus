@@ -216,6 +216,20 @@ def route_uses_google_gemini(*, provider: str, model: object) -> bool:
     } or normalized_model.startswith(("gemini/", "vertex_ai/"))
 
 
+def route_uses_gemini_api(*, provider: str, model: object) -> bool:
+    normalized_provider = _normalize_gemini_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider in {
+        "gemini",
+        "gemini_interactions",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
+    } or normalized_model.startswith("gemini/")
+
+
 def provider_is_paid_google_gemini(provider: object) -> bool:
     return _normalize_gemini_provider(provider) in PAID_GEMINI_PROVIDERS
 
