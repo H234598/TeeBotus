@@ -140,6 +140,38 @@ def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path,
     assert account_store.get_account_for_identity(identity) is not None
 
 
+def test_free_text_status_auth_code_authorizes_runtime_admin_for_non_logger_instances(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "Hier ist das Secret: 18hhGfuu3"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert len(actions) == 1
+    assert actions[0].text == "Adminzugang aktiviert."
+    assert status_auth_state_authorized(account_store, account_id) is True
+    assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot", env={}) is True
+    assert account_store.read_status_auth_state(account_id)["source"] == "runtime_admin_text_code"
+
+
+def test_free_text_status_auth_code_requires_private_chat_for_non_logger_instances(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store, bot_address_names=("bot",))
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "bot, hier ist das Secret: 18hhGfuu3", chat_type="group"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert len(actions) == 1
+    assert actions[0].text == "Bitte privat."
+    assert status_auth_state_authorized(account_store, account_id) is False
+
+
 def test_help_hides_admin_section_for_regular_accounts(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)

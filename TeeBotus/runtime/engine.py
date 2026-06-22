@@ -244,6 +244,9 @@ class TeeBotusEngine:
             admin_actions = self._admin_membership_actions(event, result.account_id)
             if admin_actions is not None:
                 return EngineResult(result.account_id, admin_actions, handled=True)
+            admin_text_auth_actions = self._free_text_admin_auth_actions(event, result.account_id, command)
+            if admin_text_auth_actions is not None:
+                return EngineResult(result.account_id, admin_text_auth_actions, handled=True)
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
@@ -429,7 +432,23 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, ADMIN_FORBIDDEN_TEXT, track=False)]
         return [SendText(event.chat_id, ADMIN_AUTH_USAGE, track=False)]
 
-    def _admin_authorize_actions(self, event: IncomingEvent, account_id: str, secret_text: str) -> list[OutgoingAction]:
+    def _free_text_admin_auth_actions(self, event: IncomingEvent, account_id: str, command: str) -> list[OutgoingAction] | None:
+        if command or not event.text:
+            return None
+        if not status_auth_codes(instance_name=event.instance):
+            return None
+        if not text_contains_status_auth_code(event.text, instance_name=event.instance):
+            return None
+        return self._admin_authorize_actions(event, account_id, event.text, source="runtime_admin_text_code")
+
+    def _admin_authorize_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        secret_text: str,
+        *,
+        source: str = "runtime_admin_command",
+    ) -> list[OutgoingAction]:
         if not event.is_private:
             return [SendText(event.chat_id, PRIVATE_ONLY, track=False)]
         if not status_auth_codes(instance_name=event.instance):
@@ -445,7 +464,7 @@ class TeeBotusEngine:
                     chat_type=str(event.chat_type or "").strip().casefold(),
                     adapter_slot=event.adapter_slot,
                 )
-            authorize_status_recipient(self.account_store, account_id, event, source="runtime_admin_command")
+            authorize_status_recipient(self.account_store, account_id, event, source=source)
         except (AccountStoreError, OSError, ValueError):
             return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
         return [SendText(event.chat_id, ADMIN_AUTH_ENABLED, track=False)]
