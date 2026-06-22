@@ -602,11 +602,16 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
     imported_items: list[dict[str, Any]] = []
     account_id = INSTANCE_STATE_ACCOUNT_ID
     session_files = _iter_codex_session_files(roots, limit=limit)
+    explicit_session_files = _explicit_codex_session_file_roots(roots)
     with store.codex_history_outbox_lock(account_id):
         rows = store.read_codex_history_outbox(account_id)
         for session_file in session_files:
             try:
-                file_results = _build_codex_session_import_results(rows, session_file)
+                file_results = _build_codex_session_import_results(
+                    rows,
+                    session_file,
+                    final_message_limit=0 if session_file in explicit_session_files else 1,
+                )
             except (OSError, ValueError, AccountStoreError) as exc:
                 file_results = [
                     {
@@ -659,7 +664,9 @@ def _aggregate_codex_session_import_results(results: Sequence[Mapping[str, Any]]
     return aggregate
 
 
-def _build_codex_session_import_results(rows: list[dict[str, Any]], session_file: str | Path) -> list[dict[str, Any]]:
+def _build_codex_session_import_results(
+    rows: list[dict[str, Any]], session_file: str | Path, *, final_message_limit: int = 0
+) -> list[dict[str, Any]]:
     path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
     parsed = _parse_codex_session_file(path)
     final_messages = parsed.get("final_messages", ())
@@ -667,6 +674,8 @@ def _build_codex_session_import_results(rows: list[dict[str, Any]], session_file
         final_messages = ()
     if not final_messages:
         return [{"status": "skipped", "reason": "missing_final_text", "path": str(path)}]
+    if final_message_limit > 0:
+        final_messages = tuple(final_messages)[-int(final_message_limit) :]
     results: list[dict[str, Any]] = []
     for message in final_messages:
         if not isinstance(message, Mapping):
@@ -2365,12 +2374,25 @@ def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tup
             continue
         if not root.is_dir():
             continue
-        files.extend(path for path in root.rglob("*.jsonl") if path.is_file())
+        files.extend(path for path in root.rglob("*.jsonl") if path.is_file() and _is_codex_session_log_path(path))
     files = sorted(set(files), key=_codex_session_file_import_sort_key)
     if limit > 0:
         files = files[:limit]
     files = sorted(files, key=_codex_session_file_processing_sort_key)
     return tuple(files)
+
+
+def _explicit_codex_session_file_roots(roots: Sequence[str | Path]) -> set[Path]:
+    files: set[Path] = set()
+    for root_value in roots:
+        root = _safe_repo_root(Path(root_value), operation="session root", allow_hidden_segments=True)
+        if root.is_file() and root.suffix == ".jsonl":
+            files.add(root)
+    return files
+
+
+def _is_codex_session_log_path(path: Path) -> bool:
+    return "sessions" in path.parts
 
 
 def _codex_session_file_import_sort_key(path: Path) -> tuple[int, str]:

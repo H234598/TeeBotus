@@ -1414,7 +1414,7 @@ def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path
     assert "Zwischenstand" not in rows[0]["summary"]["markdown"]
 
 
-def test_import_codex_session_roots_imports_each_final_turn_from_session_file(tmp_path: Path) -> None:
+def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "multi-final-session-demo", version="1.0.3")
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
     session_file = tmp_path / "sessions" / "multi-final.jsonl"
@@ -1444,8 +1444,8 @@ def test_import_codex_session_roots_imports_each_final_turn_from_session_file(tm
     session_file.parent.mkdir(parents=True, exist_ok=True)
     session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
 
-    first = import_codex_session_roots(store, (session_file,), limit=10)
-    second = import_codex_session_roots(store, (session_file,), limit=10)
+    first = import_codex_session_file(store, session_file)
+    second = import_codex_session_file(store, session_file)
 
     assert first["status_counts"] == {"imported": 2}
     assert second["status_counts"] == {"duplicate": 2}
@@ -1453,6 +1453,45 @@ def test_import_codex_session_roots_imports_each_final_turn_from_session_file(tm
     assert [(row["codex"]["turn_id"], row["summary"]["title"], row["summary_prefix"]) for row in persisted] == [
         ("turn-one", "Erste finale Summary.", "v1.0.3 #0001"),
         ("turn-two", "Zweite finale Summary.", "v1.0.3 #0002"),
+    ]
+
+
+def test_import_codex_session_roots_directory_scan_imports_latest_final_turn_only(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "multi-final-directory-demo", version="1.0.4")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = tmp_path / "sessions" / "multi-final.jsonl"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-multi-final-dir", "cwd": str(repo)}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-one"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "Alte finale Summary."}],
+            },
+        },
+        {"type": "turn_context", "payload": {"turn_id": "turn-two"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "Neueste finale Summary."}],
+            },
+        },
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+
+    report = import_codex_session_roots(store, (session_file.parent,), limit=10)
+
+    assert report["status_counts"] == {"imported": 1}
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert [(row["codex"]["turn_id"], row["summary"]["title"], row["summary_prefix"]) for row in persisted] == [
+        ("turn-two", "Neueste finale Summary.", "v1.0.4 #0001"),
     ]
 
 
@@ -1506,6 +1545,32 @@ def test_import_codex_session_roots_limit_prefers_newest_session_mtime(tmp_path:
     assert len(rows) == 1
     assert rows[0]["codex"]["session_id"] == "sess-new"
     assert rows[0]["summary"]["title"] == "Neue Summary gewinnt trotz spaeterem Pfadnamen."
+
+
+def test_import_codex_session_roots_directory_scan_ignores_non_session_jsonl_for_limit(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-ignore-non-session-demo", version="3.0.4")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    root = tmp_path / "codex-agents" / "a1"
+    session_file = write_codex_session(
+        root / "sessions" / "rollout.jsonl",
+        repo=repo,
+        session_id="sess-real-session",
+        turn_id="turn-real-session",
+        final_text="Echte Session darf durch neue Fixture-Datei nicht verdraengt werden.",
+    )
+    fixture_file = root / "plugins" / "cache" / "plugin-eval" / "fixtures" / "observed-usage" / "responses.jsonl"
+    fixture_file.parent.mkdir(parents=True, exist_ok=True)
+    fixture_file.write_text(json.dumps({"not": "a codex session"}) + "\n", encoding="utf-8")
+    os.utime(session_file, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(fixture_file, ns=(2_000_000_000, 2_000_000_000))
+
+    report = import_codex_session_roots(store, (root,), limit=1)
+
+    assert report["status_counts"] == {"imported": 1}
+    assert Path(report["items"][0]["path"]) == session_file.resolve()
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 1
+    assert rows[0]["codex"]["session_id"] == "sess-real-session"
 
 
 def test_import_codex_session_roots_numbers_limited_backfill_chronologically(tmp_path: Path) -> None:
