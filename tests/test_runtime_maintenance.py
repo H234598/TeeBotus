@@ -372,6 +372,34 @@ def test_gzip_file_skips_broken_symlink_target(tmp_path):
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_does_not_overwrite_temporary_file_created_during_open(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    blocked_temporary = tmp_path / f".{path.name}.gz.tmp"
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        file_path = Path(file)
+        if file_path == blocked_temporary and flags & os.O_CREAT and not raced:
+            raced = True
+            blocked_temporary.write_text("existing temporary\n", encoding="utf-8")
+            raise FileExistsError(file)
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    published = gzip_file(path)
+
+    assert raced is True
+    assert blocked_temporary.read_text(encoding="utf-8") == "existing temporary\n"
+    assert not (tmp_path / f"{blocked_temporary.name}.1").exists()
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -632,6 +660,39 @@ def test_runtime_maintenance_skips_broken_symlink_archive_target(tmp_path):
     assert len(published_archives) == 1
     assert published_archives[0].name == f"{blocked_target.name}.1"
     with tarfile.open(published_archives[0], "r:gz") as archive:
+        assert path.name in archive.getnames()
+
+
+def test_runtime_maintenance_does_not_overwrite_archive_temporary_file_created_during_open(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = time.mktime(time.strptime("2026-03-01", "%Y-%m-%d"))
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    archive_dir = tmp_path / "monthly_archives"
+    blocked_temporary = archive_dir / ".teebotus-runtime-2026-03.tar.gz.tmp"
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        file_path = Path(file)
+        if file_path == blocked_temporary and flags & os.O_CREAT and not raced:
+            raced = True
+            blocked_temporary.write_text("existing temporary\n", encoding="utf-8")
+            raise FileExistsError(file)
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert blocked_temporary.read_text(encoding="utf-8") == "existing temporary\n"
+    assert not (archive_dir / f"{blocked_temporary.name}.1").exists()
+    archives = sorted(archive_dir.glob("teebotus-runtime-2026-03.tar.gz*"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
         assert path.name in archive.getnames()
 
 

@@ -275,13 +275,18 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
         os.close(fd)
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
-    temporary = _unique_path(path.with_name(f".{target.name}.tmp"))
+    temporary_fd: int | None = None
+    temporary, temporary_fd = _create_unique_file(path.with_name(f".{target.name}.tmp"))
     try:
-        with os.fdopen(fd, "rb") as source, gzip.open(temporary, "wb") as sink:
-            shutil.copyfileobj(source, sink)
+        with os.fdopen(fd, "rb") as source, os.fdopen(temporary_fd, "wb") as raw_sink:
+            temporary_fd = None
+            with gzip.GzipFile(fileobj=raw_sink, mode="wb") as sink:
+                shutil.copyfileobj(source, sink)
         os.utime(temporary, (source_stat.st_atime, source_stat.st_mtime))
         published = _publish_temporary_file(temporary, target)
     except Exception:
+        if temporary_fd is not None:
+            os.close(temporary_fd)
         _unlink_quietly(temporary)
         raise
     _unlink_if_same_file(path, source_stat)
@@ -330,20 +335,25 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     for month, paths in groups.items():
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = _unique_path(archive_dir / f"teebotus-runtime-{month}.tar.gz")
-        temporary = _unique_path(archive_dir / f".{archive_path.name}.tmp")
+        temporary_fd: int | None = None
+        temporary, temporary_fd = _create_unique_file(archive_dir / f".{archive_path.name}.tmp")
         added_paths: list[tuple[Path, os.stat_result]] = []
         try:
-            with tarfile.open(temporary, "w:gz") as archive:
-                for path, selected_stat in paths:
-                    archived_stat = _add_regular_file_to_archive(archive, path, expected_stat=selected_stat)
-                    if archived_stat is None:
-                        continue
-                    added_paths.append((path, archived_stat))
+            with os.fdopen(temporary_fd, "wb") as raw_archive:
+                temporary_fd = None
+                with tarfile.open(fileobj=raw_archive, mode="w:gz") as archive:
+                    for path, selected_stat in paths:
+                        archived_stat = _add_regular_file_to_archive(archive, path, expected_stat=selected_stat)
+                        if archived_stat is None:
+                            continue
+                        added_paths.append((path, archived_stat))
             if not added_paths:
                 _unlink_quietly(temporary)
                 continue
             _publish_temporary_file(temporary, archive_path)
         except Exception:
+            if temporary_fd is not None:
+                os.close(temporary_fd)
             _unlink_quietly(temporary)
             raise
         for path, archived_stat in added_paths:
@@ -415,6 +425,21 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
             return linked
         _unlink_quietly(linked)
         return None
+
+
+def _create_unique_file(path: Path) -> tuple[Path, int]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    candidate = _unique_path(path)
+    while True:
+        try:
+            return candidate, os.open(candidate, flags, 0o600)
+        except FileExistsError:
+            candidate = _unique_path(path)
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                candidate = _unique_path(path)
+                continue
+            raise
 
 
 def _next_rotated_path(path: Path) -> Path:
