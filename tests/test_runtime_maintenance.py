@@ -1309,6 +1309,23 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, 
     assert external.read_text(encoding="utf-8") == ""
 
 
+def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    runtime_dir = tmp_path / "runtime-link"
+    runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+
+    configure_runtime_logging(base_dir=runtime_dir)
+    logging.getLogger("TeeBotus.test").warning("probe")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert not (external_runtime_dir / "teebotus-production.log").exists()
+
+
 def test_runtime_file_handler_rollover_preserves_existing_rotated_log(tmp_path):
     log_path = tmp_path / "teebotus-production.log"
     handler = RuntimeTimedRotatingFileHandler(log_path)

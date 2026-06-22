@@ -208,6 +208,8 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
 
 
 def _open_append_text_no_follow(path: Path) -> object | None:
+    if path.parent.is_symlink():
+        return None
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         fd = os.open(path, flags, 0o600)
