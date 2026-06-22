@@ -203,8 +203,12 @@ class TeeStream:
             self.write(line)
 
     def flush(self) -> None:
-        primary_flush = getattr(self.primary, "flush", None)
         primary_exception: Exception | None = None
+        try:
+            primary_flush = getattr(self.primary, "flush", None)
+        except Exception as exc:
+            primary_flush = None
+            primary_exception = exc
         if callable(primary_flush):
             try:
                 primary_flush()
