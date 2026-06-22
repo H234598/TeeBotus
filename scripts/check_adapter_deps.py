@@ -444,6 +444,15 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "vertex_gemini_2_5_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-2.5-flash", "GOOGLE_APPLICATION_CREDENTIALS"),
         "openai_premium": ("litellm", "openai/", "openai/gpt-5.5", "OPENAI_API_KEY"),
     }
+    expected_hf_pool_selectors = {
+        "hf_pool_default": "pool:default#normal_chat",
+        "hf_pool_structured": "pool:default#structured_decision",
+        "hf_pool_quality": "pool:default#psychology_explainer",
+        "hf_pool_bibliothekar": "pool:default#bibliothekar_answer",
+    }
+    expected_profile_base_urls = {name: "" for name in expected_profiles}
+    expected_profile_base_urls["local_ollama"] = "http://127.0.0.1:11434"
+    expected_profile_service_tiers = {name: "" for name in expected_profiles}
     if not isinstance(raw_profile_payload, dict):
         errors.append("raw profile payload must be mapping")
     else:
@@ -472,6 +481,39 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             for key in sorted(set(raw_profile) & allowed_raw_profile_keys):
                 if not isinstance(raw_profile[key], str):
                     errors.append(f"raw profile {name} {key} must be string")
+            provider, model_prefix, exact_model, api_key_env = expected_profiles[name]
+            raw_provider = raw_profile.get("provider")
+            if isinstance(raw_provider, str) and raw_provider != provider:
+                errors.append(f"raw profile {name} provider={raw_provider or '<empty>'} expected={provider}")
+            raw_model = raw_profile.get("model")
+            expected_exact_model = expected_hf_pool_selectors.get(name, exact_model)
+            if isinstance(raw_model, str):
+                if expected_exact_model and raw_model != expected_exact_model:
+                    errors.append(
+                        f"raw profile {name} model={raw_model or '<empty>'} expected={expected_exact_model}"
+                    )
+                elif model_prefix and not raw_model.startswith(model_prefix):
+                    errors.append(f"raw profile {name} model must start with {model_prefix}")
+            raw_api_key_env = raw_profile.get("api_key_env")
+            if isinstance(raw_api_key_env, str) and raw_api_key_env != api_key_env:
+                errors.append(
+                    f"raw profile {name} api_key_env={raw_api_key_env or '<empty>'} "
+                    f"expected={api_key_env or '<empty>'}"
+                )
+            raw_base_url = raw_profile.get("base_url")
+            expected_base_url = expected_profile_base_urls[name]
+            if isinstance(raw_base_url, str) and raw_base_url != expected_base_url:
+                errors.append(
+                    f"raw profile {name} base_url={raw_base_url or '<empty>'} "
+                    f"expected={expected_base_url or '<empty>'}"
+                )
+            raw_service_tier = raw_profile.get("service_tier")
+            expected_service_tier = expected_profile_service_tiers[name]
+            if isinstance(raw_service_tier, str) and raw_service_tier != expected_service_tier:
+                errors.append(
+                    f"raw profile {name} service_tier={raw_service_tier or '<empty>'} "
+                    f"expected={expected_service_tier or '<empty>'}"
+                )
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
@@ -479,9 +521,6 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     unexpected_profiles = sorted(set(profiles) - set(expected_profiles))
     if unexpected_profiles:
         errors.append(f"unexpected profile(s): {','.join(unexpected_profiles)}")
-    expected_profile_base_urls = {name: "" for name in expected_profiles}
-    expected_profile_base_urls["local_ollama"] = "http://127.0.0.1:11434"
-    expected_profile_service_tiers = {name: "" for name in expected_profiles}
     for name, (provider, model_prefix, exact_model, api_key_env) in expected_profiles.items():
         profile = profiles.get(name)
         if profile is None:
@@ -508,12 +547,6 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 f"profile {name} service_tier={profile.service_tier or '<empty>'} "
                 f"expected={expected_service_tier or '<empty>'}"
             )
-    expected_hf_pool_selectors = {
-        "hf_pool_default": "pool:default#normal_chat",
-        "hf_pool_structured": "pool:default#structured_decision",
-        "hf_pool_quality": "pool:default#psychology_explainer",
-        "hf_pool_bibliothekar": "pool:default#bibliothekar_answer",
-    }
     for name, expected_model in expected_hf_pool_selectors.items():
         profile = profiles.get(name)
         if profile is not None and profile.model != expected_model:
