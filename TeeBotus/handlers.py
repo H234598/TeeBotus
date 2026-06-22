@@ -9,6 +9,16 @@ from .instructions import BotInstructions, render_template
 
 DEFAULT_INSTRUCTIONS = BotInstructions()
 HELP_TEXT = DEFAULT_INSTRUCTIONS.help_text()
+ADMIN_HELP_COMMANDS = frozenset(
+    {
+        "/admin-befehle",
+        "/adminbefehle",
+        "/admin_hilfe",
+        "/adminhilfe",
+        "/admin-help",
+        "/adminhelp",
+    }
+)
 
 
 def build_reply(
@@ -28,6 +38,10 @@ def build_reply(
         return render_template(instructions.start, message, text)
     if command == "/help":
         return instructions.help_text(include_admin=include_admin_help)
+    if command in ADMIN_HELP_COMMANDS:
+        if include_admin_help:
+            return instructions.admin_help_text()
+        return render_template(instructions.unknown_command, message, text)
     if command == "/chatid":
         chat_id = message.get("chat", {}).get("id")
         template = instructions.chatid if chat_id is not None else instructions.chatid_missing
@@ -140,6 +154,10 @@ def _normalize_command(text: str) -> str:
     if "@" in command:
         command = command.split("@", maxsplit=1)[0]
     return command
+
+
+def is_admin_help_request(text: str) -> bool:
+    return _normalize_command(str(text or "").strip()) in ADMIN_HELP_COMMANDS
 
 
 def _normalize_history_text(text: str) -> str:

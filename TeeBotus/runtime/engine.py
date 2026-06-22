@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 from subprocess import TimeoutExpired
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 from pydantic import ValidationError
 
@@ -27,7 +27,7 @@ from TeeBotus.core.local_transcription import LocalTranscriptionError, transcrib
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, build_status_reply_html
-from TeeBotus.handlers import build_reply
+from TeeBotus.handlers import build_reply, is_admin_help_request
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import LLMCapabilities
 from TeeBotus.llm_client import LLMAPIError
@@ -72,6 +72,7 @@ from TeeBotus.runtime.tts_dialect import (
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
+from TeeBotus.runtime.codex_command import execute_codex_admin_command
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 PRIVATE_ONLY = "Bitte privat."
@@ -153,6 +154,9 @@ class TeeBotusEngine:
         structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
         route_to_client_factory: Callable[..., object | None] | None = None,
         cross_instance_store_factory: Callable[[Path, str], AccountStore] | None = None,
+        codex_runner: Callable[..., Any] | None = None,
+        codex_session_roots: Sequence[str | Path] | None = None,
+        codex_executable: str = "codex",
     ) -> None:
         self.account_store = account_store
         self.state = state or RuntimeState()
@@ -170,6 +174,9 @@ class TeeBotusEngine:
         self.structured_decision_runner = structured_decision_runner
         self.route_to_client_factory = route_to_client_factory or build_runtime_text_llm_client
         self.cross_instance_store_factory = cross_instance_store_factory
+        self.codex_runner = codex_runner
+        self.codex_session_roots = codex_session_roots
+        self.codex_executable = str(codex_executable or "codex")
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
@@ -235,6 +242,8 @@ class TeeBotusEngine:
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
+        if command == "/codex" and instructions.codex_enabled:
+            return EngineResult(result.account_id, self._codex_actions(event, result.account_id, instructions), handled=True)
         route_to_command = parse_route_to_command(text)
         if route_to_command is not None:
             return EngineResult(
@@ -331,7 +340,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
-        include_admin_help = command == "/help" and self._account_is_help_admin(event.instance, result.account_id)
+        include_admin_help = (command == "/help" or is_admin_help_request(text)) and self._account_is_help_admin(event.instance, result.account_id)
         reply = build_reply(
             _event_to_handler_message(event),
             instructions,
@@ -343,7 +352,7 @@ class TeeBotusEngine:
             if llm_actions:
                 return EngineResult(result.account_id, llm_actions, handled=True)
             return EngineResult(result.account_id, [], handled=False)
-        if command == "/help":
+        if command == "/help" or is_admin_help_request(text):
             return EngineResult(
                 result.account_id,
                 [SendText(event.chat_id, reply, text_mode="html", formatted_text=instructions.help_text_html(reply))],
@@ -959,6 +968,33 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, f"Route {target.label} lieferte keine Textantwort.", track=False)]
         header = f"[{target.label} | {target.provider} / {target.model}]"
         return [SendTyping(event.chat_id), SendText(event.chat_id, f"{header}\n\n{response_text}", track=False)]
+
+    def _codex_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
+        if not self._account_is_route_to_admin(event.instance, account_id):
+            return [SendText(event.chat_id, instructions.codex_unauthorized, track=False)]
+        result = execute_codex_admin_command(
+            self.account_store,
+            instance_name=event.instance,
+            text=event.text,
+            project_root=self.project_root,
+            timeout_seconds=instructions.codex_timeout_seconds,
+            session_roots=self.codex_session_roots,
+            runner=self.codex_runner,
+            executable=self.codex_executable,
+        )
+        if result.status == "usage":
+            return [SendText(event.chat_id, instructions.codex_usage, track=False)]
+        if result.status == "not_found":
+            return [SendText(event.chat_id, instructions.codex_not_found, track=False)]
+        if result.status == "no_session":
+            return [SendText(event.chat_id, instructions.codex_error.format(error=result.error or "Keine passende Codex-Session gefunden."), track=False)]
+        if result.status == "empty":
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.codex_empty, track=False)]
+        if result.status == "error":
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.codex_error.format(error=result.error or "unbekannter Fehler"), track=False)]
+        if result.ok:
+            return [SendTyping(event.chat_id), SendText(event.chat_id, result.text, track=False)]
+        return [SendText(event.chat_id, instructions.codex_usage, track=False)]
 
     def _account_is_route_to_admin(self, instance_name: str, account_id: str) -> bool:
         if not account_id:

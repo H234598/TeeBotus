@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
 
 import pytest
 
@@ -148,7 +151,7 @@ def test_help_hides_admin_section_for_regular_accounts(tmp_path, monkeypatch):
     assert len(actions) == 1
     assert "Befehle:" in actions[0].text
     assert "Admin-Befehle:" not in actions[0].text
-    assert "/codex <Prompt>" not in actions[0].text
+    assert "/codex [Projekt] [Repo]" not in actions[0].text
     assert "/RouteToOpenAI" not in actions[0].text
 
 
@@ -163,10 +166,13 @@ def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypat
 
     assert len(actions) == 1
     assert "Admin-Befehle:" in actions[0].text
-    assert "/codex <Prompt> - Admin: Codex CLI lokal" in actions[0].text
-    assert "/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini" in actions[0].text
-    assert "teebotus-proactive-review list|approve|reject" in actions[0].text
-    assert "codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis" in actions[0].text
+    assert "/codex [Projekt] [Repo] <Prompt> - Codex in der aktuellen Session des zuletzt gemeldeten Repos fortsetzen." in actions[0].text
+    assert "/RouteToOpenAI <Prompt> - Prompt direkt an OpenAI senden." in actions[0].text
+    assert "/RouteToOAI <Prompt> - Kurzform fuer OpenAI-Routing." in actions[0].text
+    assert "/RouteToHF <Prompt> - Prompt direkt an Hugging Face senden." in actions[0].text
+    assert "/RouteToGemini <Prompt> - Prompt direkt an Gemini senden." in actions[0].text
+    assert "/proactive_review - Proactive-Human-Review-Queue verwalten." in actions[0].text
+    assert "/codex_index - Codex-History Index-/Obsidian-Export anstossen." in actions[0].text
 
 
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
@@ -538,6 +544,63 @@ def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):
 
     assert len(actions) == 1
     assert actions[0].text == "Hallo telegram:user:1."
+
+
+def test_engine_codex_command_is_admin_only(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(telegram_identity_key(1), "/codex mach weiter"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Nein."
+
+
+def test_engine_codex_admin_resumes_latest_repo_session(tmp_path, monkeypatch):
+    repo = tmp_path / "TeeBotus"
+    repo.mkdir()
+    session_root = tmp_path / ".codex" / "sessions"
+    session_id = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+    _write_codex_session(session_root, session_id, repo)
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    authorize_status_recipient(account_store, account_id, event(telegram_identity_key(1), "Admin"))
+    account_store.write_codex_history_outbox(
+        INSTANCE_STATE_ACCOUNT_ID,
+        [
+            {
+                "id": "hist-1",
+                "created_at": "2026-06-19T12:00:00+00:00",
+                "updated_at": "2026-06-19T12:00:00+00:00",
+                "project": {"repo_name": "TeeBotus", "repo_root": str(repo), "remote_url": ""},
+                "codex": {"session_id": session_id},
+                "summary": {"title": "Letzte Nachricht", "markdown": "# Test"},
+            }
+        ],
+    )
+    monkeypatch.setattr("TeeBotus.runtime.codex_command.shutil.which", lambda _name: "/usr/bin/codex")
+    calls: list[dict[str, object]] = []
+
+    def runner(args, **kwargs):
+        calls.append({"args": args, **kwargs})
+        return subprocess.CompletedProcess(args, 0, stdout="ok", stderr="")
+
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        project_root=repo,
+        codex_runner=runner,
+        codex_session_roots=(session_root,),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/codex bitte Status pruefen"))
+
+    assert len(actions) == 2
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text.startswith("Codex -> TeeBotus\nSession: cccccccc-cccc-cccc-cccc-cccccccccccc")
+    assert "ok" in actions[1].text
+    assert calls[0]["args"] == ["codex", "exec", "resume", session_id, "-"]
+    assert calls[0]["cwd"] == str(repo)
+    assert calls[0]["input"] == "bitte Status pruefen"
 
 
 def test_engine_status_uses_core_status_before_configured_commands(tmp_path, monkeypatch):
@@ -2377,6 +2440,23 @@ def test_engine_account_memory_reset_requires_confirmation_and_resets_structured
     assert reset_index["index"]["semantic_cache"]["entries"] == {}
     assert account_store.read_memory_entries(account_id) == []
     assert account_store.read_account_text(account_id, "User_Habbits_and_behave.md") == "Adminhinweis bleibt."
+
+
+def _write_codex_session(root, session_id: str, cwd) -> None:
+    path = root / "2026" / "06" / "19" / f"rollout-2026-06-19T12-00-00-{session_id}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-19T12:00:00Z",
+                "type": "session_meta",
+                "payload": {"id": session_id, "cwd": str(cwd)},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    os.utime(path, (10, 10))
 
 
 def test_engine_account_memory_reset_deletes_semantic_qdrant_cache_when_enabled(tmp_path, monkeypatch):

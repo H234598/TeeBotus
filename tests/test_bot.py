@@ -3674,40 +3674,117 @@ class BotTests(unittest.TestCase):
         self.assertTrue(_is_telegram_getupdates_conflict(exc))
         self.assertFalse(_is_telegram_getupdates_conflict(TelegramAPIError("Telegram HTTP error 401: unauthorized")))
 
-    def test_codex_command_runs_locally_for_allowed_account(self) -> None:
+    def test_codex_command_resumes_latest_repo_session_for_runtime_admin(self) -> None:
         from TeeBotus.instructions import BotInstructions
+        from TeeBotus.runtime.events import IncomingEvent
+        from TeeBotus.runtime.status_auth import authorize_status_recipient
 
         api = FakeAPI()
         chat_state = ChatState(instance_name="Depressionsbot")
         with tempfile.TemporaryDirectory() as directory:
             memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
             account_id = memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
-            instructions = BotInstructions(codex_allowed_account_ids=(account_id,), codex_timeout_seconds=30)
+            authorize_status_recipient(
+                memory_store,
+                account_id,
+                IncomingEvent(
+                    event_id="telegram:1",
+                    instance="Depressionsbot",
+                    channel="telegram",
+                    adapter_slot=1,
+                    account_id=account_id,
+                    identity_key=telegram_identity_key(456),
+                    chat_id="123",
+                    chat_type="private",
+                    sender_id="456",
+                    sender_name="Ada",
+                    text="/codex Bitte pruefe das.",
+                    message_ref="1",
+                ),
+            )
+            repo = Path(directory) / "repo"
+            repo.mkdir()
+            session_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+            session_root = Path(directory) / ".codex" / "sessions"
+            session_file = session_root / "2026" / "06" / "19" / f"rollout-2026-06-19T12-00-00-{session_id}.jsonl"
+            session_file.parent.mkdir(parents=True, exist_ok=True)
+            session_file.write_text(
+                json.dumps(
+                    {
+                        "timestamp": "2026-06-19T12:00:00Z",
+                        "type": "session_meta",
+                        "payload": {"id": session_id, "cwd": str(repo)},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            memory_store.write_codex_history_outbox(
+                INSTANCE_STATE_ACCOUNT_ID,
+                [
+                    {
+                        "id": "hist-1",
+                        "created_at": "2026-06-19T12:00:00+00:00",
+                        "updated_at": "2026-06-19T12:00:00+00:00",
+                        "project": {"repo_name": "repo", "repo_root": str(repo), "remote_url": ""},
+                        "codex": {"session_id": session_id},
+                        "summary": {"title": "Letzte Nachricht", "markdown": "# Test"},
+                    }
+                ],
+            )
+            instructions = BotInstructions(codex_timeout_seconds=30)
 
             def run(command, cwd, **kwargs):
-                self.assertEqual(command, ["codex", "exec", "Bitte pruefe das."])
-                self.assertEqual(cwd, Path("/home/teladi/TeeBotus"))
+                self.assertEqual(command, ["codex", "exec", "resume", session_id, "-"])
+                self.assertEqual(cwd, str(repo))
+                self.assertEqual(kwargs["input"], "Bitte pruefe das.")
                 self.assertTrue(kwargs["text"])
                 self.assertTrue(kwargs["capture_output"])
                 self.assertEqual(kwargs["timeout"], 30)
                 self.assertFalse(kwargs["check"])
+                self.assertEqual(kwargs["env"]["CODEX_HOME"], str(Path(directory) / ".codex"))
                 return subprocess.CompletedProcess(command, 0, "Codex erledigt.\n", "")
 
-            with patch("TeeBotus.bot.shutil.which", return_value="/usr/bin/codex"):
-                with patch("TeeBotus.bot.subprocess.run", side_effect=run):
-                    handle_update(
-                        api,
-                        {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
-                        instructions,
-                        None,
-                        chat_state,
-                        user_memory_store=memory_store,
-                    )
+            with patch("TeeBotus.runtime.codex_command.shutil.which", return_value="/usr/bin/codex"):
+                with patch("TeeBotus.runtime.codex_command.default_codex_session_roots", return_value=(session_root,)):
+                    with patch("TeeBotus.runtime.codex_command.subprocess.run", side_effect=run):
+                        handle_update(
+                            api,
+                            {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
+                            instructions,
+                            None,
+                            chat_state,
+                            user_memory_store=memory_store,
+                        )
 
         self.assertEqual(api.chat_actions, [(123, "typing")])
-        self.assertEqual(api.sent_messages, [(123, "Codex erledigt.")])
+        self.assertEqual(api.sent_messages, [(123, f"Codex -> repo\nSession: {session_id}\n\nCodex erledigt.")])
 
-    def test_codex_command_rejects_sender_id_without_allowed_account(self) -> None:
+    def test_codex_command_rejects_non_admin_account(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        instructions = BotInstructions()
+
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
+            memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+
+            with patch("TeeBotus.runtime.codex_command.subprocess.run") as run:
+                handle_update(
+                    api,
+                    {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},
+                    instructions,
+                    None,
+                    chat_state,
+                    user_memory_store=memory_store,
+                )
+
+        run.assert_not_called()
+        self.assertEqual(api.sent_messages, [(123, instructions.codex_unauthorized)])
+
+    def test_codex_command_ignores_legacy_sender_id_whitelist_without_runtime_admin(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
@@ -3718,7 +3795,7 @@ class BotTests(unittest.TestCase):
             memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
             memory_store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
 
-            with patch("TeeBotus.bot.subprocess.run") as run:
+            with patch("TeeBotus.runtime.codex_command.subprocess.run") as run:
                 handle_update(
                     api,
                     {"message": {"text": "/codex Bitte pruefe das.", "chat": {"id": 123}, "from": {"id": 456}}},

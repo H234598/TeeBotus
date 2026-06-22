@@ -50,24 +50,31 @@ DEFAULT_HELP_LINES = (
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren.",
+    "/Admin-Befehle - erweiterte Admin-Befehlsuebersicht anzeigen.",
 )
 
 DEFAULT_ADMIN_HELP_LINES = (
-    "/login <account_id> <secret> - Admin: Falls Account-ID/Secret in einer anderen Instanz gueltig sind, wird der aktuelle Weg instanzuebergreifend verknuepft.",
-    "/codex <Prompt> - Admin: Codex CLI lokal im TeeBotus-Repo ausfuehren.",
-    "/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini <Prompt> - Admin: Prompt direkt an ein LLM-Backend oder Profil senden.",
-    "/proactive|/agent status,on,off,pause,resume,... - proaktiven Agenten fuer den eigenen Account steuern.",
-    "teebotus-proactive --dispatch --plan --tool-plan - Proactive-Agent planen, pruefen und faellige Outbox senden.",
-    "teebotus-proactive-review list|approve|reject - Proactive-Human-Review-Queue verwalten.",
-    "python3 -m TeeBotus.admin accounts report - Account-/Identity-/Store-Report erzeugen.",
-    "python3 -m TeeBotus.admin memory-recovery - Memory-Artefakte pruefen, importieren oder quarantainieren.",
-    "python3 -m TeeBotus.admin status-auth report|bootstrap - Admin-/Status-Empfaenger und Versandstatus pruefen.",
-    "python3 -m TeeBotus.admin codex-history watch|append|report|dispatch|acknowledge|receipt - Codex-History-Outbox verwalten.",
-    "python3 -m TeeBotus.admin codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis - Codex-History exportieren, indexieren und analysieren.",
-    "teebotus-codex-history-systemd --enable|--index-timer - Codex-History-Watcher und Index-Timer verwalten.",
-    "teebotus-embedding collections-ensure|memory-rebuild|bibliothekar-rebuild|codex-history-rebuild - Qdrant-/Embedding-Indizes warten.",
-    "teebotus-bibliothekar status|index|harvest|promote|query - Bibliothekar-Quellen pruefen, uebernehmen und abfragen.",
-    "python3 scripts/run_benchmarks.py --quick ... - Benchmarks und Exportberichte nach /Downloads erzeugen.",
+    "/codex [Projekt] [Repo] <Prompt> - Codex in der aktuellen Session des zuletzt gemeldeten Repos fortsetzen.",
+    "/RouteToOpenAI <Prompt> - Prompt direkt an OpenAI senden.",
+    "/RouteToOAI <Prompt> - Kurzform fuer OpenAI-Routing.",
+    "/RouteToHF <Prompt> - Prompt direkt an Hugging Face senden.",
+    "/RouteToGemini <Prompt> - Prompt direkt an Gemini senden.",
+    "/proactive status|on|off|pause|resume - proaktiven Agenten fuer den eigenen Account steuern.",
+    "/agent status|on|off|pause|resume - Alias fuer /proactive.",
+    "/dispatch - Codex-History Dispatch-Hilfe anzeigen.",
+    "/dispatch_dry_run - Codex-History Dispatch trocken pruefen.",
+    "/dispatch_senden - Codex-History Dispatch manuell senden.",
+    "/codex_report - Codex-History Statusreport erzeugen.",
+    "/codex_watch - Codex-History Watcher-Status anzeigen.",
+    "/codex_restart - Codex-History Watcher neu starten.",
+    "/codex_index - Codex-History Index-/Obsidian-Export anstossen.",
+    "/status_auth_report - Admin-/Status-Empfaenger pruefen.",
+    "/accounts_report - Account-/Identity-/Store-Report erzeugen.",
+    "/memory_recovery - Memory-Artefakte pruefen oder reparieren.",
+    "/embedding_rebuild - Qdrant-/Embedding-Indizes warten.",
+    "/bibliothekar_status - Bibliothekar-Status und Query-Hilfe anzeigen.",
+    "/benchmarks - Benchmark-Hilfe anzeigen.",
+    "/proactive_review - Proactive-Human-Review-Queue verwalten.",
 )
 
 
@@ -139,7 +146,7 @@ class BotInstructions:
     codex_enabled: bool = True
     codex_allowed_account_ids: tuple[str, ...] = ()
     codex_timeout_seconds: int = 300
-    codex_usage: str = "Nutzung: /codex Prompt"
+    codex_usage: str = "Nutzung: /codex <Prompt> oder /codex [Projekt] [Repo] <Prompt>"
     codex_unauthorized: str = "Nein."
     codex_not_found: str = "Codex CLI wurde nicht gefunden."
     codex_error: str = "Codex konnte gerade nicht ausgefuehrt werden: {error}"
@@ -252,6 +259,9 @@ class BotInstructions:
         if include_admin and self.admin_help_lines:
             lines.extend(["", self.admin_help_title, *self.admin_help_lines])
         return "\n".join(lines)
+
+    def admin_help_text(self) -> str:
+        return "\n".join([self.admin_help_title, *self.admin_help_lines])
 
     def help_text_html(self, text: str | None = None) -> str:
         return format_help_text_html(self.help_text() if text is None else text)

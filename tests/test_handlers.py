@@ -23,7 +23,7 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
         self.assertIn("/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
         self.assertNotIn("Admin-Befehle:", reply)
-        self.assertNotIn("/codex <Prompt>", reply)
+        self.assertNotIn("/codex [Projekt] [Repo]", reply)
         self.assertNotIn("/RouteToOpenAI", reply)
 
     def test_help_can_include_admin_section(self) -> None:
@@ -32,11 +32,17 @@ class HandlerTests(unittest.TestCase):
         self.assertIsNotNone(reply)
         assert reply is not None
         self.assertIn("Admin-Befehle:", reply)
-        self.assertIn("/codex <Prompt> - Admin: Codex CLI lokal", reply)
-        self.assertIn("/RouteToOpenAI|/RouteToOAI|/RouteToHF|/RouteToGemini", reply)
-        self.assertIn("teebotus-proactive-review list|approve|reject", reply)
-        self.assertIn("codex-history bibliothekar-export|index|categorize|graph-export|strategic-analysis", reply)
-        self.assertIn("teebotus-embedding collections-ensure|memory-rebuild|bibliothekar-rebuild|codex-history-rebuild", reply)
+        self.assertIn(
+            "/codex [Projekt] [Repo] <Prompt> - Codex in der aktuellen Session des zuletzt gemeldeten Repos fortsetzen.",
+            reply,
+        )
+        self.assertIn("/RouteToOpenAI <Prompt> - Prompt direkt an OpenAI senden.", reply)
+        self.assertIn("/RouteToOAI <Prompt> - Kurzform fuer OpenAI-Routing.", reply)
+        self.assertIn("/RouteToHF <Prompt> - Prompt direkt an Hugging Face senden.", reply)
+        self.assertIn("/RouteToGemini <Prompt> - Prompt direkt an Gemini senden.", reply)
+        self.assertIn("/proactive_review - Proactive-Human-Review-Queue verwalten.", reply)
+        self.assertIn("/codex_index - Codex-History Index-/Obsidian-Export anstossen.", reply)
+        self.assertIn("/embedding_rebuild - Qdrant-/Embedding-Indizes warten.", reply)
 
     def test_ping(self) -> None:
         self.assertEqual(build_reply({"text": "/ping"}), "pong")

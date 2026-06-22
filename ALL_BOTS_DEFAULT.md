@@ -72,7 +72,7 @@ Faerbung, keine Karikatur. Werde ruhig ein bisschem Emotional, wenn es sein muss
 - delete_error: Ich konnte die Bot-Nachricht nicht loeschen. In Gruppen brauche ich dafuer passende Adminrechte; OpenAI-Verlauf und User-Memory bleiben dabei erhalten.
 - cleanup_success: "{count} gespeicherte Nachrichten geloescht. Das entfernt die gemerkten Telegram-Nachrichten aus diesem Chat; OpenAI-Verlauf und User-Memory bleiben erhalten."
 - cleanup_usage: "Nutzung: /cleanup N oder /cleanup all. Damit loesche ich seit dem letzten Bot-Start gemerkte Nachrichten aus diesem Chat."
-- codex_usage: "Nutzung: /codex /status"
+- codex_usage: "Nutzung: /codex <Prompt> oder /codex [Projekt] [Repo] <Prompt>"
 - codex_unauthorized: Nein.
 - codex_not_found: Codex CLI wurde nicht gefunden.
 - codex_error: "Codex konnte gerade nicht ausgefuehrt werden: {error}"

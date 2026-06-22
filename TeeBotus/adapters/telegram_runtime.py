@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import shutil
 import subprocess
 import sys
 import threading
@@ -39,10 +38,9 @@ from TeeBotus.core.youtube import (
     _parse_youtube_local_options,
     _parse_youtube_local_options_from_llm_response,
     _record_youtube_parser_miss,
-    _short_process_error,
     transcribe_youtube_video,
 )
-from TeeBotus.handlers import build_reply, should_use_openai
+from TeeBotus.handlers import build_reply, is_admin_help_request, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
@@ -64,6 +62,7 @@ from TeeBotus.adapters.telegram import (
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
+from TeeBotus.runtime.codex_command import execute_codex_admin_command
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
 from TeeBotus.runtime.status_auth import StatusAuthGateResult, evaluate_status_auth_gate, status_auth_enabled
@@ -1485,10 +1484,11 @@ def _process_text_message(
         bot_identity,
         user_memory_store,
         user_memory,
+        instance_name,
     ):
         return
 
-    include_admin_help = _normalize_command(text) == "/help" and _legacy_admin_help_allowed(
+    include_admin_help = (_normalize_command(text) == "/help" or is_admin_help_request(text)) and _legacy_admin_help_allowed(
         user_memory_store,
         user_memory,
         message,
@@ -1506,7 +1506,7 @@ def _process_text_message(
         else:
             reply = _with_first_contact_intro(reply, first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
-        if _normalize_command(text) == "/help":
+        if _normalize_command(text) == "/help" or is_admin_help_request(text):
             _send_tracked_message(api, chat_state, chat_id, reply, text_mode="html", formatted_text=format_help_text_html(reply))
         else:
             _send_tracked_message(
@@ -4589,6 +4589,7 @@ def _handle_codex_command(
     bot_identity: BotIdentity,
     user_memory_store: AccountStore | None = None,
     user_memory: UserMemoryRecord | None = None,
+    instance_name: str = "",
 ) -> bool:
     if not instructions.codex_enabled:
         return False
@@ -4596,63 +4597,46 @@ def _handle_codex_command(
         return False
 
     account_id = _codex_account_id_for_message(user_memory_store, user_memory, message)
-    if not account_id or not _is_allowed_codex_account(account_id, instructions):
+    if not account_id or user_memory_store is None or not _legacy_codex_admin_allowed(user_memory_store, account_id, instance_name):
         reply = _with_first_contact_intro(instructions.codex_unauthorized, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    parts = text.split(maxsplit=1)
-    if len(parts) < 2 or not parts[1].strip():
+    if len(text.split(maxsplit=1)) < 2:
         reply = _with_first_contact_intro(instructions.codex_usage, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    prompt = parts[1].strip()
-    codex_command = "codex"
-    if shutil.which(codex_command) is None:
+    result = execute_codex_admin_command(
+        user_memory_store,
+        instance_name=instance_name,
+        text=text,
+        project_root=PROJECT_ROOT,
+        timeout_seconds=instructions.codex_timeout_seconds,
+    )
+    if result.status == "usage":
+        reply = _with_first_contact_intro(instructions.codex_usage, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        return True
+    if result.status == "not_found":
         reply = _with_first_contact_intro(instructions.codex_not_found, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
-
-    try:
-        api.send_chat_action(chat_id, "typing")
-        result = subprocess.run(
-            [codex_command, "exec", prompt],
-            cwd=PROJECT_ROOT,
-            text=True,
-            capture_output=True,
-            timeout=instructions.codex_timeout_seconds,
-            check=False,
-        )
-    except TimeoutError as exc:
-        LOGGER.error("Codex request timed out: %s", exc)
-        reply = _with_first_contact_intro(instructions.codex_error.format(error=str(exc)), first_contact, bot_identity)
+    if result.status == "no_session":
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=result.error or "Keine passende Codex-Session gefunden."), first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
-    except subprocess.TimeoutExpired as exc:
-        LOGGER.error("Codex request timed out: %s", exc)
-        reply = _with_first_contact_intro(instructions.codex_error.format(error=f"Timeout nach {instructions.codex_timeout_seconds}s"), first_contact, bot_identity)
+    if result.status == "error":
+        reply = _with_first_contact_intro(instructions.codex_error.format(error=result.error or "unbekannter Fehler"), first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
-    except OSError as exc:
-        LOGGER.error("Codex request could not be started: %s", exc)
-        reply = _with_first_contact_intro(instructions.codex_error.format(error=str(exc)), first_contact, bot_identity)
-        _send_tracked_message(api, chat_state, chat_id, reply)
-        return True
-
-    output = (result.stdout or "").strip() or (result.stderr or "").strip()
-    if result.returncode != 0:
-        error = _short_process_error(result)
-        LOGGER.error("Codex CLI failed with exit code %s: %s", result.returncode, error)
-        reply = _with_first_contact_intro(instructions.codex_error.format(error=error), first_contact, bot_identity)
-        _send_tracked_message(api, chat_state, chat_id, reply)
-        return True
-    if not output:
+    if result.status == "empty":
         reply = _with_first_contact_intro(instructions.codex_empty, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    reply = _with_first_contact_intro(output, first_contact, bot_identity)
+    api.send_chat_action(chat_id, "typing")
+    reply = _with_first_contact_intro(result.text, first_contact, bot_identity)
     _send_tracked_message(api, chat_state, chat_id, reply)
     return True
 
@@ -4695,9 +4679,12 @@ def _legacy_admin_help_allowed(
         return False
 
 
-def _is_allowed_codex_account(account_id: str, instructions: BotInstructions) -> bool:
-    allowed_account_ids = {value.strip() for value in instructions.codex_allowed_account_ids if value.strip()}
-    return account_id in allowed_account_ids
+def _legacy_codex_admin_allowed(user_memory_store: AccountStore, account_id: str, instance_name: str) -> bool:
+    try:
+        return is_runtime_admin_account(user_memory_store, account_id, instance_name=instance_name)
+    except (AccountStoreError, OSError, AttributeError, ValueError):
+        LOGGER.exception("Failed to resolve legacy codex admin access for account_id=%s.", account_id)
+        return False
 
 
 def _parse_cleanup_target(text: str) -> int | str | None:
