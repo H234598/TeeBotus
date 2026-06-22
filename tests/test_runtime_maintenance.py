@@ -808,6 +808,41 @@ def test_gzip_file_refuses_temporary_file_when_parent_becomes_symlink(tmp_path, 
     assert not list(external_runtime_dir.iterdir())
 
 
+def test_gzip_file_refuses_temporary_retry_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    blocked_temporary = runtime_dir / f".{path.name}.gz.tmp"
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        file_path = Path(file)
+        if file_path == blocked_temporary and flags & os.O_CREAT and not raced:
+            raced = True
+            blocked_temporary.write_text("existing temporary\n", encoding="utf-8")
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+            raise FileExistsError(file)
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    with pytest.raises(OSError, match="unsafe runtime temporary path"):
+        gzip_file(path)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert (moved_runtime_dir / blocked_temporary.name).read_text(encoding="utf-8") == "existing temporary\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_gzip_file_does_not_publish_temporary_path_replaced_before_publish(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -900,6 +935,41 @@ def test_gzip_file_refuses_publish_when_parent_becomes_symlink(tmp_path, monkeyp
     assert raced is True
     assert runtime_dir.is_symlink()
     assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
+def test_gzip_file_refuses_publish_retry_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    target = runtime_dir / f"{path.name}.gz"
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        destination_path = Path(destination)
+        if destination_path == target and not raced:
+            raced = True
+            target.write_text("existing target\n", encoding="utf-8")
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+            raise FileExistsError(destination)
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    with pytest.raises(OSError, match="unsafe runtime publish path"):
+        gzip_file(path)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert (moved_runtime_dir / target.name).read_text(encoding="utf-8") == "existing target\n"
     assert not list(external_runtime_dir.iterdir())
 
 

@@ -637,9 +637,13 @@ def _create_unique_file(path: Path) -> tuple[Path, int, os.stat_result]:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     candidate = _unique_path(path)
     while True:
+        if _has_symlink_parent(candidate):
+            raise OSError(f"refusing unsafe runtime temporary path: {candidate}")
         try:
             fd = os.open(candidate, flags, 0o600)
         except FileExistsError:
+            if _has_symlink_parent(path):
+                raise OSError(f"refusing unsafe runtime temporary path: {path}")
             candidate = _unique_path(path)
             continue
         except OSError as exc:
@@ -664,9 +668,13 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
         raise OSError(f"refusing unsafe runtime publish path: {target}")
     published = target
     while True:
+        if _has_symlink_parent(temporary) or _has_symlink_parent(published):
+            raise OSError(f"refusing unsafe runtime publish path: {published}")
         try:
             os.link(temporary, published, follow_symlinks=False)
         except FileExistsError:
+            if _has_symlink_parent(target):
+                raise OSError(f"refusing unsafe runtime publish path: {target}")
             published = _unique_path(target)
             continue
         linked_stat = os.stat(published, follow_symlinks=False)
