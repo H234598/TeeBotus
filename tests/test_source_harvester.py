@@ -137,6 +137,35 @@ def test_source_harvester_promotes_manifest_normalized_route_and_hash(tmp_path):
     assert promoted.promoted_path.parent == store.library_dir / "books"
 
 
+def test_source_harvester_promote_ignores_promoted_event_acceptance_rows(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
+    rows[0]["event"] = "promoted"
+    rows[0]["route"] = "accepted"
+    rows[0]["accepted_for_ingest"] = True
+    harvester.manifest_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="not marked accepted_for_ingest"):
+        harvester.promote_accepted(harvest.stored_path)
+
+
 def test_source_harvester_ignores_non_ingestable_accepted_duplicate_rows(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "therapie.txt"
@@ -264,6 +293,49 @@ def test_source_harvester_ignores_stale_duplicate_path_with_wrong_hash(tmp_path)
     assert result.accepted_for_ingest is True
     assert result.stored_path == stale_path
     assert result.stored_path.read_text(encoding="utf-8") == "Schlafhygiene und Aktivierung."
+
+
+def test_source_harvester_ignores_promoted_event_accepted_duplicate_rows(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvester.prepare()
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    accepted_path = store.library_dir / "accepted" / f"{sha256[:16]}-{source.name}"
+    accepted_path.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    harvester.manifest_path.write_text(
+        json.dumps(
+            {
+                "accepted_for_ingest": True,
+                "event": "promoted",
+                "route": "accepted",
+                "sha256": sha256,
+                "source_path": str(source),
+                "stored_path": str(accepted_path),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert result.duplicate_of is None
+    assert result.accepted_for_ingest is True
+    assert result.stored_path == accepted_path
 
 
 def test_source_harvester_ignores_external_accepted_duplicate_paths(tmp_path):

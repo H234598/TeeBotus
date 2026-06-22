@@ -153,6 +153,8 @@ class SourceHarvester:
                 continue
             if not isinstance(row, dict) or _manifest_sha256(row.get("sha256")) != sha256 or _manifest_token(row.get("route")) != route:
                 continue
+            if _manifest_token(row.get("event")) == "promoted":
+                continue
             if route == "accepted" and not _coerce_bool(row.get("accepted_for_ingest")):
                 continue
             stored = _manifest_library_path(self.library_root, row.get("stored_path"), _route_dir(route))
@@ -171,6 +173,8 @@ class SourceHarvester:
             except json.JSONDecodeError:
                 continue
             if not isinstance(row, dict):
+                continue
+            if _manifest_token(row.get("event")) == "promoted":
                 continue
             stored = _manifest_library_path(self.library_root, row.get("stored_path"), "accepted")
             if _manifest_sha256(row.get("sha256")) != sha256 or stored is None or not _same_path(stored, staged_path):
