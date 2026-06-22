@@ -62,13 +62,12 @@ def runtime_dir() -> Path:
 
 
 def runtime_log_path(base_dir: Path | str | None = None) -> Path:
-    directory = Path(base_dir) if base_dir is not None else runtime_dir()
-    return directory / PRODUCTION_LOG_FILENAME
+    return _runtime_base_dir(base_dir) / PRODUCTION_LOG_FILENAME
 
 
 def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str | None = None, tee_stdio: bool = False) -> None:
     resolved_level = normalize_log_level(level)
-    directory = Path(base_dir) if base_dir is not None else runtime_dir()
+    directory = _runtime_base_dir(base_dir)
     runtime_directory_ready = not _has_symlink_parent(directory)
     if runtime_directory_ready:
         try:
@@ -106,6 +105,12 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str
         logging.getLevelName(resolved_level),
         resolved_level,
     )
+
+
+def _runtime_base_dir(base_dir: Path | str | None = None) -> Path:
+    if base_dir is None or base_dir == "":
+        return runtime_dir()
+    return Path(base_dir)
 
 
 def normalize_log_level(level: str | int) -> int:

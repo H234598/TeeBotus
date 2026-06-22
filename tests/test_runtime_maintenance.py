@@ -25,6 +25,8 @@ from TeeBotus.runtime.maintenance import (
     install_stdio_tee,
     maintain_runtime_directory,
     normalize_log_level,
+    runtime_dir,
+    runtime_log_path,
     rotate_runtime_text_file_if_needed,
 )
 
@@ -1483,6 +1485,10 @@ def test_configure_runtime_logging_accepts_string_base_dir(tmp_path):
     handlers = logging.getLogger().handlers
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
     assert (tmp_path / "teebotus-production.log").exists()
+
+
+def test_runtime_log_path_treats_empty_string_as_default_runtime_dir():
+    assert runtime_log_path("") == runtime_dir() / "teebotus-production.log"
 
 
 def test_configure_runtime_logging_continues_when_runtime_directory_is_blocked(tmp_path, monkeypatch):
