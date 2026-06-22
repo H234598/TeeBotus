@@ -148,7 +148,7 @@ class TeeStream:
         primary_write(text)
         try:
             secondary_write(text)
-        except OSError:
+        except (OSError, ValueError):
             pass
         return len(text)
 
@@ -160,7 +160,7 @@ class TeeStream:
         if callable(secondary_flush):
             try:
                 secondary_flush()
-            except OSError:
+            except (OSError, ValueError):
                 pass
 
     def fileno(self) -> int:

@@ -280,3 +280,15 @@ def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     tee.flush()
 
     assert primary.getvalue() == "probe"
+
+
+def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():
+    primary = io.StringIO()
+    secondary = io.StringIO()
+    secondary.close()
+    tee = TeeStream(primary, secondary, Path("secondary.log"))
+
+    assert tee.write("probe") == 5
+    tee.flush()
+
+    assert primary.getvalue() == "probe"
