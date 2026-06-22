@@ -1078,6 +1078,13 @@ class TeeBotusEngine:
         OpenAI-specific media capabilities still use ``openai_client`` inside the
         implementation when needed.
         """
+        if self.llm_client is None and self.openai_client is not None and callable(getattr(self.openai_client, "create_reply", None)):
+            original_llm_client = self.llm_client
+            self.llm_client = self.openai_client
+            try:
+                return self._llm_actions(event, account_id, instructions)
+            finally:
+                self.llm_client = original_llm_client
         return self._llm_actions(event, account_id, instructions)
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:

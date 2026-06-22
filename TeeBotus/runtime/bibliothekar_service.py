@@ -27,6 +27,7 @@ HAYSTACK_QDRANT_MODULES = ("haystack_integrations.document_stores.qdrant", "qdra
 DEFAULT_BIBLIOTHEKAR_COLLECTION = QDRANT_BIBLIOTHEKAR_COLLECTION
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 LOCAL_QDRANT_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+_HAYSTACK_DUPLICATE_POLICY_OVERWRITE: Any | None = None
 REQUIRED_CITATION_CHUNK_FIELDS = (
     "chunk_id",
     "source_id",
@@ -172,21 +173,24 @@ class HaystackBibliothekarBackend:
         self._document_store_cache: Any | None = None
 
     def search(self, query: BibliothekarQuery) -> BibliothekarSelection:
+        local_backend = LocalBibliothekarBackend(self.fallback_store)
         if not self.available:
-            return LocalBibliothekarBackend(self.fallback_store).search(query)
+            return local_backend.search(query)
         try:
             document_store = self._document_store()
             chunks = self._search_document_store_chunks(document_store, query.filters)
         except Exception:
-            return LocalBibliothekarBackend(self.fallback_store).search(query)
+            return local_backend.search(query)
+        if not chunks and _active_chunk_filters(query.filters or {}):
+            return local_backend.search(query)
         if not chunks:
             try:
                 self.rebuild()
                 chunks = self._search_document_store_chunks(document_store, query.filters)
             except Exception:
-                return LocalBibliothekarBackend(self.fallback_store).search(query)
+                return local_backend.search(query)
         if not chunks:
-            local_selection = LocalBibliothekarBackend(self.fallback_store).search(query)
+            local_selection = local_backend.search(query)
             if local_selection.selected_ids:
                 return local_selection
             return BibliothekarSelection("", ())
@@ -266,10 +270,11 @@ class HaystackBibliothekarBackend:
             return document_class(content=str(chunk.get("text", "")), meta=meta)
 
     def _write_documents(self, document_store: Any, documents: list[Any]) -> None:
+        if not _document_store_needs_haystack_duplicate_policy(document_store):
+            document_store.write_documents(documents)
+            return
         try:
-            from haystack.document_stores.types import DuplicatePolicy  # type: ignore[import-not-found]
-
-            document_store.write_documents(documents, policy=DuplicatePolicy.OVERWRITE)
+            document_store.write_documents(documents, policy=_haystack_duplicate_policy_overwrite())
         except Exception:
             document_store.write_documents(documents)
 
@@ -392,7 +397,7 @@ class HaystackBibliothekarBackend:
         chunks = self._chunks_from_document_store(document_store, filters=pushed_filters)
         if chunks:
             return _apply_chunk_filters(chunks, filters) if active_filters else chunks
-        fallback_chunks = self._chunks_from_document_store(document_store)
+        fallback_chunks = self._chunks_from_document_store(document_store, filters=self._instance_document_store_filter())
         if active_filters:
             return _apply_chunk_filters(fallback_chunks, filters)
         return fallback_chunks
@@ -996,6 +1001,20 @@ def _module_available(name: str) -> bool:
         return importlib.util.find_spec(name) is not None
     except ModuleNotFoundError:
         return False
+
+
+def _document_store_needs_haystack_duplicate_policy(document_store: Any) -> bool:
+    module_name = str(type(document_store).__module__ or "")
+    return module_name.startswith("haystack") or module_name.startswith("qdrant_haystack")
+
+
+def _haystack_duplicate_policy_overwrite() -> Any:
+    global _HAYSTACK_DUPLICATE_POLICY_OVERWRITE
+    if _HAYSTACK_DUPLICATE_POLICY_OVERWRITE is None:
+        from haystack.document_stores.types import DuplicatePolicy  # type: ignore[import-not-found]
+
+        _HAYSTACK_DUPLICATE_POLICY_OVERWRITE = DuplicatePolicy.OVERWRITE
+    return _HAYSTACK_DUPLICATE_POLICY_OVERWRITE
 
 
 def _read_index(path: Path) -> dict[str, object]:

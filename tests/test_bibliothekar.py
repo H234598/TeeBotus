@@ -903,6 +903,25 @@ def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path)
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
 
 
+def test_haystack_backend_custom_document_store_write_avoids_haystack_policy_import(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    document_store = StrictWriteDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        collection="therapy_books",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    backend.rebuild()
+
+    assert document_store.write_attempts == 1
+    assert [document.meta["relative_path"] for document in document_store.documents] == ["therapie.txt"]
+
+
 def test_haystack_backend_preserves_plan2_metadata_roundtrip(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1187,7 +1206,7 @@ def test_haystack_backend_keeps_partial_file_filters_via_local_fallback(tmp_path
         ],
     }
     assert document_store.filtered_calls >= 1
-    assert document_store.unfiltered_calls >= 1
+    assert document_store.unfiltered_calls == 0
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "therapie.txt" not in selection.prompt_text
 
@@ -1703,7 +1722,7 @@ def test_haystack_backend_keeps_backend_when_filter_pushdown_is_rejected(tmp_pat
     assert "therapie.txt" not in selection.prompt_text
 
 
-def test_haystack_backend_retries_unfiltered_store_when_filter_pushdown_returns_empty(tmp_path):
+def test_haystack_backend_uses_local_fallback_when_filter_pushdown_returns_empty(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
@@ -1723,14 +1742,14 @@ def test_haystack_backend_retries_unfiltered_store_when_filter_pushdown_returns_
     selection = backend.search(BibliothekarQuery(text="System Therapie", filters={"topics": ["python"]}, max_chunks=3))
     payload = json.loads(selection.prompt_text)
 
-    assert document_store.filtered_calls == 1
-    assert document_store.unfiltered_calls >= 1
+    assert document_store.filtered_calls == 2
+    assert document_store.unfiltered_calls == 0
     assert document_store.write_attempts == 0
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
     assert "therapie.txt" not in selection.prompt_text
 
 
-def test_haystack_backend_retries_empty_instance_filter_pushdown_without_rebuild(tmp_path):
+def test_haystack_backend_rebuilds_then_uses_local_fallback_when_empty_instance_filter_stays_empty(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
@@ -1770,10 +1789,10 @@ def test_haystack_backend_retries_empty_instance_filter_pushdown_without_rebuild
     selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
     payload = json.loads(selection.prompt_text)
 
-    assert document_store.filtered_calls == 1
+    assert document_store.filtered_calls >= 1
     assert document_store.unfiltered_calls >= 1
-    assert document_store.write_attempts == 0
-    assert [chunk["chunk_id"] for chunk in payload["selected_library_chunks"]] == ["own_chunk"]
+    assert document_store.write_attempts >= 1
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
     assert "Fremde Instanz" not in selection.prompt_text
 
 
@@ -1948,7 +1967,7 @@ def test_haystack_backend_search_falls_back_to_local_store_when_document_store_s
     selection = backend.search(BibliothekarQuery(text="Therapie", filters={"topics": ["therapie"]}, max_chunks=1))
     payload = json.loads(selection.prompt_text)
 
-    assert document_store.write_attempts == 1
+    assert document_store.write_attempts == 0
     assert selection.selected_ids
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
@@ -3250,6 +3269,16 @@ class FakeDocumentStore:
         ids = {str(document_id) for document_id in document_ids}
         self.deleted_document_ids.extend(sorted(ids))
         self.documents = [document for document in self.documents if str(document.id) not in ids]
+
+
+class StrictWriteDocumentStore(FakeDocumentStore):
+    def __init__(self):
+        super().__init__()
+        self.write_attempts = 0
+
+    def write_documents(self, documents):
+        self.write_attempts += 1
+        super().write_documents(documents)
 
 
 class BrokenDocumentStore:
