@@ -757,12 +757,16 @@ def _instances_path(repo_root: Path, value: str) -> str:
 
 def _session_root_args(repo_root: Path, roots: tuple[str | Path, ...]) -> list[str]:
     args: list[str] = []
+    seen: set[Path] = set()
     for root_value in roots:
         raw = _validate_systemd_unit_value(str(root_value or "").strip(), label="sessions root")
         if not raw:
             continue
         path = Path(raw).expanduser()
         resolved = path.resolve() if path.is_absolute() else (repo_root / path).resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
         args.extend(["--sessions-root", _shell_quote(str(resolved))])
     return args
 

@@ -102,6 +102,18 @@ def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots
     assert "RestartSec=30s" in unit.service_text
 
 
+def test_render_codex_history_systemd_unit_deduplicates_session_roots(tmp_path: Path) -> None:
+    unit = render_codex_history_systemd_unit(
+        repo_root=tmp_path,
+        run_user="",
+        sessions_roots=("sessions", tmp_path / "sessions", "./sessions"),
+    )
+
+    roots = _option_values(_exec_start_args(unit.service_text), "--sessions-root")
+
+    assert roots == [str((tmp_path / "sessions").resolve())]
+
+
 def test_render_codex_history_systemd_unit_can_disable_post_index(tmp_path: Path) -> None:
     unit = render_codex_history_systemd_unit(repo_root=tmp_path, post_index=False)
 
