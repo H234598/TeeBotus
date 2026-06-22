@@ -309,12 +309,16 @@ def test_rebuild_qdrant_bibliothekar_indexes_clears_instance_when_library_is_emp
 
 def test_rebuild_qdrant_codex_history_indexes_uses_admin_only_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, str, list[str]]] = []
+    deleted_instances: list[str] = []
 
     class FakeQdrantBibliothekarIndex:
         def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
             self.url = str(url)
             self.collection = collection
             self.embedding_provider = embedding_provider
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            deleted_instances.append(instance_name)
 
         def index_chunks(self, *, instance_name: str, chunks):
             chunk_list = list(chunks)
@@ -361,10 +365,124 @@ def test_rebuild_qdrant_codex_history_indexes_uses_admin_only_chunks(tmp_path):
     assert results[0].collection_name == QDRANT_CODEX_HISTORY_COLLECTION
     assert results[0].qdrant_url == "http://localhost:6334"
     assert results[0].embedding_model == "custom-codex-history-model"
+    assert deleted_instances == ["Depressionsbot"]
     assert calls[0][:4] == ("Depressionsbot", "http://localhost:6334", QDRANT_CODEX_HISTORY_COLLECTION, 32)
     assert calls[0][4].startswith("codex_history/codex-history-rebuild-demo/")
     assert "admin-only" in calls[0][5]
     assert "project-history" in calls[0][5]
+
+
+def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp_path):
+    deleted_instances: list[str] = []
+
+    class FakeQdrantBibliothekarIndex:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
+            self.url = str(url)
+            self.collection = collection
+            self.embedding_provider = embedding_provider
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            deleted_instances.append(instance_name)
+
+        def index_chunks(self, *, instance_name: str, chunks):
+            raise AssertionError("empty Codex-History full rebuild must not write Qdrant points")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Bibliothekar
+        - backend: qdrant
+        - qdrant_url: http://localhost:6334
+        """,
+        encoding="utf-8",
+    )
+    AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+
+    results = rebuild_qdrant_codex_history_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=FakeQdrantBibliothekarIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "cleared"
+    assert results[0].chunk_count == 0
+    assert results[0].point_count == 0
+    assert results[0].point_ids == ()
+    assert results[0].qdrant_url == "http://localhost:6334"
+    assert deleted_instances == ["Depressionsbot"]
+
+
+def test_rebuild_qdrant_codex_history_indexes_repo_filter_does_not_clear_instance(tmp_path):
+    calls: list[list[str]] = []
+
+    class FakeQdrantBibliothekarIndex:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
+            self.url = str(url)
+            self.collection = collection
+            self.embedding_provider = embedding_provider
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            raise AssertionError("repo-filtered Codex-History rebuild must not clear the whole instance cache")
+
+        def index_chunks(self, *, instance_name: str, chunks):
+            chunk_list = list(chunks)
+            calls.append([str(chunk["relative_path"]) for chunk in chunk_list])
+            return tuple(f"{self.collection}:{chunk['chunk_id']}" for chunk in chunk_list)
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+    repo = tmp_path / "codex-history-filter-demo"
+    repo.mkdir()
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    append_codex_history_summary(store, repo_root=repo, title="Filtered Rebuild", bullets=["Nur dieses Repo."])
+
+    results = rebuild_qdrant_codex_history_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        repo="codex-history-filter-demo",
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=FakeQdrantBibliothekarIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "rebuilt"
+    assert results[0].chunk_count == 1
+    assert calls and calls[0][0].startswith("codex_history/codex-history-filter-demo/")
+
+
+def test_rebuild_qdrant_codex_history_indexes_empty_repo_filter_does_not_touch_qdrant(tmp_path):
+    class UnexpectedQdrantBibliothekarIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("empty repo-filtered Codex-History rebuild must not touch Qdrant")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+    repo = tmp_path / "codex-history-other-demo"
+    repo.mkdir()
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    append_codex_history_summary(store, repo_root=repo, title="Other Repo", bullets=["Nicht der Filter."])
+
+    results = rebuild_qdrant_codex_history_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        repo="missing-repo-filter",
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=UnexpectedQdrantBibliothekarIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "skipped"
+    assert results[0].chunk_count == 0
+    assert results[0].point_count == 0
+    assert results[0].error == "no codex history chunks"
 
 
 def test_rebuild_qdrant_codex_history_indexes_dry_run_avoids_qdrant_writes(tmp_path):

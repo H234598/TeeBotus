@@ -350,7 +350,25 @@ def rebuild_qdrant_codex_history_indexes(
                     )
                 )
                 continue
+            full_rebuild = _is_full_codex_history_rebuild(repo=repo, limit=limit)
             if not chunks:
+                if full_rebuild:
+                    index = qdrant_index_factory(
+                        url=effective_qdrant_url,
+                        collection=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        embedding_provider=embedding_provider,
+                    )
+                    index.delete_instance(instance_name=instance_name)
+                    results.append(
+                        _codex_history_rebuild_result(
+                            instance_name,
+                            "cleared",
+                            qdrant_url=effective_qdrant_url,
+                            collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                            embedding_config=effective_embedding_config,
+                        )
+                    )
+                    continue
                 results.append(
                     _codex_history_rebuild_result(
                         instance_name,
@@ -367,6 +385,8 @@ def rebuild_qdrant_codex_history_indexes(
                 collection=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
                 embedding_provider=embedding_provider,
             )
+            if full_rebuild:
+                index.delete_instance(instance_name=instance_name)
             point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
             results.append(
                 _codex_history_rebuild_result(
@@ -392,6 +412,10 @@ def rebuild_qdrant_codex_history_indexes(
                 )
             )
     return tuple(results)
+
+
+def _is_full_codex_history_rebuild(*, repo: str, limit: int) -> bool:
+    return not str(repo or "").strip() and int(limit or 0) <= 0
 
 
 def ensure_qdrant_collections_for_instances(
