@@ -425,6 +425,53 @@ def test_bibliothekar_harvest_manifest_relative_paths_survive_cwd_change(tmp_pat
     assert chunk["source_harvest_route"] == "accepted"
 
 
+def test_bibliothekar_harvest_manifest_backslash_paths_are_resolved(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    accepted_path = library_dir / "accepted" / "therapie.txt"
+    accepted_path.parent.mkdir(parents=True)
+    accepted_path.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "windows style manifest path",
+                "requires_human_review": False,
+                "status": "usable",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Backslash Therapiequelle"}},
+            "source_path": "download\\therapie.txt",
+            "stored_path": "accepted\\therapie.txt",
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": "accepted\\therapie.txt",
+            "stored_path": "books\\therapie.txt",
+        },
+    ]
+    manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["title"] == "Backslash Therapiequelle"
+    assert chunk["source_quality"] == "usable"
+    assert chunk["source_harvest_route"] == "accepted"
+
+
 def test_bibliothekar_harvest_manifest_ignores_nonaccepted_ingest_rows(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     book_dir = library_dir / "books"

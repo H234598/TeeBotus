@@ -468,10 +468,11 @@ def _manifest_path_candidates(library_dir: Path, value: object) -> tuple[Path, .
     text = str(value or "").strip()
     if not text:
         return ()
-    normalized_text = text.replace("\\", "/").casefold()
+    normalized_path_text = text.replace("\\", "/")
+    normalized_text = normalized_path_text.casefold()
     if _looks_like_absolute_or_uri_source_path(normalized_text):
         return ()
-    raw_path = Path(text)
+    raw_path = Path(normalized_path_text)
     if any(part == ".." for part in raw_path.parts):
         return ()
     if raw_path.is_absolute():
