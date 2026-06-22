@@ -447,7 +447,7 @@ def _build_offloaded_pydantic_ai_model(*, env: Mapping[str, str] | None) -> tupl
     profile = profiles.get(profile_name)
     if profile is None:
         raise PydanticAIUnavailableError(f"local Ollama offload profile not found: {profile_name}")
-    provider = str(profile.provider or "").strip().casefold()
+    provider = normalize_llm_provider(profile.provider)
     model_name = str(profile.model or "").strip()
     if provider in {
         "openai",

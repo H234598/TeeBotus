@@ -24,8 +24,10 @@ from TeeBotus.decisions import (
     pydantic_ai_available,
 )
 from TeeBotus.decisions.pydantic_agent import PydanticAIUnavailableError
+from TeeBotus.ai_structures import pydantic_ai_adapter
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore
+from TeeBotus.llm.profiles import LLMProfile
 
 
 def test_intent_decision_validates_confidence_range() -> None:
@@ -584,6 +586,34 @@ def test_pydantic_ai_adapter_resolves_ollama_selector_to_local_model() -> None:
     assert getattr(runner, "pydantic_ai_provider") == "litellm"
     assert getattr(runner, "litellm_provider") == "ollama"
     assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434"
+
+
+def test_pydantic_ai_ollama_offload_accepts_provider_alias(monkeypatch) -> None:
+    monkeypatch.setattr(
+        pydantic_ai_adapter,
+        "load_llm_profiles",
+        lambda: {
+            "hf_alias": LLMProfile(
+                name="hf_alias",
+                provider="hugging_face",
+                model="Qwen/Qwen2.5-7B-Instruct",
+                api_key_env="HF_TOKEN_TEST",
+            )
+        },
+    )
+
+    runner = build_pydantic_ai_model_runner(
+        "ollama_chat/llama3.1:8b",
+        env={
+            "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA": "1",
+            "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA_PROFILE": "hf_alias",
+            "HF_TOKEN_TEST": "hf_fake_test_token",
+        },
+    )
+
+    assert getattr(runner, "pydantic_ai_offload_profile") == "hf_alias"
+    assert getattr(runner, "pydantic_ai_model_name") == "huggingface/Qwen/Qwen2.5-7B-Instruct"
+    assert getattr(runner, "litellm_provider") == "huggingface"
 
 
 def test_pydantic_ai_litellm_structured_runner_validates_json(monkeypatch) -> None:
