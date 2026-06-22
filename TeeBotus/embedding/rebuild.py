@@ -51,6 +51,7 @@ class QdrantCollectionEnsureResult:
     vector_size: int = 0
     embedding_model: str = ""
     error: str = ""
+    actual_vector_size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -774,6 +775,7 @@ def _collection_ensure_result(
         vector_size=spec.vector_size if spec is not None else 0,
         embedding_model=spec.embedding_model if spec is not None else "",
         error=result.error,
+        actual_vector_size=result.actual_vector_size,
     )
 
 

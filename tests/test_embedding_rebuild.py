@@ -994,6 +994,47 @@ def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_con
     assert results[0].embedding_model == "instance-memory-model"
 
 
+def test_ensure_qdrant_collections_for_instances_preserves_actual_vector_size(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
+
+    def fake_ensure(**kwargs):
+        spec = kwargs["specs"][0]
+        return (
+            QdrantCollectionResult(
+                spec.name,
+                kwargs["url"],
+                "schema_mismatch",
+                False,
+                error="vector_size expected 384, got 64",
+                actual_vector_size=64,
+            ),
+        )
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - qdrant_url: http://localhost:6334
+        - embedding_model: intfloat/multilingual-e5-small
+        - embedding_dimensions: 384
+        """,
+        encoding="utf-8",
+    )
+
+    results = ensure_qdrant_collections_for_instances(
+        instances_dir=instances_dir,
+        qdrant_ensure_factory=fake_ensure,
+    )
+
+    assert results[0].collection_name == QDRANT_USER_MEMORY_COLLECTION
+    assert results[0].status == "schema_mismatch"
+    assert results[0].ok is False
+    assert results[0].vector_size == 384
+    assert results[0].actual_vector_size == 64
+
+
 def test_ensure_qdrant_collections_for_instances_can_include_codex_history(monkeypatch, tmp_path):
     monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
     calls: list[list[str]] = []
@@ -1149,6 +1190,41 @@ def test_embedding_cli_collections_ensure_json(monkeypatch, capsys, tmp_path):
     assert payload[0]["collection_name"] == QDRANT_USER_MEMORY_COLLECTION
     assert payload[0]["vector_size"] == 32
     assert payload[0]["embedding_model"] == "custom-model"
+
+
+def test_embedding_cli_collections_ensure_text_reports_actual_vector_size(monkeypatch, capsys, tmp_path):
+    def fake_ensure(**_kwargs):
+        from TeeBotus.embedding.rebuild import QdrantCollectionEnsureResult
+
+        return (
+            QdrantCollectionEnsureResult(
+                ("Depressionsbot",),
+                QDRANT_USER_MEMORY_COLLECTION,
+                "schema_mismatch",
+                False,
+                qdrant_url="http://127.0.0.1:6333",
+                vector_size=384,
+                embedding_model="intfloat/multilingual-e5-small",
+                error="vector_size expected 384, got 64",
+                actual_vector_size=64,
+            ),
+        )
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.ensure_qdrant_collections_for_instances", fake_ensure)
+
+    result = embedding_cli_main(
+        [
+            "--instances-dir",
+            str(tmp_path / "instances"),
+            "collections-ensure",
+        ]
+    )
+
+    assert result == 1
+    output = capsys.readouterr().out
+    assert "status=schema_mismatch" in output
+    assert "vector_size=384 actual_vector_size=64" in output
+    assert "embedding_model=intfloat/multilingual-e5-small" in output
 
 
 def test_embedding_cli_collections_ensure_rejects_remote_memory_embedding_config(capsys, tmp_path):

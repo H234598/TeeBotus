@@ -285,6 +285,7 @@ def _format_collection_ensure_result(result: object) -> str:
     ok = "true" if bool(getattr(result, "ok", False)) else "false"
     qdrant_url = str(getattr(result, "qdrant_url", "") or "")
     vector_size = int(getattr(result, "vector_size", 0) or 0)
+    actual_vector_size = getattr(result, "actual_vector_size", None)
     embedding_model = str(getattr(result, "embedding_model", "") or "")
     error = str(getattr(result, "error", "") or "")
     detail = f" ok={ok}"
@@ -292,6 +293,8 @@ def _format_collection_ensure_result(result: object) -> str:
         detail += f" qdrant_url={qdrant_url}"
     if vector_size:
         detail += f" vector_size={vector_size}"
+    if actual_vector_size is not None:
+        detail += f" actual_vector_size={int(actual_vector_size)}"
     if embedding_model:
         detail += f" embedding_model={embedding_model}"
     suffix = f" error={error}" if error else ""
