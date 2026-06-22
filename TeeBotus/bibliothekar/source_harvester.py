@@ -322,15 +322,16 @@ def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
 
 
 def _copy_or_move_file_private(source: Path, destination: Path, *, copy: bool) -> None:
-    _copy_file_private(source, destination)
+    source_stat = _copy_file_private(source, destination)
     if not copy:
-        source.unlink()
+        _unlink_if_same_file(source, source_stat)
 
 
-def _copy_file_private(source: Path, destination: Path) -> None:
+def _copy_file_private(source: Path, destination: Path) -> os.stat_result:
     src_fd = _open_existing_file_nofollow(source)
     dst_fd = -1
     try:
+        source_stat = os.fstat(src_fd)
         dst_fd = _open_destination_file_nofollow(destination)
         _chmod_private_fd(dst_fd)
         with os.fdopen(src_fd, "rb") as source_handle:
@@ -338,9 +339,20 @@ def _copy_file_private(source: Path, destination: Path) -> None:
             with os.fdopen(dst_fd, "wb") as destination_handle:
                 dst_fd = -1
                 shutil.copyfileobj(source_handle, destination_handle, length=1024 * 1024)
+        return source_stat
     finally:
         _close_fd_if_open(src_fd)
         _close_fd_if_open(dst_fd)
+
+
+def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(current.st_mode) or current.st_dev != expected_stat.st_dev or current.st_ino != expected_stat.st_ino:
+        raise ValueError(f"SourceHarvester source changed before unlink: {path}")
+    path.unlink()
 
 
 def _open_existing_file_nofollow(path: Path) -> int:
