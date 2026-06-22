@@ -151,7 +151,8 @@ def _configure_third_party_loggers(level: int) -> None:
         logging.getLogger(logger_name).setLevel(logger_level)
 
 
-def install_stdio_tee(path: Path) -> None:
+def install_stdio_tee(path: Path | str) -> None:
+    path = Path(path)
     if _has_symlink_parent(path):
         return
     try:
@@ -333,7 +334,8 @@ def _stdout_targets_path(path: Path) -> bool:
     return stdout_stat.st_dev == path_stat.st_dev and stdout_stat.st_ino == path_stat.st_ino
 
 
-def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
+def rotate_runtime_text_file_if_needed(path: Path | str, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
+    path = Path(path)
     if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
         return None
     if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
@@ -357,13 +359,14 @@ def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTI
 
 
 def maintain_runtime_directory(
-    runtime_path: Path,
+    runtime_path: Path | str,
     *,
     now: float | None = None,
     max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES,
     compress_after_seconds: int = COMPRESS_AFTER_SECONDS,
     monthly_archive_after_seconds: int = MONTHLY_ARCHIVE_AFTER_SECONDS,
 ) -> None:
+    runtime_path = Path(runtime_path)
     if _has_symlink_parent(runtime_path):
         return
     try:
@@ -387,7 +390,8 @@ def maintain_runtime_directory(
     _archive_old_compressed_files(runtime_path, now=resolved_now, archive_after_seconds=monthly_archive_after_seconds)
 
 
-def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Path:
+def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) -> Path:
+    path = Path(path)
     if path.is_symlink() or _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path) or not path.is_file():
         return path
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)

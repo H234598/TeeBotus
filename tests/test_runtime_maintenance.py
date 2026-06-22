@@ -44,6 +44,17 @@ def test_rotate_runtime_text_file_compresses_oversized_active_file(tmp_path):
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_accepts_string_path(tmp_path):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+
+    compressed = rotate_runtime_text_file_if_needed(str(path), max_bytes=4)
+
+    assert compressed is not None
+    assert compressed.suffix == ".gz"
+    assert not path.exists()
+
+
 def test_rotate_runtime_text_file_does_not_overwrite_target_created_during_rotation(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")
@@ -258,6 +269,18 @@ def test_runtime_maintenance_compresses_old_logs(tmp_path):
 
     compressed = tmp_path / f"{path.name}.gz"
     assert compressed.exists()
+    assert not path.exists()
+
+
+def test_runtime_maintenance_accepts_string_path(tmp_path):
+    now = time.time()
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    os.utime(path, (now - 8 * 24 * 60 * 60, now - 8 * 24 * 60 * 60))
+
+    maintain_runtime_directory(str(tmp_path), now=now)
+
+    assert (tmp_path / f"{path.name}.gz").exists()
     assert not path.exists()
 
 
@@ -520,6 +543,18 @@ def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
     assert symlink.is_symlink()
     assert target.read_text(encoding="utf-8") == "do not copy\n"
     assert not (tmp_path / f"{symlink.name}.gz").exists()
+
+
+def test_gzip_file_accepts_string_path(tmp_path):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+
+    published = gzip_file(str(path))
+
+    assert published == tmp_path / f"{path.name}.gz"
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
 
 
 def test_gzip_file_preserves_temporary_runtime_file(tmp_path):
@@ -1789,6 +1824,21 @@ def test_install_stdio_tee_repairs_half_installed_state_without_double_stdout_wr
 
     assert path.read_text(encoding="utf-8").splitlines().count("stdout once") == 1
     assert path.read_text(encoding="utf-8").splitlines().count("stderr once") == 1
+
+
+def test_install_stdio_tee_accepts_string_path(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / STDIO_LOG_FILENAME
+
+    install_stdio_tee(str(path))
+    print("stdout string path")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert "stdout string path" in path.read_text(encoding="utf-8")
 
 
 def test_install_stdio_tee_repairs_closed_existing_target(tmp_path, monkeypatch):
