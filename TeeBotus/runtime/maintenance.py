@@ -297,6 +297,8 @@ def _stdout_targets_path(path: Path) -> bool:
 def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
     if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
         return None
+    if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
+        return None
     if path.is_symlink() or not path.is_file():
         return None
     try:
