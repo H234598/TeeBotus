@@ -306,9 +306,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         try:
             with tarfile.open(temporary, "w:gz") as archive:
                 for path in paths:
-                    try:
-                        archive.add(path, arcname=path.name)
-                    except FileNotFoundError:
+                    if not _add_regular_file_to_archive(archive, path):
                         continue
                     added_paths.append(path)
             if not added_paths:
@@ -323,6 +321,23 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                 path.unlink()
             except FileNotFoundError:
                 pass
+
+
+def _add_regular_file_to_archive(archive: tarfile.TarFile, path: Path) -> bool:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError:
+        return False
+    with os.fdopen(fd, "rb") as source:
+        try:
+            tarinfo = archive.gettarinfo(arcname=path.name, fileobj=source)
+        except OSError:
+            return False
+        if tarinfo is None or not tarinfo.isreg():
+            return False
+        archive.addfile(tarinfo, source)
+    return True
 
 
 def _next_rotated_path(path: Path) -> Path:
