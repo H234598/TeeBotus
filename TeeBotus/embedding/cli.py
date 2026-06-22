@@ -218,6 +218,10 @@ def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argpars
 def _validate_embedding_override_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if getattr(args, "embedding_dimensions", None) is not None:
         _positive_cli_int(parser, args.embedding_dimensions, "--embedding-dimensions")
+    _non_empty_cli_string(parser, getattr(args, "embedding_provider", None), "--embedding-provider")
+    _non_empty_cli_string(parser, getattr(args, "embedding_model", None), "--embedding-model")
+    _non_empty_cli_string(parser, getattr(args, "embedding_endpoint", None), "--embedding-endpoint")
+    _non_empty_cli_string(parser, getattr(args, "embedding_api_key_env", None), "--embedding-api-key-env")
 
 
 def _validate_collections_ensure_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -240,6 +244,11 @@ def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_n
     if parsed < 1:
         parser.error(f"{argument_name} must be a positive integer.")
     return parsed
+
+
+def _non_empty_cli_string(parser: argparse.ArgumentParser, value: object, argument_name: str) -> None:
+    if value is not None and not str(value).strip():
+        parser.error(f"{argument_name} must not be empty.")
 
 
 def _validate_cli_collection_name(parser: argparse.ArgumentParser, value: str, argument_name: str) -> None:

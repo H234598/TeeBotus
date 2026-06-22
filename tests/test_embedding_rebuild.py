@@ -655,6 +655,31 @@ def test_embedding_cli_memory_rebuild_returns_failure_when_no_accounts(monkeypat
     assert "status=skipped" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("argument", "value"),
+    (
+        ("--embedding-provider", ""),
+        ("--embedding-model", " "),
+        ("--embedding-endpoint", ""),
+        ("--embedding-api-key-env", " "),
+    ),
+)
+def test_embedding_cli_memory_rebuild_rejects_empty_embedding_string_overrides(argument, value, capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                argument,
+                value,
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert f"{argument} must not be empty" in capsys.readouterr().err
+
+
 def test_embedding_cli_memory_rebuild_passes_explicit_legacy_raw_cleanup(monkeypatch, capsys, tmp_path):
     def fake_rebuild(**kwargs):
         assert kwargs["include_legacy_raw_account_id_cleanup"] is True
