@@ -15,6 +15,7 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_codex_history_indexes,
     rebuild_qdrant_memory_indexes,
 )
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.qdrant import (
     QDRANT_CODEX_HISTORY_COLLECTION,
     QDRANT_USER_MEMORY_COLLECTION,
@@ -223,49 +224,12 @@ def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_n
 
 @contextmanager
 def _dotenv_defaults_for_instances_dir(instances_dir: str | Path) -> Iterator[None]:
-    inserted_keys: list[str] = []
-    for key, value in _read_dotenv_values(_project_root_for_instances_dir(instances_dir) / ".env").items():
-        if key in os.environ:
-            continue
-        os.environ[key] = value
-        inserted_keys.append(key)
+    result = load_project_dotenv_for_instances(instances_dir)
     try:
         yield
     finally:
-        for key in inserted_keys:
+        for key in result.loaded_keys:
             os.environ.pop(key, None)
-
-
-def _project_root_for_instances_dir(instances_dir: str | Path) -> Path:
-    path = Path(instances_dir).expanduser()
-    if path.name == "instances":
-        return path.parent if str(path.parent) else Path(".")
-    return path.parent
-
-
-def _read_dotenv_values(path: Path) -> dict[str, str]:
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        return {}
-    values: dict[str, str] = {}
-    for raw_line in lines:
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", maxsplit=1)
-        key = key.strip()
-        if not key:
-            continue
-        values[key] = _clean_dotenv_value(value)
-    return values
-
-
-def _clean_dotenv_value(value: str) -> str:
-    cleaned = str(value or "").strip()
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
-        return cleaned[1:-1]
-    return cleaned
 
 
 def _format_memory_rebuild_result(result: object) -> str:
