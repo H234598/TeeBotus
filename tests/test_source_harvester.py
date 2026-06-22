@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -150,6 +151,54 @@ def test_source_harvester_manifest_append_uses_atomic_nofollow(tmp_path, monkeyp
             evidence=("Schlafhygiene und Aktivierung.",),
         )
 
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+
+
+def test_source_harvester_manifest_append_does_not_chmod_swapped_symlink(tmp_path, monkeypatch):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+    outside_manifest.chmod(0o644)
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    original_fdopen = os.fdopen
+
+    class SwapManifestAfterWrite:
+        def __init__(self, handle) -> None:
+            self.handle = handle
+
+        def __enter__(self):
+            self.handle.__enter__()
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            result = self.handle.__exit__(exc_type, exc, tb)
+            manifest_path.unlink()
+            manifest_path.symlink_to(outside_manifest)
+            return result
+
+        def write(self, text: str):
+            return self.handle.write(text)
+
+    def fdopen_and_swap(fd, *args, **kwargs):
+        return SwapManifestAfterWrite(original_fdopen(fd, *args, **kwargs))
+
+    monkeypatch.setattr(source_harvester_module.os, "fdopen", fdopen_and_swap)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert stat.S_IMODE(outside_manifest.stat().st_mode) == 0o644
     assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
 
 

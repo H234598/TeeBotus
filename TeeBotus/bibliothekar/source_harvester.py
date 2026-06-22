@@ -318,9 +318,9 @@ def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
         if exc.errno == errno.ELOOP:
             raise ValueError(f"SourceHarvester refuses symlink manifest file: {path}") from exc
         raise
+    _chmod_private_fd(fd)
     with os.fdopen(fd, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-    _chmod_private_file(path)
 
 
 def _same_path(left: object, right: Path) -> bool:
@@ -379,6 +379,13 @@ def _chmod_private_dir(path: Path) -> None:
 def _chmod_private_file(path: Path) -> None:
     try:
         path.chmod(0o600)
+    except OSError:
+        return
+
+
+def _chmod_private_fd(fd: int) -> None:
+    try:
+        os.fchmod(fd, 0o600)
     except OSError:
         return
 
