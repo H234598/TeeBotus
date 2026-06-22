@@ -3436,7 +3436,7 @@ def _emit_follow_scan_report(instance_name: str, scan_report: Mapping[str, Any],
     status_counts = scan_report.get("status_counts", {})
     if isinstance(status_counts, Mapping):
         lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
-    for item in scan_report.get("items", []) or []:
+    for item in _watch_detail_items(scan_report.get("items", [])):
         if not isinstance(item, Mapping):
             continue
         item_payload = item.get("item", {})
@@ -3853,7 +3853,7 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
         status_counts = instance.get("status_counts", {})
         if isinstance(status_counts, Mapping):
             lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
-        for item in instance.get("items", []):
+        for item in _watch_detail_items(instance.get("items", [])):
             if not isinstance(item, Mapping):
                 continue
             item_payload = item.get("item", {})
@@ -3911,6 +3911,19 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
                             f"reason={item.get('reason', '')}"
                         )
     return "\n".join(lines) + "\n"
+
+
+def _watch_detail_items(items: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(items, Sequence) or isinstance(items, (str, bytes, bytearray)):
+        return []
+    details: list[Mapping[str, Any]] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("status") or "").strip().casefold() == "duplicate":
+            continue
+        details.append(item)
+    return details
 
 
 def _git_output(repo_root: Path, *args: str) -> str:

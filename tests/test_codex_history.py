@@ -36,6 +36,7 @@ from TeeBotus.admin.codex_history import (
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
     run_codex_history_index,
+    _render_watch_report,
     _watch_payload_ok,
     watch_codex_session_roots,
     watch_codex_session_roots_for_instances,
@@ -1953,6 +1954,44 @@ def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failu
         )
         is True
     )
+
+
+def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -> None:
+    rendered = _render_watch_report(
+        {
+            "mode": "once",
+            "sessions_roots": ["/tmp/sessions"],
+            "instances": [
+                {
+                    "instance": "TeeBotus_Logger",
+                    "status_counts": {"duplicate": 2, "imported": 1, "skipped": 1},
+                    "items": [
+                        {
+                            "status": "duplicate",
+                            "reason": "dedupe_key",
+                            "item": {"summary_prefix": "v1.0.0 #0001"},
+                        },
+                        {
+                            "status": "imported",
+                            "reason": "",
+                            "item": {"summary_prefix": "v1.0.0 #0002"},
+                        },
+                        {
+                            "status": "skipped",
+                            "reason": "missing_final_text",
+                            "item": {},
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert "statuses: duplicate=2, imported=1, skipped=1" in rendered
+    assert "summary=v1.0.0 #0001" not in rendered
+    assert "import: status=duplicate" not in rendered
+    assert "import: status=imported reason= summary=v1.0.0 #0002" in rendered
+    assert "import: status=skipped reason=missing_final_text summary=" in rendered
 
 
 def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsys) -> None:
