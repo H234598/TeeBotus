@@ -656,12 +656,14 @@ python3 -m TeeBotus --runtime-status --channels telegram
 ```
 
 Remote-Profile werden genauso per Profil geschaltet. `gemini_flash_stateless`
-und `gemini_flash_stateful` erwarten `GEMINI_API_KEY`; `vertex_gemini_flash`
+und `gemini_flash_stateful` erwarten `GEMINI_API_KEY`; die bezahlten Varianten
+nutzen dieselbe Key-Variable, haben aber keine Free-Tier-Drossel. `vertex_gemini_flash`
 erwartet `GOOGLE_APPLICATION_CREDENTIALS` als Pfad auf lokale
 Vertex/Google-Credentials. `gemini_flash_stateful` nutzt den
-Gemini-Interactions-Provider mit `store=true` und `previous_interaction_id`,
-damit normale Gemini-Chatantworten stateful laufen. `gemini_flash_stateless`
-und Vertex-Gemini ueber LiteLLM bleiben stateless; TeeBotus sendet dort den
+LiteLLM-Gemini-Stateful-Client (`provider=litellm_gemini_stateful`) mit
+`store=true` und `previous_interaction_id`; alte Aliase wie
+`gemini_interactions` werden darauf normalisiert. `gemini_flash_stateless` und
+Vertex-Gemini ueber LiteLLM bleiben stateless; TeeBotus sendet dort den
 benoetigten lokalen Kontext selbst und verlaesst sich nicht auf serverseitige
 Google-Conversation-State.
 
@@ -741,7 +743,9 @@ Instanzspezifisch funktionieren
 `_RESERVE_TOKENS` und `_ENABLED`. `none`/`unlimited` deaktiviert eine einzelne
 Dimension, `TEEBOTUS_GEMINI_FREE_TIER_ENABLED=false` schaltet den Guard ab.
 `--runtime-status` meldet Google-Routen als `google_mode=stateful`, wenn sie
-ueber `gemini_interactions` laufen, sonst weiter als `google_mode=stateless`.
+ueber `litellm_gemini_stateful`, `litellm_gemini_paid_stateful` oder einen
+darauf normalisierten Alias wie `gemini_interactions` laufen, sonst weiter als
+`google_mode=stateless`.
 Bei aktiviertem Schalter erscheinen `service_tier=flex`, die wirksamen
 Guard-Werte als `free_tier_guard=...` und der Cachezustand als
 `gemini_free_tier_limits status=...`.
