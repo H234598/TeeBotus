@@ -993,6 +993,26 @@ def test_status_marks_paid_stateful_gemini_without_free_tier_warning(tmp_path):
     assert "Gemini Stateful + Free-Tier" not in text
 
 
+def test_status_normalizes_paid_gemini_interactions_alias(tmp_path):
+    class PaidAliasGeminiClient:
+        provider_name = "gemini_paid_interactions"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=PaidAliasGeminiClient(),
+        bibliothekar_enabled=False,
+        env={},
+    )
+
+    assert "- Chat/Text: litellm_gemini_paid_stateful / gemini/gemini-3.5-flash" in text
+    assert "Google-Billing: paid" in text
+    assert "Gemini Stateful + Free-Tier" not in text
+
+
 def test_engine_help_carries_formatted_release_log_link(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path), project_root=tmp_path)
 
