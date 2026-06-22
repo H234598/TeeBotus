@@ -81,6 +81,7 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str
     log_path = runtime_log_path(directory)
     stdout_targets_log = _stdout_targets_path(log_path) if runtime_directory_ready else False
     if tee_stdio and runtime_directory_ready:
+        uninstall_stdio_tee()
         install_stdio_tee(directory / STDIO_LOG_FILENAME)
     else:
         uninstall_stdio_tee()

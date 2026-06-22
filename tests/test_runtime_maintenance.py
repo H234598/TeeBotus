@@ -1713,6 +1713,43 @@ def test_configure_runtime_logging_disables_existing_stdio_tee(tmp_path, monkeyp
     assert "stdout after disable" not in stdio_log.read_text(encoding="utf-8")
 
 
+def test_configure_runtime_logging_removes_stale_stdio_tee_when_reinstall_fails(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    old_stdio_log = tmp_path / "old" / STDIO_LOG_FILENAME
+    new_runtime = tmp_path / "new"
+    new_stdio_log = new_runtime / STDIO_LOG_FILENAME
+    install_stdio_tee(old_stdio_log)
+    assert isinstance(sys.stdout, TeeStream)
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    real_open = os.open
+
+    def fail_new_stdio_open(file, flags, *args, **kwargs):
+        if Path(file) == new_stdio_log:
+            raise PermissionError(errno.EACCES, "permission denied", str(file))
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", fail_new_stdio_open)
+
+    configure_runtime_logging(base_dir=new_runtime, tee_stdio=True)
+    print("stdout after failed reinstall")
+    print("stderr after failed reinstall", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert sys.stdout is primary_stdout
+    assert sys.stderr is primary_stderr
+    assert old_stdout.secondary.closed
+    assert old_stderr.secondary.closed
+    assert "stdout after failed reinstall" in primary_stdout.getvalue()
+    assert "stderr after failed reinstall" in primary_stderr.getvalue()
+    assert "stdout after failed reinstall" not in old_stdio_log.read_text(encoding="utf-8")
+    assert not new_stdio_log.exists()
+
+
 def test_install_stdio_tee_repairs_half_installed_state_without_double_stdout_writes(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()
