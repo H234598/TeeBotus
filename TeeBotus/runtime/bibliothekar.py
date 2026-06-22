@@ -367,9 +367,10 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         stored_path = str(row.get("stored_path") or "").strip()
         if not sha256 or not stored_path or not _coerce_bool(row.get("accepted_for_ingest")):
             continue
-        if not _manifest_path_under(library_dir, stored_path, "accepted"):
+        accepted_path = _manifest_library_path(library_dir, stored_path, "accepted")
+        if accepted_path is None:
             continue
-        accepted_by_key[(sha256, stored_path)] = row
+        accepted_by_key[(sha256, _manifest_path_key(accepted_path))] = row
         accepted_by_hash[sha256] = row
     metadata: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -379,8 +380,13 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         promoted_text = str(row.get("stored_path") or "").strip()
         if not sha256 or not promoted_text:
             continue
-        promoted_path = Path(promoted_text)
-        accepted = accepted_by_key.get((sha256, str(row.get("source_path") or ""))) or accepted_by_hash.get(sha256)
+        promoted_path = _manifest_library_path(library_dir, promoted_text)
+        if promoted_path is None:
+            continue
+        source_path = _manifest_library_path(library_dir, row.get("source_path"), "accepted")
+        accepted = (
+            accepted_by_key.get((sha256, _manifest_path_key(source_path))) if source_path is not None else None
+        ) or accepted_by_hash.get(sha256)
         if not accepted:
             continue
         try:
@@ -432,14 +438,57 @@ def _coerce_bool(value: object) -> bool:
 
 
 def _manifest_path_under(library_dir: Path, value: object, subdir: str) -> bool:
+    return _manifest_library_path(library_dir, value, subdir) is not None
+
+
+def _manifest_library_path(library_dir: Path, value: object, subdir: str | None = None) -> Path | None:
+    root = (library_dir / subdir if subdir else library_dir).resolve(strict=False)
+    for candidate in _manifest_path_candidates(library_dir, value):
+        try:
+            resolved = candidate.resolve(strict=False)
+            resolved.relative_to(root)
+        except (OSError, ValueError):
+            continue
+        return resolved
+    return None
+
+
+def _manifest_path_candidates(library_dir: Path, value: object) -> tuple[Path, ...]:
     text = str(value or "").strip()
     if not text:
-        return False
+        return ()
+    normalized_text = text.replace("\\", "/").casefold()
+    if _looks_like_absolute_or_uri_source_path(normalized_text):
+        return ()
+    raw_path = Path(text)
+    if raw_path.is_absolute():
+        return (raw_path,)
+    candidates: list[Path] = []
+    library_resolved = library_dir.resolve(strict=False)
     try:
-        Path(text).resolve(strict=False).relative_to((library_dir / subdir).resolve(strict=False))
-    except (OSError, ValueError):
-        return False
-    return True
+        candidates.append(library_resolved / raw_path.relative_to(library_dir))
+    except ValueError:
+        pass
+    relative_from_library_prefix = _manifest_relative_from_library_prefix(raw_path, library_resolved)
+    if relative_from_library_prefix is not None:
+        candidates.append(library_resolved / relative_from_library_prefix)
+    candidates.append(library_resolved / raw_path)
+    candidates.append(raw_path)
+    return tuple(dict.fromkeys(candidates))
+
+
+def _manifest_relative_from_library_prefix(raw_path: Path, library_dir: Path) -> Path | None:
+    raw_parts = tuple(part for part in raw_path.parts if part)
+    library_parts = tuple(part for part in library_dir.parts if part and part != library_dir.anchor)
+    for length in range(min(len(raw_parts), len(library_parts)), 0, -1):
+        if raw_parts[:length] == library_parts[-length:]:
+            remainder = raw_parts[length:]
+            return Path(*remainder) if remainder else Path(".")
+    return None
+
+
+def _manifest_path_key(path: Path) -> str:
+    return path.resolve(strict=False).as_posix()
 
 
 def _index_document(

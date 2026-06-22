@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -190,6 +191,49 @@ def test_source_harvester_ignores_external_accepted_duplicate_paths(tmp_path):
     assert result.accepted_for_ingest is True
     assert result.stored_path is not None
     assert result.stored_path.parent == store.library_dir / "accepted"
+
+
+def test_source_harvester_resolves_relative_manifest_paths_after_cwd_change(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    download_dir = workspace / "download"
+    download_dir.mkdir()
+    source = download_dir / "therapie.txt"
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    relative_library = Path("instances") / "Depressionsbot" / "data" / "Bibliothek"
+    monkeypatch.chdir(workspace)
+    harvester = SourceHarvester(
+        relative_library,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    first = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    assert first.stored_path is not None
+    assert not first.stored_path.is_absolute()
+    duplicate = download_dir / "therapie-kopie.txt"
+    duplicate.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    other_cwd = tmp_path / "other-cwd"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+    absolute_harvester = SourceHarvester(
+        workspace / relative_library,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    second = absolute_harvester.harvest_path(
+        duplicate,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert second.duplicate_of == (workspace / first.stored_path).resolve()
+    assert second.stored_path is None
+    assert second.accepted_for_ingest is False
 
 
 def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path
+from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path, _manifest_library_path
 from TeeBotus.runtime.source_quality import SourceQualityInput, SourceQualityPipeline, SourceQualityReport, SourceRoute
 
 
@@ -155,8 +155,8 @@ class SourceHarvester:
                 continue
             if route == "accepted" and not _coerce_bool(row.get("accepted_for_ingest")):
                 continue
-            stored = Path(str(row.get("stored_path") or ""))
-            if not _path_under(stored, self.library_root / _route_dir(route)):
+            stored = _manifest_library_path(self.library_root, row.get("stored_path"), _route_dir(route))
+            if stored is None:
                 continue
             if stored.exists():
                 return stored
@@ -172,7 +172,8 @@ class SourceHarvester:
                 continue
             if not isinstance(row, dict):
                 continue
-            if row.get("sha256") != sha256 or not _same_path(row.get("stored_path"), staged_path):
+            stored = _manifest_library_path(self.library_root, row.get("stored_path"), "accepted")
+            if row.get("sha256") != sha256 or stored is None or not _same_path(stored, staged_path):
                 continue
             if row.get("route") == "accepted" and _coerce_bool(row.get("accepted_for_ingest")):
                 return True
@@ -291,14 +292,6 @@ def _same_path(left: object, right: Path) -> bool:
         return Path(left_text).resolve(strict=False) == right.resolve(strict=False)
     except OSError:
         return False
-
-
-def _path_under(path: Path, root: Path) -> bool:
-    try:
-        path.resolve(strict=False).relative_to(root.resolve(strict=False))
-    except (OSError, ValueError):
-        return False
-    return True
 
 
 def _chmod_private_dir(path: Path) -> None:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import TeeBotus.runtime.bibliothekar_service as bibliothekar_service_module
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
+from TeeBotus.bibliothekar.source_harvester import SourceHarvester
 from TeeBotus.instructions import BotInstructions, parse_instructions
 from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
@@ -23,6 +24,7 @@ from TeeBotus.runtime.bibliothekar_service import (
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
+from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityPipeline
 
 
 def test_bibliothekar_indexes_txt_epub_docx_and_retrieves_cited_chunks(tmp_path):
@@ -331,6 +333,44 @@ def test_bibliothekar_harvest_manifest_string_bool_flags(tmp_path):
 
     assert payload["selected_library_chunks"][0]["title"] == "Therapiequelle"
     assert payload["selected_library_chunks"][0]["source_requires_human_review"] is False
+
+
+def test_bibliothekar_harvest_manifest_relative_paths_survive_cwd_change(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    download_dir = workspace / "download"
+    download_dir.mkdir()
+    source = download_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    relative_instances = Path("instances")
+    monkeypatch.chdir(workspace)
+    store = BibliothekarStore("Depressionsbot", relative_instances)
+
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Relative Therapiequelle", "license": "private"},
+        claims=("Aktivierung ist relevant.",),
+        evidence=("Depression Therapie Aktivierung.",),
+    )
+    assert harvest.stored_path is not None
+    assert not harvest.stored_path.is_absolute()
+    harvester.promote_accepted(harvest.stored_path)
+    other_cwd = tmp_path / "other-cwd"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    absolute_store = BibliothekarStore("Depressionsbot", workspace / "instances")
+    absolute_store.rebuild()
+    payload = json.loads(absolute_store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["title"] == "Relative Therapiequelle"
+    assert chunk["source_quality"] == "trusted"
+    assert chunk["source_harvest_route"] == "accepted"
 
 
 def test_bibliothekar_harvest_manifest_ignores_nonaccepted_ingest_rows(tmp_path):
