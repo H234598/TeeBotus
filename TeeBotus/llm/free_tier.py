@@ -200,7 +200,7 @@ def estimate_litellm_input_tokens(messages: Sequence[Mapping[str, Any]]) -> int:
 
 
 def route_uses_google_gemini(*, provider: str, model: object) -> bool:
-    normalized_provider = str(provider or "").strip().casefold().replace("-", "_")
+    normalized_provider = _normalize_gemini_provider(provider)
     normalized_model = str(model or "").strip().casefold()
     return normalized_provider in {
         "gemini",
@@ -217,7 +217,16 @@ def route_uses_google_gemini(*, provider: str, model: object) -> bool:
 
 
 def provider_is_paid_google_gemini(provider: object) -> bool:
-    return str(provider or "").strip().casefold().replace("-", "_") in PAID_GEMINI_PROVIDERS
+    return _normalize_gemini_provider(provider) in PAID_GEMINI_PROVIDERS
+
+
+def _normalize_gemini_provider(provider: object) -> str:
+    try:
+        from TeeBotus.llm.litellm_provider import normalize_llm_provider
+
+        return normalize_llm_provider(str(provider or ""))
+    except Exception:
+        return str(provider or "").strip().casefold().replace("-", "_")
 
 
 def quota_owner_id(*, api_key: str, provider: str, model: str, api_base: str = "") -> str:

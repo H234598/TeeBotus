@@ -6,8 +6,10 @@ import json
 from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
     GeminiFreeTierLimits,
+    provider_is_paid_google_gemini,
     reset_gemini_free_tier_budget_state,
     resolve_gemini_free_tier_limits,
+    route_uses_google_gemini,
 )
 from TeeBotus.llm.gemini_limits_refresh import (
     DEFAULT_GEMINI_FREE_TIER_LIMIT_SOURCE_URL,
@@ -135,6 +137,24 @@ def test_resolve_gemini_free_tier_limits_disables_paid_provider_even_with_env_li
         model="gemini/gemini-3.5-flash",
     )
 
+    assert limits.status_summary() == "off"
+
+
+def test_gemini_paid_aliases_disable_free_tier_guard() -> None:
+    env = {
+        "TEEBOTUS_GEMINI_FREE_TIER_RPM": "1",
+        "TEEBOTUS_GEMINI_FREE_TIER_TPM": "2",
+        "TEEBOTUS_GEMINI_FREE_TIER_RPD": "3",
+    }
+
+    limits = resolve_gemini_free_tier_limits(
+        env,
+        provider="gemini_paid_interactions",
+        model="gemini/gemini-3.5-flash",
+    )
+
+    assert provider_is_paid_google_gemini("gemini_paid_interactions")
+    assert route_uses_google_gemini(provider="gemini_paid_interactions", model="custom")
     assert limits.status_summary() == "off"
 
 
