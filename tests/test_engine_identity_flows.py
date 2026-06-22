@@ -25,7 +25,7 @@ from TeeBotus.runtime.accounts import (
 from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, SendAttachment, SendText, SendTyping
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
-from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TELADI_EMERGENCY_CHAT_ID, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryResult
@@ -638,6 +638,76 @@ def test_engine_handles_providerfehler_builtin_reply_after_identity_flows(tmp_pa
 
     assert len(actions) == 1
     assert actions[0].text == "Provider machen keine Fehler."
+
+
+def test_engine_call_a_teladi_prompts_and_forwards_text_message(tmp_path):
+    account_store = store(tmp_path)
+    instructions = BotInstructions()
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions)
+    identity = telegram_identity_key(1)
+
+    prompt_actions = engine.process(event(identity, "/Call_a_Teladi"))
+
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert len(prompt_actions) == 1
+    assert prompt_actions[0].chat_id == "chat-1"
+    assert prompt_actions[0].text == instructions.teladi_call_prompt
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "teladi_emergency") is not None
+
+    sent_actions = engine.process(event(identity, "Bitte sofort melden."))
+
+    assert len(sent_actions) == 2
+    assert sent_actions[0].chat_id == TELADI_EMERGENCY_CHAT_ID
+    assert "Emergency message via /Call_a_Teladi" in sent_actions[0].text
+    assert f"Account: {account_id}" in sent_actions[0].text
+    assert "Identity: telegram:user:1" in sent_actions[0].text
+    assert "Bitte sofort melden." in sent_actions[0].text
+    assert sent_actions[1].chat_id == "chat-1"
+    assert sent_actions[1].text == instructions.teladi_call_sent
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "teladi_emergency") is None
+
+
+def test_engine_call_a_teladi_repeated_command_uses_cooldown_without_forwarding(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/Call_a_Teladi"))
+    actions = engine.process(event(identity, "/call_a_teladi"))
+
+    assert len(actions) == 1
+    assert actions[0].chat_id == "chat-1"
+    assert "Du kannst /Call_a_Teladi erst in" in actions[0].text
+    assert all(action.chat_id != TELADI_EMERGENCY_CHAT_ID for action in actions)
+
+
+def test_engine_call_a_teladi_cancel_clears_pending_flow_and_cooldown(tmp_path):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/teladi"))
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert account_store.read_agent_state(account_id)["teladi_emergency"]["used_at"]
+
+    cancel_actions = engine.process(event(identity, "/cancel"))
+
+    assert cancel_actions[0].text == "Call_a_Teladi abgebrochen."
+    assert "used_at" not in account_store.read_agent_state(account_id)["teladi_emergency"]
+    retry_actions = engine.process(event(identity, "/notfall_teladi"))
+
+    assert retry_actions[0].text == BotInstructions().teladi_call_prompt
+
+
+def test_engine_call_a_teladi_rejects_non_telegram_channel(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+
+    actions = engine.process(event(signal_identity_key(source_uuid="sig"), "/Call_a_Teladi", channel="signal"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Call_a_Teladi ist aktuell nur ueber Telegram angebunden."
 
 
 def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):

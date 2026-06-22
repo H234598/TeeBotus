@@ -23,13 +23,14 @@ from TeeBotus.core.youtube import (
     _record_youtube_parser_miss,
     transcribe_youtube_video,
 )
+from TeeBotus.core.call_a_teladi import build_teladi_header, build_teladi_message
 from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider
 from TeeBotus.core.local_transcription import LocalTranscriptionError, transcribe_local_audio
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, build_status_reply_html
 from TeeBotus.handlers import ADMIN_FORBIDDEN_TEXT, build_reply, is_admin_help_request
-from TeeBotus.instructions import BotInstructions
+from TeeBotus.instructions import BotInstructions, render_template
 from TeeBotus.llm.capabilities import LLMCapabilities
 from TeeBotus.llm_client import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError
@@ -94,6 +95,11 @@ ADMIN_AUTH_ENABLED = "Adminzugang aktiviert."
 ADMIN_AUTH_DISABLED = "Adminzugang deaktiviert. Dieser Account bekommt keine Adminmeldungen mehr."
 ADMIN_AUTH_WRONG_SECRET = "Admin-Secret stimmt nicht."
 ADMIN_AUTH_NO_SECRET_CONFIGURED = "Kein Admin-Secret konfiguriert."
+TELADI_EMERGENCY_CHAT_ID = "395935293"
+TELADI_EMERGENCY_COMMANDS = {"/call_a_teladi", "/callateladi", "/teladi", "/notfall_teladi"}
+TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
+TELADI_EMERGENCY_FLOW = "teladi_emergency"
+TELADI_EMERGENCY_STATE_KEY = "teladi_emergency"
 MEMORY_PAGE_REQUEST_RE = re.compile(r"^\s*\[\[TEE_MEMORY_PAGE(?P<attrs>[^\]]*)\]\]\s*$")
 MEMORY_PAGE_ATTR_RE = re.compile(r"(?P<key>query|exclude)\s*=\s*\"(?P<value>[^\"]*)\"")
 OPENAI_IMAGE_STATE_KEY = "openai_image_generation"
@@ -250,6 +256,11 @@ class TeeBotusEngine:
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
+        teladi_pending_actions = self._pending_teladi_emergency_actions(event, result.account_id, instructions)
+        if teladi_pending_actions is not None:
+            return EngineResult(result.account_id, teladi_pending_actions, handled=True)
+        if command in TELADI_EMERGENCY_COMMANDS:
+            return EngineResult(result.account_id, self._start_teladi_emergency_actions(event, result.account_id, instructions), handled=True)
         if command == "/ping":
             return EngineResult(result.account_id, _ping_actions(event.chat_id), handled=True)
         if command == "/codex" and instructions.codex_enabled:
@@ -539,6 +550,69 @@ class TeeBotusEngine:
         if prompt is None:
             return result
         return EngineResult(result.account_id, [*result.actions, prompt], handled=True if result.handled or result.actions else True)
+
+    def _pending_teladi_emergency_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+    ) -> list[OutgoingAction] | None:
+        pending = self.state.get_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+        if pending is None:
+            return None
+        if not _pending_flow_matches_event(pending, event):
+            return None
+        command = _command_name(event.text)
+        if command == "/cancel":
+            self.state.pop_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+            _clear_teladi_emergency_cooldown(self.account_store, account_id)
+            return [SendText(event.chat_id, "Call_a_Teladi abgebrochen.", track=False)]
+        if command in TELADI_EMERGENCY_COMMANDS:
+            remaining = _teladi_emergency_cooldown_remaining_seconds(self.account_store, account_id)
+            if remaining > 0:
+                return [
+                    SendText(
+                        event.chat_id,
+                        render_template(instructions.teladi_call_cooldown, {}, event.text, {"remaining": _format_remaining_seconds(remaining)}),
+                        track=False,
+                    )
+                ]
+            return self._start_teladi_emergency_actions(event, account_id, instructions)
+        text = str(event.text or "").strip()
+        if not text:
+            return [SendText(event.chat_id, "Bitte sende die Emergency Message als Text. /cancel bricht ab.", track=False)]
+        self.state.pop_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+        header = _build_teladi_emergency_header(event.with_account(account_id))
+        return [
+            SendText(TELADI_EMERGENCY_CHAT_ID, build_teladi_message(header, text), track=False),
+            SendText(event.chat_id, instructions.teladi_call_sent, track=False),
+        ]
+
+    def _start_teladi_emergency_actions(
+        self,
+        event: IncomingEvent,
+        account_id: str,
+        instructions: BotInstructions,
+    ) -> list[OutgoingAction]:
+        if event.channel != "telegram":
+            return [SendText(event.chat_id, "Call_a_Teladi ist aktuell nur ueber Telegram angebunden.", track=False)]
+        remaining = _teladi_emergency_cooldown_remaining_seconds(self.account_store, account_id)
+        if remaining > 0:
+            return [
+                SendText(
+                    event.chat_id,
+                    render_template(instructions.teladi_call_cooldown, {}, event.text, {"remaining": _format_remaining_seconds(remaining)}),
+                    track=False,
+                )
+            ]
+        self.state.set_pending_flow(
+            event.instance,
+            account_id,
+            TELADI_EMERGENCY_FLOW,
+            {"channel": event.channel, "chat_id": event.chat_id, "created_at": utc_now()},
+        )
+        _mark_teladi_emergency_used(self.account_store, account_id)
+        return [SendText(event.chat_id, instructions.teladi_call_prompt, track=False)]
 
     def _handle_account_edit_step(self, event: IncomingEvent, account_id: str, pending: dict[str, object]) -> EngineResult:
         text = str(event.text or "").strip().casefold()
@@ -1665,6 +1739,108 @@ def _ping_actions(chat_id: str) -> list[OutgoingAction]:
             actions.append(DelaySeconds(1.0))
         actions.append(SendText(chat_id, "Pong"))
     return actions
+
+
+def _build_teladi_emergency_header(event: IncomingEvent) -> str:
+    source_label = _teladi_source_label(event)
+    chat_title = ""
+    if isinstance(event.raw, dict):
+        raw_chat = event.raw.get("chat")
+        if isinstance(raw_chat, dict):
+            chat_title = str(raw_chat.get("title") or "").strip()
+    chat_label = chat_title or "unbekannt"
+    return "\n".join(
+        [
+            "Emergency message via /Call_a_Teladi",
+            build_teladi_header(
+                instance_name=event.instance or "unbekannt",
+                channel=event.channel,
+                account_id=event.account_id or "unbekannt",
+                identity_key=event.identity_key or "unbekannt",
+                chat_id=event.chat_id or "unbekannt",
+                source_label=source_label,
+            ),
+            f"From: {source_label or 'unbekannt'} (sender_id: {event.sender_id or 'unbekannt'})",
+            f"Chat: {chat_label} (type: {event.chat_type or 'unknown'}, chat_id: {event.chat_id or 'unbekannt'})",
+        ]
+    )
+
+
+def _teladi_source_label(event: IncomingEvent) -> str:
+    name = str(event.sender_name or "").strip()
+    username = str(event.sender_username or "").strip().lstrip("@")
+    username_label = f"@{username}" if username else ""
+    if name and username_label and username.casefold() not in name.casefold():
+        return f"{name} {username_label}"
+    return name or username_label or str(event.sender_id or "").strip()
+
+
+def _teladi_emergency_cooldown_remaining_seconds(account_store: AccountStore, account_id: str) -> int:
+    used_at = _teladi_emergency_used_at(account_store, account_id)
+    if used_at is None:
+        return 0
+    remaining = TELADI_EMERGENCY_COOLDOWN_SECONDS - int((datetime.now(timezone.utc) - used_at).total_seconds())
+    return max(0, remaining)
+
+
+def _teladi_emergency_used_at(account_store: AccountStore, account_id: str) -> datetime | None:
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return None
+    teladi_state = state.get(TELADI_EMERGENCY_STATE_KEY) if isinstance(state, dict) else None
+    if not isinstance(teladi_state, dict):
+        return None
+    return _parse_engine_datetime(str(teladi_state.get("used_at") or ""))
+
+
+def _mark_teladi_emergency_used(account_store: AccountStore, account_id: str) -> bool:
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        state = {}
+    teladi_state = state.get(TELADI_EMERGENCY_STATE_KEY)
+    if not isinstance(teladi_state, dict):
+        teladi_state = {}
+    else:
+        teladi_state = dict(teladi_state)
+    teladi_state["schema_version"] = 1
+    teladi_state["used_at"] = utc_now()
+    state[TELADI_EMERGENCY_STATE_KEY] = teladi_state
+    return _write_agent_state_best_effort(account_store, account_id, state)
+
+
+def _clear_teladi_emergency_cooldown(account_store: AccountStore, account_id: str) -> bool:
+    try:
+        state = account_store.read_agent_state(account_id)
+    except (AccountStoreError, OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False
+    teladi_state = state.get(TELADI_EMERGENCY_STATE_KEY)
+    if not isinstance(teladi_state, dict) or "used_at" not in teladi_state:
+        return True
+    teladi_state = dict(teladi_state)
+    teladi_state.pop("used_at", None)
+    teladi_state["cancelled_at"] = utc_now()
+    state[TELADI_EMERGENCY_STATE_KEY] = teladi_state
+    return _write_agent_state_best_effort(account_store, account_id, state)
+
+
+def _format_remaining_seconds(seconds: int) -> str:
+    seconds = max(1, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if seconds and not hours:
+        parts.append(f"{seconds}s")
+    return " ".join(parts) if parts else "1s"
 
 
 def _parse_admin_command_args(text: str) -> tuple[str, str]:
