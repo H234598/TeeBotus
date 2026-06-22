@@ -508,6 +508,12 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_hidden_from_loader(monk
     assert "unexpected raw profile(s): gemini_flash" in message
 
 
+def test_normalize_raw_llm_config_key_collapses_case_whitespace_and_hyphens() -> None:
+    assert check_adapter_deps._normalize_raw_llm_config_key(" API  Key-Env ") == "api_key_env"
+    assert check_adapter_deps._normalize_raw_llm_config_key("default---profile") == "default_profile"
+    assert check_adapter_deps._normalize_raw_llm_config_key("__local ollama__") == "local_ollama"
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeypatch) -> None:
     from copy import deepcopy
 
