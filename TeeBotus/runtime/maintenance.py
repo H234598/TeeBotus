@@ -376,7 +376,7 @@ def rotate_runtime_text_file_if_needed(path: Path | str, *, max_bytes: int = MAX
     rotated = _link_file_to_unique_path(path, _next_rotated_path(path), expected_stat=source_stat)
     if rotated is None:
         return None
-    _unlink_if_same_file(path, source_stat)
+    _unlink_if_same_file(path, source_stat, require_unchanged=True)
     try:
         return gzip_file(rotated, expected_stat=source_stat)
     except (OSError, ValueError, RuntimeError):
@@ -467,7 +467,7 @@ def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) 
         if temporary is not None and temporary_stat is not None:
             _unlink_if_same_file(temporary, temporary_stat)
         raise
-    _unlink_if_same_file(path, source_stat)
+    _unlink_if_same_file(path, source_stat, require_unchanged=True)
     return published
 
 
@@ -556,7 +556,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                 _unlink_if_same_file(temporary, temporary_stat)
             continue
         for path, archived_stat in added_paths:
-            _unlink_if_same_file(path, archived_stat)
+            _unlink_if_same_file(path, archived_stat, require_unchanged=True)
 
 
 def _add_regular_file_to_archive(
@@ -599,18 +599,32 @@ def _add_regular_file_to_archive(
     return archived_stat
 
 
-def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
+def _unlink_if_same_file(path: Path, expected_stat: os.stat_result, *, require_unchanged: bool = False) -> None:
     try:
         current_stat = os.stat(path, follow_symlinks=False)
     except (OSError, ValueError):
         return
     if not _same_file_stat(current_stat, expected_stat):
         return
+    if require_unchanged and not _same_file_snapshot(current_stat, expected_stat):
+        return
     _unlink_quietly(path)
 
 
 def _same_file_stat(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+def _same_file_snapshot(left: os.stat_result, right: os.stat_result) -> bool:
+    return (
+        _same_file_stat(left, right)
+        and left.st_size == right.st_size
+        and _stat_mtime_ns(left) == _stat_mtime_ns(right)
+    )
+
+
+def _stat_mtime_ns(value: os.stat_result) -> int:
+    return int(getattr(value, "st_mtime_ns", int(value.st_mtime * 1_000_000_000)))
 
 
 def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.stat_result) -> Path | None:

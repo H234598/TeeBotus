@@ -1205,6 +1205,26 @@ def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatc
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_preserves_source_modified_in_place_before_cleanup(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_copyfileobj = shutil.copyfileobj
+
+    def copy_then_modify_source(source, sink, *args, **kwargs):
+        result = real_copyfileobj(source, sink, *args, **kwargs)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write("new log\n")
+        return result
+
+    monkeypatch.setattr(shutil, "copyfileobj", copy_then_modify_source)
+
+    published = gzip_file(path)
+
+    assert path.read_text(encoding="utf-8") == "old log\nnew log\n"
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
 def test_gzip_file_keeps_published_target_when_temporary_cleanup_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -1946,6 +1966,33 @@ def test_runtime_maintenance_preserves_archived_path_replaced_before_cleanup(tmp
 
     assert raced is True
     assert path.read_bytes() == b"replacement"
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        member = archive.extractfile(path.name)
+        assert member is not None
+        assert member.read() == b"compressed-ish"
+
+
+def test_runtime_maintenance_preserves_archive_source_modified_in_place_before_cleanup(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_addfile = tarfile.TarFile.addfile
+
+    def addfile_then_modify_source(self, tarinfo, fileobj=None):
+        result = real_addfile(self, tarinfo, fileobj)
+        if tarinfo.name == path.name:
+            path.write_bytes(b"modified-source")
+        return result
+
+    monkeypatch.setattr(tarfile.TarFile, "addfile", addfile_then_modify_source)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"modified-source"
     archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
     assert len(archives) == 1
     with tarfile.open(archives[0], "r:gz") as archive:
