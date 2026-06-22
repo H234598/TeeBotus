@@ -612,6 +612,40 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
     assert "<redacted>" in combined
 
 
+def test_litellm_text_client_redacts_url_credentials_in_provider_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def completion(**_kwargs):
+        raise RuntimeError(
+            "provider rejected api_base=user:pass@example.invalid "
+            "base_url=admin:s3cr3t@internal.invalid "
+            "target=foo:bar@localhost "
+            "https://urluser:urlpass@example.invalid/v1"
+        )
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        provider="huggingface",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+    )
+
+    with caplog.at_level("WARNING", logger="TeeBotus.llm.litellm_provider"):
+        with pytest.raises(LLMAPIError) as error:
+            client.create_reply("Ping", BotInstructions(), None)
+
+    combined = str(error.value) + "\n" + "\n".join(record.getMessage() for record in caplog.records)
+
+    assert "user:pass" not in combined
+    assert "admin:s3cr3t" not in combined
+    assert "foo:bar" not in combined
+    assert "urluser:urlpass" not in combined
+    assert "api_base=<redacted>@example.invalid" in combined
+    assert "base_url=<redacted>@internal.invalid" in combined
+    assert "target=<redacted>@localhost" in combined
+    assert "https://<redacted>@example.invalid/v1" in combined
+
+
 def test_litellm_text_client_redacts_common_provider_key_shapes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     tokens = [
         "hf_" + "A" * 16,

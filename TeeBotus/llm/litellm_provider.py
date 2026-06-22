@@ -631,7 +631,13 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
 
 def _redact_url_credentials(value: str) -> str:
     text = str(value or "")
-    return re.sub(r"(?<=://)[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
+    text = re.sub(r"(?<=://)[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
+    return re.sub(
+        r"\b((?:target|base_url|api_base|url)=)[^\s/@:=]+:[^\s/@]+@",
+        r"\1<redacted>@",
+        text,
+        flags=re.IGNORECASE,
+    )
 
 
 def _redact_secret_assignment(match: re.Match[str]) -> str:
