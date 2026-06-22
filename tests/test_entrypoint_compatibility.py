@@ -1384,7 +1384,26 @@ def test_runtime_status_google_helpers_delegate_to_central_gemini_route_logic(mo
 
     assert bot._status_route_uses_google_gemini(provider="future_google_alias", model="future-model") is True
     assert bot._status_google_billing(provider="future_paid_google_alias") == "paid"
+    assert (
+        bot._llm_key_required_for_status(
+            SimpleNamespace(llm_api_key=""),
+            provider="future_google_alias",
+            model="future-model",
+            base_url="",
+        )
+        is True
+    )
+    assert bot._status_fallback_model_requires_key(provider="future_google_alias", model="future-model", base_url="") is True
     assert bot._status_route_uses_gemini_api(provider="vertex_ai", model="vertex_ai/gemini-3.5-flash") is False
+    assert (
+        bot._llm_key_required_for_status(
+            SimpleNamespace(llm_api_key=""),
+            provider="litellm",
+            model="custom-local-model",
+            base_url="http://127.0.0.1:11434",
+        )
+        is False
+    )
 
 
 def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, capsys, tmp_path) -> None:

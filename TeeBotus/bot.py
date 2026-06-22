@@ -1283,18 +1283,9 @@ def _llm_key_required_for_status(
         return False
     if _status_model_uses_ollama(model):
         return False
-    if normalized_provider in {
-        "huggingface",
-        "hf",
-        "groq",
-        "gemini",
-        "gemini_interactions",
-        "litellm_gemini_stateless",
-        "litellm_gemini_stateful",
-        "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_stateful",
-        "vertex_ai",
-    }:
+    if normalized_provider in {"huggingface", "hf", "groq"}:
+        return True
+    if _status_route_uses_google_gemini(provider=provider, model=model):
         return True
     if normalized_provider == "litellm":
         if route_api_key_env:
@@ -1406,19 +1397,9 @@ def _status_fallback_model_requires_key(*, provider: str, model: object, base_ur
         return True
     if normalized_provider == "litellm":
         return not _status_base_url_is_loopback(base_url)
-    return normalized_provider in {
-        "openai",
-        "huggingface",
-        "hf",
-        "groq",
-        "gemini",
-        "gemini_interactions",
-        "litellm_gemini_stateless",
-        "litellm_gemini_stateful",
-        "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_stateful",
-        "vertex_ai",
-    }
+    if _status_route_uses_google_gemini(provider=provider, model=model):
+        return True
+    return normalized_provider in {"openai", "huggingface", "hf", "groq"}
 
 
 def _status_gemini_key_ring_count(*, instance_name: object, provider: str, model: object) -> int:
