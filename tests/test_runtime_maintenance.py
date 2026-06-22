@@ -178,6 +178,43 @@ def test_rotate_runtime_text_file_preserves_rotated_path_replaced_before_link_st
     assert not (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_rotate_runtime_text_file_refuses_link_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_stat = os.stat
+    real_link = os.link
+    raced = False
+
+    def racing_stat(file, *args, **kwargs):
+        nonlocal raced
+        result = real_stat(file, *args, **kwargs)
+        if Path(file) == path and kwargs.get("follow_symlinks") is False and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+        return result
+
+    def fail_if_linked_through_symlink(source, destination, *args, **kwargs):
+        if runtime_dir.is_symlink():
+            raise AssertionError(f"link attempted through symlink parent: {source} -> {destination}")
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", racing_stat)
+    monkeypatch.setattr(os, "link", fail_if_linked_through_symlink)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "0123456789\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_fails(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")

@@ -591,6 +591,8 @@ def _same_file_stat(left: os.stat_result, right: os.stat_result) -> bool:
 def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.stat_result) -> Path | None:
     linked = target
     while True:
+        if _has_symlink_parent(source) or _has_symlink_parent(linked):
+            return None
         try:
             os.link(source, linked, follow_symlinks=False)
         except FileExistsError:
