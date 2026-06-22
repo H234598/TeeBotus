@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(_format_memory_rebuild_result(result))
             return 1 if any(result.status == "error" for result in results) else 0
         if args.command == "collections-ensure":
+            _validate_collections_ensure_args(parser, args)
             results = ensure_qdrant_collections_for_instances(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
@@ -197,16 +198,27 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
 def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if getattr(args, "side_index_dimensions", None) is None:
         return
-    try:
-        side_dimensions = int(args.side_index_dimensions)
-    except (TypeError, ValueError):
-        parser.error("--side-index-dimensions must be a positive integer.")
-        return
-    if side_dimensions < 1:
-        parser.error("--side-index-dimensions must be a positive integer.")
-        return
+    side_dimensions = _positive_cli_int(parser, args.side_index_dimensions, "--side-index-dimensions")
+    if str(getattr(args, "collection", "") or "").strip():
+        parser.error("--collection cannot be combined with --side-index-dimensions.")
     if args.embedding_dimensions is not None and int(args.embedding_dimensions) != side_dimensions:
         parser.error("--embedding-dimensions must match --side-index-dimensions for memory side-index rebuilds.")
+
+
+def _validate_collections_ensure_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    for value in getattr(args, "include_memory_side_index", ()) or ():
+        _positive_cli_int(parser, value, "--include-memory-side-index")
+
+
+def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parser.error(f"{argument_name} must be a positive integer.")
+        return 1
+    if parsed < 1:
+        parser.error(f"{argument_name} must be a positive integer.")
+    return parsed
 
 
 @contextmanager

@@ -776,6 +776,24 @@ def test_embedding_cli_memory_rebuild_rejects_side_index_dimension_mismatch(caps
     assert "must match --side-index-dimensions" in capsys.readouterr().err
 
 
+def test_embedding_cli_memory_rebuild_rejects_side_index_collection_override(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--side-index-dimensions",
+                "1024",
+                "--collection",
+                "custom_user_memory",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "cannot be combined with --side-index-dimensions" in capsys.readouterr().err
+
+
 def test_embedding_cli_memory_rebuild_rejects_non_positive_side_index_dimensions(capsys, tmp_path):
     with pytest.raises(SystemExit) as exc_info:
         embedding_cli_main(
@@ -1260,3 +1278,19 @@ def test_embedding_cli_collections_ensure_rejects_remote_memory_embedding_config
     output = capsys.readouterr().out
     assert "status=config_conflict" in output
     assert "Account-memory embeddings require a local endpoint" in output
+
+
+def test_embedding_cli_collections_ensure_rejects_non_positive_side_index_dimensions(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "collections-ensure",
+                "--include-memory-side-index",
+                "0",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--include-memory-side-index must be a positive integer" in capsys.readouterr().err
