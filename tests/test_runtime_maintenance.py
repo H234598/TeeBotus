@@ -1778,6 +1778,19 @@ def test_configure_runtime_logging_caps_provider_sdk_logs_during_debug_all(tmp_p
     assert logging.getLogger("openai._base_client").level == logging.WARNING
 
 
+def test_configure_runtime_logging_preserves_stricter_global_log_level_for_sdks(tmp_path):
+    for logger_name in ("litellm", "LiteLLM", "openai", "openai._base_client"):
+        logging.getLogger(logger_name).setLevel(logging.NOTSET)
+
+    configure_runtime_logging(level="ERROR", base_dir=tmp_path)
+
+    assert logging.getLogger().level == logging.ERROR
+    assert logging.getLogger("litellm").level == logging.ERROR
+    assert logging.getLogger("LiteLLM").level == logging.ERROR
+    assert logging.getLogger("openai").level == logging.ERROR
+    assert logging.getLogger("openai._base_client").level == logging.ERROR
+
+
 def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     monkeypatch.setattr(sys, "stderr", io.StringIO())

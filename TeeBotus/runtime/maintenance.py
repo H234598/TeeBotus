@@ -148,7 +148,7 @@ class TeeBotusLogContextFilter(logging.Filter):
 
 def _configure_third_party_loggers(level: int) -> None:
     for logger_name, logger_level in THIRD_PARTY_LOG_LEVELS.items():
-        logging.getLogger(logger_name).setLevel(logger_level)
+        logging.getLogger(logger_name).setLevel(max(level, logger_level))
 
 
 def install_stdio_tee(path: Path | str) -> None:
