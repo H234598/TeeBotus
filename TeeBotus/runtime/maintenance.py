@@ -137,6 +137,8 @@ def _configure_third_party_loggers(level: int) -> None:
 
 
 def install_stdio_tee(path: Path) -> None:
+    if _has_symlink_parent(path):
+        return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:

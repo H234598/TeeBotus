@@ -1519,6 +1519,27 @@ def test_install_stdio_tee_skips_when_target_directory_cannot_be_created(tmp_pat
     assert not path.parent.exists()
 
 
+def test_install_stdio_tee_refuses_symlinked_target_parent_before_mkdir(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    external_parent = tmp_path / "external-parent"
+    external_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(external_parent, target_is_directory=True)
+    path = linked_parent / "runtime" / STDIO_LOG_FILENAME
+
+    install_stdio_tee(path)
+    print("stdout only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+    assert not (external_parent / "runtime").exists()
+
+
 def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()
