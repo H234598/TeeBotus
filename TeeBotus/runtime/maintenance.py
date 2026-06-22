@@ -282,9 +282,11 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
     source_fd: int | None = fd
+    temporary: Path | None = None
     temporary_fd: int | None = None
-    temporary, temporary_fd, temporary_stat = _create_unique_file(path.with_name(f".{target.name}.tmp"))
+    temporary_stat: os.stat_result | None = None
     try:
+        temporary, temporary_fd, temporary_stat = _create_unique_file(path.with_name(f".{target.name}.tmp"))
         with ExitStack() as stack:
             source = stack.enter_context(os.fdopen(source_fd, "rb"))
             source_fd = None
@@ -299,7 +301,8 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
             _close_fd_quietly(source_fd)
         if temporary_fd is not None:
             _close_fd_quietly(temporary_fd)
-        _unlink_if_same_file(temporary, temporary_stat)
+        if temporary is not None and temporary_stat is not None:
+            _unlink_if_same_file(temporary, temporary_stat)
         raise
     _unlink_if_same_file(path, source_stat)
     return published

@@ -654,6 +654,40 @@ def test_gzip_file_removes_temporary_file_when_source_fdopen_fails(tmp_path, mon
     assert len(closed_fds) >= 2
 
 
+def test_gzip_file_closes_source_fd_when_temporary_open_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_open = os.open
+    real_close = os.close
+    source_fd: int | None = None
+    closed_fds: list[int] = []
+
+    def fail_temporary_open(file, flags, *args, **kwargs):
+        nonlocal source_fd
+        file_path = Path(file)
+        if file_path == path:
+            source_fd = real_open(file, flags, *args, **kwargs)
+            return source_fd
+        if file_path.name.startswith(f".{path.name}.gz.tmp") and flags & os.O_CREAT:
+            raise PermissionError("temporary open failed")
+        return real_open(file, flags, *args, **kwargs)
+
+    def counting_close(fd):
+        closed_fds.append(fd)
+        return real_close(fd)
+
+    monkeypatch.setattr(os, "open", fail_temporary_open)
+    monkeypatch.setattr(os, "close", counting_close)
+
+    with pytest.raises(PermissionError, match="temporary open failed"):
+        gzip_file(path)
+
+    assert source_fd in closed_fds
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_gzip_file_preserves_primary_error_when_fd_close_cleanup_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
