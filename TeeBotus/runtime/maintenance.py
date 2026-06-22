@@ -93,14 +93,22 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
 
 def normalize_log_level(level: str | int) -> int:
     if isinstance(level, int):
-        return max(DEBUG_ALL, min(logging.CRITICAL, level))
+        return _normalize_numeric_log_level(level)
     text = str(level or "INFO").strip()
     if not text:
         return logging.INFO
     if text.isdigit():
-        return max(DEBUG_ALL, min(logging.CRITICAL, int(text)))
+        return _normalize_numeric_log_level(int(text))
     normalized = text.casefold().replace("_", " ").replace("-", " ")
     return LOG_LEVEL_ALIASES.get(normalized, LOG_LEVEL_ALIASES.get(text.casefold(), logging.INFO))
+
+
+def _normalize_numeric_log_level(level: int) -> int:
+    if level == DEBUG_ALL:
+        return DEBUG_ALL
+    if level < logging.DEBUG:
+        return logging.INFO
+    return min(logging.CRITICAL, level)
 
 
 class TeeBotusLogContextFilter(logging.Filter):

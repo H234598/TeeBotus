@@ -9,10 +9,12 @@ import tarfile
 import time
 
 from TeeBotus.runtime.maintenance import (
+    DEBUG_ALL,
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
     configure_runtime_logging,
     maintain_runtime_directory,
+    normalize_log_level,
     rotate_runtime_text_file_if_needed,
 )
 
@@ -74,6 +76,24 @@ def test_runtime_maintenance_archives_old_uncompressed_logs_in_same_pass(tmp_pat
     assert not (tmp_path / f"{path.name}.gz").exists()
     with tarfile.open(archives[0], "r:gz") as archive:
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
+
+
+def test_normalize_log_level_accepts_documented_debug_all_spellings():
+    assert normalize_log_level("debug_all") == DEBUG_ALL
+    assert normalize_log_level("debug-all") == DEBUG_ALL
+    assert normalize_log_level("finest") == DEBUG_ALL
+    assert normalize_log_level(1) == DEBUG_ALL
+    assert normalize_log_level("1") == DEBUG_ALL
+
+
+def test_normalize_log_level_rejects_undocumented_numeric_trace_levels():
+    assert normalize_log_level(0) == logging.INFO
+    assert normalize_log_level("0") == logging.INFO
+    assert normalize_log_level(5) == logging.INFO
+    assert normalize_log_level("9") == logging.INFO
+    assert normalize_log_level(-5) == logging.INFO
+    assert normalize_log_level("10") == logging.DEBUG
+    assert normalize_log_level(60) == logging.CRITICAL
 
 
 def test_configure_runtime_logging_skips_file_handler_when_stdout_already_targets_runtime_log(tmp_path, monkeypatch):
