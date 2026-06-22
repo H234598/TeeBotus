@@ -694,6 +694,13 @@ def _optional_override(value: object | None, *, default: str = "") -> str:
     return text or str(default or "").strip()
 
 
+def _embedding_text_override(overrides: Mapping[str, Any], key: str, *, default: str = "") -> str:
+    if key not in overrides or overrides.get(key) is None:
+        return str(default or "").strip()
+    text = str(overrides.get(key) or "").strip()
+    return text or str(default or "").strip()
+
+
 def _qdrant_collection_name_error(value: object) -> str:
     if QDRANT_COLLECTION_NAME_RE.fullmatch(str(value or "").strip()):
         return ""
@@ -769,11 +776,11 @@ def _resolve_memory_embedding_config(
     base = embedding_config or _memory_embedding_config_from_instructions(instructions)
     override = dict(overrides or {})
     return EmbeddingConfig(
-        provider=str(override.get("provider") or base.provider).strip(),
-        model_name=str(override.get("model_name") or base.model_name).strip(),
+        provider=_embedding_text_override(override, "provider", default=base.provider),
+        model_name=_embedding_text_override(override, "model_name", default=base.model_name),
         dimensions=_positive_int(override.get("dimensions"), default=base.dimensions),
-        endpoint=str(override.get("endpoint") if override.get("endpoint") is not None else base.endpoint).strip(),
-        api_key_env=str(override.get("api_key_env") if override.get("api_key_env") is not None else base.api_key_env).strip(),
+        endpoint=_embedding_text_override(override, "endpoint", default=base.endpoint),
+        api_key_env=_embedding_text_override(override, "api_key_env", default=base.api_key_env),
     )
 
 
@@ -789,11 +796,11 @@ def _resolve_bibliothekar_embedding_config(
     )
     override = dict(overrides or {})
     return EmbeddingConfig(
-        provider=str(override.get("provider") or base.provider).strip(),
-        model_name=str(override.get("model_name") or base.model_name).strip(),
+        provider=_embedding_text_override(override, "provider", default=base.provider),
+        model_name=_embedding_text_override(override, "model_name", default=base.model_name),
         dimensions=_positive_int(override.get("dimensions"), default=base.dimensions),
-        endpoint=str(override.get("endpoint") if override.get("endpoint") is not None else base.endpoint).strip(),
-        api_key_env=str(override.get("api_key_env") if override.get("api_key_env") is not None else base.api_key_env).strip(),
+        endpoint=_embedding_text_override(override, "endpoint", default=base.endpoint),
+        api_key_env=_embedding_text_override(override, "api_key_env", default=base.api_key_env),
     )
 
 

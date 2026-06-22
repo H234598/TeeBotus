@@ -328,6 +328,52 @@ def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     assert calls == [("Depressionsbot", "http://localhost:6334", "custom-book-model", 32, [results[0].point_ids[0].split(":", 1)[1]])]
 
 
+def test_rebuild_qdrant_bibliothekar_indexes_keeps_base_endpoint_for_blank_embedding_overrides(tmp_path, monkeypatch):
+    captured: list[tuple[str, int, str, str]] = []
+    deleted_instances: list[str] = []
+
+    class FakeQdrantBibliothekarIndex:
+        def __init__(self, *, embedding_provider, **_kwargs) -> None:
+            captured.append(
+                (
+                    embedding_provider.model_name,
+                    embedding_provider.dimensions,
+                    embedding_provider.endpoint,
+                    embedding_provider.api_key,
+                )
+            )
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            deleted_instances.append(instance_name)
+
+        def index_chunks(self, *, instance_name: str, chunks):
+            raise AssertionError("empty Bibliothekar fixture must not write chunks")
+
+    monkeypatch.setenv("HF_TOKEN", "book-secret")
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    (instance_dir / "data" / "Bibliothek").mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+
+    results = rebuild_qdrant_bibliothekar_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        embedding_config=EmbeddingConfig(
+            provider="hf",
+            model_name="intfloat/multilingual-e5-small",
+            dimensions=384,
+            endpoint="http://127.0.0.1:8080/embeddings",
+            api_key_env="HF_TOKEN",
+        ),
+        embedding_overrides={"provider": " ", "model_name": "", "endpoint": " ", "api_key_env": ""},
+        qdrant_index_factory=FakeQdrantBibliothekarIndex,
+    )
+
+    assert results[0].status == "cleared"
+    assert deleted_instances == ["Depressionsbot"]
+    assert captured == [("intfloat/multilingual-e5-small", 384, "http://127.0.0.1:8080/embeddings", "book-secret")]
+
+
 def test_rebuild_qdrant_bibliothekar_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     class UnexpectedQdrantBibliothekarIndex:
         def __init__(self, **_kwargs) -> None:
@@ -789,6 +835,48 @@ def test_rebuild_qdrant_memory_indexes_rejects_invalid_embedding_config_without_
     assert results[0].account_id == ""
     assert results[0].point_count == 0
     assert "Account-memory embeddings require a local endpoint" in results[0].error
+
+
+def test_rebuild_qdrant_memory_indexes_keeps_base_endpoint_for_blank_embedding_overrides(tmp_path, monkeypatch):
+    captured: list[tuple[str, int, str, str]] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, *, embedding_provider, **_kwargs) -> None:
+            captured.append(
+                (
+                    embedding_provider.model_name,
+                    embedding_provider.dimensions,
+                    embedding_provider.endpoint,
+                    embedding_provider.api_key,
+                )
+            )
+
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
+
+    monkeypatch.setenv("HF_TOKEN", "test-secret")
+    instances_dir = tmp_path / "instances"
+    store = AccountStore(instances_dir / "Depressionsbot" / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        embedding_config=EmbeddingConfig(
+            provider="hf",
+            model_name="intfloat/multilingual-e5-small",
+            dimensions=384,
+            endpoint="http://127.0.0.1:8080/embeddings",
+            api_key_env="HF_TOKEN",
+        ),
+        embedding_overrides={"provider": " ", "model_name": "", "endpoint": " ", "api_key_env": ""},
+        qdrant_index_factory=FakeQdrantMemoryIndex,
+    )
+
+    assert results[0].status == "rebuilt"
+    assert results[0].account_id == account_id
+    assert captured == [("intfloat/multilingual-e5-small", 384, "http://127.0.0.1:8080/embeddings", "test-secret")]
 
 
 def test_rebuild_qdrant_memory_indexes_can_explicitly_request_legacy_raw_cleanup(tmp_path):
