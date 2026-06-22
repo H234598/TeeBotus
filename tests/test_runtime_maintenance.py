@@ -2312,6 +2312,29 @@ def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     assert primary.getvalue() == "probe"
 
 
+def test_tee_stream_flushes_secondary_when_primary_flush_fails():
+    class FailingPrimary(io.StringIO):
+        def flush(self):
+            raise OSError("primary flush failed")
+
+    class RecordingSecondary(io.StringIO):
+        def __init__(self):
+            super().__init__()
+            self.flushed = False
+
+        def flush(self):
+            self.flushed = True
+            return super().flush()
+
+    secondary = RecordingSecondary()
+    tee = TeeStream(FailingPrimary(), secondary, Path("secondary.log"))
+
+    with pytest.raises(OSError, match="primary flush failed"):
+        tee.flush()
+
+    assert secondary.flushed is True
+
+
 def test_tee_stream_reports_primary_writable_status():
     class ReadOnlyPrimary(io.StringIO):
         def writable(self):

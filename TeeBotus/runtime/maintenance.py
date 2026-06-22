@@ -200,14 +200,20 @@ class TeeStream:
 
     def flush(self) -> None:
         primary_flush = getattr(self.primary, "flush", None)
+        primary_exception: Exception | None = None
         if callable(primary_flush):
-            primary_flush()
+            try:
+                primary_flush()
+            except Exception as exc:
+                primary_exception = exc
         secondary_flush = getattr(self.secondary, "flush", None)
         if callable(secondary_flush):
             try:
                 secondary_flush()
             except (OSError, ValueError):
                 pass
+        if primary_exception is not None:
+            raise primary_exception
 
     def close(self) -> None:
         _close_quietly(self.secondary)
