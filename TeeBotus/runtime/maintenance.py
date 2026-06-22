@@ -132,7 +132,10 @@ def _configure_third_party_loggers(level: int) -> None:
 
 
 def install_stdio_tee(path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
     target_path = _absolute_without_symlink_resolution(path)
     if _stream_tee_target(sys.stdout) == target_path and _stream_tee_target(sys.stderr) == target_path:
         return
