@@ -473,6 +473,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         if non_string_profile_names:
             errors.append(f"raw profile name(s) must be string: {','.join(non_string_profile_names)}")
         raw_profile_names = {str(name) for name in raw_profile_payload}
+        canonical_profile_names = {name.strip().casefold().replace("-", "_"): name for name in expected_profiles}
+        for raw_name in sorted(name for name in raw_profile_payload if isinstance(name, str)):
+            canonical_name = canonical_profile_names.get(raw_name.strip().casefold().replace("-", "_"))
+            if canonical_name and raw_name != canonical_name:
+                errors.append(f"raw profile {raw_name} must use canonical key {canonical_name}")
         allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
         missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)

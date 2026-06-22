@@ -529,6 +529,28 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeyp
     assert "raw profile name(s) must be string: 123" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_alias_key(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            profiles = payload["profiles"]
+            profiles["local-ollama"] = profiles.pop("local_ollama")
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile local-ollama must use canonical key local_ollama" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_keys(monkeypatch) -> None:
     from copy import deepcopy
 
