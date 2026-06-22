@@ -448,6 +448,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         errors.append("raw profile payload must be mapping")
     else:
         raw_profile_names = {str(name) for name in raw_profile_payload}
+        allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
         missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)
         if unexpected_raw_profiles:
@@ -455,8 +456,13 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         if missing_raw_profiles:
             errors.append(f"missing raw profile(s): {','.join(missing_raw_profiles)}")
         for name in sorted(raw_profile_names & set(expected_profiles)):
-            if not isinstance(raw_profile_payload.get(name), dict):
+            raw_profile = raw_profile_payload.get(name)
+            if not isinstance(raw_profile, dict):
                 errors.append(f"raw profile {name} must be mapping")
+                continue
+            unexpected_keys = sorted(str(key) for key in raw_profile if str(key) not in allowed_raw_profile_keys)
+            if unexpected_keys:
+                errors.append(f"raw profile {name} unexpected key(s): {','.join(unexpected_keys)}")
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
@@ -543,8 +549,14 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         for normalized_name, raw_name in sorted(normalized_raw_routes.items()):
             if normalized_name in expected_routes and raw_name != normalized_name:
                 errors.append(f"raw routing purpose {raw_name} must use canonical key {normalized_name}")
-            if normalized_name in expected_routes and not isinstance(raw_routing_payload.get(raw_name), dict):
+            raw_route = raw_routing_payload.get(raw_name)
+            if normalized_name in expected_routes and not isinstance(raw_route, dict):
                 errors.append(f"raw routing purpose {raw_name} must be mapping")
+                continue
+            if normalized_name in expected_routes and isinstance(raw_route, dict):
+                unexpected_keys = sorted(str(key) for key in raw_route if str(key) not in {"profile", "fallback"})
+                if unexpected_keys:
+                    errors.append(f"raw routing purpose {raw_name} unexpected key(s): {','.join(unexpected_keys)}")
     unexpected_routes = sorted(set(routing) - set(expected_routes))
     if unexpected_routes:
         errors.append(f"unexpected routing purpose(s): {','.join(unexpected_routes)}")
