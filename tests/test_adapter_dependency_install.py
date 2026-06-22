@@ -376,6 +376,23 @@ def test_llm_profiles_plan2_contract_rejects_unexpected_profile_service_tier(mon
     assert "profile gemini_flash_stateful service_tier=flex expected=<empty>" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_wrong_profile_base_url(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    profiles = dict(llm_profiles.load_llm_profiles())
+    default_profile, routing = llm_profiles.load_llm_routing()
+    profiles["local_ollama"] = replace(profiles["local_ollama"], base_url="http://localhost:11435")
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "profile local_ollama base_url=http://localhost:11435 expected=http://127.0.0.1:11434" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_wrong_purpose_routes(monkeypatch) -> None:
     from dataclasses import replace
 

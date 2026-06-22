@@ -441,6 +441,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     unexpected_profiles = sorted(set(profiles) - set(expected_profiles))
     if unexpected_profiles:
         errors.append(f"unexpected profile(s): {','.join(unexpected_profiles)}")
+    expected_profile_base_urls = {name: "" for name in expected_profiles}
+    expected_profile_base_urls["local_ollama"] = "http://127.0.0.1:11434"
     expected_profile_service_tiers = {name: "" for name in expected_profiles}
     for name, (provider, model_prefix, exact_model, api_key_env) in expected_profiles.items():
         profile = profiles.get(name)
@@ -456,6 +458,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         if profile.api_key_env != api_key_env:
             errors.append(
                 f"profile {name} api_key_env={profile.api_key_env or '<empty>'} expected={api_key_env or '<empty>'}"
+            )
+        expected_base_url = expected_profile_base_urls[name]
+        if profile.base_url != expected_base_url:
+            errors.append(
+                f"profile {name} base_url={profile.base_url or '<empty>'} expected={expected_base_url or '<empty>'}"
             )
         expected_service_tier = expected_profile_service_tiers[name]
         if profile.service_tier != expected_service_tier:
