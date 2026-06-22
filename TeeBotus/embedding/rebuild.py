@@ -14,6 +14,7 @@ from TeeBotus.runtime.qdrant import (
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
     QDRANT_BIBLIOTHEKAR_COLLECTION,
     QDRANT_CODEX_HISTORY_COLLECTION,
+    QDRANT_COLLECTION_NAME_RE,
     QDRANT_USER_MEMORY_COLLECTION,
     QdrantCollectionResult,
     QdrantCollectionSpec,
@@ -117,6 +118,7 @@ def rebuild_qdrant_memory_indexes(
     root = Path(instances_dir)
     selected_instances = _resolve_instance_names(root, instance_names)
     target_collection = _optional_override(collection_name, default=QDRANT_USER_MEMORY_COLLECTION)
+    collection_error = _qdrant_collection_name_error(target_collection)
     requested_accounts = tuple(
         validate_sha512_token(str(account_id or "").strip().lower(), field_name="account_id")
         for account_id in account_ids
@@ -131,6 +133,19 @@ def rebuild_qdrant_memory_indexes(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
         )
+        if collection_error:
+            results.append(
+                _rebuild_result(
+                    instance_name,
+                    "",
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=target_collection,
+                    embedding_config=effective_embedding_config,
+                    error=collection_error,
+                )
+            )
+            continue
         store_kwargs: dict[str, Any] = {
             "create_dirs": False,
             "secret_provider": secret_provider or runtime_secret_provider(),
@@ -237,10 +252,23 @@ def rebuild_qdrant_bibliothekar_indexes(
         instructions = _load_instance_memory_instructions(root, instance_name)
         effective_qdrant_url = _optional_override(qdrant_url, default=instructions.bibliothekar_qdrant_url)
         effective_collection = _optional_override(instructions.bibliothekar_collection, default=QDRANT_BIBLIOTHEKAR_COLLECTION)
+        collection_error = _qdrant_collection_name_error(effective_collection)
         effective_embedding_config = _resolve_bibliothekar_embedding_config(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
         )
+        if collection_error:
+            results.append(
+                _bibliothekar_rebuild_result(
+                    instance_name,
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=effective_collection,
+                    embedding_config=effective_embedding_config,
+                    error=collection_error,
+                )
+            )
+            continue
         try:
             embedding_provider = build_embedding_provider(effective_embedding_config)
             store = BibliothekarStore(instance_name, root)
@@ -320,6 +348,7 @@ def rebuild_qdrant_codex_history_indexes(
     root = Path(instances_dir)
     selected_instances = _resolve_instruction_instance_names(root, instance_names)
     target_collection = _optional_override(collection_name, default=QDRANT_CODEX_HISTORY_COLLECTION)
+    collection_error = _qdrant_collection_name_error(target_collection)
     results: list[QdrantCodexHistoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
@@ -328,6 +357,18 @@ def rebuild_qdrant_codex_history_indexes(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
         )
+        if collection_error:
+            results.append(
+                _codex_history_rebuild_result(
+                    instance_name,
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=target_collection,
+                    embedding_config=effective_embedding_config,
+                    error=collection_error,
+                )
+            )
+            continue
         try:
             embedding_provider = build_embedding_provider(effective_embedding_config)
             store = AccountStore(
@@ -605,6 +646,12 @@ def _resolve_collection_qdrant_url(instructions_by_instance: Mapping[str, BotIns
 def _optional_override(value: object | None, *, default: str = "") -> str:
     text = str(value or "").strip()
     return text or str(default or "").strip()
+
+
+def _qdrant_collection_name_error(value: object) -> str:
+    if QDRANT_COLLECTION_NAME_RE.fullmatch(str(value or "").strip()):
+        return ""
+    return "Qdrant collection name must contain only letters, numbers, underscore, dot or dash."
 
 
 def _resolve_collection_memory_embedding_config(

@@ -223,6 +223,31 @@ def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     assert results[0].point_ids == ()
 
 
+def test_rebuild_qdrant_memory_indexes_dry_run_rejects_unsafe_collection_name(tmp_path):
+    class UnexpectedQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("unsafe dry-run collection must fail before creating qdrant index")
+
+    instances_dir = tmp_path / "instances"
+    store = AccountStore(instances_dir / "Depressionsbot" / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        account_ids=(account_id,),
+        collection_name="bad collection",
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        dry_run=True,
+        qdrant_index_factory=UnexpectedQdrantMemoryIndex,
+    )
+
+    assert results[0].status == "error"
+    assert results[0].collection_name == "bad collection"
+    assert "Qdrant collection name" in results[0].error
+
+
 def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, list[str]]] = []
     deleted_instances: list[str] = []
@@ -391,6 +416,33 @@ def test_rebuild_qdrant_bibliothekar_indexes_clears_instance_when_library_is_emp
     assert deleted_instances == ["Depressionsbot"]
 
 
+def test_rebuild_qdrant_bibliothekar_indexes_dry_run_rejects_unsafe_collection_name(tmp_path):
+    class UnexpectedQdrantBibliothekarIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("unsafe dry-run collection must fail before creating qdrant index")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: qdrant\n- collection: bad collection\n",
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Aktivierung und Schlaf.", encoding="utf-8")
+
+    results = rebuild_qdrant_bibliothekar_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        dry_run=True,
+        qdrant_index_factory=UnexpectedQdrantBibliothekarIndex,
+    )
+
+    assert results[0].status == "error"
+    assert results[0].collection_name == "bad collection"
+    assert "Qdrant collection name" in results[0].error
+
+
 def test_rebuild_qdrant_codex_history_indexes_uses_admin_only_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, str, list[str]]] = []
     deleted_instances: list[str] = []
@@ -500,6 +552,30 @@ def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp
     assert results[0].collection_name == QDRANT_CODEX_HISTORY_COLLECTION
     assert results[0].qdrant_url == "http://localhost:6334"
     assert deleted_instances == [("Depressionsbot", QDRANT_CODEX_HISTORY_COLLECTION)]
+
+
+def test_rebuild_qdrant_codex_history_indexes_rejects_unsafe_collection_name(tmp_path):
+    class UnexpectedQdrantBibliothekarIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("unsafe Codex-History collection must fail before creating qdrant index")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+    AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+
+    results = rebuild_qdrant_codex_history_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        collection_name="bad collection",
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=UnexpectedQdrantBibliothekarIndex,
+    )
+
+    assert results[0].status == "error"
+    assert results[0].collection_name == "bad collection"
+    assert "Qdrant collection name" in results[0].error
 
 
 def test_rebuild_qdrant_codex_history_indexes_repo_filter_does_not_clear_instance(tmp_path):
